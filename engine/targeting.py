@@ -1242,8 +1242,8 @@ def spec_only_subtype(spec: dict | None) -> str | None:
     """The one permanent subtype *spec* restricts its targets to, or None.
 
     "Can this spell target **only** Walls?" — the question Wall of Shadows asks
-    of whatever is aiming at it (CR 115.6). It is a question about the *target
-    description*, not about the source, so it is answered here, where the
+    of whatever is aiming at it (CR 115.1a: the target description is the phrase
+    after "target"). It is a question about the *target description*, not about the source, so it is answered here, where the
     description was derived, rather than by a second reading of the source's
     oracle text.
 

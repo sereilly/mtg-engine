@@ -618,6 +618,27 @@ class StackResolutionMixin:
             )
             if first is not None:
                 item.target_player_index = first.seat
+        # CR 608.2b, asked once for the whole object before any of it runs.
+        # This module's docstring has claimed since it was written that a
+        # resolution re-checks its targets, and until now nothing did: each
+        # handler checked its *own* target and skipped its own effect, so the
+        # sentences printed after the targeted one carried on regardless.
+        # The gate is `legality.illegal_targets_refusal` — the sibling of the
+        # announcement gate, so the same identities decide both ends.
+        illegal = self.illegal_targets_refusal(item)
+        if illegal is not None:
+            self.log.append(illegal)
+            if item.ability_instruction is None and not item.is_copy:
+                # CR 608.2b: removed from the stack and, if it is a spell, put
+                # into its owner's graveyard — the ordinary destination, so it
+                # goes through the same binning as a resolved spell. An ability
+                # and a token copy have no card to put anywhere.
+                self._bin_spell_card(
+                    self.players[item.caster_index], item.card,
+                    exile_instead=item.exile_instead_of_graveyard,
+                    verb="was countered by the rules",
+                )
+            return
         # A triggered ability with a name-keyed resolve-time hook (Rod/Cup/Sphere,
         # Verduran Enchantress, Guardian Angel deferred onto the stack).
         if item.hook_key is not None:

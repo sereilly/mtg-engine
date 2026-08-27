@@ -187,9 +187,13 @@ def test_no_acknowledgement_has_gone_stale():
 #   * the layer machinery itself has to start from the printed shape;
 #   * an effect that asks "is this *not* already a creature?" before animating
 #     it must not see the type it is about to add (engine/auras.py);
-#   * the state-based sweep matches Aura / Equipment / Saga / Role shapes, and
-#     supertypes (Legendary, World), which this engine does not model at
-#     layer 4 at all — ``has_type`` would answer False for every one of them.
+#   * the state-based sweep matches Aura / Equipment / Saga / Role shapes.
+#     Supertypes used to be listed here too and no longer are: "Legendary" and
+#     "World" are copiable values (CR 707.2), so the legend and world rules
+#     read ``printed_supertypes(perm.effective_card.type_line)`` and a Clone of
+#     a legend is a second legend. ``has_type`` is still not the accessor for
+#     them — it computes layer 4's card types and subtypes, which do not
+#     include supertypes at all.
 #
 # The list may only shrink. A new entry means either a real exemption with a
 # reason written here, or a read that should have been an accessor.
@@ -210,10 +214,9 @@ PRINTED_READ_EXEMPTIONS: dict[str, str] = {
     # asked — a self-reference, not a shortcut. Both sites say so in place.
     "auras.py": "animating_auras must not see the creature type it grants",
     "mixins/permanent_state.py": "the same self-reference, for global statics",
-    # Card shapes and supertypes this engine models on the printed line alone:
-    # `has_type` covers card types and subtypes, so it answers False for
-    # "Legendary" and "World" whatever the permanent is.
-    "mixins/game_ending.py": "Aura/Equipment/Saga/Role shapes and supertypes",
+    # Card shapes this engine models on the printed line alone. The supertype
+    # sweeps that used to be covered by this entry read the effective card now.
+    "mixins/game_ending.py": "Aura/Equipment/Saga/Role shapes",
     "mixins/helpers.py": "the Aura shape, plus a stack item's card colours",
     # An object on the stack is not a permanent and has no layers applied to it
     # here; its colour comes from the card (and a Lace's recolour, which

@@ -1,4 +1,4 @@
-"""Text-keyed immunity to being *chosen* (CR 115.6, CR 303.4).
+"""Text-keyed immunity to being *chosen* (CR 115.1, CR 303.4).
 
 The mirror of ``target_restrictions.py`` beside it, and the pair is worth
 stating: that file is what a **spell** prints about its own targeting ("You
@@ -39,8 +39,14 @@ one predicate the cast gate, the target picker and the AI all reach, so a class
 listed here is enforced everywhere a target is chosen rather than at whichever
 call site remembered. ``auras.ability_target_immunity_classes`` is the sibling
 answering the same question for *abilities*; the two are separate because CR
-115.6 lets a card stop one and not the other — Artifact Ward stops only
-abilities, Anti-Magic Aura only spells.
+115.1a and CR 115.1c/d make a spell and an ability separately targeted objects,
+so a card can stop one and not the other — Artifact Ward stops only abilities,
+Anti-Magic Aura only spells. (This paragraph cited rule 115.6 — written
+without the "CR" so it is not counted as a citation of it — until a rules-test
+round read that rule: it is the zero-targets permission and says nothing about
+the two kinds. A citation naming a rule that exists is invisible to
+`rules_gaps.py`, which checks that the number and its subrule letter are real,
+not that the sentence beside it is what the rule says.)
 
 The support gate reads this file too (``oracle._derived_static_claims``,
 ``auras.aura_continuous_claim``), so a card whose whole text is one of these
@@ -63,9 +69,9 @@ ATTACHED_SUBJECT = "attached"
 #: The class naming *every* spell, where anything else names a subtype.
 ANY_SPELL = "spell"
 
-#: Which of the two things CR 115.6 lets a card be immune to separately. A
-#: printed line may name one, the other, or both, so the answer is asked per
-#: kind and never once for both.
+#: Which of the two things a card may be immune to separately (CR 115.1a for
+#: a spell, CR 115.1c/d for an ability). A printed line may name one, the
+#: other, or both, so the answer is asked per kind and never once for both.
 SPELL_SOURCE = "spell"
 ABILITY_SOURCE = "ability"
 
@@ -291,7 +297,8 @@ def narrow_source_immunity_subtypes(permanent, source_kind: str) -> frozenset[st
     The sibling of :func:`spell_target_immunity_classes`, gathering the
     permanent's own lines and the Auras attached to it for the same reason: one
     question, one answer, however the restriction reached the creature. Asked
-    per source kind because CR 115.6 lets a card stop one and not the other, and
+    per source kind because a spell and an ability are separately targeted
+    (CR 115.1a, CR 115.1c/d) so a card can stop one and not the other, and
     Wall of Shadows printing both is not permission to answer for both at once.
     """
     from .auras import auras_attached_to

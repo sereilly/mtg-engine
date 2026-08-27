@@ -591,3 +591,134 @@ def test_608_2b_object_targeted_damage_with_no_target_does_not_hit_the_player(se
     assert result.supported is False
     assert p2.life == 20
     assert dart.tapped is False
+
+
+# ---------------------------------------------------------------------------
+# Rule 115.6 — A spell or ability that requires targets may allow *zero*
+# targets to be chosen. It still "requires targets", but it is targeted only
+# if one or more were actually chosen.
+#
+# Driven through Frost Breath ("Tap up to two target creatures") and Basri
+# Ket's "+1: Put a +1/+1 counter on up to one target creature", because the
+# rule is only observable where the engine has to *not* refuse: the cast gate
+# and `legality._ability_target_quantifiers` both read the quantifier, and an
+# "up_to" is the one that does not make a target mandatory.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("115.6")
+def test_115_6_up_to_spell_may_be_cast_choosing_no_targets_at_all(set_pool, cards):
+    """"Tap up to two target creatures" resolves having chosen zero of them.
+
+    The whole of 115.6's permission: legal targets exist, the caster names
+    none, and the spell is still cast, still resolves and still goes to the
+    graveyard — with nothing tapped, because it was never targeted at
+    anything.
+    """
+    pool = set_pool("M21")
+    bears = _perm(cards["Grizzly Bears"])
+    giant = _perm(cards["Hill Giant"])
+    p1 = PlayerState(name="P1", hand=[pool["Frost Breath"]])
+    p2 = PlayerState(name="P2", battlefield=[bears, giant])
+    game = _two_player_game(p1, p2)
+
+    result = game.cast_from_hand(0, "Frost Breath")  # no target named
+
+    assert result.supported
+    assert (bears.tapped, giant.tapped) == (False, False)
+    assert [c.name for c in p1.graveyard] == ["Frost Breath"]
+    assert len(game.stack) == 0
+
+
+@pytest.mark.cr("115.6", "115.1")
+def test_115_6_up_to_spell_is_castable_with_no_legal_target_on_the_board(set_pool, cards):
+    """Zero is a legal number of targets, so an empty board does not make an
+    "up to" spell uncastable — where a spell that *must* have one is refused
+    on exactly the same board (115.1).
+
+    The pair is the test: both spells are asked of a battlefield with no
+    creature on it, and only the quantifier differs.
+    """
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool["Frost Breath"], cards["Terror"]])
+    p2 = PlayerState(name="P2")  # no creatures anywhere
+    game = _two_player_game(p1, p2)
+
+    optional = game.cast_from_hand(0, "Frost Breath")
+    mandatory = game.cast_from_hand(0, "Terror", target_player_index=1)
+
+    assert optional.supported
+    assert not mandatory.supported
+    assert [c.name for c in p1.hand] == ["Terror"]  # only the refused one stayed
+
+
+@pytest.mark.cr("115.6", "115.1")
+def test_115_6_an_up_to_spell_affects_exactly_the_targets_chosen(set_pool, cards):
+    """One chosen target taps one creature; two tap two — and the picker is
+    told the maximum, so it collects up to that many rather than defaulting to
+    the one-target shape every other spell has.
+
+    ``max_targets`` is where "up to two" survives past the parser: the count is
+    a maximum, not a requirement, and a spec that dropped it would leave the
+    browser offering a single slot for a spell that names two.
+    """
+    pool = set_pool("M21")
+
+    def board():
+        bears = _perm(cards["Grizzly Bears"])
+        giant = _perm(cards["Hill Giant"])
+        p1 = PlayerState(name="P1", hand=[pool["Frost Breath"]])
+        p2 = PlayerState(name="P2", battlefield=[bears, giant])
+        return _two_player_game(p1, p2), bears, giant
+
+    game, bears, giant = board()
+    spec = game.cast_target_spec(0, pool["Frost Breath"])
+    assert spec["requires_target"] is True
+    assert spec["max_targets"] == 2
+
+    game.cast_from_hand(0, "Frost Breath", target_player_index=1, target_permanent_index=0)
+    assert (bears.tapped, giant.tapped) == (True, False)
+
+    game, bears, giant = board()
+    game.cast_from_hand(
+        0, "Frost Breath", target_player_index=1,
+        target_permanent_ids=[bears.permanent_id, giant.permanent_id],
+    )
+    assert (bears.tapped, giant.tapped) == (True, True)
+
+
+@pytest.mark.cr("115.6", "602.2b")
+def test_115_6_an_up_to_ability_activates_with_nothing_to_target(set_pool):
+    """The same permission for an activated ability, and the same pairing.
+
+    Basri Ket's "+1: Put a +1/+1 counter on up to one target creature"
+    activates on an empty board and its loyalty cost is paid; Liliana, Death
+    Mage's "−3: Destroy target creature." is refused on that board with no
+    loyalty spent (602.2b). One gate reads both, and it reads the quantifier —
+    an "up_to" slot walked by ``_ability_target_quantifiers`` deliberately does
+    not count as a mandatory target.
+    """
+    pool = set_pool("M21")
+    basri = Permanent(card=pool["Basri Ket"], metadata={"loyalty_counters": 3})
+    p1 = PlayerState(name="P1", battlefield=[basri])
+    game = _two_player_game(p1, PlayerState(name="P2"))
+    game.start_turn(0)
+
+    optional = game.activate_permanent_ability(
+        0, "Basri Ket", permanent_index=0, ability_index=0
+    )
+
+    assert optional.supported
+    assert basri.metadata["loyalty_counters"] == 4  # the +1 was paid
+
+    liliana = Permanent(card=pool["Liliana, Death Mage"], metadata={"loyalty_counters": 5})
+    p3 = PlayerState(name="P1", battlefield=[liliana])
+    other = _two_player_game(p3, PlayerState(name="P2"))
+    other.start_turn(0)
+
+    mandatory = other.activate_permanent_ability(
+        0, "Liliana, Death Mage", permanent_index=0, ability_index=1
+    )
+
+    assert not mandatory.supported
+    assert liliana.metadata["loyalty_counters"] == 5  # nothing was paid

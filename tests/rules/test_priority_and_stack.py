@@ -480,6 +480,39 @@ def test_608_2b_spell_whose_target_became_illegal_does_not_resolve(all_cards):
     assert any(card.name == "Lightning Bolt" for card in p1.graveyard)
 
 
+@pytest.mark.cr("608.2b")
+def test_608_2b_the_rest_of_the_spell_does_not_happen_either(set_pool):
+    """608.2b is about the **object**, not about the targeted sentence.
+
+    "Destroy target artifact. You gain life equal to its mana value." The
+    destroy checked its own target and found nothing — which is 608.2b's last
+    sentence, an illegal target being unaffected — and then the second sentence
+    paid out anyway. The rule's own worked example is this shape: Sorin's
+    Thirst deals damage *and* gains life, and "if the creature isn't a legal
+    target … Sorin's Thirst doesn't resolve. Its controller doesn't gain any
+    life."
+    """
+    tome = Permanent(card=set_pool("ATQ")["Jalum Tome"])   # an artifact, mana value 3
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("LEG")["Divine Offering"]], life=20
+    )
+    p2 = PlayerState(name="P2", battlefield=[tome])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.queue_from_hand(
+        0, "Divine Offering", target_player_index=1, target_permanent_index=0
+    )
+    # Its controller sacrifices it in response: by resolution the only target
+    # has left the zone it was targeted in.
+    game.sacrifice_permanent(tome)
+    game.resolve_top_of_stack()
+
+    assert p1.life == 20, "the rider must not resolve when the spell does not"
+    assert game.stack == []
+    assert any(card.name == "Divine Offering" for card in p1.graveyard)
+
+
 @pytest.mark.cr("608.2c")
 def test_608_2c_every_printed_effect_line_of_a_spell_is_carried_out():
     """"The controller of the spell or ability follows its instructions in the
@@ -606,15 +639,23 @@ def test_608_2b_damage_spell_with_vanished_creature_target_does_not_hit_the_play
     nothing on resolution (608.2b) — it must not fall back to damaging the
     targeted creature's controller."""
     bolt = _get(all_cards, "Lightning Bolt")
+    bear = Permanent(card=_get(all_cards, "Grizzly Bears"))
     p1 = PlayerState(name="P1", hand=[bolt])
-    p2 = PlayerState(name="P2", life=20)
+    p2 = PlayerState(name="P2", life=20, battlefield=[bear])
     game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
 
-    # Target creature index 0 on P2's (now empty) battlefield: the creature is
-    # gone by resolution time, so the spell fizzles.
-    result = game.cast_from_hand(0, "Lightning Bolt", target_player_index=1, target_permanent_index=0)
-
+    # A **legal** target, chosen as the spell is cast (601.2c), that leaves in
+    # response. The board was empty here until the announcement itself was
+    # gated: naming a creature that never existed is refused as a cast now, so
+    # it could no longer reach the resolution this test is about.
+    result = game.queue_from_hand(
+        0, "Lightning Bolt", target_player_index=1, target_permanent_index=0
+    )
     assert result.supported
+    game.sacrifice_permanent(bear)
+    game.resolve_top_of_stack()
+
     assert p2.life == 20  # no fallback damage to the player
     assert any(card.name == "Lightning Bolt" for card in p1.graveyard)
 

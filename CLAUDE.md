@@ -429,6 +429,20 @@ adding entries, not editing dispatch**:
   than activated to hit the face (Silent Dart) or no-op. It replaced a per-kind
   if-chain that named four instruction kinds and left every other one
   unenforced.
+  **A spell has both ends of the same question.** `legality.cast_target_refusal`
+  is CR 601.2c at announcement — the named target must be one
+  `_enumerate_targets` offers, checked beside `_validate_cast_targets` (not
+  inside it, which would recurse through its own per-candidate probe) and
+  before mana is spent; `legality.illegal_targets_refusal` is CR 608.2b at
+  resolution — if **every** target is illegal by then, the object leaves the
+  stack unresolved, above the instructions rather than inside each handler.
+  A handler declining its own target is the rule's *last* sentence only, so
+  "Destroy target artifact. You gain life equal to its mana value" gained the
+  life for destroying nothing. Both read targets by `permanent_id`, never by
+  index. Both are instants and sorceries only, and the three shapes they
+  deliberately decline — a triggered ability's targets, a spell that can target
+  a player, an Aura or graveyard target — are in `ROADMAP.md` with the reason
+  each is a separate round.
 - `engine/cost_modifiers.py` — text-keyed cost taxes (CR 601.2f): "<colour>
   spells cost {N} more to cast", "activated abilities of <colour> <type>s cost
   {N} more to activate". Increases only; reduction should arrive with the card

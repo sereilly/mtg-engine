@@ -9,6 +9,7 @@ from ..control import (
     end_control_change,
 )
 from ..equipment import is_equipment, unattach_illegal_equipment
+from ..layer_bridge import printed_supertypes
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..trigger_utils import matching_triggers
@@ -424,10 +425,24 @@ class GameEndingMixin:
 
             # 704.5j: legend rule — same player controlling two legendaries with same name
             for player in self.players:
-                legendary_by_name: dict[str, list[int]] = {}
+                legendary_by_name: dict[str, list[Permanent]] = {}
                 for perm in self.controlled_by(player):
-                    if "Legendary" in perm.card.type_line:
-                        legendary_by_name.setdefault(perm.card.name, []).append(perm)
+                    # Both reads are of the **effective** card, because CR 707.2
+                    # copies the name and the type line together: a Clone of
+                    # Hazezon Tamar is a second Hazezon Tamar, and asking the
+                    # printed card asks the copier's own line — where a Clone is
+                    # a Shapeshifter named Clone that matches nothing, so the
+                    # rule never fired for the one board state it exists for.
+                    # Layer 3 rides along for free (a text change rewrites the
+                    # type line before anything reads it).
+                    #
+                    # `printed_supertypes` and not `has_type`: has_type computes
+                    # layer 4's card types and subtypes, which do not include
+                    # supertypes at all — CR 205.4a puts "legendary" in front of
+                    # the card types, and nothing in this engine derives it.
+                    effective = perm.effective_card
+                    if "legendary" in printed_supertypes(effective.type_line):
+                        legendary_by_name.setdefault(effective.name, []).append(perm)
                 for name, perms in legendary_by_name.items():
                     if len(perms) > 1:
                         # Keep first; put the rest in graveyard. Collected as
@@ -443,7 +458,9 @@ class GameEndingMixin:
             world_perms: list[tuple[PlayerState, Permanent]] = [
                 (self.players[seat], perm)
                 for seat, perm in self.permanents_with_controller()
-                if "World" in perm.card.type_line
+                # The world supertype is a copiable value too (CR 707.2), and
+                # the same printed read hid a copy of a world permanent here.
+                if "world" in printed_supertypes(perm.effective_card.type_line)
             ]
             if len(world_perms) > 1:
                 # Keep last (most recent timestamp = highest position), remove rest

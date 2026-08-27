@@ -1105,3 +1105,96 @@ def test_613_1d_a_removed_subtype_leaves_the_other_types_alone():
 
     assert not aura.has_type("aura")
     assert aura.has_type("enchantment")
+
+
+# ---------------------------------------------------------------------------
+# Rule 611.1 — the other two things a continuous effect can do
+#
+# "A continuous effect modifies characteristics of objects, modifies control of
+# objects, or affects players or the rules of the game, for a fixed or
+# indefinite period." The characteristics branch is what every other test in
+# this file exercises; these two cover the branches it does not, because an
+# engine can get characteristics entirely right and still store control as a
+# move and a rules change as a per-card flag.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("611.1")
+def test_611_1_a_continuous_effect_can_modify_control_of_an_object():
+    """The second branch. Control is a *contribution* with a timestamp, not a
+    move (engine/control.py), which is what makes it a continuous effect with a
+    period: the permanent's base controller — CR 613.1's copiable value — is
+    never rewritten, so the effect ending reverts control instead of leaving it
+    wherever it last landed.
+
+    The period here is the indefinite one ("If no duration is stated, it lasts
+    until the end of the game", CR 611.2a): it survives a turn boundary and
+    ends only when the source's contribution is dropped."""
+    from engine.control import base_controller, change_control, end_control_change, set_base_controller
+
+    bear = Permanent(card=_mk_creature("Bear", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[bear])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    set_base_controller(bear, 0)
+    source = object()
+
+    change_control(bear, 1, source=source)
+    game._sync_control()
+    assert game.controller_index_of(bear) == 1
+    assert [perm.card.name for perm in game.controlled_by(1)] == ["Bear"]
+
+    # Indefinite: a turn boundary does not end it.
+    game.resolve_cleanup_step(0)
+    game.start_turn(1)
+    game.resolve_cleanup_step(1)
+    assert game.controller_index_of(bear) == 1
+
+    # And the base value the effect was layered over is untouched, so ending
+    # the effect reverts rather than guesses.
+    assert base_controller(bear) == 0
+    end_control_change(bear, source=source)
+    game._sync_control()
+    assert game.controller_index_of(bear) == 0
+    assert [perm.card.name for perm in game.controlled_by(0)] == ["Bear"]
+
+
+@pytest.mark.cr("611.1")
+def test_611_1_a_continuous_effect_can_affect_the_rules_of_the_game():
+    """The third branch. "You may play an additional land on each of your
+    turns" changes no object's characteristics and nobody's control — it
+    modifies a rule (CR 305.2's one land play per turn), and the permanent
+    printing it is not itself modified in any way a layer would report.
+
+    It is still an *effect with a period*: it applies while its source stands
+    and stops when the source leaves, which is what separates a derived
+    continuous effect from a flag written onto the player once."""
+    grant = Permanent(card=_mk_card(
+        "Explorer Stone", "Artifact",
+        "You may play an additional land on each of your turns.",
+    ))
+    forests = [
+        _mk_card(f"Forest {i}", "Basic Land - Forest", "({T}: Add {G}.)")
+        for i in (1, 2)
+    ]
+    p1 = PlayerState(name="P1", battlefield=[grant], hand=list(forests))
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = True
+    game.start_turn(0)
+
+    assert game.cast_from_hand(0, "Forest 1").supported is True
+    # One land already played this turn, and the rule change still allows one
+    # more — the whole observable content of the effect.
+    assert game._may_play_another_land(0) is True
+
+    # No characteristic of the source moved: this branch of 611.1 is precisely
+    # the one that leaves the layer system with nothing to say.
+    assert (grant.power_bonus, grant.toughness_bonus) == (0, 0)
+    assert grant.effective_card.type_line == "Artifact"
+
+    game.remove_from_battlefield(grant)
+
+    assert game._may_play_another_land(0) is False
+    second = game.cast_from_hand(0, "Forest 2")
+    assert second.supported is False
+    assert second.details == "already played a land this turn"

@@ -965,19 +965,34 @@ def test_rangers_guile_grants_hexproof_only_to_a_creature_you_control(set_pool):
     pool = set_pool("M21")
     mine = Permanent(card=pool["Alpine Watchdog"])
     theirs = Permanent(card=pool["Concordia Pegasus"])
-    p1 = PlayerState(name="P1", hand=[pool["Ranger's Guile"]], battlefield=[mine])
+    p1 = PlayerState(name="P1", hand=[pool["Ranger's Guile"], pool["Ranger's Guile"]],
+                     battlefield=[mine])
     p2 = PlayerState(name="P2", battlefield=[theirs])
     game = Game(players=[p1, p2])
     game.enforce_mana_costs = False
 
-    result = game.cast_from_hand(
+    # Naming the opponent's creature is refused as the spell is cast now
+    # (CR 601.2c, `legality.cast_target_refusal`) rather than resolving into a
+    # grant the handler then declines to make. Both halves are asserted: the
+    # announcement is refused, and nothing was granted by way of it.
+    refused = game.cast_from_hand(
         0, "Ranger's Guile", target_player_index=1, target_permanent_index=0,
     )
-    assert result.supported, result.details
+    assert not refused.supported
     game._settle()
-
     assert not theirs.has_keyword("hexproof")
     assert not mine.has_keyword("hexproof")
+
+    # …and the legal announcement still grants it, so the filter is pinned in
+    # both directions rather than only by an effect that did nothing.
+    granted = game.cast_from_hand(
+        0, "Ranger's Guile", target_player_index=0, target_permanent_index=0,
+    )
+    assert granted.supported, granted.details
+    game._settle()
+
+    assert mine.has_keyword("hexproof")
+    assert not theirs.has_keyword("hexproof")
 
 
 # --- Round 75: two targets tapped, and a marker that waits per controller ----

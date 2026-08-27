@@ -1147,3 +1147,39 @@ def test_r34_the_same_object_cannot_fill_two_target_roles(set_pool):
     )
     assert result.supported is False
     assert "no valid target" in result.details
+
+
+@pytest.mark.cr("601.2c")
+def test_601_2c_a_named_target_the_spell_cannot_describe_is_refused(set_pool):
+    """"The player announces their choice of an appropriate object or player
+    for each target." A creature is not an appropriate object for "target
+    artifact", so the spell is uncastable at it — not cast, resolved, and
+    quietly half-applied.
+
+    ``_validate_cast_targets`` checks the target of the instruction kinds it
+    has an arm for, and Divine Offering's primary instruction is the
+    ``sequence`` wrapping its two sentences, so it reached none of them. The
+    gate beside it (``legality.cast_target_refusal``) asks the same enumeration
+    the picker is built from, which is why the browser could never reach this
+    and a test or the AI could.
+    """
+    bears = Permanent(card=set_pool("LEG")["Aisling Leprechaun"])
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("LEG")["Divine Offering"]], life=20,
+        battlefield=[bears],
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    result = game.cast_from_hand(
+        0, "Divine Offering", target_player_index=0, target_permanent_index=0
+    )
+
+    assert not result.supported
+    assert "no valid target" in result.details
+    # Nothing was paid and nothing happened: the card is still in hand and the
+    # life the second sentence would have gained was never gained.
+    assert [card.name for card in p1.hand] == ["Divine Offering"]
+    assert p1.life == 20
+    assert game.stack == []

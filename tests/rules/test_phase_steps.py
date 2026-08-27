@@ -12,7 +12,9 @@ attackers/blockers and combat damage (508–510) in their own files; extra
 turns/phases/steps (500.7–500.11) in ``test_turn_phases.py``.
 
 Not covered here because the engine doesn't implement the behavior:
-- 502.1/502.2 (phasing, day/night — mechanics outside the Alpha-era pool),
+- 502.2 (day/night — the engine has no day/night designation at all, so there
+  is nothing for the untap step's second turn-based action to check; 502.1's
+  phasing *is* implemented and is covered in ``test_aura_continuous_effects.py``),
 - 503.2 ("cast only after upkeep" spells),
 - 505.3/505.4/505.5 (Archenemy schemes, Sagas, Attractions),
 - 507.1 (a single pre-chosen defending player; the engine uses per-attacker

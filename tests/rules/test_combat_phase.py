@@ -6,9 +6,13 @@ rule 506 that the LEA engine implements: the five combat steps and their
 skips/repeats (506.1), the attacking/defending player roles (506.2), the
 "only a creature can attack or block" restriction (506.3, 506.3a, 506.3b),
 removal from combat (506.4, 506.4b), "attacking/blocking alone" (506.5), and
-"had to attack" (506.6). All tests in this file are 2-player; see
-``tests/rules/test_multiplayer_combat.py`` for the CR 802 (attack multiple players)
-multi-defender combat this engine also supports.
+"had to attack" (506.6), plus the combat damage step's priority window
+(510.3) and "the defending player" an attacking creature's ability names
+(508.5). Tests here are 2-player except the CR 508.5 pair at the end,
+which needs a third seat before "the defending player" is a question with
+more than one answer; see ``tests/rules/test_multiplayer_combat.py`` for
+the CR 802 (attack multiple players) multi-defender combat this engine
+also supports.
 """
 
 import pytest
@@ -1008,3 +1012,210 @@ def test_a_blocker_that_assigns_no_combat_damage_still_takes_it():
     assert attacker.damage_marked == 0, game.log
     assert blocker.damage_marked == 2, game.log
     assert blocker.effective_power == 3
+
+
+# --- CR 510.3: the active player gets priority once the damage is dealt -----
+
+
+def _r510_to_damage_holding_priority(game, attackers, blockers=None):
+    """Run one combat up to and *into* the combat damage step, without letting
+    the step auto-resolve past its priority window.
+
+    ``allow_damage_skip=False`` is what a player flagging the step does: the
+    turn-based action still happens (CR 510.1/510.2), and then the step stops
+    where CR 510.3 says it stops instead of resolving the stack through to end
+    of combat.
+    """
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, attackers)[0]
+    game._settle()
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, blockers or {})[0]
+    game._settle()
+    game.advance_combat_phase(allow_damage_skip=False)
+
+
+@pytest.mark.cr("510.3")
+def test_510_3_the_active_player_gets_priority_in_the_combat_damage_step():
+    """"Third, the active player gets priority." The window opens *inside* the
+    combat damage step and after the damage: the step has not been left, the
+    life total already moved, and the seat holding priority is the active
+    player rather than the one who was just hit."""
+    attacker = Permanent(card=_mk_creature("Raider", 3, 3))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+
+    _r510_to_damage_holding_priority(game, [0])
+
+    assert game.current_step == "combat_damage"
+    assert game.players[1].life == 17, game.log
+    assert game.priority_player_index == game.active_player_index == 0
+    assert game.priority_pass_count == 0
+
+
+@pytest.mark.cr("510.3", "510.3a")
+def test_510_3a_a_damage_trigger_is_on_the_stack_before_that_priority():
+    """CR 510.3a puts abilities that triggered on the damage onto the stack
+    *before* the active player gets priority — so at the moment priority is
+    handed out the trigger is waiting, not already resolved. Asserted on the
+    life total the trigger would change: 20, not 22."""
+    attacker = Permanent(card=_mk_creature(
+        "Bloodletter", 2, 2,
+        "Whenever this creature deals combat damage to a player, you gain 2 life.",
+    ))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+
+    _r510_to_damage_holding_priority(game, [0])
+
+    assert game.priority_player_index == 0
+    assert [item.ability_text for item in game.stack] == [
+        "Whenever this creature deals combat damage to a player, you gain 2 life."
+    ]
+    assert game.players[0].life == 20, "the trigger must not have resolved yet"
+
+    # And it does resolve, once both players pass — the window is a real one.
+    game._settle()
+    assert game.players[0].life == 22
+
+
+@pytest.mark.cr("510.3a")
+def test_510_3a_covers_a_trigger_from_the_state_based_actions_afterward():
+    """The rule names two sources, not one: abilities that triggered on the
+    damage **or while state-based actions are performed afterward**. A blocker
+    that dies to lethal damage (CR 704.5g) is the second, and its dies-trigger
+    is on the stack under the same window."""
+    attacker = Permanent(card=_mk_creature("Ogre", 3, 3))
+    blocker = Permanent(card=_mk_creature(
+        "Martyr", 1, 1, "When this creature dies, you gain 3 life."
+    ))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", battlefield=[blocker]),
+    ])
+    game.enforce_mana_costs = False
+
+    _r510_to_damage_holding_priority(game, [0], {0: [0]})
+
+    assert not game.is_on_battlefield(blocker)
+    assert [card.name for card in game.players[1].graveyard] == ["Martyr"]
+    assert [item.ability_text for item in game.stack] == [
+        "When this creature dies, you gain 3 life."
+    ]
+    assert game.priority_player_index == 0
+    assert game.players[1].life == 20, "the trigger must not have resolved yet"
+
+
+# --- CR 508.5: which player an attacking creature's ability calls "defending"
+
+
+def _mk_forest(name: str = "Forest") -> CardDefinition:
+    return CardDefinition(
+        name=name,
+        mana_cost="",
+        cmc=0.0,
+        type_line="Basic Land - Forest",
+        oracle_text="",
+        colors=(),
+        color_identity=(),
+        keywords=(),
+        produced_mana=("G",),
+        raw={"name": name, "type_line": "Basic Land - Forest"},
+    )
+
+
+def _mk_planeswalker(name: str = "Test Walker") -> CardDefinition:
+    return CardDefinition(
+        name=name,
+        mana_cost="",
+        cmc=0.0,
+        type_line="Legendary Planeswalker - Test",
+        oracle_text="",
+        colors=(),
+        color_identity=(),
+        keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Legendary Planeswalker - Test", "loyalty": "4"},
+    )
+
+
+# Gaea's Liege's template, on an invented card: what the engine reads is the
+# printed sentence, so the name is not part of the behaviour under test.
+_DEFENDER_COUNTING_TEXT = (
+    "As long as Probe Liege isn't attacking, its power and toughness are each "
+    "equal to the number of Forests you control. As long as Probe Liege is "
+    "attacking, its power and toughness are each equal to the number of "
+    "Forests defending player controls."
+)
+
+
+def _forests(count: int) -> list[Permanent]:
+    return [Permanent(card=_mk_forest(f"Forest {i}")) for i in range(count)]
+
+
+def _r508_5_declare(game, **kwargs):
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    ok, message = game.declare_attackers(0, [0], **kwargs)
+    assert ok, message
+    game._refresh_dynamic_creatures()
+
+
+@pytest.mark.cr("508.5", "508.5a")
+def test_508_5_defending_player_is_the_player_this_attacker_is_attacking():
+    """"...the defending player it's referring to is the player that creature is
+    attacking", and CR 508.5a adds that this is *one specific* defending player
+    even when several are under attack.
+
+    Three seats, three different Forest counts, so every wrong answer is
+    visible: the controller's own (1), the other defender's (5), or every
+    battlefield at once (9). Only the seat this attacker was sent at gives 3."""
+    liege = Permanent(card=_mk_creature("Probe Liege", 0, 0, _DEFENDER_COUNTING_TEXT))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[liege] + _forests(1)),
+        PlayerState(name="P2", battlefield=_forests(3)),
+        PlayerState(name="P3", battlefield=_forests(5)),
+    ])
+
+    _r508_5_declare(game, attacker_targets={0: 1})
+
+    assert liege.defending_player_index == 1
+    assert (liege.effective_power, liege.effective_toughness) == (3, 3)
+
+
+@pytest.mark.cr("508.5", "508.1b")
+def test_508_5_attacking_a_planeswalker_names_its_controller_as_defender():
+    """"...or the controller of the planeswalker that creature is attacking."
+    The declaration here says the *opposite* with its shared fallback seat —
+    ``defending_player_index=1`` — and the walker's controller still wins,
+    because CR 508.5 derives the defending player from what the creature is
+    attacking rather than from what the caller asserted."""
+    liege = Permanent(card=_mk_creature("Probe Liege", 0, 0, _DEFENDER_COUNTING_TEXT))
+    walker = Permanent(card=_mk_planeswalker())
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[liege] + _forests(1)),
+        PlayerState(name="P2", battlefield=_forests(3)),
+        PlayerState(name="P3", battlefield=[walker] + _forests(5)),
+    ])
+
+    _r508_5_declare(
+        game,
+        defending_player_index=1,
+        attacker_planeswalker_ids={0: walker.permanent_id},
+    )
+
+    assert liege.defending_player_index == 2
+    assert game.combat_attackers == {0: 2}
+    assert (liege.effective_power, liege.effective_toughness) == (5, 5)

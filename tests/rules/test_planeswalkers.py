@@ -7,6 +7,14 @@ loyalty of a planeswalker on the battlefield *is* its loyalty counters), written
 on entry by ``_initialize_permanent_state`` and adjusted by loyalty costs and by
 damage. Tests that build a board by hand set that key themselves, exactly as a
 hand-built creature sets its own ``damage_marked``.
+
+CR 606.5 (several costs to add or remove loyalty counters combining into one)
+is deliberately untested: it needs a second, *additional* loyalty cost to
+combine the printed one with — Carth the Lion's "loyalty abilities you control
+cost an additional [+1]" is the rule's own example — and nothing in this engine
+can produce one. ``mixins/stack/activation.py`` derives the delta from the
+ability's own loyalty symbol alone, so a test here could only re-assert that
+one cost is one cost.
 """
 
 import pytest

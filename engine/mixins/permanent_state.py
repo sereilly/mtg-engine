@@ -1349,8 +1349,9 @@ class PermanentStateMixin:
         # Umezawa), "…can't be the target of spells" (Anti-Magic Aura). Asked
         # only when the chooser is a *spell*, which `ability_source is None`
         # says: these clauses narrow shroud to spells, and Artifact Ward's
-        # sibling below narrows it to abilities. A card may print either
-        # without the other (CR 115.6), so neither may answer for both.
+        # sibling below narrows it to abilities. A spell and an ability are
+        # separately targeted (CR 115.1a, CR 115.1c/d) and a card may print
+        # either without the other, so neither may answer for both.
         if ability_source is None and source_card is not None:
             from ..target_immunity import (
                 spell_is_in_class,
@@ -1379,8 +1380,9 @@ class PermanentStateMixin:
         # stopped; Terror ("Destroy target creature") is not, however plainly it
         # could kill the same Wall.
         #
-        # Asked per source kind, because CR 115.6 lets a card stop one and not
-        # the other, and the two answers come from different places: a spell's
+        # Asked per source kind, because a spell and an ability are separately
+        # targeted (CR 115.1a, CR 115.1c/d) so a card can stop one and not the
+        # other, and the two answers come from different places: a spell's
         # description is derived from its card right here, while an ability's
         # must be handed in — ``ability_source`` names the permanent, and a
         # permanent may carry several abilities that target differently.

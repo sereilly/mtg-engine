@@ -12,6 +12,11 @@ spell, and the two go through the same engine entry point. CR 305.2's
 once-per-turn count is covered from the land side in
 ``test_land_play_allowance.py``; here it is cited as what makes the action a
 special action rather than a spell.
+
+CR 116.3 ("that player receives priority afterward") is at the end. Playing a
+land opens no priority window of its own, so the grant is an explicit call —
+``Game.note_priority_action_taken``, which every action site makes once its
+action has succeeded.
 """
 
 import pytest
@@ -157,3 +162,53 @@ def test_116_2a_the_allowance_resets_on_the_players_next_turn():
 
     assert game.cast_from_hand(0, "Forest 2").supported is True
     assert len(p1.battlefield) == 2
+
+
+# ---------------------------------------------------------------------------
+# 116.3 — the player who took the special action gets priority back
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("116.3", "116.2a")
+def test_116_3_playing_a_land_grants_priority_even_with_no_window_open():
+    """"If a player takes a special action, that player receives priority
+    afterward."
+
+    The land play itself opens no priority window — it is not a spell and puts
+    nothing on the stack — so the grant has to come from somewhere, and it is
+    ``note_priority_action_taken``, the call every action site makes once its
+    action succeeded. Its "no window open" branch is the whole of CR 116.3:
+    without it a seat that took a special action outside a window would hold
+    nothing afterward and could not act again."""
+    game, p1 = _game_with_hand(_forest())
+    game.clear_priority_window()
+    assert game.priority_player_index is None
+
+    game.queue_from_hand(0, "Forest")
+    game.note_priority_action_taken(0)
+
+    assert game.has_priority(0)
+    assert not game.has_priority(1)
+    assert game.priority_pass_count == 0
+    assert len(p1.battlefield) == 1
+
+
+@pytest.mark.cr("116.3", "116.2a")
+def test_116_3_a_special_action_is_not_a_pass():
+    """The player who took it receives priority — the opponent does not. That
+    is the difference between taking a special action and passing, and the
+    second half of this test is what makes the first half mean something: the
+    same window *does* hand priority over when it is actually passed."""
+    game, p1 = _game_with_hand(_forest("Forest 1"), _forest("Forest 2"))
+    assert game.has_priority(0)
+
+    game.queue_from_hand(0, "Forest 1")
+    game.note_priority_action_taken(0)
+
+    assert game.has_priority(0)
+    assert not game.has_priority(1)
+
+    game.pass_priority(0)
+
+    assert game.has_priority(1)
+    assert not game.has_priority(0)

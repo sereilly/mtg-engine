@@ -530,6 +530,22 @@ class SpellCastingMixin:
             self.log.append(target_reason)
             return SimulationResult(card.name, False, classification.effect_kind, target_reason)
 
+        # CR 601.2c for the target the caller *named*, beside the per-kind arms
+        # above rather than inside them: a spell whose primary instruction is a
+        # `sequence` wrapper reaches no arm at all, so "Destroy target artifact.
+        # You gain life equal to its mana value" could be cast on a Grizzly
+        # Bears — the destroy then found nothing and the life was gained anyway.
+        # Still before any mana leaves the pool.
+        named_refusal = self.cast_target_refusal(
+            caster_index, card,
+            target_player_index=target_player_index,
+            target_permanent_index=target_permanent_index,
+            target_permanent_ids=target_permanent_ids,
+        )
+        if named_refusal is not None:
+            self.log.append(named_refusal)
+            return SimulationResult(card.name, False, classification.effect_kind, named_refusal)
+
         # A divided spell's cross-seat target list: sanity-check every entry so a
         # stale battlefield index can't crash resolution.
         if divided_targets is not None:

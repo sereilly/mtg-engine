@@ -21,6 +21,8 @@ import pytest
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 
+from ..helpers import _nosick
+
 
 def _creature(name: str, power: int = 2, toughness: int = 2) -> CardDefinition:
     return CardDefinition(
@@ -304,3 +306,368 @@ def test_701_12b_two_permanents_one_player_controls_exchange_to_nothing(set_pool
     assert game.controller_index_of(one) == 0
     assert game.controller_index_of(two) == 0
     assert not has_control_change(one) and not has_control_change(two)
+
+
+# ---------------------------------------------------------------------------
+# 701.2 Activate / 701.5 Cast / 701.6 Counter / 701.8 Destroy / 701.13 Exile /
+# 701.18 Play / 701.24 Shuffle
+#
+# Each of these is a verb the engine performs from several places, so every
+# test below drives a printed card rather than the handler: what the rule
+# defines is what the *player* observes at the end of the action, not the shape
+# of the call that produced it.
+# ---------------------------------------------------------------------------
+
+
+def _duel(p1: PlayerState, p2: PlayerState, *, enforce: bool = False) -> Game:
+    return Game(players=[p1, p2], enforce_mana_costs=enforce)
+
+
+# ---------------------------------------------------------------------------
+# 701.2 — Activate
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("701.2", "701.2a")
+def test_701_2a_activating_puts_the_ability_on_the_stack_and_pays_its_costs(set_pool):
+    """"To activate an activated ability is to put it onto the stack and pay
+    its costs, so that it will eventually resolve and have its effect."
+
+    Three separate things, and the test separates them: after activation the
+    ability is *on the stack*, both halves of Rod of Ruin's "{3}, {T}" are
+    already spent, and the effect has not happened yet. A cost charged at
+    resolution instead would be indistinguishable here except for this
+    intermediate observation.
+    """
+    pool = set_pool("LEA")
+    rod = Permanent(card=pool["Rod of Ruin"])
+    p1 = PlayerState(name="P1", battlefield=[rod], mana_pool={"C": 3})
+    p2 = PlayerState(name="P2", life=20)
+    game = _duel(p1, p2, enforce=True)
+
+    result = game.queue_permanent_ability(0, "Rod of Ruin", target_player_index=1)
+
+    assert result.supported
+    assert len(game.stack) == 1
+    assert rod.tapped is True                     # {T} paid
+    assert p1.mana_pool.get("C", 0) == 0          # {3} paid
+    assert p2.life == 20                          # and the effect has not run
+
+    game.resolve_top_of_stack()
+
+    assert len(game.stack) == 0
+    assert p2.life == 19
+
+
+@pytest.mark.cr("701.2", "701.2a")
+def test_701_2a_only_the_objects_controller_can_activate_its_ability(set_pool):
+    """"Only an object's controller ... can activate its activated ability
+    unless the object specifically says otherwise."
+
+    The engine enforces this by *scope*: an activation names a permanent on the
+    activating seat's own battlefield, so an opponent's Prodigal Sorcerer is not
+    an object that seat can reach at all. Nothing is paid and nothing happens --
+    and the very same call from the controller's seat works.
+    """
+    pool = set_pool("LEA")
+    sorcerer = _nosick(Permanent(card=pool["Prodigal Sorcerer"]))
+    p1 = PlayerState(name="P1", battlefield=[sorcerer], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = _duel(p1, p2)
+
+    with pytest.raises(ValueError):
+        game.activate_permanent_ability(1, "Prodigal Sorcerer", target_player_index=0)
+
+    assert sorcerer.tapped is False
+    assert p1.life == 20
+
+    assert game.activate_permanent_ability(
+        0, "Prodigal Sorcerer", target_player_index=1
+    ).supported
+    assert (sorcerer.tapped, p2.life) == (True, 19)
+
+
+# ---------------------------------------------------------------------------
+# 701.5 — Cast
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("701.5", "701.5a")
+def test_701_5a_casting_takes_the_card_from_its_zone_onto_the_stack_and_pays(set_pool):
+    """"To cast a spell is to take it from the zone it's in (usually the hand),
+    put it on the stack, and pay its costs, so that it will eventually resolve."
+
+    The same three-part observation as activation, and the same reason for
+    making it mid-flight: hand, stack and mana pool all have to have moved
+    *before* the spell resolves, and only the paused state shows that.
+    """
+    pool = set_pool("LEA")
+    p1 = PlayerState(name="P1", hand=[pool["Lightning Bolt"]], mana_pool={"R": 1})
+    p2 = PlayerState(name="P2", life=20)
+    game = _duel(p1, p2, enforce=True)
+
+    result = game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+
+    assert result.supported
+    assert p1.hand == []                          # taken from the zone it was in
+    assert len(game.stack) == 1                   # put on the stack
+    assert p1.mana_pool.get("R", 0) == 0          # costs paid
+    assert p2.life == 20                          # not yet resolved
+
+    game.resolve_top_of_stack()
+
+    assert p2.life == 17
+    assert [c.name for c in p1.graveyard] == ["Lightning Bolt"]
+
+
+@pytest.mark.cr("701.5", "701.5a", "701.13", "701.13a")
+def test_701_5a_a_resolving_permanent_spell_is_the_only_entry_that_was_cast(set_pool):
+    """Being cast is a property of *how* a permanent arrived, and Containment
+    Priest is the card that asks: "If a nontoken creature would enter and it
+    wasn't cast, exile it instead."
+
+    A creature spell cast from hand resolves onto the battlefield untouched.
+    The creature Transmogrify puts onto the battlefield out of a library was
+    never cast, so the replacement fires and it is exiled (701.13a) instead of
+    entering -- the same board, the same creature card, and only the manner of
+    arrival different.
+    """
+    pool = set_pool("M21")
+    lea = set_pool("LEA")
+
+    priest = _nosick(Permanent(card=pool["Containment Priest"]))
+    p1 = PlayerState(name="P1", battlefield=[priest], hand=[lea["Grizzly Bears"]])
+    game = _duel(p1, PlayerState(name="P2"))
+
+    assert game.cast_from_hand(0, "Grizzly Bears").supported
+    assert [perm.card.name for perm in p1.battlefield] == [
+        "Containment Priest", "Grizzly Bears",
+    ]
+    assert p1.exile == []
+
+    priest = _nosick(Permanent(card=pool["Containment Priest"]))
+    victim = _nosick(Permanent(card=lea["Grizzly Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[priest], hand=[pool["Transmogrify"]])
+    p2 = PlayerState(
+        name="P2", battlefield=[victim],
+        library=[lea["Mountain"], lea["Hill Giant"], lea["Forest"]],
+    )
+    game = _duel(p1, p2)
+
+    assert game.cast_from_hand(
+        0, "Transmogrify", target_player_index=1, target_permanent_index=0
+    ).supported
+
+    # Hill Giant was *put* onto the battlefield, not cast, so it never entered.
+    assert [perm.card.name for perm in p2.battlefield] == []
+    assert sorted(c.name for c in p2.exile) == ["Grizzly Bears", "Hill Giant"]
+
+
+# ---------------------------------------------------------------------------
+# 701.6 — Counter
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("701.6", "701.6a", "701.6b")
+def test_701_6a_a_countered_spell_leaves_the_stack_for_its_owners_graveyard(set_pool):
+    """"To counter a spell ... means to cancel it, removing it from the stack.
+    It doesn't resolve and none of its effects occur. A countered spell is put
+    into its owner's graveyard." And 701.6b: no refund of what was paid.
+
+    All four halves are separately observable here -- the stack empties, the
+    Bolt is in its *owner's* graveyard rather than the counterer's, the 3 damage
+    never happens, and the {R} that paid for it does not come back.
+    """
+    pool = set_pool("LEA")
+    p1 = PlayerState(name="P1", hand=[pool["Lightning Bolt"]], mana_pool={"R": 3})
+    p2 = PlayerState(name="P2", hand=[pool["Counterspell"]], mana_pool={"U": 2}, life=20)
+    game = _duel(p1, p2, enforce=True)
+
+    game.queue_from_hand(0, "Lightning Bolt", target_player_index=1)
+    assert p1.mana_pool.get("R", 0) == 2  # one red spent casting it
+
+    countered = game.cast_from_hand(
+        1, "Counterspell", target_stack_index=len(game.stack) - 1
+    )
+
+    assert countered.supported
+    assert len(game.stack) == 0                                  # off the stack
+    assert [c.name for c in p1.graveyard] == ["Lightning Bolt"]  # owner's graveyard
+    assert p2.life == 20                                         # no effects occurred
+    assert p1.mana_pool.get("R", 0) == 2                         # 701.6b: no refund
+
+
+# ---------------------------------------------------------------------------
+# 701.8 — Destroy
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("701.8", "701.8a", "108.3")
+def test_701_8a_a_destroyed_permanent_goes_to_its_owners_graveyard(set_pool):
+    """"To destroy a permanent, move it from the battlefield to its **owner's**
+    graveyard."
+
+    Owner, not controller -- a distinction with no visible consequence until the
+    two differ. Rubinia Soulsinger takes control of an opponent's Grizzly Bears
+    (a layer-2 contribution, which never rewrites ownership, CR 108.3); Wrath of
+    God then destroys it, and the card goes back to the player who started the
+    game with it.
+    """
+    leg = set_pool("LEG")
+    lea = set_pool("LEA")
+    rubinia = _nosick(Permanent(card=leg["Rubinia Soulsinger"]))
+    bears = _nosick(Permanent(card=lea["Grizzly Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[rubinia], hand=[lea["Wrath of God"]])
+    p2 = PlayerState(name="P2", battlefield=[bears])
+    game = _duel(p1, p2)
+    game.start_turn(0)
+
+    assert game.activate_permanent_ability(
+        0, "Rubinia Soulsinger", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    ).supported
+    assert game.controller_index_of(bears) == 0  # P1 controls it now
+
+    assert game.cast_from_hand(0, "Wrath of God").supported
+
+    assert [c.name for c in p2.graveyard] == ["Grizzly Bears"]
+    assert "Grizzly Bears" not in [c.name for c in p1.graveyard]
+
+
+# ---------------------------------------------------------------------------
+# 701.13 — Exile
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("701.13", "701.13a", "701.8b")
+def test_701_13a_exiling_a_creature_moves_it_to_exile_not_to_the_graveyard(set_pool):
+    """"To exile an object, move it to the exile zone from wherever it is."
+
+    Swords to Plowshares is the check that exile is a *different destination*
+    from the graveyard rather than a label on the same move -- the Bears reach
+    neither battlefield nor graveyard -- and 701.8b's second sentence falls out
+    of the same observation: a permanent put somewhere by a spell that never
+    says "destroy" has not been destroyed.
+    """
+    pool = set_pool("LEA")
+    bears = _nosick(Permanent(card=pool["Grizzly Bears"]))  # power 2
+    p1 = PlayerState(name="P1", hand=[pool["Swords to Plowshares"]])
+    p2 = PlayerState(name="P2", battlefield=[bears], life=20)
+    game = _duel(p1, p2)
+
+    assert game.cast_from_hand(
+        0, "Swords to Plowshares", target_player_index=1, target_permanent_index=0
+    ).supported
+
+    assert [perm.card.name for perm in p2.battlefield] == []
+    assert [c.name for c in p2.graveyard] == []
+    assert [c.name for c in p2.exile] == ["Grizzly Bears"]
+    assert p2.life == 22  # "its controller gains life equal to its power"
+
+
+@pytest.mark.cr("701.13", "701.13a", "701.21")
+def test_701_13a_exile_takes_an_object_from_whatever_zone_it_is_in(set_pool):
+    """"...from wherever it is" -- the graveyard is a zone exile reaches too.
+
+    Tormod's Crypt exiles a graveyard while *sacrificing itself*, so one
+    resolution shows both destinations at once: the cards leave the graveyard
+    for exile, and the Crypt, which was sacrificed rather than exiled (701.21),
+    goes to its owner's graveyard.
+    """
+    m21 = set_pool("M21")
+    lea = set_pool("LEA")
+    crypt = _nosick(Permanent(card=m21["Tormod's Crypt"]))
+    p1 = PlayerState(name="P1", battlefield=[crypt])
+    p2 = PlayerState(name="P2", graveyard=[lea["Grizzly Bears"], lea["Hill Giant"]])
+    game = _duel(p1, p2)
+    game.start_turn(0)
+
+    assert game.activate_permanent_ability(
+        0, "Tormod's Crypt", target_player_index=1
+    ).supported
+
+    assert p2.graveyard == []
+    assert [c.name for c in p2.exile] == ["Grizzly Bears", "Hill Giant"]
+    assert [c.name for c in p1.graveyard] == ["Tormod's Crypt"]
+    assert p1.exile == []
+
+
+# ---------------------------------------------------------------------------
+# 701.18 — Play
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("701.18", "701.18a")
+def test_701_18a_playing_a_land_does_not_use_the_stack(set_pool):
+    """"Playing a land is a special action ... so it doesn't use the stack; it
+    simply happens."
+
+    The land goes from hand to battlefield in the one call, with nothing put on
+    the stack in between -- which is what separates playing a land from casting
+    the permanent spells that share this entry point in the engine.
+    """
+    pool = set_pool("LEA")
+    p1 = PlayerState(name="P1", hand=[pool["Forest"]])
+    game = _duel(p1, PlayerState(name="P2"), enforce=True)
+    game.start_turn(0)
+
+    assert game.cast_from_hand(0, "Forest").supported
+
+    assert len(game.stack) == 0
+    assert p1.hand == []
+    assert [perm.card.name for perm in p1.battlefield] == ["Forest"]
+
+
+@pytest.mark.cr("701.18", "701.18a", "305.2", "305.2b")
+def test_701_18a_a_second_land_play_in_one_turn_is_refused_and_resets_next_turn(set_pool):
+    """"A player may play a land if ... they haven't played a land this turn."
+
+    The refusal and the reset are one rule seen twice: the second Mountain is
+    turned away on the turn the Forest was played, and the very same call
+    succeeds once a new turn has begun.
+    """
+    pool = set_pool("LEA")
+    p1 = PlayerState(name="P1", hand=[pool["Forest"], pool["Mountain"]])
+    game = _duel(p1, PlayerState(name="P2"), enforce=True)
+    game.start_turn(0)
+
+    assert game.cast_from_hand(0, "Forest").supported
+    second = game.cast_from_hand(0, "Mountain")
+
+    assert not second.supported
+    assert [perm.card.name for perm in p1.battlefield] == ["Forest"]
+    assert [c.name for c in p1.hand] == ["Mountain"]
+
+    game.start_turn(0)
+
+    assert game.cast_from_hand(0, "Mountain").supported
+    assert [perm.card.name for perm in p1.battlefield] == ["Forest", "Mountain"]
+
+
+# ---------------------------------------------------------------------------
+# 701.24 — Shuffle
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cr("701.24", "701.24a", "701.13a")
+def test_701_24a_shuffling_a_graveyard_into_a_library_preserves_every_card(set_pool):
+    """"To shuffle a library ... randomize the cards within it."
+
+    Randomizing is not the testable half -- *conservation* is. Feldon's Cane
+    shuffles a graveyard into a library, so every card that was in either zone
+    is in the library afterwards and the graveyard is empty; nothing was lost to
+    the randomization. The Cane exiles itself as part of its own cost (701.13a),
+    so it is not among them.
+    """
+    atq = set_pool("ATQ")
+    lea = set_pool("LEA")
+    cane = _nosick(Permanent(card=atq["Feldon's Cane"]))
+    p1 = PlayerState(
+        name="P1", battlefield=[cane],
+        graveyard=[lea["Grizzly Bears"], lea["Hill Giant"]],
+        library=[lea["Forest"], lea["Mountain"]],
+    )
+    game = _duel(p1, PlayerState(name="P2"))
+    game.start_turn(0)
+
+    assert game.activate_permanent_ability(0, "Feldon's Cane").supported
+
+    assert p1.graveyard == []
+    assert sorted(c.name for c in p1.library) == [
+        "Forest", "Grizzly Bears", "Hill Giant", "Mountain",
+    ]
+    assert [c.name for c in p1.exile] == ["Feldon's Cane"]
+    assert p1.battlefield == []

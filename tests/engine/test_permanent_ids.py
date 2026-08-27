@@ -308,11 +308,16 @@ def test_a_targeted_spell_still_hits_its_target_when_a_look_alike_moves_in():
     assert other.power_bonus == 0
 
 
-def test_a_target_that_has_left_falls_back_to_the_old_index_behaviour():
-    """Deliberately *not* a fizzle. The id is additive: when it no longer
-    resolves, resolution behaves exactly as it did before this migration, so the
-    identity fix can only turn a wrong answer into a right one and never
-    introduces a new way for a spell to do nothing."""
+def test_a_target_that_has_left_makes_the_spell_fizzle():
+    """CR 608.2b: the spell's only target is gone, so it does not resolve.
+
+    This test used to assert the opposite, and said so: resolution fell back to
+    the recorded *index*, which after the target left names whatever slid into
+    that slot — Giant Growth pumping a creature nobody aimed it at. It was
+    written as "deliberately not a fizzle … stated so a later change to it is a
+    deliberate one", and this is that change: the id says the chosen target has
+    left, which is precisely what the rule asks.
+    """
     caster = PlayerState(name="Caster", hand=[_lea("Giant Growth")])
     defender = PlayerState(name="Defender")
     game = Game(players=[caster, defender])
@@ -324,13 +329,11 @@ def test_a_target_that_has_left_falls_back_to_the_old_index_behaviour():
     game._put_permanent_onto_battlefield(1, survivor, None)
 
     game.queue_from_hand(0, "Giant Growth", target_player_index=1, target_permanent_index=0)
-    game.players[1].battlefield = [survivor]
+    game.remove_from_battlefield(doomed)
     game._settle()
 
-    # The chosen target is gone, so the pre-existing index/fallback path picks
-    # the remaining creature — unchanged behaviour, stated so a later change to
-    # it is a deliberate one.
-    assert survivor.power_bonus == 3
+    assert survivor.power_bonus == 0
+    assert any(card.name == "Giant Growth" for card in caster.graveyard)
 
 
 def test_the_stack_records_identity_for_every_targeted_object():

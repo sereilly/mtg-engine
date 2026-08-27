@@ -273,6 +273,29 @@ _QUANTIFIERLESS_TARGET_KINDS = frozenset({
     "grant_banding_to_target", "counter_stack_ability",
 })
 
+#: Target kinds ``illegal_targets_refusal`` declines to answer for, because a
+#: *player* may be among the chosen targets and a player target reaches the
+#: stack item through the same field as the seat a permanent target sits on.
+#: "Every target is illegal" is unanswerable where the two cannot be told
+#: apart, and a wrong "yes" there counters a spell that still has a legal
+#: target — strictly worse than the rule going unenforced for those kinds.
+#: ``none``/``modal``/``hand_card`` are in it for the plainer reason: they are
+#: not object targets at all.
+_UNFIZZLABLE_TARGET_KINDS = frozenset({
+    "none", "modal", "hand_card",
+    "player", "any", "divided", "player_or_planeswalker",
+})
+
+#: Target kinds ``cast_target_refusal`` leaves to the per-kind arms in
+#: ``_validate_cast_targets``. A named index means something different in each
+#: of them — a slot in a graveyard, a position in the stack, a card in hand —
+#: while the enumeration this gate compares against is a battlefield slot, so
+#: comparing the two would refuse legal casts rather than illegal ones.
+_UNCHECKED_CAST_TARGET_KINDS = frozenset({
+    "none", "modal", "hand_card", "stack", "graveyard_creature",
+    "spell_or_permanent",
+})
+
 
 def _ability_target_quantifiers(instruction) -> list[str]:
     """Every *mandatory-context* ``targets`` quantifier this ability carries.
@@ -810,6 +833,202 @@ class LegalityMixin:
         if not valid:
             return refused
         return None
+
+    def cast_target_refusal(
+        self, caster_index: int, card: CardDefinition, *,
+        target_player_index=None, target_permanent_index=None,
+        target_permanent_ids=None,
+    ) -> str | None:
+        """CR 601.2c: a **named** permanent target must be a legal one, checked
+        before any cost is paid. Returns the refusal, or None.
+
+        The cast-side twin of :meth:`activation_target_refusal`, and it exists
+        for the same reason that one replaced a per-kind if-chain in
+        ``activation.py``: ``_validate_cast_targets`` checks the target of the
+        instruction kinds it has arms for, so a card whose primary instruction
+        is a ``sequence`` wrapper — every "Destroy target artifact. You gain
+        life…" — reached no arm and had its target unchecked. Divine Offering
+        could be cast on Grizzly Bears.
+
+        It cannot live inside ``_validate_cast_targets``, which is what makes
+        this a second function rather than one more check there:
+        ``_enumerate_targets(for_cast=True)`` probes each candidate *through*
+        that method, so asking it from inside would recurse. Called beside it
+        instead, from the one cast path, before the mana is spent.
+
+        Only what the caller **named** is checked here. "Is there any legal
+        target at all?" is the arms' own question and several of them answer it
+        with a card-specific rule; this one answers "is the one you named among
+        the ones the picker would have offered?", which is idiom #9 — the
+        picker's enumeration is a hint and the engine re-checks the answer.
+        """
+        if card.primary_type not in ("instant", "sorcery"):
+            # **A permanent spell does not target.** ``derive_cast_spec`` reads
+            # the *card*, so Niambi, Esteemed Speaker's "when this creature
+            # enters, return another target creature you control" comes back as
+            # a creature spec — but that is the ETB trigger's target, chosen
+            # when the trigger goes on the stack (CR 603.3d), long after this
+            # spell was announced. Gating the cast on it refuses to cast the
+            # creature at all. An Aura *is* targeted (CR 115.1b) and its enchant
+            # target has its own arm in ``_validate_cast_targets``.
+            return None
+        program = compile_card_oracle(card)
+        if program.modes:
+            # A modal spell's spec is the *first* mode's, and the caller chose
+            # another: Healing Salve's mode 0 targets a player and its mode 1 a
+            # creature, so gating mode 1 against mode 0's enumeration refuses a
+            # legal cast. The chosen mode's own targets are checked by the arms
+            # in ``_validate_cast_targets``, which is handed the mode index.
+            return None
+        spec = derive_cast_spec(card, program)
+        if spec is None or spec.get("kind") in _UNCHECKED_CAST_TARGET_KINDS:
+            return None
+        if spec_roles(spec):
+            # A spell naming several targets of *different* kinds (Glyph of
+            # Delusion's Wall and the creature that Wall blocked) has one spec
+            # per role and a relation between them. ``_validate_cast_targets``
+            # already checks the whole announcement through
+            # ``_role_targets_legal``; one flat enumeration here would compare
+            # the second target against the first role's list and refuse a
+            # legal cast.
+            return None
+        named_ids = [pid for pid in (target_permanent_ids or []) if isinstance(pid, int)]
+        indices = (
+            [i for i in target_permanent_index if isinstance(i, int)]
+            if isinstance(target_permanent_index, list)
+            else ([target_permanent_index] if isinstance(target_permanent_index, int) else [])
+        )
+        if not named_ids and not indices:
+            return None
+        valid = self._enumerate_targets(caster_index, card, spec, for_cast=True)
+        legal = {
+            (t["seat"], t["index"]) for t in valid
+            if t.get("kind") == "permanent" and t.get("index") is not None
+        }
+        refused = f"no valid target for {card.name}"
+        for permanent_id in named_ids:
+            target = self.permanent_by_id(permanent_id)
+            if target is None:
+                return refused
+            slot = (self.controller_index_of(target), self.battlefield_index_of(target))
+            if slot not in legal:
+                return refused
+        if named_ids:
+            # Ids are the precise answer; an index beside them is the same
+            # choice said twice, and re-checking it would ask about whatever
+            # now sits in that slot.
+            return None
+        seats = (
+            [target_player_index] if target_player_index is not None
+            else list(range(len(self.players)))
+        )
+        for index in indices:
+            if not any((seat, index) in legal for seat in seats):
+                return refused
+        return None
+
+    def illegal_targets_refusal(self, item) -> str | None:
+        """CR 608.2b: whether *item* must leave the stack without resolving.
+
+        The other end of :meth:`activation_target_refusal`. That one asks
+        "may this be announced?" (CR 601.2c/602.2b) before a cost is paid;
+        this asks "are the targets it announced still legal?" at the moment it
+        would resolve, and the rule is all-or-nothing — if **every** target,
+        for every instance of the word "target", is illegal, the object does
+        not resolve at all. Returns the reason, or None to resolve normally.
+
+        This is not the same as a handler finding nothing to do. Each handler
+        already re-checks its own target and skips its own effect, which is
+        CR 608.2b's *last* sentence ("illegal targets won't be affected by
+        parts of the effect for which they're illegal") — and with a per-handler
+        answer, everything printed **after** that sentence still ran. Divine
+        Offering ("Destroy target artifact. You gain life equal to its mana
+        value") gained the life for destroying nothing, which is the rule's own
+        worked example inverted (CR 608.2b's Sorin's Thirst: "Its controller
+        doesn't gain any life"). The check has to be about the object, so it
+        lives here and runs once, above the instructions.
+
+        **Targets are read by identity, never by index.** The ids are what
+        ``_stack_push_object`` stamped as the object was announced, for the
+        reason it stamps them: a slot renumbers while the object waits, and an
+        index that has come to mean a different permanent would answer this
+        question about the wrong one.
+
+        Two deliberate exclusions, both because the engine cannot answer
+        "all targets" for them rather than because the rule stops:
+
+        * **A spell that can target a player** — "any target", a divided one,
+          a player-targeted one. A seat and a *chosen player* reach a stack
+          item through the same ``target_player_index`` field, so a Fireball
+          split between a creature and its controller is indistinguishable from
+          one aimed at the creature alone; the creature dying would then read
+          as "every target is illegal" when the player is still a legal one.
+        * **A graveyard target.** Two copies of one card in one graveyard are
+          literally one ``CardDefinition`` (see ``GraveyardTarget``), and
+          resolution already answers a vanished target there by clamping to the
+          last surviving copy. Replacing that with a fizzle is a decision about
+          a different rule, not this one.
+        """
+        card = item.card
+        if item.ability_instruction is not None:
+            # **Spells only, and the reason is a different bug.** A spell's
+            # targets are a player's choice, made at announcement through
+            # ``cast_target_refusal`` against the enumerated legal ones, so an
+            # id recorded on a spell is a choice that was legal when it was
+            # made and this rule is exactly the question to ask of it later.
+            #
+            # A triggered ability's are stamped at its fire site, and the death
+            # sweep enqueues a dies-trigger *while the dying permanent is still
+            # listed* (``_destroy_swept_permanents``) — so Blazing Effigy's
+            # "it deals 3 damage to target creature" records the dying Effigy
+            # itself, a permanent CR 603.3d would never have offered. Asking
+            # 608.2b of that id counters an ability the engine mis-targeted and
+            # reports it as a rules-correct fizzle, which buries the targeting
+            # bug under a rule. The fire sites have to choose targets after the
+            # permanent has left before this can widen; see ROADMAP.
+            return None
+        if card.primary_type not in ("instant", "sorcery"):
+            # The same reason the announcement gate is instants and sorceries
+            # only: a permanent spell's derived spec belongs to a triggered
+            # ability that has not been put on the stack yet, so an id stamped
+            # beside it says nothing about what *this* object targets. An Aura
+            # whose enchant target has left is CR 608.2b too, and today it
+            # enters attached to nothing and is binned by CR 704.5m one sweep
+            # later — the same destination by a different rule, so moving it is
+            # a decision for the round that can verify it.
+            return None
+        spec = derive_cast_spec(card, compile_card_oracle(card))
+        if spec is None or spec.get("kind") in _UNFIZZLABLE_TARGET_KINDS:
+            # Either the spell does not target at all — a creature spell whose
+            # caller passed a stray index still gets an id stamped, and
+            # countering it would be inventing a target the card never printed
+            # — or its target may be a player, above.
+            return None
+
+        legality: list[bool] = []
+        ids = item.target_permanent_id
+        for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):
+            if not isinstance(permanent_id, int):
+                continue
+            target = self.permanent_by_id(permanent_id)
+            legality.append(
+                target is not None
+                and self.is_on_battlefield(target)
+                # CR 608.2b's "other changes to the game state": protection or
+                # shroud gained in response is the rule's own second example,
+                # and it is the same predicate the cast gate asked.
+                and self._can_be_targeted(
+                    target, card, caster_index=item.caster_index,
+                )
+            )
+        if item.target_stack_item is not None:
+            # A countered or already-resolved spell has left the zone it was
+            # targeted in, which is CR 608.2b's first sentence.
+            legality.append(any(obj is item.target_stack_item for obj in self.stack))
+
+        if not legality or any(legality):
+            return None
+        return f"{card.name} was removed from the stack: every target is illegal (608.2b)"
 
     # -- Target enumeration ------------------------------------------------
     def _enumerate_targets(

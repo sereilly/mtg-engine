@@ -574,3 +574,81 @@ def test_401_5_players_scoped_top_reveal_covers_every_library():
     assert not top_is_public(game, 1), (
         "the own-scoped wording must not widen to the other player's library"
     )
+
+
+# ---------------------------------------------------------------------------
+# 402.3 — you may look at your own hand, count anyone's, and read no one else's
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("402.3", "400.2")
+def test_402_3_a_player_sees_their_own_hand_and_only_the_count_of_another():
+    """"A player can't look at the cards in another player's hand but may count
+    those cards at any time."
+
+    Both halves are one payload, built per viewer: the owner's own seat gets
+    card faces, every other viewer gets an opaque placeholder per position, and
+    ``hand_count`` is truthful for everyone. The count is what makes the
+    placeholders load-bearing rather than an omission — a hidden hand still has
+    to be countable, so it cannot simply be left out of the payload."""
+    from web.serialization import _serialize_player
+
+    p1 = PlayerState(name="P1", hand=[
+        _mk_card("Ancestral Recall", "Instant"),
+        _mk_card("Black Lotus", "Artifact"),
+        _mk_card("Time Walk", "Sorcery"),
+    ])
+    p2 = PlayerState(name="P2", hand=[_mk_card("Counterspell", "Instant")])
+    game = Game(players=[p1, p2])
+
+    own_view = _serialize_player(p1, 0, 0, game)
+    opponent_view = _serialize_player(p1, 1, 0, game)
+
+    assert [entry["name"] for entry in own_view["hand"]] == [
+        "Ancestral Recall", "Black Lotus", "Time Walk",
+    ]
+    # Not a single card name reaches the other seat...
+    assert opponent_view["hand"] == ["<hidden>"] * 3
+    # ...and yet both agree on how many there are.
+    assert own_view["hand_count"] == opponent_view["hand_count"] == 3
+
+
+@pytest.mark.cr("402.3")
+def test_402_3_the_count_another_player_may_take_tracks_the_hand():
+    """"…may count those cards **at any time**": the count is a live read of the
+    zone, not a number snapshotted when the hand was last visible. Drawing and
+    discarding both move it for the opponent's view."""
+    from web.serialization import _serialize_player
+
+    p1 = PlayerState(name="P1", library=_library(["A", "B"]), hand=[_mk_card("C", "Instant")])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    assert _serialize_player(p1, 1, 0, game)["hand_count"] == 1
+
+    game._draw_with_replacements(p1, 2)
+    opponent_view = _serialize_player(p1, 1, 0, game)
+    assert opponent_view["hand_count"] == 3
+    assert opponent_view["hand"] == ["<hidden>"] * 3
+
+    p1.graveyard.append(p1.hand.pop())
+    assert _serialize_player(p1, 1, 0, game)["hand_count"] == 2
+
+
+@pytest.mark.cr("402.3", "400.2")
+def test_402_3_a_spectator_may_not_look_at_anyones_hand_either():
+    """The rule says "another player's hand", not "an opponent's" — a viewer
+    who holds no seat is not the owner of any hand, so every hand is closed to
+    them. Asserted because the seat comparison is ``viewer_seat == seat`` and a
+    seatless viewer is ``None``, which is exactly the value a sloppy check
+    reads as "not an opponent"."""
+    from web.serialization import _serialize_player
+
+    p1 = PlayerState(name="P1", hand=[_mk_card("Ancestral Recall", "Instant")])
+    p2 = PlayerState(name="P2", hand=[_mk_card("Counterspell", "Instant")])
+    game = Game(players=[p1, p2])
+
+    for seat, player in enumerate((p1, p2)):
+        view = _serialize_player(player, None, seat, game)
+        assert view["hand"] == ["<hidden>"]
+        assert view["hand_count"] == 1

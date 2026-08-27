@@ -3,6 +3,8 @@
 import pytest
 
 from engine import Game, PlayerState
+from engine.copies import become_copy
+from engine.layer_bridge import printed_supertypes
 from engine.models import CardDefinition, Permanent
 
 
@@ -592,6 +594,112 @@ def test_704_5k_two_world_permanents_older_goes_to_graveyard():
     game = Game(players=[p1, p2])
 
     world_perms = [perm for perm in p1.battlefield if "World" in perm.card.type_line]
+    assert len(world_perms) == 1
+
+
+@pytest.mark.cr("704.5j", "707.2")
+def test_704_5j_reads_the_copied_name_not_the_printed_one():
+    """704.5j over CR 707.2: a Clone of a legend is a second legend.
+
+    The rule asks what the permanent's characteristics *are*, and layer 1 has
+    already answered — the copy's name and its supertypes are the copied
+    object's. Reading the printed card asks the copier's own line, where a
+    Clone is a Shapeshifter named Clone and no two permanents ever match.
+    """
+    legend = _mk_card("Hazezon Tamar", "Legendary Creature — Human Soldier")
+    clone = _mk_card("Clone", "Creature — Shapeshifter")
+    original = Permanent(card=legend)
+    copier = Permanent(card=clone)
+    p1 = PlayerState(name="P1", battlefield=[original, copier])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    become_copy(copier, original)
+    game.check_state_based_actions()
+
+    survivors = [
+        perm for perm in game.controlled_by(p1)
+        if perm.effective_card.name == "Hazezon Tamar"
+    ]
+    assert len(survivors) == 1
+    assert any(c.name in {"Hazezon Tamar", "Clone"} for c in p1.graveyard)
+
+
+@pytest.mark.cr("704.5j", "707.2")
+def test_704_5j_a_copy_under_another_controller_survives():
+    """704.5j: the legend rule is per player, and a copy is no exception.
+
+    The other half of the read above — a rule that starts asking the right
+    question can start firing on the wrong permanents, and this is the case
+    that tells the difference.
+    """
+    legend = _mk_card("Hazezon Tamar", "Legendary Creature — Human Soldier")
+    clone = _mk_card("Clone", "Creature — Shapeshifter")
+    original = Permanent(card=legend)
+    copier = Permanent(card=clone)
+    p1 = PlayerState(name="P1", battlefield=[original])
+    p2 = PlayerState(name="P2", battlefield=[copier])
+    game = Game(players=[p1, p2])
+
+    become_copy(copier, original)
+    game.check_state_based_actions()
+
+    assert [p.effective_card.name for p in game.controlled_by(p1)] == ["Hazezon Tamar"]
+    assert [p.effective_card.name for p in game.controlled_by(p2)] == ["Hazezon Tamar"]
+    assert not p1.graveyard and not p2.graveyard
+
+
+@pytest.mark.cr("704.5j", "707.2", "111.1")
+def test_704_5j_a_token_copy_of_a_legend_is_binned_too():
+    """704.5j: the same read, down the path a token copy takes.
+
+    A token copy's own ``card`` carries nothing but a name and the type line
+    "Token" (CR 111.1) — every characteristic is the layer 1a contribution — so
+    the printed read missed this one twice over. Sublime Epiphany's "create a
+    token that's a copy of target creature" is the shipped card that does it.
+    """
+    legend = _mk_card("Hazezon Tamar", "Legendary Creature — Human Soldier")
+    original = Permanent(card=legend)
+    p1 = PlayerState(name="P1", battlefield=[original])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    game.create_token_copy(0, original)
+    game.check_state_based_actions()
+
+    survivors = [
+        perm for perm in game.controlled_by(p1)
+        if perm.effective_card.name == "Hazezon Tamar"
+    ]
+    assert len(survivors) == 1
+    # 111.7: the token ceases to exist rather than reaching a graveyard, so
+    # which of the two was kept decides whether anything is there at all.
+    assert len(p1.graveyard) <= 1
+
+
+@pytest.mark.cr("704.5k", "707.2")
+def test_704_5k_reads_the_copied_supertype():
+    """704.5k: a copy of a world permanent is a world permanent.
+
+    Same read as the legend rule and the same fix — the world supertype is a
+    copiable value (CR 707.2), so the sweep has to ask the effective line.
+    Copy Artifact is the card in this pool that can do it.
+    """
+    world = _mk_card("Nether Void", "World Enchantment")
+    copier = _mk_card("Copy Artifact", "Enchantment")
+    original = Permanent(card=world)
+    copy = Permanent(card=copier)
+    p1 = PlayerState(name="P1", battlefield=[original, copy])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    become_copy(copy, original)
+    game.check_state_based_actions()
+
+    world_perms = [
+        perm for perm in game.all_permanents()
+        if "world" in printed_supertypes(perm.effective_card.type_line)
+    ]
     assert len(world_perms) == 1
 
 
