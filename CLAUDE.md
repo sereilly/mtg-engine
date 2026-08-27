@@ -744,11 +744,11 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (roughly 394 of the 734 catalog cards passing —
-379 checked in-game and 15 auto-passed — 4 more reported `equivalent`; the
-rest — almost all of M21 and Antiquities, both promoted before their in-game
-pass — have no recorded result yet, which SET_PLAYBOOK.md Phase 5 owns and
-deliberately does not gate promotion on; the summary at the top of the
+manually validated in-game (roughly 430 of the 1,044 catalog cards passing —
+379 checked in-game and 51 auto-passed — 8 more reported `equivalent`; the
+rest — almost all of M21, Antiquities and Legends, all three promoted before
+their in-game pass — have no recorded result yet, which SET_PLAYBOOK.md Phase 5
+owns and deliberately does not gate promotion on; the summary at the top of the
 markdown is the current number). A card can also be recorded **failing**: that
 is an in-game bug report with a card name on it, and it stays in the tracker
 until the card is fixed and re-checked. **Generated automatically** — results
