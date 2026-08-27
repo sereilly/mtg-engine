@@ -234,6 +234,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # rather than with the text (CR 609.3), which is a payload difference and
     # not a category one.
     "recolor_target_chosen_color": "recolor",
+    # Dream Coat: the same effect on an Aura's own host rather than on a
+    # target, and on the set of colours the card offers rather than one.
+    "recolor_enchanted_chosen_color": "recolor",
     # CR 701.12b, an atomic swap of two layer-2 contributions.
     "exchange_control_of_targets": "control",
     "exchange_control_of_bound": "control",
@@ -284,6 +287,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Looking at a hand reads a hidden zone; the legacy rule and the handler
     # both live in the engine's zones modules.
     "exile_target_graveyard": "zones",
+    # Sword of the Ages: what the ability's own cost sacrificed, exiled out of
+    # the graveyard the cost put it in.
+    "exile_cost_sacrifices": "zones",
     "reveal_hand_and_choose": "zones",
     "look_at_target_hand": "zones",
     "look_at_target_library_top": "zones",

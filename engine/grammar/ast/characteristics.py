@@ -254,6 +254,13 @@ class BecomeCreature:
 #: disagree, and nothing to say which one the handler should believe.
 CHOSEN_COLOR = "chosen_color"
 
+#: The plural of it — "becomes **the color or colors** of your choice" (Dream
+#: Coat). A different sentinel rather than a flag beside the singular, for the
+#: reason the singular is a sentinel at all: what the card offers is a *set* of
+#: colours where Alchor's Tomb offers one, and a reader that could not tell them
+#: apart would silently answer the wider offer with the narrower one.
+CHOSEN_COLORS = "chosen_colors"
+
 
 @dataclass(frozen=True)
 class BecomeColor:

@@ -1739,6 +1739,49 @@ def exile_target_graveyard(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("exile_cost_sacrifices")
+def exile_cost_sacrifices(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…, then exile this artifact and those creature cards." (Sword of the
+    Ages.)
+
+    Everything the ability's own cost sacrificed, taken out of the graveyard the
+    sacrifice put it in. CR 601.2h paid that cost before the ability reached the
+    stack, so there is no battlefield step here and no permanent to move — each
+    is a *card* now (CR 400.7), found in its **owner's** graveyard, which is not
+    always the seat that controlled it.
+
+    Each card is matched by object identity, never by name: two copies of the
+    same creature in one graveyard are two cards, and exiling "a Grizzly Bears"
+    would be free to take the wrong one.
+
+    A cost that ate nothing but the source exiles just the source, which is what
+    "any number of creatures" and none of them means.
+    """
+    cards = [
+        permanent.card
+        for permanent in ((context.choices or {}).get("sacrificed_set_for_cost") or ())
+    ]
+    source = context.source_permanent
+    if source is not None:
+        cards.append(source.card)
+    exiled: list[str] = []
+    for card in cards:
+        for player in game.players:
+            index = next(
+                (i for i, held in enumerate(player.graveyard) if held is card), None
+            )
+            if index is not None:
+                player.exile.append(player.graveyard.pop(index))
+                exiled.append(card.name)
+                break
+    game.log.append(
+        f"{context.card.name} exiled {', '.join(exiled)}"
+        if exiled
+        else f"{context.card.name}: nothing it sacrificed is still in a graveyard"
+    )
+    return True, "resolved"
+
+
 @effect_handler("exile_target_graveyard_card")
 def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Exile target card from a graveyard." (Return to Nature's third mode,

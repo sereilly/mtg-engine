@@ -243,6 +243,21 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
             "no handler honours this counter restriction: " + ", ".join(leftover), node=node
         )
 
+    if node.only_if is not None:
+        # "…if it would destroy a land you control" (Equinox). Carried as the
+        # key the handler asks `engine/counter_conditions.py` with — the same
+        # table the parse gate read, so what the card was admitted for and what
+        # the counter checks cannot part company. An unkeyed condition here
+        # would be a counter that fires on every spell, which is the direction
+        # nothing crashes and the card is simply wrong.
+        from ...counter_conditions import counter_condition_key
+
+        key = counter_condition_key(node.only_if)
+        if key is None:
+            raise LoweringError(
+                f"nothing answers the counter condition {node.only_if!r}", node=node
+            )
+        payload["only_if"] = key
     if node.unless_pays is not None:
         if node.unless_pays.pips == _COUNTER_UNLESS_PAYS_X:
             payload["unless_pays_x"] = True

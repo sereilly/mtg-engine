@@ -27,6 +27,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (
     _mentions_x,
+    _restrictions_beyond,
     _stamp_x_from_count,
     count_spec,
 )
@@ -56,6 +57,8 @@ def lower_where_x(
         return _lower_where_x_this_way(node, inner, produced)
     if isinstance(node.definition, ast.CountersOnSource):
         return _lower_where_x_counters(node, inner)
+    if isinstance(node.definition, ast.TotalPowerSacrificedThisWay):
+        return _lower_where_x_sacrificed_power(node, inner)
     # "…where X is **twice** the number of …" (Jovial Evil). The factor is
     # unwrapped here and handed to `count_spec`, so only the definitions this
     # branch can scale accept one: a `Times` over a death history or a mana
@@ -96,6 +99,34 @@ def _lower_where_x_counters(
     if not _mentions_x(inner):
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
     return _stamp_x_from_count(inner, {"source_counters": node.definition.kind})
+
+
+def _lower_where_x_sacrificed_power(
+    node: ast.WhereX, inner: tuple[OracleInstruction, ...]
+) -> tuple[OracleInstruction, ...]:
+    """"…where X is the total power of the creatures sacrificed this way."
+    (Sword of the Ages.)
+
+    Not a count of a set on any board, so it carries no owner and no zone: the
+    creatures were eaten by this ability's own cost (CR 601.2h) and are cards in
+    a graveyard by the time X is read. What is summed is their last power on the
+    battlefield (CR 608.2h), recorded as the cost was charged.
+
+    Only "creatures" is admitted, because that is the only set the cost charger
+    records — a card printing another noun would be aggregating over a payment
+    nothing kept, and lowering refuses rather than reading a zero.
+    """
+    filt = node.definition.filter
+    if filt.card_types != ("creature",) or _restrictions_beyond(
+        filt, frozenset({"card_types"})
+    ):
+        raise LoweringError(
+            "the sacrificed total is read off creatures and nothing narrower",
+            node=node,
+        )
+    if not _mentions_x(inner):
+        raise LoweringError("a where-clause defined an X nothing reads", node=node)
+    return _stamp_x_from_count(inner, {"cost_sacrifices_power": True})
 
 
 def _names_a_player_target(inner: tuple[OracleInstruction, ...]) -> bool:

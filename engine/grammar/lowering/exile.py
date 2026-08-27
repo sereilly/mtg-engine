@@ -272,3 +272,17 @@ def _fused_exile_then_controller_life(
     if gain.amount != ast.ThatMuch("its_power"):
         return None
     return (OracleInstruction("exile_creature_gain_life_equal_to_power", "", {}),)
+
+
+def _lower_exile_cost_sacrifices(
+    node: ast.ExileCostSacrifices,
+) -> tuple[OracleInstruction, ...]:
+    """"…, then exile this artifact and those creature cards." (Sword of the
+    Ages.)
+
+    No payload: what to exile is exactly what the ability's cost sacrificed,
+    which only the activation that charged it knows (CR 601.2h) and which it
+    records. A filter here would be a second opinion about a set already
+    decided.
+    """
+    return (OracleInstruction("exile_cost_sacrifices", "", {}),)

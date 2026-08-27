@@ -758,6 +758,13 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     # node carries the sentinel instead. Read before the colour-word branch,
     # which would see "the" and refuse — and read here rather than as a separate
     # production, because it is the same verb with the same duration tail.
+    # "…becomes **the color or colors of your choice**" (Dream Coat). Read
+    # before the singular, which shares its first three words and would leave
+    # "or colors of your choice" unconsumed — the refusal Dream Coat's ability
+    # met. The plural is a different offer (a set of colours, CR 105.2), so it
+    # carries its own sentinel rather than collapsing into the singular's.
+    if stream.accept_phrase("the", "color", "or", "colors", "of", "your", "choice"):
+        return ast.BecomeColor(subject, ast.CHOSEN_COLORS, _parse_duration(stream))
     if stream.accept_phrase("the", "color", "of", "your", "choice"):
         return ast.BecomeColor(subject, ast.CHOSEN_COLOR, _parse_duration(stream))
     token = stream.peek()

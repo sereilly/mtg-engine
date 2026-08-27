@@ -140,6 +140,25 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
     definition = _parse_where_x(stream)
     if definition is not None:
         statement = ast.WhereX(statement, definition)
+        # "…, where X is the total power of the creatures sacrificed this way,
+        # **then exile this artifact and those creature cards**." (Sword of the
+        # Ages.) The comma list inside the body stops at "where" — correctly,
+        # since the clause is a modifier and not a step — so a step printed
+        # *after* the definition has to be picked up here, where the definition
+        # has been consumed. Left to the body it was unconsumed text and refused
+        # the whole ability.
+        #
+        # The definition stays scoped to the sentence it modifies: the tail is a
+        # sibling in the sequence rather than another statement inside the
+        # WhereX, so an X the tail does not read is an X it is not stamped with.
+        tail_mark = stream.mark()
+        joined = stream.accept_punct(",")
+        if stream.accept_word("then"):
+            statement = ast.Sequence(
+                (statement, parse_statement(stream, top_level=False))
+            )
+        elif joined:
+            stream.reset(tail_mark)
     if delay is None:
         return statement
     event, once, duration, binds, watches = delay

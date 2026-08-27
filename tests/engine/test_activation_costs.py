@@ -19,7 +19,8 @@ import pytest
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.grammar import ast, parse_line
 from engine.mixins.stack.activation import COST_PERFORMING_KINDS
-from engine.oracle import compile_card_oracle, parse_activated_ability_cost
+from engine.oracle import (chargeable_sacrifice_payload, compile_card_oracle,
+                           parse_activated_ability_cost)
 
 
 @pytest.fixture(scope="module")
@@ -51,7 +52,16 @@ def test_every_admitted_cost_clause_is_charged(pool):
                 if isinstance(cost, ast.SacrificeCost) and not cost.filter.is_source:
                     if charged.sacrifice_filter is None:
                         unpaid.append(f"{card.name}: {ability.source_line}")
-                    elif charged.sacrifice_filter != cost.filter.to_payload():
+                    # Through the charger's *own* reduction of the grammar's
+                    # filter, not against the raw phrase payload: two keys are
+                    # deliberately not carried into a charged cost (see
+                    # `chargeable_sacrifice_payload`), and comparing against the
+                    # raw form reports a dropped rider for every phrase that
+                    # prints one of them — "any number of creatures **you
+                    # control**" (Sword of the Ages) was the first.
+                    elif charged.sacrifice_filter != chargeable_sacrifice_payload(
+                        cost.filter.to_payload()
+                    ):
                         # Not "is something charged" but "is *this* charged".
                         # The grammar admits the line on the strength of the
                         # whole noun phrase, so a charger reading a smaller one

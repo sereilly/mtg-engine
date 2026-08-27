@@ -147,6 +147,25 @@ class SacrificedForCost:
 
 
 @dataclass(frozen=True)
+class TotalPowerSacrificedThisWay:
+    """"…where X is **the total power of the creatures sacrificed this way**"
+    (Sword of the Ages).
+
+    An aggregate over the permanents the ability's own *cost* ate, not over
+    anything on a board — CR 601.2h pays the cost before the ability is on the
+    stack, so by the time X is read those creatures are cards in a graveyard.
+    The number is last-known information (CR 608.2h), recorded as the cost was
+    charged.
+
+    The noun phrase is carried rather than assumed: "the creatures" is what
+    this card sacrifices, and a card printing "the artifacts" is the same
+    sentence about a different set. What a reader can actually aggregate is the
+    lowering's question.
+    """
+    filter: ObjectFilter
+
+
+@dataclass(frozen=True)
 class Half:
     """"half X, rounded up/down"."""
     of: "Amount"
@@ -306,7 +325,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, Half, Times, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject, DamageDealtThisTurn, DamageDealtByChosenCast]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject, DamageDealtThisTurn, DamageDealtByChosenCast]
 
 
 # ---------------------------------------------------------------------------
@@ -837,6 +856,13 @@ class TapSelf:
 @dataclass(frozen=True)
 class SacrificeCost:
     filter: ObjectFilter = field(default_factory=ObjectFilter)
+    # "Sacrifice this artifact **and any number of creatures you control**"
+    # (Sword of the Ages). How many the phrase names: one by default, and
+    # :class:`AnyNumber` when the payer chooses the size of the set. Carried
+    # rather than assumed, because the two are charged differently — a fixed
+    # count can make the ability unpayable and "any number" never can, since
+    # zero is a number (CR 601.2h).
+    count: Amount = field(default_factory=lambda: Fixed(1))
 
 
 @dataclass(frozen=True)

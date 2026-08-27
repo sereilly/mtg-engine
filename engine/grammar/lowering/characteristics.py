@@ -753,7 +753,28 @@ def _lower_become_color(
     and layer 5 reads both (`engine/layer_bridge.py`). One handler covers one
     target or several, since a single chosen slot is a list of one.
     """
-    if node.color == ast.CHOSEN_COLOR:
+    if node.color in (ast.CHOSEN_COLOR, ast.CHOSEN_COLORS):
+        several = node.color == ast.CHOSEN_COLORS
+        if _is_enchanted(node.subject):
+            # "Enchanted creature becomes the color or colors of your choice."
+            # (Dream Coat.) The Aura's own host rather than a target: an Aura's
+            # activated ability acts on what it is attached to (CR 303.4), which
+            # is nothing the activator chooses. Read as a target it refused, and
+            # the ability compiled to nothing at all.
+            if node.duration.kind is not None:
+                raise LoweringError(
+                    f"no handler recolours for {node.duration.kind!r}", node=node
+                )
+            return (
+                OracleInstruction(
+                    "recolor_enchanted_chosen_color", "", {"several": several}
+                ),
+            )
+        if several:
+            raise LoweringError(
+                "only an Aura's own host may be given a set of chosen colours",
+                node=node,
+            )
         # "Target permanent you control becomes the color of your choice."
         # (Alchor's Tomb.) Its own kind rather than a flag on the lace kind,
         # because the two describe different pickers: a lace targets a spell or

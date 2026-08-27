@@ -140,8 +140,8 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
         "keyword grant — _apply_aura_effect",
     ),
     (
-        re.compile(rf'^enchanted {_NOUN} has "[^"]+"$'),
-        "granted activated/triggered ability — _apply_aura_effect",
+        re.compile(rf'^{_ATTACHED} {_NOUN} has "[^"]+"$'),
+        "granted ability line — aura_granted_ability_lines / Permanent.effective_card",
     ),
     (
         # "…gets +2/+2, has first strike, and is a Knight in addition to its
@@ -967,6 +967,36 @@ def aura_conditional_grant_holds(permanent, state: str) -> bool:
     """Whether *permanent* is in *state* right now (CR 611.3a — asked on every
     recompute, never locked in when the Aura attached)."""
     return permanent.tapped if state == "tapped" else not permanent.tapped
+
+
+# 'Enchanted land has "{T}: Counter target spell if it would destroy a land you
+# control."' (Equinox.) A whole printed *ability*, not a keyword — so what the
+# host gains is the line, and the compiler is what turns a line into an ability.
+# The same channel a board-wide static's granted ability already travels on
+# (`engine/global_statics.py`), for the same reason: nothing downstream of the
+# compiler knows a word for "counter target spell if …".
+_QUOTED_ABILITY_GRANT = re.compile(rf'^{_ATTACHED} {_NOUN} has "(?P<ability>[^"]+)"$')
+
+
+def aura_granted_ability_lines(oracle_text: str) -> tuple[str, ...]:
+    """The printed ability lines an Aura grants the permanent it is attached to.
+
+    **Derived, not recorded.** ``Permanent.effective_card`` asks this of every
+    attachment on every read, so detaching the Aura takes the ability away with
+    nothing to undo — CR 611.3b's "removal is the absence of a contribution",
+    the arrangement every other continuous half of this file already uses.
+
+    The claim table at the top of this module named this behaviour and the code
+    it named had been deleted, so Equinox's whole printed effect was a claim
+    with nothing behind it: the card reported supported and the land it
+    enchanted gained nothing at all.
+    """
+    lines: list[str] = []
+    for raw_line in (oracle_text or "").splitlines():
+        match = _QUOTED_ABILITY_GRANT.match(_line_text(raw_line))
+        if match is not None:
+            lines.append(match.group("ability"))
+    return tuple(lines)
 
 
 def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:

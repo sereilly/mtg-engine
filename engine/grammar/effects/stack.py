@@ -111,6 +111,25 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         else:
             raise stream.error("expected a spell to counter")
 
+    # "…**if it would destroy a land you control**" (Equinox). Read before the
+    # "unless … pays" clause because a card can print only one of them and this
+    # one starts with a word that clause never does; the sentence is handed to
+    # `engine/counter_conditions.py`, which is the code that answers it, so a
+    # condition nothing implements leaves the line refused rather than consumed
+    # and dropped — a dropped condition here is a counter that fires on every
+    # spell.
+    condition_mark = stream.mark()
+    if stream.accept_word("if"):
+        from ...counter_conditions import counter_condition_readable
+
+        words: list[str] = []
+        while not stream.exhausted and not stream.at_punct("."):
+            words.append(str(stream.next().text))
+        sentence = " ".join(words).replace(" '", "'")
+        if counter_condition_readable(sentence):
+            return ast.CounterSpell(subject, only_if=sentence)
+    stream.reset(condition_mark)
+
     payment = _parse_unless_pays(stream)
     if payment is not None:
         # "…pays {4} **instead**" (Lofty Denial). The word is the whole
@@ -178,6 +197,16 @@ def _parse_modal_head(stream: TokenStream) -> ast.ModalNode | None:
     at_least = bool(stream.accept_phrase("or", "more"))
     stream.accept_kind(DASH)
     stream.accept_punct(".")
+    # "…: Choose one. **Activate only if there are two or more hatchling
+    # counters on this artifact.**" (Triassic Egg.) The trailing sentence
+    # belongs to the *ability*, not to the head, and it is read through the same
+    # reader every other activated line reads it through — so a restriction
+    # nothing implements still refuses the line.
+    #
+    # Without this the head failed the end-of-clause check below and the card's
+    # whole modal ability was unread: Triassic Egg reported supported on its
+    # counter-adding line while the ability players actually want did nothing.
+    _parse_activation_restriction(stream)
     if not stream.exhausted:
         stream.reset(mark)
         return None

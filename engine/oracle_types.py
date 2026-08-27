@@ -90,6 +90,13 @@ class ActivatedAbilityCost:
     # also the answer for a phrase the charger cannot test — the grammar refuses
     # such a line, and this reader must not disagree by charging the wider cost.
     sacrifice_filter: dict | None = None
+    #: How many of them. "Sacrifice **a** creature" (Hobblefiend) is one;
+    #: "Sacrifice this artifact **and any number of** creatures you control"
+    #: (Sword of the Ages) is a set whose size the payer chooses, announced on
+    #: activation. Beside the filter for the reason ``remove_counter_count`` is
+    #: beside its kind: only a fixed count can make an ability unpayable, and
+    #: "any number" never can, since zero is a number (CR 601.2h).
+    sacrifice_count: "int | str" = 1
     # Seasoned Hallowblade: "Discard a card: …" — N cards the payer chooses,
     # where `discard_last_drawn` above names its card by history and leaves the
     # payer no choice at all. Two fields because they are two costs: a card

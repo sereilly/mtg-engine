@@ -97,6 +97,15 @@ def count_from_payload(
     # zone, so `evaluate_count` has nothing to scan for it. The kind is data,
     # and `counters_on` is the one reader that knows whether it means the P/T
     # channel or a store the card invented (CR 122.1).
+    # "…where X is the total power of the creatures sacrificed this way"
+    # (Sword of the Ages). Not a set in any zone either: the creatures paid this
+    # ability's cost (CR 601.2h) and are cards in a graveyard by now, so the sum
+    # is over what the activation recorded — their last power on the
+    # battlefield (CR 608.2h). A cost that ate nothing sums to zero, which is
+    # what "any number of creatures" and none of them means.
+    if spec.get("cost_sacrifices_power"):
+        sacrificed = (context.choices or {}).get("sacrificed_set_for_cost") or ()
+        return max(0, sum(max(0, perm.effective_power) for perm in sacrificed))
     counters = spec.get("source_counters")
     if counters is not None:
         source = context.source_permanent

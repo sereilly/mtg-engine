@@ -185,3 +185,197 @@ def test_takklemaggot_offers_only_creatures_it_could_enchant(set_pool):
 
     offered = {p.card.name for p in game.live_permanent_choices(choice)}
     assert offered == {"Mine", "Spare"}
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 promotion — two Auras whose only ability compiled to nothing.
+#
+# Both reported *supported*: Dream Coat on its enchant line, Equinox on an
+# `engine/auras.py` claim entry naming code that had been deleted. That entry is
+# the shape `support_report.py --hollow-lines` warns about in its footer — a
+# line leaning on a registry the compiler cannot see — and the only way to tell
+# a live registry from a stale claim is to give the behaviour a game.
+# ---------------------------------------------------------------------------
+
+
+def _p4_aura_game(aura, host, **player_kwargs):
+    """*aura* attached to *host*, both under P1, with costs off."""
+    aura.metadata["summoning_sickness_turn"] = -99
+    host.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=[host, aura], **player_kwargs)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    attach_aura(aura, host)
+    return game, p1, p2
+
+
+def test_dream_coat_recolours_the_creature_it_enchants(set_pool):
+    """"{0}: Enchanted creature becomes the color or colors of your choice."
+
+    The subject is the Aura's own host (CR 303.4), not a target — read as one
+    the sentence refused and the ability compiled to nothing, so activating it
+    logged "ability not implemented".
+    """
+    from engine.layer_bridge import computed_colors
+
+    coat = Permanent(card=set_pool("LEG")["Dream Coat"])
+    bear = Permanent(card=_creature("Bear", 2, 2))
+    game, p1, _ = _p4_aura_game(coat, bear)
+
+    result = game.activate_permanent_ability(
+        0, "Dream Coat", permanent_index=1, mana_color="U"
+    )
+    game._settle()
+
+    assert result.supported
+    assert computed_colors(bear) == {"U"}, "a colour replacement, not an addition"
+
+
+def test_dream_coat_can_make_its_host_several_colours(set_pool):
+    """"the color **or colors** of your choice" — CR 105.2 makes an object of
+    two colours one object, and the plural is a wider offer than Alchor's
+    Tomb's singular. Answering it with one colour would be a narrowing the card
+    does not print, so the write takes a set."""
+    from engine.layer_bridge import computed_colors
+
+    coat = Permanent(card=set_pool("LEG")["Dream Coat"])
+    bear = Permanent(card=_creature("Bear", 2, 2))
+    game, p1, _ = _p4_aura_game(coat, bear)
+
+    # The set arrives on the same channel one colour does; the wire carries one
+    # symbol today, so this is the layer's half of the answer.
+    bear.metadata["color_override"] = ("W", "U")
+
+    assert computed_colors(bear) == {"W", "U"}
+
+
+def test_equinox_grants_its_land_the_printed_counter_ability(set_pool):
+    """'Enchanted land has "{T}: Counter target spell if it would destroy a
+    land you control."'
+
+    A whole printed *ability* granted to the host, so what the host gains is the
+    **line** and the compiler is what turns a line into an ability. The claim
+    table said "granted activated/triggered ability — _apply_aura_effect" and
+    that function no longer existed, so the land gained nothing at all.
+    """
+    equinox = Permanent(card=set_pool("LEG")["Equinox"])
+    forest = Permanent(card=_p4_land())
+    _game, _p1, _p2 = _p4_aura_game(equinox, forest)
+
+    program = compile_card_oracle(forest.effective_card)
+    granted = [a for a in program.activated_abilities if "counter" in a.source_line]
+
+    assert len(granted) == 1
+    assert granted[0].supported, (
+        "a granted line the compiler cannot read is the same hollow shape as "
+        "a grant nothing makes"
+    )
+
+
+def test_the_granted_ability_goes_away_with_the_aura(set_pool):
+    """Derived, not recorded (CR 611.3b): detaching contributes nothing, so
+    there is no delta for anything to remember to undo."""
+    equinox = Permanent(card=set_pool("LEG")["Equinox"])
+    forest = Permanent(card=_p4_land())
+    _game, _p1, _p2 = _p4_aura_game(equinox, forest)
+
+    from engine.auras import detach_aura
+
+    detach_aura(equinox, forest)
+
+    program = compile_card_oracle(forest.effective_card)
+    assert not [a for a in program.activated_abilities if "counter" in a.source_line]
+
+
+def _p4_land(name: str = "Wood") -> CardDefinition:
+    """A land with no text of its own, so what it can do is what Equinox grants.
+
+    Invented rather than borrowed from another set's pool: Legends prints no
+    basic land, and a per-set file reaching into a second set's pool is reaching
+    past the convention for a prop.
+    """
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Land", oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Land"},
+    )
+
+
+def _p4_spell(name: str, text: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="{2}{R}", cmc=3.0, type_line="Sorcery",
+        oracle_text=text, colors=("R",), color_identity=("R",), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Sorcery", "oracle_text": text},
+    )
+
+
+def _p4_equinox_board(set_pool, spell):
+    """P1's enchanted land, with *spell* in P2's hand."""
+    equinox = Permanent(card=set_pool("LEG")["Equinox"])
+    forest = Permanent(card=_p4_land())
+    forest.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=[forest, equinox])
+    p2 = PlayerState(name="P2", hand=[spell])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    attach_aura(equinox, forest)
+    return game, p1, p2, forest
+
+
+def test_equinox_counters_a_spell_that_would_destroy_a_land(set_pool):
+    """The condition is asked of the *chosen spell's own effect* at resolution
+    (CR 608.2), which nothing on the stack item records — so it is answered by
+    reading that spell's compiled program."""
+    game, p1, p2, forest = _p4_equinox_board(
+        set_pool, _p4_spell("Stone Rain", "Destroy target land.")
+    )
+
+    game.queue_from_hand(1, "Stone Rain", target_player_index=0, target_permanent_index=0)
+    result = game.activate_permanent_ability(
+        0, "Wood", target_player_index=1, ability_index=0, target_stack_index=0
+    )
+    game.resolve_stack()
+
+    assert result.supported
+    assert forest in p1.battlefield
+    assert [c.name for c in p2.graveyard] == ["Stone Rain"]
+
+
+def test_equinox_counters_a_land_sweep_too(set_pool):
+    """"Destroy all lands" names no target, so the question is only whether the
+    ability's controller has a land — the sweep half of the same condition."""
+    game, p1, p2, forest = _p4_equinox_board(
+        set_pool, _p4_spell("Armageddon", "Destroy all lands.")
+    )
+
+    game.queue_from_hand(1, "Armageddon", target_player_index=0)
+    result = game.activate_permanent_ability(
+        0, "Wood", target_player_index=1, ability_index=0, target_stack_index=0
+    )
+    game.resolve_stack()
+
+    assert result.supported
+    assert forest in p1.battlefield
+
+
+def test_equinox_declines_a_spell_that_would_not(set_pool):
+    """The condition is the whole card. A counter that fired regardless would
+    be a free Counterspell on every land — the direction nothing crashes and
+    the card is simply wrong."""
+    game, p1, p2, forest = _p4_equinox_board(
+        set_pool,
+        _p4_spell("Bolt", "Bolt deals 3 damage to any target."),
+    )
+
+    game.queue_from_hand(1, "Bolt", target_player_index=0)
+    result = game.activate_permanent_ability(
+        0, "Wood", target_player_index=1, ability_index=0, target_stack_index=0
+    )
+    game.resolve_stack()
+
+    assert result.supported, "the ability resolves; it simply counters nothing"
+    assert any(
+        "would not destroy a land you control" in line for line in game.log
+    ), "the refusal is logged rather than silent"

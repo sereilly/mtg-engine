@@ -124,6 +124,7 @@ from .zones import (
 from .exile import (
     _EXILED_CREATURE,
     _lower_exile,
+    _lower_exile_cost_sacrifices,
     _lower_exile_until_leaves_or_untaps,
     _fused_exile_then_controller_life,
 )
@@ -336,6 +337,7 @@ __all__ = [
     "_lower_shuffle_hand_into_library",
     "_EXILED_CREATURE",
     "_lower_exile",
+    "_lower_exile_cost_sacrifices",
     "_fused_exile_then_controller_life",
     "_DAMAGED_PLAYER_EVENTS",
     "CHOSEN_HAND_CARDS_RESULT",

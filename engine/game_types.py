@@ -55,6 +55,12 @@ CHOICE_KEYS = (
     # above: the counters are off the permanent before the ability reaches the
     # stack, so nothing on the board can be counted at resolution.
     "counters_removed_for_cost",
+    # Every permanent an "any number of <noun phrase>" sacrifice cost ate
+    # (Sword of the Ages). A list beside ``sacrificed_for_cost``'s single
+    # permanent rather than a widening of it: the two are different costs — one
+    # names a permanent the payer chooses, the other a *set* whose size the
+    # payer chooses — and a card can print both, as this one does.
+    "sacrificed_set_for_cost",
 )
 
 

@@ -29,7 +29,9 @@ from .references import parse_target_spec
 from .stream import TokenStream
 
 
-def _parse_cost_object(stream: TokenStream, verb: str) -> ast.ObjectFilter:
+def _parse_cost_object(
+    stream: TokenStream, verb: str, *, bare_plural: bool = False
+) -> ast.ObjectFilter:
     """The noun phrase naming what a cost gives up, after *verb*.
 
     Delegates to the noun parser rather than skipping a token, so "Sacrifice
@@ -55,7 +57,13 @@ def _parse_cost_object(stream: TokenStream, verb: str) -> ast.ObjectFilter:
     spec = parse_target_spec(stream)
     if spec is None:
         raise stream.error(f"expected what to {verb} as a cost")
-    allowed = ("all",) if another else ("this", "a")
+    # *bare_plural* is the "any number of **creatures you control**" tail (Sword
+    # of the Ages): the count is printed in front of the phrase, so the phrase
+    # itself is the bare plural the noun parser calls "all". Admitted only where
+    # the caller has already read a count — an "all" quantifier reaching the
+    # ordinary path still refuses, because "Sacrifice creatures you control"
+    # names no number at all.
+    allowed = ("all",) if (another or bare_plural) else ("this", "a")
     if spec.quantifier not in allowed or spec.count != 1:
         raise stream.error(f"unsupported {verb} cost quantifier {spec.quantifier!r}")
     return replace(spec.filter, other_than_source=True) if another else spec.filter
@@ -91,8 +99,15 @@ def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
         # function exists to prevent, in the direction that costs a card its
         # support rather than its narrowing.
         return False
+    # ``controller`` travels beside it, for the reason the comment on the
+    # charger gives: a sacrifice is paid from the payer's own battlefield, so
+    # "creatures **you control**" narrows nothing the enumeration has not
+    # already done — but a key handed to a matcher that cannot test it is a key
+    # silently dropped, so it is lifted out rather than left in. Sword of the
+    # Ages prints the phrase and refused for it.
     return object_only_filter(
-        filt.to_payload(), carried_separately=frozenset({"exclude_self"})
+        filt.to_payload(),
+        carried_separately=frozenset({"exclude_self", "controller"}),
     ) is not None
 
 
@@ -155,6 +170,23 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             if not _is_chargeable_sacrifice(sacrificed):
                 raise stream.error("no cost path charges a narrowed sacrifice")
             costs.append(ast.SacrificeCost(sacrificed))
+            # "Sacrifice this artifact **and any number of creatures you
+            # control**" (Sword of the Ages). One printed cost naming two
+            # things, so it becomes two entries: the source, and a set whose
+            # size the payer chooses. Read here rather than as a second
+            # "Sacrifice" clause because the card prints the verb once — and
+            # without it the "and …" tail was unconsumed text that refused the
+            # whole ability.
+            more = stream.mark()
+            if stream.accept_phrase("and", "any", "number", "of"):
+                several = _parse_cost_object(
+                    stream, "sacrifice", bare_plural=True
+                )
+                if not _is_chargeable_sacrifice(several):
+                    raise stream.error("no cost path charges a narrowed sacrifice")
+                costs.append(ast.SacrificeCost(several, count=ast.AnyNumber()))
+            else:
+                stream.reset(more)
             stream.accept_punct(",")
             continue
         if stream.accept_word("exile"):

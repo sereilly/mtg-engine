@@ -354,6 +354,24 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                 "permanent, cannot counter"
             )
             return True, "resolved"
+        # "…**if it would destroy a land you control**" (Equinox). A condition
+        # about the chosen spell's *own effect*, which nothing on the stack item
+        # records — so it is answered by reading that spell's compiled program
+        # (engine/counter_conditions.py), through the same table the grammar
+        # admitted the line with. CR 608.2 puts the question here rather than at
+        # activation: the board can change while the ability waits.
+        only_if = instruction.payload.get("only_if")
+        if only_if is not None:
+            from ..counter_conditions import counter_condition_holds
+
+            if not counter_condition_holds(
+                str(only_if), game, target, game.players.index(context.caster)
+            ):
+                game.log.append(
+                    f"{card.name}: {target.card.name} would not "
+                    f"{str(only_if).replace('it would ', '')}, cannot counter"
+                )
+                return True, "resolved"
         # "counter target artifact spell **you control**" (Goblin Artisans).
         # Whose spell it is, asked of the seat that put it on the stack.
         if instruction.payload.get("controller") == "you":

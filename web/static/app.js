@@ -1901,6 +1901,10 @@ function cardRequiresManaColorChoice(card) {
     text.includes("any one color")
     || text.includes("one mana of any color")
     || text.includes("the color of your choice")
+    // "…becomes the color **or colors** of your choice" (Dream Coat). The same
+    // one-shot prompt: the plural is a wider offer, not a different question,
+    // and the substring above does not contain it.
+    || text.includes("the color or colors of your choice")
   );
 }
 

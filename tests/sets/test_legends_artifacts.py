@@ -1334,3 +1334,283 @@ def test_a_tapped_voodoo_doll_is_left_alone(set_pool):
 
     assert doll in p1.battlefield
     assert p1.life == 20
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 promotion — six artifacts whose ability compiled to nothing at all.
+# Every one reported *supported* on another line while the ability players
+# actually activate logged "ability not implemented", which is the hollow shape
+# `support_report.py --hollow-lines` censuses. These tests activate in a game
+# and assert the effect, never the compilation.
+# ---------------------------------------------------------------------------
+
+import pytest
+
+from engine.models import CardDefinition
+from engine.named_counters import counters_key, counters_on
+
+
+def _p4_game(*battlefield, **player_kwargs):
+    """A two-player game with *battlefield* under P1, costs off, no sickness."""
+    for permanent in battlefield:
+        permanent.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=list(battlefield), **player_kwargs)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2
+
+
+def _p4_creature(name: str, power: int, toughness: int) -> CardDefinition:
+    type_line = "Creature - Test"
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line,
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+_P4_BATTERIES = {
+    "Black Mana Battery": "B",
+    "Blue Mana Battery": "U",
+    "Green Mana Battery": "G",
+    "Red Mana Battery": "R",
+    "White Mana Battery": "W",
+}
+
+
+@pytest.mark.parametrize("name,symbol", sorted(_P4_BATTERIES.items()))
+def test_a_mana_battery_pays_one_plus_every_counter_it_removes(set_pool, name, symbol):
+    """"{T}, Remove any number of charge counters from this artifact: Add {B},
+    then add an additional {B} for each charge counter removed this way."
+
+    One template and five cards, so the colour is payload and the test is
+    parametrized over the cycle: a colour wired into the instruction instead of
+    read off the card is exactly what a single-card test would miss.
+    """
+    battery = Permanent(card=set_pool("LEG")[name])
+    battery.metadata[counters_key("charge")] = 3
+    game, p1, _ = _p4_game(battery)
+
+    result = game.activate_permanent_ability(0, name, ability_index=1)
+    game._settle()
+
+    assert result.supported
+    assert p1.mana_pool[symbol] == 4, "one flat, plus one for each of three counters"
+    assert counters_on(battery, "charge") == 0
+    assert battery.tapped
+
+
+def test_a_battery_removing_fewer_counters_pays_out_less(set_pool):
+    """"**Any number**" is the payer's choice, announced on activation — so the
+    count is not "all of them" wired in, and the counters unspent stay put."""
+    battery = Permanent(card=set_pool("LEG")["Red Mana Battery"])
+    battery.metadata[counters_key("charge")] = 4
+    game, p1, _ = _p4_game(battery)
+
+    result = game.activate_permanent_ability(
+        0, "Red Mana Battery", ability_index=1, x_value=1
+    )
+    game._settle()
+
+    assert result.supported
+    assert p1.mana_pool["R"] == 2, "one flat, plus the single counter removed"
+    assert counters_on(battery, "charge") == 3
+
+
+def test_a_battery_with_no_counters_still_makes_its_one_mana(set_pool):
+    """Zero is a legal answer to "any number" (CR 601.2h), so the ability is
+    activatable with an empty artifact and pays only its printed pip."""
+    battery = Permanent(card=set_pool("LEG")["White Mana Battery"])
+    game, p1, _ = _p4_game(battery)
+
+    result = game.activate_permanent_ability(0, "White Mana Battery", ability_index=1)
+    game._settle()
+
+    assert result.supported
+    assert p1.mana_pool["W"] == 1
+
+
+def test_life_chisel_gains_the_sacrificed_creature_s_toughness(set_pool):
+    """"Sacrifice a creature: You gain life equal to the sacrificed creature's
+    toughness. Activate only during your upkeep."
+
+    The toughness is read off the creature the *cost* ate (CR 608.2h), which is
+    off the battlefield before the ability ever reaches the stack.
+    """
+    chisel = Permanent(card=set_pool("LEG")["Life Chisel"])
+    wall = Permanent(card=_p4_creature("Big Wall", 0, 8))
+    game, p1, _ = _p4_game(chisel, wall, life=20)
+    game.current_step = "upkeep"
+    game.active_player_index = 0
+
+    result = game.activate_permanent_ability(0, "Life Chisel", cost_permanent_index=1)
+    game._settle()
+
+    assert result.supported
+    assert p1.life == 28
+    assert [p.card.name for p in p1.battlefield] == ["Life Chisel"]
+
+
+def test_life_chisel_is_still_gated_to_your_upkeep(set_pool):
+    """The restriction and the effect have to agree. A gate over an ability that
+    never resolved is the state this round found the card in — the clause was
+    enforced and there was nothing behind it."""
+    chisel = Permanent(card=set_pool("LEG")["Life Chisel"])
+    wall = Permanent(card=_p4_creature("Big Wall", 0, 8))
+    game, p1, _ = _p4_game(chisel, wall, life=20)
+    game.current_step = "draw"
+    game.active_player_index = 0
+
+    result = game.activate_permanent_ability(0, "Life Chisel", cost_permanent_index=1)
+
+    assert not result.supported
+    assert p1.life == 20
+    assert wall in p1.battlefield, "a refused activation pays no cost"
+
+
+def test_mirror_universe_swaps_both_life_totals(set_pool):
+    """CR 701.12c: each player gains or loses the difference. Both totals are
+    read before either moves — reading the second after the first had moved
+    would copy one total onto both players."""
+    mirror = Permanent(card=set_pool("LEG")["Mirror Universe"])
+    game, p1, p2 = _p4_game(mirror, life=3)
+    p2.life = 19
+    game.current_step = "upkeep"
+    game.active_player_index = 0
+
+    result = game.activate_permanent_ability(0, "Mirror Universe", target_player_index=1)
+    game._settle()
+
+    assert result.supported
+    assert (p1.life, p2.life) == (19, 3)
+    assert mirror not in p1.battlefield, "the exchange costs the artifact"
+
+
+def test_the_life_exchange_goes_through_the_gain_seam(set_pool):
+    """The rising half is a life *gain* (CR 701.12c), so it is recorded like any
+    other — which is what lets a replacement effect or a gain trigger see it."""
+    mirror = Permanent(card=set_pool("LEG")["Mirror Universe"])
+    game, p1, p2 = _p4_game(mirror, life=3)
+    p2.life = 19
+    game.current_step = "upkeep"
+    game.active_player_index = 0
+
+    game.activate_permanent_ability(0, "Mirror Universe", target_player_index=1)
+    game._settle()
+
+    assert p1.life_gained_this_turn >= 16
+
+
+def test_voodoo_doll_deals_its_pin_counters_and_costs_two_x(set_pool):
+    """"{X}{X}, {T}: This artifact deals damage equal to the number of pin
+    counters on it to any target. X is the number of pin counters on this
+    artifact."
+
+    The trailing sentence defines the *cost's* X, so the activator does not
+    announce it — and {X}{X} is two of them, not one.
+    """
+    doll = Permanent(card=set_pool("LEG")["Voodoo Doll"])
+    doll.metadata[counters_key("pin")] = 3
+    game, p1, p2 = _p4_game(doll)
+    game.enforce_mana_costs = True
+    p1.mana_pool["C"] = 6
+
+    result = game.activate_permanent_ability(0, "Voodoo Doll", target_player_index=1)
+    game._settle()
+
+    assert result.supported
+    assert p2.life == 17
+    assert sum(p1.mana_pool.values()) == 0, "{X}{X} with X=3 costs six, not three"
+
+
+def test_voodoo_doll_cannot_be_activated_for_half_its_cost(set_pool):
+    """The half a single "{x}" substring test charged: five mana is one short of
+    the {X}{X} the card prints."""
+    doll = Permanent(card=set_pool("LEG")["Voodoo Doll"])
+    doll.metadata[counters_key("pin")] = 3
+    game, p1, p2 = _p4_game(doll)
+    game.enforce_mana_costs = True
+    p1.mana_pool["C"] = 5
+
+    result = game.activate_permanent_ability(0, "Voodoo Doll", target_player_index=1)
+
+    assert not result.supported
+    assert p2.life == 20
+
+
+def test_triassic_egg_returns_a_creature_card_from_the_graveyard(set_pool):
+    """"Sacrifice this artifact: Choose one. … • Return target creature card
+    from your graveyard to the battlefield."
+
+    A modal *activated* ability whose head carries a trailing restriction: the
+    head refused on those four words, so the whole ability went unread and only
+    the counter-adding line kept the card looking supported.
+    """
+    egg = Permanent(card=set_pool("LEG")["Triassic Egg"])
+    egg.metadata[counters_key("hatchling")] = 2
+    game, p1, _ = _p4_game(egg, graveyard=[_p4_creature("Sleeper", 2, 2)])
+
+    result = game.activate_permanent_ability(0, "Triassic Egg", ability_index=2)
+    game._settle()
+
+    assert result.supported
+    assert [p.card.name for p in p1.battlefield] == ["Sleeper"]
+
+
+def test_triassic_egg_needs_two_hatchling_counters(set_pool):
+    """The restriction rides onto every expanded mode. Dropped in that rewrite
+    it would have gated nothing at all — one counter, both modes free."""
+    egg = Permanent(card=set_pool("LEG")["Triassic Egg"])
+    egg.metadata[counters_key("hatchling")] = 1
+    game, p1, _ = _p4_game(egg, graveyard=[_p4_creature("Sleeper", 2, 2)])
+
+    result = game.activate_permanent_ability(0, "Triassic Egg", ability_index=2)
+
+    assert not result.supported
+    assert egg in p1.battlefield
+
+
+def test_sword_of_the_ages_deals_the_total_power_it_ate_and_exiles_it(set_pool):
+    """"{T}, Sacrifice this artifact and any number of creatures you control:
+    … deals X damage …, where X is the total power of the creatures sacrificed
+    this way, then exile this artifact and those creature cards."
+
+    Every part is last-known information: the creatures are cards in a graveyard
+    by the time X is read, and the exile reaches into that graveyard for exactly
+    them.
+    """
+    sword = Permanent(card=set_pool("LEG")["Sword of the Ages"])
+    ogre = Permanent(card=_p4_creature("Ogre", 3, 3))
+    bear = Permanent(card=_p4_creature("Bear", 2, 2))
+    game, p1, p2 = _p4_game(sword, ogre, bear)
+
+    result = game.activate_permanent_ability(
+        0, "Sword of the Ages", target_player_index=1,
+        cost_permanent_ids=[ogre.permanent_id, bear.permanent_id],
+    )
+    game._settle()
+
+    assert result.supported
+    assert p2.life == 15, "3 + 2 total power"
+    assert p1.battlefield == []
+    assert sorted(c.name for c in p1.exile) == ["Bear", "Ogre", "Sword of the Ages"]
+    assert p1.graveyard == [], "the sacrificed cards are exiled, not left behind"
+
+
+def test_sword_of_the_ages_sacrificing_nothing_deals_nothing(set_pool):
+    """"Any number" includes none (CR 601.2h), and none is what a seat that
+    names no creature has chosen — so the ability may not help itself to a board
+    to make its X larger."""
+    sword = Permanent(card=set_pool("LEG")["Sword of the Ages"])
+    ogre = Permanent(card=_p4_creature("Ogre", 3, 3))
+    game, p1, p2 = _p4_game(sword, ogre)
+
+    result = game.activate_permanent_ability(0, "Sword of the Ages", target_player_index=1)
+    game._settle()
+
+    assert result.supported
+    assert p2.life == 20
+    assert [p.card.name for p in p1.battlefield] == ["Ogre"]
+    assert [c.name for c in p1.exile] == ["Sword of the Ages"]

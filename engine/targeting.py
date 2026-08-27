@@ -328,6 +328,14 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # that is the handler's business, not the picker's.
     "exile_target_graveyard_card": {"kind": "graveyard_creature", "any_card": True},
     "exchange_ante_with_top_library": {"kind": "none"},
+    # Dream Coat: "Enchanted creature becomes the color or colors of your
+    # choice." The *permanent* is not chosen — an Aura's ability acts on its
+    # own host (CR 303.4) — so there is no target picker; what the activator
+    # chooses is a colour, which rides `mana_color` like every other CR 609.3
+    # choice. A positive "nothing to point at", not an absent derivation:
+    # without the row the ability answered None and the guard could not tell
+    # the two apart.
+    "recolor_enchanted_chosen_color": {"kind": "none"},
     "tap_or_untap_target": {"kind": "permanent"},
     "drain_target_lands_mana": {"kind": "player"},
     "tap_target_player_lands_and_drain_mana": {"kind": "player"},
@@ -502,7 +510,11 @@ def _cost_picker_spec(cost) -> dict | None:
         narrowing = {
             key: value
             for key, value in described.items()
-            if key != "exclude_self"
+            # ``own_only`` above already *is* "you control", so carrying the
+            # seat again would be the same restriction written twice — and the
+            # second copy would reach an enumerator with no observer, which
+            # refuses every candidate rather than narrowing anything.
+            if key not in ("exclude_self", "controller")
             and not (key == "type_filter" and isinstance(value, str))
         }
         if narrowing:

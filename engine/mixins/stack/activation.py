@@ -644,14 +644,46 @@ class AbilityActivationMixin:
         # at all. That exclusion is `exclude_self` inside the filter, which is
         # why the source is handed to the matcher rather than tested here.
         sacrifice_cost_permanent = None
-        if ability.cost.sacrifice_filter is not None and ability.instruction is not None and (
+        sacrifice_cost_set: list = []
+        if (
+            ability.cost.sacrifice_count == "any"
+            and ability.cost.sacrifice_filter is not None
+        ):
+            # "Sacrifice this artifact **and any number of creatures you
+            # control**" (Sword of the Ages). The payer names the set as the
+            # ability is activated (CR 601.2b) — through `cost_permanent_ids`,
+            # the same channel every other chosen cost permanent arrives on —
+            # and naming none is a legal payment, because zero is a number. So
+            # there is no default pick here: unlike a "sacrifice a creature"
+            # cost, which must eat something or the ability is unactivatable,
+            # this one has a legal answer that costs nothing, and choosing
+            # creatures for a seat that named none would sacrifice a board to
+            # pay a cost of zero.
+            described = ability.cost.sacrifice_filter
+            for permanent_id in cost_permanent_ids or []:
+                found = self.permanent_by_id(permanent_id)
+                if (
+                    found is not None
+                    and found is not permanent
+                    and self.controls(controller_index, found)
+                    and subject_matches(
+                        self, found, described,
+                        observer=controller_index, source=permanent,
+                    )
+                    and not any(found is already for already in sacrifice_cost_set)
+                ):
+                    sacrifice_cost_set.append(found)
+        elif ability.cost.sacrifice_filter is not None and ability.instruction is not None and (
             ability.instruction.kind not in COST_PERFORMING_KINDS
         ):
             described = ability.cost.sacrifice_filter
             candidates = [
                 perm
                 for perm in self.controlled_by(controller_index)
-                if subject_matches(self, perm, described, source=permanent)
+                if subject_matches(
+                    self, perm, described,
+                    observer=controller_index, source=permanent,
+                )
             ]
             if not candidates:
                 details = (
@@ -940,6 +972,18 @@ class AbilityActivationMixin:
             self.log.append(
                 f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
             )
+        # …and the "any number of" set beside it (Sword of the Ages), paid the
+        # same way and at the same moment. Each is sacrificed by identity — an
+        # index held across the removals would name whichever permanent slid
+        # into the slot — and the list survives on the resolution's choices,
+        # because by the time the effect reads their total power they are cards
+        # in a graveyard (CR 608.2h).
+        for victim in sacrifice_cost_set:
+            name = victim.card.name
+            self.sacrifice_permanent(victim)
+            self.log.append(
+                f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
+            )
 
         # Ring of Ma'rûf: "Exile this artifact" is part of the cost, so the
         # permanent leaves before the ability goes on the stack — and the ability
@@ -1006,6 +1050,7 @@ class AbilityActivationMixin:
                     # two paths it came down.
                     choices={
                         "counters_removed_for_cost": counters_removed_for_cost,
+                        "sacrificed_set_for_cost": list(sacrifice_cost_set),
                         "sacrificed_for_cost": sacrifice_cost_permanent,
                         "discarded_for_cost": (
                             list(discard_cost_cards)
@@ -1051,6 +1096,10 @@ class AbilityActivationMixin:
                     # it: the counters are off the permanent before the ability
                     # is on the stack, so the number survives nowhere else.
                     "counters_removed_for_cost": counters_removed_for_cost,
+                    # …and the permanents an "any number of" sacrifice cost ate
+                    # (Sword of the Ages), whose total power the effect reads
+                    # back once they are cards in a graveyard.
+                    "sacrificed_set_for_cost": list(sacrifice_cost_set),
                     "sacrificed_for_cost": sacrifice_cost_permanent,
                     # …and what its discard cost ate, for the same reason and
                     # on the same channel: "If the discarded card was a land
