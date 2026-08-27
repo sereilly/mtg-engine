@@ -68,6 +68,10 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # again: whether an Aura is attached is readable off the permanent alone,
     # so it belongs to the pure half like every other state word.
     "not_enchanted",
+    # "destroy **target enchanted** creature" (Ramses Overdark). The positive
+    # twin, and testable for the same reason: whether an Aura is attached is
+    # readable off the permanent alone.
+    "enchanted_only",
     # "Auras you own **attached to permanents you control**" (Remove
     # Enchantments). A nested noun phrase describing the host, answered by
     # asking this same function of the host — so what it can test is exactly

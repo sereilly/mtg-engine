@@ -633,6 +633,17 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         ):
             return False
 
+    # "destroy **target enchanted** creature" (Ramses Overdark) — the positive
+    # half, asked exactly as its negation above is: an Aura attached, not merely
+    # something attached, because this engine shares the attachment record with
+    # Equipment (CR 301.5f) and an equipped creature is not an enchanted one.
+    if payload.get("enchanted_only"):
+        if not any(
+            attached.has_type("aura")
+            for attached in (perm.metadata.get("attached_auras") or [])
+        ):
+            return False
+
     def _has_type(name: str) -> bool:
         # is_creature (not the printed line) so animated lands count.
         return perm.is_creature if name == "creature" else perm.has_type(name)

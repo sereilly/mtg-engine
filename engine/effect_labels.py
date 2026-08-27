@@ -171,6 +171,87 @@ ACTIVATED_LABELS: dict[str, str] = {
     # decide later what becomes of them. Exile is where they go.
     "exile_until_leaves_or_untaps": "activated_recursion",
     "exchange_ownership_unless_paid": "activated_recursion",
+    # --- Legends' activated abilities, added at its promotion ----------------
+    # Same rule as the two blocks above: the bucket the *ability* belongs to,
+    # named in the vocabulary the shipped pool already uses, rather than a
+    # rendering of the instruction kind. Where an existing kind already answers
+    # the question the new one asks, the new one takes that kind's label.
+    #
+    # A CR 122.1 counter put on the source (the five Mana Batteries' charge
+    # counters, Triassic Egg's hatchling counter). `add_counter_to_self` above
+    # is the +1/+1 twin and `add_named_counter_to_self` is already
+    # `triggered_counter` on the other side.
+    "add_named_counter_to_self": "activated_counter",
+    # Ayesha Tanaka counters an ability on the stack. `activated_counter` is
+    # taken — it means a +1/+1 counter — and `counter_top_stack_spell`'s
+    # `spell_pattern` is the "nothing claimed this clause" marker rather than a
+    # bucket, so the label is the grammar category's own word, pinned here so a
+    # category rename cannot re-bucket the card.
+    "counter_stack_ability": "activated_counterspells",
+    # Giant Slug's "{5}: At the beginning of your next upkeep, …". The label
+    # `engine/oracle.py` already reports for an activated ability that creates a
+    # delayed trigger (CR 603.7); the grammar reads this one, so it takes the
+    # same word rather than a second name for the same shape.
+    "create_delayed_trigger": "activated_delayed_trigger",
+    # Clergy of the Holy Nimbus, beside `deny_regeneration_to_target`.
+    "deny_regeneration_to_self": "activated_deny_regeneration",
+    # A player discards (Gwendlyn Di Corci at random, Nebuchadnezzar by named
+    # card). The triggered side's word for the same event is `triggered_discard`
+    # — the legacy `spell_pattern` on `discard_target_cards` above is the
+    # unclaimed marker carried across the deletion, not a bucket to copy.
+    "discard_x_target_cards": "activated_discard",
+    "name_and_random_reveal": "activated_discard",
+    # Xira Arien, beside `draw_controller_cards`: a draw is a draw whoever does
+    # it.
+    "draw_target_cards": "activated_draw",
+    # Gauntlets of Chaos swaps two permanents. `activated_steal` is the pool's
+    # word for an ability whose point is who controls what.
+    "exchange_control_of_targets": "activated_steal",
+    # Knowledge Vault puts cards aside face down to be handed back later —
+    # Tawnos's Coffin and Bronze Tablet's bucket above, for the same reason:
+    # exile is where they go and the ability is about their coming back.
+    "exile_top_of_library": "activated_recursion",
+    # Al-abara's Carpet, beside `grant_prevention_shield`.
+    "grant_source_class_prevention_shield": "activated_prevent",
+    # North Star produces no mana; its whole effect is permission to spend what
+    # you have as though it were another type (CR 601.2g). `activated_mana` is
+    # for an ability whose point is that mana appears, so this takes Idol of
+    # Endurance's `activated_permission` instead.
+    "grant_spend_mana_as_though": "activated_permission",
+    # Hyperion Blacksmith's "You may tap or untap …". The `may` wrapper says
+    # nothing about what it wraps, exactly as `sequence` does not — and with no
+    # trigger condition to name the moment, the honest label names the shape,
+    # which is what `triggered_sequence` does on the other side.
+    "may": "activated_optional",
+    # Petra Sphinx: the top card is seen and then sorted. `activated_look` is
+    # the bucket for an ability whose point is cards being looked at.
+    "name_then_reveal_top": "activated_look",
+    # Prevention, however the shield is spelled: a blanket over the combat
+    # damage step (Angus Mackenzie), one creature's damage (Horn of Deafening,
+    # Lady Evangela), or damage sent somewhere else instead (Shimian Night
+    # Stalker — the bucket Jade Monolith's hook already declares).
+    "prevent_all_combat_damage": "activated_prevent",
+    "prevent_damage_by_target_until_eot": "activated_prevent",
+    "redirect_damage_from_target_until_eot": "activated_prevent",
+    # Quarum Trench Gnomes changes what a land produces. The mana is the point,
+    # which is what `activated_mana` answers.
+    "produce_mana_instead": "activated_mana",
+    # Tempest Efreet is Bronze Tablet's sibling — an ownership exchange with a
+    # card that ends up somewhere it can be used again.
+    "random_reveal_ownership_exchange": "activated_recursion",
+    # Alchor's Tomb changes a permanent's colour. Antiquities' `gain_type`
+    # settled this: the report's word for a permanent changing what it *is* is
+    # `activated_pump`, and a colour change is layer 5 beside that layer 4 one.
+    "recolor_target_chosen_color": "activated_pump",
+    # Losing a keyword until end of turn (Radjan Spirit, Shelkin Brownie,
+    # Tolaria, Urborg) is `grant_target_keyword_until_eot` with a minus sign.
+    "remove_target_keyword_until_eot": "activated_pump",
+    # Sentinel, beside `set_base_pt_target_until_eot`.
+    "set_source_base_toughness_from_target_power": "activated_pump",
+    # Rubinia Soulsinger and Willow Satyr, beside
+    # `steal_target_permanent_linked_to_self` — the same ability with the link
+    # read off the source.
+    "steal_target_linked_to_source": "activated_steal",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -270,6 +351,67 @@ TRIGGERED_LABELS: dict[str, str] = {
     # rather than guessing at a bucket. Ten cards share it and they do ten
     # different things.
     "sequence": "triggered_sequence",
+    # --- Legends' triggered abilities, added at its promotion ----------------
+    # Same rule again: the bucket the ability belongs to, in the vocabulary the
+    # pool already uses. Every entry here also has to *keep a prefix*: a label
+    # without `triggered_` is what `web/serialization.py` reads as "not a
+    # triggered ability", so the fallback marker `spell_pattern` is never the
+    # answer for a trigger that uses the stack.
+    #
+    # A combat restriction laid on a creature (Wall of Dust), beside the
+    # `triggered_combat` the optional combat triggers already take.
+    "cant_attack_during_controllers_next_turn": "triggered_combat",
+    # Gabriel Angelfire's modal upkeep grant. `choose_one` is a wrapper and says
+    # nothing by itself, but every mode of the one card that prints it grants a
+    # keyword — so it takes the keyword-grant bucket, exactly as `if_then` takes
+    # the bucket of the branch the Urza's cycle guards. A second card choosing
+    # among something else splits this by condition.
+    "choose_one": "triggered_pump",
+    # In the Eye of Chaos, Invoke Prejudice, Nether Void, Presence of the
+    # Master. `activated_counter` / `triggered_counter` mean a +1/+1 counter, so
+    # countering takes the grammar category's word, matching
+    # `counter_stack_ability` on the activated side. Note this is *not* the
+    # `spell_pattern` that `counter_top_stack_spell` carries in the activated
+    # table: that label is the legacy marker, and here it would cost four real
+    # triggers their `triggered_` prefix.
+    "counter_top_stack_spell": "triggered_counterspells",
+    # Blight, beside `destroy_target_permanent`.
+    "destroy_attached_permanent": "triggered_destruction",
+    # Nicol Bolas, beside `opponent_discards_random_card_on_damage`.
+    "discard_hand": "triggered_discard",
+    # Hazezon Tamar's departing Sand Warriors, beside `exile_self`.
+    "exile_all_matching": "triggered_exile",
+    # Pit Scorpion's poison counters. A counter is a counter whether it sits on
+    # a permanent or on a player (CR 122.1).
+    "player_gets_poison_counters": "triggered_counter",
+    # Knowledge Vault's leave-trigger empties the pile its activated ability
+    # filled; `triggered_exile` is where that pile lives.
+    "put_exiled_with_source": "triggered_exile",
+    # Aisling Leprechaun turns a blocker green — the colour change whose bucket
+    # `recolor_target_chosen_color` settles on the activated side.
+    "recolor_target_from_text": "triggered_pump",
+    # Divine Intervention's countdown and Venarian Gold's sleep counter. Not
+    # `upkeep_effect`: that label belongs to the pay-or-consequence upkeep
+    # registry, and these are ordinary triggers that go on the stack, where the
+    # prefix is read.
+    "remove_counter_from_self": "triggered_counter",
+    "remove_counter_from_attached": "triggered_counter",
+    # Elder Land Wurm shedding defender: `grant_self_keyword_until_eot` with a
+    # minus sign, and the same bucket.
+    "remove_self_keyword": "triggered_pump",
+    # Three P/T rewrites (Brine Hag, Halfdane, Wall of Tombstones), beside
+    # `pump_self` and `pump_target_creature_until_eot`.
+    "set_base_pt_of_creatures_that_damaged_source": "triggered_pump",
+    "set_source_base_pt_from_target_until_next_upkeep": "triggered_pump",
+    "set_source_base_toughness_from_count": "triggered_pump",
+    # The Wretched keeps what blocked it. `activated_steal` is the pool's word
+    # for an ability whose point is who controls what; this is its trigger.
+    "steal_blockers_of_source": "triggered_steal",
+    # Arena of the Ancients, beside `tap_enchanted_creature`.
+    "tap_all_matching": "triggered_tap",
+    # Cosmic Horror, beside the four `upkeep_pay_or_*` entries above: a
+    # pay-or-consequence upkeep trigger the upkeep registry runs.
+    "upkeep_pay_or_destroy_self": "upkeep_effect",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps
@@ -308,6 +450,15 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # Miter), added at its promotion. `permanent_dies` is the wider condition
     # `dies` above narrows to a creature, and it names the same moment.
     ("permanent_dies", "may"): "triggered_death",
+    # Legends' four optional triggers, added at its promotion. Same rule as
+    # M21's block: `may` says nothing, so the row names the moment.
+    ("attacks_unblocked", "may"): "triggered_combat",
+    ("creature_attacks_or_blocks", "may"): "triggered_combat",
+    ("draw_step_self", "may"): "triggered_draw",
+    # Imprison's second trigger. The moment is an ability being activated —
+    # neither a cast nor a combat step, so it gets the word for what it watches,
+    # beside `("you_cast_spell", "may")` above.
+    ("nonmana_ability_activated", "may"): "triggered_activation",
 }
 
 

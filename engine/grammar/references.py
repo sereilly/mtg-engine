@@ -300,6 +300,17 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         return None
     if other_before_target:
         filt = dataclasses.replace(filt, other_than_source=True)
+    if targeted and filt.is_enchanted:
+        # "Destroy **target enchanted creature**." (Ramses Overdark.) The noun
+        # parser reads "enchanted <noun>" as the referent CR 303.4b gives an
+        # Aura — the permanent this Aura is attached to — because that is what
+        # the phrase means on the cards that print it alone. With "target" in
+        # front of it the same words are a *restriction*: nothing is attached to
+        # Ramses, and the creature is picked from every enchanted creature on
+        # the board. This is the one place both halves are known, so it is where
+        # the referent becomes the restriction rather than in each lowering that
+        # would otherwise have to ask the question again.
+        filt = dataclasses.replace(filt, is_enchanted=False, enchanted_only=True)
     return ast.TargetSpec(
         quantifier, filt, count,
         count_from_x=exactly_x,

@@ -261,6 +261,13 @@ def _narrowing_flags(source: dict) -> dict:
         # With no seat supplied the enumerator offers nothing, which is the
         # safe direction: an unanswerable narrowing must never widen to "any".
         flags["defending_player_only"] = True
+    if source.get("enchanted_only"):
+        # "destroy target **enchanted** creature" (Ramses Overdark) — the
+        # positive twin of ``not_enchanted`` below, and a picker flag for the
+        # same reason: the enumerator narrows with the same matcher the handler
+        # re-asks at resolution, so what is offered and what is destroyed cannot
+        # disagree.
+        flags["enchanted_only"] = True
     if source.get("not_enchanted"):
         # "target permanent **that isn't enchanted**" (Time Elemental) —
         # CR 303.4a. A picker flag rather than a restriction left to the
@@ -573,6 +580,53 @@ def _counter_spec(payload: dict) -> dict:
     return spec
 
 
+def _chosen_permanent_spec(payload: dict) -> dict | None:
+    """Whose battlefield a mid-resolution choice is drawn from.
+
+    "You and **target player** exchange control of the creature you each control
+    with the greatest mana value" (Juxtapose). The permanents are not targets —
+    they are chosen as the spell resolves (CR 601.2c chose nothing but the
+    player) — but the *player* is, and this instruction's ``controlled_by``
+    is the only place the compiled program records it. ``_controlled_by_seat``
+    reads the same word at resolution, so the seat the picker asks for and the
+    seat the exchange draws from are one answer.
+
+    The caster's own side answers None: "you" names no choice, and a spell whose
+    every step named the caster would otherwise raise a player picker for a
+    choice nobody makes.
+    """
+    if payload.get("controlled_by") == "target" or payload.get("chooser") == "target":
+        return {"kind": "player"}
+    return None
+
+
+def _counter_ability_spec(payload: dict) -> dict | None:
+    """"Counter target activated ability from an artifact source" (Rust, Ayesha
+    Tanaka) — an *ability* on the stack, not a spell.
+
+    The same "stack" picker a counterspell raises, because the object is chosen
+    from the same zone; what differs is which objects it may offer, and every
+    narrowing is handed over in the shape the handler tests it in
+    (``ability_kinds``, ``source_card_types``). One reading, so the ability the
+    picker offers and the ability the counter would actually counter are the
+    same set — an offer the handler then refuses is a tap paid for nothing.
+
+    "Counter **that** ability" (Imprison) chooses nothing: the object is the one
+    its trigger fired on, found by identity. None is the answer there, exactly
+    as it is for the counterspell's "counter it".
+    """
+    if payload.get("bound_to_trigger"):
+        return None
+    spec: dict = {
+        "kind": "stack",
+        "stack_ability_kinds": list(payload.get("ability_kinds") or ()) or ["activated", "triggered"],
+    }
+    source_types = payload.get("source_card_types")
+    if source_types:
+        spec["stack_ability_source_types"] = list(source_types)
+    return spec
+
+
 def _graveyard_return_spec(payload: dict) -> dict:
     """A graveyard return, narrowed to the card type it may take.
 
@@ -704,6 +758,8 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "sacrifice_matching_permanent": _forced_sacrifice_spec,
     "target_gains_life": _life_gain_spec,
     "counter_top_stack_spell": _counter_spec,
+    "counter_stack_ability": _counter_ability_spec,
+    "choose_permanent": _chosen_permanent_spec,
     # Reverberation names a spell on the stack the same way a counter does, and
     # narrows it the same way ("target **sorcery** spell"), so it derives the
     # same picker — the spec is about what is being *chosen*, not about what is

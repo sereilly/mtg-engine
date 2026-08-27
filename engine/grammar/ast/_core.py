@@ -439,6 +439,16 @@ class ObjectFilter:
     # creature" and "a creature that is enchanted" the same words to every
     # reader downstream.
     not_enchanted: bool = False
+    # "destroy **target enchanted** creature" (Ramses Overdark) — a creature
+    # with an Aura attached, chosen from the whole board. The third of the
+    # three, and the one the printed word "target" separates from
+    # ``is_enchanted`` above: on an Aura, "enchanted creature" *names* the
+    # permanent that Aura is on, while a card that asks its controller to pick
+    # one is describing every creature that is enchanted. `references.py`
+    # rewrites the referent into this restriction at the one place the
+    # quantifier is known, because the noun parser reading "enchanted creature"
+    # has not seen the word in front of it yet.
+    enchanted_only: bool = False
     # "all Equipment **attached to that creature**" (Turn to Slag). Which object
     # it is attached to, as a referent rather than a filter: "that creature" is
     # the spell's own target, and no read of the Equipment alone can say so.
@@ -630,6 +640,8 @@ class ObjectFilter:
             payload["not_ability_targeted_by_same_name"] = True
         if self.not_enchanted:
             payload["not_enchanted"] = True
+        if self.enchanted_only:
+            payload["enchanted_only"] = True
         if self.nontoken:
             payload["nontoken"] = True
         if self.token_only:
