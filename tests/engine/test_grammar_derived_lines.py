@@ -136,6 +136,40 @@ def test_combat_restrictions_match_the_derivation_table_exactly():
         # "This creature must be blocked if able." (Canopy Stalker.) Same
         # position: the table implements it, the grammar does not read it.
         "must_be_blocked",
+        # --- the nine Legends shipped, all in the same position ---------------
+        # Promotion widened `load_catalog()` over Legends and these arrived at
+        # once. Every one is implemented by `engine/combat_restrictions.py` and
+        # dispatched by the declare-attackers or declare-blockers step, and none
+        # has a grammar production — so each fails the parser and the table is
+        # the only implementer, which is what the assertion below checks. They
+        # are listed one by one rather than as a blanket "any combat
+        # restriction": the whole value of this list is that a kind arriving in
+        # it was looked at, and a kind the grammar *does* read (the two that
+        # reach the comparison below) must not be able to slip in silently.
+        #
+        # Moat and Evil Eye of Orms-by-Gore, over a described set of creatures
+        # rather than over the carrier.
+        "creatures_cant_attack",
+        # Akron Legionnaire: "Except for creatures named Akron Legionnaire and
+        # artifact creatures, creatures you control can't attack." The
+        # exceptions are a union of noun-phrase filters in the payload, tested
+        # by `subject_matches` at declaration — the self-name among them is
+        # *data* in a filter, not a name-keyed dispatch
+        # (tests/engine/test_card_name_reads.py draws that line).
+        "controlled_creatures_cant_attack",
+        # Giant Turtle's "if it attacked during your last turn", read off the
+        # attack record the declare-attackers step stamps.
+        "cant_attack_if_attacked_last_turn",
+        # Arboria: a fact about the *defending player*, off the per-seat
+        # last-own-turn record the turn boundary folds.
+        "cant_attack_unless_defender_acted",
+        # Elven Riders / Evil Eye: "can't be blocked except by …", the whitelist
+        # twin of `cant_be_blocked_by` above.
+        "cant_be_blocked_except_by",
+        # Caverns of Despair, one card printing both halves.
+        "max_attackers_each_combat", "max_blockers_each_combat",
+        # Marble Priest: "All Walls able to block this creature do so."
+        "must_be_blocked_by_all_able",
     }
 
     compared = 0

@@ -20,6 +20,7 @@ from engine.activation_restrictions import (
     unreadable_activation_clauses,
 )
 from engine.card_loader import load_catalog
+from engine.named_counters import add_counters
 from engine.models import Permanent, PlayerState
 from tests.helpers import _nosick
 
@@ -150,3 +151,122 @@ def test_every_printed_activation_clause_in_the_pool_is_readable():
         "printed activation clauses nothing enforces — add them to "
         f"ACTIVATION_RESTRICTIONS: {unreadable}"
     )
+
+
+# ---------------------------------------------------------------------------
+# The three clauses Legends prints on their own. Each was *unreadable* by the
+# table, which is the gate half of this module's failure mode: the sentence is
+# printed, the card reports supported, and no row says what the sentence means.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("602.5")
+@pytest.mark.parametrize(
+    "phase, step, allowed",
+    [
+        ("beginning", "upkeep", True),
+        ("precombat_main", "precombat_main", True),
+        ("combat", "declare_attackers", True),
+        ("combat", "declare_blockers", True),
+        ("combat", "combat_damage", False),
+        ("combat", "end_of_combat", False),
+        ("postcombat_main", "postcombat_main", False),
+    ],
+)
+def test_602_5_only_before_a_named_step_is_a_point_in_the_turn(phase, step, allowed):
+    """"Activate only before the combat damage step." (Angus Mackenzie.)
+
+    A window bounded by a point in the turn rather than by a phase name, so the
+    answer has to be an *ordering*: read as "during combat" it would allow the
+    end of combat step, which is after the damage this card is racing, and read
+    as "your turn" it would refuse the activation on the turn Angus most wants
+    it -- an opponent's.
+    """
+    game, _p1, _p2, _angus = _board("Angus Mackenzie")
+    game.current_turn_phase = phase
+    game.current_step = step
+
+    result = game.activate_permanent_ability(0, "Angus Mackenzie")
+    game._settle()
+
+    assert result.supported is allowed, result.details
+    if not allowed:
+        assert "only before that step" in result.details
+
+
+@pytest.mark.cr("602.5")
+def test_602_5_the_named_step_is_payload_not_a_row_per_card():
+    """The step alternation is built from the engine's own turn structure, so a
+    card printed with a different step is the same sentence. Asked of invented
+    clauses, because Legends prints only the one -- and a table needing a row
+    per step would answer no to both of the first two."""
+    from engine.activation_restrictions import activation_restriction_line
+
+    assert activation_restriction_line("Activate only before the end step")
+    assert activation_restriction_line("Activate only before the declare blockers step")
+    # A step this engine does not have leaves the clause unmatched, which makes
+    # its card unsupported rather than admitted with the timing ignored.
+    assert not activation_restriction_line("Activate only before the mulligan step")
+
+
+@pytest.mark.cr("602.5")
+def test_602_5_a_counter_threshold_is_read_off_the_permanent():
+    """"Activate only if there are two or more hatchling counters on this
+    artifact." (Triassic Egg.) Count and counter word are both payload, and the
+    counters are the *source's* -- so the answer changes as the card's other
+    ability puts them on."""
+    game, _p1, _p2, egg = _board("Triassic Egg")
+    line = next(l for l in egg.card.oracle_text.splitlines() if "Activate only" in l)
+
+    assert activation_denial(game, 0, egg, line) is not None
+    add_counters(egg, "hatchling", 1)
+    assert activation_denial(game, 0, egg, line) is not None, (
+        "one is not two -- a threshold read as presence is a weaker restriction"
+    )
+    add_counters(egg, "hatchling", 1)
+    assert activation_denial(game, 0, egg, line) is None
+
+
+@pytest.mark.cr("602.5")
+def test_602_5_once_each_turn_standing_alone_is_a_row_of_its_own():
+    """"Activate only once each turn." (Dream Coat.)
+
+    The two rows carrying this as an optional tail (Instill Energy, Gate to
+    Phyrexia) could not read it standing alone, so the clause was unreadable
+    while the words were nonetheless enforced by a substring test beside the
+    table -- one fact with two representations. Both halves ask
+    `limits_to_once_each_turn` now, over the state the permanent carries.
+    """
+    from engine.activation_restrictions import (
+        limits_to_once_each_turn,
+        mark_activated_this_turn,
+    )
+
+    game, _p1, _p2, coat = _board("Dream Coat")
+    line = next(l for l in coat.card.oracle_text.splitlines() if "Activate only" in l)
+    assert limits_to_once_each_turn(line)
+
+    assert activation_denial(game, 0, coat, line) is None
+    mark_activated_this_turn(game, coat)
+    assert activation_denial(game, 0, coat, line) == "only once each turn"
+    # The limit is per turn, so the next one clears it.
+    game.turn += 1
+    assert activation_denial(game, 0, coat, line) is None
+
+
+@pytest.mark.cr("602.5")
+def test_602_5_the_once_each_turn_tail_is_still_read_as_the_same_clause():
+    """Instill Energy prints the limit as a *tail* on a timing clause. The
+    reader the stamp uses has to see all three printed spellings, or a card ends
+    up stamped and never refused, or refused and never stamped."""
+    from engine.activation_restrictions import limits_to_once_each_turn
+
+    assert limits_to_once_each_turn(
+        "{0}: Untap enchanted creature. Activate only during your turn and only "
+        "once each turn."
+    )
+    assert limits_to_once_each_turn(
+        "Sacrifice a creature: Destroy target artifact. Activate only during "
+        "your upkeep and only once each turn."
+    )
+    assert not limits_to_once_each_turn("{T}: Add {C}.")

@@ -39,14 +39,27 @@ if TYPE_CHECKING:
 #: (game, controller_index, source) -> True when activating is currently legal.
 ActivationPredicate = Callable[["Game", int, "Permanent | None"], bool]
 
+#: The same, plus the clause's own match. A clause whose *parameters* are
+#: printed -- which step, how many counters of which word -- has to read them,
+#: and reading them off the match is what keeps a parameter data instead of
+#: baking it into the pattern and needing a row per printing. The same choice
+#: `combat_restrictions.py` makes about its land type.
+ParameterisedActivationPredicate = Callable[
+    ["Game", int, "Permanent | None", "re.Match[str]"], bool
+]
+
 
 @dataclass(frozen=True)
 class ActivationRestriction:
     """One printed clause, what it permits, and what to say when it does not."""
 
     pattern: "re.Pattern[str]"
-    is_legal: ActivationPredicate
+    is_legal: "ActivationPredicate | ParameterisedActivationPredicate"
     denial: str
+    #: Whether `is_legal` takes the match as a fourth argument. Declared rather
+    #: than sniffed: a signature guessed by introspection is a signature that
+    #: silently stops being guessed right.
+    reads_payload: bool = False
 
 
 def _as_a_sorcery(game: "Game", controller_index: int, source) -> bool:
@@ -158,6 +171,121 @@ def _controlled_since_your_last_turn(game: "Game", controller_index: int, source
     return bool(game._controlled_since_turn_start(source))
 
 
+#: The metadata key a "once each turn" activation stamps on its permanent, and
+#: the one both readers of that clause share. The refusal and the stamp used to
+#: agree by both spelling the words, which is one fact with two representations
+#: -- the shape this whole module exists to collapse.
+ONCE_EACH_TURN_MARK = "ability_used_turn"
+
+
+def limits_to_once_each_turn(ability_text: str) -> bool:
+    """Whether this printed ability line may be activated only once a turn.
+
+    Three printed spellings, one question: the bare clause (Dream Coat) and the
+    tail on a timing clause (Instill Energy's "during your turn and only once
+    each turn", Gate to Phyrexia's upkeep one). `mixins/stack/activation.py`
+    asks this both to refuse a second activation and to stamp the first, so the
+    row below and the stamp cannot disagree about which lines are limited.
+    """
+    return any("once each turn" in clause for clause in _clauses(ability_text))
+
+
+def already_activated_this_turn(game: "Game", source) -> bool:
+    """Whether *source* has already used a once-a-turn ability this turn.
+
+    The one read of the stamp mark_activated_this_turn writes, shared by
+    the row below and by `mixins/stack/activation.py`'s refusal -- so the key is
+    spelled once and the two cannot drift.
+    """
+    return source is not None and source.metadata.get(ONCE_EACH_TURN_MARK) == game.turn
+
+
+def _not_yet_activated_this_turn(game: "Game", controller_index: int, source) -> bool:
+    """"Activate only once each turn." (Dream Coat.)
+
+    Per-*permanent* state, so the source is what answers -- and a source that is
+    gone answers yes, for the mirror of the reason
+    `_controlled_since_your_last_turn` answers no: there is no permanent to have
+    already used its ability.
+    """
+    return not already_activated_this_turn(game, source)
+
+
+def mark_activated_this_turn(game: "Game", source) -> None:
+    """Stamp a permanent whose ability is limited to one activation a turn."""
+    if source is not None:
+        source.metadata[ONCE_EACH_TURN_MARK] = game.turn
+
+
+def _turn_positions() -> dict[str, int]:
+    """Every step of a turn, printed name -> how far through the turn it is.
+
+    Built from the engine's own turn structure rather than listed here, so a
+    step this engine grows is orderable the moment it exists and a step it does
+    not have cannot be named by a card this table admits. The printed spelling
+    is the step key with its underscores opened out -- "combat damage", "end of
+    combat" -- which is how the CR prints them.
+    """
+    from .mixins._constants import _PHASE_STEPS, _TURN_PHASES
+
+    positions: dict[str, int] = {}
+    for phase in _TURN_PHASES:
+        for step in _PHASE_STEPS.get(phase, (phase,)):
+            positions.setdefault(step.replace("_", " "), len(positions))
+    return positions
+
+
+_TURN_POSITIONS = _turn_positions()
+
+
+def _current_turn_position(game: "Game") -> int | None:
+    step = str(getattr(game, "current_step", "") or "").replace("_", " ")
+    return _TURN_POSITIONS.get(step)
+
+
+def _before_step(game: "Game", controller_index: int, source, match) -> bool:
+    """"Activate only before the combat damage step." (Angus Mackenzie.)
+
+    A window bounded by a *point in the turn* and by neither player's seat:
+    Angus prevents all combat damage this turn, and the damage it is racing is
+    dealt on whichever turn it is -- the same reason the seat is not part of
+    `_during_declare_blockers`.
+
+    The step is payload. A card printed "only before the end step" needs no code
+    here, and a card printed with a step this engine does not have never reaches
+    this predicate at all: the pattern is built from the same turn structure, so
+    an unreadable step leaves the clause unmatched and its card unsupported.
+    """
+    here = _current_turn_position(game)
+    if here is None:
+        return False
+    return here < _TURN_POSITIONS[match.group("step")]
+
+
+def _at_least_that_many_counters(
+    game: "Game", controller_index: int, source, match
+) -> bool:
+    """"Activate only if there are two or more hatchling counters on this
+    artifact." (Triassic Egg.)
+
+    Number and counter word are both payload, read off the match: the sentence
+    is the same sentence with any other word in it, and `named_counters` already
+    stores an invented kind without knowing which. Asked of the *source*,
+    because "on this artifact" names the permanent carrying the ability -- and a
+    source that has left answers no, a permanent that is gone having no counters
+    (CR 400.7).
+    """
+    from .grammar.vocabulary import NUMBER_WORDS
+    from .named_counters import counters_on
+
+    if source is None:
+        return False
+    needed = NUMBER_WORDS.get(match.group("count"))
+    if needed is None:
+        return False
+    return counters_on(source, match.group("counter")) >= needed
+
+
 #: Matched whole, and no pattern is a prefix of another -- held by
 #: `tests/rules/test_activation_restrictions.py`.
 ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
@@ -253,6 +381,43 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         _controlled_since_your_last_turn,
         "only if you have controlled it since your most recent turn began",
     ),
+    # --- the three Legends prints on their own -------------------------------
+    # "Activate only once each turn" (Dream Coat) standing *alone*, where the
+    # two rows above carry it as an optional tail. The refusal was already
+    # enforced -- `mixins/stack/activation.py` substring-matched the words --
+    # but the clause was unreadable *here*, which is the gate half: a card whose
+    # only restriction is this sentence was admitted by a table that could not
+    # say what the sentence means, and the next such card would inherit that.
+    # Both halves ask `limits_to_once_each_turn` now.
+    ActivationRestriction(
+        re.compile(r"^activate only once each turn$"),
+        _not_yet_activated_this_turn,
+        "only once each turn",
+    ),
+    # "Activate only before the combat damage step." (Angus Mackenzie.) The step
+    # alternation is built from the engine's own turn structure, so the step is
+    # payload and a step the engine does not have leaves the clause unmatched.
+    ActivationRestriction(
+        re.compile(
+            r"^activate only before the (?P<step>"
+            + "|".join(sorted(map(re.escape, _TURN_POSITIONS), key=len, reverse=True))
+            + r") step$"
+        ),
+        _before_step,
+        "only before that step",
+        reads_payload=True,
+    ),
+    # "Activate only if there are two or more hatchling counters on this
+    # artifact." (Triassic Egg.) Number and counter word are both payload.
+    ActivationRestriction(
+        re.compile(
+            r"^activate only if there are (?P<count>[a-z]+) or more "
+            r"(?P<counter>[a-z]+) counters on this [a-z]+$"
+        ),
+        _at_least_that_many_counters,
+        "not enough counters on it yet",
+        reads_payload=True,
+    ),
 )
 
 
@@ -325,17 +490,27 @@ def activation_denial(game, controller_index: int, source, ability_text: str) ->
     for clause in _clauses(ability_text):
         cleaned = clause.rstrip(".")
         for entry in ACTIVATION_RESTRICTIONS:
-            if entry.pattern.match(cleaned) and not entry.is_legal(
-                game, controller_index, source
-            ):
+            match = entry.pattern.match(cleaned)
+            if match is None:
+                continue
+            legal = (
+                entry.is_legal(game, controller_index, source, match)
+                if entry.reads_payload
+                else entry.is_legal(game, controller_index, source)
+            )
+            if not legal:
                 return entry.denial
     return None
 
 
 __all__ = [
     "ACTIVATION_RESTRICTIONS",
+    "ONCE_EACH_TURN_MARK",
     "ActivationRestriction",
     "activation_denial",
     "activation_restriction_line",
+    "already_activated_this_turn",
+    "limits_to_once_each_turn",
+    "mark_activated_this_turn",
     "unreadable_activation_clauses",
 ]

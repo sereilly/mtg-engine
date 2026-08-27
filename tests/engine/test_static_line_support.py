@@ -36,19 +36,14 @@ import pytest
 from engine.card_loader import load_catalog
 from engine.characteristic_defining import dynamic_pt_for
 from engine.combat_restrictions import combat_restriction_for
-from engine.cost_modifiers import cost_modifier_claims_line
 from engine.land_play_allowance import land_play_line
 from engine.lord_buffs import lord_buff_for
-from engine.global_statics import global_static_for
-from engine.library_top import library_top_line
-from engine.prevention import prevention_claims_line
-from engine.replacements import replacement_claims_line
-from engine.enter_effects import enter_effect_line
 from engine.ante import is_ante_deck_line
 from engine.hand_size import hand_size_line
 from engine.untap_restrictions import self_untap_line
 from engine.grammar import compile_line
 from engine.oracle import (
+    _derived_static_claims,
     _is_supported_static_creature_line,
     compile_card_oracle,
     normalize_creature_line,
@@ -101,44 +96,26 @@ def _derived(normalized: str) -> bool:
         # table the gate asks. Only the permission clause is a claim: the
         # damage rider is a trigger the table does not own.
         or land_play_line(normalized) == "allowance"
-        # "White spells cost {3} more to cast" (Gloom), "Creature spells with
-        # flying you cast cost {1} less" (Watcher of the Spheres) — dispatched
-        # by mixins/stack/casting.py and activation.py through
-        # spell_cost_tax / spell_cost_reduction / ability_cost_tax, which read
-        # every permanent's own text through the same table the gate asks.
-        or cost_modifier_claims_line(normalized)
-        # "If you would gain life, draw that many cards instead" (Lich), "…you
-        # may put it on top of your library instead" (Library of Leng) —
-        # dispatched by engine/replacements.py's interceptors, which self-select
-        # on the permanent's own text through the same registry the gate asks.
-        # The seventh derivation table, and the last to be asked here: it joined
-        # when round 111 widened the creature gate from one hand-copied
-        # replacement constant to the whole registry, and these two lines
-        # arrived with it.
-        or replacement_claims_line(normalized)
-        # "If a source would deal damage to you, prevent that damage and put an
-        # incarnation counter on this enchantment" (Nine Lives) — dispatched by
-        # engine/prevention.py's interceptor, which self-selects on the
-        # permanent's own text through the same matcher the gate asks. CR 615's
-        # half of the table above it, and the eleventh here.
-        or prevention_claims_line(normalized)
-        # "All artifacts have …" (Energy Flux), "Creatures you control attack
-        # each combat if able" (the Pirate Pursued Whale makes) — dispatched by
-        # the CR 613 layer bridge, which appends the granted ability to each
-        # affected permanent's effective card. The eighth derivation table, and
-        # it reached the creature gate in round 130.
-        or global_static_for(normalized) is not None
-        # "Play with the top card of your library revealed", "…you may play
-        # lands from the top of your library" — dispatched by
-        # engine/library_top.py, which reads every controlled permanent's own
-        # text through the same table the gate asks. The ninth derivation table.
-        or library_top_line(normalized)
-        # "This creature enters tapped" (Forgotten Sentinel) — carried out by
-        # `_initialize_permanent_state`, from the same table the gate reads. The
-        # tenth derivation table, and the first entry-state one to reach here:
-        # M21 prints the phrase on a creature, where the shipped pool only had
-        # it on lands.
-        or enter_effect_line(normalized) is not None
+        # **Every table the gate itself names**, asked of this one line
+        # through `oracle._derived_static_claims` — the same function
+        # `_is_supported_static_creature_line`'s siblings ask when they admit a
+        # card. Seven arms stood here spelled out by hand (cost_modifiers,
+        # replacements, prevention, global_statics, library_top, enter_effects,
+        # and the two before them), which made this guard a *second copy* of
+        # that list with one reader each: the copy had thirteen tables where the
+        # gate had eighteen, so `evasion_negation` (round 27), `target_immunity`
+        # (rounds 18/31) and `regeneration` (round 29) were admitted, dispatched
+        # and enforced while this test reported all twelve of their lines as
+        # implemented nowhere. Every one of them was a false alarm, and a false
+        # alarm here is worse than none: it is twelve lines of noise standing in
+        # front of the real gap this file exists to catch.
+        #
+        # `card_name` is deliberately **not** passed. A claim keyed by a card's
+        # name (Island Sanctuary's `DRAW_STEP_MODIFIERS` entry) is a claim about
+        # the whole card, and letting it answer here would let one hooked line
+        # back every other line the card prints. Only the text-derived tables
+        # get to answer a question about one line of text.
+        or bool(_derived_static_claims(normalized, normalized, None))
         # "The chosen player's maximum hand size is four." (Cursed Rack) — the
         # eleventh derivation table, read by the cleanup step that enforces
         # CR 402.2 and by the gate that admits the line.

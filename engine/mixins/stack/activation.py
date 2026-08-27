@@ -13,7 +13,12 @@ import random
 
 from ...activation_permissions import (activation_permission_denial,
                                         card_widens_activation)
-from ...activation_restrictions import activation_denial
+from ...activation_restrictions import (
+    activation_denial,
+    already_activated_this_turn,
+    limits_to_once_each_turn,
+    mark_activated_this_turn,
+)
 from ...auras import attached_ability_cost_reduction, aura_restriction_active
 from ...cost_modifiers import ability_cost_tax, ability_self_reduction_amount
 from ...mana_payment import is_mana_ability
@@ -484,10 +489,14 @@ class AbilityActivationMixin:
 
         # The timing half of "Activate only during your turn and only once each
         # turn" is in the restriction table above; the *once* half is
-        # per-permanent state rather than a property of the game, so it stays
-        # here with the state it reads.
-        once_each_turn = "once each turn" in ability_lower
-        if once_each_turn and permanent.metadata.get("ability_used_turn") == self.turn:
+        # per-permanent state rather than a property of the game, so the stamp
+        # stays here with the state it reads. **Which lines are limited is the
+        # table's answer**, not a substring test beside it: the bare clause
+        # (Dream Coat) is a row there now, and a reader here spelling the words
+        # itself is the second representation that lets a refusal and a stamp
+        # disagree about the same sentence.
+        once_each_turn = limits_to_once_each_turn(ability_lower)
+        if once_each_turn and already_activated_this_turn(self, permanent):
             details = f"{permanent.card.name}'s ability can only be activated once each turn"
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
@@ -789,7 +798,7 @@ class AbilityActivationMixin:
 
         # All guards/costs passed — mark a "once each turn" ability as used.
         if once_each_turn:
-            permanent.metadata["ability_used_turn"] = self.turn
+            mark_activated_this_turn(self, permanent)
 
         # CR 606.4: a loyalty symbol is a cost to put on or remove that many
         # loyalty counters, paid as the ability is activated — so the walker's
