@@ -396,6 +396,16 @@ class Permanent:
         from .keywords import granted_ability_lines, removed_ability_lines
 
         granted.extend(granted_ability_lines(self))
+        # …and an ability an **Aura attached to this permanent** grants
+        # ('Enchanted land has "{T}: Counter target spell …"', Equinox). Derived
+        # from the attachments on every read rather than recorded when the Aura
+        # arrived, so detaching it takes the ability away with nothing to undo
+        # (CR 611.3b). Read off the Aura's *effective* card, because a text
+        # change rewrites what the Aura says before anything reads it.
+        from .auras import aura_granted_ability_lines, auras_attached_to
+
+        for aura in auras_attached_to(self):
+            granted.extend(aura_granted_ability_lines(aura.effective_card.oracle_text))
         # …and layer 6's other half (CR 613.1f): an ability an effect has taken
         # away. Dropped *before* the grants are appended, so a card that loses a
         # line and is then granted one keeps the granted one — and so a grant of

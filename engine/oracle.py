@@ -75,6 +75,8 @@ __all__ = [
     "lex_oracle_text",
     "normalize_creature_line",
     "parse_activated_ability_cost",
+    "chargeable_sacrifice_payload",
+    "trigger_condition_of_line",
 ]
 
 
@@ -840,7 +842,7 @@ def _parse_loyalty_cost(cost_part: str) -> tuple[int | None, int | None]:
     return sign * int(magnitude), None
 
 
-def _chargeable_sacrifice_filter(phrase: str) -> dict | None:
+def _chargeable_sacrifice_filter(phrase: str, *, plural: bool = False) -> dict | None:
     """The filter payload a "Sacrifice <noun phrase>" cost charges, or None when
     the payment path cannot collect it.
 
@@ -856,13 +858,42 @@ def _chargeable_sacrifice_filter(phrase: str) -> dict | None:
     from .grammar import subject_filter_payload
     from .subject_filters import object_only_filter
 
-    described = subject_filter_payload(phrase)
+    # *plural* is the "any number of **creatures you control**" tail (Sword of
+    # the Ages): the count is printed in front of the phrase, so what is left is
+    # a bare plural rather than the singular every other sacrifice cost names.
+    # The grammar's cost side reads the same shape through ``bare_plural``, and
+    # both are gated identically — the count changes how many are charged, never
+    # what may pay.
+    described = subject_filter_payload(phrase, plural=plural)
     if described is None:
         return None
-    # A sacrifice cost is paid from the payer's own battlefield, so "you
-    # control" would be no narrowing at all — but nothing here checks it, and a
-    # phrase the charger silently agrees with is still a phrase it did not read.
-    carried = object_only_filter(described, carried_separately=frozenset({"exclude_self"}))
+    return chargeable_sacrifice_payload(described)
+
+
+def chargeable_sacrifice_payload(described: dict) -> dict | None:
+    """The charger's reading of an already-parsed noun-phrase payload.
+
+    Split out of :func:`_chargeable_sacrifice_filter` so the pool-wide guard in
+    ``tests/engine/test_activation_costs.py`` can ask the same question of the
+    grammar's own filter instead of re-deriving it. That guard compares what the
+    grammar admitted against what this charges, and comparing a *raw* phrase
+    payload against a reduced one reports a difference for every key the
+    reduction legitimately drops — which is how "creatures **you control**"
+    (Sword of the Ages) read as a dropped rider.
+
+    Two keys are dropped rather than carried, and neither is a narrowing lost.
+    ``controller`` is one: every path that charges a sacrifice enumerates the
+    payer's own battlefield first, so "you control" restricts nothing the
+    enumeration has not already done — but ``permanent_matches_filter`` has no
+    observer, so a key left in would be handed over and refuse every candidate.
+    ``exclude_self`` is the other, and it comes back on: the charger holds the
+    ability's source and compares by identity.
+    """
+    from .subject_filters import object_only_filter
+
+    carried = object_only_filter(
+        described, carried_separately=frozenset({"exclude_self", "controller"})
+    )
     if carried is None:
         return None
     if "exclude_self" in described:
@@ -948,13 +979,41 @@ def _life_payment_cost(cost_lower: str) -> int:
     return int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
 
 
+def activation_colon_index(line: str) -> int | None:
+    """The index of the colon that separates an activated ability's cost from
+    its effect — or None when the line has none.
+
+    **A colon inside quotation marks is not one.** An Aura that grants an
+    ability writes the whole ability inside quotes ("Enchanted land has \"{T}:
+    Counter target spell …\"", Equinox), and that colon belongs to the granted
+    ability rather than to any ability of the Aura. Split on it, the Aura reads
+    as a permanent with a {T} cost and an effect of "counter target spell" —
+    which is how Equinox reported an activated ability that compiled to nothing
+    while its printed static line, which ``engine/auras.py`` implements in full,
+    was never classified as one.
+
+    The grammar's parser has had this rule since it learned to read a granted
+    ability (``parser._split_on_colon`` over the tokens before the first
+    quote); this is that rule on the string the compiler's line classifier
+    reads, so the two front ends agree about where an ability begins.
+    """
+    in_quotes = False
+    for index, character in enumerate(line):
+        if character == '"':
+            in_quotes = not in_quotes
+        elif character == ":" and not in_quotes:
+            return index
+    return None
+
+
 def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
     requires_tap = False
-    if not line or ":" not in line:
+    colon = activation_colon_index(line or "")
+    if colon is None:
         return ActivatedAbilityCost(required, requires_tap)
 
-    cost_part = line.split(":", 1)[0]
+    cost_part = line[:colon]
     loyalty, loyalty_x_sign = _parse_loyalty_cost(cost_part)
     if loyalty is not None or loyalty_x_sign is not None:
         # A loyalty symbol is the whole cost (CR 606.4); reading the clause
@@ -1003,6 +1062,23 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         if chosen_sacrifice
         else None
     )
+    # "Sacrifice this artifact **and any number of creatures you control**"
+    # (Sword of the Ages). One printed cost naming two things: the source, read
+    # above, and a *set* whose size the payer chooses. The same field carries
+    # the noun phrase — it is the same question, "what may pay this?" — with
+    # ``sacrifice_count`` saying how many, exactly as ``remove_counter_count``
+    # does one cost up. Without this the tail matched nothing at all and the
+    # ability sacrificed only itself, so its X was always zero.
+    sacrifice_count: int | str = 1
+    any_number_sacrifice = re.search(
+        r"\bsacrifice [^,:]*?\band any number of ([^,:]+?)\s*(?=,|$)", cost_lower
+    )
+    if sacrifice_filter is None and any_number_sacrifice is not None:
+        sacrifice_filter = _chargeable_sacrifice_filter(
+            any_number_sacrifice.group(1), plural=True
+        )
+        if sacrifice_filter is not None:
+            sacrifice_count = "any"
     # "Discard a card" (Seasoned Hallowblade), "Discard a land card or Shrine
     # card" (Sanctum of Shattered Heights). Jandor's Ring's history-named card is
     # read above; counting it here too would charge the Ring twice.
@@ -1049,9 +1125,23 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # open, and a card - or a grant - may invent one.
     removal_cost = re.search(r"\bremove an? ([a-z]+) counter from ", cost_lower)
     remove_counter = removal_cost.group(1) if removal_cost else None
+    remove_counter_count: int | str = 1
+    if remove_counter is None:
+        # "Remove **any number of** charge counters from this artifact" (the
+        # five Mana Batteries). The same cost with the count left to the payer,
+        # so it is the same field plus how many — not a second cost. Without
+        # this row the clause matched nothing at all: the ability was activated
+        # for free, forever, and its effect had no number to read.
+        any_number = re.search(
+            r"\bremove any number of ([a-z]+) counters from ", cost_lower
+        )
+        if any_number is not None:
+            remove_counter = any_number.group(1)
+            remove_counter_count = "any"
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
         sacrifice_filter,
+        sacrifice_count=sacrifice_count,
         tap_filter=tap_cost[1] if tap_cost else None,
         tap_count=tap_cost[0] if tap_cost else 0,
         discard_cards=0 if discard_filters is None else 1,
@@ -1061,6 +1151,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         discard_self=discard_self,
         put_counter=put_counter,
         remove_counter=remove_counter,
+        remove_counter_count=remove_counter_count,
         pay_life=_life_payment_cost(cost_lower),
     )
 
@@ -1253,6 +1344,46 @@ def _extract_if_condition(effect_text: str) -> tuple[str | None, str]:
     return None, effect_text
 
 
+def trigger_condition_of_line(
+    line: str, card_name: str | None = None
+) -> tuple[TriggerCondition | None, str]:
+    """The legacy table's reading of one printed line: ``(condition, remainder)``.
+
+    **This is the only reading.** It used to live inline in
+    ``_parse_triggered_ability``, which meant every other caller that wanted to
+    know "what condition does the legacy table see here?" — the pool-wide guard
+    in ``tests/engine/test_grammar_lowering.py`` most sharply — wrote the
+    normalize-and-parse half and dropped the self-reference fallback below. Two
+    readings of one table is the bug this project keeps finding: the guard
+    reported Axelrod Gunnarson and Nicol Bolas as conditions "the legacy table
+    does not name", when the table names both and only the guard could not see
+    it.
+
+    The fallback: the card's own name collapsed to "this creature", for the
+    reason ``_restriction_line`` gives about the static tables. Every row is
+    anchored on the modern templating, and a card that says its own name
+    ("Whenever a creature dealt damage by **Axelrod Gunnarson** this turn dies")
+    is printing a condition this engine already dispatches, the old way. Without
+    it the row matched nothing and the card reported "text too complex" while
+    the grammar — whose lexer collapses the same references — read the line. Two
+    front ends disagreeing about one printed line is a card refused by the
+    stricter of them.
+
+    A *fallback* rather than the first reading, because the collapse is a
+    whole-word substitution over the entire line and a card whose name is an
+    ordinary word ("Fire", or a test fixture called "Player") would have its
+    recipient clause rewritten out from under a row that already matched.
+    Nothing this reads is text the uncollapsed pass could read.
+    """
+    normalized = normalize_creature_line(line)
+    condition, remainder = _parse_trigger_condition(normalized)
+    if condition is None and card_name:
+        collapsed = _collapse_self_references(normalized, card_name, "this creature")
+        if collapsed != normalized:
+            condition, remainder = _parse_trigger_condition(collapsed)
+    return condition, remainder
+
+
 def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedTriggeredAbility | None:
     """Parse a single oracle text line as a triggered ability.
 
@@ -1261,28 +1392,7 @@ def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedT
     with supported=False if the trigger prefix is recognized but the
     condition or effect is not.
     """
-    normalized = normalize_creature_line(line)
-
-    condition, remainder = _parse_trigger_condition(normalized)
-    if condition is None and card_name:
-        # The card's own name collapsed to "this creature", for the reason
-        # `_restriction_line` gives about the static tables: every row here is
-        # anchored on the modern templating, and a card that says its own name
-        # ("Whenever a creature dealt damage by **Axelrod Gunnarson** this turn
-        # dies") is printing the condition this engine already dispatches, the
-        # old way. Without it the row matched nothing and the card reported
-        # "text too complex" while the grammar — whose lexer collapses the same
-        # references — read the line. Two front ends disagreeing about one
-        # printed line is a card refused by the stricter of them.
-        #
-        # A *fallback* rather than the first reading, because the collapse is a
-        # whole-word substitution over the entire line and a card whose name is
-        # an ordinary word ("Fire", or a test fixture called "Player") would
-        # have its recipient clause rewritten out from under a row that already
-        # matched. Nothing this reads is text the uncollapsed pass could read.
-        collapsed = _collapse_self_references(normalized, card_name, "this creature")
-        if collapsed != normalized:
-            condition, remainder = _parse_trigger_condition(collapsed)
+    condition, remainder = trigger_condition_of_line(line, card_name)
     if condition is None:
         return None  # not a triggered ability line
 
@@ -1802,10 +1912,14 @@ def _qualified_keyword_part(part: str) -> bool:
 
 def _parse_activated_ability(line: str, card_name: str | None = None) -> ParsedActivatedAbility | None:
     normalized = normalize_creature_line(line)
-    if ":" not in normalized:
+    # Not "is there a colon", but "is there an *activation* colon": one inside
+    # quotation marks belongs to an ability the line grants, not to one the
+    # permanent has. See :func:`activation_colon_index`.
+    colon = activation_colon_index(normalized)
+    if colon is None:
         return None
 
-    effect_text = normalized.split(":", 1)[1].strip()
+    effect_text = normalized[colon + 1:].strip()
     # "…: Until end of turn, whenever <subject> <event>, <effect>." (Subira.)
     # A delayed triggered ability created on resolution (CR 603.7), read here
     # for the same reason the loyalty path reads it: handed to the grammar, the
@@ -2867,8 +2981,23 @@ def expand_modal_activated_lines(oracle_text: str) -> str:
         ):
             bullets = _bullets_after(lines, i)
             if bullets:
-                cost = line.partition(":")[0].strip()
-                out.extend(f"{cost}: {bullet}" for bullet in bullets)
+                cost, _, effect = line.partition(":")
+                cost = cost.strip()
+                # Whatever the head line printed *after* "Choose one." rides on
+                # to every expanded ability — "Activate only if there are two or
+                # more hatchling counters on this artifact." (Triassic Egg). The
+                # restriction is enforced off ``source_line``, so a rewrite that
+                # dropped it would turn a gated ability into a free one, on
+                # every mode at once. Taken from the raw text for the same
+                # reason the cost is: re-rendering it would be a second
+                # spelling, free to differ from the one the restriction table
+                # matches.
+                head, _, tail = effect.partition(".")
+                tail = tail.strip()
+                out.extend(
+                    f"{cost}: {bullet}" + (f" {tail}" if tail else "")
+                    for bullet in bullets
+                )
                 i += 1 + len(bullets)
                 continue
         out.append(lines[i])

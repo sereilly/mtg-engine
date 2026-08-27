@@ -709,8 +709,15 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     for suffix, stamp in (("", 0), ("_until_eot", 1)):
         override = perm.metadata.get(f"color_override{suffix}")
         if override:
+            # A *set* of colours where the card offered one ("becomes the color
+            # or colors of your choice", Dream Coat) — CR 105.2 makes an object
+            # of two colours one object, not two effects. Normalized here rather
+            # than at every write, because this is the one reader: a channel
+            # that could hold either and a reader that could only take one would
+            # make a multicoloured permanent read as a list-shaped colour.
+            colours = list(override) if isinstance(override, (list, tuple)) else [override]
             effects.append(
-                set_colors(scope_only(oid), [override], timestamp=stamp,
+                set_colors(scope_only(oid), colours, timestamp=stamp,
                            label=f"colour override{suffix}")
             )
     return effects

@@ -736,7 +736,12 @@ class SpellCastingMixin:
         return [
             perm
             for perm in self.controlled_by(caster_index)
-            if subject_matches(self, perm, cost.sacrifice_filter)
+            # The observer is the payer: "a creature **you control**" is a
+            # seat comparison, and a payload carrying one with no observer to
+            # compare against refuses every candidate.
+            if subject_matches(
+                self, perm, cost.sacrifice_filter, observer=caster_index
+            )
         ]
 
     def _unpayable_additional_cost(

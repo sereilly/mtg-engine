@@ -2103,11 +2103,18 @@ def test_every_executed_trigger_agrees_with_the_legacy_condition_table(catalog):
     ``_parse_triggered_ability`` discarded the whole ability. That is the shape
     of false coverage this guard exists to make impossible.
     """
-    from engine.oracle import _parse_trigger_condition, normalize_creature_line
+    from engine.oracle import trigger_condition_of_line
 
     disagreements = []
     for name, line, node, _lowered in _executed_trigger_lines(catalog):
-        condition, _ = _parse_trigger_condition(normalize_creature_line(line))
+        # Through the compiler's own reader, not a re-spelling of it: this
+        # guard used to call `_parse_trigger_condition(normalize_creature_line(
+        # line))`, which is `_parse_triggered_ability`'s first half with its
+        # self-reference fallback dropped. Every pre-modern card that prints its
+        # own name in the condition (Axelrod Gunnarson, Nicol Bolas) then read
+        # as `legacy: None` — a disagreement invented by the guard, in exactly
+        # the shape the guard exists to catch.
+        condition, _ = trigger_condition_of_line(line, name)
         legacy = condition.kind if condition is not None else None
         if legacy != node.event.kind:
             disagreements.append(
@@ -2471,14 +2478,21 @@ def test_sacrifice_cost_distinguishes_the_source_from_a_chosen_permanent():
     assert ast.SacrificeCost(
         ast.ObjectFilter(card_types=("artifact",), is_source=True)
     ) in lotus.costs
-    # Diamond Valley's cost now parses; its *effect* is what still refuses, so
-    # the card stays on the legacy path for a reason the backlog can name.
+    # Diamond Valley's cost names a creature its controller chooses, so its
+    # filter is the *opposite* of the Lotus's: a type with no `is_source`. Its
+    # effect compiles too now ("equal to the sacrificed creature's toughness"
+    # is a production, shared with Life Chisel), which is what makes the two
+    # halves of this comparison a live pair rather than a parse against a
+    # refusal.
     valley = compile_line(
         "{T}, Sacrifice a creature: You gain life equal to the sacrificed "
         "creature's toughness.",
         card_name="Diamond Valley",
     )
-    assert not valley.parsed and "cost" not in (valley.failure_reason or "")
+    assert valley.usable
+    assert ast.SacrificeCost(
+        ast.ObjectFilter(card_types=("creature",))
+    ) in valley.node.costs
 
 
 def test_exile_cost_refuses_anything_but_the_source():

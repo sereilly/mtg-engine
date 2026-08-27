@@ -124,6 +124,7 @@ from .zones import (
 from .exile import (
     _EXILED_CREATURE,
     _lower_exile,
+    _lower_exile_cost_sacrifices,
     _lower_exile_until_leaves_or_untaps,
     _fused_exile_then_controller_life,
 )
@@ -220,6 +221,7 @@ from .game import (
     _lower_create_emblem,
     _lower_ante,
     _lower_repeat_process,
+    _lower_exchange_life_totals,
     _lower_set_life_total,
     _lower_gain_life,
     _title,
@@ -335,6 +337,7 @@ __all__ = [
     "_lower_shuffle_hand_into_library",
     "_EXILED_CREATURE",
     "_lower_exile",
+    "_lower_exile_cost_sacrifices",
     "_fused_exile_then_controller_life",
     "_DAMAGED_PLAYER_EVENTS",
     "CHOSEN_HAND_CARDS_RESULT",
@@ -393,6 +396,7 @@ __all__ = [
     "_lower_remove_from_combat",
     "_lower_ante",
     "_lower_repeat_process",
+    "_lower_exchange_life_totals",
     "_lower_set_life_total",
     "_lower_gain_life",
     "_title",

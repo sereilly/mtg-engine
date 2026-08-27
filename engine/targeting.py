@@ -335,6 +335,14 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # that is the handler's business, not the picker's.
     "exile_target_graveyard_card": {"kind": "graveyard_creature", "any_card": True},
     "exchange_ante_with_top_library": {"kind": "none"},
+    # Dream Coat: "Enchanted creature becomes the color or colors of your
+    # choice." The *permanent* is not chosen — an Aura's ability acts on its
+    # own host (CR 303.4) — so there is no target picker; what the activator
+    # chooses is a colour, which rides `mana_color` like every other CR 609.3
+    # choice. A positive "nothing to point at", not an absent derivation:
+    # without the row the ability answered None and the guard could not tell
+    # the two apart.
+    "recolor_enchanted_chosen_color": {"kind": "none"},
     "tap_or_untap_target": {"kind": "permanent"},
     "drain_target_lands_mana": {"kind": "player"},
     "tap_target_player_lands_and_drain_mana": {"kind": "player"},
@@ -416,6 +424,10 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # (Liliana, Death Mage's ultimate.) The recipient is a seat; the per-each
     # count is read at resolution and names nothing.
     "target_loses_life": {"kind": "player"},
+    # "Exchange life totals with target opponent." (Mirror Universe.) The other
+    # seat is a target chosen as the ability is activated (CR 602.2b); the
+    # controller's own half is not chosen at all.
+    "exchange_life_totals": {"kind": "player"},
     # Cuombajj Witches. Its handler delegates the controller's half to
     # `deal_damage`, which takes a player or a permanent; the opponent's half is
     # a pending choice made after resolution, not a target chosen here.
@@ -438,12 +450,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # whose damage is redirected. `requires_source` is what tells the UI to run
     # the second prompt.
     "jade_monolith_redirect": {"kind": "creature", "requires_source": True},
-    # Diamond Valley's "Sacrifice a creature" is part of the activation cost, so
-    # the creature is the controller's own and the prompt says "sacrifice" —
-    # the same spec the cast-side additional cost above derives.
-    "sacrifice_creature_gain_life_by_toughness": {
-        "kind": "creature", "own_only": True, "sacrifice_cost": True,
-    },
     # Ebony Horse: "Untap target attacking creature you control." Its handler
     # requires `p.attacking` *and* that the creature is on the activating
     # player's battlefield, and an explicit choice that fails either test
@@ -511,7 +517,11 @@ def _cost_picker_spec(cost) -> dict | None:
         narrowing = {
             key: value
             for key, value in described.items()
-            if key != "exclude_self"
+            # ``own_only`` above already *is* "you control", so carrying the
+            # seat again would be the same restriction written twice — and the
+            # second copy would reach an enumerator with no observer, which
+            # refuses every candidate rather than narrowing anything.
+            if key not in ("exclude_self", "controller")
             and not (key == "type_filter" and isinstance(value, str))
         }
         if narrowing:

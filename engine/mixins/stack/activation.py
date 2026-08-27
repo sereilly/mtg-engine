@@ -21,6 +21,7 @@ from ...activation_restrictions import (
 )
 from ...auras import attached_ability_cost_reduction, aura_restriction_active
 from ...cost_modifiers import ability_cost_tax, ability_self_reduction_amount
+from ...cost_x_definitions import cost_x_value
 from ...mana_payment import is_mana_ability
 from ...events import emit
 from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
@@ -43,12 +44,18 @@ from ...subject_filters import card_matches_any, filter_head_noun, subject_match
 #: sacrifices nothing. That was harmless while only Metamorphosis and Sacrifice
 #: produced it — both sorceries, whose cost the *casting* path pays, so this
 #: set never saw them — and it silently stopped paying the cost the moment an
-#: activated ability produced the same kind (Priest of Yawgmoth). The listed
-#: kind is the one whose handler really does call
-#: `_sacrifice_creature_for_mana` (Diamond Valley).
-COST_PERFORMING_KINDS = frozenset({
-    "sacrifice_creature_gain_life_by_toughness",   # Diamond Valley
-})
+#: activated ability produced the same kind (Priest of Yawgmoth).
+#:
+#: **Empty today, and that is the resting state.** The one entry was
+#: `sacrifice_creature_gain_life_by_toughness`, Diamond Valley's fused hook: it
+#: sacrificed the creature itself, so the cost path had to be told to stand
+#: down. Life Chisel prints the same sentence with a different cost clause, so
+#: the sentence became a production ("equal to the sacrificed creature's
+#: toughness") that reads the cost's own record and sacrifices nothing — and a
+#: handler that only reads does not belong here. The set survives because the
+#: next fused kind will, and an empty frozenset says so more clearly than a
+#: comment on an absence.
+COST_PERFORMING_KINDS: frozenset[str] = frozenset()
 
 
 class AbilityActivationMixin:
@@ -371,16 +378,33 @@ class AbilityActivationMixin:
         # payload (CR 122.1's kinds are open), and what the ability *does* is
         # not the cost's business. An ability granted with any other counter's
         # word paid nothing and could be activated for ever.
+        counters_removed_for_cost = 0
         if ability.cost.remove_counter:
             from ...named_counters import counters_key, counters_on
 
             kind = ability.cost.remove_counter
             held = counters_on(permanent, kind)
-            if held <= 0:
-                details = f"{permanent.card.name} has no {kind} counters to remove"
-                self.log.append(details)
-                return SimulationResult(permanent.card.name, False, "unsupported", details)
-            permanent.metadata[counters_key(kind)] = held - 1
+            wanted = ability.cost.remove_counter_count
+            if wanted == "any":
+                # "Remove **any number of** charge counters from this artifact"
+                # (the Mana Batteries). The payer announces how many as the
+                # ability is activated (CR 601.2b), through the same channel
+                # every other announced number travels on; a seat that announces
+                # nothing removes every counter, which is deterministic and the
+                # only answer that is never worse on a card whose effect scales
+                # with the count. Zero is a legal payment — "any number"
+                # includes none — so this half can never make the ability
+                # unactivatable.
+                counters_removed_for_cost = (
+                    held if x_value is None else max(0, min(held, int(x_value)))
+                )
+            else:
+                if held < int(wanted):
+                    details = f"{permanent.card.name} has no {kind} counters to remove"
+                    self.log.append(details)
+                    return SimulationResult(permanent.card.name, False, "unsupported", details)
+                counters_removed_for_cost = int(wanted)
+            permanent.metadata[counters_key(kind)] = held - counters_removed_for_cost
 
         # Per-ability timing restrictions are scoped to the *selected* ability's
         # own clause, not the whole card. Rock Hydra's "Activate only during your
@@ -620,14 +644,46 @@ class AbilityActivationMixin:
         # at all. That exclusion is `exclude_self` inside the filter, which is
         # why the source is handed to the matcher rather than tested here.
         sacrifice_cost_permanent = None
-        if ability.cost.sacrifice_filter is not None and ability.instruction is not None and (
+        sacrifice_cost_set: list = []
+        if (
+            ability.cost.sacrifice_count == "any"
+            and ability.cost.sacrifice_filter is not None
+        ):
+            # "Sacrifice this artifact **and any number of creatures you
+            # control**" (Sword of the Ages). The payer names the set as the
+            # ability is activated (CR 601.2b) — through `cost_permanent_ids`,
+            # the same channel every other chosen cost permanent arrives on —
+            # and naming none is a legal payment, because zero is a number. So
+            # there is no default pick here: unlike a "sacrifice a creature"
+            # cost, which must eat something or the ability is unactivatable,
+            # this one has a legal answer that costs nothing, and choosing
+            # creatures for a seat that named none would sacrifice a board to
+            # pay a cost of zero.
+            described = ability.cost.sacrifice_filter
+            for permanent_id in cost_permanent_ids or []:
+                found = self.permanent_by_id(permanent_id)
+                if (
+                    found is not None
+                    and found is not permanent
+                    and self.controls(controller_index, found)
+                    and subject_matches(
+                        self, found, described,
+                        observer=controller_index, source=permanent,
+                    )
+                    and not any(found is already for already in sacrifice_cost_set)
+                ):
+                    sacrifice_cost_set.append(found)
+        elif ability.cost.sacrifice_filter is not None and ability.instruction is not None and (
             ability.instruction.kind not in COST_PERFORMING_KINDS
         ):
             described = ability.cost.sacrifice_filter
             candidates = [
                 perm
                 for perm in self.controlled_by(controller_index)
-                if subject_matches(self, perm, described, source=permanent)
+                if subject_matches(
+                    self, perm, described,
+                    observer=controller_index, source=permanent,
+                )
             ]
             if not candidates:
                 details = (
@@ -704,8 +760,25 @@ class AbilityActivationMixin:
         # Abilities with an "{X}" in their cost (e.g. Clockwork Beast's
         # "{X}, {T}: Put up to X +1/+0 counters") charge X generic mana on top of
         # the printed symbols, where X is the amount the player chose.
-        if x_value and "{x}" in (ability.source_line or "").lower():
-            required_cost["generic"] = required_cost.get("generic", 0) + int(x_value)
+        #
+        # **Per printed symbol, and only in the cost clause.** Voodoo Doll's
+        # cost is "{X}{X}" — two of them, so it charges 2X — and a card whose
+        # *effect* mentions X ("deals X damage") is not charging a second one.
+        # A single substring test read both as one X, which is half the cost on
+        # the one card in the pool that prints the double.
+        x_symbols = (ability.source_line or "").lower().split(":", 1)[0].count("{x}")
+        # "X is the number of pin counters on this artifact." (Voodoo Doll.)
+        # The card *defines* X, so the activator does not announce it
+        # (CR 601.2b) — and the definition is read from the same table the
+        # grammar consumed the sentence through, because an X consumed by one
+        # reader and unknown to the other is a cost nobody charges.
+        defined_x = cost_x_value(self, permanent, ability.source_line or "")
+        if defined_x is not None:
+            x_value = defined_x
+        if x_value and x_symbols:
+            required_cost["generic"] = (
+                required_cost.get("generic", 0) + int(x_value) * x_symbols
+            )
         # Ability cost taxes (Gloom: "Activated abilities of white enchantments
         # cost {3} more to activate"; the white-spell cast tax is applied
         # separately in cast_from_hand).
@@ -899,6 +972,18 @@ class AbilityActivationMixin:
             self.log.append(
                 f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
             )
+        # …and the "any number of" set beside it (Sword of the Ages), paid the
+        # same way and at the same moment. Each is sacrificed by identity — an
+        # index held across the removals would name whichever permanent slid
+        # into the slot — and the list survives on the resolution's choices,
+        # because by the time the effect reads their total power they are cards
+        # in a graveyard (CR 608.2h).
+        for victim in sacrifice_cost_set:
+            name = victim.card.name
+            self.sacrifice_permanent(victim)
+            self.log.append(
+                f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
+            )
 
         # Ring of Ma'rûf: "Exile this artifact" is part of the cost, so the
         # permanent leaves before the ability goes on the stack — and the ability
@@ -964,6 +1049,8 @@ class AbilityActivationMixin:
                     # back what the cost ate must not depend on which of the
                     # two paths it came down.
                     choices={
+                        "counters_removed_for_cost": counters_removed_for_cost,
+                        "sacrificed_set_for_cost": list(sacrifice_cost_set),
                         "sacrificed_for_cost": sacrifice_cost_permanent,
                         "discarded_for_cost": (
                             list(discard_cost_cards)
@@ -1003,6 +1090,16 @@ class AbilityActivationMixin:
                 # additional cost's sacrifice.
                 choices={
                     "chosen_source": chosen_source,
+                    # How many counters the cost's "remove any number of …"
+                    # actually took (the Mana Batteries), on the same
+                    # last-known-information channel as the sacrifice beside
+                    # it: the counters are off the permanent before the ability
+                    # is on the stack, so the number survives nowhere else.
+                    "counters_removed_for_cost": counters_removed_for_cost,
+                    # …and the permanents an "any number of" sacrifice cost ate
+                    # (Sword of the Ages), whose total power the effect reads
+                    # back once they are cards in a graveyard.
+                    "sacrificed_set_for_cost": list(sacrifice_cost_set),
                     "sacrificed_for_cost": sacrifice_cost_permanent,
                     # …and what its discard cost ate, for the same reason and
                     # on the same channel: "If the discarded card was a land

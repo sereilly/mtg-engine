@@ -325,3 +325,117 @@ def test_the_grant_ends_when_the_tabernacle_leaves(set_pool):
     game._settle()
 
     assert game.is_on_battlefield(mine)
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 promotion — two lands whose second ability compiled to nothing.
+#
+# Both reported *supported* on their mana ability, so the card looked complete
+# while the ability anyone actually taps it for logged "ability not
+# implemented". Ability index 1 throughout: index 0 is the mana line.
+# ---------------------------------------------------------------------------
+
+
+def _p4_land_game(land, *others, opponent_battlefield=()):
+    for permanent in (land, *others, *opponent_battlefield):
+        permanent.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=[land, *others])
+    p2 = PlayerState(name="P2", battlefield=list(opponent_battlefield))
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2
+
+
+def _p4_body(name: str, power: int, toughness: int, text: str = "", keywords=()):
+    type_line = "Creature - Test"
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text=text,
+        colors=(), color_identity=(), keywords=tuple(keywords), produced_mana=(),
+        raw={"name": name, "type_line": type_line,
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def test_pendelhaven_pumps_a_one_one(set_pool):
+    """"{T}: Target 1/1 creature gets +1/+2 until end of turn."
+
+    A printed power/toughness pair standing as an adjective (CR 208.1) — the
+    lexer gives it its own token kind, so the noun phrase's adjective loop
+    stopped dead on it and the whole line refused with "expected a subject".
+    """
+    pendelhaven = Permanent(card=set_pool("LEG")["Pendelhaven"])
+    onesie = Permanent(card=_p4_body("Onesie", 1, 1))
+    game, p1, _ = _p4_land_game(pendelhaven, onesie)
+
+    result = game.activate_permanent_ability(
+        0, "Pendelhaven", target_player_index=0, target_permanent_index=1,
+        ability_index=1,
+    )
+    game._settle()
+
+    assert result.supported
+    assert (onesie.effective_power, onesie.effective_toughness) == (2, 3)
+
+
+def test_pendelhaven_will_not_pump_anything_bigger(set_pool):
+    """"1/1" is a *restriction*, and one dropped on the way to the dispatcher
+    is a land that pumps any creature on the board. Both halves are checked:
+    the filter carries a power and a toughness comparison, and emitting one
+    without the other would let a 1/3 through."""
+    pendelhaven = Permanent(card=set_pool("LEG")["Pendelhaven"])
+    twosie = Permanent(card=_p4_body("Twosie", 2, 2))
+    game, p1, _ = _p4_land_game(pendelhaven, twosie)
+
+    result = game.activate_permanent_ability(
+        0, "Pendelhaven", target_player_index=0, target_permanent_index=1,
+        ability_index=1,
+    )
+
+    assert not result.supported, "a 2/2 is not a legal target for this ability"
+    assert (twosie.effective_power, twosie.effective_toughness) == (2, 2)
+
+
+def test_hammerheim_strips_every_landwalk(set_pool):
+    """"{T}: Target creature loses all landwalk abilities until end of turn."
+
+    A keyword *family* (CR 702.14a), so the phrase names every member — and the
+    member list is derived from the keyword registry rather than spelled beside
+    it, so a landwalk the engine learns to grant is one this can take away.
+    """
+    hammerheim = Permanent(card=set_pool("LEG")["Hammerheim"])
+    walker = Permanent(
+        card=_p4_body("Walker", 2, 2, text="Islandwalk", keywords=("Islandwalk",))
+    )
+    game, p1, p2 = _p4_land_game(hammerheim, opponent_battlefield=[walker])
+    assert game._has_keyword(walker, "islandwalk")
+
+    result = game.activate_permanent_ability(
+        0, "Hammerheim", target_player_index=1, target_permanent_index=0,
+        ability_index=1,
+    )
+    game._settle()
+
+    assert result.supported
+    assert not game._has_keyword(walker, "islandwalk")
+
+
+def test_hammerheim_leaves_other_evasion_alone(set_pool):
+    """"All landwalk abilities" is a family, not "all abilities". A member list
+    that reached past the family would strip flying too, which is a strictly
+    better card than the one printed."""
+    hammerheim = Permanent(card=set_pool("LEG")["Hammerheim"])
+    flier = Permanent(
+        card=_p4_body("Flier", 2, 2, text="Flying\nForestwalk",
+                      keywords=("Flying", "Forestwalk"))
+    )
+    game, p1, p2 = _p4_land_game(hammerheim, opponent_battlefield=[flier])
+
+    result = game.activate_permanent_ability(
+        0, "Hammerheim", target_player_index=1, target_permanent_index=0,
+        ability_index=1,
+    )
+    game._settle()
+
+    assert result.supported
+    assert not game._has_keyword(flier, "forestwalk")
+    assert game._has_keyword(flier, "flying")

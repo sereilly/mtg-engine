@@ -393,6 +393,54 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
     return True, "resolved"
 
 
+@effect_handler("recolor_enchanted_chosen_color")
+def recolor_enchanted_chosen_color(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Enchanted creature becomes the color or colors of your choice."
+    (Dream Coat.)
+
+    The sibling of ``recolor_target_chosen_color`` above, differing only in
+    *which* permanent it recolours: an Aura's activated ability acts on what it
+    is attached to (CR 303.4), which the activator does not choose. Read as a
+    target the sentence refused and the ability compiled to nothing.
+
+    CR 609.3 puts the colour choice in the resolution, so the answer arrives on
+    ``context.choices["new_color"]`` — the same channel every other chosen
+    colour in the engine reads. ``several`` says the card offered a *set*
+    (CR 105.2, "the color **or colors**"): the write takes any number, so a
+    channel carrying "WU" makes a white-and-blue creature, and the one symbol
+    the activation wire carries today is one legal answer to that offer rather
+    than a narrowing of it. An unanswered choice recolours nothing, because a
+    permanent that became a colour nobody picked is the wrong colour.
+    """
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+    enchanted = source_permanent.metadata.get("attached_to")
+    if enchanted is None:
+        return False, "aura not attached to a permanent"
+    answer = (context.choices or {}).get("new_color")
+    parts = answer if isinstance(answer, (list, tuple)) else [answer]
+    symbols = [
+        symbol for symbol in (game._normalize_mana_color(part) for part in parts)
+        if symbol
+    ]
+    if not symbols:
+        game.log.append(
+            f"{context.card.name}: no colour was chosen, so nothing is recoloured"
+        )
+        return True, "resolved"
+    # A tuple whenever the card offered a set, so layer 5 writes every colour
+    # rather than the first — and a bare symbol otherwise, which is what every
+    # writer before this one put on the channel.
+    enchanted.metadata["color_override"] = (
+        tuple(symbols) if instruction.payload.get("several") else symbols[0]
+    )
+    game.log.append(
+        f"{enchanted.card.name} became {'/'.join(symbols)} ({context.card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("recolor_targets_until_eot")
 def recolor_targets_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"One or more target creatures become <colour> until end of turn."

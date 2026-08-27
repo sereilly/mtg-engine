@@ -49,6 +49,18 @@ CHOICE_KEYS = (
     # A list, because the cost's count is payload — one card today, N the day a
     # card prints "Discard two cards:".
     "discarded_for_cost",
+    # How many counters a printed "Remove any number of <kind> counters from
+    # this permanent" cost actually took (the five Mana Batteries). A number
+    # rather than an object, and on this channel for the same reason as the two
+    # above: the counters are off the permanent before the ability reaches the
+    # stack, so nothing on the board can be counted at resolution.
+    "counters_removed_for_cost",
+    # Every permanent an "any number of <noun phrase>" sacrifice cost ate
+    # (Sword of the Ages). A list beside ``sacrificed_for_cost``'s single
+    # permanent rather than a widening of it: the two are different costs — one
+    # names a permanent the payer chooses, the other a *set* whose size the
+    # payer chooses — and a card can print both, as this one does.
+    "sacrificed_set_for_cost",
 )
 
 

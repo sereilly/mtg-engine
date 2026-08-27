@@ -117,6 +117,28 @@ IMPLEMENTED_KEYWORDS: frozenset[str] = frozenset({
 NUMERIC_ARGUMENT_KEYWORDS: frozenset[str] = frozenset({"rampage"})
 
 
+#: The keyword **families** a card can name wholesale: "loses all landwalk
+#: abilities" (Hammerheim). CR 702.14a defines landwalk as a family of
+#: "[type]walk" abilities rather than one ability, so a card that names the
+#: family is naming every member of it, and what the parser must produce is the
+#: member list.
+#:
+#: **Derived from the registry, not spelled beside it.** Which landwalks exist
+#: is already :data:`IMPLEMENTED_KEYWORDS`; a second hand-written tuple here
+#: would be the standing bug of this project — one fact with two
+#: representations, so a landwalk added to the registry keeps being granted and
+#: silently stops being removable by the card that says "all of them".
+KEYWORD_FAMILIES: dict[str, tuple[str, ...]] = {
+    "landwalk": tuple(
+        sorted(
+            keyword
+            for keyword in IMPLEMENTED_KEYWORDS
+            if keyword.endswith("walk") and keyword != "landwalk"
+        )
+    ),
+}
+
+
 def _index_by_first_word(words: frozenset[str]) -> dict[str, tuple[tuple[str, ...], ...]]:
     """Map each first word to the multiword entries starting with it, longest
     first, so the noun parser can greedily match "time lord" before "time"."""
@@ -162,7 +184,8 @@ def match_longest(
 __all__ = [
     "ABILITY_WORDS", "ALL_SUBTYPES", "ARTIFACT_TYPES", "CARD_TYPES",
     "COLOR_WORDS", "CREATURE_TYPES", "ENCHANTMENT_TYPES", "IMPLEMENTED_KEYWORDS",
-    "KEYWORD_ABILITIES", "KEYWORD_ACTIONS", "KEYWORD_INDEX", "LAND_TYPES",
+    "KEYWORD_ABILITIES", "KEYWORD_ACTIONS", "KEYWORD_FAMILIES", "KEYWORD_INDEX",
+    "LAND_TYPES",
     "NUMBER_WORDS", "NUMERIC_ARGUMENT_KEYWORDS", "ORDINAL_WORDS",
     "PLANESWALKER_TYPES", "SPELL_TYPES",
     "SUBTYPE_INDEX",

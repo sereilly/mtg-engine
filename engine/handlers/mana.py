@@ -219,6 +219,19 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         multiplier = (
             count_from_payload(game, context, per_each) if per_each is not None else 1
         )
+        # "…add an additional {B} **for each charge counter removed this way**"
+        # (the five Mana Batteries). The multiplier is the ability's own cost
+        # payment, not a board count: the counters came off as the cost was paid
+        # (CR 601.2h) and are gone by now, so the number is the one the
+        # activation path recorded. Counting what is still on the artifact would
+        # be the exact complement of what the card says.
+        #
+        # Zero is a real answer — "any number" includes none — and adds only the
+        # flat pips the sentence in front of this one already produced.
+        if instruction.payload.get("per_each_counter_removed") is not None:
+            multiplier = max(0, int((context.choices or {}).get(
+                "counters_removed_for_cost", 0
+            )))
         # "Spend this mana only to cast an instant or sorcery spell." (Vodalian
         # Arcanist.) The mana goes into its own bucket rather than the pool;
         # `_pay_mana_cost` merges a bucket in only for a spell the restriction

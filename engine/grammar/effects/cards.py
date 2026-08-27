@@ -674,6 +674,40 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     return None
 
 
+def _parse_exile_cost_sacrifices(stream: TokenStream) -> ast.Statement | None:
+    """``Exile this <noun> and those <noun> cards.`` (Sword of the Ages.)
+
+    Returns None quietly on anything else, like the two exile productions
+    beside it, so an ordinary exile keeps its own refusal.
+
+    Both halves are required. "Exile this artifact" alone is the source leaving
+    the battlefield — a sentence the ordinary production already reads, and a
+    different effect from this one, which reaches into a graveyard for a set the
+    cost put there. Reading only the first half and stopping is what the
+    ordinary production would do, so this is tried in front of it.
+    """
+    mark = stream.mark()
+    stream.expect_word("exile")
+    if not stream.accept_word("this"):
+        stream.reset(mark)
+        return None
+    if stream.peek_word() is None:
+        stream.reset(mark)
+        return None
+    stream.advance()   # the source's own noun ("artifact")
+    if not stream.accept_phrase("and", "those"):
+        stream.reset(mark)
+        return None
+    if stream.peek_word() is None:
+        stream.reset(mark)
+        return None
+    stream.advance()   # the sacrificed set's noun ("creature")
+    if not stream.accept_word("cards", "card"):
+        stream.reset(mark)
+        return None
+    return ast.ExileCostSacrifices()
+
+
 def _parse_exile_graveyard(stream: TokenStream) -> ast.Statement | None:
     """``Exile target player's graveyard.`` (Tormod's Crypt.)
 

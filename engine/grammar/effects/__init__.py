@@ -85,6 +85,7 @@ from .cards import (
     _parse_mill,
     _parse_scry,
     _parse_cast_permission,
+    _parse_exile_cost_sacrifices,
     _parse_exile_graveyard,
     _parse_reveal_hand_and_choose,
     _parse_exile_top_of_library,
@@ -99,6 +100,7 @@ from .stack import (
     _UNPAID_PENALTIES,
     _parse_unpaid_penalty_sentence,
     _parse_activation_restriction,
+    _parse_cost_x_definition,
 )
 from .combat import (
     _parse_assigns_no_combat_damage,
@@ -111,6 +113,7 @@ from .combat import (
 )
 from .game import (
     _parse_ante,
+    _parse_exchange_life_totals,
     _parse_life_total_becomes,
     _parse_wins,
     _parse_choose_number,
@@ -171,6 +174,7 @@ __all__ = [
     "_parse_scry",
     "_parse_add_mana",
     "_parse_cast_permission",
+    "_parse_exile_cost_sacrifices",
     "_parse_exile_graveyard",
     "_parse_reveal_hand_and_choose",
     "_parse_exile_top_of_library",
@@ -189,6 +193,7 @@ __all__ = [
     "_UNPAID_PENALTIES",
     "_parse_unpaid_penalty_sentence",
     "_parse_activation_restriction",
+    "_parse_cost_x_definition",
     "_BASIC_LAND_WORDS",
     "_parse_cant_attack_or_block",
     "_parse_assigns_no_combat_damage",
@@ -197,6 +202,7 @@ __all__ = [
     "_CANT_BE_ACTIONS",
     "_parse_cant_be",
     "_parse_ante",
+    "_parse_exchange_life_totals",
     "_parse_life_total_becomes",
     "_parse_wins",
     "_parse_choose_number",

@@ -124,6 +124,48 @@ class ThatMuch:
 
 
 @dataclass(frozen=True)
+class SacrificedForCost:
+    """A characteristic of what the ability's **own cost** sacrificed — "you
+    gain life equal to **the sacrificed creature's toughness**" (Life Chisel,
+    Diamond Valley).
+
+    Not a :class:`ThatMuch`, and the difference is which channel holds the
+    answer. A back-reference reads the resolution scratchpad, filled by an
+    earlier *step of the effect*; this names the permanent the **cost** ate
+    (CR 601.2h), which is off the battlefield before the ability was ever put
+    on the stack. The engine already carries that permanent forward as
+    last-known information (CR 608.2h) on ``sacrificed_for_cost``, the same
+    channel "the sacrificed artifact's mana value" (Priest of Yawgmoth) reads —
+    so this node names the characteristic and the reader names the channel.
+
+    The characteristic is a field rather than part of the node's name for the
+    reason the counter kind is payload: "the sacrificed creature's **power**" is
+    the same sentence about a different number, and a card printing it needs no
+    new node.
+    """
+    characteristic: str   # "power" | "toughness" | "mana_value"
+
+
+@dataclass(frozen=True)
+class TotalPowerSacrificedThisWay:
+    """"…where X is **the total power of the creatures sacrificed this way**"
+    (Sword of the Ages).
+
+    An aggregate over the permanents the ability's own *cost* ate, not over
+    anything on a board — CR 601.2h pays the cost before the ability is on the
+    stack, so by the time X is read those creatures are cards in a graveyard.
+    The number is last-known information (CR 608.2h), recorded as the cost was
+    charged.
+
+    The noun phrase is carried rather than assumed: "the creatures" is what
+    this card sacrifices, and a card printing "the artifacts" is the same
+    sentence about a different set. What a reader can actually aggregate is the
+    lowering's question.
+    """
+    filter: ObjectFilter
+
+
+@dataclass(frozen=True)
 class Half:
     """"half X, rounded up/down"."""
     of: "Amount"
@@ -283,7 +325,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, Half, Times, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject, DamageDealtThisTurn, DamageDealtByChosenCast]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject, DamageDealtThisTurn, DamageDealtByChosenCast]
 
 
 # ---------------------------------------------------------------------------
@@ -826,6 +868,13 @@ class TapSelf:
 @dataclass(frozen=True)
 class SacrificeCost:
     filter: ObjectFilter = field(default_factory=ObjectFilter)
+    # "Sacrifice this artifact **and any number of creatures you control**"
+    # (Sword of the Ages). How many the phrase names: one by default, and
+    # :class:`AnyNumber` when the payer chooses the size of the set. Carried
+    # rather than assumed, because the two are charged differently — a fixed
+    # count can make the ability unpayable and "any number" never can, since
+    # zero is a number (CR 601.2h).
+    count: Amount = field(default_factory=lambda: Fixed(1))
 
 
 @dataclass(frozen=True)

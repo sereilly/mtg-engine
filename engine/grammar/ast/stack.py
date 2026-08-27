@@ -88,6 +88,15 @@ class CounterSpell:
     # than consumed and dropped: without it the sentence pair would ask the
     # spell's controller to pay twice, which is two counters and not this card.
     replaces_prior_amount: bool = False
+    # "…**if it would destroy a land you control**" (Equinox). A condition on
+    # whether the counter happens at all, asked of the targeted spell as this
+    # resolves (CR 608.2). A recorded *name* rather than a `Condition`, for the
+    # reason `unpaid_penalty` above is one: what it asks about is the other
+    # spell's own effect, which no board-state condition in this grammar can
+    # express — so the sentence is read verbatim and
+    # `engine/counter_conditions.py` is what answers it, refusing at lowering
+    # anything it cannot.
+    only_if: str | None = None
 
 
 @dataclass(frozen=True)

@@ -115,10 +115,12 @@ from .lowering import (
     _lower_gain_keyword,
     _lower_lose_keyword,
     _lower_ante,
+    _lower_exchange_life_totals,
     _lower_set_life_total,
     _lower_gain_life,
     _lower_double_power,
     _lower_switch_pt,
+    _lower_exile_cost_sacrifices,
     _lower_exile_graveyard,
     _lower_reveal_hand_and_choose,
     _lower_look_at_hand,
@@ -263,6 +265,8 @@ def lower_statement(
         return _lower_remove_counter(statement, dispatch_event)
     if isinstance(statement, ast.Ante):
         return _lower_ante(statement)
+    if isinstance(statement, ast.ExchangeLifeTotals):
+        return _lower_exchange_life_totals(statement)
     if isinstance(statement, ast.SetLifeTotal):
         return _lower_set_life_total(statement)
     if isinstance(statement, ast.GainLife):
@@ -440,6 +444,8 @@ def lower_statement(
 
     if isinstance(statement, ast.RevealHandAndChoose):
         return _lower_reveal_hand_and_choose(statement)
+    if isinstance(statement, ast.ExileCostSacrifices):
+        return _lower_exile_cost_sacrifices(statement)
     if isinstance(statement, ast.ExileGraveyard):
         return _lower_exile_graveyard(statement)
     if isinstance(statement, ast.LookAtHand):

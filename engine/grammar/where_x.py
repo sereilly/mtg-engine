@@ -238,6 +238,18 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
     # takes a maximum over them (Carrion Grub).
     if stream.accept_phrase("greatest", "power", "among"):
         return ast.GreatestPowerAmong(parse_object_filter(stream))
+    # "…the **total power of the creatures sacrificed this way**" (Sword of the
+    # Ages). A fourth aggregate over a noun phrase, and the words are again what
+    # tell it apart: a *sum* of powers, over the set the ability's own cost ate
+    # rather than over anything a zone still holds.
+    if stream.accept_phrase("total", "power", "of"):
+        stream.accept_word("the")
+        filt = parse_object_filter(stream)
+        if stream.accept_phrase("sacrificed", "this", "way"):
+            return ast.TotalPowerSacrificedThisWay(filt)
+        raise stream.error(
+            "a total power is only read off what was sacrificed this way"
+        )
     if not stream.accept_phrase("number", "of"):
         raise stream.error("expected 'the number of' in a where-clause")
     # "…the number of **+1/+1 counters on it**" (Primordial Ooze). In front of

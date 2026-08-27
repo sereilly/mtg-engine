@@ -210,6 +210,47 @@ def set_life_total(game: Game, instruction: OracleInstruction, context: OracleEx
     return True, "resolved"
 
 
+@effect_handler("exchange_life_totals")
+def exchange_life_totals(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exchange life totals with target opponent." (Mirror Universe.)
+
+    CR 701.12c: each player *gains or loses* the amount needed to reach the
+    other's previous total — not an assignment of two numbers. Written that way
+    for the reason ``set_life_total`` above is: the gain goes through
+    ``_gain_life``, the one seam every life gain passes through, so Lich's
+    replacement still replaces it and "whenever you gain life" still fires.
+
+    Both previous totals are read **before** either side moves. Moving one seat
+    and then reading the other would hand the second seat the number the first
+    had just been given, which is not an exchange but a copy — and on the card
+    that prints this it is the difference between stealing an opponent's life
+    total and setting both players to it.
+
+    CR 701.12a makes the exchange atomic: a target that is no longer a legal
+    seat leaves both totals alone rather than moving one of them.
+    """
+    card = context.card
+    mine = context.caster
+    theirs = context.target
+    if theirs is None or theirs is mine or theirs.lost or mine.lost:
+        game.log.append(
+            f"{card.name}: no opponent to exchange life totals with, so nothing happens"
+        )
+        return True, "resolved"
+    my_total, their_total = mine.life, theirs.life
+    for player, wanted in ((mine, their_total), (theirs, my_total)):
+        before = player.life
+        if wanted > before:
+            game._gain_life(player, wanted - before, card.name)
+        elif wanted < before:
+            player.life -= before - wanted
+    game.log.append(
+        f"{card.name}: {mine.name} and {theirs.name} exchanged life totals "
+        f"({my_total}/{their_total} -> {mine.life}/{theirs.life})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("opponents_who_could_not_discard_lose_life")
 def opponents_who_could_not_discard_lose_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Each opponent who can't loses 3 life." (Liliana, Waker of the Dead's
@@ -280,6 +321,26 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # be two composable instructions instead of one fused kind.
     source_key = instruction.payload.get("amount_from")
     trigger_key = instruction.payload.get("amount_from_trigger")
+    # "You gain life equal to the sacrificed creature's toughness" (Life Chisel,
+    # Diamond Valley). A third channel beside the two below, and a third because
+    # it is a different question: the scratchpad holds what a *step of this
+    # effect* produced and the trigger context holds what the *event* carried,
+    # while this names what the ability's own **cost** ate — paid, and off the
+    # battlefield, before the ability was ever put on the stack (CR 601.2h).
+    #
+    # The toughness is the permanent's *effective* toughness as it last existed
+    # (CR 608.2h): a Giant Tortoise sacrificed while untapped is worth its
+    # +0/+3, not its printed 1. A cost that ate nothing gains nothing rather
+    # than reading a printed number off a card.
+    cost_characteristic = instruction.payload.get("amount_from_cost_sacrifice")
+    if cost_characteristic is not None:
+        sacrificed = context.choices.get("sacrificed_for_cost")
+        life_gain = (
+            max(0, int(getattr(sacrificed, f"effective_{cost_characteristic}", 0)))
+            if sacrificed is not None else 0
+        )
+        game._gain_life(gainer, life_gain, card.name)
+        return True, "resolved"
     if trigger_key is not None:
         # The firing event's own number, frozen into the trigger's context by
         # the fire site: "…you gain life equal to its power" on a dies trigger
@@ -363,26 +424,6 @@ def grant_extra_turn(game: Game, instruction: OracleInstruction, context: Oracle
         f"{caster.name} gained an extra turn" if count == 1
         else f"{caster.name} gained {count} extra turns"
     )
-    return True, "resolved"
-
-
-@effect_handler("sacrifice_creature_gain_life_by_toughness")
-def sacrifice_creature_gain_life_by_toughness(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Diamond Valley: sacrifice one of the caster's own creatures, then gain
-    life equal to the toughness it had. Reuses the same "sacrifice a creature"
-    resolution helper as the Sacrifice card / sacrifice_creature_for_mana.
-
-    The toughness is the creature's *effective* toughness as it last existed on
-    the battlefield (CR 608.2h) — a Giant Tortoise sacrificed while untapped is
-    worth its +0/+3, not its printed 1."""
-    caster = context.caster
-    card = context.card
-    chosen = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
-    sacrificed = game._sacrifice_creature_for_mana(caster, chosen_index=chosen)
-    if sacrificed is None:
-        game.log.append(f"{caster.name} had no creature to sacrifice")
-        return True, "resolved"
-    game._gain_life(caster, max(0, sacrificed.effective_toughness), card.name)
     return True, "resolved"
 
 

@@ -213,8 +213,16 @@ def source_colors(source) -> tuple[str, ...]:
     if source is None:
         return ()
     meta = getattr(source, "metadata", None)
-    if isinstance(meta, dict) and meta.get("color_override"):
-        return (str(meta["color_override"]),)
+    override = meta.get("color_override") if isinstance(meta, dict) else None
+    if override:
+        # One symbol or several — Dream Coat's host is every colour it chose,
+        # and a shield answering to one of them answers to the permanent
+        # (CR 105.2). Read as a string a tuple would have compared as its repr,
+        # which matches no colour at all.
+        return (
+            tuple(str(part) for part in override)
+            if isinstance(override, (list, tuple)) else (str(override),)
+        )
     card = getattr(source, "card", source)
     return tuple(getattr(card, "colors", ()) or ())
 

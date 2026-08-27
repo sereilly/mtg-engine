@@ -204,6 +204,23 @@ class RevealHandAndChoose:
 
 
 @dataclass(frozen=True)
+class ExileCostSacrifices:
+    """"…, then **exile this artifact and those creature cards**." (Sword of
+    the Ages.)
+
+    What the ability's own cost sacrificed, exiled from the graveyard it is
+    already in. Not an ordinary exile of a permanent: CR 601.2h paid the cost
+    before the ability reached the stack, so by the time this step runs there is
+    nothing on the battlefield to move — and CR 400.7 makes each of them a new
+    object in the graveyard, which is why "those creature cards" says *cards*.
+
+    No fields: the set is the one the activation recorded, and "this artifact"
+    is the ability's own source. A production that let the sentence name some
+    other set would be naming objects nothing kept.
+    """
+
+
+@dataclass(frozen=True)
 class ExileGraveyard:
     """``Exile target player's graveyard.`` (Tormod's Crypt.)
 

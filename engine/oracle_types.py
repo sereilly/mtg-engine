@@ -90,6 +90,13 @@ class ActivatedAbilityCost:
     # also the answer for a phrase the charger cannot test — the grammar refuses
     # such a line, and this reader must not disagree by charging the wider cost.
     sacrifice_filter: dict | None = None
+    #: How many of them. "Sacrifice **a** creature" (Hobblefiend) is one;
+    #: "Sacrifice this artifact **and any number of** creatures you control"
+    #: (Sword of the Ages) is a set whose size the payer chooses, announced on
+    #: activation. Beside the filter for the reason ``remove_counter_count`` is
+    #: beside its kind: only a fixed count can make an ability unpayable, and
+    #: "any number" never can, since zero is a number (CR 601.2h).
+    sacrifice_count: "int | str" = 1
     # Seasoned Hallowblade: "Discard a card: …" — N cards the payer chooses,
     # where `discard_last_drawn` above names its card by history and leaves the
     # payer no choice at all. Two fields because they are two costs: a card
@@ -136,6 +143,17 @@ class ActivatedAbilityCost:
     # ability granted with any other counter's name — Life Matrix grants one —
     # was activated for free and could be activated forever.
     remove_counter: str | None = None
+    #: How many of them. The Mana Batteries print "Remove **any number of**
+    #: charge counters from this artifact", where Scavenging Ghoul prints "a".
+    #: An int is a fixed count; ``"any"`` is the payer's choice, announced on
+    #: activation the way an X is (CR 601.2b), and what the effect then reads
+    #: back is how many actually came off.
+    #:
+    #: Beside ``remove_counter`` rather than folded into it, because the two
+    #: answer different questions and only one of them can be unpayable: a fixed
+    #: count needs at least that many on the permanent, while "any number" is
+    #: payable with none at all (CR 601.2h — zero is a number).
+    remove_counter_count: "int | str" = 1
     # Shacklegeist: "Tap two untapped Spirits you control: …" — N permanents the
     # payer taps, named by the printed noun phrase. Distinct from
     # ``requires_tap``, which taps the *source* and is the {T} symbol: this taps

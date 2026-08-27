@@ -213,12 +213,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
                 mana={"W": 0, "U": 0, "B": 3, "R": 0, "G": 0, "C": 0, "generic": 0},
             ),
     },
-    'Diamond Valley': {
-        '{t}, sacrifice a creature: you gain life equal to the sacrificed '
-        "creature's toughness":
-            _line('sacrifice_creature_gain_life_by_toughness',
-                'activated_gain_life'),
-    },
     'Dragon Whelp': {
         "{r}: this creature gets +1/+0 until end of turn. if this ability has been "
         "activated four or more times this turn, sacrifice this creature at the "
