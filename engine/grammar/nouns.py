@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from . import ast
-from .amounts import parse_amount
+from .amounts import parse_amount, parse_pt_pair
 from .errors import GrammarError
 from .lexer import PT, SELF, WORD
 from .names import parse_card_name
@@ -247,6 +247,27 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         # must be consumed or full-token consumption fails the whole line.
         if stream.at_punct(",") and stream.peek_word(1) is not None:
             stream.advance()
+
+        # "target **1/1** creature" (Pendelhaven) — a printed power/toughness
+        # pair standing as an adjective (CR 208.1). It says exactly what the
+        # postmodifier "with power 1 and toughness 1" says, so it sets the same
+        # two comparison fields rather than minting a third representation of
+        # the same restriction. Read here rather than at the head, because the
+        # lexer gives it a `pt` token and `peek_word` is None for one — the
+        # loop below would `break` and the whole line would refuse, which is
+        # how Pendelhaven's pump refused with "expected a subject".
+        #
+        # Signed pairs are not adjectives: "+1/+2" is the *amount* of a pump
+        # and belongs to the verb, so only an unsigned pair is taken.
+        if stream.at_kind(PT):
+            token = stream.peek()
+            if token is not None and token.text[:1] not in ("+", "-", "−"):
+                power, _, toughness, _ = parse_pt_pair(token.text)
+                stream.advance()
+                d.power = ast.Comparison("eq", power)
+                d.toughness = ast.Comparison("eq", toughness)
+                continue
+
         word = stream.peek_word()
         if word is None:
             break

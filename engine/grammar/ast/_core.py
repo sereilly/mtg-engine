@@ -124,6 +124,29 @@ class ThatMuch:
 
 
 @dataclass(frozen=True)
+class SacrificedForCost:
+    """A characteristic of what the ability's **own cost** sacrificed — "you
+    gain life equal to **the sacrificed creature's toughness**" (Life Chisel,
+    Diamond Valley).
+
+    Not a :class:`ThatMuch`, and the difference is which channel holds the
+    answer. A back-reference reads the resolution scratchpad, filled by an
+    earlier *step of the effect*; this names the permanent the **cost** ate
+    (CR 601.2h), which is off the battlefield before the ability was ever put
+    on the stack. The engine already carries that permanent forward as
+    last-known information (CR 608.2h) on ``sacrificed_for_cost``, the same
+    channel "the sacrificed artifact's mana value" (Priest of Yawgmoth) reads —
+    so this node names the characteristic and the reader names the channel.
+
+    The characteristic is a field rather than part of the node's name for the
+    reason the counter kind is payload: "the sacrificed creature's **power**" is
+    the same sentence about a different number, and a card printing it needs no
+    new node.
+    """
+    characteristic: str   # "power" | "toughness" | "mana_value"
+
+
+@dataclass(frozen=True)
 class Half:
     """"half X, rounded up/down"."""
     of: "Amount"
@@ -283,7 +306,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, Half, Times, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject, DamageDealtThisTurn, DamageDealtByChosenCast]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, Half, Times, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject, DamageDealtThisTurn, DamageDealtByChosenCast]
 
 
 # ---------------------------------------------------------------------------

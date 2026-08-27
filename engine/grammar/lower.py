@@ -115,6 +115,7 @@ from .lowering import (
     _lower_gain_keyword,
     _lower_lose_keyword,
     _lower_ante,
+    _lower_exchange_life_totals,
     _lower_set_life_total,
     _lower_gain_life,
     _lower_double_power,
@@ -263,6 +264,8 @@ def lower_statement(
         return _lower_remove_counter(statement, dispatch_event)
     if isinstance(statement, ast.Ante):
         return _lower_ante(statement)
+    if isinstance(statement, ast.ExchangeLifeTotals):
+        return _lower_exchange_life_totals(statement)
     if isinstance(statement, ast.SetLifeTotal):
         return _lower_set_life_total(statement)
     if isinstance(statement, ast.GainLife):

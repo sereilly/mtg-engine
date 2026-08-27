@@ -55,6 +55,7 @@ from .rebinding import rebind_pronoun_to_event_subject
 from .triggers import _parse_trigger_event
 from .effects import (
     _parse_activation_restriction,
+    _parse_cost_x_definition,
     _parse_damage_rider_sentence,
     _parse_unpaid_penalty_sentence,
 )
@@ -443,6 +444,12 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # ability, not to the effect. Consuming it here keeps the line
             # fully accounted for; enforcement stays on the raw text.
             if _parse_activation_restriction(stream) is not None:
+                continue
+            # A trailing "X is the number of pin counters on this artifact."
+            # belongs to the ability's *cost*, not to its effect — same
+            # arrangement, same reason, and enforcement likewise stays on the
+            # raw text (engine/cost_x_definitions.py).
+            if _parse_cost_x_definition(stream) is not None:
                 continue
 
         steps.append(parse_statement(stream))

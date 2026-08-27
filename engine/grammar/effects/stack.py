@@ -220,6 +220,39 @@ def _parse_unpaid_penalty_sentence(stream: TokenStream) -> str | None:
     return None
 
 
+def _parse_cost_x_definition(stream: TokenStream) -> ast.ActivationRestriction | None:
+    """A trailing "X is the number of pin counters on this artifact." sentence
+    (Voodoo Doll) — what the ability's **cost** X is, when the card says.
+
+    The same arrangement as :func:`_parse_activation_restriction` below, for the
+    same reason: the sentence belongs to the ability rather than to the effect,
+    and what enforces it is the activation path, which reads the raw text. The
+    grammar's job is to account for the tokens — and, through
+    ``engine/cost_x_definitions.py``, to refuse a definition nothing computes.
+
+    Refusing is the whole point of asking that module rather than matching "x
+    is" here: an unimplemented definition consumed silently would leave the
+    activator announcing X freely on a cost the card fixes, which on a {X}{X}
+    ability is free.
+    """
+    from ...cost_x_definitions import cost_x_definition_readable
+
+    mark = stream.mark()
+    stream.accept_punct(".", ";")
+    if not stream.at_word("x") or stream.peek_word(1) != "is":
+        stream.reset(mark)
+        return None
+    words: list[str] = []
+    while not stream.exhausted and not stream.at_punct("."):
+        words.append(str(stream.next().text))
+    sentence = " ".join(words).replace(" '", "'")
+    if not cost_x_definition_readable(sentence):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    return ast.ActivationRestriction(sentence)
+
+
 def _parse_activation_restriction(stream: TokenStream) -> ast.ActivationRestriction | None:
     """A trailing "Activate only …" / "Any player may activate this ability."
     sentence on an activated ability.

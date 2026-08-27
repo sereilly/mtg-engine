@@ -409,6 +409,10 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # (Liliana, Death Mage's ultimate.) The recipient is a seat; the per-each
     # count is read at resolution and names nothing.
     "target_loses_life": {"kind": "player"},
+    # "Exchange life totals with target opponent." (Mirror Universe.) The other
+    # seat is a target chosen as the ability is activated (CR 602.2b); the
+    # controller's own half is not chosen at all.
+    "exchange_life_totals": {"kind": "player"},
     # Cuombajj Witches. Its handler delegates the controller's half to
     # `deal_damage`, which takes a player or a permanent; the opponent's half is
     # a pending choice made after resolution, not a target chosen here.
@@ -431,12 +435,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # whose damage is redirected. `requires_source` is what tells the UI to run
     # the second prompt.
     "jade_monolith_redirect": {"kind": "creature", "requires_source": True},
-    # Diamond Valley's "Sacrifice a creature" is part of the activation cost, so
-    # the creature is the controller's own and the prompt says "sacrifice" —
-    # the same spec the cast-side additional cost above derives.
-    "sacrifice_creature_gain_life_by_toughness": {
-        "kind": "creature", "own_only": True, "sacrifice_cost": True,
-    },
     # Ebony Horse: "Untap target attacking creature you control." Its handler
     # requires `p.attacking` *and* that the creature is on the activating
     # player's battlefield, and an explicit choice that fails either test

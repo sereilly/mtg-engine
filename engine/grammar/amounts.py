@@ -184,6 +184,31 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
         filt = parse_object_filter(stream)
         return ast.CountOf(filt)
 
+    # "equal to **the sacrificed creature's toughness**" (Life Chisel, Diamond
+    # Valley) — a characteristic of the permanent the ability's own *cost* ate,
+    # not of anything a step of the effect touched. Read before the
+    # back-references below because it names its own channel and needs no
+    # producer: CR 601.2h pays the cost before the ability is on the stack, so
+    # by the time this resolves the creature is a memory the activation path
+    # recorded (`sacrificed_for_cost`).
+    #
+    # The noun and the characteristic are both read as printed, so "the
+    # sacrificed **artifact's** mana value" is the same production. Which of
+    # them a handler can actually answer is the lowering's question.
+    sacrificed_mark = stream.mark()
+    if stream.accept_word("sacrificed"):
+        noun = stream.peek_word()
+        if noun is not None:
+            stream.advance()
+            if stream.accept_word("'s"):
+                if stream.accept_phrase("mana", "value"):
+                    return ast.SacrificedForCost("mana_value")
+                characteristic = stream.peek_word()
+                if characteristic in ("power", "toughness"):
+                    stream.advance()
+                    return ast.SacrificedForCost(str(characteristic))
+    stream.reset(sacrificed_mark)
+
     if stream.accept_phrase("damage", "dealt"):
         # "…equal to the damage dealt **this way**" (Syphon Soul). "This way"
         # says the number is the one *this effect* produced rather than any

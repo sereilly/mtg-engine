@@ -113,6 +113,18 @@ def _lower_add_mana(
         payload: dict[str, object] = {key: node.pips}
         if node.spend_only is not None:
             payload["spend_only"] = node.spend_only
+        if node.per_each_counter_removed is not None:
+            # "…for each charge counter removed this way" (the Mana Batteries).
+            # The multiplier is the ability's own cost payment, which the
+            # activation path recorded as it charged it — so the payload names
+            # the counter kind and the handler reads the number back, the same
+            # split "the sacrificed artifact's mana value" makes one branch up.
+            #
+            # Carried rather than left on the node: an unread field here is a
+            # printed clause that parses, lowers, and multiplies nothing, which
+            # on these five cards is a battery that always makes exactly one
+            # mana however many counters it just ate.
+            payload["per_each_counter_removed"] = node.per_each_counter_removed
         if node.per_each is not None:
             # The count is taken at resolution through the one evaluator every
             # computed amount shares, so "creature with power 4 or greater you

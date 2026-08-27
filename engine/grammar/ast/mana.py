@@ -61,6 +61,23 @@ class AddMana:
     # lowering's question, and the producer gate there is what makes the words
     # legal at all.
     from_bound_creature: str | None = None
+    # "…then add an additional {B} **for each charge counter removed this way**"
+    # (the five Mana Batteries). A multiplier like `per_each` below, over a
+    # number that is not on the board at all: the counters were removed to pay
+    # this ability's own cost (CR 601.2h), so what is counted is the payment and
+    # the count is last-known information. The counter's printed kind, or None.
+    #
+    # Its own field rather than a `per_each` filter, because an `ObjectFilter`
+    # describes permanents to scan for and there is nothing to scan: read as one
+    # the clause would count the counters *still* on the artifact, which is
+    # every one the player chose not to spend — the exact complement of what the
+    # card says.
+    per_each_counter_removed: str | None = None
+    # "**an additional** {B}" (the Mana Batteries). Recorded rather than
+    # consumed and dropped: the word says this clause adds on top of the one
+    # before it, which is what makes the printed sentence two statements rather
+    # than a restatement of one.
+    additional: bool = False
     # "Add {G} **for each creature with power 4 or greater you control**"
     # (Leafkin Avenger). A board count multiplying the whole clause, the same
     # shape a life gain and a counter placement already carry — so it is a

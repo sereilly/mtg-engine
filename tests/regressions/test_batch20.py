@@ -173,7 +173,7 @@ class TestDiamondValley:
 
     def test_activation_spec_asks_for_one_of_your_own_creatures(self, arn_by_name):
         # Derived from the ability's compiled instruction, not from its text —
-        # `sacrifice_creature_gain_life_by_toughness` sacrifices one of the
+        # the ability sacrifices one of the
         # activating player's own creatures, which is what the spec says.
         program = compile_card_oracle(arn_by_name["Diamond Valley"])
         spec = derive_activation_spec(usable_activated_abilities(program)[0])

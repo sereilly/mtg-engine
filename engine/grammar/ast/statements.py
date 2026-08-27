@@ -152,6 +152,7 @@ from .game import (
     LoseLife,
     PayLife,
     SetLifeTotal,
+    ExchangeLifeTotals,
     WinGame,
 )
 
@@ -159,7 +160,7 @@ from .game import (
 Effect = Union[
     DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, LoseKeyword, PlayerGetsCounters, PutCounter, RemoveCounter,
     DoublePower, SwitchPT,
-    GainLife, LoseLife, PayLife, SetLifeTotal, Ante, Draw, Discard, Mill, Scry, Destroy, Sacrifice,
+    GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, Mill, Scry, Destroy, Sacrifice,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, ShuffleHandIntoLibrary, Exile,
     ExileUntilLeavesOrUntaps, PutSourceIntoZone, Tap, Untap,
     TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped,

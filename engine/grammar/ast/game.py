@@ -57,6 +57,22 @@ class SetLifeTotal:
 
 
 @dataclass(frozen=True)
+class ExchangeLifeTotals:
+    """"Exchange life totals with target opponent." (Mirror Universe.)
+
+    CR 701.12c: an exchange of life totals is each player *gaining or losing*
+    the difference, not an assignment of two numbers — so replacement effects
+    apply and life-gain triggers fire, exactly as :class:`SetLifeTotal` is
+    written to for the same reason. CR 701.12a makes it atomic: if either half
+    cannot happen, no part of it does.
+
+    The other party is a player reference like any other, so "target opponent"
+    and a card that printed "target player" are the same production.
+    """
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
 class Ante:
     """"Ante the top card of your library." (CR 407.)
 

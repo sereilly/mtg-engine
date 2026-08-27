@@ -65,6 +65,38 @@ def _lower_gain_life(
                 {"amount_from_trigger": "dead_power", "recipient": "caster"},
             ),
         )
+    if isinstance(node.amount, ast.SacrificedForCost):
+        # "You gain life equal to the sacrificed creature's toughness" (Life
+        # Chisel, Diamond Valley). The number is read off the permanent the
+        # ability's own cost ate, which the activation path carried forward as
+        # last-known information (CR 608.2h) — so the payload names the
+        # characteristic and the handler names the channel.
+        #
+        # Toughness alone, because that is the only characteristic anything
+        # reads back off that record today: emitting "power" here would produce
+        # an instruction the handler would answer with a zero, which is the
+        # silent half of the failure this file refuses on behalf of.
+        if node.amount.characteristic != "toughness":
+            raise LoweringError(
+                "no handler reads the sacrificed permanent's "
+                f"{node.amount.characteristic!r}",
+                node=node,
+            )
+        if node.player.kind != "you":
+            raise LoweringError(
+                "the sacrificed permanent's toughness is gained by the "
+                "ability's own controller",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "target_gains_life", "",
+                {
+                    "amount_from_cost_sacrifice": node.amount.characteristic,
+                    "recipient": "caster",
+                },
+            ),
+        )
     if isinstance(node.amount, ast.ThatMuch):
         # "You gain life equal to the damage dealt" — reads the value the
         # preceding damage instruction recorded in the resolution scratchpad,
@@ -530,6 +562,33 @@ def _lower_ante(node: ast.Ante) -> tuple[OracleInstruction, ...]:
     return (
         OracleInstruction(
             "ante_top_card", "", {"players": _player_recipient(node.player, node)}
+        ),
+    )
+
+
+def _lower_exchange_life_totals(
+    node: ast.ExchangeLifeTotals,
+) -> tuple[OracleInstruction, ...]:
+    """"Exchange life totals with target opponent." (Mirror Universe.)
+
+    The exchange is between the ability's controller and one other seat, so the
+    payload carries only who the other seat is — CR 701.12c then makes it two
+    gains/losses of the difference, which is the handler's business.
+
+    A *targeted* seat only. "Exchange life totals with each opponent" is not an
+    exchange any number of players can be in (whose total would each of them
+    get?), so the sweeping recipients the rest of this module accepts refuse
+    here rather than picking one of them.
+    """
+    if node.player.kind not in ("target_opponent", "target_player"):
+        raise LoweringError(
+            f"an exchange of life totals needs one named seat, not "
+            f"{node.player.kind!r}",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "exchange_life_totals", "", {"recipient": "target"}
         ),
     )
 

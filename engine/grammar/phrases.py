@@ -30,8 +30,9 @@ from .lexer import (MANA, NUMBER, PUNCT, QUOTE, WORD, tokenize)
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
 from .references import parse_target_spec
 from .stream import TokenStream
-from .vocabulary import (CARD_TYPES, KEYWORD_INDEX, NUMBER_WORDS,
-                         NUMERIC_ARGUMENT_KEYWORDS, match_longest)
+from .vocabulary import (CARD_TYPES, KEYWORD_FAMILIES, KEYWORD_INDEX,
+                         NUMBER_WORDS, NUMERIC_ARGUMENT_KEYWORDS,
+                         match_longest)
 _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # "for as long as this artifact remains tapped" (Ashnod's Battle Gear,
     # Tawnos's Weaponry). A *linked* duration: it ends when the source untaps
@@ -526,6 +527,25 @@ def _accept_bands_with_other(stream: TokenStream) -> str | None:
 
 
 def _parse_keywords(stream: TokenStream) -> tuple[str, ...]:
+    # "all **landwalk** abilities" (Hammerheim) — a card naming a keyword
+    # *family* rather than listing its members. CR 702.14a makes landwalk a
+    # family of "[type]walk" abilities, so the phrase means every member and the
+    # member list is what everything above this production wants: the loss then
+    # lowers, targets and dispatches as the ordinary keyword list it is, with no
+    # second notion of "a family" for the layer-6 channel to learn.
+    #
+    # Read first and whole, because "all" is not a keyword and the loop below
+    # would stop on it — which is how Hammerheim's second ability refused with
+    # "expected a keyword ability" for a family the engine implements six
+    # members of.
+    family_mark = stream.mark()
+    if stream.accept_word("all"):
+        family = stream.peek_word()
+        if family in KEYWORD_FAMILIES and stream.peek_word(1) in ("ability", "abilities"):
+            stream.advance(2)
+            return KEYWORD_FAMILIES[str(family)]
+    stream.reset(family_mark)
+
     keywords: list[str] = []
     while True:
         banded = _accept_bands_with_other(stream)

@@ -75,6 +75,7 @@ __all__ = [
     "lex_oracle_text",
     "normalize_creature_line",
     "parse_activated_ability_cost",
+    "trigger_condition_of_line",
 ]
 
 
@@ -1049,6 +1050,19 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # open, and a card - or a grant - may invent one.
     removal_cost = re.search(r"\bremove an? ([a-z]+) counter from ", cost_lower)
     remove_counter = removal_cost.group(1) if removal_cost else None
+    remove_counter_count: int | str = 1
+    if remove_counter is None:
+        # "Remove **any number of** charge counters from this artifact" (the
+        # five Mana Batteries). The same cost with the count left to the payer,
+        # so it is the same field plus how many — not a second cost. Without
+        # this row the clause matched nothing at all: the ability was activated
+        # for free, forever, and its effect had no number to read.
+        any_number = re.search(
+            r"\bremove any number of ([a-z]+) counters from ", cost_lower
+        )
+        if any_number is not None:
+            remove_counter = any_number.group(1)
+            remove_counter_count = "any"
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
         sacrifice_filter,
@@ -1061,6 +1075,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         discard_self=discard_self,
         put_counter=put_counter,
         remove_counter=remove_counter,
+        remove_counter_count=remove_counter_count,
         pay_life=_life_payment_cost(cost_lower),
     )
 
@@ -1253,6 +1268,46 @@ def _extract_if_condition(effect_text: str) -> tuple[str | None, str]:
     return None, effect_text
 
 
+def trigger_condition_of_line(
+    line: str, card_name: str | None = None
+) -> tuple[TriggerCondition | None, str]:
+    """The legacy table's reading of one printed line: ``(condition, remainder)``.
+
+    **This is the only reading.** It used to live inline in
+    ``_parse_triggered_ability``, which meant every other caller that wanted to
+    know "what condition does the legacy table see here?" — the pool-wide guard
+    in ``tests/engine/test_grammar_lowering.py`` most sharply — wrote the
+    normalize-and-parse half and dropped the self-reference fallback below. Two
+    readings of one table is the bug this project keeps finding: the guard
+    reported Axelrod Gunnarson and Nicol Bolas as conditions "the legacy table
+    does not name", when the table names both and only the guard could not see
+    it.
+
+    The fallback: the card's own name collapsed to "this creature", for the
+    reason ``_restriction_line`` gives about the static tables. Every row is
+    anchored on the modern templating, and a card that says its own name
+    ("Whenever a creature dealt damage by **Axelrod Gunnarson** this turn dies")
+    is printing a condition this engine already dispatches, the old way. Without
+    it the row matched nothing and the card reported "text too complex" while
+    the grammar — whose lexer collapses the same references — read the line. Two
+    front ends disagreeing about one printed line is a card refused by the
+    stricter of them.
+
+    A *fallback* rather than the first reading, because the collapse is a
+    whole-word substitution over the entire line and a card whose name is an
+    ordinary word ("Fire", or a test fixture called "Player") would have its
+    recipient clause rewritten out from under a row that already matched.
+    Nothing this reads is text the uncollapsed pass could read.
+    """
+    normalized = normalize_creature_line(line)
+    condition, remainder = _parse_trigger_condition(normalized)
+    if condition is None and card_name:
+        collapsed = _collapse_self_references(normalized, card_name, "this creature")
+        if collapsed != normalized:
+            condition, remainder = _parse_trigger_condition(collapsed)
+    return condition, remainder
+
+
 def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedTriggeredAbility | None:
     """Parse a single oracle text line as a triggered ability.
 
@@ -1261,28 +1316,7 @@ def _parse_triggered_ability(line: str, card_name: str | None = None) -> ParsedT
     with supported=False if the trigger prefix is recognized but the
     condition or effect is not.
     """
-    normalized = normalize_creature_line(line)
-
-    condition, remainder = _parse_trigger_condition(normalized)
-    if condition is None and card_name:
-        # The card's own name collapsed to "this creature", for the reason
-        # `_restriction_line` gives about the static tables: every row here is
-        # anchored on the modern templating, and a card that says its own name
-        # ("Whenever a creature dealt damage by **Axelrod Gunnarson** this turn
-        # dies") is printing the condition this engine already dispatches, the
-        # old way. Without it the row matched nothing and the card reported
-        # "text too complex" while the grammar — whose lexer collapses the same
-        # references — read the line. Two front ends disagreeing about one
-        # printed line is a card refused by the stricter of them.
-        #
-        # A *fallback* rather than the first reading, because the collapse is a
-        # whole-word substitution over the entire line and a card whose name is
-        # an ordinary word ("Fire", or a test fixture called "Player") would
-        # have its recipient clause rewritten out from under a row that already
-        # matched. Nothing this reads is text the uncollapsed pass could read.
-        collapsed = _collapse_self_references(normalized, card_name, "this creature")
-        if collapsed != normalized:
-            condition, remainder = _parse_trigger_condition(collapsed)
+    condition, remainder = trigger_condition_of_line(line, card_name)
     if condition is None:
         return None  # not a triggered ability line
 

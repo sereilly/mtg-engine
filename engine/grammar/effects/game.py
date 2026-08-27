@@ -586,6 +586,30 @@ def _parse_ante(
     return ast.Ante(subject if subject is not None else possessive)
 
 
+def _parse_exchange_life_totals(stream: TokenStream) -> ast.Statement:
+    """``Exchange life totals with <player>.`` (Mirror Universe.)
+
+    Filed with the game family rather than beside ``_parse_exchange_control``
+    in ``board``: what is exchanged is a life total, and the family a
+    production belongs to is the family of what it acts on. The two share only
+    the printed verb, and the dispatcher branches on the word after it.
+
+    The other party goes through ``parse_player_ref``, so "target opponent",
+    "target player" and "each opponent" are read by the same noun phrase every
+    other sentence about a player uses; what the handler can actually exchange
+    with is the lowering's question.
+    """
+    stream.expect_word("exchange")
+    if not stream.accept_phrase("life", "totals"):
+        raise stream.error("expected 'life totals' after 'exchange'")
+    if not stream.accept_word("with"):
+        raise stream.error("expected 'with' after 'exchange life totals'")
+    player = parse_player_ref(stream)
+    if player is None:
+        raise stream.error("expected the player to exchange life totals with")
+    return ast.ExchangeLifeTotals(player)
+
+
 def _parse_life_total_becomes(stream: TokenStream) -> ast.Statement | None:
     """``<player>'s life total becomes <N>`` / ``your life total becomes <N>``.
 

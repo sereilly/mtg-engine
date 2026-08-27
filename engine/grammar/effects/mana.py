@@ -45,6 +45,33 @@ def _parse_mana_multiplier(stream: TokenStream) -> "ast.ObjectFilter | None":
         return None
 
 
+def _parse_removed_counter_multiplier(stream: TokenStream) -> str | None:
+    """``for each <kind> counter removed this way`` after a mana clause (the
+    five Mana Batteries), as the counter's printed kind.
+
+    Read before :func:`_parse_mana_multiplier`, whose noun-phrase reader would
+    take "charge counter" as an object filter and then choke on "removed this
+    way" — leaving the whole line refused for a clause the engine can answer.
+
+    "This way" is what makes it a *payment* rather than a board count: the
+    counters were removed to pay this ability's own cost and are gone by the
+    time the mana is added, so nothing on the battlefield can be counted.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    kind = stream.peek_word()
+    if kind is not None and kind not in ("counter", "counters"):
+        stream.advance()
+        if (
+            stream.accept_word("counter", "counters")
+            and stream.accept_phrase("removed", "this", "way")
+        ):
+            return kind
+    stream.reset(mark)
+    return None
+
+
 def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     """``Add {G}`` / ``Add {C}{C}{C}`` / ``Add one mana of any color``."""
     start = stream.mark()
@@ -52,6 +79,12 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
 
     def _clause() -> str:
         return render(stream.tokens[start:stream.pos])
+
+    # "add **an additional** {B}" (the Mana Batteries). The word belongs to this
+    # clause rather than to the pips, and it is recorded rather than dropped:
+    # the sentence it appears in is "Add {B}, then add an additional {B} …", two
+    # statements whose second one only makes sense as an addition to the first.
+    additional = bool(stream.accept_phrase("an", "additional"))
 
     pips: dict[str, int] = {}
     choice = False
@@ -72,11 +105,14 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
                 break
             choice = True
     if pips:
+        removed = _parse_removed_counter_multiplier(stream)
         return ast.AddMana(
             tuple(sorted(pips.items())),
             choice=choice,
             source_text=_clause(),
-            per_each=_parse_mana_multiplier(stream),
+            additional=additional,
+            per_each_counter_removed=removed,
+            per_each=_parse_mana_multiplier(stream) if removed is None else None,
         )
 
     # "Add **an amount of {B} equal to the sacrificed artifact's mana value**."

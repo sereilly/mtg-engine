@@ -42,6 +42,7 @@ from .effects import (
     _parse_end_the_turn, _parse_exchange_control, _parse_exile_graveyard,
     _parse_exile_top_of_library, _parse_extra_turn, _parse_fight, _parse_flip_coin,
     _parse_gain_control, _parse_gains, _parse_game_is_a_draw, _parse_gets,
+    _parse_exchange_life_totals,
     _parse_has, _parse_life_total_becomes, _parse_look_at_hand, _parse_loses,
     _parse_mill, _parse_modal_head, _parse_pay_life, _parse_player_adds_mana,
     _parse_prevent, _parse_put_iterated_card_on_library,
@@ -235,6 +236,14 @@ def parse_subject_verb(
     if stream.at_word("attach"):
         return _parse_attach(stream)
     if stream.at_word("exchange"):
+        # One printed verb, two effect families: "exchange **control** of …"
+        # acts on permanents (`board`) and "exchange **life totals** with …"
+        # acts on a player's life (`game`). The word after the verb is the whole
+        # difference, so it is the branch — a shared production would have to
+        # own both, and a family a production belongs to is the family of what
+        # it acts on.
+        if stream.peek_word(1) == "life":
+            return _parse_exchange_life_totals(stream)
         return _parse_exchange_control(stream)
     if stream.at_word("put"):
         # "Put all cards exiled with this artifact into their owner's hand."
