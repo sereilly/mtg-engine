@@ -77,7 +77,7 @@ from engine.oracle import (  # noqa: E402
     _parse_activated_ability,
     _parse_delayed_attack_trigger,
     _parse_loyalty_ability,
-    _parse_trigger_condition,
+    trigger_condition_of_line,
     _parse_triggered_ability,
     compile_card_oracle,
     expand_ability_lines,
@@ -794,7 +794,13 @@ def analyze_card(card, hooked: set[str], run_probe: bool = True) -> CardCoverage
         # while the legacy registry answered for those lines too.
         trig = _parse_triggered_ability(line, card.name)
         if trig is not None:
-            condition, remainder = _parse_trigger_condition(normalized)
+            # Through the one reader, and **with the card's name** — the line
+            # above already passes it. Called without it, a card whose
+            # condition names itself (Axelrod Gunnarson, Nicol Bolas) returned
+            # a None condition beside a non-None ability and crashed on
+            # `.raw_text`. That is the third reader of this table found this
+            # hour: the compiler, `test_grammar_lowering`'s guard, and here.
+            condition, remainder = trigger_condition_of_line(line, card.name)
             if not trig.supported:
                 # A trigger the compiler can't run, on a card that still
                 # compiles supported. It may be implemented out-of-band (an

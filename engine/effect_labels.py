@@ -243,6 +243,21 @@ ACTIVATED_LABELS: dict[str, str] = {
     # settled this: the report's word for a permanent changing what it *is* is
     # `activated_pump`, and a colour change is layer 5 beside that layer 4 one.
     "recolor_target_chosen_color": "activated_pump",
+    # Dream Coat recolours the creature its Aura is on rather than a target.
+    # Same layer-5 change, same bucket — the report's question is what the
+    # ability *does*, and "which permanent" is the payload's business.
+    "recolor_enchanted_chosen_color": "activated_pump",
+    # Diamond Valley and Life Chisel. Life gain has no legacy bucket: the
+    # spell table marks `target_gains_life` `spell_pattern` (unclaimed), and
+    # the only life kind here is `target_loses_life`, which sits under
+    # `activated_damage` because that is where a *loss* has always been
+    # reported. A gain is not damage, so it gets its own word rather than
+    # being filed under the opposite of itself.
+    "target_gains_life": "activated_lifegain",
+    # Mirror Universe. Deliberately not `activated_lifegain`: an exchange can
+    # cost its controller life, and a bucket that says "gain" of an ability
+    # that can halve your total is a report that misleads.
+    "exchange_life_totals": "activated_life_exchange",
     # Losing a keyword until end of turn (Radjan Spirit, Shelkin Brownie,
     # Tolaria, Urborg) is `grant_target_keyword_until_eot` with a minus sign.
     "remove_target_keyword_until_eot": "activated_pump",
