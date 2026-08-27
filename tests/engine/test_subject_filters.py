@@ -247,6 +247,7 @@ _COVERED_ELSEWHERE = {
     "owner": "test_ownership_is_asked_separately_from_control",
     "exclude_self": "test_the_relative_keys_refuse_without_the_context_they_need",
     "not_enchanted": "test_not_enchanted_rejects_a_permanent_carrying_an_aura",
+    "enchanted_only": "test_enchanted_only_rejects_a_permanent_with_no_aura",
     "attached_to_filter": "test_a_host_phrase_is_asked_of_the_host",
 }
 
@@ -288,6 +289,39 @@ def test_not_enchanted_rejects_a_permanent_carrying_an_aura(pool):
     assert subject_matches(game, bare, {"not_enchanted": True})
     assert subject_matches(game, equipped, {"not_enchanted": True})
     assert not subject_matches(game, enchanted, {"not_enchanted": True})
+
+
+def test_enchanted_only_rejects_a_permanent_with_no_aura(pool):
+    """"Destroy **target enchanted creature**." (Ramses Overdark.)
+
+    The positive twin of the test above, and here for the same reason: the
+    ``_REJECTIONS`` table builds a bare permanent, which is what this key
+    rejects rather than what it accepts, so the accepted one has to be given an
+    Aura first.
+
+    The equipped creature is again the half a matcher reading the bare
+    attachment record would get wrong — CR 301.5f attaches an Equipment through
+    the same list — and getting it wrong here points Ramses at a creature the
+    handler would then refuse.
+    """
+    bare = Permanent(card=pool["Grizzly Bears"])
+    enchanted = Permanent(card=pool["Grizzly Bears"])
+    equipped = Permanent(card=pool["Grizzly Bears"])
+    aura = Permanent(card=pool["Holy Strength"])
+    gear = Permanent(card=pool["Short Sword"])
+    game = Game(players=[
+        PlayerState(
+            name="P1",
+            battlefield=[bare, enchanted, equipped, aura, gear],
+        ),
+        PlayerState(name="P2"),
+    ])
+    _r30_attach(aura, enchanted)
+    _r30_attach(gear, equipped)
+
+    assert subject_matches(game, enchanted, {"enchanted_only": True})
+    assert not subject_matches(game, bare, {"enchanted_only": True})
+    assert not subject_matches(game, equipped, {"enchanted_only": True})
 
 
 def test_a_conjunction_of_types_matches_only_a_permanent_that_is_both(pool):

@@ -264,7 +264,14 @@ _TARGET_STEP_KEYS = ("steps", "then", "else", "action", "otherwise", "effect")
 #: Instruction kinds that target an object but carry no ``targets`` quantifier
 #: in their payload (the derivation encodes the target elsewhere). Only banding
 #: today; kept as a set so a second such kind is one entry, not a second branch.
-_QUANTIFIERLESS_TARGET_KINDS = frozenset({"grant_banding_to_target"})
+#: Kinds whose target is mandatory although no ``targets`` quantifier rides
+#: their payload. ``counter_stack_ability`` names its object in a noun phrase
+#: the stack lowering reads into ``ability_kinds`` rather than into a targets
+#: description, so without this row Ayesha Tanaka could be tapped with an empty
+#: stack — the cost paid for a counter that had nothing to counter.
+_QUANTIFIERLESS_TARGET_KINDS = frozenset({
+    "grant_banding_to_target", "counter_stack_ability",
+})
 
 
 def _ability_target_quantifiers(instruction) -> list[str]:
@@ -1099,6 +1106,15 @@ class LegalityMixin:
             perm, {"not_enchanted": True}
         ):
             return False
+        # "…**target enchanted creature**" (Ramses Overdark), the positive twin
+        # and asked in the same place for the same reason: the restriction is
+        # not about the head noun, and the picker must offer exactly what the
+        # handler's matcher would accept — an unenchanted creature offered here
+        # is a tap paid for a destroy that then fizzles.
+        if spec.get("enchanted_only") and not permanent_matches_filter(
+            perm, {"enchanted_only": True}
+        ):
+            return False
         if kind == "player_or_planeswalker":
             # "Target player or planeswalker" (Chandra's Magmutt): the only
             # permanents in the union are planeswalkers — the player faces were
@@ -1259,6 +1275,14 @@ class LegalityMixin:
         targets: list[dict] = []
         color_filter = spec.get("stack_color_filter")
         instant_sorcery_only = spec.get("stack_instant_sorcery_only")
+        # "Counter target **activated ability** from an artifact source" (Rust,
+        # Ayesha Tanaka). A spec that asks for abilities offers abilities and
+        # nothing else: an ability is not a spell (CR 113.7a) and the two are
+        # never interchangeable targets, so this is a different list rather than
+        # a wider one.
+        ability_kinds = spec.get("stack_ability_kinds")
+        if ability_kinds:
+            return self._enumerate_stack_ability_targets(spec, ability_kinds)
         depth = len(self.stack)
         for i, item in enumerate(self.stack):
             # Only spells are legal targets — activated/triggered abilities on the
@@ -1309,4 +1333,53 @@ class LegalityMixin:
             # The UI (and the cast/activate action) index the stack top-first, the
             # reverse of the engine's bottom-first list — emit the top-first index.
             targets.append({"kind": "stack", "stack_index": depth - 1 - i, "name": item_card.name})
+        return targets
+
+    def _enumerate_stack_ability_targets(
+        self, spec: dict, ability_kinds: list[str]
+    ) -> list[dict]:
+        """The **abilities** on the stack this spec may point at (CR 113.7a).
+
+        Its own enumeration rather than a widening of the spell one above: an
+        ability has no card of its own, so every narrowing a counterspell asks
+        of a spell — colour, card type, what it targets — is a question this
+        list cannot be asked, and the two it *is* asked (which kind of ability,
+        and what kind of permanent it came from) mean nothing to a spell.
+
+        Both are answered through the handler's own readers
+        (``_stack_ability_kind``, ``_spell_is_one_of``), so an ability offered
+        here is one ``counter_stack_ability`` would counter. Offering one it
+        would refuse is not a cosmetic slip: the activation cost is paid before
+        the counter resolves, so the tap buys nothing and nothing on screen says
+        why.
+
+        A mana ability is never here to be excluded (CR 605.3a: it does not use
+        the stack), which is what the printed reminder text says.
+        """
+        from .handlers.stack import _spell_is_one_of, _stack_ability_kind
+
+        source_types = tuple(spec.get("stack_ability_source_types") or ())
+        depth = len(self.stack)
+        targets: list[dict] = []
+        for i, item in enumerate(self.stack):
+            if getattr(item, "ability_instruction", None) is None:
+                continue
+            kind = _stack_ability_kind(item)
+            if kind is None or kind not in ability_kinds:
+                continue
+            if source_types:
+                source = item.source_permanent
+                if source is None or not _spell_is_one_of(
+                    source.effective_card, source_types
+                ):
+                    continue
+            item_card = getattr(item, "card", None)
+            name = item_card.name if item_card is not None else "ability"
+            # Top-first, the convention the spell enumeration above emits and
+            # the cast/activate action resolves by.
+            targets.append({
+                "kind": "stack",
+                "stack_index": depth - 1 - i,
+                "name": f"{name}'s {kind} ability",
+            })
         return targets

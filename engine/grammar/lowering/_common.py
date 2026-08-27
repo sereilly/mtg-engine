@@ -85,6 +85,7 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "controller", "tapped", "attacking", "blocking", "other_than_source",
     "nontoken", "named", "their_choice", "mana_value", "power", "toughness",
     "colored", "with_plus1_counter", "supertypes", "not_enchanted",
+    "enchanted_only",
     "attached_to_filter",
     # "target permanent you both **own** and control" (Obelisk of Undoing) /
     # "all Auras **you own** attached to permanents you control" (Remove

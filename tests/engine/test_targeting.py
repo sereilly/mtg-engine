@@ -162,6 +162,16 @@ _TARGET_WORD = re.compile(r"\btargets?\b")
 _LOYALTY_PREFIX = re.compile(r"^\s*[+−-]?\s*[0-9x]+\s*:", re.I)
 _MODAL_BULLET = re.compile(r"^\s*•")
 _TAXES_TARGETING_SPELLS = re.compile(r"spells .*that target .*cost")
+# * A **shroud-shaped restriction** ("can't be the target of Aura spells",
+#   Bartel Runeaxe, Tetsuo Umezawa) says what somebody else's spell may not do.
+#   Nothing about it is chosen as this card is cast.
+_CANT_BE_TARGETED = re.compile(r"can't be the target of")
+# * A **static effect keyed on what another object targeted** — Bronze Horse's
+#   "prevent all damage that would be dealt to this creature **by spells that
+#   target it**", Wall of Shadows' "abilities that can target only Walls". The
+#   same use of the word the cost tax above makes, without the cost: it
+#   describes the other spell, and this card chooses nothing.
+_OTHERS_TARGETING = re.compile(r"(?:spells|abilities)[^.]*? that (?:can )?target")
 
 
 def _names_a_cast_target(line: str) -> bool:
@@ -173,6 +183,8 @@ def _names_a_cast_target(line: str) -> bool:
         or _LOYALTY_PREFIX.match(line)
         or _MODAL_BULLET.match(line)
         or _TAXES_TARGETING_SPELLS.search(line)
+        or _CANT_BE_TARGETED.search(line)
+        or _OTHERS_TARGETING.search(line)
     )
 
 # Cards that name a target the UI has no picker for, with the reason. An entry

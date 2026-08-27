@@ -1013,3 +1013,133 @@ def test_the_record_is_per_permanent_and_not_per_card(set_pool):
 
     assert damage_dealt_to_permanent(game, first, source_name="Blazing Effigy") == 0
     assert damage_dealt_to_permanent(game, second, source_name="Blazing Effigy") == 3
+
+
+# ---------------------------------------------------------------------------
+# Promotion round — the two abilities that targeted with no prompt behind them
+#
+# Both derive their whole spec from the compiled program
+# (`engine/targeting.py`), and both are asked through
+# `Game.activation_target_spec` — the list the web picker shows and the list
+# `legality.activation_target_refusal` gates on are the same call, so a test
+# that asked the derivation alone would not be asking what a player sees.
+# ---------------------------------------------------------------------------
+
+
+def _p4_ability_spec(game, seat, permanent):
+    """The picker the UI raises for *permanent*'s first targeting ability."""
+    index = game.players[seat].battlefield.index(permanent)
+    return game.activation_target_spec(seat, index)
+
+
+def _p4_ramses_board(set_pool, lea_by_name):
+    """Ramses Overdark on seat 0; on seat 1 an enchanted creature, a bare one
+    and an *equipped* one — the third being the case a matcher reading the bare
+    attachment record would get wrong (CR 301.5f)."""
+    ramses = Permanent(card=set_pool("LEG")["Ramses Overdark"])
+    enchanted = Permanent(card=lea_by_name["Grizzly Bears"])
+    bare = Permanent(card=lea_by_name["Hill Giant"])
+    aura = Permanent(card=lea_by_name["Holy Strength"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[ramses]),
+        PlayerState(name="P2", battlefield=[enchanted, bare, aura]),
+    ])
+    from engine.auras import attach_aura
+
+    attach_aura(aura, enchanted)
+    game.start_turn(0)
+    return game, ramses, enchanted, bare
+
+
+def test_ramses_overdark_offers_only_enchanted_creatures(set_pool, catalog_by_name):
+    """"Destroy target enchanted creature" is a restriction, not the Aura
+    referent — Ramses is not an Aura and nothing is attached to it."""
+    game, ramses, enchanted, bare = _p4_ramses_board(set_pool, catalog_by_name)
+
+    spec = _p4_ability_spec(game, 0, ramses)
+
+    assert spec["kind"] == "creature"
+    offered = {t["name"] for t in spec["valid_targets"]}
+    assert offered == {"Grizzly Bears"}, offered
+    assert enchanted.card.name == "Grizzly Bears" and bare.card.name == "Hill Giant"
+
+
+def test_ramses_overdark_destroys_the_enchanted_creature(set_pool, catalog_by_name):
+    game, ramses, enchanted, _bare = _p4_ramses_board(set_pool, catalog_by_name)
+
+    result = game.queue_permanent_ability(
+        0, "Ramses Overdark", target_player_index=1,
+        target_permanent_index=game.players[1].battlefield.index(enchanted),
+    )
+    assert result.supported
+    game.resolve_stack()
+    game._settle()
+
+    assert not any(p.card.name == "Grizzly Bears" for p in game.players[1].battlefield)
+    assert any(p.card.name == "Hill Giant" for p in game.players[1].battlefield)
+
+
+def test_ramses_overdark_refuses_an_unenchanted_creature(set_pool, catalog_by_name):
+    """The gate and the picker are one answer (CR 602.2b): a creature the
+    picker never offered is refused before the tap is paid."""
+    game, ramses, _enchanted, bare = _p4_ramses_board(set_pool, catalog_by_name)
+
+    result = game.queue_permanent_ability(
+        0, "Ramses Overdark", target_player_index=1,
+        target_permanent_index=game.players[1].battlefield.index(bare),
+    )
+
+    assert not result.supported
+    assert not ramses.tapped, "the cost is not paid for a refused activation"
+    assert any(p.card.name == "Hill Giant" for p in game.players[1].battlefield)
+
+
+def _p4_pinger(name: str, type_line: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="{2}", cmc=2.0, type_line=type_line,
+        oracle_text="{T}: This permanent deals 1 damage to any target.",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line, "power": "1", "toughness": "1"},
+    )
+
+
+def test_ayesha_tanaka_offers_only_an_artifact_sources_ability(set_pool):
+    """"Counter target activated ability from an artifact source": the picker
+    offers abilities, never spells, and only the ones the handler would counter.
+
+    Both halves matter. A spell on the stack is not an ability (CR 113.7a) and
+    a creature's ability is not from an artifact source, so an offer of either
+    would be a {T} paid for a counter that then refuses its own target.
+    """
+    artifact = Permanent(card=_p4_pinger("Test Pinger", "Artifact"))
+    creature = Permanent(card=_p4_pinger("Test Archer", "Creature - Archer"))
+    ayesha = Permanent(card=set_pool("LEG")["Ayesha Tanaka"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[artifact, creature], life=20),
+        PlayerState(name="P2", battlefield=[ayesha], life=20),
+    ])
+    game.start_turn(0)
+    assert game.queue_permanent_ability(0, "Test Pinger", target_player_index=1).supported
+    assert game.queue_permanent_ability(0, "Test Archer", target_player_index=1).supported
+
+    spec = _p4_ability_spec(game, 1, ayesha)
+
+    assert spec["kind"] == "stack"
+    offered = {t["name"] for t in spec["valid_targets"]}
+    assert offered == {"Test Pinger's activated ability"}, offered
+
+
+def test_ayesha_tanaka_cannot_be_activated_with_nothing_to_counter(set_pool):
+    """CR 602.2b: with no ability on the stack there is no legal target, so the
+    ability is refused with nothing paid rather than tapping for a no-op."""
+    ayesha = Permanent(card=set_pool("LEG")["Ayesha Tanaka"])
+    game = Game(players=[
+        PlayerState(name="P1", life=20),
+        PlayerState(name="P2", battlefield=[ayesha], life=20),
+    ])
+    game.start_turn(1)
+
+    result = game.queue_permanent_ability(1, "Ayesha Tanaka")
+
+    assert not result.supported
+    assert not ayesha.tapped
