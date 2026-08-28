@@ -4,9 +4,26 @@ Pool-wide, not per-set: it parametrizes over cards/manifest.json, so a
 newly ingested set is swept the moment it is added. It lived in
 tests/sets/test_lea_cards.py, which is why Arabian Nights went unswept
 for as long as it did.
+
+**Both manifest roles**, and that is the whole point of the sweep. It read
+``load_catalog()`` — the seam that decides what a player may deck, and so
+shipped-only — which meant a set under ``measured`` was swept the moment it was
+*promoted*, i.e. after every card in it had already been implemented. The
+docstring above promised the opposite and nothing checked the promise, so The
+Dark's ingest ran the whole suite green over 119 cards none of it had loaded.
+That defeats SET_PLAYBOOK Phase 1's yield step, which is the cheapest
+bug-finding moment a set has: a new set's text reaches code the old pool never
+executed, and the crashes are worth more before the text work than after.
+Reading a card file is not shipping it (CLAUDE.md, "the manifest has two
+roles"), and a smoke test that only asks "does this throw" makes no support
+claim — so this is the one pool-wide guard that opts in, the same way
+``tests/conftest.py``'s ``set_cards`` factory does and for the same reason.
+``test_the_sweep_covers_every_measured_set`` below holds it there.
 """
 
 from __future__ import annotations
+
+import pytest
 
 from engine import Game, PlayerState, classify_card, load_cards
 from engine.models import CardDefinition, Permanent
@@ -44,13 +61,58 @@ def pytest_generate_tests(metafunc):
     # cards/LEA_cards.json directly, so Arabian Nights — 78 cards, tracked as a
     # complete set — was never swept at all. Driving it from the manifest means
     # a new set is covered the moment it is ingested.
-    from engine.card_loader import load_catalog
-
-    names = [c.name for c in load_catalog() if c.name not in SWEEP_EXCLUSIONS]
+    names = [c.name for c in _sweep_pool() if c.name not in SWEEP_EXCLUSIONS]
     metafunc.parametrize("card_name", names)
 
 
-def test_every_catalog_card_resolves_without_exception(all_cards, catalog_by_name, card_name):
+def _sweep_pool():
+    """Every card file the manifest lists, both roles, deduped as usual.
+
+    Not ``load_catalog()``: see the module docstring. A measured set's cards
+    must reach this sweep while the set is still being implemented, which is
+    the only time the crashes it finds are cheap.
+    """
+    from engine.card_loader import load_cards, manifest_set_paths
+
+    return load_cards(manifest_set_paths(include_measured=True))
+
+
+@pytest.fixture(scope="module")
+def sweep_by_name():
+    """The sweep's pool keyed by name — both manifest roles.
+
+    ``catalog_by_name`` is shipped-only on purpose and is read by guards that
+    are making a claim about what ships; this sweep is not one of them.
+    """
+    return {card.name: card for card in _sweep_pool()}
+
+
+def test_the_sweep_covers_every_measured_set(sweep_by_name):
+    """The sweep's pool includes the measured sets, not just the shipped ones.
+
+    The guard for the bug in the module docstring. Asserting a card count or a
+    named card would go stale the moment the pool moved — a set promotes and
+    the assertion starts passing for the wrong reason — so this asks the
+    manifest what it expects and compares against what the sweep actually
+    parametrized over.
+    """
+    from engine.card_loader import load_cards, manifest_measured_sets, manifest_set_path
+
+    for entry in manifest_measured_sets():
+        code = entry["code"]
+        cards = load_cards(manifest_set_path(code, include_measured=True))
+        missing = [
+            c.name for c in cards
+            if c.name not in sweep_by_name and c.name not in SWEEP_EXCLUSIONS
+        ]
+        assert not missing, (
+            f"{code} is in the manifest under 'measured' but {len(missing)} of its "
+            f"cards never reach the sweep, e.g. {missing[:5]} — Phase 1's yield "
+            f"step is running over a pool that does not contain the new set"
+        )
+
+
+def test_every_catalog_card_resolves_without_exception(all_cards, sweep_by_name, card_name):
     """Every card in the pool must resolve without throwing a Python exception.
 
     A smoke test: it does not check the effect in detail. The board it builds is
@@ -59,7 +121,7 @@ def test_every_catalog_card_resolves_without_exception(all_cards, catalog_by_nam
     """
     from engine.mixins.stack import aura_enchant_noun, permanent_matches_enchant_noun
 
-    card = catalog_by_name[card_name]
+    card = sweep_by_name[card_name]
     island = _island(all_cards)
     plains = _plains(all_cards)
     swamp = _swamp(all_cards)
