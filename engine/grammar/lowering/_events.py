@@ -113,6 +113,11 @@ _BOUND_OBJECT_DELAYED_EVENTS: frozenset[str] = frozenset({
     "bound_permanent_dies",              # Reincarnation
     "bound_permanent_dealt_damage",      # Glyph of Life
     "next_end_of_combat",                # Glyph of Doom
+    # War Barge ("when this artifact leaves the battlefield this turn, destroy
+    # **that creature**") and Runesword. The object the ability is *about* is
+    # not always the object it watches: this membership is the acted-on half,
+    # and `DelayedTrigger.watched_permanent_id` carries the watched one.
+    "bound_permanent_leaves_battlefield",
 })
 
 #: The payload key the delayed machinery stamps that object's id under.

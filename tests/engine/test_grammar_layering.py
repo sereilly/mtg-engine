@@ -128,7 +128,7 @@ LOWER_LAYERS = ["lowering", "statics", "lower"]
 # `library` joined on the parse side when The Dark pushed `effects/cards.py`
 # past the size guard: search, look-at and the library's top split off, reusing
 # `lowering/library.py`'s name so the two halves mirror rather than fork.
-EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library"]
+EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "control_changes"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -170,7 +170,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # CR's other line: CR 701.14 is a keyword action, an atomic exchange between two
 # creatures (701.14b — if either has left, neither deals damage), where
 # everything left behind is one source dealing to a recipient.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "counters", "keywords", "tapping", "prevention", "redirection", "fighting", "where_x", "control_flow", "attachments", "control_changes"]
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "counters", "keywords", "tapping", "prevention", "redirection", "fighting", "where_x", "control_flow", "attachments"]
 # The AST side has no `library`: what a search or a look-at *is* — the pile, the
 # filter, the fate of what was found — is a handful of nodes that sit perfectly
 # well beside the other card nodes, and the split that made `library` a family
@@ -179,7 +179,18 @@ LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "counters", "keywords",
 # the symmetry and cost the thing symmetry is for: one home per node, findable
 # from the family name. Same asymmetry, opposite direction, as `zones`/`exile`
 # above — which the lowering side carries and the parse side does not.
-AST_FAMILIES = [family for family in EFFECT_FAMILIES if family != "library"]
+# Two families exist on the parse and lowering sides but not in the AST, and
+# both for the same reason: the size guard fired on the *productions* and the
+# *lowerings*, never on the inventory. What a search or a control change IS —
+# the pile and its filter, the seat and its timestamp — is a handful of nodes
+# that sit perfectly well beside the board and card ones, and a near-empty
+# `ast/library.py` or `ast/control_changes.py` would buy back the symmetry and
+# cost the thing symmetry is for: one home per node, findable from the family
+# name. Same asymmetry, opposite direction, as `zones`/`exile` above.
+AST_FAMILIES = [
+    family for family in EFFECT_FAMILIES
+    if family not in ("library", "control_changes")
+]
 
 
 def _imports(path: Path) -> list[tuple[int, str, bool]]:

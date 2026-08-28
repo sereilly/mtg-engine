@@ -320,9 +320,11 @@ def parse_pair_ordinal_subject(stream: TokenStream) -> "ast.TargetSpec | None":
 
     The ordinal half of :func:`parse_bound_subject`, reachable on its own
     because the productions that read a bound object do **not** share one
-    reader: ``effects/board._parse_that_object`` is deliberately local to the
-    destroy production, so that "that creature" cannot leak into the shared
-    noun parser. The ordinals are named in two families all the same (Infinite
+    reader: :func:`_parse_that_object` is reached only where a production calls
+    it, never from the shared noun parser, so that "that creature" cannot leak
+    into every line printing the phrase. (It lived in ``effects/board.py`` until
+    the damage family needed it too; the copy left behind there shadowed this
+    one for a round.) The ordinals are named in two families all the same (Infinite
     Authority destroys one member of the pair and puts a counter on the other),
     and a second spelling of them is how the two halves of one printed sentence
     would come to disagree about which creature they meant.

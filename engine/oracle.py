@@ -661,6 +661,19 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
 # "when" triggers (enter/leave events)
 WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("enters_battlefield",          r"when (?:this|.+) enters(?: the battlefield)?"),
+    # "When **the token** leaves the battlefield, sacrifice this enchantment."
+    # (Dance of Many.) CR 603.6c's event asked about a *different* object from
+    # the one whose ability it is — the token this permanent created — which is
+    # the same shape as `attached_creature_dies` below, an Aura watching its
+    # host. The relation is in the kind because it is the relation the fire
+    # site dispatches on; nothing about the token itself narrows it.
+    #
+    # Above the generic row and deliberately not folded into it: that row's
+    # `.+` swallows "the token" and reports the ability as watching the
+    # enchantment, which is a trigger firing on the wrong event while the card
+    # compiles supported.
+    ("created_token_leaves_battlefield",
+     r"when the token leaves(?: the battlefield)?"),
     ("leaves_battlefield",          r"when (?:this|.+) leaves(?: the battlefield)?"),
     ("attached_creature_dies",      r"when(?:ever)? (?:equipped|enchanted) creature dies"),
     # CR 701.26a's event with the one-shot trigger word (Blight: "**When**

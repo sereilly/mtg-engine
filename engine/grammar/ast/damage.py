@@ -35,6 +35,31 @@ class DamageRiders:
 
 
 @dataclass(frozen=True)
+class DamageRidersUntilEndOfTurn:
+    """"If the creature deals damage to a creature this turn, the creature
+    dealt damage can't be regenerated this turn. If a creature dealt damage by
+    the targeted creature would die this turn, exile that creature instead."
+    (Runesword.)
+
+    The same two riders :class:`DamageRiders` carries, granted to a creature
+    for the turn instead of applied to one damage event now. Old templating
+    prints them as "if" sentences, and they are not conditionals: nothing is
+    tested when the ability resolves, and what is created is a standing
+    property of the *damager* — which is the shape `Silhouette`'s prevention
+    takes on the other side of the same verb.
+
+    Its own node rather than a flag on ``DealDamage`` because this sentence
+    deals no damage at all: it says what the damage somebody else deals later
+    will do.
+    """
+    #: Whose damage carries them. ``"ability_target"`` is the creature the
+    #: ability already chose — printed as "the creature" and as "the targeted
+    #: creature", one referent under two spellings.
+    subject: str
+    riders: DamageRiders
+
+
+@dataclass(frozen=True)
 class DealDamage:
     source: TargetSpec | None          # the damage source ("this creature", the spell)
     amount: Amount

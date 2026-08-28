@@ -564,6 +564,42 @@ def sacrifice_attached_permanent(game: Game, instruction: OracleInstruction, con
         return True, "resolved"
     game.sacrifice_permanent(attached)
     game.log.append(f"{context.card.name}: {attached.card.name} was sacrificed")
+
+
+@effect_handler("destroy_bound_permanent")
+def destroy_bound_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"When this artifact leaves the battlefield this turn, **destroy that
+    creature**." (War Barge.)
+
+    The victim is the object the creating ability bound (CR 603.7c), carried by
+    id in the trigger's context — the creature War Barge's own activation
+    targeted, which is *not* the object the delay watched. Nothing is chosen
+    here and nothing is addressed by index: an id is the identity a permanent
+    keeps across everything that renumbers a battlefield (CR 400.7).
+
+    Through ``_destroy_swept_permanents``, the same seam ``destroy_self`` and
+    ``destroy_attached_permanent`` beside it use, so the indestructible check
+    and the graveyard move behave as they do for a targeted destroy — and "a
+    creature destroyed this way can't be regenerated" is this handler's
+    ``bypass_regeneration``, not a second reading of CR 701.19c.
+
+    A creature already gone is destroyed by nothing, which is CR 608.2b doing
+    as much as it can rather than a failure.
+    """
+    victim = game.permanent_by_id(
+        (context.trigger_context or {}).get("bound_permanent_id")
+    )
+    seat = game.controller_index_of(victim) if victim is not None else None
+    if victim is None or seat is None:
+        game.log.append(f"{context.card.name}: the creature it named is gone")
+        return True, "resolved"
+    destroyed = game._destroy_swept_permanents(
+        game.players[seat],
+        lambda candidate: candidate is victim,
+        allow_regeneration=not instruction.payload.get("bypass_regeneration"),
+    )
+    if destroyed:
+        game.log.append(f"{context.card.name} destroyed {victim.card.name}")
     return True, "resolved"
 
 

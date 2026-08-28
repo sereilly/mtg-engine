@@ -12,7 +12,8 @@ from ..exiled_records import source_object
 from ..named_counters import counters_on, remove_counters
 from ..pt import pt_counter_key, set_base_pt
 from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
-from ..tokens import CREATED_TOKEN_RESULT_KEY, make_token_card
+from ..tokens import (CREATED_TOKEN_RESULT_KEY, CREATED_WITH_PERMANENT_ID,
+                     make_token_card, tokens_created_with)
 from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
                       block_pair_permanents, permanent_matches_filter,
                       resolve_amount, resolve_target_permanent,
@@ -83,6 +84,7 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
     # — by resolution time of the *delayed* ability it may be in a graveyard,
     # and an index would by then address whatever slid into its slot.
     bound_id = None
+    watched_id = None
     # "…when **Stangg** leaves the battlefield" / "…when **that token** leaves
     # the battlefield" (Stangg). The opener names an object this effect already
     # holds rather than one it chose, so there is no target to resolve: the
@@ -95,19 +97,19 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
     watches = payload.get("watches")
     if watches is not None:
         if watches == "source":
-            bound_id = (
+            watched_id = (
                 context.source_permanent.permanent_id
                 if context.source_permanent is not None else None
             )
         elif watches == "created_token":
             recorded = (context.results or {}).get(CREATED_TOKEN_RESULT_KEY)
-            bound_id = recorded if isinstance(recorded, int) else None
-        if bound_id is None:
+            watched_id = recorded if isinstance(recorded, int) else None
+        if watched_id is None:
             game.log.append(
                 f"{context.card.name} had no permanent to watch"
             )
             return True, "no object"
-    elif payload.get("binds_target"):
+    if payload.get("binds_target"):
         bound = resolve_target_permanent(game, context)
         if bound is None:
             # The target is gone (CR 608.2b): there is nothing for the delayed
@@ -115,6 +117,14 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
             game.log.append(f"{context.card.name} had no creature to watch")
             return True, "no target"
         bound_id = bound.permanent_id
+    # The two roles are one object on every card that names only one, which is
+    # every card but War Barge. Collapsed here rather than at the comparison, so
+    # the entry states outright what it watches and what it is about instead of
+    # leaving one of them to be inferred.
+    if bound_id is None:
+        bound_id = watched_id
+    if watched_id is None:
+        watched_id = bound_id
     # CR 608.2h's last-known information, frozen at creation. The resolution
     # scratchpad *is* what
     # this effect's earlier steps knew — Mana Drain's countered spell and its
@@ -130,6 +140,7 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
         source_name=context.card.name,
         card=context.card,
         bound_permanent_id=bound_id,
+        watched_permanent_id=watched_id,
         # CR 603.7d's source, frozen now: an activated ability's own permanent
         # is what "this creature" means when the delay finally fires.
         source_permanent_id=(
@@ -634,7 +645,17 @@ def create_copy_token(game: Game, instruction: OracleInstruction, context: Oracl
 
     count = resolve_amount(instruction.payload.get("count", 1), context.x_value)
     for _ in range(max(0, count)):
-        game.create_token_copy(controller_index, source)
+        token = game.create_token_copy(controller_index, source)
+        # "When this enchantment leaves the battlefield, exile **the token**."
+        # (Dance of Many.) Which permanent made this one, stamped for the same
+        # reason `create_token` beside it stamps it: the sentences that name
+        # the token belong to *other* abilities of the same permanent, fired
+        # turns after the resolution that made it, so the resolution scratchpad
+        # is long gone and nothing about the token itself records its maker.
+        if context.source_permanent is not None:
+            token.metadata[CREATED_WITH_PERMANENT_ID] = (
+                context.source_permanent.permanent_id
+            )
         game.log.append(
             f"{context.card.name} created a token copy of {source.card.name}"
         )
@@ -720,7 +741,7 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         # comes back is a new object (CR 400.7), and its old Tetravites were
         # not created with *it*.
         if context.source_permanent is not None:
-            metadata["created_with_permanent_id"] = context.source_permanent.permanent_id
+            metadata[CREATED_WITH_PERMANENT_ID] = context.source_permanent.permanent_id
         token = Permanent(card=token_card, metadata=metadata)
         game._put_permanent_onto_battlefield(seat, token, None)
         # "…that are tapped and attacking" (Basri Ket): entry state, not an
@@ -1059,7 +1080,7 @@ def exile_any_number_of_own_tokens(
     source = context.source_permanent
     if source is None:
         return True, "resolved"
-    owned = _tokens_created_with(game, source)
+    owned = tokens_created_with(game, source)
     seat = game.controller_index_of(source)
     if seat is None or not owned:
         context.results["trigger_count"] = 0
@@ -1077,16 +1098,6 @@ def exile_any_number_of_own_tokens(
     return True, "resolved"
 
 
-def _tokens_created_with(game: Game, source) -> list:
-    """The tokens on the battlefield that *source* created, oldest first."""
-    return sorted(
-        (
-            perm
-            for perm in game.all_permanents()
-            if perm.metadata.get("created_with_permanent_id") == source.permanent_id
-        ),
-        key=lambda perm: perm.permanent_id,
-    )
 
 
 @effect_handler("sacrifice_matching_permanent")

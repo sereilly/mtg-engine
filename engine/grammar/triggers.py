@@ -895,6 +895,13 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                     "controls_matching_permanent", "when", subject=controlled
                 )
             stream.reset(mark_controls)
+        # "When **the token** leaves the battlefield, …" (Dance of Many). The
+        # CR 603.6c event asked about the token this permanent created rather
+        # than about the permanent itself — read on this front end too, because
+        # a narrowing only one of them sees is a card whose two halves watch
+        # different objects (the pipeline's oldest failure mode).
+        if stream.accept_phrase("the", "token", "leaves", "the", "battlefield"):
+            return ast.TriggerEvent("created_token_leaves_battlefield", "when")
         mark = stream.mark()
         if stream.at_kind(SELF) or stream.at_word("this"):
             stream.advance()

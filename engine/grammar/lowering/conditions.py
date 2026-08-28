@@ -94,11 +94,19 @@ def _lower_condition(
             raise LoweringError(
                 "'it's …' reads a card's printed type line", node=condition
             )
-        return {
+        payload = {
             "kind": "revealed_card_is",
             "card_types": list(condition.filter.card_types),
             "type_match": condition.filter.type_match,
         }
+        # "If it **isn't** a land card" (Wand of Ith). Carried rather than
+        # lowered into a separate kind, so the two spellings reach the one
+        # evaluator that knows how to read the record — and emitted only when
+        # the word was printed, the way every other optional narrowing in this
+        # pipeline is.
+        if condition.negated:
+            payload["negated"] = True
+        return payload
     if isinstance(condition, ast.ItWas):
         # The pronoun's referent, resolved here because only here is the
         # sentence in front of it known. One producer answers it today — the

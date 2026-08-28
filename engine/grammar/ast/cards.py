@@ -204,6 +204,40 @@ class RevealHand:
 
 
 @dataclass(frozen=True)
+class RevealRandomFromHand:
+    """``<player> reveals a card at random from their hand.`` (Wand of Ith.)
+
+    Not a :class:`RevealHand` with a count: that reveal makes the *whole* hand
+    public and chooses nothing, while this one picks one card the player does
+    not choose (CR 701.16 over a random selection). The distinction matters
+    downstream — the sentences behind this one ask what "it" is, and there is
+    no "it" after a hand reveal.
+
+    Its record is the one every "if it's a …" already reads, so the branch
+    behind it is the existing condition rather than a second one.
+    """
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
+class DiscardRevealedUnlessPayLife:
+    """``<player> discards it unless they pay <N> life.`` (Wand of Ith.)
+
+    "It" is the card an earlier sentence of the same effect revealed. An offer
+    made to a seat that is not the ability's controller, with the discard as its
+    declined branch — the shape :class:`UnlessPlayerPays` has for a mana cost
+    made to an opponent, printed the other way round and paid in life.
+
+    ``mana_value_of_revealed`` is the second printed amount: "life equal to
+    **its** mana value" is a number nothing knows until the card is revealed, so
+    it is a flag rather than an :class:`Amount` the parser could resolve.
+    """
+    player: PlayerRef
+    amount: Amount | None = None
+    mana_value_of_revealed: bool = False
+
+
+@dataclass(frozen=True)
 class RevealHandAndChoose:
     """``Target opponent reveals their hand. You choose a <filter> card from
     it. That player discards that card.`` (Duress.)

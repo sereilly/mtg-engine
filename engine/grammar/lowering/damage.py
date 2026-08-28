@@ -973,3 +973,22 @@ def _lower_damage_conjunction(node: ast.Conjunction) -> tuple[OracleInstruction,
             ),
         )
     return _lower_damage(first) + _lower_damage(second)
+
+
+def _lower_damage_dealt_riders(
+    node: "ast.DamageRidersUntilEndOfTurn",
+) -> tuple[OracleInstruction, ...]:
+    """Runesword's two rider sentences (CR 701.19c, CR 614).
+
+    The riders are the same payload keys the damage lowering already writes;
+    what differs is *when* they are read — the marker sits on the damager and
+    the damage seam stamps the victim, rather than the dealer stamping one
+    victim now. One kind for both sentences, because a card printing either
+    alone is the same instruction with one key.
+    """
+    payload: dict[str, object] = {"subject": node.subject}
+    if node.riders.no_regen:
+        payload["no_regen"] = True
+    if node.riders.exile_if_dies:
+        payload["exile_if_dies"] = True
+    return (OracleInstruction("grant_damage_riders_until_eot", "", payload),)

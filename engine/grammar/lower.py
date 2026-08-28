@@ -89,6 +89,7 @@ from .lowering import (
     _lower_create_copy_token,
     _lower_create_token,
     _lower_damage,
+    _lower_damage_dealt_riders,
     _lower_damage_conjunction,
     _lower_coin_flip_damage_loop,
     _lower_damage_this_game_history,
@@ -125,7 +126,9 @@ from .lowering import (
     _lower_switch_pt,
     _lower_exile_cost_sacrifices,
     _lower_exile_graveyard,
+    _lower_discard_revealed_unless_pay_life,
     _lower_reveal_hand,
+    _lower_reveal_random_from_hand,
     _lower_reveal_hand_and_choose,
     _lower_look_at_hand,
     _lower_look_at_library_top,
@@ -243,6 +246,8 @@ def lower_statement(
     dispatch_subject = event_subject if whole_effect else None
     if isinstance(statement, ast.DealDamage):
         return _lower_damage(statement, event, produced)
+    if isinstance(statement, ast.DamageRidersUntilEndOfTurn):
+        return _lower_damage_dealt_riders(statement)
     if isinstance(statement, ast.DamageThoseDamagedThisGame):
         return _lower_damage_this_game_history(statement)
     if isinstance(statement, ast.CoinFlipDamageLoop):
@@ -466,6 +471,10 @@ def lower_statement(
 
     if isinstance(statement, ast.RevealHand):
         return _lower_reveal_hand(statement)
+    if isinstance(statement, ast.RevealRandomFromHand):
+        return _lower_reveal_random_from_hand(statement)
+    if isinstance(statement, ast.DiscardRevealedUnlessPayLife):
+        return _lower_discard_revealed_unless_pay_life(statement, produced)
     if isinstance(statement, ast.RevealHandAndChoose):
         return _lower_reveal_hand_and_choose(statement)
     if isinstance(statement, ast.ExileCostSacrifices):

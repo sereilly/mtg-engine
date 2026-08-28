@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..damage_events import (DAMAGE_DENIES_REGENERATION,
+                             DAMAGE_EXILES_INSTEAD)
 from ..damage_redirects import DamageRedirect, add_redirect
 from ..dexterity import flip_lands_on
 from ..models import Permanent
@@ -1370,4 +1372,41 @@ def deal_damage_each_matching(
         if struck
         else f"{card.name} found nothing to damage"
     )
+    return True, "resolved"
+
+
+@effect_handler("grant_damage_riders_until_eot")
+def grant_damage_riders_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"If the creature deals damage to a creature this turn, the creature
+    dealt damage can't be regenerated this turn. If a creature dealt damage by
+    the targeted creature would die this turn, exile that creature instead."
+    (Runesword.)
+
+    Two markers on the creature this ability targeted, saying what the damage
+    it deals for the rest of the turn will do. Not a damage event and not a
+    trigger: a trigger resolves after state-based actions have already buried
+    whatever it killed, and by then there is nothing left to exile — so the
+    riders are read at the damage seam itself
+    (``damage_events._apply_dealer_riders``) and travel to the victim there.
+
+    The riders are the same two Disintegrate applies to one event of its own;
+    what differs is that the marker sits on the dealer. Cleared with the turn
+    by ``mixins/_constants._EOT_METADATA_KEYS``.
+    """
+    creature = resolve_target_permanent(game, context)
+    if creature is None:
+        game.log.append(f"{context.card.name}: no creature to grant it to")
+        return True, "resolved"
+    granted: list[str] = []
+    if instruction.payload.get("no_regen"):
+        creature.metadata[DAMAGE_DENIES_REGENERATION] = True
+        granted.append("can't be regenerated")
+    if instruction.payload.get("exile_if_dies"):
+        creature.metadata[DAMAGE_EXILES_INSTEAD] = True
+        granted.append("is exiled if it would die")
+    if granted:
+        game.log.append(
+            f"{context.card.name}: what {creature.card.name} damages this turn "
+            + " and ".join(granted)
+        )
     return True, "resolved"

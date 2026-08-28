@@ -28,92 +28,6 @@ from ..phrases import (
 )
 
 
-def _parse_gain_control(
-    stream: TokenStream, *, leading_duration: str | None = None
-) -> ast.GainControl | None:
-    """``Gain control of <subject> <duration>.``
-
-    Returns None — cursor untouched — unless the line really opens "gain
-    control": "gains flying", "you gain 3 life" and "gains control of this
-    creature" (Ghazbán Ogre, whose subject comes first) all begin with the same
-    verb and are read elsewhere.
-
-    The duration clause is *required*, and only the shapes a handler implements
-    are admitted: "until end of turn", "for as long as you control this
-    <noun>" (Aladdin, The Wretched), and that clause with "…and this <noun>
-    remains tapped" behind it (Willow Satyr, Rubinia Soulsinger). An untimed
-    "gain control of target creature" is a permanent control change; a
-    differently-conditioned one (Old Man of the Sea's power comparison)
-    reverts on things nothing here watches. Each would be this production's
-    sentence with the ending changed, so each has to fail rather than borrow
-    a linked duration it does not print.
-    """
-    mark = stream.mark()
-    stream.expect_word("gain")
-    if not stream.accept_word("control"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("of"):
-        stream.reset(mark)
-        return None
-    # "that creature" (Disharmony) — the object a previous sentence already
-    # chose, read by the same back-reference the destroy production uses so
-    # the two cannot drift apart about what the phrase names.
-    subject = _parse_that_object(stream) or parse_recipient(stream)
-    if subject is None:
-        raise stream.error("expected what to gain control of")
-    # "…until end of turn" (Traitorous Greed). A lifetime of its own rather than
-    # one tied to a permanent that is still there: the spell that granted it is
-    # in a graveyard by the time the turn ends, so nothing can be watched for —
-    # CR 611.2c ends it at cleanup instead.
-    if leading_duration is not None:
-        # "**For as long as this creature remains tapped,** gain control of …"
-        # (Preacher.) The duration printed in front of the verb instead of
-        # behind it, read by the statement layer and handed down — the same
-        # sentence either way, so there is one production and one lowering. A
-        # card printing *both* is refused rather than having one silently win.
-        if stream.at_word("until", "for"):
-            raise stream.error("this sentence prints two different durations")
-        return ast.GainControl(subject, leading_duration)
-    if stream.accept_phrase("until", "end", "of", "turn"):
-        return ast.GainControl(subject, "until_end_of_turn")
-    if not stream.accept_phrase("for", "as", "long", "as"):
-        raise stream.error(
-            "no handler for a control change without a duration the engine ends"
-        )
-    # "…for as long as **this creature remains on the battlefield**" (Scarwood
-    # Bandits). A weaker link than "you control this creature": an opponent who
-    # steals the Bandits breaks that one and not this one, so the two are
-    # different durations and the sweep tests them separately. Read before the
-    # control clause because the two share only the four words above.
-    mark = stream.mark()
-    if _accept_self_reference(stream) and stream.accept_phrase(
-        "remains", "on", "the", "battlefield"
-    ):
-        return ast.GainControl(subject, "while_source_on_battlefield")
-    stream.reset(mark)
-    if not stream.accept_phrase("you", "control"):
-        raise stream.error(
-            "no handler for a control change without a duration the engine ends"
-        )
-    if not _accept_self_reference(stream):
-        raise stream.error("expected the permanent the control change is linked to")
-    # "…and this creature remains tapped" — the second condition of the linked
-    # duration (CR 611.2b). Only the self-referential spelling is admitted:
-    # a condition about any other object would be one the sweep has no record
-    # to check, so the words stay unconsumed and the line fails loudly.
-    if stream.accept_word("and"):
-        if not _accept_self_reference(stream) or not stream.accept_phrase(
-            "remains", "tapped"
-        ):
-            raise stream.error(
-                "the only compound linked duration is "
-                "'…and this permanent remains tapped'"
-            )
-        return ast.GainControl(subject, "while_you_control_source_tapped")
-    return ast.GainControl(subject, "while_you_control_source")
-
-
 def _parse_put_source_into_zone(stream: TokenStream) -> ast.Statement | None:
     """``Put it into your graveyard.`` (All Hallow's Eve, from exile.)
 
@@ -468,8 +382,10 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     no_regen = False
     mark = stream.mark()
     stream.accept_punct(".", ",")
-    if stream.accept_phrase("it", "can't", "be", "regenerated") or stream.accept_phrase(
-        "they", "can't", "be", "regenerated"
+    if (
+        stream.accept_phrase("it", "can't", "be", "regenerated")
+        or stream.accept_phrase("they", "can't", "be", "regenerated")
+        or _accept_destroyed_this_way_no_regen(stream)
     ):
         no_regen = True
     else:
@@ -480,6 +396,41 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
             for each in (subject, *further)
         ))
     return ast.Destroy(subject, no_regen=no_regen, delay=delay)
+
+
+def _accept_destroyed_this_way_no_regen(stream: TokenStream) -> bool:
+    """``A <noun> destroyed this way can't be regenerated.`` (War Barge.)
+
+    CR 701.19c's rider printed as a sentence about the *effect* rather than
+    about a pronoun. The wording belongs to cards whose destruction was
+    arranged a sentence earlier — War Barge's is inside a delayed ability — so
+    there is no "it" left in the reader's hand to point at, and the noun
+    restates the type the destroy already named.
+
+    It sets the same ``no_regen`` field the two pronoun spellings do, because
+    it says the same thing: this destruction is the one regeneration cannot
+    answer. The noun is consumed against the closed type set rather than
+    skipped, so a sentence naming something the destroy did not destroy leaves
+    the words unread and fails the line loudly.
+    """
+    mark = stream.mark()
+    if (
+        stream.accept_word("a", "an")
+        and stream.accept_word(*_DESTROYED_THIS_WAY_NOUNS)
+        and stream.accept_phrase("destroyed", "this", "way")
+        and stream.accept_phrase("can't", "be", "regenerated")
+    ):
+        return True
+    stream.reset(mark)
+    return False
+
+
+#: The nouns "…destroyed this way…" is printed about. A closed set for the
+#: reason every other type word in this grammar is one: an open read would
+#: claim a sentence about something the destroy never touched.
+_DESTROYED_THIS_WAY_NOUNS: tuple[str, ...] = (
+    "creature", "artifact", "enchantment", "land", "permanent",
+)
 
 
 def _parse_doesnt_untap_next_step(
@@ -567,40 +518,6 @@ def _parse_attach(stream: TokenStream) -> ast.Statement:
     if host is None:
         raise stream.error("expected what to attach to")
     return ast.Attach(subject, host)
-
-
-def _parse_exchange_control(stream: TokenStream) -> ast.Statement:
-    """``Exchange control of <first> and <second>.`` (CR 701.12b — Gauntlets of
-    Chaos.)
-
-    Both halves go through ``parse_recipient``, so the printed type list
-    ("target artifact, creature, or land you control") and the printed
-    controller ("target permanent an opponent controls") are read by the noun
-    phrase every other production already uses.
-
-    "…that shares one of those types with it" is read *here* rather than by the
-    noun parser, and that is the point: it compares the second permanent with
-    the **first**, and an ``ObjectFilter`` describes one permanent with nothing
-    to compare against. Parsed there it could only have been dropped, and a
-    dropped restriction is an exchange the card does not allow — a Mox traded
-    for a Forest. The production that holds both slots is the one that can
-    carry it.
-    """
-    stream.expect_word("exchange")
-    stream.expect_word("control")
-    stream.expect_word("of")
-    first = parse_recipient(stream)
-    if first is None:
-        raise stream.error("expected what to exchange control of")
-    if not stream.accept_word("and"):
-        raise stream.error("expected 'and' between the two permanents exchanged")
-    second = parse_recipient(stream)
-    if second is None:
-        raise stream.error("expected the other permanent of the exchange")
-    shares = stream.accept_phrase(
-        "that", "shares", "one", "of", "those", "types", "with", "it"
-    )
-    return ast.ExchangeControl(first, second, shares_a_type=bool(shares))
 
 
 def _parse_tap_untap(stream: TokenStream) -> ast.Statement:

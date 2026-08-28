@@ -33,6 +33,7 @@ from ._core import (
 )
 from .damage import (
     DamageCantBePreventedOrRedirected,
+    DamageRidersUntilEndOfTurn,
     DamageUnlessPay,
     Fight,
     CoinFlipDamageLoop,
@@ -102,6 +103,8 @@ from .cards import (
     ExileGraveyard,
     RevealHand,
     RevealHandAndChoose,
+    RevealRandomFromHand,
+    DiscardRevealedUnlessPayLife,
     ExileTopOfLibrary,
     PutExiledWithSource,
     ChooseCardsInHand,
@@ -166,6 +169,7 @@ from .game import (
 Effect = Union[
     CoinFlipDamageLoop,
     DamageThoseDamagedThisGame,
+    DamageRidersUntilEndOfTurn,
     DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, LoseKeyword, PlayerGetsCounters, PutCounter, RemoveCounter,
     DoublePower, SwitchPT,
     GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, Mill, Scry, Destroy, Sacrifice,
@@ -187,6 +191,8 @@ Effect = Union[
     CastPermission, LookTopPickToHand,
     RevealHand,
     RevealHandAndChoose,
+    RevealRandomFromHand,
+    DiscardRevealedUnlessPayLife,
     Shuffle, ExtraTurn, EndTheTurn, ChooseNumber, ChoosePlayerWhoCast, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCreature,
     SacrificeUnlessPay, DestroyUnlessPay, DestroyEachUnlessPaid, DamageUnlessPay, Fight, LookAtHand, LookAtLibraryTop,
     CantBe, AttackAsThough, CombatRestriction, AttackingDoesntTap,

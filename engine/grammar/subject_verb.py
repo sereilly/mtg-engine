@@ -39,6 +39,7 @@ from .effects import (
     _parse_choose_player_who_cast,
     _parse_counter, _parse_create_token,
     _parse_damage, _parse_damage_redirect, _parse_destroy, _parse_discard,
+    _parse_discard_revealed_unless_pay_life,
     _parse_reveal_hand,
     _parse_damage, _parse_damage_cant_be_prevented, _parse_damage_redirect,
     _parse_destroy, _parse_discard,
@@ -614,6 +615,13 @@ def parse_subject_verb(
         if token.text in ("draws", "draw") and isinstance(source_spec, ast.PlayerRef):
             return _parse_draw(stream, source_spec)
         if token.text in ("discards", "discard") and isinstance(source_spec, ast.PlayerRef):
+            # "…**discards it unless they pay 1 life**." (Wand of Ith.) "It" is
+            # the card the sentence in front of this one revealed, so nothing is
+            # chosen and there is no count — read first, and declining without
+            # consuming leaves every ordinary discard its own reading.
+            bought_off = _parse_discard_revealed_unless_pay_life(stream, source_spec)
+            if bought_off is not None:
+                return bought_off
             return _parse_discard(stream, source_spec)
         if token.text in ("mills", "mill") and isinstance(source_spec, ast.PlayerRef):
             return _parse_mill(stream, source_spec)

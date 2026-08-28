@@ -29,6 +29,43 @@ TOKEN_CARD_KEY = "is_token_card"
 #: is nothing about the token itself a later sentence could look it up by.
 CREATED_TOKEN_RESULT_KEY = "created_token_permanent_id"
 
+#: The metadata key a token maker stamps on the token it made, naming the
+#: permanent that made it by ``permanent_id``.
+#:
+#: The *durable* half of the back-reference above: the scratchpad key answers
+#: "which token did this resolution make" and dies with the resolution, while
+#: this one answers "which permanent made this token" and lives as long as the
+#: token does. Dance of Many needs the second — its "exile the token" and "when
+#: the token leaves the battlefield" are separate abilities of the same
+#: enchantment, fired turns after the resolution that created the token — and
+#: Tetravus's "tokens created with this creature" is the same question asked of
+#: several. By id rather than by identity because a permanent that leaves and
+#: returns is a new object (CR 400.7) and its old tokens were not created with
+#: *it*.
+CREATED_WITH_PERMANENT_ID = "created_with_permanent_id"
+
+
+def tokens_created_with(game, source) -> list:
+    """The permanents on the battlefield *source* created, oldest first.
+
+    The one reader of :data:`CREATED_WITH_PERMANENT_ID`, here rather than in
+    either handler that asks because two of them do — Tetravus's counted exile
+    and Dance of Many's "the token" — and they live in different modules.
+
+    Ordered by id so "the token" is a stable answer rather than whatever the
+    battlefield scan reached first, and read through the control seam because
+    a raw battlefield walk is a second opinion about who controls what.
+    """
+    if source is None:
+        return []
+    return sorted(
+        (
+            perm for perm in game.all_permanents()
+            if perm.metadata.get(CREATED_WITH_PERMANENT_ID) == source.permanent_id
+        ),
+        key=lambda perm: perm.permanent_id,
+    )
+
 
 def is_token_card(card: CardDefinition) -> bool:
     """Whether *card* is a token's stand-in card (CR 111.7).

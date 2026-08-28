@@ -59,6 +59,7 @@ from .effects import (
     _parse_assigns_no_combat_damage,
     _parse_attacking_doesnt_tap,
     _parse_bound_targeting_prevention,
+    _parse_damage_dealt_riders,
     _parse_counter,
     _parse_create_token,
     _parse_damage,
@@ -550,6 +551,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     bound_shield = _parse_bound_targeting_prevention(stream)
     if bound_shield is not None:
         return bound_shield
+
+    # "If the creature deals damage to a creature this turn, the creature dealt
+    # damage can't be regenerated this turn." (Runesword.) The other side of
+    # the same verb, and not a conditional either: the sentence grants a
+    # standing property to the creature the ability targeted. Read here, beside
+    # the shield above and before the generic conditional, and refusing without
+    # consuming.
+    dealt_riders = _parse_damage_dealt_riders(stream)
+    if dealt_riders is not None:
+        return dealt_riders
 
     # "if <condition>, <statement>"
     if stream.at_word("if"):

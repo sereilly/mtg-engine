@@ -37,6 +37,7 @@ from .damage import (
     _parse_damage_redirect,
     _parse_damage_cant_be_prevented,
     _parse_bound_targeting_prevention,
+    _parse_damage_dealt_riders,
 )
 from .characteristics import (
     _parse_double,
@@ -64,7 +65,6 @@ from .board import (
     _parse_shuffle_graveyard_into_library,
     _parse_shuffle_hand_into_library,
     parse_player_chooses_permanent,
-    _parse_gain_control,
     _parse_return,
     _parse_put_source_into_zone,
     _parse_destroy,
@@ -72,7 +72,10 @@ from .board import (
     _parse_doesnt_untap_next_step,
     _parse_tap_untap,
     _parse_attach,
+)
+from .control_changes import (
     _parse_exchange_control,
+    _parse_gain_control,
 )
 from .mana import (
     _parse_add_mana,
@@ -84,6 +87,7 @@ from .cards import (
     _parse_draw,
     _parse_choose_cards_in_hand,
     _parse_discard,
+    _parse_discard_revealed_unless_pay_life,
     _parse_mill,
     _parse_scry,
     _parse_cast_permission,
@@ -145,6 +149,7 @@ __all__ = [
     "_parse_damage_redirect",
     "_parse_damage_cant_be_prevented",
     "_parse_bound_targeting_prevention",
+    "_parse_damage_dealt_riders",
     "_parse_gets",
     "_parse_gains",
     "_parse_loses",
@@ -178,6 +183,7 @@ __all__ = [
     "_parse_shuffle_graveyard_into_library",
     "_parse_shuffle_hand_into_library",
     "_parse_discard",
+    "_parse_discard_revealed_unless_pay_life",
     "_parse_mill",
     "_parse_scry",
     "_parse_add_mana",

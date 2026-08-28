@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from ..combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
 from ..combat_permissions import ATTACK_AS_THOUGH_NO_DEFENDER
+from ..damage_events import (DAMAGE_DENIES_REGENERATION,
+                             DAMAGE_EXILES_INSTEAD)
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 _EOT_METADATA_KEYS = (
@@ -48,6 +50,11 @@ _EOT_METADATA_KEYS = (
     # Disintegrate-style riders that last only "this turn"
     "cant_be_regenerated_this_turn",
     "exile_if_dies_this_turn",
+    # The same two riders held on the **damager** rather than on the damaged
+    # (Runesword), named through `engine/damage_events.py` so the write, the
+    # read and this sweep cannot spell the channel three ways.
+    DAMAGE_DENIES_REGENERATION,
+    DAMAGE_EXILES_INSTEAD,
     # Sengir Vampire damage-source tracking (cleared each turn)
     "damaged_by_sources_this_turn",
     # The other direction of the same record: whom this permanent has dealt

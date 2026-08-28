@@ -173,6 +173,14 @@ def _parse_reveal_hand(
     """
     mark = stream.mark()
     stream.expect_word("reveals", "reveal")
+    # "…reveals **a card at random from their hand**." (Wand of Ith.) A
+    # different act over the same zone: one card, chosen by nobody, and the
+    # sentences behind it ask what it is. Read here because this is where the
+    # verb is dispatched and because the two readings must not overlap — the
+    # hand reveal below makes every card public and leaves no "it".
+    random_from_hand = _parse_random_card_from_hand(stream, player)
+    if random_from_hand is not None:
+        return random_from_hand
     if not (
         (stream.accept_word("their") or stream.accept_word("your"))
         and stream.accept_word("hand")
@@ -463,3 +471,66 @@ def _parse_choose_cards_in_hand(stream: TokenStream) -> "ast.ChooseCardsInHand |
     drawn = bool(stream.accept_phrase("drawn", "this", "turn"))
     return ast.ChooseCardsInHand(count=count, filter=filt, drawn_this_turn=drawn)
 
+
+
+def _parse_random_card_from_hand(
+    stream: TokenStream, player: ast.PlayerRef
+) -> "ast.RevealRandomFromHand | None":
+    """``a card at random from their hand`` — the object of "reveals" for the
+    random spelling (Wand of Ith).
+
+    Split out of :func:`_parse_reveal_hand` rather than nested in it, because
+    the two are different effects sharing one verb: this one names a single
+    card nobody chose and leaves a record the sentences behind it read, and the
+    hand reveal names every card and leaves none.
+    """
+    mark = stream.mark()
+    if (
+        stream.accept_phrase("a", "card", "at", "random", "from")
+        and (stream.accept_word("their") or stream.accept_word("your"))
+        and stream.accept_word("hand")
+    ):
+        return ast.RevealRandomFromHand(player)
+    stream.reset(mark)
+    return None
+
+
+def _parse_discard_revealed_unless_pay_life(
+    stream: TokenStream, player: ast.PlayerRef
+) -> "ast.DiscardRevealedUnlessPayLife | None":
+    """``<player> discards it unless they pay 1 life.``
+    ``<player> discards it unless they pay life equal to its mana value.``
+    (Wand of Ith.)
+
+    "It" is the card the sentence in front of this one revealed, so the discard
+    chooses nothing — which is what separates this from the ordinary discard
+    the same verb otherwise reads, and why it is tried first.
+
+    The payment is refused rather than skipped when it is neither of the two
+    printed shapes: a cost nobody is charged is the discard happening
+    unconditionally, which is the card without its clause.
+    """
+    mark = stream.mark()
+    stream.expect_word("discards", "discard")
+    if not (
+        stream.accept_word("it")
+        and stream.accept_word("unless")
+        and stream.accept_word("they", "he", "she")
+        and stream.accept_word("pay", "pays")
+    ):
+        stream.reset(mark)
+        return None
+    # "…pay **life equal to its mana value**": a number nothing knows until the
+    # card is revealed, so it travels as the flag the handler resolves rather
+    # than as an amount this parser could have counted.
+    if stream.accept_phrase("life", "equal", "to", "its", "mana", "value"):
+        return ast.DiscardRevealedUnlessPayLife(player, mana_value_of_revealed=True)
+    try:
+        amount = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("life"):
+        stream.reset(mark)
+        return None
+    return ast.DiscardRevealedUnlessPayLife(player, amount=amount)

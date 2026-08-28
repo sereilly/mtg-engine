@@ -298,14 +298,18 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # state test, not a card test. So this branch takes the sentence only when a
     # noun phrase naming card *types* follows, and hands it back otherwise.
     it_mark = stream.mark()
-    if stream.accept_phrase("it", "'s") or stream.accept_phrase("it", "is"):
+    # "If it **isn't** a land card, …" (Wand of Ith) is the same test read the
+    # other way, so it is the same branch carrying the word rather than a
+    # second one — two readings of one record are two places for it to drift.
+    negated = bool(stream.at_word("it")) and _accept_it_is(stream, negated=True)
+    if negated or stream.accept_phrase("it", "'s") or stream.accept_phrase("it", "is"):
         stream.accept_word("a", "an")
         try:
             revealed_filter = parse_object_filter(stream)
         except GrammarError:
             revealed_filter = None
         if revealed_filter is not None and revealed_filter.card_types:
-            return ast.RevealedCardIs(revealed_filter)
+            return ast.RevealedCardIs(revealed_filter, negated=negated)
     stream.reset(it_mark)
 
     # "if **that creature was destroyed this way**" (Infinite Authority). The
@@ -584,3 +588,21 @@ def _parse_blockers_of_bound_creature(
         else ast.Comparison("ge", ast.Fixed(at_least or 1))
     )
     return ast.BlockersOfBoundCreature(filt, comparison)
+
+
+def _accept_it_is(stream: TokenStream, *, negated: bool) -> bool:
+    """``it isn't`` / ``it is not`` — the negative spelling of "it's".
+
+    Its own reader because the negation is printed three ways and the
+    contraction is one token to the lexer's eye in only one of them; a branch
+    that read "isn't" alone would leave "is not" unread, and an unread negation
+    is the condition answering the opposite of what the card says.
+    """
+    mark = stream.mark()
+    if stream.accept_word("it") and (
+        stream.accept_word("isn't")
+        or (stream.accept_word("is") and stream.accept_word("not"))
+    ):
+        return negated
+    stream.reset(mark)
+    return False
