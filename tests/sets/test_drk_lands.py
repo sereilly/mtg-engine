@@ -408,3 +408,85 @@ def test_sorrows_path_activated_ability_is_no_longer_hollow(set_pool):
         "swap_block_assignments"
     ]
     assert all(a.supported for a in program.activated_abilities)
+
+
+def test_sorrows_path_refires_the_block_trigger_of_a_creature_it_moves(set_pool):
+    """CR 509.3a, and the reason the handler removes and re-blocks rather than
+    swapping two map entries: a creature removed from combat "wasn't a blocking
+    creature at that time", so an effect that then makes it block fires its
+    "whenever this creature blocks" again.
+
+    Cockatrice marks whatever it blocks for destruction at end of combat. It
+    marks Alpha on the declaration and Beta after the Path moves it — and a
+    swap of map entries would have marked nothing the second time.
+    """
+    lea = set_pool("LEA")
+    alpha = _nosick(Permanent(card=_k3_creature("Alpha", 2, 5)))
+    beta = _nosick(Permanent(card=_k3_creature("Beta", 3, 5)))
+    path = Permanent(card=set_pool("DRK")["Sorrow's Path"])
+    cockatrice = Permanent(card=lea["Cockatrice"])
+    other = Permanent(card=_k3_creature("Other", 1, 5))
+    p1 = PlayerState(name="P1", battlefield=[alpha, beta, path])
+    p2 = PlayerState(name="P2", battlefield=[cockatrice, other], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0, 1])[0], game.log
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0, 1: 1})[0], game.log
+    game._settle()
+    assert alpha.metadata.get("destroy_at_end_of_combat"), game.log
+    assert not beta.metadata.get("destroy_at_end_of_combat"), game.log
+
+    assert game.activate_permanent_ability(
+        0, "Sorrow's Path",
+        target_permanent_ids=[cockatrice.permanent_id, other.permanent_id],
+    ).supported, game.log
+    game._settle()
+
+    assert game.combat_blockers[1] == {0: [1], 1: [0]}, game.log
+    assert beta.metadata.get("destroy_at_end_of_combat"), game.log
+
+
+def test_sorrows_path_does_not_re_announce_an_attacker_becoming_blocked(set_pool):
+    """The other half of CR 509.3, and the half a swap must *not* fire.
+
+    CR 509.1h keeps an attacker blocked while its blocker is removed, so the
+    plain "whenever this creature becomes blocked" — rampage (CR 702.23a) is
+    the pool's only printing — triggers "only if the attacking creature was an
+    unblocked creature at that time", and it never was. Counted off the fire
+    site's own log line, because rampage over one blocker pumps by zero and
+    would hide a second firing.
+    """
+    lea = set_pool("LEA")
+    rampager = _nosick(Permanent(card=set_pool("LEG")["Frost Giant"]))  # rampage 2
+    beta = _nosick(Permanent(card=_k3_creature("Beta", 3, 5)))
+    path = Permanent(card=set_pool("DRK")["Sorrow's Path"])
+    ex = Permanent(card=_k3_creature("Ex", 1, 6))
+    why = Permanent(card=_k3_creature("Why", 1, 6))
+    p1 = PlayerState(name="P1", battlefield=[rampager, beta, path])
+    p2 = PlayerState(name="P2", battlefield=[ex, why], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0, 1])[0], game.log
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0, 1: 1})[0], game.log
+    game._settle()
+    announced = [line for line in game.log if "triggered on becoming blocked" in line]
+    assert len(announced) == 1, game.log
+
+    assert game.activate_permanent_ability(
+        0, "Sorrow's Path",
+        target_permanent_ids=[ex.permanent_id, why.permanent_id],
+    ).supported, game.log
+    game._settle()
+
+    assert game.combat_blockers[1] == {0: [1], 1: [0]}, game.log
+    assert [line for line in game.log if "triggered on becoming blocked" in line] == announced
