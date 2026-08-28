@@ -2294,7 +2294,7 @@ def put_cards_from_hand_onto_battlefield(game: Game, instruction: OracleInstruct
     chosen = [card for card in caster.hand if eligible(card)][:count]
     caster_index = game.players.index(caster)
     for card in chosen:
-        caster.hand = [c for c in caster.hand if c is not card]
+        game.take_card_from_hand(caster, card)
         game._put_permanent_onto_battlefield(caster_index, Permanent(card=card), None)
         game.log.append(f"{caster.name} put {card.name} onto the battlefield")
     if not chosen:
@@ -2522,7 +2522,7 @@ def each_player_discards_a_card(game: Game, instruction: OracleInstruction, cont
             game.log.append(f"{player.name} must choose a card to discard")
         else:
             card = player.hand[0]
-            player.hand = [c for c in player.hand if c is not card]
+            game.take_card_from_hand(player, card)
             game._discard_card(player, card)
             game.log.append(f"{player.name} discarded {card.name}")
     context.results["players_who_could_not_discard"] = could_not
@@ -3507,7 +3507,7 @@ def put_iterated_card_on_library(game: Game, instruction: OracleInstruction, con
             f"longer in {player.name}'s hand"
         )
         return True, "resolved"
-    player.hand = [c for c in player.hand if c is not card]
+    game.take_card_from_hand(player, card)
     position = "bottom" if str(instruction.payload.get("position", "top")) == "bottom" else "top"
     game.put_card_into_library(player, card, position)
     game.log.append(

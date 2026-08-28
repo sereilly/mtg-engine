@@ -15,6 +15,7 @@ from .ai_valuation import (
     returns_creature_to_hand,
     several_target_slot_sides,
 )
+from .cast_restrictions import check_cast_timing
 from .cost_modifiers import cost_reduction_for_cast, reduce_cost, spell_cost_tax
 from .classifier import classify_card
 from .game import Game
@@ -92,6 +93,15 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
         ):
             continue
         if not _can_cast_with_targets(game, player_index, card):
+            continue
+        # CR 601.2's printed timing gates ("Cast this spell only during an
+        # opponent's turn…"), through the table the cast path itself reads.
+        # Asked here for the same reason every other gate in this function is:
+        # a cast the engine will refuse is a turn the AI spends on nothing, and
+        # it re-proposes the same card the next turn and the next. Siren's Call
+        # did exactly that for ten consecutive turns once the simulator started
+        # dealing whole sets.
+        if check_cast_timing(game, player_index, (card.oracle_text or "").lower()):
             continue
 
         # X first: an X-draw spell's target choice depends on how many cards it
@@ -806,8 +816,26 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
     to prevent one module over, and ``targeting.derive_cast_spec`` guards with
     the same gate for the UI's benefit.
     """
+    if game._set_lockout_banning_card(card) is not None:
+        # "Players can't cast Arabian Nights cards" (City in a Bottle). Not a
+        # targeting question, but the same failure: the cast path refuses and
+        # the AI offers the card again next turn. Asked for every card, not
+        # only a spell, because the lockout bans *playing* a land too.
+        return False
+
     if card.primary_type not in SPELL_TYPES:
         return True
+
+    # The engine's own enumeration, asked **before** the arms below. Those arms
+    # are preferences as much as legality — "is there something on the
+    # opponent's board worth destroying" — and each reads one or two payload
+    # keys, so a narrowing the key does not carry is invisible to it: Tunnel
+    # ("destroy target Wall") reads `type_filter == "creature"` and answers yes
+    # to any creature at all, then the cast path checks `wall_only` and
+    # refuses. Putting the engine's answer first can only ever skip *more*
+    # casts, and only ones it can prove have no legal target.
+    if _no_legal_cast_target(game, caster_index, card):
+        return False
 
     opponent = game.players[choose_attack_target(game, caster_index)]
     caster = game.players[caster_index]
@@ -853,6 +881,62 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
     return True
 
 
+def _no_legal_cast_target(game: Game, caster_index: int, card: CardDefinition) -> bool:
+    """Whether *card* names a mandatory target and the board offers none.
+
+    The chain above is an if-chain over instruction kinds, so every kind it does
+    not name fell out of the bottom as "castable" — and for a spell that
+    *targets*, castable-with-no-target is a turn the AI spends on an action the
+    engine then refuses. It does not lose the game or break a rule (the cast
+    gate declines before any mana is spent, CR 601.2c), which is why nothing
+    caught it: it is silent, and it repeats. The simulator's old eight-card
+    decklist could not reach it because every card in it had an arm. Random
+    decks reach it immediately — Deathlace and Thoughtlace (``spell_or
+    _permanent``, a kind with no arm) were chosen, refused, and chosen again
+    every turn of every game, so a seat holding one never did anything else.
+
+    Rather than adding two more arms — the next unnamed kind would just repeat
+    this — ask the enumeration the picker and the cast path already use. That
+    is the same move ``activation_target_refusal`` made when it replaced the
+    per-kind if-chain in ``activation.py``.
+    """
+    program = compile_card_oracle(card)
+    # A modal spell is *not* excepted here, unlike in `cast_target_refusal`
+    # where the caller may have chosen any mode. This policy names no mode, so
+    # the spell is cast as mode 0 and mode 0's spec — which is what
+    # `derive_cast_spec` returns — is exactly the question to ask. Blue
+    # Elemental Blast's mode 0 counters a red spell, so an AI holding one with
+    # an empty stack offered it every turn and was refused every turn.
+    spec = derive_cast_spec(card, program)
+    if spec is None or spec.get("kind") in ("none", "modal") or spec_roles(spec):
+        # No spec, no target; roles are `_choose_role_targets`' question and it
+        # already declines an unfillable chain.
+        return False
+    if _targets_are_optional(program):
+        # "Up to one target" is castable with none (CR 601.2c).
+        return False
+    return not game._enumerate_targets(caster_index, card, spec, for_cast=True)
+
+
+def _targets_are_optional(program) -> bool:
+    """True when every ``targets`` quantifier the program carries is an "up to"."""
+    quantifiers: list[str] = []
+
+    def walk(instruction) -> None:
+        if instruction is None:
+            return
+        payload = getattr(instruction, "payload", None) or {}
+        targets = payload.get("targets")
+        if isinstance(targets, dict) and "quantifier" in targets:
+            quantifiers.append(targets.get("quantifier"))
+        for step in payload.get("steps") or ():
+            walk(step)
+
+    for instruction in program.instructions:
+        walk(instruction)
+    return bool(quantifiers) and all(q == "up_to" for q in quantifiers)
+
+
 def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> tuple[int, int] | None:
     """Pick (player_index, permanent_index) for an Aura's enchant target.
 
@@ -891,6 +975,14 @@ def _choose_aura_target(game: Game, caster_index: int, card: CardDefinition) -> 
         # the cast path refuses is an AI turn spent on an action the game then
         # rejects, and a human seat offered a target it cannot take.
         if forbidden_target(game, card, permanent, caster_index):
+            continue
+        # CR 702.16b: an Aura with a quality cannot be cast targeting a
+        # permanent with protection from it. Asked through the cast path's own
+        # function for the same reason `forbidden_target` is, one line up — and
+        # it was missing, so the AI would pick a creature wearing White Ward for
+        # a white Aura, be refused, and pick it again next turn. Invisible until
+        # the simulator started building decks that contain both.
+        if not game._can_be_targeted(permanent, card, caster_index=caster_index):
             continue
         if permanent_matches_enchant_noun(permanent, noun):
             return target_player_index, permanent_index

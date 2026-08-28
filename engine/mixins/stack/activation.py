@@ -953,7 +953,7 @@ class AbilityActivationMixin:
         # the ability goes on the stack, so the discarded card is the one drawn
         # before this activation rather than the card it draws.
         if discard_cost_card is not None:
-            controller.hand = [c for c in controller.hand if c is not discard_cost_card]
+            self.take_card_from_hand(controller, discard_cost_card)
             self._discard_card(controller, discard_cost_card)
             self.log.append(
                 f"{controller.name} discarded {discard_cost_card.name} "
@@ -964,7 +964,7 @@ class AbilityActivationMixin:
         # cost is collected before the ability is on the stack, so an ability
         # that draws cannot discard what it drew.
         for cost_card in discard_cost_cards:
-            controller.hand = [c for c in controller.hand if c is not cost_card]
+            self.take_card_from_hand(controller, cost_card)
             self._discard_card(controller, cost_card)
             self.log.append(
                 f"{controller.name} discarded {cost_card.name} "

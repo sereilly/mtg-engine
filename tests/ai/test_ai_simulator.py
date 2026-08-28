@@ -4,7 +4,7 @@ import pathlib
 import pytest
 
 from engine import Game, PlayerState
-from engine.ai_simulator import _build_deck, run_ai_simulation
+from engine.ai_simulator import build_limited_deck, run_ai_simulation
 from engine.models import Permanent
 from tests.helpers import LEA_PATH
 
@@ -36,23 +36,40 @@ def _expected_card_names() -> set[str]:
     return found
 
 
-def test_every_simulator_expectation_names_a_card_the_deck_plays(all_cards):
+def test_every_simulator_expectation_names_a_card_the_deck_can_play(all_cards):
     """``_assert_expected`` is allowed its card names — it is a test oracle, and
     one derived from the compiled program would be a tautology (a Lightning Bolt
     mis-parsed to 1 damage deals 1 and matches its own derived expectation).
 
-    What it is *not* immune to is the decklist drifting: an expectation for a
-    card ``_build_deck`` stopped playing never fires again, and nothing fails.
+    What it is *not* immune to is drifting off the pool: an expectation for a
+    card the simulator can never deal never fires again, and nothing fails.
     That is the same "the comment expired without anyone editing it" decay the
-    name rule exists for, so it gets a guard rather than a promise."""
-    deck = {card.name for card in _build_deck({c.name: c for c in all_cards}, seed=1)}
-    expected = _expected_card_names()
+    name rule exists for, so it gets a guard rather than a promise.
 
+    The guard changed shape when the decklist did. It used to build the one
+    fixed deck and ask whether each name was in it; decks are now random draws
+    from whichever set is under test, so "in the deck" is a property of a seed
+    rather than of the code. What still holds — and is what the oracle needs —
+    is that each name is a card the builder *can* deal from the pool the
+    default runs use. `required=` is how the tests below pin their own
+    subjects, and it is the same mechanism, so this asserts the mechanism."""
+    cards = {c.name: c for c in all_cards}
+    expected = _expected_card_names()
     assert expected, "no card-name expectations found — did _assert_expected move?"
-    orphaned = sorted(expected - deck)
+
+    missing = sorted(name for name in expected if name not in cards)
+    assert not missing, (
+        "engine/ai_simulator.py::_assert_expected checks cards that are not in "
+        f"the pool it runs over, so the checks never run: {missing}"
+    )
+    dealt = {
+        card.name
+        for card in build_limited_deck(cards, seed=1, required=sorted(expected))
+    }
+    orphaned = sorted(expected - dealt)
     assert not orphaned, (
-        "engine/ai_simulator.py::_assert_expected checks cards the simulator's "
-        f"decklist no longer plays, so the checks never run: {orphaned}"
+        "engine/ai_simulator.py::_assert_expected checks cards the deck builder "
+        f"will not deal even when asked for them by name: {orphaned}"
     )
 
 
@@ -137,12 +154,19 @@ def test_prodigal_sorcerer_summoning_sickness_clears_after_turn(all_cards):
 
 @pytest.mark.slow
 def test_prodigal_sorcerer_deals_damage_in_simulation():
-    """Regression: Prodigal Sorcerer must deal damage once summoning sickness clears."""
+    """Regression: Prodigal Sorcerer must deal damage once summoning sickness clears.
+
+    ``required_cards`` pins the subject into both decks. It used to be there
+    because the simulator played one fixed decklist that happened to contain
+    it; decks are now random draws from the set, so a seed that dealt no
+    Prodigal Sorcerer would pass this test having regressed nothing — the
+    vacuous pass that a "never fires again" guard exists to prevent."""
     report = run_ai_simulation(
         cards_path=LEA_PATH,
         games=5,
         seed=42,
         max_turns=18,
+        required_cards=("Prodigal Sorcerer",),
     )
 
     prodigal_damage_lines = [
@@ -208,6 +232,10 @@ def test_ancestral_recall_never_self_causes_library_loss():
         games=10,
         seed=1337,
         max_turns=25,
+        # Pinned for the same reason as the Prodigal Sorcerer test above: this
+        # regression is about what the AI does *holding* Ancestral Recall, so a
+        # deck without one asserts nothing at all.
+        required_cards=("Ancestral Recall",),
     )
 
     prev_was_ancestral_cast = False

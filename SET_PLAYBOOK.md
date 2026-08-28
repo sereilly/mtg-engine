@@ -460,14 +460,24 @@ review directly shrinks this phase.
    what it buys is the set as a deckbuilding constraint: the deck editor's set
    filter gains the code, and every card under it renders that set's own art.
    Check the filter's count against the census, not just that the option exists.
-3. `scripts/simulate_ai_games.py` — a seeded run is byte-identical unless a
-   fix legitimately changed AI-visible behaviour, in which case the change is
-   named in the retrospective. Note that `--set <CODE>` cannot run for most
-   sets: the simulator builds one fixed deck, so any pool missing `Island`,
-   `Lightning Bolt` or `Ancestral Recall` is refused (correctly — an empty or
-   partial pool would report a clean run it never had). LEA and `--all` are the
-   runnable scopes; compare `--all` across the promotion commit, which is the
-   comparison that would actually catch a change.
+3. `scripts/simulate_ai_games.py --set <CODE>` — the set plays itself. Each
+   seat gets a random limited deck built from the set under test (CR 100.2b:
+   that product plus basic lands), so this is a real exercise of the new cards
+   rather than a run of Alpha's. **Run it as part of the promotion**, not only
+   as a determinism check: over eight sets it found five defects nothing else
+   had, four of them AI gates the engine refuses and one a card-deleting bug
+   in the engine. A seeded run is byte-identical unless a fix legitimately
+   changed AI-visible behaviour, in which case the change is named in the
+   retrospective; `--all` across the promotion commit is the comparison that
+   catches whether promotion itself changed anything.
+
+   Read two numbers besides the issue list. **Interactions** must be non-zero —
+   the script now fails when a run casts nothing, because "no illegal
+   interactions" over games where nobody could pay for anything is a true
+   statement about nothing. And **declined casts** should be zero: a cast the
+   engine refuses costs nothing and breaks no rule, but the AI re-proposes the
+   same card every turn, so a seat holding one does nothing for the rest of the
+   game. Neither number existed while the simulator played one fixed decklist.
 
 ## Phase 6 — Retrospective and playbook update
 

@@ -38,9 +38,6 @@ def main() -> int:
             max_turns=args.max_turns,
         )
     except ValueError as exc:
-        # The simulator plays one fixed decklist. A pool that cannot supply it
-        # has to stop here: dropping the cards it lacks would still report
-        # "no illegal interactions", over games that were never played.
         parser.error(f"{selection.label}: {exc}")
 
     log_path = Path(args.log_file)
@@ -50,6 +47,26 @@ def main() -> int:
     print(f"Games simulated: {report.games_completed}/{report.games_requested}")
     print(f"Interactions logged: {report.interaction_count}")
     print(f"Log file: {log_path}")
+
+    if report.refused_casts:
+        total = sum(report.refused_casts.values())
+        print(f"Casts the engine declined: {total} (the cast gate working, not a failure)")
+        for reason, count in report.refused_casts.most_common(5):
+            print(f"  {count}x {reason}")
+
+    # The guard the fixed decklist used to give for free. Building the deck out
+    # of the set means no pool can fail to supply it, so nothing stops a run
+    # over a set whose cards the AI can never pay for — and "no illegal
+    # interactions detected" over games where nobody cast anything is exactly
+    # the true-statement-about-nothing this script's --set handling exists to
+    # prevent. Measure the thing itself: did anything happen?
+    if report.interaction_count == 0:
+        print(
+            f"No spell was cast and no ability activated across "
+            f"{report.games_completed} game(s). The run proves nothing — check "
+            f"that {selection.label} can produce mana for its own spells."
+        )
+        return 1
 
     if report.issues:
         print("Issues found:")

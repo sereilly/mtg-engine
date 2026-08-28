@@ -379,3 +379,58 @@ def test_equinox_declines_a_spell_that_would_not(set_pool):
     assert any(
         "would not destroy a land you control" in line for line in game.log
     ), "the refusal is logged rather than silent"
+
+
+# --- Sylvan Library: the duplicate-copy hand removal ---
+
+
+def test_sylvan_library_puts_back_one_copy_not_every_copy(set_pool, catalog_by_name):
+    """Regression: identical cards in hand, one put on the library, and the
+    rest ceased to exist.
+
+    A hand is a ``list[CardDefinition]`` and a deck repeats one immutable
+    definition per copy — ``web/deck_builder.py`` does
+    ``deck.extend([card] * count)`` — so every Forest in a hand is the *same
+    object*. ``put_iterated_card_on_library`` removed the chosen card with
+    ``[c for c in player.hand if c is not card]``, an identity test that is
+    right about which object and wrong about how many: it removed all of them
+    and then put exactly one back. ``engine/phases/upkeep_step.py`` documents
+    the same class found in a graveyard (Nether Shadow: five cards in, four
+    out); this is the hand's copy of it, and ``Game.take_card_from_hand`` is
+    now the one way to do it.
+
+    Life is set to 3 so the mode default cannot afford "pay 4 life" and takes
+    the library branch instead — without that the branch never runs and this
+    test passes over the bug, which is how it was first written.
+    """
+    from engine.game import Game
+    from engine.models import Permanent, PlayerState
+
+    pool = set_pool("LEG")
+    forest = catalog_by_name["Forest"]
+    p1 = PlayerState(name="P1")
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.turn = 3
+
+    library = Permanent(card=pool["Sylvan Library"])
+    p1.battlefield.append(library)
+    game._initialize_permanent_state(library, 0, None)
+
+    p1.life = 3
+    p1.hand = [forest]
+    p1.library = [forest, forest, forest, pool["Rust"], pool["Backfire"]]
+    before = len(p1.hand) + len(p1.library)
+
+    game.resolve_draw_step(0)
+    game.auto_resolve_pending_choices()
+
+    assert any(
+        "put Forest on top of their library" in line for line in game.log
+    ), "the library branch has to run, or this test asserts nothing"
+    after = len(p1.hand) + len(p1.library)
+    assert after == before, (
+        f"cards left the game: hand+library held {before} before the trigger "
+        f"and {after} after"
+    )
+    assert sum(1 for c in p1.hand + p1.library if c is forest) == 4

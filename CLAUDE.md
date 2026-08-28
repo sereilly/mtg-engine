@@ -137,7 +137,7 @@ python scripts/serve_lan.py --port 8010   # same app, dual-stack IPv4+IPv6 for L
 
 # Engine scripts
 python scripts/run_duel.py            # scripted deterministic duel, no server (default LEA)
-python scripts/simulate_ai_games.py   # AI-vs-AI batch; deterministic per seed (default LEA)
+python scripts/simulate_ai_games.py --set DRK   # AI-vs-AI batch over one set; deterministic per seed (default LEA)
 python scripts/support_report.py      # per-category card-support coverage (whole pool)
 python scripts/support_report.py --set ATQ --hollow-lines   # supported cards carrying an ability with no instruction behind it (a Phase 3 exit criterion)
 python scripts/support_report.py --set LEG --refusals   # every refused line of every unsupported card with its exact refusal site (the plain census quotes only the first) — the work list backlog rounds are planned from
@@ -153,6 +153,23 @@ python scripts/fetch_vocabulary.py    # re-fetch data/vocabulary/*.json from Scr
 python scripts/ingest_set.py 3ED --fetch   # add a new set: download from Scryfall into the engine's card format
 python scripts/ingest_set.py --all --check # report card-file sizes without writing
 ```
+
+**The AI simulator plays the set you name.** `run_ai_simulation` deals each
+seat its own random *limited* deck out of the pool it is given — CR 100.2b's
+"this product and basic land cards", 40 cards at 17 lands — seeded from the
+run's seed so a seed still reproduces a run exactly. It replaced a hand-written
+36-card Alpha decklist, which meant `--set` worked for the three base sets and
+refused the other seven for want of an `Island`; the refusal was right and the
+scope was the bug. Basics come from the set when it prints them and from the
+manifest when it does not, which is what makes Antiquities, Legends and The
+Dark playable at all — their own lands cannot cast their own spells.
+`required=` pins a card into every deck, for a regression test whose subject
+has to be in play; without it such a test passes on any seed that dealt none.
+Two numbers in the report are the honesty checks: `interaction_count` (a run
+that cast nothing proves nothing, and the script now exits 1) and
+`refused_casts` (casts the engine declined — no rule broken and nothing spent,
+but the AI re-proposes the same card every turn, so a non-zero count is a seat
+doing nothing all game).
 
 **Naming a set:** every script that runs over a set takes `--set <CODE>` /
 `--all` / `--cards <path>`, resolved through `cards/manifest.json` by
@@ -525,6 +542,20 @@ adding entries, not editing dispatch**:
   removals and are exempted by name in `tests/engine/test_control_reads.py`:
   `_sync_control`'s move between battlefields (a control change is not a zone
   change) and the Debug Menu's wholesale board replacement.
+  **And leaving a *hand* is one too, for the opposite reason.** A hand is a
+  `list[CardDefinition]` and a deck repeats one immutable definition per copy
+  (`web/deck_builder.py`: `[card] * count`), so every copy of a card in a hand
+  is the **same Python object** — which makes
+  `[c for c in player.hand if c is not card]` remove all of them where the
+  caller then puts exactly one somewhere. Five sites spelled it that way and
+  each deleted cards from the game: Sylvan Library put one card back and
+  destroyed the other two, a forced discard binned one and vanished the rest.
+  `Game.take_card_from_hand(owner, card)` removes exactly one, by index found
+  through identity (`list.remove`/`index` compare by *value*, which matches a
+  different printing of the same card). Guarded by
+  `tests/engine/test_hand_removal_seam.py`, which also fails on any new
+  identity filter over a hand. `engine/phases/upkeep_step.py` documents the
+  same class found in a graveyard, where the fix was to carry the index.
 - `engine/auras.py` — what an Aura's effect lines say and whether the engine
   implements them. Gates support (an Aura whose effect is unimplemented is
   reported unsupported rather than entering play and doing nothing) and derives

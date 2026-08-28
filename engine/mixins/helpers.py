@@ -480,6 +480,38 @@ class GameHelpersMixin:
         caller convert."""
         return owner if isinstance(owner, int) else self.players.index(owner)
 
+    def take_card_from_hand(self, owner, card) -> bool:
+        """Remove **one** copy of *card* from *owner*'s hand. True if it was there.
+
+        The mirror of ``put_card_into_hand``, and it exists because the obvious
+        spelling is wrong. A hand is a ``list[CardDefinition]`` and a deck is
+        built by repeating one definition — ``deck.extend([card] * count)`` in
+        ``web/deck_builder.py``, and the same in the AI simulator — so every
+        copy of a card in a hand is *the same Python object*. That makes
+        ``player.hand = [c for c in player.hand if c is not card]`` remove all
+        of them, and the caller then puts exactly one somewhere: the rest cease
+        to exist.
+
+        ``engine/phases/upkeep_step.py`` documents the same bug found in a
+        graveyard (Nether Shadow: five cards in, four out) and fixed there by
+        carrying the index. Five more sites had it in hands — Sylvan Library's
+        "put the card on top of your library", a forced discard, two discard
+        costs and a put-onto-the-battlefield — all invisible until a deck held
+        two copies of one card *and* one of those effects fired. The AI
+        simulator's fixed eight-card decklist could reach neither half.
+
+        Removing by index is what makes it exactly one, and identity is what
+        picks the index: ``list.remove`` and ``list.index`` compare by value,
+        which on a frozen dataclass means two different printings of one card
+        would match each other.
+        """
+        player = self.players[self._owner_seat(owner)] if isinstance(owner, int) else owner
+        for index, held in enumerate(player.hand):
+            if held is card:
+                del player.hand[index]
+                return True
+        return False
+
     def put_card_into_hand(self, owner, card) -> bool:
         """Put *card* into its owner's hand, unless CR 903.9b diverts it.
 

@@ -39,7 +39,7 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **9,117 tests**, CI budget **240s**, CI-measured
+2. **The suite stays fast.** **9,162 tests**, CI budget **240s**, CI-measured
    baseline **110s** (`ci.yml`). The budget catches a step change; the
    baseline is what catches creep, and it is the number to keep honest.
    Raising the budget is a decision, not maintenance — it has been raised three
