@@ -107,6 +107,21 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     def _amount_for(face) -> int:
         if per_recipient_spec is None:
             return damage
+        # "…equal to 3 minus the number of cards **they** discarded this way"
+        # (Mind Bomb). A per-seat number too, but one an earlier step of this
+        # same resolution recorded rather than one the board can be asked for —
+        # so it is read out of the scratchpad here instead of going to
+        # `evaluate_count`, which counts objects. A seat the record never
+        # mentions discarded nothing, which is the printed base.
+        record = per_recipient_spec.get("resolution_record")
+        if record is not None:
+            recorded = context.results.get(record) or {}
+            seat = game.players.index(face)
+            return max(
+                0,
+                int(per_recipient_spec.get("base", 0))
+                - int(recorded.get(seat, 0)),
+            )
         return max(0, evaluate_count(
             game, face, per_recipient_spec,
             exclude=source_permanent, source=source_permanent,
@@ -1276,6 +1291,39 @@ def redirect_damage_until_eot(
     game.log.append(
         f"{card_name}: damage {source_name} would deal to {caster.name} this turn "
         f"is dealt to {new_recipient.card.name} instead"
+    )
+    return True, "resolved"
+
+
+@effect_handler("redirect_matching_damage_to_you_until_eot")
+def redirect_matching_damage_to_you_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Blood of the Martyr: "Until end of turn, if damage would be dealt to any
+    creature, you may have that damage dealt to you instead."
+
+    The record hangs off the **caster**, and it is the one record in the family
+    that does not live on the recipient it watches. The recipients are a printed
+    noun phrase — every creature, including the ones that enter after this
+    resolves — so there is no object to hang it on and nothing to update when
+    one arrives. Hanging it on the taker instead means the cleanup sweep that
+    already clears a player's redirects clears this one too, with no new
+    lifetime and no new field
+    (see ``engine/damage_redirects.class_redirects``).
+    """
+    caster = context.caster
+    add_redirect(
+        caster,
+        DamageRedirect(
+            new_recipient=caster,
+            recipients=dict(instruction.payload.get("recipients") or {}),
+            optional=bool(instruction.payload.get("optional")),
+            source_name=getattr(context.card, "name", None),
+        ),
+    )
+    game.log.append(
+        f"{getattr(context.card, 'name', 'an effect')}: {caster.name} may take "
+        "damage dealt to any creature this turn"
     )
     return True, "resolved"
 

@@ -17,6 +17,7 @@ that outgrew its parse half. See ``tests/engine/test_grammar_layering.py``.
 """
 
 from ...oracle_types import OracleInstruction
+from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -66,6 +67,8 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
       pointing at nothing, and CR 614.9 makes that a redirect that silently does
       nothing at all.
     """
+    if node.optional:
+        return _lower_optional_class_redirect(node)
     if node.to is None:
         # "All damage that would be dealt this turn **by target sorcery spell**
         # is dealt to that spell's controller instead." (Reverberation.) The one
@@ -203,5 +206,70 @@ def _lower_spell_damage_redirect(
                 "new_recipient": "spell_controller",
                 "card_types": list(spec.filter.card_types),
             },
+        ),
+    )
+
+
+def _lower_optional_class_redirect(
+    node: ast.RedirectDamage,
+) -> tuple[OracleInstruction, ...]:
+    """Blood of the Martyr: "Until end of turn, if damage would be dealt to any
+    creature, you may have that damage dealt to you instead."
+
+    Two things separate this from every recorded redirect above, and both are
+    payload rather than a kind of their own:
+
+    * the protected recipient is a **class**, not an object. Every other
+      redirect in the pool hangs its record off the one recipient it watches;
+      a class has no object to hang off, so the record goes on the seat that
+      takes the damage and carries the noun phrase it answers to
+      (``engine/damage_redirects.class_redirects``). That is also why the
+      filter is held to what ``subject_matches`` can test: a restriction the
+      matcher would drop is a redirect covering strictly more creatures than
+      the card prints.
+    * the replacement is **optional** (CR 614). The word is carried through to
+      the interceptor, which offers a
+      :class:`~engine.replacement_choices.ReplacementChoice` instead of moving
+      the damage — dropping it would make every point compulsory.
+
+    Everything else refuses. A source narrowing, a "next time" bound, an
+    opponent's pick and any duration but this turn all have readings on the
+    recorded redirect and none here, and admitting one would arm a record that
+    quietly ignores it.
+    """
+    if not _is_you(node.new_recipient):
+        raise LoweringError(
+            "an optional redirect is armed on its controller; no handler moves "
+            "damage onto another recipient",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
+    if (
+        node.dealt_by is not None
+        or node.from_chosen_source
+        or node.one_shot
+        or node.chooser is not None
+    ):
+        raise LoweringError(
+            "an optional class redirect names no source, no bound and no other "
+            "chooser",
+            node=node,
+        )
+    spec = node.to
+    if not isinstance(spec, ast.TargetSpec) or spec.quantifier not in ("all", "each"):
+        raise LoweringError(
+            "no handler arms a redirect over this class of recipients", node=node
+        )
+    described = _filter_payload(spec.filter)
+    untestable = untestable_filter_keys(described)
+    if untestable:
+        raise LoweringError(
+            "a redirect cannot test " + ", ".join(sorted(untestable)), node=node
+        )
+    return (
+        OracleInstruction(
+            "redirect_matching_damage_to_you_until_eot", "",
+            {"recipients": described, "optional": True},
         ),
     )

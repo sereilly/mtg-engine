@@ -76,6 +76,8 @@ from .effect_ordering import (
     choose_effect,
 )
 from .damage_redirects import (
+    DamageRedirect,
+    _is_permanent,
     applicable_redirect,
     drop_spent,
     live_recipient,
@@ -782,6 +784,8 @@ def _apply_recorded_redirect(game, payload: dict) -> ReplacementOutcome | None:
     redirect = _recorded_redirect(game, payload)
     if redirect is None:  # pragma: no cover - the predicate just said otherwise
         return None
+    if redirect.optional:
+        return _offer_optional_redirect(game, payload, redirect)
     recipient = payload["recipient"]
     new_recipient = live_recipient(game, redirect)
     amount = payload["amount"]
@@ -814,6 +818,133 @@ def _apply_recorded_redirect(game, payload: dict) -> ReplacementOutcome | None:
         + (f" ({redirect.source_name})" if redirect.source_name else "")
     )
     return ReplacementOutcome(replaced=True)
+
+
+#: The seat a class-scoped optional redirect asks, and the labels it offers.
+#: Option 0 takes the damage; option 1 leaves it where it was dealt.
+_TAKE_THE_DAMAGE = 0
+_LEAVE_THE_DAMAGE = 1
+
+
+def _would_be_lethal(permanent, amount: int) -> bool:
+    """Whether *amount* more damage would be lethal to *permanent* (CR 704.5g).
+
+    ``effective_toughness`` rather than the printed number, because that is the
+    layer-aware accessor every other read of a creature's size goes through.
+    """
+    return permanent.effective_toughness - int(permanent.damage_marked or 0) <= amount
+
+
+def _optional_redirect_default(game, payload: dict, redirect: DamageRedirect) -> int:
+    """The stated policy a non-interactive seat takes on "you may have that
+    damage dealt to you instead".
+
+    Take the damage exactly when it would otherwise kill the creature *and* the
+    taker survives at 1 or more life. That is a policy about the two facts the
+    sentence trades between and nothing about which card printed it: below
+    lethal, the creature keeps the damage and heals at cleanup, so paying life
+    for it buys nothing; at or above the taker's life total it loses the game
+    to save a creature, which no board state makes worth it.
+
+    Stated here rather than defaulting to the offer (the shape every other
+    ``ReplacementChoice`` takes) because this offer is the only one in the
+    engine that can *lose the game* — Blood of the Martyr's controller is
+    offered every point of damage every creature on the board would take,
+    including their opponents' burn aimed at their opponents' creatures.
+    """
+    taker = redirect.new_recipient
+    recipient = payload["recipient"]
+    amount = int(payload["amount"])
+    if getattr(taker, "life", 0) - amount < 1:
+        return _LEAVE_THE_DAMAGE
+    if _is_permanent(recipient) and _would_be_lethal(recipient, amount):
+        return _TAKE_THE_DAMAGE
+    return _LEAVE_THE_DAMAGE
+
+
+def _offer_optional_redirect(
+    game, payload: dict, redirect: DamageRedirect
+) -> ReplacementOutcome | None:
+    """CR 614 + CR 614.9: "you **may** have that damage dealt to you instead."
+
+    The event is consumed either way and the resolver deals the damage, because
+    that is what makes both answers one code path: "yes" is the ordinary
+    redirect above and "no" is the event running again with this record held
+    out of it. An interceptor that declined by returning ``None`` could not
+    exist — the answer arrives on a later request, and by then
+    ``apply_replacements`` has long returned.
+    """
+    taker = redirect.new_recipient
+    if not isinstance(taker, PlayerState):  # pragma: no cover - lowering refuses it
+        return None
+    recipient = payload["recipient"]
+    from_name = getattr(recipient, "name", None) or getattr(
+        getattr(recipient, "card", None), "name", "it"
+    )
+    suspended, _ = offer_replacement_choice(
+        game,
+        ReplacementChoice(
+            kind="optional_damage_redirect",
+            player_index=game.players.index(taker),
+            options=(
+                f"take the {payload['amount']} damage yourself",
+                f"leave it on {from_name}",
+            ),
+            default_option=_optional_redirect_default(game, payload, redirect),
+            data={
+                "_redirect": redirect,
+                "_recipient": recipient,
+                "_source": payload.get("source"),
+                "amount": int(payload["amount"]),
+                "combat": bool(payload.get("combat")),
+                "from_name": from_name,
+            },
+        ),
+    )
+    if suspended:
+        game.log.append(
+            f"{taker.name} may take the {payload['amount']} damage headed for "
+            f"{from_name} ({redirect.source_name or 'redirect'})"
+        )
+    return ReplacementOutcome(replaced=True)
+
+
+@replacement_choice("optional_damage_redirect")
+def _resolve_optional_damage_redirect(
+    game, choice: ReplacementChoice, option_index: int
+) -> int:
+    """Deal the damage the offer suspended, to whichever recipient was chosen.
+
+    ``applying`` is held over the hand-off in both branches and for the same
+    reason it is in the compulsory redirect: the damage is re-run through the
+    whole contention set, so a record still applicable would offer itself
+    again — forever on the declining branch, which is the one the flag exists
+    for here.
+    """
+    redirect = choice.data["_redirect"]
+    recipient = choice.data["_recipient"]
+    source = choice.data["_source"]
+    amount = int(choice.data["amount"])
+    taker = game.players[choice.player_index]
+    redirect.applying = True
+    try:
+        if option_index == _TAKE_THE_DAMAGE:
+            redirect.spend()
+            game._deal_damage_to_player(taker, amount, source=source)
+            game.log.append(
+                f"{amount} damage to {choice.data['from_name']} is dealt to "
+                f"{taker.name} instead"
+                + (f" ({redirect.source_name})" if redirect.source_name else "")
+            )
+        elif isinstance(recipient, PlayerState):  # pragma: no cover - not printed
+            game._deal_damage_to_player(recipient, amount, source=source)
+        else:
+            game._mark_damage_on_permanent(
+                recipient, amount, source=source, combat=bool(choice.data["combat"])
+            )
+    finally:
+        redirect.applying = False
+    return 0
 
 
 def _is_desert(source) -> bool:

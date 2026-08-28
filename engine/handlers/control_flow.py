@@ -756,6 +756,15 @@ def _offer_to_seat(
     the player who took it. Only an offer made to a *set* of seats rebinds:
     everywhere else the target is the one the spell or ability already chose,
     and overwriting it would aim the accept branch at the wrong object.
+
+    ``context.caster`` is deliberately **not** moved, and that is a known
+    limit rather than a decision: an action inside the offer that addresses the
+    effect's controller — the "you" form of a discard, say — would act on the
+    caster while ``_action_is_takeable`` above tested the *offered* player's
+    hand. No card in the pool prints that pair (Rebirth's ante and life-set both
+    read the target), and the one that would have, Mind Bomb, is collapsed into
+    a per-seat prompt before it reaches here
+    (``grammar/lowering/control_flow._each_player_optional_discard``).
     """
     player = game.players[player_index]
     if rebind:

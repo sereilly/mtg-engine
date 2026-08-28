@@ -29,6 +29,17 @@ X_FROM_COUNT = "x_from_count"
 # checks that, and refuses otherwise).
 X_FROM_COUNT_PER_RECIPIENT = "x_from_count_per_recipient"
 
+# The resolution-scratchpad key a discard offered to several seats records its
+# per-seat tally under — ``{seat: cards discarded}`` — read by the damage that
+# is sized from it ("3 minus the number of cards **they** discarded this way",
+# Mind Bomb). Beside ``discarded_count`` rather than replacing it: that one is a
+# single number for the whole resolution, which answers the wrong question the
+# moment more than one seat discards — the last seat to answer would decide
+# everybody's number. Here for the reason the keys above are: the grammar's
+# lowering writes it into a payload, a handler seeds it and the prompt's answer
+# fills it in, and a second spelling is how those three come apart.
+DISCARDED_BY_SEAT = "discarded_by_seat"
+
 # The payload key an effect carries when the object it acts on was **bound by
 # the firing trigger** rather than chosen as a target — "…that creature becomes
 # green" under a block trigger (Aisling Leprechaun). Here for the same reason as

@@ -220,3 +220,80 @@ def test_festival_stops_at_the_end_of_the_turn(set_pool):
     game.current_step = "declare_attackers"
     ok, _message = game.declare_attackers(0, [0])
     assert ok
+
+
+# --- H4: per-seat damage state (The Dark) ---
+
+
+def test_blood_of_the_martyr_offers_its_controller_a_creature_the_damage_would_kill(
+    set_pool,
+):
+    """"Until end of turn, if damage would be dealt to any creature, you may
+    have that damage dealt to you instead."
+
+    The record watches a *class*, so it covers a creature that entered after
+    the spell resolved — and it is optional, so a non-interactive seat takes
+    the stated policy: take the damage when it would otherwise be lethal and
+    the taker survives it.
+    """
+    pool = set_pool("DRK")
+    lea = set_pool("LEA")
+    p1 = PlayerState(name="P1", hand=[pool["Blood of the Martyr"]])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    _cast(game, 0, "Blood of the Martyr")
+
+    # Entered *after* the spell resolved: a record hung on the creatures that
+    # happened to be there would miss it.
+    latecomer = Permanent(card=lea["Grizzly Bears"])  # 2/2
+    p1.battlefield.append(latecomer)
+    life_before = p1.life
+
+    game._mark_damage_on_permanent(latecomer, 2, source=None)
+
+    assert latecomer.damage_marked == 0, game.log
+    assert p1.life == life_before - 2
+
+
+def test_blood_of_the_martyr_leaves_damage_a_creature_survives(set_pool):
+    """The other half of the same stated policy: below lethal the creature keeps
+    the damage, because it heals at cleanup and the life would not come back."""
+    pool = set_pool("DRK")
+    lea = set_pool("LEA")
+    bears = Permanent(card=lea["Grizzly Bears"])  # 2/2
+    p1 = PlayerState(
+        name="P1", hand=[pool["Blood of the Martyr"]], battlefield=[bears]
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    _cast(game, 0, "Blood of the Martyr")
+    life_before = p1.life
+
+    game._mark_damage_on_permanent(bears, 1, source=None)
+
+    assert bears.damage_marked == 1, game.log
+    assert p1.life == life_before
+
+
+def test_blood_of_the_martyr_ends_with_the_turn(set_pool):
+    """"Until end of turn" — the record expires through the cleanup step's one
+    sweep over a player's redirects, with no lifetime of its own."""
+    pool = set_pool("DRK")
+    lea = set_pool("LEA")
+    bears = Permanent(card=lea["Grizzly Bears"])
+    p1 = PlayerState(
+        name="P1", hand=[pool["Blood of the Martyr"]], battlefield=[bears]
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+
+    _cast(game, 0, "Blood of the Martyr")
+    game.resolve_cleanup_step(0)
+    life_before = p1.life
+
+    game._mark_damage_on_permanent(bears, 2, source=None)
+
+    assert bears.damage_marked == 2, game.log
+    assert p1.life == life_before

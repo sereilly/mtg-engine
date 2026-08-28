@@ -635,6 +635,24 @@ def _leng_discard(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("optional_damage_redirect")
+def _optional_damage_redirect(ctx: PromptContext, choices: list) -> dict:
+    """Blood of the Martyr: take this creature's damage yourself, or leave it.
+
+    One event at a time, with how many are still queued behind it — a board
+    sweep can arm one per creature, and they are answered in the order they
+    were dealt.
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "amount": choice.data["amount"],
+        "from_name": choice.data["from_name"],
+        "options": list(choice.options),
+        "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
+    }
+
+
 @prompt_renderer("balance")
 def _balance(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]

@@ -54,6 +54,7 @@ from .effects import (
     _parse_change_text,
     _parse_source_of_choice_effect,
     _parse_damage_redirect,
+    _parse_optional_damage_redirect,
     _parse_assigns_no_combat_damage,
     _parse_attacking_doesnt_tap,
     _parse_bound_targeting_prevention,
@@ -534,6 +535,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     bound_shield = _parse_bound_targeting_prevention(stream)
     if bound_shield is not None:
         return bound_shield
+
+    # "If damage would be dealt to any creature, you may have that damage dealt
+    # to you instead." (Blood of the Martyr.) A replacement condition too, and
+    # here for the same reason as the shield above: the generic conditional
+    # below tests what is *true* when the sentence resolves, and this one is
+    # about what *would happen* later in the turn. Refuses without consuming.
+    optional_redirect = _parse_optional_damage_redirect(stream)
+    if optional_redirect is not None:
+        return optional_redirect
 
     # "if <condition>, <statement>"
     if stream.at_word("if"):

@@ -17,7 +17,7 @@ from ._common import (
 )
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
-from ..oracle_types import (EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
+from ..oracle_types import (DISCARDED_BY_SEAT, EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             PER_OBJECT_SEAT_RECORDS)
 from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..resumption import run_resumable
@@ -143,9 +143,8 @@ def draw_then_discard_self(game: Game, instruction: OracleInstruction, context: 
     actual_discard = min(discard_count, len(caster.hand))
     if actual_discard <= 0:
         return True, "resolved"
-    player_index = game.players.index(caster)
     game.arm_pending_choice(
-        "discard", player_index,
+        "discard", game.players.index(caster),
         count=actual_discard,
         allow_top_of_library=game._controls_top_of_library_discard(caster),
     )
@@ -2514,6 +2513,55 @@ def each_player_discards_a_card(game: Game, instruction: OracleInstruction, cont
     return True, "resolved"
 
 
+@effect_handler("each_player_discards_up_to_cards")
+def each_player_discards_up_to_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each player may discard up to three cards." (Mind Bomb.)
+
+    One ``discard`` prompt per seat with the printed ceiling, offered in turn
+    order (CR 101.4). The ceiling *is* the offer — a player may answer with
+    none — which is why the "may" in front of it collapses into this rather than
+    arming a yes/no offer of its own
+    (``engine/grammar/lowering/control_flow._each_player_optional_discard``).
+
+    Every seat is recorded, including the ones with nothing to discard, because
+    "3 minus the number of cards **they** discarded this way" is a number for
+    every player and a seat the record never mentions has to read as zero rather
+    than as a missing key. The scratchpad rides the prompt, so the count that is
+    written is the one the seat actually chose — the hand as it stood when the
+    prompt was armed is not the answer.
+    """
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    caster_index = game.players.index(context.caster)
+    if instruction.payload.get("actor") == "each_opponent":
+        seats = [s for s in game.opponents_of(caster_index) if not game.players[s].lost]
+    else:
+        # CR 101.4: the active player first, then the rest in turn order.
+        count = len(game.players)
+        active = game.active_player_index or 0
+        seats = sorted(
+            (i for i, p in enumerate(game.players) if not p.lost),
+            key=lambda i: ((i - active) % count, i),
+        )
+    by_seat = context.results.setdefault(DISCARDED_BY_SEAT, {})
+    context.results.setdefault("discarded_count", 0)
+    for seat in seats:
+        player = game.players[seat]
+        by_seat[seat] = 0
+        actual = min(amount, len(player.hand))
+        if actual <= 0:
+            game.log.append(f"{player.name} has no cards to discard")
+            continue
+        game.arm_pending_choice(
+            "discard", seat,
+            count=actual,
+            up_to=True,
+            allow_top_of_library=game._controls_top_of_library_discard(player),
+            _results=context.results,
+        )
+        game.log.append(f"{player.name} may discard up to {actual} card(s)")
+    return True, "resolved"
+
+
 @effect_handler("exile_top_of_library")
 def exile_top_of_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Exile the top three cards of your library." (Chandra, Heart of Fire's
@@ -2972,12 +3020,19 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
     # answered: "…for each card discarded this way" has to read a zero when
     # there was nothing to discard, not a key the scratchpad never grew.
     context.results["discarded_count"] = 0
+    # And the per-seat tally, for the same reason and at the same moment. One
+    # number cannot answer "how many did **they** discard" once the discard is
+    # offered to every player (Mind Bomb): the last seat to answer would decide
+    # everybody's number. Seeded to zero here so a seat with nothing to discard
+    # reads as zero rather than as a seat the record never mentions.
+    player_seat = game.players.index(caster)
+    by_seat = context.results.setdefault(DISCARDED_BY_SEAT, {})
+    by_seat[player_seat] = 0
     if amount <= 0:
         game.log.append(f"{caster.name} has no cards to discard")
         return True, "resolved"
-    player_index = game.players.index(caster)
     game.arm_pending_choice(
-        "discard", player_index,
+        "discard", player_seat,
         count=amount,
         filter=described,
         allow_top_of_library=game._controls_top_of_library_discard(caster),

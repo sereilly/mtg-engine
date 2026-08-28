@@ -65,6 +65,19 @@ class DamageRedirect:
     uses: int | None = None
     lifetime: str = END_OF_TURN
     source_name: str | None = None
+    #: The printed noun phrase this record watches, as a filter payload, when it
+    #: watches a **class** of recipients rather than the object it hangs off —
+    #: "if damage would be dealt to **any creature**" (Blood of the Martyr). A
+    #: class has no object to hang a record off, so such a record lives on the
+    #: seat that *takes* the damage and is reached through
+    #: :func:`class_redirects`; ``None`` is every other record, which is found by
+    #: its recipient and answers to nothing else.
+    recipients: dict | None = None
+    #: CR 614's "you **may** have that damage dealt to you instead". The
+    #: interceptor offers a ``ReplacementChoice`` rather than moving the damage,
+    #: and the chooser is ``new_recipient``'s seat — the player whose card this
+    #: is, not the one whose creature was about to be damaged.
+    optional: bool = False
     #: True while this record is being applied. A redirect deals the damage on
     #: to its new recipient as a fresh event, and that event runs the whole
     #: contention set again — so a pair of records pointing at each other would
@@ -207,6 +220,43 @@ def resolving_object_redirects(game) -> list[DamageRedirect]:
     return redirects_on(items[-1]) if items else []
 
 
+def class_redirects(game, recipient) -> list[DamageRedirect]:
+    """The class-scoped records that watch *recipient*, oldest first.
+
+    A record normally lives on the recipient it watches, which is what makes it
+    findable at all. "If damage would be dealt to **any creature**" watches a
+    printed noun phrase instead, and a phrase is not an object — the creatures
+    it covers include ones that have not entered the battlefield yet, so there
+    is nothing to hang it on and nothing to update when one arrives. So it lives
+    on the seat that takes the damage instead, in the same collection, and is
+    matched by asking the noun phrase about each damaged permanent.
+
+    That also keeps the sweeps and the lifetimes exactly as they were: the
+    cleanup step already calls :func:`clear_redirects` on every player.
+
+    Only a permanent can be watched this way. Every printed class in this
+    family names permanents ("any creature"), and a filter payload is a question
+    about a permanent — asking it of a ``PlayerState`` would answer True for the
+    empty filter and move every point of damage in the game.
+    """
+    if not _is_permanent(recipient):
+        return []
+    # Late, and inside the function, for the reason `_is_permanent` is duck
+    # typed: this module is what a redirect *is*, and the matcher is a question
+    # about the engine's objects. Importing it at module scope would put the
+    # whole game model behind a file that otherwise needs none of it.
+    from .subject_filters import subject_matches
+
+    found: list[DamageRedirect] = []
+    for player in game.players:
+        for record in redirects_on(player):
+            if record.recipients is None:
+                continue
+            if subject_matches(game, recipient, record.recipients):
+                found.append(record)
+    return found
+
+
 def applicable_redirect(game, recipient, source) -> DamageRedirect | None:
     """The record that would move this damage, or None. Pure.
 
@@ -217,7 +267,10 @@ def applicable_redirect(game, recipient, source) -> DamageRedirect | None:
     wants an order of its own in ``engine/replacements.py`` rather than a
     second reading here.
     """
-    for redirect in list(redirects_on(recipient)) + resolving_object_redirects(game):
+    own = [r for r in redirects_on(recipient) if r.recipients is None]
+    for redirect in (
+        own + class_redirects(game, recipient) + resolving_object_redirects(game)
+    ):
         if redirect.spent or redirect.applying:
             continue
         if not source_matches(redirect.source, source):
