@@ -162,6 +162,7 @@ from .game import (
 
 
 Effect = Union[
+    CoinFlipDamageLoop,
     DamageThoseDamagedThisGame,
     DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, LoseKeyword, PlayerGetsCounters, PutCounter, RemoveCounter,
     DoublePower, SwitchPT,
