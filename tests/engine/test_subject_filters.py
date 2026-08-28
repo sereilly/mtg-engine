@@ -78,6 +78,10 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     # declaration — a bear standing outside combat is not attacking, and a
     # matcher that ignored the key would untap it anyway (Disharmony).
     ("attacking_only", {"attacking_only": True}, "Grizzly Bears"),
+    # "a creature that has been dealt damage this turn" (Giant Shark). A record
+    # the damage seam stamps; a bear nothing has hit does not carry it, and a
+    # matcher ignoring the key would fire the Shark's trigger on every block.
+    ("dealt_damage_this_turn", {"dealt_damage_this_turn": True}, "Grizzly Bears"),
 )
 
 

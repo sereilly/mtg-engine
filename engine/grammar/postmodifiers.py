@@ -450,6 +450,15 @@ def _parse_postmodifiers(
                 ):
                     d.dealt_damage_to_source_this_turn = True
                     continue
+            # "…that **has been dealt damage this turn**" (Giant Shark). The
+            # passive voice with no agent, which is the whole difference from
+            # the clause above: that one asks who dealt it, this one only that
+            # some damage was. Both halves required — a clause naming another
+            # window is a different sentence, and the record is kept per turn.
+            elif stream.accept_phrase("has", "been", "dealt", "damage"):
+                if stream.accept_phrase("this", "turn"):
+                    d.was_dealt_damage_this_turn = True
+                    continue
             stream.reset(probe)
             break
         if stream.at_word("blocking") and stream.peek_word(1) == "or":

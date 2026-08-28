@@ -18,6 +18,9 @@ _EOT_METADATA_KEYS = (
     "destroy_if_did_not_attack_eot",
     "destroy_if_attacked_eot",
     "attacked_this_turn",
+    # "a creature that has been dealt damage this turn" (Giant Shark) - the
+    # record damage_events.deal_damage stamps on whatever took the damage.
+    "was_dealt_damage_this_turn",
     "redirect_one_damage_to_owner_until_eot",
     # Layer 7b temporary set effects (613.4b)
     "absolute_power_until_eot",

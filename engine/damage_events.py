@@ -319,6 +319,16 @@ def _announce(game, event: dict, dealt: int) -> None:
         seat = game.players.index(recipient)
         if seat not in seats:
             seats.append(seat)
+    if not isinstance(recipient, PlayerState) and dealt > 0:
+        # "…blocked by a creature **that has been dealt damage this turn**"
+        # (Giant Shark). The mirror of the record above, kept on the creature
+        # that *took* the damage — and here, at the one seam every damage path
+        # passes through, for the reason that one is: a ping from an ability is
+        # damage this record must see too. Not a read of ``damage_marked``,
+        # which is what is left on the creature: regeneration (CR 701.19a) and
+        # a toughness rewrite each wipe that while the damage stays dealt.
+        # Cleared with the turn by ``_EOT_METADATA_KEYS``.
+        recipient.metadata["was_dealt_damage_this_turn"] = True
     emit(game, "damage_dealt", **payload)
     if not isinstance(recipient, PlayerState):
         # "Whenever that creature is dealt damage by an attacking creature this

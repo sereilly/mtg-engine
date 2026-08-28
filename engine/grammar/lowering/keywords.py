@@ -197,6 +197,37 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         return (
             OracleInstruction("grant_target_keyword_until_eot", "", several_payload),
         )
+    # "Each creature blocking or blocked by this creature gains first strike
+    # until end of turn." (Spitting Slug.) A set named by a combat relation to
+    # the ability's own source (CR 509), which is not a characteristic any
+    # candidate carries — so the relation is the whole of the instruction and
+    # nothing is described for a picker. The team grant beside it cannot take
+    # this: it walks the *caster's* board, and the creatures blocking this one
+    # are the opponent's.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and not node.subject.targeted
+        and node.subject.quantifier in ("all", "each")
+        and node.subject.filter.in_combat_with_source
+    ):
+        leftover = _restrictions_beyond(
+            node.subject.filter,
+            frozenset({"card_types", "in_combat_with_source"}),
+        )
+        if leftover or node.subject.filter.card_types != ("creature",):
+            raise LoweringError(
+                "the combat-pair keyword grant reads creatures in combat with "
+                "its source and nothing narrower",
+                node=node,
+            )
+        for keyword in node.keywords:
+            _check_grantable(keyword, node)
+        return (
+            OracleInstruction(
+                "grant_keyword_to_creatures_in_combat_with_source", "",
+                {"keywords": tuple(node.keywords), "duration": duration},
+            ),
+        )
     scope = "self" if _is_source(node.subject) else ("target" if _is_target(node.subject) else None)
     if scope is None:
         raise LoweringError("unsupported keyword-grant subject", node=node)

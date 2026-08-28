@@ -548,6 +548,13 @@ class ObjectFilter:
     # never emitted, so every lowering not written for it refuses the phrase
     # instead of quietly widening to every creature.
     dealt_damage_to_source_this_turn: bool = False
+    # "a creature **that has been dealt damage this turn**" (Giant Shark) - the
+    # same history with no agent named, so unlike the field above it is a fact
+    # about the candidate alone and rides an ordinary payload key. Its own field
+    # rather than a reading of `damage_marked`: damage marked is what is *left*
+    # on the creature, and regeneration and a toughness rewrite both erase it
+    # while the damage stays dealt (CR 120.3).
+    was_dealt_damage_this_turn: bool = False
     # "all creatures **blocking this creature**" (The Wretched). The set of
     # creatures currently declared as blockers of the ability's own source
     # (CR 509.1a). *Relative* like ``created_with_source``: no read of the
@@ -672,6 +679,8 @@ class ObjectFilter:
             payload["owner"] = self.owner
         if self.attacking:
             payload["attacking_only"] = True
+        if self.was_dealt_damage_this_turn:
+            payload["dealt_damage_this_turn"] = True
         if self.blocking:
             payload["blocking_only"] = True
         if self.any_states:

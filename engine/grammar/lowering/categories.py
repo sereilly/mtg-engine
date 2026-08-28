@@ -377,6 +377,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "player_loses_game": "game_end",
     "target_player_loses_game": "game_end",
     "game_is_draw": "game_end",
+    # "Each creature blocking or blocked by this creature gains first strike
+    # until end of turn." (Spitting Slug.) The keyword family, like every other
+    # grant: what differs is which permanents receive it.
+    "grant_keyword_to_creatures_in_combat_with_source": "pump",
     "grant_unblockable_to_target": "evasion",
     # "Target creature can't be blocked **by Walls** this turn." (Tower of
     # Coireall.) The same evasion family: what differs is that the restriction
