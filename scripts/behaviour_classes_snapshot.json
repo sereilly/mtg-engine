@@ -9,6 +9,7 @@
     "Earth Elemental",
     "Fire Elemental",
     "Garruk's Gorehorn",
+    "Goblin Hero",
     "Gray Ogre",
     "Grizzly Bears",
     "Headless Horseman",
@@ -29,9 +30,11 @@
     "Pearled Unicorn",
     "Raging Bull",
     "Savannah Lions",
+    "Scarwood Goblins",
     "Scathe Zombies",
     "Sir Shandlar of Eberyn",
     "Sivitri Scarzam",
+    "Squire",
     "Staunch Shieldmate",
     "The Lady of the Mountain",
     "Tobias Andrion",
@@ -93,6 +96,13 @@
     "Touch of Darkness"
   ],
   [
+    "Elvish Archers",
+    "Hornet Cobra",
+    "Land Leeches",
+    "Ramirez DePietro",
+    "Stone-Throwing Devils"
+  ],
+  [
     "Wall of Earth",
     "Wall of Heat",
     "Wall of Ice",
@@ -112,10 +122,9 @@
     "Unholy Strength"
   ],
   [
-    "Elvish Archers",
-    "Hornet Cobra",
-    "Ramirez DePietro",
-    "Stone-Throwing Devils"
+    "Bog Wraith",
+    "Lost Soul",
+    "Marsh Goblins"
   ],
   [
     "Darkness",
@@ -137,6 +146,10 @@
     "Rod of Ruin"
   ],
   [
+    "Army of Allah",
+    "Morale"
+  ],
+  [
     "Bad Moon",
     "Crusade"
   ],
@@ -153,8 +166,8 @@
     "Red Elemental Blast"
   ],
   [
-    "Bog Wraith",
-    "Lost Soul"
+    "Bog Imp",
+    "Mahamoti Djinn"
   ],
   [
     "Burn Bright",
@@ -169,6 +182,10 @@
     "Shanodin Dryads"
   ],
   [
+    "Clay Statue",
+    "Diabolic Machine"
+  ],
+  [
     "Colossal Dreadmaw",
     "Wildwood Patrol"
   ],
@@ -181,8 +198,16 @@
     "Segovian Leviathan"
   ],
   [
+    "Drowned",
+    "Walking Dead"
+  ],
+  [
     "Giant Growth",
     "Titanic Growth"
+  ],
+  [
+    "Hell Swarm",
+    "Marsh Gas"
   ],
   [
     "Moorish Cavalry",

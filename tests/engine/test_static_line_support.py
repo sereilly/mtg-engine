@@ -91,11 +91,21 @@ def _derived(normalized: str) -> bool:
         or static_bonus_for(normalized) is not None
         or lord_buff_for(normalized) is not None
         # "You may play two additional lands on each of your turns" (Azusa,
-        # Fastbond) — dispatched by mixins/effects.py:_land_play_allowances,
-        # which reads every controlled permanent's own text through the same
-        # table the gate asks. Only the permission clause is a claim: the
-        # damage rider is a trigger the table does not own.
-        or land_play_line(normalized) == "allowance"
+        # Fastbond) and "Players can't play lands" (Worms of the Earth) — both
+        # dispatched by `mixins/effects.py:_land_play_refusal`, which reads
+        # every controlled permanent's own text through the same table the gate
+        # asks.
+        #
+        # Asked as "does the table claim this line", not "does it claim it as
+        # an *allowance*". The equality here named one of the table's return
+        # values, so when the prohibition was added to the same table this
+        # guard reported Worms of the Earth as an unbacked line — while
+        # `_land_play_refusal` was refusing land plays perfectly well. A guard
+        # that re-spells part of what it checks invents a disagreement and then
+        # reports it, which is the most expensive kind of failure because it
+        # looks like a finding. The damage rider is still not a claim: it is a
+        # trigger the table does not own.
+        or land_play_line(normalized) in ("allowance", "prohibition")
         # **Every table the gate itself names**, asked of this one line
         # through `oracle._derived_static_claims` — the same function
         # `_is_supported_static_creature_line`'s siblings ask when they admit a

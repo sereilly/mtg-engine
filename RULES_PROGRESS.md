@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**332 / 611 tracked rules covered (54%)** — 1597 tests, 0 unannotated.
+**334 / 611 tracked rules covered (54%)** — 1600 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [112. Spells](#112-spells) | 0/4 | 0% |
 | [113. Abilities](#113-abilities) | 2/12 | 16% |
 | [114. Emblems](#114-emblems) | 5/5 | 100% |
-| [115. Targets](#115-targets) | 6/10 | 60% |
+| [115. Targets](#115-targets) | 8/10 | 80% |
 | [116. Special Actions](#116-special-actions) | 3/3 | 100% |
 | [117. Timing and Priority](#117-timing-and-priority) | 6/6 | 100% |
 | [118. Costs](#118-costs) | 9/14 | 64% |
@@ -268,9 +268,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(2 tests)*
 - [ ] **115.5** A spell or ability on the stack is an illegal target for itself.
 - [x] **115.6** A spell or ability that requires targets may allow zero targets to be chosen. Such a spell or abi... *(4 tests)*
-- [ ] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo...
+- [x] **115.7** Some effects allow a player to change the target(s) of a spell or ability, and other effects allo... *(3 tests, subrules a)*
 - [x] **115.8** Modal spells and abilities may have different targeting requirements for each mode. An effect tha... *(1 tests)*
-- [ ] **115.9** Some objects check what another spell or ability is targeting. Depending on the wording, these ma...
+- [x] **115.9** Some objects check what another spell or ability is targeting. Depending on the wording, these ma... *(1 tests, subrules a)*
 - [x] **115.10** Spells and abilities can affect objects and players they don’t target. In general, those objects ... *(2 tests, subrules a)*
 
 ### 116. Special Actions

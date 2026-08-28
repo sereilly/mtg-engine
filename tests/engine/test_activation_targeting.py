@@ -277,6 +277,30 @@ def test_the_sweep_actually_covers_the_pool(supported_cards):
     assert len(list(_targeting_abilities(supported_cards))) > 45
 
 
+def _another_seat_chooses(ability) -> bool:
+    """Whether this ability's "target" is picked by somebody other than its
+    controller, part-way through the resolution.
+
+    Preacher: "gain control of target creature **of an opponent's choice** they
+    control." The word "target" is there, but no picker can be offered when the
+    ability is *activated* — the opponent has not chosen yet, and the seat that
+    activated it never chooses at all. The compiled program says so exactly: a
+    `choose_permanent` step whose `chooser` is not the controller, feeding the
+    step that acts on the result.
+
+    Derived from the program rather than listed by name, because "only Preacher
+    does this" is a claim about the pool that expires without anyone editing the
+    comment — the same reason `card_hooks.py` is the only place a name may
+    decide anything.
+    """
+    steps = ability.instruction.payload.get("steps") or (ability.instruction,)
+    return any(
+        step.kind == "choose_permanent"
+        and step.payload.get("chooser") not in (None, "you", "controller")
+        for step in steps
+    )
+
+
 def test_every_ability_that_names_a_target_derives_its_own_prompt(supported_cards):
     """The end state of this migration, as a ratchet.
 
@@ -290,6 +314,7 @@ def test_every_ability_that_names_a_target_derives_its_own_prompt(supported_card
         for card, index, ability, line in _targeting_abilities(supported_cards)
         if derive_activation_spec(ability) is None
         and (card.name, index) not in _FALLBACK_ABILITIES
+        and not _another_seat_chooses(ability)
     ]
 
     assert gaps == [], "these abilities target but derive no prompt:\n  " + "\n  ".join(gaps)

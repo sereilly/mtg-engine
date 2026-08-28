@@ -18,7 +18,7 @@ matched — did nothing whatsoever.
 """
 
 from ..card_hooks import DRAW_STEP_MODIFIERS
-from ..draw_step_modifiers import draw_step_bonus_for
+from ..draw_step_modifiers import draw_step_bonus_for, draw_step_skip_for
 from ..game_types import OracleExecutionContext
 from ..handlers.control_flow import evaluate_condition
 from ..pt import BASE_PT_REVERT_KEY, clear_base_pt
@@ -107,6 +107,7 @@ class DrawStepMixin:
         self,
         player_index: int,
         sanctuary_choice: bool | None = None,
+        draw_skip_choice: bool | None = None,
         defer_priority: bool = False,
         pay_life_loss: dict[str, bool] | None = None,
     ) -> int:
@@ -198,6 +199,29 @@ class DrawStepMixin:
         if has_sanctuary and sanctuary_choice is not False:
             player.island_sanctuary_protected = True
             self.log.append(f"{player.name} skipped draw (Island Sanctuary active)")
+            self._close_or_defer_step(phase, step, defer_priority)
+            return 0
+
+        # CR 504 with CR 614: "If you would begin your draw step, you may skip
+        # that step instead. If you do, you gain 2 life." (Fasting.) Asked of
+        # the *step*, before the turn-based draw below, because that is what the
+        # card replaces — Island Sanctuary above replaces the draw inside a step
+        # that did begin, which is why the two are separate checks rather than
+        # one flag.
+        #
+        # A non-interactive seat takes the skip, which is the stated policy for
+        # every "you may" the engine answers for a player (ROADMAP idiom 8):
+        # the alternative is a default that silently declines whatever the card
+        # was for. `draw_skip_choice=False` is a seat that chose to draw.
+        for permanent in self.controlled_by(player):
+            skip = draw_step_skip_for(permanent.effective_card.oracle_text)
+            if skip is None or draw_skip_choice is False:
+                continue
+            self.log.append(
+                f"{player.name} skipped their draw step ({permanent.card.name})"
+            )
+            if skip.life_gain:
+                self._gain_life(player, skip.life_gain, permanent.card.name)
             self._close_or_defer_step(phase, step, defer_priority)
             return 0
 

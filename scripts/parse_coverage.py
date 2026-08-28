@@ -52,7 +52,9 @@ from engine.cast_costs import cast_cost_claims_line  # noqa: E402
 from engine.cast_restrictions import CAST_RESTRICTIONS  # noqa: E402
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for  # noqa: E402
-from engine.draw_step_modifiers import draw_step_bonus_for  # noqa: E402
+from engine.draw_step_modifiers import (  # noqa: E402
+    draw_step_bonus_for, draw_step_skip_line,
+)
 from engine.global_statics import global_static_for  # noqa: E402
 from engine.auras import (  # noqa: E402
     aura_effect_claim,
@@ -323,6 +325,11 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("global_statics.py (lingering rider)",
      lambda s: s.startswith("if this enchantment leaves the battlefield, this effect continues")),
     ("draw_step_modifiers.py", lambda s: draw_step_bonus_for(s) is not None),
+    # The optional whole-step skip and the rider it buys (Fasting). Two
+    # sentences, claimed one at a time because this table is asked per
+    # sentence — `draw_step_skip_for` reads them together to decide whether
+    # the card is supported at all.
+    ("draw_step_modifiers.py", lambda s: draw_step_skip_line(s)),
     ("cost_modifiers.py", lambda s: bool(cost_modifiers_for(s))),
     ("activation gate (stack/activation)", lambda s: any(g in s for g in _ACTIVATION_GATES)),
     ("mixin text scan", lambda s: _matches_any(s, _MIXIN_TEXT_SCANS)),

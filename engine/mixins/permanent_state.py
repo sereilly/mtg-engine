@@ -96,7 +96,7 @@ def _count_dynamic_pt(
     if payload.get("only_during") == "your_turn":
         active = game.players[game.active_player_index] if game.players else None
         if active is not player:
-            return int(payload.get("otherwise", 0))
+            return int(payload.get("otherwise_value", 0))
     scope = payload.get("scope", "you")
     if scope == "all":
         battlefields = [p.battlefield for p in game.players]

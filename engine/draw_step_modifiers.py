@@ -66,3 +66,82 @@ def draw_step_bonus_for(oracle_text: str) -> DrawStepBonus | None:
                 requires_untapped=match.group("untapped") is not None,
             )
     return None
+
+
+@dataclass(frozen=True)
+class DrawStepSkip:
+    """An optional skip of the whole draw step, and what taking it buys.
+
+    CR 504 with CR 614: "If you would begin your draw step, you may skip that
+    step instead. If you do, <rider>." The skip is the template — a card can
+    print it with any rider — so the *trigger* is derived from text here while
+    the rider is read into a field this module knows how to honour.
+
+    ``life_gain`` is the only rider implemented, and a rider this cannot read
+    makes the whole template refuse (``draw_step_skip_for`` returns None), which
+    costs the card its support rather than skipping the step and quietly
+    dropping what the skip was *for*. That is the same rule every narrowing in
+    the engine follows: a clause the dispatcher cannot carry out refuses at
+    compile time instead of being ignored.
+
+    Deliberately **not** merged with Island Sanctuary's `DrawStepModifier` hook.
+    The two are close but not the same rule — Island Sanctuary replaces the
+    *draw* ("if you would draw a card during your draw step"), this replaces the
+    *step* — and its rider grants a protection quality no table yet reads. When
+    a third card lands on either side, that is the moment to see whether one
+    reader covers both; a merge now would be a guess about which of the two
+    shapes the next card prints.
+    """
+
+    life_gain: int = 0
+
+
+_SKIP_STEP = re.compile(
+    r"^if you would begin your draw step, you may skip that step instead$"
+)
+#: The rider sentences this module can carry out. A rider outside it refuses.
+_SKIP_RIDER_LIFE = re.compile(rf"^if you do, you gain (?P<count>\d+|{_COUNT_WORD}) life$")
+
+
+@lru_cache(maxsize=None)
+def draw_step_skip_for(oracle_text: str) -> DrawStepSkip | None:
+    """The optional draw-step skip *oracle_text* offers its controller, or None.
+
+    None both for "this card does not print the template" and for "it prints a
+    rider nothing here implements" — the caller cannot tell them apart and does
+    not need to, because both mean *this module does not carry this card out*.
+    The support gate reads the same function, so the second case is a card
+    reported unsupported naming its clause rather than one that skips a step and
+    forgets its rider.
+    """
+    lowered = oracle_text.lower()
+    if "draw step" not in lowered:
+        return None
+    sentences = [
+        sentence.strip().rstrip(".")
+        for line in lowered.split("\n")
+        for sentence in line.split(". ")
+    ]
+    for index, sentence in enumerate(sentences):
+        if not _SKIP_STEP.match(sentence):
+            continue
+        rider = sentences[index + 1] if index + 1 < len(sentences) else ""
+        match = _SKIP_RIDER_LIFE.match(rider)
+        if match is None:
+            return None
+        count = match.group("count")
+        return DrawStepSkip(
+            life_gain=int(count) if count.isdigit() else _COUNT_WORDS[count]
+        )
+    return None
+
+
+def draw_step_skip_line(normalized_line: str) -> bool:
+    """Whether *normalized_line* is one of the two sentences the template owns.
+
+    Read by the support gate and by `scripts/parse_coverage.py`, so what is
+    implemented and what is claimed cannot drift — the same pairing
+    `enter_effect_line` uses.
+    """
+    line = normalized_line.strip().lower().rstrip(".")
+    return bool(_SKIP_STEP.match(line) or _SKIP_RIDER_LIFE.match(line))

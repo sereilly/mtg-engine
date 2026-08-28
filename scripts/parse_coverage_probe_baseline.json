@@ -65,6 +65,20 @@
   ]
  },
  {
+  "card": "Blood of the Martyr",
+  "clause": "until end of turn, if damage would be dealt to any creature, you may have that damage dealt to you instead",
+  "ignored": [
+   "any"
+  ]
+ },
+ {
+  "card": "Bone Flute",
+  "clause": "all creatures get -1/-0 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Brine Hag",
   "clause": "change the base power and toughness of all creatures that dealt damage to it this turn to 0/2",
   "ignored": [
@@ -91,6 +105,20 @@
   "clause": "destroy all black creatures",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Eater of the Dead",
+  "clause": "if this creature is tapped, exile target creature card from a graveyard and untap this creature",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Eternal Flame",
+  "clause": "eternal flame deals x damage to target opponent or planeswalker and half x damage, rounded up, to you, where x is the number of mountains you control",
+  "ignored": [
+   "flame"
   ]
  },
  {
@@ -174,6 +202,20 @@
   ]
  },
  {
+  "card": "Goblin Shrine",
+  "clause": "it deals 1 damage to each goblin creature",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Goblin Wizard",
+  "clause": "you may put a goblin permanent card from your hand onto the battlefield",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Hazezon Tamar",
   "clause": "exile all sand warriors",
   "ignored": [
@@ -237,6 +279,20 @@
   ]
  },
  {
+  "card": "Marsh Gas",
+  "clause": "all creatures get -2/-0 until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Martyr's Cry",
+  "clause": "exile all white creatures. for each creature exiled this way, its controller draws a card",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Mishra's Factory",
   "clause": "target assembly-worker creature gets +1/+1 until end of turn",
   "ignored": [
@@ -248,6 +304,13 @@
   "clause": "destroy all artifacts, creatures, and enchantments",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Orc General",
+  "clause": "other orc creatures get +1/+1 until end of turn",
+  "ignored": [
+   "creatures"
   ]
  },
  {
@@ -281,6 +344,27 @@
   "clause": "you may have this enchantment become a 3/3 sphinx creature with flying in addition to its other types until end of turn",
   "ignored": [
    "have"
+  ]
+ },
+ {
+  "card": "Riptide",
+  "clause": "tap all blue creatures",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Runesword",
+  "clause": "target attacking creature gets +2/+0 until end of turn. when that creature leaves the battlefield this turn, sacrifice this artifact. if the creature deals damage to a creature this turn, the creature dealt damage can't be regenerated this turn. if a creature dealt damage by the targeted creature would die this turn, exile that creature instead",
+  "ignored": [
+   "targeted"
+  ]
+ },
+ {
+  "card": "Season of the Witch",
+  "clause": "destroy all untapped creatures that didn't attack this turn, except for creatures that couldn't attack",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -320,6 +404,14 @@
   ]
  },
  {
+  "card": "Spitting Slug",
+  "clause": "you may pay {1}{g}. if you do, this creature gains first strike until end of turn. otherwise, each creature blocking or blocked by this creature gains first strike until end of turn",
+  "ignored": [
+   "each",
+   "creature"
+  ]
+ },
+ {
   "card": "Subira, Tulzidi Caravanner",
   "clause": "another target creature with power 2 or less can't be blocked this turn",
   "ignored": [
@@ -336,6 +428,13 @@
  {
   "card": "The Wretched",
   "clause": "gain control of all creatures blocking this creature for as long as you control this creature",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Tivadar's Crusade",
+  "clause": "destroy all goblins",
   "ignored": [
    "all"
   ]
@@ -426,10 +525,25 @@
   ]
  },
  {
+  "card": "Wand of Ith",
+  "clause": "target player reveals a card at random from their hand. if it's a land card, that player discards it unless they pay 1 life. if it isn't a land card, the player discards it unless they pay life equal to its mana value",
+  "ignored": [
+   "card,",
+   "card,"
+  ]
+ },
+ {
   "card": "Whirling Dervish",
   "clause": "if this creature dealt damage to an opponent this turn, put a +1/+1 counter on it",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Worms of the Earth",
+  "clause": "any player may sacrifice two lands of their choice or have this enchantment deal 5 damage to that player. if a player does either, destroy this enchantment",
+  "ignored": [
+   "either,"
   ]
  },
  {

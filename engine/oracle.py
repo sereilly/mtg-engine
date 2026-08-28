@@ -3280,7 +3280,7 @@ def _derived_static_claims(
     """
     from .card_hooks import DRAW_STEP_MODIFIERS
     from .cost_modifiers import cost_modifier_claims_line
-    from .draw_step_modifiers import draw_step_bonus_for
+    from .draw_step_modifiers import draw_step_bonus_for, draw_step_skip_for
     from .enter_effects import enter_effect_line
     from .evasion_negation import negated_evasion_abilities
     from .extra_triggers import extra_triggers_for
@@ -3365,6 +3365,15 @@ def _derived_static_claims(
     # sentence about *skipping* one. Deleting that fallback is what exposed it —
     # tests/engine/test_derived_support.py named the card immediately.
     if card_name in DRAW_STEP_MODIFIERS:
+        claims.append("draw_step_modifiers")
+    # "If you would begin your draw step, you may skip that step instead. If you
+    # do, you gain 2 life." (Fasting.) The text-keyed twin of the hook above,
+    # asked of the whole card because the template is two sentences: the skip
+    # and the rider it buys. `draw_step_skip_for` returns None for a rider
+    # phases/draw_step.py cannot carry out, so a card printing an unreadable one
+    # is reported unsupported naming the clause rather than skipping its step
+    # and forgetting what the skip was for.
+    if draw_step_skip_for(oracle_text) is not None:
         claims.append("draw_step_modifiers")
     if any(
         cost_modifier_claims_line(normalize_creature_line(line))

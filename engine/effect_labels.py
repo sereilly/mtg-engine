@@ -40,6 +40,23 @@ from __future__ import annotations
 # Instruction kind -> label, for an ability the grammar reads in the **activated**
 # position (the clause right of an ability's colon).
 ACTIVATED_LABELS: dict[str, str] = {
+    # --- The Dark ---
+    # Declared rather than defaulted, for the reason the whole table exists: the
+    # category default would bucket each of these by the *grammar family* its
+    # kind sits in, which is not the vocabulary `SimulationResult` and the
+    # support report were built on. Bone Flute is the tell — it is a shipped
+    # card that had a settled bucket, and it only appears here because Orc
+    # General's narrowed anthem generalised its kind out of a bespoke one.
+    "buff_creatures_global": "activated_pump",
+    "grant_cant_be_blocked_by_until_eot": "activated_evasion",
+    "grant_half_prevention_shield": "activated_prevent",
+    "skip_next_untap": "activated_tapping",
+    "swap_controller_land_mana_until_eot": "activated_mana",
+    "exile_target_permanent": "activated_destruction",
+    # "Unless an opponent pays {2}, gain control of target artifact…"
+    # (Scarwood Bandits). The offer is the control change's price, not an effect
+    # of its own, so the ability reports what it *does* if the offer is declined.
+    "unless_player_pays": "activated_control",
     "add_counter_to_self": "activated_counter",
     "add_power_counters_to_self": "activated_counter",
     # Jandor's Saddlebags. Declared here rather than taken from the "tapping"
@@ -272,6 +289,18 @@ ACTIVATED_LABELS: dict[str, str] = {
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
 # position (the clause after a trigger condition).
 TRIGGERED_LABELS: dict[str, str] = {
+    # --- The Dark ---
+    # Each names what the ability is *for*, which is the question the support
+    # report and `SimulationResult` ask. The `may` wrappers among this set's new
+    # triggers are in TRIGGERED_LABELS_BY_CONDITION instead, because a wrapper
+    # says nothing about its contents and the condition is the only half of the
+    # pair that does.
+    "create_copy_token": "triggered_token",
+    "exile_created_token": "triggered_exile",
+    "destroy_self": "triggered_destruction",
+    "destroy_all_matching": "triggered_destruction",
+    "deal_damage_each_matching": "triggered_damage",
+    "deal_damage_to_those_damaged_this_game": "triggered_damage",
     "add_corpse_counters_for_each_creature_died": "triggered_counter",
     "add_counter_to_self": "triggered_counter",
     # A CR 122.1 counter (Malefic Scythe, Armageddon Clock). The same
@@ -449,6 +478,21 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # optional clause behind it ("remove a counter … gain 1 life") is neither a
     # draw nor damage.
     ("upkeep_self", "may"): "upkeep_effect",
+    # The Dark's pay-or-consequence upkeeps, which reach the stack as an
+    # ordinary optional trigger rather than through the `upkeep_pay_or_*` kinds:
+    # Curse Artifact and Erosion ask the *enchanted permanent's* controller,
+    # Worms of the Earth asks every player. Same bucket as the four
+    # `upkeep_pay_or_*` entries above — what differs is who is asked, which is
+    # payload, not a different kind of ability.
+    ("upkeep_enchanted_controller", "may"): "upkeep_effect",
+    ("upkeep_each", "may"): "upkeep_effect",
+    # Mana Vortex counters its own spell unless a land is sacrificed. The
+    # condition is what makes this a cast trigger; the wrapper is silent.
+    ("self_cast", "may"): "triggered_counterspells",
+    # Spitting Slug's first strike, bought or given away. `triggered_combat`
+    # rather than `triggered_pump`: both branches happen in combat and only one
+    # of them pumps anything of yours.
+    ("creature_blocks_or_blocked_by", "may"): "triggered_combat",
     # M21's seventeen optional triggers. `may` still says nothing about the
     # effect, and the *condition* is the only thing in the pair that does — so
     # each row names the moment rather than the effect, which is the honest

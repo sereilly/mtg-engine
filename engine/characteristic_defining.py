@@ -155,7 +155,12 @@ def _turn_split_land_count(match: re.Match) -> dict[str, object]:
         "scope": "opponents" if match.group("whose") == "your opponents" else "you",
         "plus": int(match.group("plus")),
         "only_during": "your_turn",
-        "otherwise": int(match.group("otherwise")),
+        # Not "otherwise": `handlers/control_flow.py` owns that key for the
+        # *else branch of a `may`*, and the guards that walk a composed
+        # effect recurse into it expecting a list of steps. Angry Mob put a
+        # bare number there and `test_front_end_safety` crashed trying to
+        # iterate a 2. A payload key means one thing across the engine.
+        "otherwise_value": int(match.group("otherwise")),
     }
 
 

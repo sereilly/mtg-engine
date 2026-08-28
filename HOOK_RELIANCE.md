@@ -12,9 +12,9 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**74 of 1044 supported cards (7.1%)** carry at least one name-keyed entry, across **80 entries** in 7 registries. The pool is 1044 cards, 100.0% supported.
+**74 of 1162 supported cards (6.4%)** carry at least one name-keyed entry, across **80 entries** in 7 registries. The pool is 1162 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **2,001 hand-written entries** covering **1,851 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **1,798 hand-written entries** covering **1,663 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
@@ -23,15 +23,13 @@ Held at this rate, supporting the 26,113-card release line would need about **2,
 | LEA | 290 | 290 (100.0%) | 44 (15.2%) | 388 | 41 (10.6%) | 48 | 16.6 |
 | LEB | 292 | 292 (100.0%) | 44 (15.1%) | 389 | 41 (10.5%) | 48 | 16.4 |
 | 2ED | 292 | 292 (100.0%) | 44 (15.1%) | 389 | 41 (10.5%) | 48 | 16.4 |
-| ARN | 78 | 78 (100.0%) | 24 (30.8%) | 107 | 22 (20.6%) | 26 | 33.3 |
+| ARN | 78 | 78 (100.0%) | 23 (29.5%) | 107 | 21 (19.6%) | 25 | 32.1 |
 | ATQ | 85 | 85 (100.0%) | 4 (4.7%) | 120 | 4 (3.3%) | 4 | 4.7 |
-| 3ED | 296 | 296 (100.0%) | 40 (13.5%) | 389 | 38 (9.8%) | 43 | 14.5 |
+| 3ED | 296 | 296 (100.0%) | 39 (13.2%) | 389 | 37 (9.5%) | 42 | 14.2 |
 | LEG | 310 | 310 (100.0%) | 2 (0.6%) | 430 | 2 (0.5%) | 2 | 0.6 |
+| DRK | 119 | 119 (100.0%) | 1 (0.8%) | 167 | 1 (0.6%) | 1 | 0.8 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| DRK *(measured)* | 119 | 57 (47.9%) | 0 (0.0%) | 70 | 0 (0.0%) | 0 | 0.0 |
-| **ALL (shipped, deduped)** | **1044** | **1044 (100.0%)** | **74 (7.1%)** | **1549** | **69 (4.5%)** | **80** | **7.7** |
-
-*(measured)* — DRK are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
+| **ALL (shipped, deduped)** | **1162** | **1162 (100.0%)** | **74 (6.4%)** | **1715** | **69 (4.0%)** | **80** | **6.9** |
 
 **Read the rows, not the average.** The base sets are near-identical reprint lists, so four of these rows are one data point wearing four hats — and the ALL row, deduped across reprints, is dominated by it. The independent comparison is between that block and the sets printed to a different brief.
 
@@ -70,7 +68,6 @@ Held at this rate, supporting the 26,113-card release line would need about **2,
 - **Drain Power** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Drop of Honey** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Earthbind** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Ebony Horse** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Erg Raiders** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Eye for an Eye** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Falling Star** (`CARD_LINE_INSTRUCTIONS`) — 1 line
@@ -117,6 +114,7 @@ Held at this rate, supporting the 26,113-card release line would need about **2,
 - **Simulacrum** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Sindbad** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Siren's Call** (`CARD_LINE_INSTRUCTIONS`) — 1 line
+- **Sorrow's Path** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Stone Giant** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Timetwister** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Volcanic Eruption** (`CARD_LINE_INSTRUCTIONS`) — 1 line
