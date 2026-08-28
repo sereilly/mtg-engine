@@ -266,39 +266,7 @@ class DeclareBlockersStepMixin:
         else:
             self.combat_blockers.pop(controller_index, None)
         self.combat_blockers_declared_by.add(controller_index)
-        for blocker_idx in assignments:
-            if 0 <= blocker_idx < len(defender.battlefield):
-                defender.battlefield[blocker_idx].metadata["blocked_this_combat"] = True
-        # "…all creatures that were blocked by that creature **this turn**"
-        # (Glyph of Doom). `blocked_this_combat` above cannot answer it: that
-        # flag is cleared by `end_combat` and says only *that* the creature
-        # blocked, not what. A turn may hold several combats and the sentence
-        # spans all of them, so the pair is recorded per turn and by id — an
-        # index renumbers the moment anything leaves (CR 400.7) — and swept
-        # with the rest of the turn's records at cleanup.
-        for _blocker_idx, blocker, blocked in self._resolved_block_pairs(
-            controller_index, assignments
-        ):
-            record = blocker.metadata.setdefault("blocked_attacker_ids_this_turn", [])
-            # "…the player who controlled that creature **the last time it
-            # became blocked by that Wall**" (Glyph of Reincarnation). Who
-            # controls the attacker is CR 613 layer 2 and moves; by the time
-            # that sentence is read the creature is in a graveyard and has no
-            # controller at all. So the seat is frozen here, beside the id it
-            # keys, at the one moment the block happens — and overwritten on
-            # each later block by the same blocker, which is precisely what
-            # "the last time" says. Kept on the *blocker* rather than on the
-            # attacker because the sentence asks about blocks by one named
-            # Wall, not about every block the creature was in.
-            controllers = blocker.metadata.setdefault(
-                "blocked_attacker_controllers_this_turn", {}
-            )
-            for _attacker_idx, attacker in blocked:
-                if attacker.permanent_id not in record:
-                    record.append(attacker.permanent_id)
-                seat = self.controller_index_of(attacker)
-                if seat is not None:
-                    controllers[attacker.permanent_id] = seat
+        self._record_block_history(controller_index, assignments)
         self._prune_combat_state()
         # CR 802.4: blocks lock in only once every defending player has declared
         # (or been auto-skipped) in APNAP order — not after this one defender.
@@ -773,6 +741,12 @@ class DeclareBlockersStepMixin:
         else:
             self.combat_blockers.pop(defender_player_index, None)
         self.combat_band_blocks.pop(blocker_index, None)
+        # CR 506.4: it stops being a blocking creature, so the division of its
+        # combat damage among the creatures it was blocking (CR 510.1a) is gone
+        # with the block. Left behind, that map would divide the damage of
+        # whatever is blocking from this slot next — the same class of staleness
+        # `_renumber_combat_after_removal` exists for, one map further on.
+        self.combat_multiblock_damage.pop(blocker_index, None)
         defender = self.players[defender_player_index]
         if 0 <= blocker_index < len(defender.battlefield):
             removed = defender.battlefield[blocker_index]
@@ -789,6 +763,57 @@ class DeclareBlockersStepMixin:
                 active.battlefield[a_idx].blocked = False
         # CR 702.22h: band block propagation is recomputed from combat_blockers.
         self._apply_band_block_propagation()
+
+    def _record_block_history(
+        self, controller_index: int, assignments: dict[int, list[int]]
+    ) -> None:
+        """Stamp what each blocker in *assignments* is now blocking.
+
+        The one place a block is written onto the permanents involved, and it is
+        one place because a block happens in two ways: the declaration (CR
+        509.1g) and an effect that makes a creature block (Sorrow's Path's
+        reassignment). A record kept only by the declaration would answer
+        "which creatures did that Wall block this turn?" with the blocks the
+        *player* chose and none of the blocks an effect imposed — a silent
+        undercount, since the reader (Glyph of Doom, Glyph of Delusion,
+        Glyph of Reincarnation) cannot tell an empty record from no block.
+        """
+        if not (0 <= controller_index < len(self.players)):
+            return
+        defender = self.players[controller_index]
+        for blocker_idx in assignments:
+            if 0 <= blocker_idx < len(defender.battlefield):
+                defender.battlefield[blocker_idx].metadata["blocked_this_combat"] = True
+        # "…all creatures that were blocked by that creature **this turn**"
+        # (Glyph of Doom). `blocked_this_combat` above cannot answer it: that
+        # flag is cleared by `end_combat` and says only *that* the creature
+        # blocked, not what. A turn may hold several combats and the sentence
+        # spans all of them, so the pair is recorded per turn and by id — an
+        # index renumbers the moment anything leaves (CR 400.7) — and swept
+        # with the rest of the turn's records at cleanup.
+        for _blocker_idx, blocker, blocked in self._resolved_block_pairs(
+            controller_index, assignments
+        ):
+            record = blocker.metadata.setdefault("blocked_attacker_ids_this_turn", [])
+            # "…the player who controlled that creature **the last time it
+            # became blocked by that Wall**" (Glyph of Reincarnation). Who
+            # controls the attacker is CR 613 layer 2 and moves; by the time
+            # that sentence is read the creature is in a graveyard and has no
+            # controller at all. So the seat is frozen here, beside the id it
+            # keys, at the one moment the block happens — and overwritten on
+            # each later block by the same blocker, which is precisely what
+            # "the last time" says. Kept on the *blocker* rather than on the
+            # attacker because the sentence asks about blocks by one named
+            # Wall, not about every block the creature was in.
+            controllers = blocker.metadata.setdefault(
+                "blocked_attacker_controllers_this_turn", {}
+            )
+            for _attacker_idx, attacker in blocked:
+                if attacker.permanent_id not in record:
+                    record.append(attacker.permanent_id)
+                seat = self.controller_index_of(attacker)
+                if seat is not None:
+                    controllers[attacker.permanent_id] = seat
 
     def _fire_creature_blocks_triggers(self, controller_index: int, assignments: dict[int, list[int]]) -> None:
         """Put each blocker's own "whenever this creature blocks" triggers on
@@ -1012,7 +1037,8 @@ class DeclareBlockersStepMixin:
                 )
 
     def _fire_becomes_blocked_triggers(
-        self, controller_index: int, assignments: dict[int, list[int]]
+        self, controller_index: int, assignments: dict[int, list[int]],
+        *, already_blocked: bool = False,
     ) -> None:
         """An attacker's own "whenever this creature becomes blocked" triggers.
 
@@ -1024,6 +1050,15 @@ class DeclareBlockersStepMixin:
         dispatcher can exist at all. It never had one: `creature_becomes_blocked`
         parsed in both tables and no combat step fired it, the same shape as
         `creature_attacks_or_blocks` and `creature_you_control_dies` before it.
+
+        *already_blocked* is for the second way a block happens: an effect that
+        reassigns blockers between attackers that were **already** blocked
+        (Sorrow's Path). CR 509.1h keeps such an attacker blocked throughout, so
+        CR 509.3c's once-per-creature half does not fire again — it triggers
+        "only if the attacking creature was an unblocked creature at that time"
+        — while CR 509.3d's per-blocker half does, because that creature was not
+        already blocking that attacker. One flag rather than a second
+        dispatcher, so the two halves cannot drift apart.
         """
         if not (0 <= self.active_player_index < len(self.players)):
             return
@@ -1064,7 +1099,7 @@ class DeclareBlockersStepMixin:
             ]
             for source, source_seat, trig in watchers:
                 if not trig.condition.payload.get("blocker_filter"):
-                    matched = blockers[:1]
+                    matched = [] if already_blocked else blockers[:1]
                 else:
                     matched = [
                         b for b in blockers

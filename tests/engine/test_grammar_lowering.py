@@ -661,16 +661,22 @@ def test_a_sacrifice_narrowing_the_prompt_can_test_rides_the_filter():
 
 
 def test_a_sacrifice_narrowing_the_prompt_cannot_test_still_refuses():
-    """"A blocking creature" is a restriction no filter payload the prompt
-    reads can express, so the line refuses rather than sacrificing any creature
-    at all. That is the whole reason the payload is gated on a key set instead
-    of being handed over whole.
+    """A narrowing whose payload key is outside the **promised** set refuses the
+    whole line rather than sacrificing any creature at all. That is the reason
+    the payload is gated on a key set instead of being handed over whole: the
+    gate reads the promise (``TESTABLE_SUBJECT_FILTER_KEYS`` /
+    ``OBJECT_ONLY_FILTER_KEYS``), never a hope that some matcher downstream
+    happens to answer.
 
-    The example used to be "an attacking creature"; that key joined
-    ``TESTABLE_SUBJECT_FILTER_KEYS`` (with the matcher behind it) for
-    Disharmony's untap, so the guard keeps its point with the narrowing that
-    is still outside the set."""
-    result = compile_line("Sacrifice a blocking creature.", card_name="Test")
+    The example has moved twice, and both moves are the guard working rather
+    than rotting: it was "an attacking creature" until ``attacking_only`` joined
+    the set for Disharmony's untap, and "a blocking creature" until
+    ``blocking_only`` joined it for Righteousness' picker and Sorrow's Path's
+    two blockers. What is left outside the promise is the *union* spelling —
+    ``any_states``, "attacking **or** blocking" — so that is what the guard
+    names now.
+    """
+    result = compile_line("Sacrifice an attacking or blocking creature.", card_name="Test")
     assert result.parsed and not result.lowered
 
 

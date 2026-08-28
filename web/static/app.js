@@ -1889,6 +1889,9 @@ function activatedAbilityRequiresTargetAny(card) { return specKind(card) === "an
 function activatedAbilityRequiresTargetPlayer(card) { return specKind(card) === "player"; }
 function activatedAbilityRequiresTargetCreatureGrant(card) { return specKind(card) === "creature"; }
 function activatedAbilityRequiresTargetStackSpell(card) { return specKind(card) === "stack"; }
+// The activation twin of `cardRequiresTargetRoles`: several targets of
+// different kinds in dependency order (Sorrow's Path).
+function activatedAbilityRequiresTargetRoles(card) { return specKind(card) === "roles"; }
 
 function cardRequiresManaColorChoice(card) {
   if (!card || typeof card === "string") return false;
@@ -8175,6 +8178,19 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
+  // An ability naming several targets of **different kinds**, chosen in
+  // dependency order (Sorrow's Path: "two target blocking creatures controlled
+  // by the same opponent", where the second is settled by whose creature the
+  // first is). The same walk the cast side runs — the backend ships the whole
+  // choice tree on `valid_targets` — so this is the cast prompt with the
+  // activation's source permanent carried beside it.
+  if (activatedAbilityRequiresTargetRoles(card)) {
+    startCastRolesTargetPrompt(card, "activate", {
+      sourcePermanentIndex: permanentIndex, abilityIndex,
+    });
+    return;
+  }
+
   // Activated abilities that destroy a target creature (e.g. Royal Assassin)
   // must let the player choose which creature before the ability is activated.
   // The permanent's activation target_spec supplies the kind and legal targets.
@@ -8928,7 +8944,7 @@ function roleTargetsHint() {
   return `Choose the ${roleTargetNoun(role)} for ${p.cardName} (${step}).`;
 }
 
-function startCastRolesTargetPrompt(card, castAction = "cast") {
+function startCastRolesTargetPrompt(card, castAction = "cast", extra = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
   const spec = targetSpecOf(card);
@@ -8951,6 +8967,11 @@ function startCastRolesTargetPrompt(card, castAction = "cast") {
     roles,
     roleChosen: [],
     roleOptions: options,
+    // `sourcePermanentIndex` / `abilityIndex` for an *activated* ability whose
+    // roles are chosen the same way (Sorrow's Path's two blockers). The walk is
+    // identical — CR 602.2b reaches the same CR 601.2c — so only the action
+    // body at the end of it differs.
+    ...(extra || {}),
     ...indexValidTargets(options),
   };
   renderActivationPrompt();
@@ -8994,18 +9015,33 @@ function confirmRoleTargets() {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "roles") return;
   const { cardName, castAction, roleChosen } = p;
+  const activating = castAction === "activate";
   // In role order, which is the order the engine's own roles list is in — the
   // wire is positional and both ends read one list.
-  const body = {
-    seat,
-    action: castAction || "cast",
-    card_name: cardName,
-    target_permanent_ids: roleChosen.map((t) => t.id),
-  };
+  const body = activating
+    ? withPermanentId(
+        {
+          seat,
+          action: "activate",
+          permanent_name: cardName,
+          permanent_index: p.sourcePermanentIndex,
+          target_permanent_ids: roleChosen.map((t) => t.id),
+        },
+        "permanent_id", seat, p.sourcePermanentIndex,
+      )
+    : {
+        seat,
+        action: castAction || "cast",
+        card_name: cardName,
+        target_permanent_ids: roleChosen.map((t) => t.id),
+      };
+  if (activating && Number.isInteger(p.abilityIndex)) body.ability_index = p.abilityIndex;
+  const verb = activating ? "Activating" : "Casting";
+  const done = activating ? "Activated" : "Cast";
   clearPendingCastTargeting();
-  updateActionHint(`Casting ${cardName}...`);
+  updateActionHint(`${verb} ${cardName}...`);
   sendAction(body)
-    .then(() => updateActionHint(`Cast ${cardName}.`))
+    .then(() => updateActionHint(`${done} ${cardName}.`))
     .catch((e) => updateActionHint(e.message, true))
     .finally(() => clearPendingHandCast());
 }

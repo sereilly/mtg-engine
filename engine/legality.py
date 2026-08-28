@@ -545,28 +545,41 @@ class LegalityMixin:
             if earlier_index is not None and earlier_index < len(chosen)
             else None
         )
-        return lambda perm: role_relation_holds(role, earlier, perm)
+        return lambda perm: role_relation_holds(role, earlier, perm, self)
 
     def _role_target_walk(
         self, caster_index: int, card: CardDefinition, spec: dict,
-        chosen: tuple, *, for_cast: bool,
+        chosen: tuple, *, for_cast: bool, source_permanent=None,
+        ability_instruction=None, ability_source=None,
     ) -> list[dict]:
-        """The whole choice tree of a roles spell, depth-first.
+        """The whole choice tree of a roles spell **or ability**, depth-first.
 
         Each entry is one legal target for the current role with the entries
         legal *after* it under ``next`` - so the browser can walk the roles in
         one payload rather than asking the server again between clicks, and so
         a role 0 candidate that leaves role 1 with nothing to choose is visible
         as an empty ``next`` rather than as a dead end discovered mid-prompt.
+
+        The three ability keywords are carried, not defaulted away: an
+        *activated* ability's roles (Sorrow's Path's two blockers) are
+        enumerated with the same source-permanent and instruction narrowing
+        every one-target ability gets, and a walk that dropped them would offer
+        a list the activation gate then refuses.
         """
         options = self.role_target_options(
-            caster_index, card, spec, chosen, for_cast=for_cast
+            caster_index, card, spec, chosen, for_cast=for_cast,
+            source_permanent=source_permanent,
+            ability_instruction=ability_instruction,
+            ability_source=ability_source,
         )
         walked: list[dict] = []
         for option in options:
             perm = self.permanent_at(option.get("seat"), option.get("index"))
             following = self._role_target_walk(
-                caster_index, card, spec, chosen + (perm,), for_cast=for_cast
+                caster_index, card, spec, chosen + (perm,), for_cast=for_cast,
+                source_permanent=source_permanent,
+                ability_instruction=ability_instruction,
+                ability_source=ability_source,
             )
             if not following and len(chosen) + 1 < len(spec_roles(spec)):
                 # CR 601.2c: every target of the spell is chosen, so a first
@@ -579,7 +592,8 @@ class LegalityMixin:
 
     def _role_targets_legal(
         self, caster_index: int, card: CardDefinition, spec: dict,
-        chosen: list, *, for_cast: bool,
+        chosen: list, *, for_cast: bool, source_permanent=None,
+        ability_instruction=None, ability_source=None,
     ) -> bool:
         """Whether *chosen* - one permanent per role, in role order - is a legal
         announcement, asked through the very list the picker was built from."""
@@ -588,7 +602,10 @@ class LegalityMixin:
             return False
         for index in range(len(roles)):
             options = self.role_target_options(
-                caster_index, card, spec, tuple(chosen[:index]), for_cast=for_cast
+                caster_index, card, spec, tuple(chosen[:index]), for_cast=for_cast,
+                source_permanent=source_permanent,
+                ability_instruction=ability_instruction,
+                ability_source=ability_source,
             )
             if not any(
                 self.permanent_at(option.get("seat"), option.get("index"))
@@ -642,6 +659,20 @@ class LegalityMixin:
             getattr(spec_ability, "instruction", None)
         )
         spec["requires_target"] = spec["kind"] != "none"
+        if spec["kind"] == ROLES_TARGET_KIND:
+            # An **ability** whose targets are of different kinds, chosen in
+            # dependency order (CR 602.2b reaches CR 601.2c). The same walk the
+            # cast side runs, and it has to be the same one: `_enumerate_targets`
+            # has no arm for a roles spec, so an ability described this way was
+            # handed an empty list and refused for want of a target it could
+            # not enumerate.
+            spec["valid_targets"] = self._role_target_walk(
+                controller_index, card, spec, (), for_cast=False,
+                source_permanent=source_permanent,
+                ability_instruction=ability_instruction,
+                ability_source=source_permanent,
+            )
+            return spec
         spec["valid_targets"] = self._enumerate_targets(
             controller_index, card, spec, for_cast=False,
             ability_instruction=ability_instruction,
@@ -749,6 +780,39 @@ class LegalityMixin:
         ):
             return None
         instruction = getattr(ability, "instruction", None)
+        if kind == ROLES_TARGET_KIND:
+            # An ability naming several targets of *different* kinds, chosen in
+            # dependency order (Sorrow's Path's two blockers, the second settled
+            # by whose creature the first is). There is no second gate behind
+            # this one — the cast side defers a roles announcement to
+            # ``_validate_cast_targets`` and an activation has nothing of the
+            # sort — so the whole announcement is checked here, through the very
+            # walk the picker was built from.
+            ability_instruction = _targeting_instruction(instruction)
+            refused = f"no valid target for {card.name}"
+            named = [
+                self.permanent_by_id(pid)
+                for pid in (target_permanent_ids or [])
+                if isinstance(pid, int)
+            ]
+            if named:
+                legal = self._role_targets_legal(
+                    controller_index, card, spec, named, for_cast=False,
+                    source_permanent=source_permanent,
+                    ability_instruction=ability_instruction,
+                    ability_source=source_permanent,
+                )
+                return None if legal else refused
+            # Nothing named: CR 602.2b's half of the question — could the whole
+            # announcement be made at all? An empty walk means no, and the cost
+            # is never paid.
+            walked = self._role_target_walk(
+                controller_index, card, spec, (), for_cast=False,
+                source_permanent=source_permanent,
+                ability_instruction=ability_instruction,
+                ability_source=source_permanent,
+            )
+            return None if walked else refused
         quantifiers = _ability_target_quantifiers(instruction)
         mandatory = "target" in quantifiers or (
             instruction is not None and instruction.kind in _QUANTIFIERLESS_TARGET_KINDS
@@ -1378,6 +1442,16 @@ class LegalityMixin:
                 return False
             # Singing Tree: only currently-attacking creatures are legal choices.
             if spec.get("attacking_only") and not perm.attacking:
+                return False
+            # Righteousness, Sorrow's Path: only creatures that are currently
+            # blocking are legal choices. The narrower half of the `any_states`
+            # union below, asked of the same `state_holds` table so a picker and
+            # a resolution cannot disagree about what "blocking" means. Enforced
+            # here as well as at resolution because CR 602.2b refuses an
+            # activation outright when no legal target exists — the cast side
+            # reached the same answer through its own `_validate_cast_targets`
+            # probe, and an *ability* narrowed this way had nothing at all.
+            if spec.get("blocking_only") and not state_holds(perm, "blocking"):
                 return False
             # The Legends pinger cycle: "target attacking or blocking creature".
             # Enforced here as well as at resolution, because CR 602.2b refuses

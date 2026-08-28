@@ -717,6 +717,16 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     if payload.get("attacking_only") and not perm.attacking:
         return False
 
+    # "target **blocking** creature" (Righteousness), "two target blocking
+    # creatures …" (Sorrow's Path). The other half of the union above, asked of
+    # the same ``state_holds`` table — the noun parser has produced this key
+    # since the state adjectives were read, and until it was answered here the
+    # narrowing was carried by the payload and tested by nothing that reads a
+    # filter: ``subject_matches`` dropped it, so a role's re-check at CR 608.2b
+    # and the picker both admitted a creature that is not blocking at all.
+    if payload.get("blocking_only") and not state_holds(perm, "blocking"):
+        return False
+
     # "a creature **that has been dealt damage this turn**" (Giant Shark). A
     # record stamped by `damage_events.deal_damage`, not a read of
     # ``damage_marked``: marked damage is what is *left* on the creature, and
@@ -1026,7 +1036,7 @@ def roles_still_legal(
             ),
             None,
         )
-        if not role_relation_holds(role, earlier, perm):
+        if not role_relation_holds(role, earlier, perm, game):
             return False
         resolved.append(perm)
     return bool(roles)
