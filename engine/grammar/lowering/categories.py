@@ -554,6 +554,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # what it changes is the land's mana ability, and nothing else in the
     # engine asks about that.
     "produce_mana_instead": "mana",
+    # The class-scoped, until-end-of-turn twin (Deep Water). Same category:
+    # what changes is which lands it covers and how long it lasts.
+    "swap_controller_land_mana_until_eot": "mana",
     # "For one spell this turn, you may spend mana as though it were mana of
     # any type…" (North Star.) A CR 609.4 permission the payment reads, not a
     # production of mana — the same category because what it is about is how

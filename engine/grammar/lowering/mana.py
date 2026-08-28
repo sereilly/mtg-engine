@@ -9,10 +9,11 @@ never uses the stack.
 """
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import object_only_filter
+from ...subject_filters import object_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    _REST_OF_TURN,
     _amount_payload,
     _filter_payload,
     _targets_payload,
@@ -250,6 +251,18 @@ def _lower_produces_mana_instead(
     ``engine/targeting.py``'s picker — so the two agree on which lands are
     legal instead of each reading the printed noun again.
     """
+    if node.by_controller:
+        return _lower_controller_mana_swap(node)
+    if node.duration.kind is not None:
+        # CR 611.2's "indefinitely" is what the recorded swap gives, and the
+        # record dies with the permanent (CR 400.7). A printed window would need
+        # a sweep to end it, and there is none for this record.
+        raise LoweringError("a targeted produced-mana swap has no window", node=node)
+    if node.replaced == ast.ANY_OTHER_TYPE:
+        raise LoweringError(
+            "a targeted produced-mana swap names the symbol it replaces",
+            node=node,
+        )
     described = _targets_payload(node.target)
     if described is None:
         raise LoweringError(
@@ -266,6 +279,58 @@ def _lower_produces_mana_instead(
                 "replaced": node.replaced,
                 "produced": node.produced,
             },
+        ),
+    )
+
+
+def _lower_controller_mana_swap(
+    node: ast.ProducesManaInstead,
+) -> tuple[OracleInstruction, ...]:
+    """Deep Water: "Until end of turn, if you tap a land you control for mana,
+    it produces {U} instead of any other type."
+
+    A swap over a *class* rather than one named land, which is why it is a
+    different instruction from the targeted one above rather than the same one
+    with a wider filter: the record cannot live on a permanent. The lands it
+    covers include ones that enter after this resolves, and which of them the
+    seat controls is answered when each is tapped — so the record hangs off the
+    seat and the filter travels with it
+    (``engine/land_mana_swaps.py``).
+
+    Three refusals, each a way the sentence could mean more than it says:
+
+    * "instead of any other type" and nothing narrower. A named symbol here
+      would be a swap that fires on some of the seat's lands and not others,
+      and the record has no per-symbol reading.
+    * a window the sweeps give. "Until end of turn" is the one the cleanup step
+      ends; anything else would be a swap nothing ever lifts.
+    * a filter the matcher can test, and one naming the seat's own lands. A
+      restriction ``subject_matches`` cannot answer would be dropped where the
+      swap is applied, which is a seat whose *opponents*' lands change colour.
+    """
+    if node.replaced != ast.ANY_OTHER_TYPE:
+        raise LoweringError(
+            "a controller-wide mana swap replaces every type the land makes",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError("a recorded mana swap lasts exactly this turn", node=node)
+    filt = node.target.filter
+    if node.target.quantifier not in ("a", "all", "each") or filt.controller != "you":
+        raise LoweringError(
+            "a controller-wide mana swap covers the lands its controller has",
+            node=node,
+        )
+    described = _filter_payload(filt)
+    untestable = untestable_filter_keys(described)
+    if untestable:
+        raise LoweringError(
+            "a mana swap cannot test " + ", ".join(sorted(untestable)), node=node
+        )
+    return (
+        OracleInstruction(
+            "swap_controller_land_mana_until_eot", "",
+            {"produced": node.produced, "lands": described},
         ),
     )
 

@@ -87,6 +87,7 @@ from .effects import (
     _parse_modal_head,
     _parse_player_adds_mana,
     _parse_produces_instead,
+    _parse_you_tap_produces_instead,
     _parse_spend_mana_as_though,
     _parse_prevent,
     _parse_double,
@@ -524,6 +525,12 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # reading.
     if stream.at_word("if"):
         produces = _parse_produces_instead(stream)
+        if produces is not None:
+            return produces
+        # "…if **you tap** a land you control for mana, it produces {U} instead
+        # of any other type." (Deep Water.) The active-voice spelling of the
+        # same swap, beside it and refusing the same way.
+        produces = _parse_you_tap_produces_instead(stream)
         if produces is not None:
             return produces
 

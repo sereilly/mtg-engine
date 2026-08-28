@@ -77,6 +77,7 @@ from .mana import (
     _parse_add_mana,
     _parse_player_adds_mana,
     _parse_produces_instead,
+    _parse_you_tap_produces_instead,
     _parse_spend_mana_as_though,
 )
 from .cards import (
@@ -188,6 +189,7 @@ __all__ = [
     "_parse_put_exiled_with_source",
     "_parse_player_adds_mana",
     "_parse_produces_instead",
+    "_parse_you_tap_produces_instead",
     "_parse_spend_mana_as_though",
     "_parse_double",
     "_parse_switch_pt",

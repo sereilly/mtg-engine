@@ -29,6 +29,7 @@ from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...land_types import change_land_type
 from ...models import CardDefinition, Permanent
 from ...oracle_types import DISCARDED_BY_SEAT
+from ... import land_mana_swaps
 from ...pending_choices import CHOICE_SPECS, PendingChoice, register_choice, spec_for
 from ...replacement_choices import pending_choices_for
 from ...resumption import resume_after_answer, run_resumable
@@ -1885,8 +1886,24 @@ class PendingChoicesMixin:
         could afford and lost the spell.
         """
         return plan_payment(
-            player.mana_pool, untapped_mana_lands(self.controlled_by(player)), cost
+            player.mana_pool, untapped_mana_lands(self.controlled_by(player)), cost,
+            produces=self._land_payment_colors,
         )
+
+    def _land_payment_colors(self, land) -> tuple[str, ...]:
+        """What tapping *land* would actually put in its controller's pool.
+
+        The permanent's own answer, unless a seat-wide swap says otherwise —
+        "Until end of turn, if you tap a land you control for mana, it produces
+        {U} instead of any other type" (Deep Water). That record hangs off the
+        seat, so only a caller with the game can resolve it, which is why the
+        planner takes this as a hook rather than reading the permanent itself
+        (``engine/land_mana_swaps.py``). Without it the planner would tap a
+        Swamp to pay a {B} the tap will not produce, and report a cost payable
+        that is not.
+        """
+        swapped = land_mana_swaps.swapped_symbol(self, land)
+        return (swapped,) if swapped else tuple(land.effective_produced_mana or ())
 
     def _default_mana_payment(self, choice: PendingChoice) -> None:
         controller = self.players[choice.player_index]
@@ -2631,6 +2648,7 @@ class PendingChoicesMixin:
             player.mana_pool,
             untapped_mana_lands(self.controlled_by(player)),
             entry.get("cost") or {},
+            produces=self._land_payment_colors,
         )
 
     def _player_can_pay_optional(self, player, entry: dict) -> bool:

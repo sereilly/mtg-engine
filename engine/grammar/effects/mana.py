@@ -361,6 +361,66 @@ def _parse_produces_instead(stream: TokenStream) -> "ast.ProducesManaInstead | N
     return ast.ProducesManaInstead(target, replaced=replaced, produced=produced)
 
 
+def _parse_you_tap_produces_instead(
+    stream: TokenStream,
+) -> "ast.ProducesManaInstead | None":
+    """``If you tap <objects> for mana, it produces {X} instead of any other
+    type.`` (Deep Water, with "Until end of turn," in front of it — the leading
+    duration the statement layer distributes.)
+
+    The same CR 611.2 / CR 305.7 swap :func:`_parse_produces_instead` reads, in
+    the active voice and about a *class* of lands rather than one named object.
+    Read as its own production rather than as a branch of that one because the
+    two sentences share no word after "if": one names the land and puts it in
+    the subject slot, the other names the tapper and puts the land in the
+    object slot.
+
+    Refuses without consuming, for that function's reason: "if" opens every
+    conditional in the pool.
+
+    Both ends are read. "instead of any other **type**" is not a colour — it is
+    everything the land would have produced — and a production that stopped at
+    "instead of" would compile Deep Water onto a swap of one unnamed symbol.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("if", "you", "tap"):
+        return None
+    try:
+        subject = parse_target_spec(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if subject is None or not stream.accept_phrase("for", "mana"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    # "**it** produces" — the land the condition just named, exactly as the
+    # passive spelling reads it.
+    if not stream.accept_phrase("it", "produces"):
+        stream.reset(mark)
+        return None
+    token = stream.peek()
+    produced = token.text.strip("{}") if token is not None and token.kind == MANA else ""
+    # One coloured symbol, spelled as the card prints it. A hybrid, a phyrexian
+    # or a generic pip is a symbol the record has no way to produce, and
+    # admitting one would arm a swap onto a symbol no mana pool has.
+    if len(produced) != 1 or not produced.isalpha():
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("instead", "of", "any", "other", "type"):
+        stream.reset(mark)
+        return None
+    return ast.ProducesManaInstead(
+        subject,
+        replaced=ast.ANY_OTHER_TYPE,
+        produced=produced,
+        by_controller=True,
+    )
+
+
 def _parse_spend_mana_as_though(stream: TokenStream) -> "ast.SpendManaAsThough | None":
     """``For <N> spell(s) this turn, you may spend mana as though it were mana
     of any color/type to pay that spell's mana cost.``

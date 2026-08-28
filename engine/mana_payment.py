@@ -29,7 +29,7 @@ matching and no reason to accept a heuristic.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Iterable, Sequence
+from typing import TYPE_CHECKING, Callable, Iterable, Sequence
 
 if TYPE_CHECKING:
     from .models import Permanent
@@ -92,7 +92,10 @@ def _match_colored(
 
 
 def plan_payment(
-    pool: dict[str, int], lands: Sequence["Permanent"], required: dict[str, int]
+    pool: dict[str, int],
+    lands: Sequence["Permanent"],
+    required: dict[str, int],
+    produces: "Callable[[Permanent], Sequence[str]] | None" = None,
 ) -> ManaPayment | None:
     """How *required* can be paid from *pool* plus tapping *lands*, or None.
 
@@ -100,6 +103,16 @@ def plan_payment(
     spent-in-advance and a land kept untapped is worth more than one that is
     not. Whatever colours the pool cannot cover are matched against the lands;
     the generic part is then paid by anything left over, pool before lands.
+
+    *produces* overrides what a land makes, for the effects that change it and
+    that the permanent cannot answer alone: "Until end of turn, if you tap a
+    land you control for mana, it produces {U} instead of any other type" (Deep
+    Water) is a record on the *seat*, so only a caller with the game can resolve
+    it (``engine/land_mana_swaps.py``). Passed in rather than looked up here for
+    the reason this module takes a pool and a list instead of a game: what a
+    cost can be paid from is arithmetic, and the caller owns the board. A caller
+    that omits it gets the permanent's own answer, which is what every caller
+    got before the override existed.
     """
     want = _normalized(required)
     from_pool: dict[str, int] = {}
@@ -114,7 +127,7 @@ def plan_payment(
         pips.extend([symbol] * (want[symbol] - paid))
 
     producers = [
-        (index, frozenset(land.effective_produced_mana or ()))
+        (index, frozenset(produces(land) if produces else (land.effective_produced_mana or ())))
         for index, land in enumerate(lands)
     ]
     assignment = _match_colored(pips, producers) if pips else {}

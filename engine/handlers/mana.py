@@ -320,6 +320,36 @@ def channel_life_for_mana(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
+@effect_handler("swap_controller_land_mana_until_eot")
+def swap_controller_land_mana_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Deep Water: "Until end of turn, if you tap a land you control for mana,
+    it produces {U} instead of any other type."
+
+    The record goes on the **seat**, not on the lands, which is the whole of
+    what separates this from ``produce_mana_instead`` above: the class it names
+    includes lands that have not entered yet, and which of them this seat
+    controls is answered when each is tapped. See
+    ``engine/land_mana_swaps.py`` for why the per-permanent record cannot carry
+    either half.
+    """
+    from ..land_mana_swaps import LandManaSwap, add_swap
+
+    caster = context.caster
+    add_swap(
+        caster,
+        LandManaSwap(
+            produced=str(instruction.payload.get("produced", "")),
+            lands=dict(instruction.payload.get("lands") or {}),
+            source_name=getattr(context.card, "name", None),
+        ),
+    )
+    game.log.append(
+        f"{getattr(context.card, 'name', 'an effect')}: {caster.name}'s lands "
+        f"produce {{{instruction.payload.get('produced', '')}}} this turn"
+    )
+    return True, "resolved"
+
+
 @effect_handler("produce_mana_instead")
 def produce_mana_instead(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"If target Plains is tapped for mana, it produces colorless mana instead
