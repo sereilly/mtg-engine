@@ -8,7 +8,7 @@ from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
 from ._common import (
-    apply_damage_to_creature, apply_temp_pt_boost, evaluate_count,
+    apply_damage_to_creature, apply_temp_pt_boost, evaluate_count, flip_coin,
     permanent_matches_filter, resolve_amount,
     resolve_target_permanent, resolve_target_permanents,
 )
@@ -82,6 +82,19 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # a property of the printed quantity and not of where its left half came
     # from.
     damage = max(0, damage + int(instruction.payload.get("amount_bonus", 0) or 0))
+    # "…deals **half X damage, rounded down**, to any target, and half X damage,
+    # **rounded up**, to you." (Banshee; Eternal Flame prints the second half.)
+    # Applied here — after every branch above and after the printed addend —
+    # because the halving is the last arithmetic the sentence does, and the two
+    # roundings in one sentence are the whole point of the card: an announced
+    # X of 5 is 2 to the target and 3 to its controller.
+    #
+    # A count that halves does *not* arrive here. It carries `half` on its own
+    # spec and is halved inside the count evaluator, where the number is
+    # computed; halving twice is what a second reader of the same rider buys.
+    halving = instruction.payload.get("amount_half")
+    if halving:
+        damage = -(-damage // 2) if halving == "up" else damage // 2
 
     # "…deals damage to each opponent equal to the number of Islands **that
     # player** controls" (Typhoon). One number per seat, so it cannot have been
@@ -722,6 +735,152 @@ def deal_damage_each_attacking_creature(
                 game._mark_damage_on_permanent(perm, damage, source=card)
                 struck += 1
     game.log.append(f"{card.name} dealt {damage} damage to each of {struck} attacking creatures")
+    return True, "resolved"
+
+
+@effect_handler("coin_flip_damage_loop")
+def coin_flip_damage_loop(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Mana Clash: "You and target opponent each flip a coin. … deals 1 damage
+    to each player whose coin comes up tails. Repeat this process until both
+    players' coins come up heads on the same flip."
+
+    Two flips a round (CR 705.1), one per player, because "both players' coins"
+    is two coins — one flip read twice would make the exit condition a 1-in-2
+    rather than a 1-in-4 and would never let one player take damage alone.
+
+    **This damage deliberately does not ask CR 616.1's ordering question.** The
+    mechanism behind an ask is a *restart*: the event is re-run once the seat has
+    answered (see `engine/resumption.py`). Re-running anything inside this loop
+    would re-flip its coins, so the answer would be applied to a different
+    random outcome than the one it was asked about — a worse failure than not
+    asking. Every other damage path in the engine is re-runnable and does ask.
+
+    The round cap is not a rule. CR 705 makes this terminate with probability 1
+    (a quarter of rounds end it), and a seeded RNG that failed to is a bug in
+    the RNG rather than a game state anyone should hang on.
+    """
+    caster = context.caster
+    opponent = context.target
+    card = context.card
+    if opponent is None or opponent is caster:
+        game.log.append(f"{card.name}: no opponent to flip against")
+        return True, "resolved"
+    damage = resolve_amount(instruction.payload.get("amount", 1), context.x_value)
+    rounds = 0
+    while rounds < 1000:
+        rounds += 1
+        caster_heads = flip_coin()
+        opponent_heads = flip_coin()
+        game.log.append(
+            f"{card.name}: {caster.name} flipped "
+            f"{'heads' if caster_heads else 'tails'}, {opponent.name} flipped "
+            f"{'heads' if opponent_heads else 'tails'}"
+        )
+        if not caster_heads:
+            game._deal_damage_to_player(caster, damage, source=card)
+        if not opponent_heads:
+            game._deal_damage_to_player(opponent, damage, source=card)
+        if caster_heads and opponent_heads:
+            break
+    game.log.append(f"{card.name}: both coins came up heads after {rounds} flip(s)")
+    return True, "resolved"
+
+
+@effect_handler("deal_damage_to_those_damaged_this_game")
+def deal_damage_to_those_damaged_this_game(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"At the beginning of your upkeep, this creature deals 1 damage to each
+    opponent and planeswalker **it has dealt damage to this game**." (The
+    Fallen.)
+
+    The recipients come off the record the damage seam keeps on this permanent
+    (``engine/damage_events.DAMAGED_THIS_GAME``), never off the board: a board
+    read cannot tell an opponent this creature has hurt from one it has not.
+
+    Everything in the record is an identity rather than a position — a seat
+    index and a ``permanent_id`` — so a planeswalker that left and came back is
+    a different object and is not damaged (CR 400.7), and one that is simply
+    gone is skipped rather than resolved onto whatever slid into its slot. A
+    seat recorded while it was an opponent that is no longer one is skipped too:
+    the card says "each **opponent**", asked now.
+    """
+    from ..damage_events import DAMAGED_THIS_GAME
+
+    card = context.card
+    source = context.source_permanent
+    if source is None:
+        game.log.append(f"{card.name}: its source is gone, no damage dealt")
+        return True, "resolved"
+    damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    classes = set(instruction.payload.get("classes") or ())
+    record = source.metadata.get(DAMAGED_THIS_GAME) or {}
+    controller = game.controller_index_of(source)
+    struck = []
+    if "opponent" in classes:
+        for seat in list(record.get("seats") or ()):
+            if seat == controller or not (0 <= seat < len(game.players)):
+                continue
+            victim = game.players[seat]
+            game._deal_damage_to_player(victim, damage, source=source, asks=True)
+            struck.append(victim.name)
+    if "planeswalker" in classes:
+        for permanent_id in list(record.get("permanents") or ()):
+            walker = game.permanent_by_id(permanent_id)
+            if walker is None or not walker.has_type("planeswalker"):
+                continue
+            apply_damage_to_creature(game, walker, damage, source)
+            struck.append(walker.card.name)
+    game.log.append(
+        f"{card.name} dealt {damage} damage to {', '.join(struck)}"
+        if struck else f"{card.name} has dealt damage to nobody yet"
+    )
+    return True, "resolved"
+
+
+@effect_handler("deal_damage_each_matching_creature")
+def deal_damage_each_matching_creature(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"…it deals 2 damage to you and **each creature you control**."
+    (Sorrow's Path.)
+
+    The filtered creature sweep. What it hits is payload rather than part of
+    the kind, so the narrowing is answered by ``subject_matches`` — the one
+    reader of a printed noun phrase — and a card printing a different one needs
+    no handler.
+
+    Over the control seam, never ``player.battlefield``: "you control" is a
+    derived controller (CR 613 layer 2), and a raw read is a second opinion
+    about who controls what. The set is snapshotted before the loop because
+    damage can kill: CR 704.3 keeps state-based actions out of the middle of a
+    resolution, but an effect armed by the damage could still move a permanent,
+    and a list being mutated under the iterator would skip whichever creature
+    slid into the vacated slot.
+    """
+    from ..subject_filters import subject_matches
+
+    card = context.card
+    damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    described = instruction.payload.get("filter") or {}
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+    struck = 0
+    for perm in list(game.all_permanents()):
+        if not perm.is_creature:
+            continue
+        if not subject_matches(
+            game, perm, described,
+            observer=observer, source=context.source_permanent,
+        ):
+            continue
+        apply_damage_to_creature(game, perm, damage, card)
+        struck += 1
+    game.log.append(
+        f"{card.name} dealt {damage} damage to each of {struck} creatures"
+    )
     return True, "resolved"
 
 

@@ -674,6 +674,25 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     return None
 
 
+def _parse_reveal_hand(stream: TokenStream, player: "ast.PlayerRef") -> ast.Statement:
+    """``<player> reveals their hand.`` (Inquisition, and the opening sentence of
+    Amnesia and Rag Man.)
+
+    Reached only after `_parse_reveal_hand_and_choose` has declined the whole
+    Duress paragraph, so the two never race: that one reads three sentences or
+    none, and this one reads the sentence it left.
+
+    "their hand" is expected rather than accepted. "Reveals the top card of
+    their library" and "reveals a card at random from their hand" are different
+    effects over different zones, and a production that read the verb and
+    shrugged at its object would claim them and reveal the wrong pile.
+    """
+    stream.expect_word("reveals", "reveal")
+    if not stream.accept_phrase("their", "hand"):
+        raise stream.error("expected 'their hand' after 'reveals'")
+    return ast.RevealHand(player)
+
+
 def _parse_exile_cost_sacrifices(stream: TokenStream) -> ast.Statement | None:
     """``Exile this <noun> and those <noun> cards.`` (Sword of the Ages.)
 

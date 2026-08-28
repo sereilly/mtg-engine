@@ -23,8 +23,9 @@ from .. import ast
 from ..errors import LoweringError
 from ._events import CREATED_TOKEN
 from ._common import (
-    _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_targets, _filter_payload,
-    _is_created_token, _is_source, _restrictions_beyond, dropped_narrowings,
+    _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_several_targets, _describe_targets,
+    _filter_payload, _is_created_token, _is_source, _names_several_targets,
+    _restrictions_beyond, dropped_narrowings,
 )
 
 
@@ -200,6 +201,28 @@ def _lower_exile(
                 node=node,
             )
         return (OracleInstruction("exile_created_token", "", {}),)
+    # "Exile **two target** nonartifact creatures." (Ashes to Ashes; Dust to
+    # Dust prints the same over artifacts.) One announcement collecting several
+    # targets, resolved as a list — so it is the same instruction with the
+    # several-targets description, not a second kind, exactly as the damage
+    # lowering treats Volcanic Salvo. Opted into rather than admitted by the
+    # single-target check below, which is the safety `_describe_several_targets`
+    # exists for: a handler that resolves one permanent must never be handed a
+    # two-target picker.
+    if _names_several_targets(subject):
+        assert isinstance(subject, ast.TargetSpec)
+        if subject.filter.zone != "battlefield" or subject.filter.is_card:
+            # Everything below this branch that reads another zone reaches a
+            # *card* picker; the list resolver is over permanents, so a
+            # graveyard or hand phrase would be collected and then looked for on
+            # the battlefield.
+            raise LoweringError(
+                "only battlefield permanents are exiled several at a time",
+                node=node,
+            )
+        several = _filter_payload(subject.filter)
+        _describe_several_targets(several, subject)
+        return (OracleInstruction("exile_target_permanent", "", several),)
     if (
         not isinstance(subject, ast.TargetSpec)
         or subject.quantifier != "target"

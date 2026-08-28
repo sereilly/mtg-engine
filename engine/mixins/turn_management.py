@@ -268,6 +268,7 @@ class TurnManagementMixin:
             player.noncombat_damage_dealt_to_opponents_this_turn = 0
             player.creatures_died_under_your_control_this_turn = 0
             player.spells_cast_this_turn = []
+            player.attacked_this_turn = False
 
     def start_turn(self, player_index: int) -> None:
         self.begin_turn_bookkeeping(player_index)

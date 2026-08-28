@@ -196,6 +196,14 @@ class DeclareAttackersStepMixin:
                 self.seat_turn_counts.get(controller_index, 0),
             )
 
+        if declared:
+            # CR 508.1: the seat that declared them attacked this turn. Stamped
+            # here, once, beside the per-creature record — "target player who
+            # attacked this turn" (Fire and Brimstone) asks about the player,
+            # and the creature that carried the attack may be gone by the time
+            # the question is asked.
+            controller.attacked_this_turn = True
+
         self._prune_combat_state()
         self.log.append(f"{controller.name} declared {len(unique_indices)} attacker(s)")
         if validated_bands:

@@ -28,6 +28,18 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # generalisation of the row above: the described set is payload, so a card
     # printing any other noun phrase needs no kind of its own.
     "deal_damage_each_matching": "damage",
+    # "…deals 2 damage to **each creature you control**" (Sorrow's Path). The
+    # filtered creature sweep the two fused kinds above are special cases of:
+    # what it damages is payload, so a card printing a different narrowing
+    # needs no kind. Same category, so GRAMMAR_CATEGORIES is unchanged.
+    "deal_damage_each_matching_creature": "damage",
+    # "…to each opponent and planeswalker **it has dealt damage to this
+    # game**" (The Fallen). The recipients are a record on the source rather
+    # than a set on a board. Same category, so GRAMMAR_CATEGORIES is unchanged.
+    "deal_damage_to_those_damaged_this_game": "damage",
+    # Mana Clash's coin-flip loop (CR 705). The randomiser is control flow, but
+    # what the paragraph *does* is deal damage, which is what this table names.
+    "coin_flip_damage_loop": "damage",
     "deal_damage_to_recorded_permanents": "damage",
     "deal_damage_and_opponent_choice": "damage",
     "self_damage_unless_pay": "damage",
@@ -214,6 +226,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "tap_creatures_blocking_target": "tapping",
     "untap_all_matching": "tapping",
     "grant_prevention_shield": "prevention",
+    # "…prevent half that damage, rounded down" (Dark Sphere) — a CR 615.8
+    # whole-instance shield that absorbs a share of the event. Same category, so
+    # GRAMMAR_CATEGORIES is unchanged.
+    "grant_half_prevention_shield": "prevention",
     "prevent_all_combat_damage": "prevention",
     # The same blanket, narrowed to a printed noun phrase (Pack Leader). Same
     # category: what differs is who it covers, not what kind of effect it is.
@@ -294,6 +310,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Sword of the Ages: what the ability's own cost sacrificed, exiled out of
     # the graveyard the cost put it in.
     "exile_cost_sacrifices": "zones",
+    # "Target player reveals their hand." (Inquisition.) The reveal on its own
+    # (CR 701.20) — a zone becoming public, the same family as the paragraph
+    # below it, so GRAMMAR_CATEGORIES is unchanged.
+    "reveal_hand": "zones",
     "reveal_hand_and_choose": "zones",
     "look_at_target_hand": "zones",
     "look_at_target_library_top": "zones",

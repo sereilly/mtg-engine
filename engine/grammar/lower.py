@@ -90,6 +90,8 @@ from .lowering import (
     _lower_create_token,
     _lower_damage,
     _lower_damage_conjunction,
+    _lower_coin_flip_damage_loop,
+    _lower_damage_this_game_history,
     _lower_damage_unless_pay,
     _fused_conditional_counter,
     _fused_tap_enchanted_then_counters,
@@ -122,6 +124,7 @@ from .lowering import (
     _lower_switch_pt,
     _lower_exile_cost_sacrifices,
     _lower_exile_graveyard,
+    _lower_reveal_hand,
     _lower_reveal_hand_and_choose,
     _lower_look_at_hand,
     _lower_look_at_library_top,
@@ -237,6 +240,10 @@ def lower_statement(
     dispatch_subject = event_subject if whole_effect else None
     if isinstance(statement, ast.DealDamage):
         return _lower_damage(statement, event, produced)
+    if isinstance(statement, ast.DamageThoseDamagedThisGame):
+        return _lower_damage_this_game_history(statement)
+    if isinstance(statement, ast.CoinFlipDamageLoop):
+        return _lower_coin_flip_damage_loop(statement)
     if isinstance(statement, ast.Fight):
         return _lower_fight(statement, whole_effect)
     if isinstance(statement, ast.DamageUnlessPay):
@@ -442,6 +449,8 @@ def lower_statement(
     if isinstance(statement, ast.ShuffleHandIntoLibrary):
         return _lower_shuffle_hand_into_library(statement)
 
+    if isinstance(statement, ast.RevealHand):
+        return _lower_reveal_hand(statement)
     if isinstance(statement, ast.RevealHandAndChoose):
         return _lower_reveal_hand_and_choose(statement)
     if isinstance(statement, ast.ExileCostSacrifices):

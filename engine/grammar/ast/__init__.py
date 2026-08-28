@@ -112,6 +112,8 @@ from .conditions import (
 )
 from .damage import (
     DamageRiders,
+    CoinFlipDamageLoop,
+    DamageThoseDamagedThisGame,
     DealDamage,
     DamageUnlessPay,
     Fight,
@@ -180,6 +182,7 @@ from .cards import (
     CastPermission,
     ExileCostSacrifices,
     ExileGraveyard,
+    RevealHand,
     RevealHandAndChoose,
     ExileTopOfLibrary,
     PutExiledWithSource,
@@ -341,6 +344,8 @@ __all__ = [
     "RawEffect",
     # damage
     "DamageRiders",
+    "CoinFlipDamageLoop",
+    "DamageThoseDamagedThisGame",
     "DealDamage",
     "DamageUnlessPay",
     "Fight",
@@ -399,6 +404,7 @@ __all__ = [
     "CastPermission",
     "ExileCostSacrifices",
     "ExileGraveyard",
+    "RevealHand",
     "RevealHandAndChoose",
     "ExileTopOfLibrary",
     "PutExiledWithSource",

@@ -70,6 +70,7 @@ from .pt import remove_plus1_counters
 from .shields import (
     PREVENT_ALL_BUT,
     PREVENT_AND_GAIN_LIFE,
+    PREVENT_HALF,
     PREVENT_FROM_COLOR,
     PREVENT_FROM_SUBJECT,
     PREVENT_FROM_TARGETING_SOURCE,
@@ -107,6 +108,13 @@ SUBJECT_BLANKET = 26
 # it costs its recipient nothing.
 TARGETING_BLANKET = 27
 SOURCE_CAP = 100  # Forcefield against a chosen attacker
+# "…prevent half that damage, rounded down" (Dark Sphere) against a chosen
+# source. Beside Forcefield's cap and for the same reason the note above gives:
+# it is a *partial* prevention, so it runs before the whole-event shields — a
+# halved event can still be shielded outright, and a whole-event shield spent
+# first would leave this one halving nothing.
+SOURCE_HALF = 150
+GENERIC_HALF = 160  # the same shield with no source recorded
 GENERIC_CAP = 200  # Forcefield with no chosen attacker
 SOURCE_SHIELD = 300  # Reverse Damage against a chosen source
 GENERIC_SHIELD = 400  # Reverse Damage with no chosen source
@@ -641,6 +649,26 @@ def _gain_prevented_life(game, event: dict, used: list[Shield], prevented: int) 
     recipient = event["recipient"]
     game.log.append(f"Reverse Damage prevented {prevented} damage to {recipient.name}")
     game._gain_life(recipient, prevented, source_name="Reverse Damage")
+
+
+@prevention_effect(SOURCE_HALF, applies=_arms(PREVENT_HALF, chosen=True, player_only=True))
+def _half_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
+    """Dark Sphere: "The next time a source of your choice would deal damage to
+    you this turn, prevent half that damage, rounded down."
+
+    Half of *this* event, computed by the shield when the event exists — see
+    ``Shield.would_prevent``. A 1-damage event therefore prevents nothing and
+    leaves the shield armed, the same reading ``_forcefield_chosen_attacker``
+    takes of the same situation and for the same reason.
+    """
+    return _spend(game, event, PREVENT_HALF, chosen=True)
+
+
+@prevention_effect(GENERIC_HALF, applies=_arms(PREVENT_HALF, chosen=False, player_only=True))
+def _half_prevention_generic(game, event: dict) -> PreventionOutcome | None:
+    """Dark Sphere sacrificed without recording a chosen source (AI / headless):
+    the next damage event from any source is halved."""
+    return _spend(game, event, PREVENT_HALF, chosen=False)
 
 
 @prevention_effect(

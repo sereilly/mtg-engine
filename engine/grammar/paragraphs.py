@@ -27,9 +27,60 @@ from .amounts import expect_pt, parse_amount
 from .errors import GrammarError
 from .lexer import (MANA, SELF)
 from .nouns import parse_object_filter
-from .references import parse_player_ref
+from .references import parse_player_ref, parse_recipient
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES, COLOR_WORDS, CREATURE_TYPES
+
+
+def _parse_coin_flip_damage_loop(stream: TokenStream) -> ast.Statement | None:
+    """``You and target opponent each flip a coin. <source> deals N damage to
+    each player whose coin comes up tails. Repeat this process until both
+    players' coins come up heads on the same flip.`` (Mana Clash.)
+
+    Read whole, like every paragraph here: the second sentence reads a pair of
+    flips only the first produces, and the third is a loop over both of them.
+
+    Returns None without consuming when the words are not this paragraph, so a
+    sentence merely opening "You and …" keeps its own reading — the same
+    courtesy Juxtapose's production is given, and for the same reason: both are
+    tried in front of the subject parser, which would read "You" and choke on
+    the conjunction.
+
+    Every fixed word after the first sentence is *expected*, not accepted. Each
+    one is a way the paragraph could mean something smaller and still parse:
+    damage on "tails" rather than on heads, both coins rather than one, and a
+    loop rather than a single round. A production that shrugged at the third
+    sentence would compile Mana Clash as one flip.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "you", "and", "target", "opponent", "each", "flip", "a", "coin"
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    source = parse_recipient(stream)
+    if source is None or not isinstance(source, ast.TargetSpec) or not source.filter.is_source:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("deals", "deal"):
+        stream.reset(mark)
+        return None
+    amount = parse_amount(stream)
+    if not stream.accept_phrase(
+        "damage", "to", "each", "player", "whose", "coin", "comes", "up", "tails"
+    ):
+        raise stream.error("expected damage to each player whose coin comes up tails")
+    stream.accept_punct(".")
+    if not stream.accept_phrase(
+        # "players'" is one token: the lexer splits a possessive apostrophe off
+        # a singular ("player 's") and leaves a plural one attached, so the
+        # plural is matched as printed.
+        "repeat", "this", "process", "until", "both", "players'", "coins",
+        "come", "up", "heads", "on", "the", "same", "flip",
+    ):
+        raise stream.error("expected the repeat clause that closes the flip loop")
+    return ast.CoinFlipDamageLoop(source, amount)
 
 
 def _parse_ownership_exchange_unless_paid(stream: TokenStream) -> ast.Statement | None:

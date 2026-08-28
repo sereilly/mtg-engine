@@ -698,6 +698,13 @@ class PlayerState:
     # control": it is one number for the table, so reading it per player would
     # count the opponent's deaths too.
     creatures_died_under_your_control_this_turn: int = 0
+    # Whether this seat declared an attacker this turn (CR 508.1). On the seat
+    # rather than derived from the board, because a player who attacked and
+    # then lost the attacker still attacked this turn — reading
+    # `attacked_this_turn` off the creatures would forget exactly the case
+    # Fire and Brimstone is printed for. Reset with the rest of the turn
+    # histories.
+    attacked_this_turn: bool = False
     # Cards drawn this turn, in draw order — the last entry is "the last card you
     # drew this turn" (Jandor's Ring's discard cost). Every path that draws must
     # record here, so effects that replace a draw but still put a card in hand

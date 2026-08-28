@@ -9,6 +9,8 @@ from ..shields import (
     make_capped_charge,
     make_capped_source,
     make_color_shield,
+    make_half_charge,
+    make_half_source,
     make_life_gain_charge,
     make_life_gain_source,
     make_numeric_pool,
@@ -169,6 +171,40 @@ def grant_reverse_damage_shield(game: Game, instruction: OracleInstruction, cont
     else:
         add_shield(caster, make_life_gain_charge(granted_by))
         game.log.append(f"{caster.name} armed a Reverse Damage shield")
+    return True, "resolved"
+
+
+@effect_handler("grant_half_prevention_shield")
+def grant_half_prevention_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Dark Sphere: "The next time a source of your choice would deal damage to
+    you this turn, prevent half that damage, rounded down."
+
+    The same choice Reverse Damage's shield makes — a permanent on any
+    battlefield, or a spell on the stack matched by the CardDefinition it will
+    deal its damage with — because it is the same printed phrase (CR 615.8).
+    What differs is only what the shield absorbs, and that is the shield's own
+    arithmetic rather than anything decided here: half of an event nobody can
+    size yet.
+    """
+    caster = context.caster
+    rounding = str(instruction.payload.get("half", "down"))
+    granted_by = context.card.name if context.card else None
+    if context.stack_target is not None:
+        chosen = context.stack_target.card
+    else:
+        chosen = resolve_target_permanent(
+            game, context, predicate=lambda p: True, fallback_players=()
+        )
+    if chosen is not None:
+        add_shield(caster, make_half_source(chosen, rounding, granted_by))
+        source_card = getattr(chosen, "card", chosen)
+        game.log.append(
+            f"{caster.name} will prevent half the next damage from "
+            f"{getattr(source_card, 'name', 'a source')}"
+        )
+    else:
+        add_shield(caster, make_half_charge(rounding, granted_by))
+        game.log.append(f"{caster.name} will prevent half the next damage dealt to them")
     return True, "resolved"
 
 
