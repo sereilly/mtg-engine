@@ -85,6 +85,22 @@ def _lower_reveal_top(node: ast.RevealTopToHandOrBottom) -> tuple[OracleInstruct
 _REVEALED_HAND_FIELDS = frozenset({"excluded_types", "is_card"})
 
 
+def _lower_reveal_hand(node: ast.RevealHand) -> tuple[OracleInstruction, ...]:
+    """"Target player **reveals their hand**" (CR 701.16), on its own.
+
+    The first half of Amnesia and Rag Man, lowered as its own step so the
+    discard behind it is the ordinary discard instruction rather than a second
+    fused kind. Only a *chosen* player has a handler: "each player reveals their
+    hand" would be a loop nothing here performs, and "you reveal your hand"
+    reveals a zone the revealer already sees.
+    """
+    if node.player.kind not in ("target_player", "target_opponent"):
+        raise LoweringError(
+            f"no handler reveals {node.player.kind!r}'s hand", node=node
+        )
+    return (OracleInstruction("reveal_hand", "", _targets_only(node.player)),)
+
+
 def _lower_reveal_hand_and_choose(
     node: ast.RevealHandAndChoose,
 ) -> tuple[OracleInstruction, ...]:

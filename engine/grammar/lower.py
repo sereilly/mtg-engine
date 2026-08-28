@@ -106,6 +106,7 @@ from .lowering import (
     _lower_for_each,
     _lower_repeat_process,
     _lower_for_each_destroyed,
+    _lower_for_each_exiled,
     _lower_for_each_chosen,
     _lower_choose_cards_in_hand,
     _lower_put_iterated_card_on_library,
@@ -122,6 +123,7 @@ from .lowering import (
     _lower_switch_pt,
     _lower_exile_cost_sacrifices,
     _lower_exile_graveyard,
+    _lower_reveal_hand,
     _lower_reveal_hand_and_choose,
     _lower_look_at_hand,
     _lower_look_at_library_top,
@@ -442,6 +444,8 @@ def lower_statement(
     if isinstance(statement, ast.ShuffleHandIntoLibrary):
         return _lower_shuffle_hand_into_library(statement)
 
+    if isinstance(statement, ast.RevealHand):
+        return _lower_reveal_hand(statement)
     if isinstance(statement, ast.RevealHandAndChoose):
         return _lower_reveal_hand_and_choose(statement)
     if isinstance(statement, ast.ExileCostSacrifices):
@@ -672,6 +676,17 @@ def lower_statement(
         # `ast.WhereX`'s is — the lowering below only repeats it.
         if isinstance(statement.iterator, ast.DiedThisWay):
             return _lower_for_each_destroyed(
+                statement,
+                lower_statement(
+                    statement.effect, produced,
+                    event=event, event_subject=event_subject, whole_effect=False,
+                ),
+                produced,
+            )
+        # "For each creature **exiled this way**" — the exile family's set,
+        # walked the same way and refused the same way when nothing exiled one.
+        if isinstance(statement.iterator, ast.ExiledThisWay):
+            return _lower_for_each_exiled(
                 statement,
                 lower_statement(
                     statement.effect, produced,

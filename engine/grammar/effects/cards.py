@@ -623,6 +623,44 @@ def _parse_counted_search(
     )
 
 
+def _parse_reveal_hand(
+    stream: TokenStream, player: ast.PlayerRef
+) -> ast.Statement | None:
+    """``<player> reveals their hand [and <does something with it>]`` (CR 701.16).
+
+    Amnesia ("…and discards all nonland cards") and Rag Man ("…and discards a
+    creature card at random"). Two steps rather than one fused node, because
+    that is what the sentence is: the reveal makes the hand public and the
+    discard then happens out of it, and a card printing some other act after the
+    reveal reuses this production instead of adding a second one.
+
+    The conjunction is read here rather than left to the sentence loop because
+    the sentence loop splits on full stops, not on "and" — and the second half
+    prints no subject, so a reader that got it on its own would fail on
+    "discards" with no player in front of it.
+
+    Returns None without consuming when the words are not a hand reveal, so
+    "reveals the top card of their library" keeps its own reading.
+    """
+    mark = stream.mark()
+    stream.expect_word("reveals", "reveal")
+    if not (
+        (stream.accept_word("their") or stream.accept_word("your"))
+        and stream.accept_word("hand")
+    ):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("and"):
+        return ast.RevealHand(player)
+    if stream.peek_word() in ("discards", "discard"):
+        # The same player throughout: "and discards" has no subject of its own,
+        # so handing the discard production anyone else would aim it at a seat
+        # the sentence never named.
+        return ast.Sequence((ast.RevealHand(player), _parse_discard(stream, player)))
+    stream.reset(mark)
+    return None
+
+
 def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     """``<player> reveals their hand. You choose a <filter> card from it.
     That player discards that card.`` (Duress.)

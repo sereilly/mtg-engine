@@ -308,9 +308,21 @@ def _lower_put_counter(
         and not _names_several_targets(node.subject)
     ):
         assert isinstance(node.subject, ast.TargetSpec)
-        if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
+        # "Put **X** +0/+1 counters on target creature, where X is that
+        # creature's mana value." (Living Armor.) The number is payload on the
+        # same instruction rather than a second kind: what changes is how many
+        # of one counter go on one creature, and the where-clause behind the X
+        # is resolved at the single dispatch point like every other one. A
+        # printed count of 1 keeps emitting no ``count`` key at all, so every
+        # payload written before this stays byte-identical.
+        if isinstance(node.count, ast.Fixed):
+            placed: int | str = node.count.value
+        elif isinstance(node.count, ast.Var):
+            placed = node.count.name
+        else:
             raise LoweringError(
-                "a counter of this kind is placed one at a time", node=node
+                "a counter of this kind is placed a fixed or variable number "
+                "at a time", node=node,
             )
         filt = node.subject.filter
         leftover = _restrictions_beyond(
@@ -326,6 +338,8 @@ def _lower_put_counter(
             filt, in_combat_with_source=False
         ))
         payload: dict[str, object] = {"counter": node.counter}
+        if placed != 1:
+            payload["count"] = placed
         if filt.in_combat_with_source:
             payload["in_combat_with_source"] = True
         _describe_targets(payload, stripped)

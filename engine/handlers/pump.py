@@ -624,6 +624,16 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
     # place — so the default is the whole of the compatibility, and a card
     # printing "-0/-1" is this instruction with a different word in it.
     kind = str(instruction.payload.get("counter", "+1/+1"))
+    # "Put **X** +0/+1 counters on target creature." (Living Armor.) How many of
+    # that kind, resolved through the same `context.x_value` every other amount
+    # reads — absent on every payload written before it, and 1 is what those
+    # have always meant.
+    how_many = resolve_amount(instruction.payload.get("count", 1), context.x_value)
+    if how_many <= 0:
+        # A where-clause can define an X of zero (a creature with mana value 0),
+        # and CR 122.1 places no counters then. Logged as a resolution rather
+        # than a miss: the ability did what it said.
+        how_many = 0
 
     # "…put a +1/+1 counter on **the first creature**." (Infinite Authority.)
     # No target was ever chosen: the sentence names one half of the pair a block
@@ -721,8 +731,16 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
     if target_creature is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
-    game.place_pt_counters(target_creature, kind)
-    game.log.append(f"{target_creature.card.name} gets a {kind} counter ({card.name})")
+    if how_many:
+        game.place_pt_counters(target_creature, kind, how_many)
+        game.log.append(
+            f"{target_creature.card.name} gets a {kind} counter ({card.name})"
+            if how_many == 1
+            else f"{target_creature.card.name} gets {how_many} {kind} counters "
+                 f"({card.name})"
+        )
+    else:
+        game.log.append(f"{card.name}: no counters to place")
     # "…, then double the number of +1/+1 counters on that creature."
     # (Invigorating Surge.) Read *after* the placement, so the one just put down
     # is doubled too — and placed through the same seam, so a Conclave Mentor

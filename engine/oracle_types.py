@@ -348,6 +348,26 @@ _MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")
 #: The value under each key is ``{permanent_id: seat}``. A loop over those same
 #: objects (``for_each``) resolves it to the one seat per iteration, which is
 #: what makes the record readable from inside a per-object effect.
+#: What "**exiled this way**" names (Martyr's Cry). The `produced` marker an
+#: exiling sweep stamps, and the ``OracleExecutionContext.results`` key it
+#: records the swept objects under — the destroy family's ``destroyed_this_way``
+#: pair one zone over, and separate from it because a sweep that exiles kills
+#: nothing, so a loop reading the destroy record would run zero times.
+#:
+#: Here rather than beside either reader, because the readers are on opposite
+#: ends of the pipeline: the lowering gates the printed phrase on the marker and
+#: the handler writes the objects. This module imports nothing from the engine,
+#: so both can reach it.
+EXILED_THIS_WAY = "exiled_this_way"
+EXILED_THIS_WAY_OBJECTS = "exiled_this_way_objects"
+
+
 PER_OBJECT_SEAT_RECORDS: dict[str, str] = {
     "controller_when_blocked": "blocked_controller_seats",
+    # "For each creature exiled this way, **its controller** draws a card."
+    # (Martyr's Cry.) The bare possessive, which inside a loop over objects an
+    # earlier step swept off the battlefield names that object's controller —
+    # and has to be read off a record, because CR 400.7 makes the exiled card a
+    # new object that no battlefield read can find a seat for (idiom 6).
+    "controller": "swept_controller_seats",
 }

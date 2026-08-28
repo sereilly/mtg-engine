@@ -17,6 +17,8 @@ from ._common import (
 )
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
+from ..oracle_types import (EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
+                            PER_OBJECT_SEAT_RECORDS)
 from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..resumption import run_resumable
 from ..search_filters import search_matches
@@ -31,7 +33,26 @@ if TYPE_CHECKING:
 
 @effect_handler("draw_target_cards")
 def draw_target_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    target = context.target
+    """"Target player draws N cards", and "**its controller** draws a card"
+    inside a loop over objects an earlier step swept (Martyr's Cry).
+
+    ``drawer_seat`` names a per-object record; the loop resolves it to one seat
+    per iteration (``OracleExecutionContext.iteration_seats``). With the record
+    absent nobody drew — the sentence named a seat nothing recorded — and the
+    honest answer is to draw nothing rather than to fall back on
+    ``context.target``, which is a seat this sentence never mentions.
+    """
+    drawer_seat = instruction.payload.get("drawer_seat")
+    if drawer_seat is not None:
+        seat = context.iteration_seats.get(str(drawer_seat))
+        if seat is None:
+            game.log.append(
+                f"{context.card.name}: nothing recorded whose permanent that was"
+            )
+            return True, "resolved"
+        target = game.players[int(seat)]
+    else:
+        target = context.target
     count = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     drawn = game._draw_with_replacements(target, count)
     game.log.append(f"{target.name} drew {drawn} cards")
@@ -526,8 +547,21 @@ def discard_x_target_cards(game: Game, instruction: OracleInstruction, context: 
     if not isinstance(amount, int):
         amount = context.x_value
     x = max(0, amount or 0)
-    actual = min(x, len(target.hand))
-    indices = random.sample(range(len(target.hand)), actual)
+    # "…discards a **creature** card at random." (Rag Man.) The sample is drawn
+    # from the slots answering the printed phrase, not from the whole hand —
+    # re-checked here rather than trusted from the lowering, which is the same
+    # rule every other narrowed handler follows. No filter is every slot, which
+    # is what Mind Twist has always meant.
+    filters = instruction.payload.get("filter") or {}
+    eligible = [
+        index for index, held in enumerate(target.hand)
+        if not filters or _card_matches_filter(held, filters)
+    ]
+    actual = min(x, len(eligible))
+    # ``random.sample`` over the eligible slots, drawing from the module-level
+    # RNG ``run_ai_simulation`` seeds — so a given seed still replays a run
+    # exactly, which sampling from a fresh Random() would break.
+    indices = random.sample(eligible, actual)
     for i in sorted(indices, reverse=True):
         discarded = target.hand.pop(i)
         game._discard_card(target, discarded)  # Library of Leng -> top of library
@@ -1661,6 +1695,35 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     """
     card = context.card
     payload = instruction.payload
+    # "Exile **two** target artifacts." (Dust to Dust.) The several-targets
+    # description is the opt-in: a list was collected at announcement, so each
+    # slot resolves strictly and a target that has left is simply dropped
+    # (CR 608.2b) rather than falling back to a scan for a look-alike.
+    targets_desc = instruction.payload.get("targets") or {}
+    if (
+        isinstance(targets_desc, dict)
+        and isinstance(targets_desc.get("count"), int)
+        and targets_desc["count"] > 1
+    ):
+        chosen = resolve_target_permanents(game, context)
+        exiled_any = False
+        for target_perm in chosen:
+            if not permanent_matches_filter(target_perm, payload):
+                # Idiom 9: the picker's enumeration is a hint, so the filter is
+                # re-checked here against the answer that came back.
+                continue
+            owner_idx = game.owner_index_of(target_perm)
+            if owner_idx is None:
+                owner_idx = game.controller_index_of(target_perm)
+            game.remove_from_battlefield(target_perm)
+            game.players[owner_idx if owner_idx is not None else 0].exile.append(
+                target_perm.card
+            )
+            game.log.append(f"{card.name} exiled {target_perm.card.name}")
+            exiled_any = True
+        if not exiled_any:
+            game.log.append(f"{card.name}: no valid permanent to exile")
+        return True, "resolved"
     perm = resolve_target_permanent(
         game,
         context,
@@ -1678,6 +1741,61 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     if controller_index is not None:
         context.results["exiled_permanent_controller"] = controller_index
     game.log.append(f"{card.name} exiled {perm.card.name}")
+    return True, "resolved"
+
+
+@effect_handler("reveal_hand")
+def reveal_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target player reveals their hand." (CR 701.16, the first half of
+    Amnesia and Rag Man.)
+
+    Its own step, so what happens to the revealed cards is the next
+    instruction's business. Through ``record_reveal``, the one feed the web
+    layer reads, rather than a log line alone: a reveal the client cannot show
+    is a reveal the player has to take on trust, and Rag Man's at-random discard
+    is exactly the effect where seeing the hand is the point.
+    """
+    victim = context.target if context.target is not None else context.caster
+    seat = next(
+        (i for i, seated in enumerate(game.players) if seated is victim), None
+    )
+    names = [held.name for held in victim.hand]
+    if seat is not None:
+        game.record_reveal(seat, names)
+    game.log.append(
+        f"{victim.name} reveals their hand: " + (", ".join(names) or "(empty)")
+    )
+    return True, "resolved"
+
+
+@effect_handler("discard_all_matching_cards")
+def discard_all_matching_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…and discards all nonland cards." (Amnesia.)
+
+    Nobody chooses, so there is no pending choice and no prompt: every card in
+    the hand answering the printed phrase is discarded. The filter is re-checked
+    here rather than trusted from the lowering for the reason every other
+    handler re-checks one — the payload describes what the card said, and this
+    is the reader that decides what leaves the zone.
+
+    **Idiom 11**: two copies of one card in a hand are literally one
+    ``CardDefinition`` object, so the cards to discard are resolved *before*
+    anything leaves the zone, and then removed by position from the back — a
+    scan-and-remove by value would take the wrong copy of a pair.
+    """
+    victim = context.target if context.target is not None else context.caster
+    filters = instruction.payload.get("filter") or {}
+    doomed = [
+        index for index, held in enumerate(victim.hand)
+        if _card_matches_filter(held, filters)
+    ]
+    for index in reversed(doomed):
+        discarded = victim.hand.pop(index)
+        game._discard_card(victim, discarded)
+    game.log.append(
+        f"{victim.name} discarded {len(doomed)} card(s)"
+        if doomed else f"{victim.name} had no cards to discard"
+    )
     return True, "resolved"
 
 
@@ -2232,6 +2350,17 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
         return True
 
     victims = [perm for perm in game.all_permanents() if matches(perm)]
+    # Who controlled each of them, read **before** the sweep (CR 608.2h /
+    # idiom 6): "For each creature exiled this way, its controller draws a
+    # card" (Martyr's Cry) asks about a permanent that no longer exists by the
+    # time the loop runs, and CR 400.7 makes the exiled card a new object with
+    # no controller at all.
+    controllers = {
+        perm.permanent_id: seat
+        for perm in victims
+        for seat in (game.controller_index_of(perm),)
+        if seat is not None
+    }
     for perm in victims:
         owner_idx = game.owner_index_of(perm)
         owner = game.players[owner_idx] if owner_idx is not None else context.caster
@@ -2239,6 +2368,9 @@ def exile_all_matching(game: Game, instruction: OracleInstruction, context: Orac
             owner.exile.append(perm.card)
         game._remove_aura_effects(perm)
     game.remove_all_from_battlefield(victims)
+    context.results[EXILED_THIS_WAY_OBJECTS] = victims
+    context.results[EXILED_THIS_WAY] = len(victims)
+    context.results[PER_OBJECT_SEAT_RECORDS["controller"]] = controllers
     game.log.append(f"{context.card.name} exiled {len(victims)} permanent(s)")
     return True, "resolved"
 

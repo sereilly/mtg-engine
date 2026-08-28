@@ -329,11 +329,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "bounce_target_creature": {"kind": "creature"},
     "phase_out_target_creature_until_source_leaves": {"kind": "creature"},
     "reanimate_creature": {"kind": "graveyard_creature", "own_graveyard_only": True},
-    # "target card from a graveyard" — any card, any seat's graveyard, so no
-    # own_graveyard_only. The picker is the reanimation one because the
-    # *choice* is identical; only where the card goes afterwards differs, and
-    # that is the handler's business, not the picker's.
-    "exile_target_graveyard_card": {"kind": "graveyard_creature", "any_card": True},
     "exchange_ante_with_top_library": {"kind": "none"},
     # Dream Coat: "Enchanted creature becomes the color or colors of your
     # choice." The *permanent* is not chosen — an Aura's ability acts on its
@@ -664,6 +659,31 @@ def _graveyard_return_spec(payload: dict) -> dict:
     return spec
 
 
+def _graveyard_exile_spec(payload: dict) -> dict:
+    """"Exile target card from a graveyard", narrowed to the card type it may
+    take.
+
+    Any seat's graveyard, so no ``own_graveyard_only`` — the picker is the
+    reanimation one because the *choice* is identical; only where the card goes
+    afterwards differs, and that is the handler's business.
+
+    Derived from the payload rather than a fixed dict, for the reason
+    :func:`_graveyard_return_spec` is: Return to Nature takes any card, Grave
+    Robbers an artifact card and Eater of the Dead a creature card, and a fixed
+    ``any_card`` spec would offer Grave Robbers a creature its own re-check then
+    refuses. ``graveyard_card_matches`` reads the same keys in all three places.
+    """
+    spec: dict = {"kind": GRAVEYARD_TARGET_KIND}
+    card_type = payload.get("card_type")
+    if payload.get("any_card") or card_type is None:
+        spec["any_card"] = True
+    elif card_type != "creature":
+        # "creature" is the enumerator's own default, so naming it changes
+        # nothing; every other type is carried.
+        spec["card_type"] = card_type
+    return spec
+
+
 def _prevention_shield_spec(payload: dict) -> dict | None:
     """A "prevent the next N damage" shield, and who is being shielded.
 
@@ -776,6 +796,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # then done to it.
     "redirect_damage_from_target_spell_until_eot": _counter_spec,
     "return_creature_from_graveyard_to_hand": _graveyard_return_spec,
+    "exile_target_graveyard_card": _graveyard_exile_spec,
     "grant_prevention_shield": _prevention_shield_spec,
     "set_base_pt_target_until_eot": _set_base_pt_spec,
     "grant_cast_permission": _cast_permission_spec,

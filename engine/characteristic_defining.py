@@ -116,6 +116,49 @@ def _type_count_plus(match: re.Match) -> dict[str, object]:
     }
 
 
+def _toughness_land_count(match: re.Match) -> dict[str, object]:
+    """People of the Woods: "…**toughness** is equal to the number of Forests
+    you control."
+
+    The mirror of Kinetic Augur's row one axis over, and payload for the same
+    reason: which half a CDA defines is part of the sentence, not part of the
+    counting. The printed power stands (People of the Woods is 0/*), which
+    ``set_base_pt``'s None expresses exactly.
+    """
+    payload: dict[str, object] = {
+        "defines": "toughness", "count": "land", "scope": "you",
+    }
+    if match.group("land_type"):
+        payload["land_type"] = match.group("land_type")
+    return payload
+
+
+def _turn_split_land_count(match: re.Match) -> dict[str, object]:
+    """Angry Mob: "During **your** turn, …are each equal to 2 plus the number of
+    Swamps your opponents control. During turns other than yours, …are each 2."
+
+    One row rather than two, for the reason Gaea's Liege's attacking split is
+    one: a rule claiming the first sentence alone would leave the second
+    unclaimed and the creature would carry the count on every turn, which is
+    the half of the card that makes it playable against nobody.
+
+    Both the constant and the off-turn value are payload — they are printed
+    numbers, and a card printing "3 plus … otherwise 3" is this template — and
+    so is the counted land type and whose battlefield it sits on. ``only_during``
+    is what the counter reads to decide which of the two answers applies; it is
+    a *turn* question, so it cannot be folded into ``scope``, which is a
+    question about a battlefield.
+    """
+    return {
+        "count": "land",
+        "land_type": match.group("land_type"),
+        "scope": "opponents" if match.group("whose") == "your opponents" else "you",
+        "plus": int(match.group("plus")),
+        "only_during": "your_turn",
+        "otherwise": int(match.group("otherwise")),
+    }
+
+
 def _same_name_count(match: re.Match) -> dict[str, object]:
     return {"count": "same_name", "scope": "all"}
 
@@ -204,6 +247,31 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
             r"(?P<whose>you|your opponents) controls?$"
         ),
         _type_count_plus,
+    ),
+    (
+        # People of the Woods. "**Toughness** is", not "power and toughness are
+        # each": the printed power stands, the same way Kinetic Augur's printed
+        # toughness does.
+        re.compile(
+            rf"^{_SUBJECT} toughness is equal to the number of "
+            rf"(?:(?P<land_type>{_LAND_ALTERNATION})s|lands) you control$"
+        ),
+        _toughness_land_count,
+    ),
+    (
+        # Angry Mob. Both halves in one pattern, for Shapeshifter's reason: a
+        # rule claiming the first sentence would leave the second standing
+        # unread, and the card would count Swamps on every turn instead of only
+        # its controller's.
+        re.compile(
+            rf"^during your turn, {_SUBJECT} power and toughness are each equal "
+            r"to (?P<plus>\d+) plus the number of "
+            rf"(?P<land_type>{_LAND_ALTERNATION})s "
+            r"(?P<whose>you|your opponents) controls?\. "
+            r"during turns other than yours, .+?'s power and toughness are "
+            r"each (?P<otherwise>\d+)$"
+        ),
+        _turn_split_land_count,
     ),
     (
         # Keldon Warlord, and the unqualified "creatures you control" form.

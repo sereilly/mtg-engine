@@ -185,6 +185,24 @@ class LookTopPickToHand:
 
 
 @dataclass(frozen=True)
+class RevealHand:
+    """``<player> reveals their hand`` (CR 701.16).
+
+    The reveal on its own, as the first half of "…**and** discards all nonland
+    cards" (Amnesia) or "…and discards a creature card at random" (Rag Man).
+
+    Its own node rather than a flag on the discard beside it, because the reveal
+    is a game action with its own consequence — the hand becomes public
+    information, which is what makes an at-random discard verifiable — and it
+    composes: a card printing a reveal in front of some *other* act on the same
+    hand needs no second production. :class:`RevealHandAndChoose` stays separate
+    because its three sentences share a *choice*, which is not composable in
+    that way: the middle sentence names a card the first one revealed.
+    """
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
 class RevealHandAndChoose:
     """``Target opponent reveals their hand. You choose a <filter> card from
     it. That player discards that card.`` (Duress.)

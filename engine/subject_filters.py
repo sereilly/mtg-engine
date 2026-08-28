@@ -132,7 +132,12 @@ def untestable_filter_keys(
 #: that a card *can*: it is printed on the face, in the same words, and nothing
 #: could have changed it.
 CARD_ONLY_FILTER_KEYS = frozenset(
-    {"type_filter", "subtype_filter", "named", "supertypes", "mana_value"}
+    {"type_filter", "subtype_filter", "named", "supertypes", "mana_value",
+     # "…discards all **nonland** cards" (Amnesia). The negative of
+     # ``type_filter`` and answered the same way — off the printed type line,
+     # which for a card in a zone is the whole of what there is (CR 613.1) — so
+     # it is testable here for exactly the reason ``type_filter`` is.
+     "exclude_types"}
 )
 
 

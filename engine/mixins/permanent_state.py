@@ -84,6 +84,15 @@ def _count_dynamic_pt(
     animated land counts as a creature and a land turned into a Swamp counts as
     a Swamp — the printed type line is not the authority on either.
     """
+    # "**During your turn**, …are each equal to 2 plus the number of Swamps
+    # your opponents control. **During turns other than yours**, …are each 2."
+    # (Angry Mob.) A question about the turn rather than about a battlefield, so
+    # it is asked before the scope is read: on any other player's turn the
+    # sentence names no set at all and the printed constant is the whole answer.
+    if payload.get("only_during") == "your_turn":
+        active = game.players[game.active_player_index] if game.players else None
+        if active is not player:
+            return int(payload.get("otherwise", 0))
     scope = payload.get("scope", "you")
     if scope == "all":
         battlefields = [p.battlefield for p in game.players]
@@ -774,6 +783,12 @@ class PermanentStateMixin:
                     set_base_pt(permanent, value, max(0, int(complement) - value))
                 elif dynamic_pt.payload.get("defines") == "power":
                     set_base_pt(permanent, value, None)
+                elif dynamic_pt.payload.get("defines") == "toughness":
+                    # "…**toughness** is equal to the number of Forests you
+                    # control" (People of the Woods, a 0/*). The mirror of the
+                    # branch above and the same None: the printed power keeps
+                    # tracking whatever else applies to it.
+                    set_base_pt(permanent, None, value)
                 else:
                     set_base_pt(permanent, value, value)
 

@@ -390,6 +390,12 @@ def _card_matches_filter(card, filt: dict) -> bool:
     wanted_all_subtypes = filt.get("subtype_filter_all") or ()
     if wanted_all_subtypes and not all(s in subtypes for s in wanted_all_subtypes):
         return False
+    # "**nonland** card" (Amnesia). The negative of the test above, off the same
+    # printed line and OR'd the same way: a card naming *any* excluded type is
+    # out, which is what "noncreature, nonland" means when both are printed.
+    excluded = filt.get("exclude_types") or ()
+    if excluded and any(name in types for name in excluded):
+        return False
     # The card-level twin of `type_filter_all`: "an **artifact creature** card".
     # Off the printed type line, which for a card in a zone is the whole of
     # what there is (CR 613.1).

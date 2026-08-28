@@ -178,6 +178,22 @@ def parse_where_x_definition(stream: TokenStream) -> "ast.Amount | None":
                 )
             stream.reset(phrase_mark)
     stream.reset(named_mark)
+    # "…where X is **that creature's mana value**" (Living Armor). The same
+    # named back-reference one branch up, in English's other word order: a
+    # possessive rather than an "of" phrase. One production for both, because
+    # what they mean is identical — the referent travels on the same node and
+    # is matched against the sentence's target roles by the same lowering — and
+    # two would be two answers to which characteristics a card may name.
+    possessive_mark = stream.mark()
+    if stream.accept_word("that"):
+        referent = parse_object_filter(stream)
+        if stream.accept_word("'s"):
+            for phrase, name in _SUBJECT_CHARACTERISTICS:
+                if stream.accept_phrase(*phrase):
+                    return ast.CharacteristicOfSubject(
+                        name, _accept_offset(stream), referent
+                    )
+    stream.reset(possessive_mark)
     # "…where X is **twice** the number of white creatures that player
     # controls" (Jovial Evil). A multiplier in front of whatever definition
     # follows, read here so it scales every one of them rather than only the

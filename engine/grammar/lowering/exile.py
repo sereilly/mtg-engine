@@ -21,10 +21,11 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
-from ._events import CREATED_TOKEN
+from ._events import CREATED_TOKEN, EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
 from ._common import (
-    _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_targets, _filter_payload,
-    _is_created_token, _is_source, _restrictions_beyond, dropped_narrowings,
+    _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_several_targets, _describe_targets,
+    _filter_payload, _is_created_token, _is_source, _names_several_targets,
+    _restrictions_beyond, dropped_narrowings,
 )
 
 
@@ -200,6 +201,24 @@ def _lower_exile(
                 node=node,
             )
         return (OracleInstruction("exile_created_token", "", {}),)
+    # "Exile **two** target artifacts." (Dust to Dust.) The same instruction as
+    # the one-target exile — what happens to each artifact is identical — with
+    # the several-targets opt-in, which is what says the handler resolves a list
+    # and the picker collects N (idiom: a lowering that dropped ``count`` would
+    # exile one of the two and report the card supported).
+    #
+    # Battlefield permanents only: the several-target *card* description is a
+    # different key shape, and the graveyard branch below reads a picker that
+    # offers one card.
+    if isinstance(subject, ast.TargetSpec) and _names_several_targets(subject):
+        filt = subject.filter
+        if filt.zone != "battlefield" or filt.is_card:
+            raise LoweringError(
+                "the several-target exile reads battlefield permanents", node=node
+            )
+        several: dict[str, object] = _filter_payload(filt)
+        _describe_several_targets(several, subject)
+        return (OracleInstruction("exile_target_permanent", "", several),)
     if (
         not isinstance(subject, ast.TargetSpec)
         or subject.quantifier != "target"
@@ -213,13 +232,44 @@ def _lower_exile(
 
     filt = subject.filter
     if filt.zone == "graveyard" and filt.is_card:
-        if filt.zone_owner is not None or filt.card_types or filt.subtypes or filt.colors:
-            # The picker this lowers onto enumerates *any* card in *any*
-            # graveyard. Narrowing it is a payload-derived spec, not something
-            # to fake by dropping the narrowing here.
+        if filt.zone_owner is not None or filt.subtypes or filt.colors:
+            # The picker this lowers onto enumerates every graveyard. Whose pile
+            # it may read, and a subtype or colour narrowing, are still shapes
+            # nothing behind it tests — dropped here they would offer a card the
+            # printed line forbids, so they refuse (idiom 2).
             raise LoweringError(
                 "no graveyard picker narrows to this card or this player yet",
                 node=node,
+            )
+        if len(filt.card_types) > 1:
+            # A *union* ("target artifact or creature card") is a second key
+            # shape the picker and the re-check would each have to learn; until
+            # a card in the pool prints one from a graveyard it refuses rather
+            # than collapsing to the first type.
+            raise LoweringError(
+                "no graveyard picker reads a union of card types yet", node=node
+            )
+        if _restrictions_beyond(
+            filt, frozenset({"card_types", "zone", "is_card"})
+        ):
+            raise LoweringError(
+                "no graveyard picker narrows to this card or this player yet",
+                node=node,
+            )
+        if filt.card_types:
+            # "Exile target **artifact** card from a graveyard." (Grave
+            # Robbers.) / "…target **creature** card…" (Eater of the Dead.) The
+            # named type is carried, never collapsed: ``card_type`` is the key
+            # ``graveyard_card_matches`` tests by containment in the printed
+            # type line (CR 205.2, idiom 15), so an artifact creature answers
+            # both spellings, and one predicate serves the picker, the
+            # activation re-check and the handler.
+            return (
+                OracleInstruction(
+                    "exile_target_graveyard_card",
+                    "",
+                    {"any_card": False, "card_type": filt.card_types[0]},
+                ),
             )
         return (
             OracleInstruction("exile_target_graveyard_card", "", {"any_card": True}),
@@ -228,6 +278,43 @@ def _lower_exile(
     exile_payload = _filter_payload(filt)
     _describe_targets(exile_payload, subject)
     return (OracleInstruction("exile_target_permanent", "", exile_payload),)
+
+
+def _lower_for_each_exiled(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each creature exiled this way,** <effect>." (Martyr's Cry.)
+
+    The exile family's twin of ``_lower_for_each_destroyed``, here rather than
+    beside it for the reason this module exists at all: the set it walks is the
+    one ``exile_all_matching`` recorded, and nothing about a destruction
+    describes it.
+
+    Refused without a producer, as every back-reference in this grammar is: with
+    no earlier step that exiled anything the words name nothing, and an empty
+    loop is a sentence that reports supported and does not run.
+    """
+    if EXILED_THIS_WAY not in produced:
+        raise LoweringError(
+            "'exiled this way' with no earlier step in this effect that "
+            "exiled anything", node=node,
+        )
+    filt = node.iterator.filter
+    if filt.to_payload() != {"type_filter": "creature"} or filt.zone != "battlefield":
+        raise LoweringError(
+            "'exiled this way' iterates what the earlier step exiled and "
+            "cannot be narrowed further", node=node,
+        )
+    if not inner:
+        raise LoweringError("a per-object loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {"iterator": {"produced_by": EXILED_THIS_WAY_OBJECTS}, "effect": inner},
+        ),
+    )
 
 
 def _lower_exile_until_leaves_or_untaps(

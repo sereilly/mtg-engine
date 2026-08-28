@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Union
 
 from .conditions import Condition
-from .conditions import ChosenThisWay, DiedThisTurn, DiedThisWay
+from .conditions import ChosenThisWay, DiedThisTurn, DiedThisWay, ExiledThisWay
 from ._core import (
     Cost,
     Duration,
@@ -96,6 +96,7 @@ from .cards import (
     Draw,
     ExileCostSacrifices,
     ExileGraveyard,
+    RevealHand,
     RevealHandAndChoose,
     ExileTopOfLibrary,
     PutExiledWithSource,
@@ -178,6 +179,7 @@ Effect = Union[
     RandomRevealOwnershipExchange,
     ExileTopOfLibrary, PutExiledWithSource, ExileGraveyard, ExileCostSacrifices,
     CastPermission, LookTopPickToHand,
+    RevealHand,
     RevealHandAndChoose,
     Shuffle, ExtraTurn, EndTheTurn, ChooseNumber, ChoosePlayerWhoCast, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCreature,
     SacrificeUnlessPay, DestroyUnlessPay, DamageUnlessPay, Fight, LookAtHand, LookAtLibraryTop,
@@ -299,7 +301,8 @@ class ForEach:
     plain filter "creature" would count the creatures still on the battlefield
     — a different number, and one that moves in the opposite direction.
     """
-    iterator: ObjectFilter | PlayerRef | DiedThisTurn | DiedThisWay | ChosenThisWay
+    iterator: (ObjectFilter | PlayerRef | DiedThisTurn | DiedThisWay
+                | ExiledThisWay | ChosenThisWay)
     effect: "Statement"
 
 

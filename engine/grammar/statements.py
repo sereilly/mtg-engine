@@ -188,7 +188,7 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
 
 def _parse_leading_for_each(
     stream: TokenStream,
-) -> "ast.DiedThisWay | ast.ChosenThisWay | None":
+) -> "ast.DiedThisWay | ast.ExiledThisWay | ast.ChosenThisWay | None":
     """``For each <objects> that died this way,`` — the set a later clause
     repeats over, in the leading printed position.
 
@@ -219,6 +219,20 @@ def _parse_leading_for_each(
     except GrammarError:
         stream.reset(mark)
         return None
+    # "For each creature **exiled this way**, …" (Martyr's Cry). The same
+    # leading position and the same "this way" window, over the set an earlier
+    # step *exiled* rather than the set it destroyed — two records, so two
+    # nodes, because a sweep that exiles kills nothing and the destroy family's
+    # record would be empty.
+    #
+    # No "that": the printed participle is bare ("creature exiled this way"),
+    # where the death spelling prints a relative clause ("creature **that**
+    # died this way").
+    if stream.accept_phrase("exiled", "this", "way"):
+        if not stream.accept_punct(","):
+            stream.reset(mark)
+            return None
+        return ast.ExiledThisWay(filt)
     if not stream.accept_phrase("that", "died", "this", "way"):
         stream.reset(mark)
         return None

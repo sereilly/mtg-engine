@@ -38,6 +38,7 @@ from .effects import (
     _parse_choose_player_who_cast,
     _parse_counter, _parse_create_token,
     _parse_damage, _parse_damage_redirect, _parse_destroy, _parse_discard,
+    _parse_reveal_hand,
     _parse_doesnt_untap_next_step, _parse_double, _parse_draw, _parse_enchant,
     _parse_end_the_turn, _parse_exchange_control, _parse_exile_graveyard,
     _parse_exile_top_of_library, _parse_extra_turn, _parse_fight, _parse_flip_coin,
@@ -540,6 +541,14 @@ def parse_subject_verb(
             return _parse_discard(stream, source_spec)
         if token.text in ("mills", "mill") and isinstance(source_spec, ast.PlayerRef):
             return _parse_mill(stream, source_spec)
+        # "Target player **reveals their hand** and discards all nonland cards."
+        # (Amnesia.) Declines without consuming when the reveal names something
+        # other than a hand, so "reveals the top card of their library" keeps
+        # its own reading and its own error.
+        if token.text in ("reveals", "reveal") and isinstance(source_spec, ast.PlayerRef):
+            revealed = _parse_reveal_hand(stream, source_spec)
+            if revealed is not None:
+                return revealed
         # "**Each player** returns all creature cards from their graveyard to
         # the battlefield." (All Hallow's Eve.) The return production with a
         # printed subject: only the bare imperative ("Return target creature
