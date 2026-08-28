@@ -576,3 +576,76 @@ def test_erosion_destroys_the_land_when_neither_half_can_be_paid(set_pool):
 
     assert [c for c in game.pending_choices if c.kind == "optional_pay"] == []
     assert not game.is_on_battlefield(forest), game.log
+
+
+def _brainwashed_board(set_pool, catalog_by_name, *, mountains: int, creatures: int = 1):
+    """A board of Brainwashed Grizzly Bears, in the declare-attackers step.
+
+    Indices are found by identity rather than ``battlefield.index``: an Aura
+    attached to a creature makes ``Permanent``'s value comparison recurse, which
+    is a live demonstration of why the control seam bans that call.
+    """
+    bears = [Permanent(card=catalog_by_name["Grizzly Bears"]) for _ in range(creatures)]
+    lands = [Permanent(card=catalog_by_name["Mountain"]) for _ in range(mountains)]
+    p1 = PlayerState(name="P1", battlefield=[*bears, *lands],
+                     library=[catalog_by_name["Mountain"]] * 10)
+    p2 = PlayerState(name="P2", library=[catalog_by_name["Mountain"]] * 10)
+    game = Game(players=[p1, p2])
+    for bear in bears:
+        aura = Permanent(card=set_pool("DRK")["Brainwash"])
+        p1.battlefield.append(aura)
+        attach_aura(aura, bear)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    attackers = [i for i, perm in enumerate(p1.battlefield)
+                 if any(perm is bear for bear in bears)]
+    return game, p1, attackers, lands
+
+
+def test_brainwash_refuses_the_attack_when_the_toll_cannot_be_paid(set_pool, catalog_by_name):
+    """"Enchanted creature can't attack unless its controller pays {3}."
+
+    CR 508.1g: a cost paid as attackers are declared. With no mana available the
+    declaration is refused outright — the failure mode this guards against is
+    the opposite one, an unenforced restriction letting the creature attack for
+    free, which is silent and wrong in the attacker's favour.
+    """
+    game, p1, attackers, _ = _brainwashed_board(set_pool, catalog_by_name, mountains=0)
+
+    declared, message = game.declare_attackers(0, attackers)
+
+    assert not declared, game.log
+    assert not p1.battlefield[attackers[0]].attacking
+
+
+def test_brainwash_charges_the_toll_it_checked(set_pool, catalog_by_name):
+    """Checked and *charged*: the three Mountains are tapped by the declaration.
+
+    A restriction that gates the attack and then forgets to take the mana is
+    the same bug as one that never gated it, one step later.
+    """
+    game, p1, attackers, lands = _brainwashed_board(set_pool, catalog_by_name, mountains=3)
+    assert not any(land.tapped for land in lands)
+
+    declared, _ = game.declare_attackers(0, attackers)
+
+    assert declared, game.log
+    assert sum(land.tapped for land in lands) == 3, game.log
+
+
+def test_brainwash_tolls_add_up_across_attackers(set_pool, catalog_by_name):
+    """Two enchanted creatures cost {6}, not {3}.
+
+    The toll is per attacking creature (CR 508.1g is asked of each declaration),
+    so a board that can pay one cannot declare both — the reading that charges
+    once for the whole attack is the widening one.
+    """
+    game, p1, attackers, _ = _brainwashed_board(
+        set_pool, catalog_by_name, mountains=3, creatures=2)
+
+    declared, message = game.declare_attackers(0, attackers)
+
+    assert not declared, game.log
+    assert "{6}" in message, message

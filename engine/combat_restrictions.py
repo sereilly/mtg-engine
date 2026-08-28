@@ -22,6 +22,7 @@ import re
 from dataclasses import dataclass, field
 
 from .grammar.vocabulary import COLOR_WORDS, CREATURE_TYPES, IMPLEMENTED_KEYWORDS
+from .mana_payment import mana_cost_from_symbols
 
 # Basic land types a "controls a <type>" clause can name. Restricted to the five
 # basics deliberately: the enforcing check in declare_attackers_step scopes its
@@ -60,6 +61,8 @@ class CombatRestriction:
 #   creatures_cant_attack           phases/declare_attackers_step.can_attack
 #   cant_attack_if_attacked_last_turn  phases/declare_attackers_step.can_attack
 #   cant_attack_unless_defender_acted  phases/declare_attackers_step.can_attack
+#   cant_attack_unless_pay          phases/declare_attackers_step.can_attack
+#                                   + declare_attackers (the charge)
 #   cant_block                      phases/declare_blockers_step
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
 #   cant_be_blocked_by              phases/declare_blockers_step
@@ -97,6 +100,26 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
             rf"an? (?P<land_type>{'|'.join(_LAND_TYPES)})$"
         ),
         "cant_attack_without_land_type",
+    ),
+    # "Enchanted creature can't attack unless its controller pays {3}."
+    # (Brainwash.) CR 508.1g: an additional *cost* to attack, paid as attackers
+    # are declared — the mana twin of Leviathan's "unless you sacrifice two
+    # Islands", which the grammar reads because its cost is a parsed noun
+    # phrase. This one's cost is a printed symbol run, which is exactly what a
+    # derivation table can hold.
+    #
+    # Both spellings of the payer, and they are one seat rather than two: CR
+    # 508.1a lets only the active player declare attackers, so the creature's
+    # controller *is* "you" for any card that could print the other wording.
+    # Whose text the sentence is on is the difference between Brainwash and a
+    # creature printing it about itself — `auras.aura_combat_restriction`
+    # rewrites the subject and asks this same table (idiom 14).
+    (
+        re.compile(
+            r"^this creature can't attack unless (?:you pay|its controller pays) "
+            r"(?P<attack_mana>(?:\{[^}]+\})+)$"
+        ),
+        "cant_attack_unless_pay",
     ),
     # "…unless **you** control four or more artifacts" (Gadrak). The count and
     # the type are payload for the reason the land type above is: a card printed
@@ -334,6 +357,19 @@ def combat_restriction_for(
         # would go inert, and the creature would be blockable by anything. That
         # is the widening direction, so the line refuses instead and its card is
         # reported unsupported naming the clause.
+        # The printed symbol run as the symbol dict every payment in this engine
+        # reads. Converted here for the same reason a captured number becomes an
+        # int here: a payload whose shape depends on which regex matched is how
+        # a cost silently stops being payable. A symbol
+        # `mana_cost_from_symbols` cannot spend refuses the whole line — a cost
+        # read as smaller than it is charges less than the card says, and the
+        # widening direction is a creature that attacks for free.
+        printed_cost = payload.pop("attack_mana", None)
+        if printed_cost is not None:
+            cost = mana_cost_from_symbols(printed_cost)
+            if cost is None:
+                return None
+            payload["mana"] = cost
         subtype = payload.get("blocker_subtype")
         if subtype is not None and subtype not in CREATURE_TYPES:
             return None

@@ -1286,6 +1286,14 @@ ENFORCED_ATTACHED_COMBAT_RESTRICTIONS = frozenset({
     # subject rewrite as the blacklist beside it — the difference between
     # Seeker and Elven Riders is whose text the sentence is printed on.
     "cant_be_blocked_except_by",
+    # "Enchanted creature can't attack unless its controller pays {3}."
+    # (Brainwash.) CR 508.1g, an additional cost to declare the creature as an
+    # attacker. Its reader is
+    # ``phases/declare_attackers_step._attack_mana_costs_of``, which asks this
+    # channel and the creature's own compiled program together — the gate in
+    # ``can_attack`` and the charge in ``declare_attackers`` share it, so the
+    # restriction cannot be checked and then left uncharged.
+    "cant_attack_unless_pay",
 })
 
 #: "Enchanted creature" / "equipped creature" in the subject position, with the
