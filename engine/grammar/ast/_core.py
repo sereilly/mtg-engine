@@ -555,6 +555,12 @@ class ObjectFilter:
     # on the creature, and regeneration and a toughness rewrite both erase it
     # while the damage stays dealt (CR 120.3).
     was_dealt_damage_this_turn: bool = False
+    # "target creature **of an opponent's choice** they control" (Preacher) -
+    # who *picks* the object, which is not a property of any candidate. Never
+    # emitted, like the two relations above, so a lowering not written for it
+    # refuses the phrase instead of quietly letting the ability's controller
+    # choose - which is the seat the card says must not.
+    chosen_by_opponent: bool = False
     # "all creatures **blocking this creature**" (The Wretched). The set of
     # creatures currently declared as blockers of the ability's own source
     # (CR 509.1a). *Relative* like ``created_with_source``: no read of the

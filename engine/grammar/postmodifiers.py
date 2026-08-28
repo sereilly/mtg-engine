@@ -572,6 +572,22 @@ def _parse_postmodifiers(
             if stream.accept_phrase("their", "choice"):
                 d.their_choice = True
                 continue
+            # "…**of an opponent's choice** they control" (Preacher). A
+            # different fact from "of their choice" above and deliberately a
+            # different field: that one says the seat already named picks, this
+            # one names a seat that is not the ability's controller. Reading one
+            # as the other would hand Preacher's pick to the Preacher's own
+            # player, which is the opposite of what it prints.
+            #
+            # "They control" is read here rather than as a controller clause of
+            # its own, because "they" is the opponent this phrase just named —
+            # a pronoun naming the object the sentence already named (idiom 20),
+            # and there is nowhere else in the phrase it could point.
+            if stream.accept_phrase("an", "opponent", "'s", "choice"):
+                d.chosen_by_opponent = True
+                if stream.accept_phrase("they", "control"):
+                    d.controller = "opponent"
+                continue
             # "another permanent **of that type**" (Enchantment Alteration) —
             # the type of the object the sentence's earlier clause named.
             # Recorded, never resolved here: the noun phrase cannot know what

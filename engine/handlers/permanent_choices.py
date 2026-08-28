@@ -187,6 +187,12 @@ def _controlled_by_seat(game, word: str, context) -> int | None:
             if context.target in game.players
             else None
         )
+    if word == "chooser":
+        # "…of an opponent's choice **they** control" (Preacher): the seat being
+        # asked. A pronoun naming the player the phrase already named, so the
+        # picked-from battlefield and the picking seat are one answer rather
+        # than two that can disagree once there are three players.
+        return _chooser_seat(game, payload, context)
     return None
 
 

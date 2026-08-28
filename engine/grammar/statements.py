@@ -39,6 +39,7 @@ from .where_x import parse_where_x_definition
 from .subject_verb import parse_subject_verb
 from .rebinding import rebind_pronoun_to_condition_target
 from .phrases import (
+    _accept_self_reference,
     parse_bound_subject,
     _parse_can_attack_as_though,
     _parse_duration,
@@ -264,6 +265,35 @@ def _distribute_duration(
     return dataclasses.replace(statement, duration=duration)
 
 
+def _parse_leading_linked_duration(stream: TokenStream) -> "ast.GainControl | None":
+    """``For as long as <self> remains tapped, gain control of <subject>.``
+    (Preacher.)
+
+    Returns None with the cursor untouched for anything else opening "for as
+    long as", so the trailing spelling every other card prints keeps its reader
+    and an unreadable condition still fails loudly on its own words.
+
+    Only the control change takes it. A leading duration on any other sentence
+    is the ordinary ``Duration`` the reader below distributes; this one names
+    the conditions a *sweep* re-checks, which only the control contribution has.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "as", "long", "as"):
+        return None
+    if not (
+        _accept_self_reference(stream)
+        and stream.accept_phrase("remains", "tapped")
+        and stream.accept_punct(",")
+    ):
+        stream.reset(mark)
+        return None
+    control = _parse_gain_control(stream, leading_duration="while_source_tapped")
+    if control is None:
+        stream.reset(mark)
+        return None
+    return control
+
+
 def _parse_unless_player_pays(stream: TokenStream) -> "ast.UnlessPlayerPays | None":
     """``Unless <player> pays <cost>, <statement>.`` (Scarwood Bandits.)
 
@@ -330,6 +360,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     unless_paid = _parse_unless_player_pays(stream)
     if unless_paid is not None:
         return unless_paid
+    # "**For as long as this creature remains tapped,** gain control of …"
+    # (Preacher.) A linked duration (CR 611.2b) printed in front of the verb.
+    # Read here for the reason the leading duration below is read here — it
+    # governs the whole sentence — and handed to the control production rather
+    # than distributed like an ordinary one, because a linked duration is a
+    # *string* on that node naming which conditions the sweep re-checks, not a
+    # `Duration` any effect can carry.
+    leading_link = _parse_leading_linked_duration(stream)
+    if leading_link is not None:
+        return leading_link
     revealed = _parse_reveal_hand_and_choose(stream)
     if revealed is not None:
         return revealed

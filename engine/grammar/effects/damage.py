@@ -176,9 +176,9 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
             second_recipient = parse_recipient(stream)
             if second_recipient is None:
                 raise stream.error("expected a damage recipient")
-            second_chooser: ast.PlayerRef | None = None
-            if stream.accept_phrase("of", "an", "opponent", "'s", "choice"):
-                second_chooser = ast.PlayerRef("target_opponent")
+            second_chooser, second_recipient = _parse_opponents_choice(
+                stream, second_recipient
+            )
             second = ast.DealDamage(
                 source, second_amount, (second_recipient,), ast.DamageRiders(), second_chooser
             )
@@ -482,7 +482,7 @@ def _parse_source_of_choice_effect(
         new_recipient = parse_recipient(stream)
         if new_recipient is None:
             raise stream.error("expected who takes the redirected damage")
-        chooser = _parse_opponents_choice(stream)
+        chooser, new_recipient = _parse_opponents_choice(stream, new_recipient)
         if not stream.accept_word("instead"):
             raise stream.error("expected 'instead' to end a redirection effect")
         return ast.RedirectDamage(
@@ -505,13 +505,36 @@ def _parse_source_of_choice_effect(
     return ast.PreventDamage(ast.Fixed(1), to=recipient, from_filter=filt)
 
 
-def _parse_opponents_choice(stream: TokenStream) -> "ast.PlayerRef | None":
+def _parse_opponents_choice(
+    stream: TokenStream, recipient: "ast.Recipient | None" = None
+) -> "tuple[ast.PlayerRef | None, ast.Recipient | None]":
     """"…of an opponent's choice" — the rider that hands the pick to the other
-    seat. The same three words :func:`_parse_damage`'s second clause reads, in
-    one place because two productions now read them."""
+    seat, and the recipient with the rider lifted off it.
+
+    Two spellings reach here, and they are the same three words. The rider may
+    still be sitting in the stream (nothing else claimed it), or the noun parser
+    may already have consumed it as part of the noun phrase — which is what it
+    does when the phrase continues, as "target creature of an opponent's choice
+    **they control**" (Preacher) does. One reader either way: two productions
+    racing on one phrase is how Nova Pentacle's chooser came to be dropped the
+    day the noun parser learned the longer form.
+
+    The flag is *lifted*, not copied: it is not a property of any candidate, and
+    every lowering downstream refuses a filter still carrying it rather than
+    letting the wrong seat choose.
+    """
     if stream.accept_phrase("of", "an", "opponent", "'s", "choice"):
-        return ast.PlayerRef("target_opponent")
-    return None
+        return ast.PlayerRef("target_opponent"), recipient
+    filt = getattr(recipient, "filter", None)
+    if filt is not None and getattr(filt, "chosen_by_opponent", False):
+        return (
+            ast.PlayerRef("target_opponent"),
+            dataclasses.replace(
+                recipient,
+                filter=dataclasses.replace(filt, chosen_by_opponent=False),
+            ),
+        )
+    return None, recipient
 
 
 def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
@@ -559,7 +582,7 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
     new_recipient = parse_recipient(stream) or parse_bound_subject(stream)
     if new_recipient is None:
         raise stream.error("expected who takes the redirected damage")
-    chooser = _parse_opponents_choice(stream)
+    chooser, new_recipient = _parse_opponents_choice(stream, new_recipient)
     if not stream.accept_word("instead"):
         raise stream.error("expected 'instead' to end a redirection effect")
     return ast.RedirectDamage(

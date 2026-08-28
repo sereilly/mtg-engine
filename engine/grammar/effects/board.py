@@ -24,7 +24,9 @@ from ..phrases import (
 )
 
 
-def _parse_gain_control(stream: TokenStream) -> ast.GainControl | None:
+def _parse_gain_control(
+    stream: TokenStream, *, leading_duration: str | None = None
+) -> ast.GainControl | None:
     """``Gain control of <subject> <duration>.``
 
     Returns None — cursor untouched — unless the line really opens "gain
@@ -60,6 +62,15 @@ def _parse_gain_control(stream: TokenStream) -> ast.GainControl | None:
     # one tied to a permanent that is still there: the spell that granted it is
     # in a graveyard by the time the turn ends, so nothing can be watched for —
     # CR 611.2c ends it at cleanup instead.
+    if leading_duration is not None:
+        # "**For as long as this creature remains tapped,** gain control of …"
+        # (Preacher.) The duration printed in front of the verb instead of
+        # behind it, read by the statement layer and handed down — the same
+        # sentence either way, so there is one production and one lowering. A
+        # card printing *both* is refused rather than having one silently win.
+        if stream.at_word("until", "for"):
+            raise stream.error("this sentence prints two different durations")
+        return ast.GainControl(subject, leading_duration)
     if stream.accept_phrase("until", "end", "of", "turn"):
         return ast.GainControl(subject, "until_end_of_turn")
     if not stream.accept_phrase("for", "as", "long", "as"):

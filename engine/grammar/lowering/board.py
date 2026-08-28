@@ -32,6 +32,7 @@ from ._common import (
 )
 from ._events import (
     binds_block_pair,
+    CHOSEN_PERMANENT,
     _BOUND_OBJECT_DELAYED_EVENTS,
     _UNTAPPED_PERMANENTS,
 )
@@ -570,6 +571,63 @@ def _lower_gain_control(
             )
         _describe_targets(described, subject)
         return (OracleInstruction("gain_control_until_eot", "", described),)
+    if node.duration == "while_source_tapped":
+        # "For as long as this creature remains tapped, gain control of target
+        # creature **of an opponent's choice they control**." (Preacher.)
+        #
+        # Two instructions rather than one: the pick belongs to another seat, so
+        # it is the ordinary ``choose_permanent`` prompt — armed on the opponent,
+        # answered into the resolution's scratchpad — and the steal behind it
+        # reads that answer instead of a target. Both halves already exist; what
+        # is new is only the pairing.
+        #
+        # A deliberate, recorded deviation from CR 601.2c: the printed word is
+        # "target", and a target is chosen as the ability is *activated*. This
+        # engine's activation flow announces targets from one seat, so the
+        # opponent's pick is made at resolution instead. What that costs is the
+        # 608.2b re-check and shroud on the picked creature; what the
+        # alternative costs is a second seat inside the announcement step.
+        if subject.quantifier != "target" or not subject.filter.chosen_by_opponent:
+            raise LoweringError(
+                "the tapped-source link is printed on a choice an opponent "
+                "makes",
+                node=node,
+            )
+        described = _filter_payload(
+            subject.filter, carried_separately=frozenset({"chosen_by_opponent"})
+        )
+        # The candidate rule asks `subject_matches` with the ability's seat as
+        # observer, so the gate is what that answers — including `controller`,
+        # which is exactly the key this phrase carries and which the
+        # object-only subset the other branches use would refuse.
+        if untestable_filter_keys(described):
+            raise LoweringError(
+                "the control change cannot test this restriction", node=node
+            )
+        return (
+            OracleInstruction(
+                "choose_permanent", "",
+                {
+                    "result_key": CHOSEN_PERMANENT,
+                    "chooser": "opponent",
+                    # The candidates come from the chooser's own battlefield —
+                    # "they control" — which is a seat question the filter's
+                    # `controller` key answers only relative to the *ability's*
+                    # controller. In a two-player game the two agree; with three
+                    # seats they do not, and the printed word is "they".
+                    "controlled_by": "chooser",
+                    "filter": described,
+                    "prompt": "Choose a creature you control.",
+                },
+            ),
+            OracleInstruction(
+                "steal_target_linked_to_source", "",
+                {
+                    "permanents_from": CHOSEN_PERMANENT,
+                    "link_conditions": ["source_remains_tapped"],
+                },
+            ),
+        )
     if node.duration == "while_source_on_battlefield":
         # "…for as long as this creature remains on the battlefield" (Scarwood
         # Bandits). The same monitored contribution the two-condition steal
