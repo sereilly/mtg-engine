@@ -152,15 +152,18 @@ from .board import (
     _lower_for_each_destroyed,
     _lower_delayed_destroy,
     _lower_delayed_self_action,
-    _lower_exchange_control,
     _lower_exchange_greatest_mana_value,
     _lower_regenerate,
     _lower_destroy_unless_pay,
     _lower_sacrifice_unless_pay,
-    _LINKED_STEAL_FILTER,
-    _lower_gain_control,
     _lower_sacrifice,
     _lower_sacrifice_expansion_permanents,
+    _lower_destroy_each_unless_paid,
+)
+from .control_changes import (
+    _LINKED_STEAL_FILTER,
+    _lower_exchange_control,
+    _lower_gain_control,
 )
 from .tapping import (
     _lower_tap,
@@ -349,6 +352,7 @@ __all__ = [
     "_lower_gain_control",
     "_lower_sacrifice",
     "_lower_sacrifice_expansion_permanents",
+    "_lower_destroy_each_unless_paid",
     "_lower_shuffle_graveyard_into_library",
     "_lower_shuffle_hand_into_library",
     "_EXILED_CREATURE",

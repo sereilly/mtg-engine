@@ -170,7 +170,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # CR's other line: CR 701.14 is a keyword action, an atomic exchange between two
 # creatures (701.14b — if either has left, neither deals damage), where
 # everything left behind is one source dealing to a recipient.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "counters", "keywords", "tapping", "prevention", "redirection", "fighting", "where_x", "control_flow", "attachments"]
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "counters", "keywords", "tapping", "prevention", "redirection", "fighting", "where_x", "control_flow", "attachments", "control_changes"]
 # The AST side has no `library`: what a search or a look-at *is* — the pile, the
 # filter, the fate of what was found — is a handful of nodes that sit perfectly
 # well beside the other card nodes, and the split that made `library` a family

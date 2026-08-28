@@ -809,7 +809,20 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # `engine/oracle.py`'s table because both front ends see the whole line,
         # and a condition only one of them reads leaves the other refusing the
         # effect behind it.
+        # Marked, because both readings behind "there are" can refuse: the block
+        # used to consume the two words and fall through with the cursor past
+        # them, so every later branch was offered a line missing its opening.
+        # That was invisible while one production followed the phrase and is
+        # what kept Mana Vortex's reading below from being reached at all.
+        state_mark = stream.mark()
         if stream.accept_phrase("there", "are"):
+            # "When there are **no lands on the battlefield**, sacrifice this
+            # enchantment." (Mana Vortex.) CR 603.8 again, asked about every
+            # battlefield rather than about the source's controller — a
+            # different set and so a different kind, since a Mana Vortex whose
+            # controller has run out of lands stays while an opponent has one.
+            if stream.accept_phrase("no", "lands", "on", "the", "battlefield"):
+                return ast.TriggerEvent("no_lands_anywhere", "when")
             count = stream.peek_word()
             if count in NUMBER_WORDS:
                 stream.advance()
@@ -827,6 +840,7 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                                 return ast.TriggerEvent(
                                     "counters_reach_threshold", "when",
                                 )
+        stream.reset(state_mark)
         # "**When** enchanted land becomes tapped, destroy it" (Blight). The
         # same event as the whenever spelling — one printed word apart — so it
         # is the same production, asked with the word this branch read.
@@ -859,6 +873,12 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
             "causes", "you", "to", "discard", "this", "card",
         ):
             return ast.TriggerEvent("discarded_by_opponent_effect", "when")
+        # "When **you cast this spell**" (Mana Vortex) — CR 603.6d, an ability
+        # that triggers on its own object being cast. Read on this front end
+        # too, for the reason every condition above it is: a condition only one
+        # of them sees leaves the other refusing the effect behind it.
+        if stream.accept_phrase("you", "cast", "this", "spell"):
+            return ast.TriggerEvent("self_cast", "when")
         if stream.accept_phrase("you", "control", "no", "islands"):
             return ast.TriggerEvent("no_islands", "when")
         if stream.accept_phrase("you", "control", "no", "lands"):

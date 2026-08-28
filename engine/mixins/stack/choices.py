@@ -3202,6 +3202,62 @@ class PendingChoicesMixin:
         deterministic default used for AI players and headless simulation."""
         self.auto_resolve_pending_choices(only_player_index=only_player_index, kinds=("optional_pay",))
 
+    # -- Paying life to buy one permanent out of a sweep (Cleansing) --------
+
+    def confirm_pay_life_to_save(self, player_index: int, accept: bool = True) -> bool:
+        """Answer "…unless any player pays N life" for the land on offer."""
+        return self.resolve_pending_choice(
+            "pay_life_to_save", player_index, accept=bool(accept)
+        )
+
+    def _resolve_pay_life_to_save(self, choice: PendingChoice, accept: bool) -> bool:
+        """Pay, or decline and let the sweep have it.
+
+        The saved set is the *loop's own* record, handed in when the prompt was
+        armed. It has to be, and not a field here: the offer goes round every
+        seat about one permanent, and what the loop needs to know is whether
+        anybody has paid yet — a per-seat answer cannot say."""
+        data = choice.data
+        player = self.players[choice.player_index]
+        life = int(data.get("life", 1))
+        self.discard_pending_choice(choice)
+        # CR 119.4: a player may pay N life only with at least N to pay. Down to
+        # exactly 0 is legal, and the state-based check that follows ends the
+        # game — so this is a refusal to pay what is not there, not a life
+        # total this rule is protecting.
+        if not accept or player.life < life:
+            self.log.append(
+                f"{player.name} declined to pay {life} life for "
+                f"{data.get('permanent_name', 'a permanent')}"
+            )
+            return True
+        player.life -= life
+        saved = data.get("_saved")
+        if saved is not None:
+            saved.add(int(data["permanent_id"]))
+        self.log.append(
+            f"{player.name} paid {life} life to save "
+            f"{data.get('permanent_name', 'a permanent')} ({data.get('card_name', '')})"
+        )
+        return True
+
+    def _default_pay_life_to_save(self, choice: PendingChoice) -> None:
+        """The stated policy for a seat nobody is asking: pay for a permanent
+        you control, and only while the payment is not your whole life total.
+
+        A policy rather than a valuation, the discipline
+        ``_default_optional_pay`` states: a seat pays to keep its own board and
+        never pays to keep an opponent's, and it never pays itself to nothing
+        for one permanent. A card that should choose otherwise wants a
+        valuation in ``engine/ai_valuation.py``, not a branch here."""
+        permanent = self.permanent_by_id(choice.data.get("permanent_id"))
+        seat = self.controller_index_of(permanent) if permanent is not None else None
+        life = int(choice.data.get("life", 1))
+        mine = seat == choice.player_index
+        self._resolve_pay_life_to_save(
+            choice, mine and self.players[choice.player_index].life > life
+        )
+
     # -- Which permanent receives a loyalty counter (Liliana's Scrounger) ----
 
     def confirm_loyalty_recipient(self, player_index: int, permanent_id: int) -> bool:
@@ -3808,6 +3864,25 @@ register_choice(
     # deterministic answer before the flag is set — so headless and AI play run
     # exactly as they did.
     suspends=True,
+)
+
+register_choice(
+    "pay_life_to_save",
+    resolve=lambda game, choice, r: game._resolve_pay_life_to_save(choice, r["accept"]),
+    default=lambda game, choice: game._default_pay_life_to_save(choice),
+    action="pay_life_to_save_confirm",
+    prompt_key="pay_life_to_save",
+    blocked_detail="answer the pay-to-save offer before other actions",
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The answer decides what the *next* step of the same resolution does with
+    # this permanent — and, one step later, whether the seat behind you is
+    # asked about it at all — so the loop genuinely stops here.
+    suspends=True,
+    # A non-interactive seat never queues it: the sweep has to finish, and the
+    # stated default is taken where the offer stands. That is also what keeps
+    # AI and headless play free of the suspension above.
+    default_at_arm=True,
 )
 
 register_choice(

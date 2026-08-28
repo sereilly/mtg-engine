@@ -187,6 +187,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "destroy_all_lands": "destruction",
     "destroy_all_lands_of_type": "destruction",
     "destroy_all_matching": "destruction",
+    "destroy_each_unless_life_paid": "destruction",
     "destroy_attached_permanent": "destruction",
     "destroy_self": "destruction",
     "destroy_all_artifacts_creatures_enchantments": "destruction",

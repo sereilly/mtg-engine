@@ -465,3 +465,77 @@ def test_gaeas_touch_can_still_be_sacrificed_for_two_green(set_pool):
     assert result.supported, result.details
     assert p1.mana_pool["G"] == 2, (dict(p1.mana_pool), game.log)
     assert p1.battlefield == []
+
+
+# --- H2: land denial and prohibitions (The Dark) ---
+
+
+def test_mana_vortex_counters_itself_when_no_land_is_sacrificed(set_pool):
+    """"When you cast this spell, counter it unless you sacrifice a land."
+
+    CR 603.6d: the ability is on the object being cast and triggers from the
+    stack, so no battlefield scan can find it. With no land to give, the offer
+    is never made and the decline branch counters the spell — the enchantment
+    reaches a graveyard rather than the battlefield.
+    """
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.players[0].hand = [set_pool("DRK")["Mana Vortex"]]
+
+    game.cast_from_hand(0, "Mana Vortex")
+    game.auto_resolve_pending_choices()
+    while game.stack:
+        game.resolve_top_of_stack()
+        game.auto_resolve_pending_choices()
+
+    assert [p.card.name for p in game.players[0].battlefield] == [], game.log
+    assert game.players[0].graveyard[-1].name == "Mana Vortex", game.log
+
+
+def test_mana_vortex_takes_a_land_from_whoever_is_in_upkeep(set_pool):
+    """"At the beginning of each player's upkeep, **that player** sacrifices a
+    land of their choice."
+
+    The seat is the one the trigger's condition named, frozen by the fire site
+    — not the source's controller, which is the wrong seat on every upkeep but
+    their own. So P2's upkeep costs P2 a land and leaves P1's alone.
+    """
+    lea = set_pool("LEA")
+    vortex = Permanent(card=set_pool("DRK")["Mana Vortex"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[vortex, Permanent(card=lea["Forest"])]),
+        PlayerState(name="P2", battlefield=[Permanent(card=lea["Swamp"])]),
+    ])
+    game._sync_control()
+
+    _run_upkeep(game, 1)
+    game.auto_resolve_pending_choices()
+
+    assert [p.card.name for p in game.players[1].battlefield] == [], game.log
+    assert "Forest" in [p.card.name for p in game.players[0].battlefield], game.log
+
+
+def test_mana_vortex_sacrifices_itself_once_every_land_is_gone(set_pool):
+    """"When there are no lands on the battlefield, sacrifice this enchantment."
+
+    A state trigger (CR 603.8) over *every* battlefield, not the controller's:
+    the Vortex stays while an opponent still has a land and goes the moment the
+    last one anywhere leaves.
+    """
+    lea = set_pool("LEA")
+    vortex = Permanent(card=set_pool("DRK")["Mana Vortex"])
+    swamp = Permanent(card=lea["Swamp"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[vortex]),
+        PlayerState(name="P2", battlefield=[swamp]),
+    ])
+    game._sync_control()
+
+    game.check_state_based_actions()
+    assert game.is_on_battlefield(vortex), game.log
+
+    game.sacrifice_permanent(swamp)
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(vortex), game.log
+    assert game.players[0].graveyard[-1].name == "Mana Vortex"

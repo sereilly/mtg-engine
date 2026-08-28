@@ -301,3 +301,34 @@ def test_martyrs_cry_leaves_a_creature_of_another_color_alone(set_pool):
 
     assert [perm.card.name for perm in p2.battlefield] == ["Rag Man"]
     assert p2.hand == [], game.log
+
+
+# --- H2: land denial and prohibitions (The Dark) ---
+
+
+def test_cleansing_destroys_only_the_lands_nobody_paid_for(set_pool):
+    """"For each land, destroy that land unless any player pays 1 life."
+
+    The offer is per land and it goes round every seat, so both branches are in
+    one cast: P1 buys its three Forests back at 1 life apiece, and P2's Swamp
+    is destroyed because the seat that would want it cannot pay — the stated
+    default never pays a seat down to nothing, and P1 will not spend life on
+    somebody else's land.
+    """
+    game, players = _cast_from(set_pool, "Cleansing")
+    lea = set_pool("LEA")
+    players[0].battlefield = [Permanent(card=lea["Forest"]) for _ in range(3)]
+    players[1].battlefield = [Permanent(card=lea["Swamp"])]
+    players[1].life = 1
+    game._sync_control()
+
+    result = game.cast_from_hand(0, "Cleansing")
+
+    assert result.supported, result.details
+    assert len(players[0].battlefield) == 3, game.log
+    assert players[1].battlefield == [], game.log
+    assert players[1].graveyard[-1].name == "Swamp"
+    # Three lands saved at 1 life apiece; the seat that could not pay paid
+    # nothing.
+    assert players[0].life == 17, game.log
+    assert players[1].life == 1, game.log

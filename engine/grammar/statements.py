@@ -46,6 +46,7 @@ from .phrases import (
     _parse_mana_payment,
 )
 from .effects import (
+    _parse_for_each_destroy_unless_paid,
     _parse_add_mana,
     _parse_becomes,
     _parse_cant_attack_or_block,
@@ -409,6 +410,14 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # governs a whole sentence: the same rule the leading duration a few
     # branches below follows, and for the same reason — an effect that read its
     # own "for each" would be one production per effect that can carry one.
+    # "**For each land,** destroy that land unless any player pays 1 life."
+    # (Cleansing.) Read before the "this way" windows below, because both open
+    # with the same two words and only this one names a set on the battlefield
+    # — the window reader would take the noun phrase and then fail the line on
+    # the missing participle, losing it to a less specific error.
+    each_bought_off = _parse_for_each_destroy_unless_paid(stream)
+    if each_bought_off is not None:
+        return each_bought_off
     per_death = _parse_leading_for_each(stream)
     if per_death is not None:
         # The repeated act may be printed as a choice of two ("pay 4 life **or**

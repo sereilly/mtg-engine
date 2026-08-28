@@ -171,7 +171,6 @@ class GameEndingMixin:
             # Modeled alongside SBAs so it fires immediately when the last
             # matching land leaves, not only at the next upkeep (CR 603.8).
             for seat, player in enumerate(self.players):
-                departing_ss = []
                 for perm in list(self.controlled_by(player)):
                     needs_island = next(matching_triggers(
                         perm.effective_card,
@@ -190,13 +189,42 @@ class GameEndingMixin:
                     controls_any_land = any(
                         p.card.primary_type == "land" for p in self.controlled_by(seat)
                     )
-                    if (needs_island and not controls_island) or (needs_any_land and not controls_any_land):
-                        self._permanent_to_graveyard(player, perm)
-                        reason = "controls no lands" if needs_any_land and not controls_any_land else "controls no Islands"
+                    # "When there are **no lands on the battlefield**,
+                    # sacrifice this enchantment." (Mana Vortex.) The same
+                    # state trigger asked about every battlefield rather than
+                    # this seat's, so it is its own condition and its own
+                    # count: a Mana Vortex whose controller has run out of
+                    # lands stays while an opponent still has one.
+                    needs_any_land_anywhere = next(matching_triggers(
+                        perm.effective_card,
+                        condition_kinds={"no_lands_anywhere"},
+                        instruction_kinds={"sacrifice_self"},
+                    ), None) is not None
+                    lands_anywhere = any(
+                        p.has_type("land") for p in self.all_permanents()
+                    )
+                    if (
+                        (needs_island and not controls_island)
+                        or (needs_any_land and not controls_any_land)
+                        or (needs_any_land_anywhere and not lands_anywhere)
+                    ):
+                        # Through the one sacrifice transition (CR 701.21a), not
+                        # a graveyard append beside a battlefield rebuild: the
+                        # card says *sacrifice*, and the open-coded pair here
+                        # skipped the `was_sacrificed` stamp and the
+                        # `you_sacrifice_permanent` announcement that every
+                        # other sacrifice in the engine makes. Sea Serpent and
+                        # Island Fish Jasconius have been leaving that way since
+                        # the seam was built.
+                        self.sacrifice_permanent(perm)
+                        if needs_any_land_anywhere and not lands_anywhere:
+                            reason = "no lands on the battlefield"
+                        elif needs_any_land and not controls_any_land:
+                            reason = "controls no lands"
+                        else:
+                            reason = "controls no Islands"
                         self.log.append(f"{perm.card.name} sacrificed ({reason})")
                         changed = True
-                        departing_ss.append(perm)
-                self.remove_all_from_battlefield(departing_ss)
 
             # The positive state trigger: "When you control a Dwarf, sacrifice
             # this creature." (Goblins of the Flarg.) CR 603.8 again, and here

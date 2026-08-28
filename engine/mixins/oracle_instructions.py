@@ -163,6 +163,17 @@ class OracleInstructionsMixin:
         oracle compiler already recognizes these conditions, so a card written
         "whenever you cast an enchantment spell" needs no registry entry.
         """
+        # "When **you cast this spell**, counter it unless you sacrifice a land."
+        # (Mana Vortex.) CR 603.6d: the ability is on the object being cast and
+        # triggers from the stack, so no battlefield scan can find it —
+        # `events.cast_trigger_events` reads it off the card, and the event's
+        # `cast_card` is both what selects it and what "counter **it**" then
+        # finds on the stack. Announced first, so a counter goes on the stack
+        # directly above its own spell.
+        emit(
+            self, "self_cast", subject=card,
+            caster_index=caster_index, cast_card=card,
+        )
         emit(self, "you_cast_spell", subject=card, caster_index=caster_index)
         # The ordinal form (Double Vision) is the *same* event asked a different
         # question, so it is announced from the same place rather than given a

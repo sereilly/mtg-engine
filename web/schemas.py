@@ -68,6 +68,7 @@ ActionKind = Literal[
     "sacrifice_confirm",
     "effect_order_confirm",
     "resolve_optional_pay",
+    "pay_life_to_save_confirm",
     "land_type_confirm",
     "number_choice_confirm",
     "confirm_mana_payment",

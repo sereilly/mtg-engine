@@ -368,6 +368,16 @@ def _action_resolve_optional_pay(session, req, seat_type):
         raise HTTPException(status_code=400, detail="accept (true/false) is required")
     session.game.confirm_optional_pay(req.seat, card_name=req.card_name, accept=bool(req.accept))
 
+@action_handler("pay_life_to_save_confirm")
+def _action_pay_life_to_save_confirm(session, req, seat_type):
+    # Cleansing: "For each land, destroy that land unless any player pays 1
+    # life." One offer at a time, so the answer is just accept/decline.
+    if req.accept is None:
+        raise HTTPException(status_code=400, detail="accept (true/false) is required")
+    ok = session.game.confirm_pay_life_to_save(req.seat, bool(req.accept))
+    if not ok:
+        raise HTTPException(status_code=400, detail="no pay-to-save offer pending for you")
+
 @action_handler("land_type_confirm")
 def _action_land_type_confirm(session, req, seat_type):
     # Phantasmal Terrain: the controller picks the enchanted land's basic type.
