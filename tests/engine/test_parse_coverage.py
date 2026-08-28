@@ -120,12 +120,23 @@ def test_grammar_refuses_the_rider_shape_instead_of_swallowing_it():
 
     The probe detects a swallowed rider after the fact; the grammar's
     full-token-consumption rule prevents one. A clause whose trailing words the
-    grammar cannot account for is refused outright, so there is nothing for the
-    probe to find — which is why the Hasran Ogress shape no longer appears in
-    the destroy family at all.
+    grammar cannot account for is refused, so there is nothing for the probe to
+    find.
+
+    The refusal moved one layer down when Erosion printed this shape about a
+    seat the offer *can* name ("…unless **that player** pays {1} or 1 life"):
+    the destroy family reads the tail now, and what refuses "its controller" is
+    ``lowering/control_flow.OFFERABLE_ACTORS`` — the four references
+    ``handlers/control_flow._offered_seats`` can actually resolve. That is a
+    strictly better refusal for the bug class this file guards, because it names
+    the payer rather than reporting unconsumed text, and it claims nothing:
+    ``scripts/parse_coverage.py`` reads ``usable``, which a lowering refusal
+    leaves False. So both halves are asserted — the line is unusable, and the
+    reason says which word it could not honour.
     """
     from engine.grammar import compile_line
 
     result = compile_line("Destroy target creature unless its controller pays {4}.")
-    assert not result.parsed
     assert not result.usable
+    assert not result.lowered
+    assert "controller" in (result.lowering_error or ""), result.lowering_error

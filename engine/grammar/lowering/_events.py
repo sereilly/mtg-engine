@@ -358,3 +358,38 @@ def _chosen_cast_amount(
         rounding = amount.rounding
         amount = amount.of
     return (amount, rounding) if isinstance(amount, ast.DamageDealtByChosenCast) else None
+
+
+#: Trigger events whose *condition* already names the permanent the source is
+#: attached to. Under one of them a later "that <noun>" in the same sentence is
+#: that same permanent — "At the beginning of the upkeep of enchanted land's
+#: controller, destroy **that land**" (Erosion), "…unless they sacrifice **that
+#: artifact**" (Curse Artifact).
+#:
+#: Idiom 20's rule with the noun repeated instead of "it": the pronoun names the
+#: object the sentence already named. It has to be an event set rather than a
+#: property of the noun phrase, because "that land" under any *other* event is
+#: the firing event's object (Hooded Blightfang's damaged planeswalker) and
+#: under most events is nothing at all — and a "that" resolved against the
+#: wrong one of those does not fail, it acts on a different permanent.
+ATTACHED_SUBJECT_EVENTS: frozenset[str] = frozenset({"upkeep_enchanted_controller"})
+
+
+def names_attached_permanent(subject, event: str | None) -> bool:
+    """Whether *subject* names the permanent the ability's source is attached to.
+
+    One reader for both spellings — "it"/"enchanted <noun>", which the noun
+    parser already marks, and the repeated "that <noun>" above — so a lowering
+    that learns one gets the other and the two cannot come to disagree about
+    which permanent an Aura's sentence is talking about.
+    """
+    from ._common import _is_enchanted
+
+    if _is_enchanted(subject):
+        return True
+    return (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "that"
+        and not subject.targeted
+        and event in ATTACHED_SUBJECT_EVENTS
+    )

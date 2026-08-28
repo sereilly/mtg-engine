@@ -32,6 +32,7 @@ from ._common import (
 )
 from ._events import (
     binds_block_pair,
+    names_attached_permanent,
     CHOSEN_PERMANENT,
     _BOUND_OBJECT_DELAYED_EVENTS,
     _UNTAPPED_PERMANENTS,
@@ -223,7 +224,13 @@ def _lower_destroy(
     # targeted destroy would ask for a pick the card never offers — and would
     # find a permanent by index on whichever battlefield the context happened
     # to carry.
-    if _is_enchanted(spec):
+    #
+    # "…destroy **that land**" (Erosion) is the same referent spelled with the
+    # noun repeated instead of the pronoun, and only under an event whose
+    # condition already named it -- see `names_attached_permanent`. Asked here,
+    # above the "that" branch below, because that branch reads the *firing
+    # event's* object and would destroy whatever the fire site had stamped.
+    if names_attached_permanent(spec, event):
         attached_payload: dict[str, object] = {}
         if node.no_regen:
             attached_payload["bypass_regeneration"] = True
@@ -736,7 +743,9 @@ def _forced_sacrifice_filter(filt: ast.ObjectFilter) -> dict | None:
     return object_only_filter(filt.to_payload(), carried_separately=_SACRIFICE_CARRIED)
 
 
-def _lower_sacrifice(node: ast.Sacrifice) -> tuple[OracleInstruction, ...]:
+def _lower_sacrifice(
+    node: ast.Sacrifice, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     """Only "sacrifice this <permanent>" has a handler.
 
     Sacrificing something *chosen* ("sacrifice a creature") is a different
@@ -757,6 +766,14 @@ def _lower_sacrifice(node: ast.Sacrifice) -> tuple[OracleInstruction, ...]:
     # exactly what the prompt already does; the only thing that changes is who
     # is asked, and that is also what lets the printed "of their choice" be
     # read and then dropped rather than refused.
+    # "…unless they sacrifice **that artifact**" (Curse Artifact) — the
+    # permanent this Aura is attached to, which the trigger's own condition
+    # named. Above the chosen-sacrifice prompt below and not routed through it:
+    # "that artifact" is one known permanent, and "an artifact" is a pick from
+    # every artifact its controller has, so a player with two of them would be
+    # offered the wrong one to give up.
+    if names_attached_permanent(node.subject, event):
+        return (OracleInstruction("sacrifice_attached_permanent", "", {}),)
     if (
         node.player.kind in _SACRIFICE_PAYERS
         and isinstance(node.subject, ast.TargetSpec)

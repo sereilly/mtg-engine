@@ -580,7 +580,15 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
 
     if (cond, kind) in UPKEEP_EFFECTS:
         return f"registered upkeep pair ({cond}, {kind}) — phases/upkeep_effects.py"
-    if cond in ("upkeep_self", "upkeep_each") and kind in EFFECT_HANDLERS:
+    from .phases.upkeep_step import _ORDINARY_UPKEEP_SEATS
+
+    # Asked of the upkeep step's own table rather than a copied list of its
+    # members. The copy here read ``("upkeep_self", "upkeep_each")`` while the
+    # step had grown a third condition, which is the drift this file's other
+    # comments keep describing — a gate and a dispatch reading two spellings of
+    # one rule, where the gate's is the smaller and so refuses cards the engine
+    # can actually play.
+    if cond in _ORDINARY_UPKEEP_SEATS and kind in EFFECT_HANDLERS:
         return "ordinary upkeep trigger (CR 603.3) — phases/upkeep_step.py"
     return None
 

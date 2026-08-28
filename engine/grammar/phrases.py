@@ -31,8 +31,9 @@ from .lexer import (MANA, NUMBER, PUNCT, QUOTE, WORD, tokenize)
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
 from .references import parse_target_spec
 from .stream import TokenStream
-from .vocabulary import (CARD_TYPES, KEYWORD_FAMILIES, KEYWORD_INDEX,
-                         NUMBER_WORDS, NUMERIC_ARGUMENT_KEYWORDS,
+from .vocabulary import (CARD_TYPES, CREATURE_TYPES, KEYWORD_FAMILIES,
+                         KEYWORD_INDEX, NUMBER_WORDS,
+                         NUMERIC_ARGUMENT_KEYWORDS, SUBTYPE_INDEX,
                          match_longest)
 _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # "for as long as this artifact remains tapped" (Ashnod's Battle Gear,
@@ -817,6 +818,52 @@ def _parse_pay_life(stream: TokenStream) -> "ast.PayLife | None":
         stream.reset(mark)
         return None
     return ast.PayLife(player=ast.PlayerRef("you"), amount=amount)
+
+
+def _parse_that_object(stream: TokenStream) -> ast.TargetSpec | None:
+    """``that <card type>`` — the object a trigger already named.
+
+    Not a target: the trigger bound it when it fired, so nothing is chosen on
+    resolution. It gets its own quantifier rather than being read as an ordinary
+    noun phrase, so a lowering written for "target creature" can never receive
+    it — the two reach completely different handlers, and the ones that take a
+    bound object read it out of the trigger's context instead of the payload.
+
+    A fragment two effect families ask for by name -- the board family's
+    "destroy that land" and the damage family's "unless they sacrifice that
+    artifact" -- so it lives here rather than in either of them. That is the
+    *only* thing that changed when it moved: it is still reached only where a
+    production calls it, never from the shared noun parser, because the phrase
+    turns up all over the pool ("tap that creature", "that player discards")
+    and letting `parse_recipient` claim it would lower every one of those lines
+    through a filter naming a card type nobody bound.
+    """
+    # "destroy **the other** creature" (Infinite Authority) — the second member
+    # of a pair the trigger bound, read through the shared ordinal production
+    # so the counter clause in the same sentence names it the same way.
+    ordinal = parse_pair_ordinal_subject(stream)
+    if ordinal is not None:
+        return ordinal
+    mark = stream.mark()
+    if not stream.accept_word("that"):
+        return None
+    noun = stream.peek_word()
+    if noun is not None and noun in CARD_TYPES:
+        stream.advance()
+        return ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,)))
+    # "destroy that **Wall**" (Battering Ram). A subtype names the bound object
+    # just as a card type does — the trigger that fired required it, so the word
+    # is describing what was bound rather than narrowing a fresh choice. Read
+    # through the vocabulary, so a made-up noun still refuses.
+    matched = match_longest(stream.words_from(), 0, SUBTYPE_INDEX)
+    if matched is not None and matched[0] in CREATURE_TYPES:
+        stream.advance(matched[1])
+        return ast.TargetSpec(
+            "that",
+            ast.ObjectFilter(card_types=("creature",), subtypes=(matched[0],)),
+        )
+    stream.reset(mark)
+    return None
 
 
 def parse_counted_subject(

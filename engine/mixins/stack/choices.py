@@ -2616,14 +2616,26 @@ class PendingChoicesMixin:
         )
 
     def _player_can_pay_optional(self, player, entry: dict) -> bool:
-        """CR 601.2h, for an optional cost: whether it *could* be paid."""
+        """CR 601.2h, for an optional cost: whether it *could* be paid.
+
+        ``life_alternative`` is CR 118.8's second way to cover the *same* offer
+        ("…pays {1} **or 1 life**", Erosion), so it widens this answer rather
+        than replacing it: a player with the life and not the mana can take the
+        offer, and one with neither cannot. It is a different field from
+        ``life_cost``, which is a life cost with no mana alternative at all
+        (Bronze Tablet) — folding the two would make an unaffordable mana cost
+        read as a life one.
+        """
         life_cost = int(entry.get("life_cost", 0) or 0)
         if life_cost:
             # CR 119.4: a player may pay N life only with at least N to pay —
             # paying down to exactly 0 is legal, and the state-based check that
             # follows is what ends the game.
             return player.life >= life_cost
-        return self._optional_pay_plan(player, entry) is not None
+        if self._optional_pay_plan(player, entry) is not None:
+            return True
+        alternative = int(entry.get("life_alternative", 0) or 0)
+        return bool(alternative) and player.life >= alternative
 
     def _pay_optional(self, player_index: int, entry: dict) -> None:
         """Collect the entry's mana cost from its player and run what accepting
@@ -2649,11 +2661,26 @@ class PendingChoicesMixin:
         else:
             plan = self._optional_pay_plan(player, entry)
             if plan is None:
-                return
-            for symbol, amount in plan.from_pool.items():
-                player.mana_pool[symbol] = int(player.mana_pool.get(symbol, 0)) - amount
-            for land in plan.tapped:
-                self.become_tapped(land)
+                # CR 118.8's alternative ("…pays {1} **or 1 life**", Erosion).
+                # A *stated policy* rather than a second prompt: the mana is
+                # spent whenever the board can cover it, and the life only when
+                # it cannot. The offer is one decision and the web prompt asks
+                # it once, so which half pays for it is the engine's to state —
+                # and stating "mana first" is the reading that keeps a life
+                # total for the alternatives that have no other currency.
+                alternative = int(entry.get("life_alternative", 0) or 0)
+                if not alternative or player.life < alternative:
+                    return
+                player.life -= alternative
+                self.log.append(
+                    f"{player.name} paid {alternative} life "
+                    f"({entry.get('card_name', '')})"
+                )
+            else:
+                for symbol, amount in plan.from_pool.items():
+                    player.mana_pool[symbol] = int(player.mana_pool.get(symbol, 0)) - amount
+                for land in plan.tapped:
+                    self.become_tapped(land)
         # A grammar-lowered "may" carries its consequence as instructions rather
         # than as one of the three fixed fields above, so any effect can sit
         # behind an optional cost.
@@ -3185,6 +3212,12 @@ class PendingChoicesMixin:
             if life_cost
             else plan_payment(player.mana_pool, (), entry.get("cost") or {})
         )
+        # The same policy for CR 118.8's alternative: floating mana first, and
+        # the life only when there is none — and never down to zero, which is
+        # the reading the life-cost branch above already takes.
+        alternative = int(entry.get("life_alternative", 0) or 0)
+        if floating is None and alternative and player.life > alternative:
+            floating = True
         self.discard_pending_choice(choice)
         if floating is not None:
             self._pay_optional(choice.player_index, entry)

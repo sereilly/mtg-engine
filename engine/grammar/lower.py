@@ -444,7 +444,14 @@ def lower_statement(
         return _lower_reveal_top(statement)
 
     if isinstance(statement, ast.Sacrifice):
-        return _lower_sacrifice(statement)
+        # ``event``, not ``dispatch_event``: what "that artifact" names is a
+        # fact about the *trigger* — its condition already named the enchanted
+        # permanent — rather than about where in the sentence the clause sits,
+        # and the kind it produces reaches its handler through the ordinary
+        # dict dispatch however deeply it is nested. The same reading
+        # ``_lower_destroy`` above takes, and for the same reason: Curse
+        # Artifact's sacrifice lowers under a ``May``.
+        return _lower_sacrifice(statement, event)
     if isinstance(statement, ast.SacrificeExpansionPermanents):
         return _lower_sacrifice_expansion_permanents(statement)
     if isinstance(statement, ast.GainType):

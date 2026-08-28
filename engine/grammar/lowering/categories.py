@@ -281,6 +281,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "sacrifice_self": "zones",
     # The controller-chosen sacrifice (Dire Fleet Warmonger's optional cost).
     "sacrifice_matching_permanent": "zones",
+    "sacrifice_attached_permanent": "zones",
     "upkeep_pay_or_sacrifice_enchantment": "upkeep",
     "upkeep_pay_or_sacrifice_self": "upkeep",
     # The destroy twin (Cosmic Horror). Same family: it is the upkeep's

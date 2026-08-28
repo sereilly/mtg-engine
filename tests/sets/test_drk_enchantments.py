@@ -465,3 +465,114 @@ def test_gaeas_touch_can_still_be_sacrificed_for_two_green(set_pool):
     assert result.supported, result.details
     assert p1.mana_pool["G"] == 2, (dict(p1.mana_pool), game.log)
     assert p1.battlefield == []
+
+
+# --- H1: Aura upkeep and attack costs (The Dark) ---
+
+
+def _cursed(set_pool, *, artifact: str = "Mox Pearl"):
+    """Curse Artifact on one of P2's two artifacts, on P2's upkeep.
+
+    Two artifacts deliberately: "that artifact" is the one this Aura enchants,
+    and an offer that let its controller give up *an* artifact instead would
+    pass this test with the wrong permanent gone.
+    """
+    enchanted = Permanent(card=set_pool("LEA")[artifact])
+    spare = Permanent(card=set_pool("LEA")["Mox Ruby"])
+    aura = Permanent(card=set_pool("DRK")["Curse Artifact"])
+    p1 = PlayerState(name="P1", battlefield=[aura])
+    p2 = PlayerState(name="P2", battlefield=[enchanted, spare])
+    game = Game(players=[p1, p2])
+    game._sync_control()
+    attach_aura(aura, enchanted)
+    game.active_player_index = 1
+    return game, enchanted, spare, aura
+
+
+def test_curse_artifact_offers_the_enchanted_artifact_and_takes_it(set_pool):
+    """"At the beginning of the upkeep of enchanted artifact's controller, this
+    Aura deals 2 damage to that player unless they sacrifice that artifact."
+
+    The offer is owed by the *enchanted* artifact's controller (CR 109.5 makes
+    the Aura's controller the ability's controller, and the sentence names the
+    other seat), and what it gives up is the permanent the trigger's condition
+    named -- not a pick from every artifact that player has."""
+    game, enchanted, spare, aura = _cursed(set_pool)
+
+    game.resolve_upkeep(1)
+    offered = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert [(c.player_index, c.data["card_name"]) for c in offered] == [
+        (1, "Curse Artifact")
+    ], game.log
+
+    game.confirm_optional_pay(1, "Curse Artifact", accept=True)
+
+    assert not game.is_on_battlefield(enchanted), game.log
+    assert game.is_on_battlefield(spare), "the other artifact was never offered"
+    assert game.players[1].life == 20, "the cost was paid, so no damage"
+
+
+def test_curse_artifact_deals_its_damage_when_the_offer_is_declined(set_pool):
+    game, enchanted, spare, aura = _cursed(set_pool)
+
+    game.resolve_upkeep(1)
+    game.confirm_optional_pay(1, "Curse Artifact", accept=False)
+
+    assert game.players[1].life == 18, game.log
+    assert game.is_on_battlefield(enchanted), "declining keeps the artifact"
+
+
+def _eroded(set_pool, *, life: int = 20, tapped: bool = False):
+    """Erosion on P2's only land, on P2's upkeep.
+
+    *tapped* is how the payer is left with no mana to reach: the enchanted
+    Forest is the one land, so tapping it is what makes CR 118.8's life
+    alternative the only way to cover the offer.
+    """
+    forest = Permanent(card=set_pool("LEA")["Forest"], tapped=tapped)
+    aura = Permanent(card=set_pool("DRK")["Erosion"])
+    p1 = PlayerState(name="P1", battlefield=[aura])
+    p2 = PlayerState(name="P2", battlefield=[forest], life=life)
+    game = Game(players=[p1, p2])
+    game._sync_control()
+    attach_aura(aura, forest)
+    game.active_player_index = 1
+    return game, forest, aura
+
+
+def test_erosion_destroys_the_enchanted_land_when_nothing_is_paid(set_pool):
+    """"…destroy that land unless that player pays {1} or 1 life." "That land"
+    is the land the trigger's own condition named, so nothing is picked."""
+    game, forest, aura = _eroded(set_pool)
+
+    game.resolve_upkeep(1)
+    game.confirm_optional_pay(1, "Erosion", accept=False)
+
+    assert not game.is_on_battlefield(forest), game.log
+    assert game.players[1].life == 20, "declining costs no life"
+
+
+def test_erosion_takes_the_life_alternative_when_the_mana_is_gone(set_pool):
+    """CR 118.8: "{1} **or** 1 life" is one offer the payer may cover either
+    way. With every land tapped the mana half is unreachable, and an offer that
+    read only the mana would have destroyed a land its controller could pay
+    for."""
+    game, forest, aura = _eroded(set_pool, tapped=True)
+
+    game.resolve_upkeep(1)
+    game.confirm_optional_pay(1, "Erosion", accept=True)
+
+    assert game.players[1].life == 19, game.log
+    assert game.is_on_battlefield(forest)
+
+
+def test_erosion_destroys_the_land_when_neither_half_can_be_paid(set_pool):
+    """The offer is never made when the payer can afford neither half, and the
+    penalty applies anyway -- the shape ``_narrow_to_takeable_actions`` exists
+    for. At 0 life CR 119.4 leaves no life to pay."""
+    game, forest, aura = _eroded(set_pool, life=0, tapped=True)
+
+    game.resolve_upkeep(1)
+
+    assert [c for c in game.pending_choices if c.kind == "optional_pay"] == []
+    assert not game.is_on_battlefield(forest), game.log
