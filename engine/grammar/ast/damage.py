@@ -161,6 +161,15 @@ class RedirectDamage:
                       every one for the duration
     chooser        -- "…of an opponent's choice", the same rider
                       :class:`DealDamage` carries and for the same reason
+    optional       -- "you **may** have that damage dealt to you instead"
+                      (Blood of the Martyr). CR 614 lets a replacement be
+                      optional, and the word is a flag here rather than a node
+                      of its own because everything else about the sentence is
+                      the redirection above: the same recipient, the same new
+                      recipient, the same duration vocabulary. Dropping it would
+                      make the redirect compulsory, which on this card moves
+                      every point of damage every creature would take onto its
+                      controller's face whether they wanted it or not.
     """
 
     to: Recipient | None = None
@@ -170,6 +179,7 @@ class RedirectDamage:
     duration: Duration = field(default_factory=Duration)
     one_shot: bool = False
     chooser: PlayerRef | None = None
+    optional: bool = False
 
 
 @dataclass(frozen=True)

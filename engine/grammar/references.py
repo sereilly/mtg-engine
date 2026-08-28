@@ -296,6 +296,18 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         quantifier = "each"
     elif stream.accept_word("all"):
         quantifier = "all"
+    elif stream.at_word("any") and stream.peek_word(1) != "target":
+        # "if damage would be dealt to **any creature**" (Blood of the Martyr).
+        # In a sentence about what *would* happen, "any <noun>" is the whole
+        # class — CR 614's replacements are written about every object that
+        # answers the phrase — so it is the sweep quantifier and not a choice.
+        # Guarded on the following word because CR 115.4's "any target" is a
+        # quantifier of its own and is read at the top of this function; every
+        # other "any …" (a colour, a type, a number of) is claimed before the
+        # cursor reaches here, and one that is not still fails in the noun
+        # parser below and rewinds.
+        stream.advance()
+        quantifier = "all"
     elif stream.at_word("this"):
         quantifier = "this"
     elif stream.at_word("enchanted"):

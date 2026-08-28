@@ -56,6 +56,7 @@ from .effects import (
     _parse_change_text,
     _parse_source_of_choice_effect,
     _parse_damage_redirect,
+    _parse_optional_damage_redirect,
     _parse_assigns_no_combat_damage,
     _parse_attacking_doesnt_tap,
     _parse_bound_targeting_prevention,
@@ -89,6 +90,7 @@ from .effects import (
     _parse_modal_head,
     _parse_player_adds_mana,
     _parse_produces_instead,
+    _parse_you_tap_produces_instead,
     _parse_spend_mana_as_though,
     _parse_prevent,
     _parse_double,
@@ -542,6 +544,12 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         produces = _parse_produces_instead(stream)
         if produces is not None:
             return produces
+        # "…if **you tap** a land you control for mana, it produces {U} instead
+        # of any other type." (Deep Water.) The active-voice spelling of the
+        # same swap, beside it and refusing the same way.
+        produces = _parse_you_tap_produces_instead(stream)
+        if produces is not None:
+            return produces
 
     # "If a spell or ability that targets that creature would cause a source to
     # deal damage to that creature this turn, prevent that damage."
@@ -561,6 +569,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     dealt_riders = _parse_damage_dealt_riders(stream)
     if dealt_riders is not None:
         return dealt_riders
+
+    # "If damage would be dealt to any creature, you may have that damage dealt
+    # to you instead." (Blood of the Martyr.) A replacement condition too, and
+    # here for the same reason as the shield above: the generic conditional
+    # below tests what is *true* when the sentence resolves, and this one is
+    # about what *would happen* later in the turn. Refuses without consuming.
+    optional_redirect = _parse_optional_damage_redirect(stream)
+    if optional_redirect is not None:
+        return optional_redirect
 
     # "if <condition>, <statement>"
     if stream.at_word("if"):

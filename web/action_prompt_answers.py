@@ -357,6 +357,22 @@ def _action_leng_discard_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="invalid Library of Leng choice")
 
+@action_handler("optional_damage_redirect_confirm")
+def _action_optional_damage_redirect_confirm(session, req, seat_type):
+    # Blood of the Martyr: "you may have that damage dealt to you instead."
+    if not any(
+        e["player_index"] == req.seat
+        for e in session.game.pending_optional_damage_redirects
+    ):
+        raise HTTPException(status_code=400, detail="no damage redirect choice pending for you")
+    if req.take_the_damage is None:
+        raise HTTPException(status_code=400, detail="take_the_damage (true/false) is required")
+    ok = session.game.confirm_optional_damage_redirect(
+        req.seat, take_the_damage=bool(req.take_the_damage)
+    )
+    if not ok:
+        raise HTTPException(status_code=400, detail="invalid damage redirect choice")
+
 @action_handler("resolve_optional_pay")
 def _action_resolve_optional_pay(session, req, seat_type):
     # Color rods (Wooden Sphere, …): "you may pay {1}. If you do, gain life."

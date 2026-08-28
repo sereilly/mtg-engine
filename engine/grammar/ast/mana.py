@@ -13,9 +13,15 @@ what a land will produce the next time it is tapped (CR 611.2, CR 305.7).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from ._core import Amount, PlayerRef, TargetSpec
+from ._core import Amount, Duration, PlayerRef, TargetSpec
+
+#: ``ProducesManaInstead.replaced`` for "instead of any **other** type" — the
+#: whole of what the land would otherwise have produced, rather than one named
+#: symbol. Named once because the parse side writes it and the lowering reads
+#: it, and a second spelling of the string is how those two come apart.
+ANY_OTHER_TYPE = "any_other"
 
 
 @dataclass(frozen=True)
@@ -128,7 +134,9 @@ class AddManaForTappedLand:
 @dataclass(frozen=True)
 class ProducesManaInstead:
     """"If target Plains is tapped for mana, it produces colorless mana instead
-    of white mana." (Quarum Trench Gnomes.)
+    of white mana." (Quarum Trench Gnomes.) "Until end of turn, if you tap a
+    land you control for mana, it produces {U} instead of any other type."
+    (Deep Water.)
 
     Not an addition: nothing is produced when this resolves. It is a continuous
     effect on one land that swaps one symbol for another the next time — and
@@ -140,10 +148,24 @@ class ProducesManaInstead:
     """
 
     target: TargetSpec
-    #: The symbol the land would have produced.
+    #: The symbol the land would have produced, or :data:`ANY_OTHER_TYPE` for
+    #: "instead of any **other** type" — every symbol the land could have made
+    #: (Deep Water). A sentinel rather than a list of the six, because the
+    #: phrase is about whatever the land produces and the engine must not have
+    #: to enumerate that at parse time.
     replaced: str
     #: The symbol it produces instead.
     produced: str
+    #: "**Until end of turn**, if you tap a land you control for mana …" — Deep
+    #: Water's window. Quarum Trench Gnomes prints none and means CR 611.2's
+    #: "indefinitely", which is the empty duration this defaults to.
+    duration: "Duration" = field(default_factory=lambda: Duration())
+    #: True when the sentence is written about the *tapper* ("if **you tap** a
+    #: land you control") rather than about the land ("if target Plains **is
+    #: tapped**"). The two spellings are the same event and a different scope: a
+    #: seat's whole class of lands against one named object, which is why the
+    #: record they arm hangs off different things.
+    by_controller: bool = False
 
 
 @dataclass(frozen=True)

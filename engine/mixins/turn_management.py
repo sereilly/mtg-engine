@@ -6,6 +6,7 @@ import random
 from ..auras import aura_additional_mana_on_tap
 from ..card_hooks import ENCHANTED_LAND_TAPPED_FOR_MANA
 from ..hand_locks import expire_hand_locks
+from .. import land_mana_swaps
 from ..game_types import OracleExecutionContext, SimulationResult
 from ..oracle import compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities
@@ -362,6 +363,18 @@ class TurnManagementMixin:
         # Both are ordinary `permanent_becomes_tapped` triggers now, so they go
         # on the stack (CR 603.3) from wherever the tap happens.
         self.become_tapped(land)
+        # "Until end of turn, if you tap a land you control for mana, it
+        # produces {U} instead of any other type." (Deep Water.) Read here, and
+        # applied to whatever the production below actually puts in the pool,
+        # because this is the one place the two production paths meet: a land
+        # with a compiled mana ability runs it and writes into the pool itself,
+        # where a basic falls through to the `produced_mana` summary — and the
+        # per-permanent swap `Permanent._swapped_mana` applies is only on the
+        # second of those. Snapshotting the pool is what makes "instead of any
+        # **other** type" mean what it says: whatever came out, this is what it
+        # is instead.
+        swapped_to = land_mana_swaps.swapped_symbol(self, land)
+        pool_before = dict(player.mana_pool) if swapped_to else {}
         # **The land's own compiled mana ability, when it has one.** This used
         # to add exactly one symbol chosen from `produced_mana`, which is right
         # for every land in the 1993-94 base sets and for the dual cycles — all
@@ -408,6 +421,21 @@ class TurnManagementMixin:
                 if symbols:
                     mana_symbol = symbols[0]
             player.mana_pool[mana_symbol] = player.mana_pool.get(mana_symbol, 0) + 1
+
+        if swapped_to:
+            moved = 0
+            for symbol, amount in list(player.mana_pool.items()):
+                gained = int(amount) - int(pool_before.get(symbol, 0))
+                if gained > 0 and symbol != swapped_to:
+                    player.mana_pool[symbol] = int(amount) - gained
+                    moved += gained
+            if moved:
+                player.mana_pool[swapped_to] = (
+                    player.mana_pool.get(swapped_to, 0) + moved
+                )
+                self.log.append(
+                    f"{land_name} produced {{{swapped_to}}} instead"
+                )
 
         self.log.append(f"{player.name} tapped {land_name} for mana")
 

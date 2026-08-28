@@ -258,6 +258,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "redirect_damage_from_target_until_eot": "damage",
     "redirect_damage_from_chosen_source_until_eot": "damage",
     "redirect_damage_from_target_spell_until_eot": "damage",
+    # The class-scoped, optional one (Blood of the Martyr). Same category
+    # for the same reason: what it moves is damage, and being optional and
+    # being about a class are payload differences.
+    "redirect_matching_damage_to_you_until_eot": "damage",
     "recolor_target_from_text": "recolor",
     # The same layer-5 colour change with a duration and several targets
     # (Dwarven Song and its four siblings). Same category: what differs is how
@@ -305,6 +309,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "discard_target_cards": "zones",
     # The controller's own chosen discard (Jeskai Elder's if-you-do branch).
     "discard_controller_cards": "zones",
+    # "Each player may discard up to three cards." (Mind Bomb.) One prompt
+    # per seat, and a discard like every other one in this category.
+    "each_player_discards_up_to_cards": "zones",
     # "Each opponent discards two cards." (Bad Deal) — one pending discard
     # choice per opponent, same flow as the targeted form.
     "each_opponent_discards_cards": "zones",
@@ -565,6 +572,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # what it changes is the land's mana ability, and nothing else in the
     # engine asks about that.
     "produce_mana_instead": "mana",
+    # The class-scoped, until-end-of-turn twin (Deep Water). Same category:
+    # what changes is which lands it covers and how long it lasts.
+    "swap_controller_land_mana_until_eot": "mana",
     # "For one spell this turn, you may spend mana as though it were mana of
     # any type…" (North Star.) A CR 609.4 permission the payment reads, not a
     # production of mana — the same category because what it is about is how
@@ -672,6 +682,9 @@ _PRODUCES: dict[str, str] = {
     # the number exists — the hand the step was handed is not the hand the
     # player chose from.
     "discard_controller_cards": "discarded_count",
+    # The per-seat form records the same thing, so a sentence reading "the
+    # number of cards they discarded this way" has a producer to name.
+    "each_player_discards_up_to_cards": "discarded_count",
     # "Choose two cards in your hand … **For each of those cards**, …"
     # (Sylvan Library.) The pick records what it chose, which is the only
     # place the next sentence can read that set from: nothing about a hand

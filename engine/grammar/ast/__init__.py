@@ -177,6 +177,7 @@ from .board import (
     SacrificeUnlessPay,
 )
 from .mana import (
+    ANY_OTHER_TYPE,
     AddMana,
     AddManaForTappedLand,
     ProducesManaInstead,
@@ -416,6 +417,7 @@ __all__ = [
     "Scry",
     "AddMana",
     "AddManaForTappedLand",
+    "ANY_OTHER_TYPE",
     "ProducesManaInstead",
     "SpendManaAsThough",
     "CastPermission",

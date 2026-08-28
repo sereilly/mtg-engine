@@ -63,6 +63,7 @@ ActionKind = Literal[
     "discard_confirm",
     "revealed_hand_pick_confirm",
     "leng_discard_confirm",
+    "optional_damage_redirect_confirm",
     "commander_zone_change_confirm",
     "balance_confirm",
     "sacrifice_confirm",
@@ -365,6 +366,7 @@ class GameActionRequest(BaseModel):
     # (Library of Leng) whether to put them on top of the library instead.
     discard_indices: list[int] | None = None
     to_library: bool | None = None
+    take_the_damage: bool | None = None
     # CR 903.9: whether the commander goes to the command zone instead of the
     # zone it was headed for. Its own field rather than reusing `accept`,
     # because the answer is a destination and not a yes to an offer of one.

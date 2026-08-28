@@ -332,3 +332,55 @@ def test_cleansing_destroys_only_the_lands_nobody_paid_for(set_pool):
     # nothing.
     assert players[0].life == 17, game.log
     assert players[1].life == 1, game.log
+
+# --- H4: per-seat damage state (The Dark) ---
+
+
+def _resolve_with_prompts(game: Game) -> None:
+    """Resolve the stack, answering every non-interactive seat's prompt as it
+    is armed — what the game loop does for an AI or headless seat."""
+    for _ in range(20):
+        if game.pending_choices:
+            game.auto_resolve_pending_choices()
+        elif game.stack:
+            game.resolve_top_of_stack()
+        else:
+            return
+
+
+def test_mind_bomb_damages_each_player_by_what_that_player_kept(set_pool):
+    """"Each player may discard up to three cards. Mind Bomb deals damage to
+    each player equal to 3 minus the number of cards they discarded this way."
+
+    Two seats, two different discards, two different numbers — which is the
+    whole card. A single ``discarded_count`` for the resolution would let the
+    seat that answered last decide everybody's damage.
+    """
+    game, players = _cast_from(set_pool, "Mind Bomb")
+    lea = set_pool("LEA")
+    # Three to give up, so the stated "up to N" policy takes all three.
+    players[0].hand += [lea["Mountain"] for _ in range(3)]
+    # One to give up, so this seat can only pay one of its three.
+    players[1].hand = [lea["Island"]]
+
+    result = game.cast_from_hand(0, "Mind Bomb")
+    _resolve_with_prompts(game)
+
+    assert result.supported, result.details
+    assert players[0].life == 20, game.log
+    assert players[1].life == 18, game.log
+    assert players[0].hand == [] and players[1].hand == []
+
+
+def test_mind_bomb_deals_the_printed_three_when_nobody_can_discard(set_pool):
+    """3 minus nothing is 3. A seat with an empty hand is recorded as having
+    discarded zero rather than left out of the record — a missing seat and a
+    seat that discarded nothing are the same number, and it must be the one the
+    card prints."""
+    game, players = _cast_from(set_pool, "Mind Bomb")
+
+    game.cast_from_hand(0, "Mind Bomb")
+    _resolve_with_prompts(game)
+
+    assert players[0].life == 17, game.log
+    assert players[1].life == 17, game.log

@@ -888,3 +888,84 @@ def test_dance_of_many_ignores_a_token_it_did_not_create(set_pool):
     game._settle()
 
     assert any(p is dance for p in p1.battlefield), game.log
+
+# --- H4: per-seat damage state (The Dark) ---
+
+
+def test_deep_water_makes_every_land_you_control_produce_blue(set_pool):
+    """"{U}: Until end of turn, if you tap a land you control for mana, it
+    produces {U} instead of any other type."
+
+    The record is on the seat, not on the lands, so it reaches a land that
+    entered after the ability resolved — and it reaches a land with a compiled
+    mana ability as well as a basic, which is the pair the per-permanent swap
+    could not cover.
+    """
+    pool = set_pool("DRK")
+    lea = set_pool("LEA")
+    deep = Permanent(card=pool["Deep Water"])
+    forest = Permanent(card=lea["Forest"])
+    p1 = PlayerState(name="P1", battlefield=[deep, forest])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    assert game.activate_permanent_ability(0, "Deep Water").supported, game.log
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    latecomer = Permanent(card=lea["Mountain"])
+    p1.battlefield.append(latecomer)
+    game._sync_control()
+
+    assert game.tap_land_for_mana(0, "Forest"), game.log
+    assert game.tap_land_for_mana(0, "Mountain"), game.log
+
+    assert p1.mana_pool["U"] == 2, game.log
+    assert p1.mana_pool["G"] == 0 and p1.mana_pool["R"] == 0, game.log
+
+
+def test_deep_water_leaves_an_opponents_lands_alone(set_pool):
+    """"a land **you** control" (CR 109.5): the record is asked of the land's
+    own controller, so an opponent's Forest still makes green."""
+    pool = set_pool("DRK")
+    lea = set_pool("LEA")
+    deep = Permanent(card=pool["Deep Water"])
+    theirs = Permanent(card=lea["Forest"])
+    p1 = PlayerState(name="P1", battlefield=[deep])
+    p2 = PlayerState(name="P2", battlefield=[theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    assert game.activate_permanent_ability(0, "Deep Water").supported, game.log
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert game.tap_land_for_mana(1, "Forest"), game.log
+    assert p2.mana_pool["G"] == 1, game.log
+    assert p2.mana_pool["U"] == 0
+
+
+def test_deep_water_stops_at_the_end_of_the_turn(set_pool):
+    """"Until end of turn" — the record expires through the one cleanup sweep
+    that already clears a player's shields and redirects."""
+    pool = set_pool("DRK")
+    lea = set_pool("LEA")
+    deep = Permanent(card=pool["Deep Water"])
+    forest = Permanent(card=lea["Forest"])
+    p1 = PlayerState(name="P1", battlefield=[deep, forest])
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    assert game.activate_permanent_ability(0, "Deep Water").supported, game.log
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.resolve_cleanup_step(0)
+    forest.tapped = False
+
+    assert game.tap_land_for_mana(0, "Forest"), game.log
+    assert p1.mana_pool["G"] == 1, game.log

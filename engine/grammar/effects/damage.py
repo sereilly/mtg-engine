@@ -796,6 +796,51 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
     )
 
 
+def _parse_optional_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
+    """"If damage would be dealt to <recipients>, you may have that damage
+    dealt to <recipient> instead." (Blood of the Martyr, with "Until end of
+    turn," in front of it — the leading duration the statement layer
+    distributes.)
+
+    The same CR 614.9 redirection ``_parse_damage_redirect`` above reads, in the
+    other printed word order and with two differences that are the whole card:
+    the protected recipient is a **class** ("any creature") rather than one
+    named object, and the replacement is **optional** (CR 614: "you may"). Both
+    ride :class:`ast.RedirectDamage` rather than getting a node — the sentence
+    is a redirect in every other respect, and a second node would be a second
+    reader to keep in step.
+
+    Non-consuming until "you may have that damage dealt to" has been read, for
+    the reason the redirect above is: "If damage would be dealt to …" also opens
+    a shield sentence ("…prevent that damage") that other productions claim, and
+    a production that consumed the opening of every one of them would refuse
+    lines with readers of their own. Past that phrase the sentence is this
+    redirect and nothing else, so from there it raises.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("if", "damage", "would", "be", "dealt", "to"):
+        stream.reset(mark)
+        return None
+    to = parse_recipient(stream) or parse_bound_subject(stream)
+    if to is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "you", "may", "have", "that", "damage", "dealt", "to"
+    ):
+        stream.reset(mark)
+        return None
+    new_recipient = parse_recipient(stream) or parse_bound_subject(stream)
+    if new_recipient is None:
+        raise stream.error("expected who takes the redirected damage")
+    if not stream.accept_word("instead"):
+        raise stream.error("expected 'instead' to end a redirection effect")
+    return ast.RedirectDamage(to=to, new_recipient=new_recipient, optional=True)
+
+
 def _parse_bound_targeting_prevention(stream: TokenStream) -> "ast.PreventDamage | None":
     """"If a spell or ability that targets <bound object> would cause a source
     to deal damage to <bound object> this turn, prevent that damage."

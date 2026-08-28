@@ -453,3 +453,48 @@ def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]
             "the combat-damage flag lasts exactly this turn", node=node
         )
     return (OracleInstruction("prevent_all_combat_damage", "", {}),)
+
+
+# ---------------------------------------------------------------------------
+# The lock (CR 615.1 / CR 614.9's negative)
+# ---------------------------------------------------------------------------
+#
+# "…can't be prevented or dealt instead to another permanent or player" is not
+# a damage clause at all: it is a sentence about the two registries that modify
+# one, and it lowers to a mark the shields and the redirects both read. It came
+# here rather than staying in ``damage`` the round that module went back over
+# the thousand-line guard, along the line this module was already cut on — a
+# damage lowering asks which handler deals how much to whom, and this one asks
+# what may modify that. Whether a redirect is the other half of what it locks is
+# a fact about the *handler*; the sentence is one clause with one instruction,
+# so splitting it across two families would give it two homes and no owner.
+
+def _lower_damage_cant_be_prevented(
+    node: ast.DamageCantBePreventedOrRedirected,
+) -> tuple[OracleInstruction, ...]:
+    """"Damage that would be dealt to that creature this turn can't be
+    prevented or dealt instead to another permanent or player." (Whippoorwill.)
+
+    Two refusals, each a way the sentence could otherwise reach further than it
+    says:
+
+    * the subject must be the object the sentence in front of it chose. A
+      described set would be a lock over permanents nobody picked, and the
+      handler has only the ability's own target to mark.
+    * the duration must be this turn, because that is what the sweep gives it.
+      A lock nothing ends is a creature no shield may ever protect.
+    """
+    subject = node.subject
+    if (
+        not isinstance(subject, ast.TargetSpec)
+        or subject.quantifier not in ("that", "it")
+        or _restrictions_beyond(subject.filter, frozenset({"card_types"}))
+    ):
+        raise LoweringError(
+            "the damage lock is armed on the creature the previous sentence "
+            "chose",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError("the damage lock lasts exactly this turn", node=node)
+    return (OracleInstruction("lock_damage_to_target", "", {}),)

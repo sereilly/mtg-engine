@@ -76,9 +76,6 @@ from .damage import (
     _lower_damage,
     _lower_damage_dealt_riders,
     _lower_damage_conjunction,
-    _lower_coin_flip_damage_loop,
-    _lower_damage_this_game_history,
-    _lower_damage_cant_be_prevented,
 )
 from .fighting import (
     _fused_prepare_then_interact,
@@ -91,6 +88,7 @@ from .prevention import (
     _lower_prevent_damage,
     _lower_prevent_half,
     _lower_prevent_all,
+    _lower_damage_cant_be_prevented,
 )
 from .characteristics import (
     _fused_tap_any_number_then_pump,
@@ -251,6 +249,8 @@ from .game import (
     _lower_win_game,
     _lower_lose_life,
     _lower_pay_life,
+    _lower_coin_flip_damage_loop,
+    _lower_damage_this_game_history,
 )
 
 __all__ = [

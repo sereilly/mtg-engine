@@ -18,6 +18,7 @@ from ..control import end_until_eot_control_changes
 from ..layer_bridge import GAINED_TYPES
 from ..mixins._constants import _EOT_METADATA_KEYS
 from ..damage_redirects import clear_redirects
+from ..land_mana_swaps import clear_swaps as clear_land_mana_swaps
 from ..shields import clear_shields
 from ..pt import remove_temporary_pt
 
@@ -110,6 +111,11 @@ class CleanupStepMixin:
             # CR 614.9's redirects expire with the turn for the same reason and
             # by the same one sweep (engine/damage_redirects.py).
             clear_redirects(player)
+            # "Until end of turn, if you tap a land you control for mana, it
+            # produces {U} instead of any other type." (Deep Water.) A CR 611.2
+            # swap with a printed window, and it expires by the same one sweep
+            # for the same reason (engine/land_mana_swaps.py).
+            clear_land_mana_swaps(player)
             player.mirror_damage_charges = 0
             player.mirror_damage_sources = []
             player.channel_active_until_eot = False

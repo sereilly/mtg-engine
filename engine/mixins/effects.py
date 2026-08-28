@@ -904,6 +904,19 @@ class EffectsMixin:
         ]
 
     @property
+    def pending_optional_damage_redirects(self) -> list[dict]:
+        """CR 614.9's outstanding optional offers — one per damage event whose
+        recipient a class-scoped redirect watches (Blood of the Martyr)."""
+        return [
+            {
+                "player_index": choice.player_index,
+                "amount": choice.data["amount"],
+                "from_name": choice.data["from_name"],
+            }
+            for choice in pending_choices_for(self, "optional_damage_redirect")
+        ]
+
+    @property
     def pending_leng_discards(self) -> list[dict]:
         return [
             {"player_index": choice.player_index, "card": choice.data["card"]}

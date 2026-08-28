@@ -695,3 +695,77 @@ def _lower_pay_life(node: ast.PayLife) -> tuple[OracleInstruction, ...]:
     if not isinstance(amount, int) or amount < 0:
         raise LoweringError("a life payment is a printed number", node=node)
     return (OracleInstruction("pay_life", "", {"amount": amount}),)
+
+
+# ---------------------------------------------------------------------------
+# Damage whose shape is a whole-game process rather than an event
+# ---------------------------------------------------------------------------
+#
+# Two sentences that print the word "damage" and share nothing with the damage
+# family's vocabulary: neither reads a recipient noun phrase, a duration or a
+# rider. Mana Clash is an *unbounded repeat* (CR 705) whose rounds are the
+# effect, and The Fallen's recipients are a ledger kept for the whole game
+# rather than a set any board can be asked for. They came here the round
+# ``lowering/damage.py`` went back over the thousand-line guard, on the line
+# this module is already cut on: the game and its players, rather than one
+# event on the board.
+
+#: The recipient classes the history handler resolves. "player" and "creature"
+#: parse — the phrase reads the same on any of them — and refuse here, because
+#: the record holds seats and permanent ids and nothing has been written that
+#: turns those into a living creature or a non-opponent seat. A class admitted
+#: without a resolver would name nobody and deal nothing, on a card reporting
+#: itself supported.
+_HISTORY_RECIPIENTS = frozenset({"opponent", "planeswalker"})
+
+
+def _lower_coin_flip_damage_loop(
+    node: ast.CoinFlipDamageLoop,
+) -> tuple[OracleInstruction, ...]:
+    """Mana Clash's whole paragraph (CR 705).
+
+    One instruction, because the loop is the effect: a flip, a reading of both
+    coins, and a repeat that depends on both. Composed out of `flip_coin` and
+    `if_then` it would be a *fixed* number of rounds, since nothing in the
+    control-flow vocabulary repeats — and the printed sentence is unbounded.
+
+    Only the amount is payload; who flips and which face is punished are the
+    process itself.
+    """
+    return (
+        OracleInstruction(
+            "coin_flip_damage_loop", "",
+            {
+                "amount": _amount_payload(node.amount),
+                # The opponent is chosen when the spell is cast (CR 601.2c), so
+                # the picker has to be raised from the compiled program like any
+                # other target.
+                "targets": {
+                    "quantifier": "target", "kind": "player", "opponents_only": True,
+                },
+            },
+        ),
+    )
+
+
+def _lower_damage_this_game_history(
+    node: ast.DamageThoseDamagedThisGame,
+) -> tuple[OracleInstruction, ...]:
+    """"…deals 1 damage to each opponent and planeswalker it has dealt damage to
+    this game." (The Fallen.)
+
+    The recipients are a record on the source, not a set on any board, so the
+    payload carries only how much and which classes of the record to reach for.
+    """
+    unknown = sorted(set(node.classes) - _HISTORY_RECIPIENTS)
+    if unknown:
+        raise LoweringError(
+            "no handler reaches the damaged-this-game " + ", ".join(unknown),
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "deal_damage_to_those_damaged_this_game", "",
+            {"amount": _amount_payload(node.amount), "classes": list(node.classes)},
+        ),
+    )

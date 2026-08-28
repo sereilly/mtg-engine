@@ -1104,7 +1104,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2257,6 +2257,14 @@ function getLengDiscardInfo(state = currentState) {
   return info;
 }
 
+function getOptionalDamageRedirectInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.optional_damage_redirect;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  return info;
+}
+
 function getCommanderZoneChangeInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.commander_zone_change;
@@ -2725,7 +2733,7 @@ function getPromptBoardTargeting(state = currentState) {
 
   if (getUpkeepPreventionInfo(state)) return null;
   if (getDiscardSelectInfo(state)) return null;
-  if (getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state)) return null;
+  if (getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state)) return null;
 
   // Balance: the lands/creatures to sacrifice are picked on the board (the cards
   // to discard are picked in hand — see the balanceHandSelectable hand option).
@@ -3131,7 +3139,7 @@ function isAnyPromptActive(state = currentState) {
   if (getOptionalTriggerInfo(state)) return true;
   if (getUpkeepPreventionInfo(state)) return true;
   if (getDiscardSelectInfo(state)) return true;
-  if (getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state)) return true;
+  if (getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state)) return true;
   if (getBalanceSelectInfo(state)) return true;
   if (getOptionalPayInfo(state)) return true;
   if (getOptionalUntapInfo(state)) return true;
@@ -3165,7 +3173,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -3733,6 +3741,53 @@ function applyLengDiscardPrompt(info) {
         toLibrary
           ? `${cardName} was put on top of your library (Library of Leng).`
           : `${cardName} was put into your graveyard.`,
+      );
+    });
+  });
+}
+
+// CR 614.9 with CR 614's "may": damage is about to be dealt to a creature and
+// this seat may take it on the face instead (Blood of the Martyr). One event at
+// a time; two buttons, like Library of Leng's above.
+function applyOptionalDamageRedirectPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const amount = Number(info.amount || 0);
+  const fromName = info.from_name || "that creature";
+  const remaining = Number(info.remaining || 1);
+  title.textContent = "Take the damage?";
+  body.textContent =
+    `${amount} damage would be dealt to ${fromName}. Have it dealt to you instead?` +
+    (remaining > 1 ? ` (${remaining} events to answer)` : "");
+
+  steps.innerHTML =
+    `<div class="prompt-choice-row">` +
+    `<button type="button" class="prompt-choice-btn" data-redirect-take="yes">Take ${amount} damage</button>` +
+    `<button type="button" class="prompt-choice-btn" data-redirect-take="no">Leave it on ${fromName}</button>` +
+    `</div>`;
+
+  steps.querySelectorAll("[data-redirect-take]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const take = btn.dataset.redirectTake === "yes";
+      await sendAction({ seat, action: "optional_damage_redirect_confirm", take_the_damage: take });
+      updateActionHint(
+        take
+          ? `You took ${amount} damage instead of ${fromName}.`
+          : `${fromName} was dealt ${amount} damage.`,
       );
     });
   });
@@ -6813,6 +6868,12 @@ function renderActivationPrompt() {
   const lengDiscardInfo = getLengDiscardInfo();
   if (lengDiscardInfo) {
     applyLengDiscardPrompt(lengDiscardInfo);
+    return;
+  }
+
+  const optionalRedirectInfo = getOptionalDamageRedirectInfo();
+  if (optionalRedirectInfo) {
+    applyOptionalDamageRedirectPrompt(optionalRedirectInfo);
     return;
   }
 

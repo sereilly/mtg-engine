@@ -35,6 +35,7 @@ from .damage import (
     _parse_prevent_all,
     _parse_source_of_choice_effect,
     _parse_damage_redirect,
+    _parse_optional_damage_redirect,
     _parse_damage_cant_be_prevented,
     _parse_bound_targeting_prevention,
     _parse_damage_dealt_riders,
@@ -81,6 +82,7 @@ from .mana import (
     _parse_add_mana,
     _parse_player_adds_mana,
     _parse_produces_instead,
+    _parse_you_tap_produces_instead,
     _parse_spend_mana_as_though,
 )
 from .cards import (
@@ -147,6 +149,7 @@ __all__ = [
     "_parse_prevent_all",
     "_parse_source_of_choice_effect",
     "_parse_damage_redirect",
+    "_parse_optional_damage_redirect",
     "_parse_damage_cant_be_prevented",
     "_parse_bound_targeting_prevention",
     "_parse_damage_dealt_riders",
@@ -196,6 +199,7 @@ __all__ = [
     "_parse_put_exiled_with_source",
     "_parse_player_adds_mana",
     "_parse_produces_instead",
+    "_parse_you_tap_produces_instead",
     "_parse_spend_mana_as_though",
     "_parse_double",
     "_parse_switch_pt",

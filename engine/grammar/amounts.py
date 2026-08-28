@@ -171,6 +171,22 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     if stream.at_word("half"):
         return parse_amount(stream)
 
+    # "equal to **3 minus the number of cards they discarded this way**" (Mind
+    # Bomb). A named count with a printed constant, and the same table the
+    # ", where X is …" trailer reads — the two front ends print the same
+    # phrases about the same counts, so they ask one reader rather than keeping
+    # a row each. It consumes nothing unless a whole row matches, so every
+    # other "equal to …" below keeps the reading it had.
+    #
+    # Late, and inside the function: `where_x` reads noun phrases, `nouns`
+    # reads this module for its comparisons, so the cycle is broken at call
+    # time exactly as `parse_object_filter`'s is below.
+    from .where_x import accept_board_count
+
+    named = accept_board_count(stream)
+    if named is not None:
+        return named
+
     stream.accept_word("the")
 
     if stream.accept_phrase("number", "of"):

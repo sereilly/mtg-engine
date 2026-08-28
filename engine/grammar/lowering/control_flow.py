@@ -190,6 +190,9 @@ def _lower_may(
     decision per player; the actor is carried as payload and
     ``handlers/control_flow.may`` arms one prompt for each named seat.
     """
+    collapsed = _each_player_optional_discard(node)
+    if collapsed is not None:
+        return collapsed
     # **An offer made to a set of seats rebinds what "that player" means.**
     # ``handlers/control_flow._offer_to_seat`` replaces ``context.target`` with
     # the offered seat for exactly these actors, so inside the offer the words
@@ -277,6 +280,61 @@ def _lower_may(
     if not (action or then or otherwise or reflexive):
         raise LoweringError("an optional action with no consequence", node=node)
     return (OracleInstruction("may", "", payload),)
+
+
+#: The actors that name a *set* of seats, spelled here as the lowering sees them.
+#: The handler has its own copy of this reading (``handlers/control_flow``'s
+#: ``_EACH_ACTORS``) because it is answering a different question — which seats
+#: to arm — and the two are checked against each other by the pool rather than
+#: by a shared constant this module would have to import upwards.
+_EACH_SEAT_ACTORS = frozenset({"each_player", "each_opponent"})
+
+
+def _each_player_optional_discard(
+    node: ast.May,
+) -> tuple[OracleInstruction, ...] | None:
+    """"Each player may discard **up to** three cards." (Mind Bomb.)
+
+    One prompt per seat rather than an offer per seat, because the offer and the
+    ceiling are the same decision: "up to three" already lets a player discard
+    none, so the "may" in front of it adds no answer the discard prompt does not
+    already have. Collapsing them is what makes the sentence behind it work —
+    a discard prompt suspends the resolution until every seat has answered
+    (CR 608.2), where an offer does not, and "…damage equal to 3 minus the
+    number of cards **they** discarded this way" has to run after the answers
+    rather than before them.
+
+    Deliberately narrow. It returns None — leaving the ordinary offer — unless
+    the whole sentence is that one shape: an unconditional offer, made to a set
+    of seats, of a chosen discard with a printed ceiling and nothing behind it.
+    An offer with a cost, an if-you-do or an otherwise is a second decision that
+    the discard prompt genuinely cannot carry.
+    """
+    action = node.action
+    if (
+        node.cost is not None
+        or node.then is not None
+        or node.otherwise is not None
+        or node.reflexive is not None
+        or node.starting_with is not None
+        or not isinstance(node.actor, ast.PlayerRef)
+        or node.actor.kind not in _EACH_SEAT_ACTORS
+        or not isinstance(action, ast.Discard)
+        or not isinstance(action.player, ast.PlayerRef)
+        or action.player.kind != "you"
+        or not action.up_to
+        or action.at_random
+        or action.whole_hand
+        or action.filter is not None
+        or not isinstance(action.count, ast.Fixed)
+    ):
+        return None
+    return (
+        OracleInstruction(
+            "each_player_discards_up_to_cards", "",
+            {"actor": node.actor.kind, "amount": action.count.value},
+        ),
+    )
 
 
 #: The branches of a ``may`` whose records are visible to the steps *after* it.

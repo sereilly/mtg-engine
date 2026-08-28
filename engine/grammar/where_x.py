@@ -40,6 +40,17 @@ _BOARD_COUNTS: tuple[tuple[str, tuple[str, ...]], ...] = (
         (NUMBER_SLOT, "minus", "the", "number", "of", "cards", "in", "their",
          "hand"),
     ),
+    # Mind Bomb: the shortfall of what a player *chose to discard* below the
+    # printed number. Beside the two hand rows above because it is the same
+    # arithmetic with the same constant-as-payload — what differs is the pile
+    # counted, and that is what the name is for. Not a board state: "this way"
+    # is the count an earlier step of this same effect recorded, which is why
+    # the lowering below refuses the phrase with no discard in front of it.
+    (
+        "base_over_discarded_this_way",
+        (NUMBER_SLOT, "minus", "the", "number", "of", "cards", "they",
+         "discarded", "this", "way"),
+    ),
     (
         "untapped_lands_at_turn_start",
         ("the", "number", "of", "untapped", "lands", "they", "controlled",
@@ -71,6 +82,22 @@ _OFFSET_WORDS: dict[str, int] = {"minus": -1, "plus": 1}
 _MULTIPLIER_WORDS: dict[str, int] = {"twice": 2}
 
 
+def accept_board_count(stream: TokenStream) -> ast.BoardCount | None:
+    """The named count at the cursor, or None with nothing consumed.
+
+    One reader for the two front ends that print these phrases — the
+    ", where X is …" trailer below, and ``amounts.parse_equal_to``'s "equal to
+    …". They read the same phrases about the same counts, so a row added for
+    one and missing from the other would be the same printed sentence meaning a
+    count on one card and nothing at all on the next.
+    """
+    for name, phrase in _BOARD_COUNTS:
+        matched, base = _accept_literal(stream, *phrase)
+        if matched:
+            return ast.BoardCount(name, base)
+    return None
+
+
 def _parse_where_x_is(stream: TokenStream) -> ast.BoardCount | None:
     """", where X is <board-state count>" — the trailer that says what the X of
     the preceding clause counts.
@@ -86,10 +113,9 @@ def _parse_where_x_is(stream: TokenStream) -> ast.BoardCount | None:
     if not stream.accept_phrase("where", "x", "is"):
         stream.reset(mark)
         return None
-    for name, phrase in _BOARD_COUNTS:
-        matched, base = _accept_literal(stream, *phrase)
-        if matched:
-            return ast.BoardCount(name, base)
+    count = accept_board_count(stream)
+    if count is not None:
+        return count
     stream.reset(mark)
     return None
 

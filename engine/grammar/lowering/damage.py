@@ -16,7 +16,9 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
-from ...oracle_types import X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT
+from ...oracle_types import (
+    DISCARDED_BY_SEAT, X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
+)
 from ._common import (
     _lower_described_set_damage, _REST_OF_TURN,
     _describe_several_targets,
@@ -254,9 +256,84 @@ def _lower_counted_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]
     return (OracleInstruction("deal_damage", "", payload),)
 
 
-def _lower_board_count_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
+#: Named counts whose number is **one per seat** and comes out of this
+#: resolution's own scratchpad rather than off the board, mapped to the key the
+#: earlier step recorded it under. They lower onto the same looping recipients
+#: `_per_recipient_count` does and refuse everywhere else, for that function's
+#: reason: one number per seat cannot be folded into the single X.
+_PER_SEAT_RECORD_COUNTS: dict[str, str] = {
+    "base_over_discarded_this_way": DISCARDED_BY_SEAT,
+}
+
+#: The producer each of those counts needs to have run first. "This way" names
+#: what a step of *this same effect* did, so with no such step the phrase names
+#: nothing (idiom 7) — and here it would name nothing while still computing a
+#: number, the printed base, which is the quiet way to be wrong.
+_PER_SEAT_RECORD_PRODUCERS: dict[str, str] = {
+    "base_over_discarded_this_way": "discarded_count",
+}
+
+
+def _lower_per_seat_record_damage(
+    node: ast.DealDamage, record: str, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """Mind Bomb: "…deals damage to each player equal to 3 minus the number of
+    cards they discarded this way."
+
+    Every refusal is a way the sentence could otherwise mean more than it says:
+
+    * the recipients must be the looping ones. "They" is the seat being
+      damaged, so there is one number per seat and nowhere to put it on a
+      clause naming a single recipient.
+    * the base must be printed. Without it the arithmetic has no left-hand side
+      and the damage would be however many cards the player discarded, which is
+      the card upside down.
+    * a step of this same effect must actually record the count. "This way" is
+      a back-reference, and one with no producer names nothing — here it would
+      silently compute the base and deal 3 to everybody.
+    """
+    recipient = node.recipients[0] if len(node.recipients) == 1 else None
+    if not (
+        isinstance(recipient, ast.PlayerRef)
+        and recipient.kind in _LOOPED_PLAYER_RECIPIENTS
+    ):
+        raise LoweringError("no handler counts this damage per recipient", node=node)
+    if node.riders != ast.DamageRiders():
+        raise LoweringError("a counted damage carries no riders yet", node=node)
+    if node.amount.base is None:
+        raise LoweringError(
+            f"the {node.amount.name!r} count needs the constant it subtracts "
+            "against",
+            node=node,
+        )
+    producer = _PER_SEAT_RECORD_PRODUCERS[node.amount.name]
+    if producer not in produced:
+        raise LoweringError(
+            f"nothing in this effect records the {node.amount.name!r} count",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "deal_damage", "",
+            {
+                "recipient": recipient.kind,
+                X_FROM_COUNT_PER_RECIPIENT: {
+                    "resolution_record": record,
+                    "base": node.amount.base,
+                },
+            },
+        ),
+    )
+
+
+def _lower_board_count_damage(
+    node: ast.DealDamage, produced: frozenset[str] = frozenset()
+) -> tuple[OracleInstruction, ...]:
     """Damage sized by a named board count (Black Vise, Power Surge)."""
     assert isinstance(node.amount, ast.BoardCount)
+    record = _PER_SEAT_RECORD_COUNTS.get(node.amount.name)
+    if record is not None:
+        return _lower_per_seat_record_damage(node, record, produced)
     found = _BOARD_COUNT_DAMAGE.get(node.amount.name)
     if found is None:
         raise LoweringError(
@@ -443,7 +520,7 @@ def _lower_damage(
     if isinstance(node.amount, ast.CountOf):
         return _lower_counted_damage(node)
     if isinstance(node.amount, ast.BoardCount):
-        return _lower_board_count_damage(node)
+        return _lower_board_count_damage(node, produced)
     # "Target creature you control deals damage equal to its power to another
     # target creature." (Garruk, Savage Herald's −2.) A fused kind: the biter
     # and the bitten are two chosen targets resolved as a list, and the amount
@@ -855,96 +932,6 @@ def _lower_split_recipients(
             dataclasses.replace(node, recipients=(recipient,)), event, produced
         )
     return lowered
-
-
-#: The recipient classes the history handler resolves. "player" and "creature"
-#: parse — the phrase reads the same on any of them — and refuse here, because
-#: the record holds seats and permanent ids and nothing has been written that
-#: turns those into a living creature or a non-opponent seat. A class admitted
-#: without a resolver would name nobody and deal nothing, on a card reporting
-#: itself supported.
-_HISTORY_RECIPIENTS = frozenset({"opponent", "planeswalker"})
-
-
-def _lower_coin_flip_damage_loop(
-    node: ast.CoinFlipDamageLoop,
-) -> tuple[OracleInstruction, ...]:
-    """Mana Clash's whole paragraph (CR 705).
-
-    One instruction, because the loop is the effect: a flip, a reading of both
-    coins, and a repeat that depends on both. Composed out of `flip_coin` and
-    `if_then` it would be a *fixed* number of rounds, since nothing in the
-    control-flow vocabulary repeats — and the printed sentence is unbounded.
-
-    Only the amount is payload; who flips and which face is punished are the
-    process itself.
-    """
-    return (
-        OracleInstruction(
-            "coin_flip_damage_loop", "",
-            {
-                "amount": _amount_payload(node.amount),
-                # The opponent is chosen when the spell is cast (CR 601.2c), so
-                # the picker has to be raised from the compiled program like any
-                # other target.
-                "targets": {
-                    "quantifier": "target", "kind": "player", "opponents_only": True,
-                },
-            },
-        ),
-    )
-
-
-def _lower_damage_this_game_history(
-    node: ast.DamageThoseDamagedThisGame,
-) -> tuple[OracleInstruction, ...]:
-    """"…deals 1 damage to each opponent and planeswalker it has dealt damage to
-    this game." (The Fallen.)
-
-    The recipients are a record on the source, not a set on any board, so the
-    payload carries only how much and which classes of the record to reach for.
-    """
-    unknown = sorted(set(node.classes) - _HISTORY_RECIPIENTS)
-    if unknown:
-        raise LoweringError(
-            "no handler reaches the damaged-this-game " + ", ".join(unknown),
-            node=node,
-        )
-    return (
-        OracleInstruction(
-            "deal_damage_to_those_damaged_this_game", "",
-            {"amount": _amount_payload(node.amount), "classes": list(node.classes)},
-        ),
-    )
-def _lower_damage_cant_be_prevented(
-    node: ast.DamageCantBePreventedOrRedirected,
-) -> tuple[OracleInstruction, ...]:
-    """"Damage that would be dealt to that creature this turn can't be
-    prevented or dealt instead to another permanent or player." (Whippoorwill.)
-
-    Two refusals, each a way the sentence could otherwise reach further than it
-    says:
-
-    * the subject must be the object the sentence in front of it chose. A
-      described set would be a lock over permanents nobody picked, and the
-      handler has only the ability's own target to mark.
-    * the duration must be this turn, because that is what the sweep gives it.
-      A lock nothing ends is a creature no shield may ever protect.
-    """
-    subject = node.subject
-    if (
-        not isinstance(subject, ast.TargetSpec)
-        or subject.quantifier not in ("that", "it")
-        or _restrictions_beyond(subject.filter, frozenset({"card_types"}))
-    ):
-        raise LoweringError(
-            "the damage lock is armed on the creature the previous sentence "
-            "chose",
-            node=node,
-        )
-    if node.duration.kind not in _REST_OF_TURN:
-        raise LoweringError("the damage lock lasts exactly this turn", node=node)
-    return (OracleInstruction("lock_damage_to_target", "", {}),)
 
 
 def _lower_damage_conjunction(node: ast.Conjunction) -> tuple[OracleInstruction, ...]:

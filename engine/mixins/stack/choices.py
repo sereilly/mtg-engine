@@ -28,6 +28,8 @@ from ...auras import attach_aura
 from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...land_types import change_land_type
 from ...models import CardDefinition, Permanent
+from ...oracle_types import DISCARDED_BY_SEAT
+from ... import land_mana_swaps
 from ...pending_choices import CHOICE_SPECS, PendingChoice, register_choice, spec_for
 from ...replacement_choices import pending_choices_for
 from ...resumption import resume_after_answer, run_resumable
@@ -1293,6 +1295,14 @@ class PendingChoicesMixin:
         results = choice.data.get("_results")
         if results is not None:
             results["discarded_count"] = discarded
+            # And the per-seat tally, which is the same fact asked the way a
+            # sentence about "**they**" asks it. Written beside the single
+            # number rather than instead of it: "…then draw that many" reads
+            # one seat's answer where "damage to each player equal to 3 minus
+            # the number of cards they discarded" reads every seat's, and one
+            # key cannot be both.
+            by_seat = results.setdefault(DISCARDED_BY_SEAT, {})
+            by_seat[choice.player_index] = discarded
         player = self.players[choice.player_index]
         if choice.data.get("draw_that_many") and discarded > 0:
             # CR 614.5: a draw a replacement effect *created* is not replaced
@@ -1420,6 +1430,15 @@ class PendingChoicesMixin:
         commander goes into the command zone, or on to where it was headed."""
         return self.resolve_replacement_choice(
             player_index, 0 if to_command_zone else 1, kind="commander_zone_change"
+        )
+
+    def confirm_optional_damage_redirect(
+        self, player_index: int, take_the_damage: bool
+    ) -> bool:
+        """Resolve the oldest pending CR 614.9 "you may have that damage dealt
+        to you instead" offer for *player_index*."""
+        return self.resolve_replacement_choice(
+            player_index, 0 if take_the_damage else 1, kind="optional_damage_redirect"
         )
 
     def confirm_leng_discard(self, player_index: int, to_library: bool) -> bool:
@@ -1867,8 +1886,24 @@ class PendingChoicesMixin:
         could afford and lost the spell.
         """
         return plan_payment(
-            player.mana_pool, untapped_mana_lands(self.controlled_by(player)), cost
+            player.mana_pool, untapped_mana_lands(self.controlled_by(player)), cost,
+            produces=self._land_payment_colors,
         )
+
+    def _land_payment_colors(self, land) -> tuple[str, ...]:
+        """What tapping *land* would actually put in its controller's pool.
+
+        The permanent's own answer, unless a seat-wide swap says otherwise —
+        "Until end of turn, if you tap a land you control for mana, it produces
+        {U} instead of any other type" (Deep Water). That record hangs off the
+        seat, so only a caller with the game can resolve it, which is why the
+        planner takes this as a hook rather than reading the permanent itself
+        (``engine/land_mana_swaps.py``). Without it the planner would tap a
+        Swamp to pay a {B} the tap will not produce, and report a cost payable
+        that is not.
+        """
+        swapped = land_mana_swaps.swapped_symbol(self, land)
+        return (swapped,) if swapped else tuple(land.effective_produced_mana or ())
 
     def _default_mana_payment(self, choice: PendingChoice) -> None:
         controller = self.players[choice.player_index]
@@ -2613,6 +2648,7 @@ class PendingChoicesMixin:
             player.mana_pool,
             untapped_mana_lands(self.controlled_by(player)),
             entry.get("cost") or {},
+            produces=self._land_payment_colors,
         )
 
     def _player_can_pay_optional(self, player, entry: dict) -> bool:
@@ -4319,6 +4355,25 @@ register_choice(
     action="leng_discard_confirm",
     prompt_key="leng_discard",
     blocked_detail="choose where the discarded card goes (Library of Leng) before other actions",
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+register_choice(
+    "optional_damage_redirect",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="optional_damage_redirect_confirm",
+    prompt_key="optional_damage_redirect",
+    blocked_detail=(
+        "choose whether you take the damage headed for that creature before "
+        "other actions"
+    ),
+    # The damage event that armed this is over — it was consumed so that both
+    # answers could run through one resolver — so nothing is waiting on the
+    # answer to carry on. A non-interactive seat takes the stated policy where
+    # it stands, exactly as the three offers above do.
     default_at_arm=True,
     spectator_visible=True,
     hidden_for_ai=False,
