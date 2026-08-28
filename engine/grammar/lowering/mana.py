@@ -125,6 +125,12 @@ def _lower_add_mana(
             # on these five cards is a battery that always makes exactly one
             # mana however many counters it just ate.
             payload["per_each_counter_removed"] = node.per_each_counter_removed
+        if node.per_each_counter_on_source is not None:
+            # "…for each **storage counter on this land**" (City of Shadows).
+            # Counted off the source at resolution, which is what separates it
+            # from the payment above — and carried as the counter's kind, so a
+            # card printing another word is data.
+            payload["per_each_counter_on_source"] = node.per_each_counter_on_source
         if node.per_each is not None:
             # The count is taken at resolution through the one evaluator every
             # computed amount shares, so "creature with power 4 or greater you
@@ -167,16 +173,18 @@ def _lower_add_mana(
     # injection on the ``any_color`` payload key, and the AI's mana valuation
     # reads the text. Both are the same string the legacy rule wrote.
     amount = _amount_payload(node.any_color)
-    return (
-        OracleInstruction(
-            "add_mana_from_text", "",
-            {
-                "oracle_text": node.source_text,
-                "any_color": True,
-                "any_color_count": amount,
-            },
-        ),
-    )
+    payload: dict[str, object] = {
+        "oracle_text": node.source_text,
+        "any_color": True,
+        "any_color_count": amount,
+    }
+    if node.any_color_from is not None:
+        # "…that a land an opponent controls could produce" (Fellwar Stone).
+        # Which board narrows the choice, carried so the handler and the colour
+        # picker read one answer. Emitted only when printed, so every payload
+        # written before it is byte-identical.
+        payload["any_color_from"] = node.any_color_from
+    return (OracleInstruction("add_mana_from_text", "", payload),)
 
 
 # Which player the mana goes to, from the clause's own subject. Both spellings

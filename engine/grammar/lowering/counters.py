@@ -308,9 +308,21 @@ def _lower_put_counter(
         and not _names_several_targets(node.subject)
     ):
         assert isinstance(node.subject, ast.TargetSpec)
-        if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
+        # "Put **X** +0/+1 counters on target creature, where X is that
+        # creature's mana value." (Living Armor.) The number is payload on the
+        # same instruction rather than a second kind: what changes is how many
+        # of one counter go on one creature, and the where-clause behind the X
+        # is resolved at the single dispatch point like every other one. A
+        # printed count of 1 keeps emitting no ``count`` key at all, so every
+        # payload written before this stays byte-identical.
+        if isinstance(node.count, ast.Fixed):
+            placed: int | str = node.count.value
+        elif isinstance(node.count, ast.Var):
+            placed = node.count.name
+        else:
             raise LoweringError(
-                "a counter of this kind is placed one at a time", node=node
+                "a counter of this kind is placed a fixed or variable number "
+                "at a time", node=node,
             )
         filt = node.subject.filter
         leftover = _restrictions_beyond(
@@ -326,10 +338,36 @@ def _lower_put_counter(
             filt, in_combat_with_source=False
         ))
         payload: dict[str, object] = {"counter": node.counter}
+        if placed != 1:
+            payload["count"] = placed
         if filt.in_combat_with_source:
             payload["in_combat_with_source"] = True
         _describe_targets(payload, stripped)
         return (OracleInstruction("add_counter_to_target", "", payload),)
+    # "Put **X +0/+1** counters on this creature." (Necropolis.) The source's
+    # own twin of the targeted branch above, and payload for the same reasons:
+    # which CR 122.1a pair the counter names, and how many of it, are the whole
+    # of what differs. A printed +1/+1 keeps the branch below it byte for byte,
+    # so nothing written before this changes shape.
+    if (
+        is_pt_counter(node.counter)
+        and node.counter != "+1/+1"
+        and not node.up_to
+        and _is_source(node.subject)
+    ):
+        if isinstance(node.count, ast.Fixed):
+            placed_on_self: int | str = node.count.value
+        elif isinstance(node.count, ast.Var):
+            placed_on_self = node.count.name
+        else:
+            raise LoweringError(
+                "a counter on the source is placed a fixed or variable number "
+                "at a time", node=node,
+            )
+        payload: dict[str, object] = {"counter": node.counter}
+        if placed_on_self != 1:
+            payload["count"] = placed_on_self
+        return (OracleInstruction("add_counter_to_self", "", payload),)
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)
     if isinstance(node.count, ast.ThatMuch) and _is_source(node.subject):

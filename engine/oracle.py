@@ -934,6 +934,61 @@ def chargeable_sacrifice_payload(described: dict) -> dict | None:
     return carried
 
 
+def chargeable_exile_payload(described: dict) -> dict | None:
+    """The charger's reading of an "Exile <noun phrase>" cost's noun payload.
+
+    :func:`chargeable_sacrifice_payload` one zone wider, and shaped the same way
+    for the same reason: the grammar admits the line by asking this, the
+    activation path charges the cost by asking this, and the pool-wide guard in
+    ``tests/engine/test_activation_costs.py`` compares the two answers.
+
+    ``zone`` and ``zone_owner`` are dropped rather than carried - the charger
+    enumerates one named zone of one named seat, so they restrict nothing the
+    enumeration has not already done, and a key handed to a matcher that cannot
+    test it would refuse every candidate. ``controller`` goes the same way and
+    for the reason a sacrifice's does; ``exclude_self`` comes back on, because
+    the charger holds the source and compares by identity.
+    """
+    from .subject_filters import card_only_filter, object_only_filter
+
+    zone = described.get("zone")
+    stripped = {
+        key: value for key, value in described.items()
+        if key not in ("zone", "zone_owner")
+    }
+    if zone == "graveyard":
+        # A card in a zone has no computed characteristics (CR 613.1), so the
+        # card matcher is what answers here - the same split
+        # ``chargeable_card_filter`` makes for a discard cost.
+        return card_only_filter(stripped)
+    carried = object_only_filter(
+        stripped, carried_separately=frozenset({"exclude_self", "controller"})
+    )
+    if carried is None:
+        return None
+    if "exclude_self" in stripped:
+        carried = {**carried, "exclude_self": True}
+    return carried
+
+
+def _chargeable_exile_filter(phrase: str) -> dict | None:
+    """The filter payload an "Exile <noun phrase>" cost charges, or None when the
+    payment path cannot collect it. The two-halves pairing
+    :func:`_chargeable_sacrifice_filter` describes, one zone wider."""
+    from .grammar.phrases import parse_subject_filter
+
+    # The noun parser directly rather than ``subject_filter_payload``: that
+    # reader refuses any phrase naming a zone at all, because a *trigger*
+    # subject is always a permanent - and "a creature card **from your
+    # graveyard**" is exactly the shape it exists to refuse. The zone is the
+    # point here, so the gate is ``chargeable_exile_payload`` alone, which is
+    # also the function the grammar's own cost side asks (idiom 1).
+    filt = parse_subject_filter(phrase)
+    if filt is None:
+        return None
+    return chargeable_exile_payload(filt.to_payload())
+
+
 def _chargeable_discard_filters(phrase: str) -> tuple[dict, ...] | None:
     """The alternatives a "Discard <noun phrase>" cost may be paid with, or None
     when the payment path cannot collect it.
@@ -1069,6 +1124,30 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     cost_lower = cost_part.lower()
     discard_last_drawn = "discard the last card you drew this turn" in cost_lower
     exile_self = bool(re.search(r"\bexile this (artifact|creature|enchantment|permanent|land)\b", cost_lower))
+    # "Exile a creature you control" (City of Shadows) / "Exile a creature
+    # card from your graveyard" (Necropolis) - a *chosen* object rather than
+    # the source. The regex only **delimits** the noun phrase to the end of
+    # its comma-separated cost segment, exactly as the sacrifice one below
+    # does; what the phrase names is read by the noun parser, because a regex
+    # approximating it is a second reader of one clause and the direction
+    # those drift in is a cost charged more widely than the card prints.
+    chosen_exile = (
+        None if exile_self
+        else re.search(r"\bexile ((?:another|an?) [^,:]+?)\s*(?=,|$)", cost_lower)
+    )
+    exile_filter = (
+        _chargeable_exile_filter(chosen_exile.group(1)) if chosen_exile else None
+    )
+    # Which zone it comes out of. Read off the same phrase rather than
+    # guessed: a graveyard payment enumerates cards and a battlefield one
+    # enumerates permanents, and answering the wrong one exiles nothing while
+    # the ability still resolves.
+    exile_zone = (
+        "graveyard"
+        if chosen_exile is not None
+        and "from your graveyard" in chosen_exile.group(1)
+        else "battlefield"
+    )
     # "Sacrifice this artifact" (Black Lotus, Bottle of Suleiman). Older
     # printings name the card instead of saying "this artifact", so accept
     # either wording.
@@ -1174,6 +1253,8 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
         sacrifice_filter,
+        exile_filter=exile_filter,
+        exile_zone=exile_zone,
         sacrifice_count=sacrifice_count,
         tap_filter=tap_cost[1] if tap_cost else None,
         tap_count=tap_cost[0] if tap_cost else 0,

@@ -80,7 +80,6 @@ from .mana import (
 from .cards import (
     _parse_draw,
     _parse_choose_cards_in_hand,
-    _parse_put_iterated_card_on_library,
     _parse_discard,
     _parse_mill,
     _parse_scry,
@@ -89,9 +88,12 @@ from .cards import (
     _parse_exile_graveyard,
     _parse_reveal_hand,
     _parse_reveal_hand_and_choose,
-    _parse_exile_top_of_library,
     _parse_put_exiled_with_source,
+)
+from .library import (
+    _parse_exile_top_of_library,
     _parse_look_at_hand,
+    _parse_put_iterated_card_on_library,
     _parse_reveal_top,
     _parse_search_library,
 )

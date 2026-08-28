@@ -8,6 +8,8 @@ from __future__ import annotations
 from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
+from engine.models import CardDefinition, Permanent
+import random
 
 
 # --- G2: auras and land statics (The Dark) ---
@@ -114,7 +116,13 @@ def test_an_opponents_dwarf_does_not_sacrifice_goblins_of_the_flarg(set_pool):
 # --- G1: damage family (The Dark) ---
 
 
-def _board(set_pool, name: str, *, seats: int = 2) -> tuple[Game, list[PlayerState], Permanent]:
+def _damage_board(set_pool, name: str, *, seats: int = 2) -> tuple[Game, list[PlayerState], Permanent]:
+    """A board with one named DRK creature, for the damage group's tests.
+
+    Named for its group rather than `_board`: the zones group landed a
+    helper of that name in this file in the same round, taking a *list* of
+    creatures, and the later definition silently shadowed this one.
+    """
     """*name* on seat 0's battlefield, summoning sickness already worked off."""
     perm = Permanent(card=set_pool("DRK")[name])
     perm.summoning_sick = False
@@ -134,7 +142,7 @@ def test_banshee_rounds_the_two_halves_in_opposite_directions(set_pool):
     """"half X damage, rounded down, to any target, and half X damage, rounded
     up, to you" — one sentence, two roundings. With X = 5 that is 2 and 3, and
     a reader that honoured one rounding for both would deal 2/2 or 3/3."""
-    game, players, banshee = _board(set_pool, "Banshee")
+    game, players, banshee = _damage_board(set_pool, "Banshee")
 
     result = game.activate_permanent_ability(
         0, "Banshee", target_player_index=1, x_value=5
@@ -148,7 +156,7 @@ def test_banshee_rounds_the_two_halves_in_opposite_directions(set_pool):
 def test_banshee_with_an_odd_x_of_one_hits_only_its_controller(set_pool):
     """X = 1: half rounded down is 0, and CR 120.8 makes a source that would
     deal 0 damage deal none at all. Half rounded up is still 1."""
-    game, players, banshee = _board(set_pool, "Banshee")
+    game, players, banshee = _damage_board(set_pool, "Banshee")
 
     game.activate_permanent_ability(0, "Banshee", target_player_index=1, x_value=1)
 
@@ -160,7 +168,7 @@ def test_electric_eel_pumps_and_bites_its_controller_in_one_ability(set_pool):
     """"gets +2/+0 until end of turn **and deals 1 damage to you**" is one
     printed ability. Read as a pump alone the card is strictly better than it
     prints, and the whole line refused to parse before the conjunct existed."""
-    game, players, eel = _board(set_pool, "Electric Eel")
+    game, players, eel = _damage_board(set_pool, "Electric Eel")
 
     result = game.activate_permanent_ability(0, "Electric Eel")
 
@@ -187,7 +195,7 @@ def test_the_fallen_damages_nobody_before_it_has_damaged_anybody(set_pool):
     """"each opponent … **it has dealt damage to this game**" is a history, not
     a board. With an empty record the upkeep trigger hits nothing; a reading
     that dropped the clause would be a Pestilence."""
-    game, players, fallen = _board(set_pool, "The Fallen")
+    game, players, fallen = _damage_board(set_pool, "The Fallen")
     game.start_turn(0)
     game._settle()
 
@@ -197,7 +205,7 @@ def test_the_fallen_damages_nobody_before_it_has_damaged_anybody(set_pool):
 def test_the_fallen_remembers_the_opponent_it_damaged(set_pool):
     """One point of damage from this creature puts that seat in its record, and
     every later upkeep collects on it."""
-    game, players, fallen = _board(set_pool, "The Fallen")
+    game, players, fallen = _damage_board(set_pool, "The Fallen")
     game._deal_damage_to_player(players[1], 3, source=fallen)
     assert players[1].life == 17
 
@@ -211,7 +219,7 @@ def test_the_fallen_forgets_what_a_previous_object_damaged(set_pool):
     """CR 400.7: a creature that leaves and returns is a new object. The record
     lives on the permanent, so the new one remembers nothing — which is what
     keeps "this game" from meaning "this game, plus a previous incarnation"."""
-    game, players, fallen = _board(set_pool, "The Fallen")
+    game, players, fallen = _damage_board(set_pool, "The Fallen")
     game._deal_damage_to_player(players[1], 1, source=fallen)
     game.remove_from_battlefield(fallen)
 
@@ -231,7 +239,7 @@ def test_the_fallen_never_damages_its_own_controller(set_pool):
     """"each **opponent**": a seat recorded because this creature damaged its
     own controller is not one, and the record holds seats rather than
     opponents so the question is asked when the trigger resolves."""
-    game, players, fallen = _board(set_pool, "The Fallen")
+    game, players, fallen = _damage_board(set_pool, "The Fallen")
     game._deal_damage_to_player(players[0], 1, source=fallen)
     life_before = players[0].life
 
@@ -324,3 +332,364 @@ def test_leviathan_pays_two_islands_as_attackers_are_declared(set_pool):
     assert leviathan.attacking
     assert sum(1 for p in game.controlled_by(0) if p.has_type("island")) == 1
     assert [c.name for c in game.players[0].graveyard] == ["Island", "Island"]
+
+# --- G5: zones and characteristics (The Dark) ---------------------------------
+
+
+def _nosick(perm: Permanent) -> Permanent:
+    perm.metadata["summoning_sickness_turn"] = -99
+    return perm
+
+
+def _basic(name: str, subtype: str, symbol: str) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0,
+        type_line=f"Basic Land - {subtype}", oracle_text="",
+        colors=(), color_identity=(symbol,), keywords=(), produced_mana=(symbol,),
+        raw={"name": name, "type_line": f"Basic Land - {subtype}"},
+    )
+
+
+def _board(set_pool, mine, theirs=(), *, my_graveyard=(), their_hand=()):
+    pool = set_pool("DRK")
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[_nosick(Permanent(card=pool[name])) for name in mine],
+        graveyard=[pool[name] for name in my_graveyard],
+    )
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[_nosick(Permanent(card=pool[name])) for name in theirs],
+        hand=[pool[name] for name in their_hand],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, p1, p2, pool
+
+
+# --- exiling from a graveyard, as a cost and as an effect ---------------------
+
+
+def test_grave_robbers_exiles_an_artifact_card_and_gains_two_life(set_pool):
+    """"{B}, {T}: Exile target artifact card from a graveyard. You gain 2
+    life." The picker is narrowed to artifacts, and the narrowing is the whole
+    difference from the "any card" form the graveyard exile used to be."""
+    game, p1, p2, pool = _board(
+        set_pool, ["Grave Robbers"], my_graveyard=["Fellwar Stone"],
+    )
+    life = p1.life
+
+    result = game.activate_permanent_ability(
+        0, "Grave Robbers", permanent_index=0,
+        target_player_index=0, target_permanent_index=0,
+    )
+
+    assert result.supported, result.details
+    assert p1.graveyard == [], game.log
+    assert [card.name for card in p1.exile] == ["Fellwar Stone"]
+    assert p1.life == life + 2
+
+
+def test_grave_robbers_picker_is_narrowed_to_artifact_cards(set_pool):
+    """The control: "artifact card" is carried into the picker rather than
+    collapsed to "any card". One predicate, offered and re-checked - a picker
+    offering a creature for a cost the resolution then refuses is a tap paid
+    for nothing."""
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    pool = set_pool("DRK")
+    program = compile_card_oracle(pool["Grave Robbers"])
+    spec = derive_activation_spec(program.activated_abilities[0])
+
+    assert spec == {"kind": "graveyard_creature", "card_type": "artifact"}
+
+
+def test_eater_of_the_dead_untaps_itself_by_eating_a_corpse(set_pool):
+    """"{0}: **If this creature is tapped**, exile target creature card from a
+    graveyard and untap this creature." Both halves, in order."""
+    game, p1, p2, pool = _board(
+        set_pool, ["Eater of the Dead"], my_graveyard=["Rag Man"],
+    )
+    eater = p1.battlefield[0]
+    eater.tapped = True
+
+    result = game.activate_permanent_ability(
+        0, "Eater of the Dead", permanent_index=0,
+        target_player_index=0, target_permanent_index=0,
+    )
+
+    assert result.supported, result.details
+    assert [card.name for card in p1.exile] == ["Rag Man"], game.log
+    assert eater.tapped is False
+
+
+def test_necropolis_grows_by_the_exiled_cards_mana_value(set_pool):
+    """"Exile a creature card from your graveyard: Put **X** +0/+1 counters on
+    this creature, where X is **the exiled card's** mana value."
+
+    The cost is paid before the ability resolves (CR 601.2h), so by the time X
+    is read the card is out of the game - the number is last-known information
+    the activation recorded, not anything a zone still holds."""
+    game, p1, p2, pool = _board(
+        set_pool, ["Necropolis"], my_graveyard=["Angry Mob"],
+    )
+    necropolis = p1.battlefield[0]
+    printed = necropolis.effective_toughness
+    mana_value = int(pool["Angry Mob"].cmc)
+    assert mana_value > 0, "the fixture needs a card with a real mana value"
+
+    result = game.activate_permanent_ability(0, "Necropolis", permanent_index=0)
+
+    assert result.supported, result.details
+    assert p1.graveyard == [], "the cost ate the card"
+    assert [card.name for card in p1.exile] == ["Angry Mob"]
+    assert necropolis.effective_toughness == printed + mana_value, game.log
+    assert necropolis.effective_power == 0, "+0/+1 counters add no power"
+
+
+def test_necropolis_cannot_be_activated_with_an_empty_graveyard(set_pool):
+    """The control on the test above: the exile is a *cost*, so with nothing to
+    pay it the ability is not activated at all (CR 602.2b) rather than resolving
+    for free."""
+    game, p1, p2, pool = _board(set_pool, ["Necropolis"])
+    necropolis = p1.battlefield[0]
+    printed = necropolis.effective_toughness
+
+    result = game.activate_permanent_ability(0, "Necropolis", permanent_index=0)
+
+    assert not result.supported
+    assert necropolis.effective_toughness == printed
+
+
+# --- revealing a hand and discarding from it ---------------------------------
+
+
+def test_rag_man_takes_a_creature_card_at_random(set_pool):
+    """"Target opponent reveals their hand and discards a **creature** card at
+    random." The sample is drawn from the cards answering the phrase, so the
+    land in hand is never at risk."""
+    game, p1, p2, pool = _board(
+        set_pool, ["Rag Man"], their_hand=["Angry Mob", "City of Shadows"],
+    )
+    random.seed(11)
+
+    result = game.activate_permanent_ability(
+        0, "Rag Man", permanent_index=0, target_player_index=1,
+    )
+
+    assert result.supported, result.details
+    assert [card.name for card in p2.hand] == ["City of Shadows"], game.log
+    assert [card.name for card in p2.graveyard] == ["Angry Mob"]
+
+
+def test_rag_man_replays_the_same_discard_for_the_same_seed(set_pool):
+    """Determinism: the sample comes from the module RNG ``run_ai_simulation``
+    seeds, so a given seed reproduces a run exactly."""
+    taken = []
+    for _ in range(2):
+        game, p1, p2, pool = _board(
+            set_pool, ["Rag Man"],
+            their_hand=["Angry Mob", "Necropolis", "People of the Woods"],
+        )
+        random.seed(4)
+        game.activate_permanent_ability(
+            0, "Rag Man", permanent_index=0, target_player_index=1,
+        )
+        taken.append([card.name for card in p2.graveyard])
+
+    assert taken[0] == taken[1] and len(taken[0]) == 1, taken
+
+
+# --- characteristic-defining P/T (CR 604.3) ----------------------------------
+
+
+def test_people_of_the_woods_toughness_counts_forests(set_pool):
+    """"…**toughness** is equal to the number of Forests you control." The
+    printed power stands: this is a 0/*, and defining both halves would make it
+    a creature the card never prints."""
+    pool = set_pool("DRK")
+    forest = _basic("Forest", "Forest", "G")
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[
+            Permanent(card=pool["People of the Woods"]),
+            Permanent(card=forest),
+            Permanent(card=forest),
+        ],
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._refresh_dynamic_creatures()
+    people = p1.battlefield[0]
+
+    printed_power = int(pool["People of the Woods"].raw["power"])
+    assert people.effective_toughness == 2, game.log
+    assert people.effective_power == printed_power, "only the toughness is defined"
+
+    # …and it tracks the board rather than being fixed as it entered. A third
+    # Forest is a third point of toughness; without one it would be a 0/0 and
+    # die to the state-based check, which is the card.
+    p1.battlefield.append(Permanent(card=forest))
+    game._refresh_dynamic_creatures()
+
+    assert people.effective_toughness == 3, game.log
+
+
+def test_angry_mob_counts_swamps_only_on_its_controllers_turn(set_pool):
+    """"During **your** turn, …are each equal to 2 plus the number of Swamps
+    **your opponents** control. During turns other than yours, …are each 2."
+
+    Two answers on one card, and which one applies is a question about the turn
+    rather than about a battlefield."""
+    swamp = _basic("Swamp", "Swamp", "B")
+    pool = set_pool("DRK")
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pool["Angry Mob"])])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=swamp) for _ in range(3)],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    mob = p1.battlefield[0]
+
+    game.start_turn(0)
+    assert (mob.effective_power, mob.effective_toughness) == (5, 5), game.log
+
+    game.active_player_index = 1
+    game._refresh_dynamic_creatures()
+    assert (mob.effective_power, mob.effective_toughness) == (2, 2), game.log
+
+
+# --- odds and ends -----------------------------------------------------------
+
+
+def test_goblin_wizard_drops_a_goblin_out_of_hand(set_pool):
+    """"{T}: You may put a **Goblin permanent card** from your hand onto the
+    battlefield." A generic head noun after a subtype, which used to refuse the
+    line outright."""
+    pool = set_pool("DRK")
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[_nosick(Permanent(card=pool["Goblin Wizard"]))],
+        hand=[pool["Orc General"], pool["Goblin Wizard"]],
+    )
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(0, "Goblin Wizard", permanent_index=0)
+
+    assert result.supported, result.details
+    # The offer is a prompt, so a seat that answers by default takes it - the
+    # stated AI policy for an optional put-onto-the-battlefield.
+    game.auto_resolve_pending_choices()
+    dropped = [perm.card.name for perm in p1.battlefield]
+    assert dropped.count("Goblin Wizard") == 2, game.log
+    assert "Orc General" in [card.name for card in p1.hand], "an Orc is not a Goblin"
+
+
+def test_orc_general_buffs_other_orcs_and_eats_one_to_do_it(set_pool):
+    """"{T}, Sacrifice **another Orc or Goblin**: Other **Orc** creatures get
+    +1/+1 until end of turn."
+
+    Both halves are narrowed by subtype, and the two live on opposite sides of
+    the pipeline - the cost is charged by `engine/oracle.py` and the buff comes
+    out of the grammar. A narrowing that reached only one of them is a cost
+    nobody pays or a board nobody named."""
+    game, p1, p2, pool = _board(
+        set_pool, ["Orc General", "Orc General", "Goblin Wizard"],
+    )
+    source, other_orc, goblin = p1.battlefield
+    goblin_power = goblin.effective_power
+    printed = int(pool["Orc General"].raw["power"])
+
+    result = game.activate_permanent_ability(0, "Orc General", permanent_index=0)
+
+    assert result.supported, result.details
+    eaten = {"Orc General", "Goblin Wizard"} - {
+        perm.card.name for perm in p1.battlefield
+    } or {"Goblin Wizard"}
+    assert eaten, "the cost ate nothing"
+    # "**Other** Orc creatures" - CR 109.5 excludes the ability's own source,
+    # so the General that paid does not buff itself.
+    assert source.effective_power == printed, game.log
+    if any(perm is other_orc for perm in p1.battlefield):
+        assert other_orc.effective_power == printed + 1, game.log
+    if any(perm is goblin for perm in p1.battlefield):
+        assert goblin.effective_power == goblin_power, "a Goblin is not an Orc"
+
+
+def test_orc_general_cannot_be_activated_with_no_other_orc_or_goblin(set_pool):
+    """The control on the cost half: "another Orc or Goblin" is charged, so a
+    lone General has no legal payment and the buff never happens."""
+    game, p1, p2, pool = _board(set_pool, ["Orc General"])
+
+    result = game.activate_permanent_ability(0, "Orc General", permanent_index=0)
+
+    assert not result.supported, game.log
+    assert [perm.card.name for perm in p1.battlefield] == ["Orc General"]
+
+
+def test_nameless_race_is_the_life_its_controller_paid_as_it_entered(set_pool):
+    """"As this creature enters, pay any amount of life. The amount you pay
+    can't be more than the total number of white nontoken permanents your
+    opponents control plus the total number of white cards in their
+    graveyards." / "…power and toughness are each equal to the life paid as it
+    entered."
+
+    An *entry* value, not a running count: the number is fixed as the creature
+    arrives (CR 614.1c) and nothing on any board answers for it afterwards -
+    which is why it rides the permanent the way Wood Elemental's sacrifice
+    count does.
+    """
+    pool = set_pool("DRK")
+    plains = _basic("Plains", "Plains", "W")
+    p1 = PlayerState(name="P1", hand=[pool["Nameless Race"]])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=plains)],
+        graveyard=[pool["Martyr's Cry"], pool["Angry Mob"]],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    life = p1.life
+
+    result = game.cast_from_hand(0, "Nameless Race")
+    assert result.supported, result.details
+
+    # Three white objects on the far side: the Plains is a white permanent only
+    # if its colour says so, so the cap is what the two white cards in the
+    # graveyard allow plus whatever the board adds.
+    prompt = [c for c in game.pending_choices if c.kind == "number_choice"]
+    assert prompt, game.log
+    cap = prompt[0].data["maximum"]
+    assert cap >= 2, (cap, game.log)
+
+    assert game.confirm_number_choice(0, 2), game.log
+    race = [perm for perm in p1.battlefield if perm.card.name == "Nameless Race"][0]
+    assert (race.effective_power, race.effective_toughness) == (2, 2), game.log
+    assert p1.life == life - 2, "the life is paid, not merely chosen"
+
+
+def test_nameless_race_declined_dies_as_a_zero_zero(set_pool):
+    """The control: paying nothing is a legal answer, and a 0/0 dies to the
+    state-based check — which is the card."""
+    pool = set_pool("DRK")
+    p1 = PlayerState(name="P1", hand=[pool["Nameless Race"]])
+    p2 = PlayerState(name="P2", graveyard=[pool["Martyr's Cry"]])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    life = p1.life
+
+    game.cast_from_hand(0, "Nameless Race")
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert "Nameless Race" not in {perm.card.name for perm in p1.battlefield}, game.log
+    assert p1.life == life

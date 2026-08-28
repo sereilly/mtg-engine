@@ -329,11 +329,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "bounce_target_creature": {"kind": "creature"},
     "phase_out_target_creature_until_source_leaves": {"kind": "creature"},
     "reanimate_creature": {"kind": "graveyard_creature", "own_graveyard_only": True},
-    # "target card from a graveyard" — any card, any seat's graveyard, so no
-    # own_graveyard_only. The picker is the reanimation one because the
-    # *choice* is identical; only where the card goes afterwards differs, and
-    # that is the handler's business, not the picker's.
-    "exile_target_graveyard_card": {"kind": "graveyard_creature", "any_card": True},
     "exchange_ante_with_top_library": {"kind": "none"},
     # Dream Coat: "Enchanted creature becomes the color or colors of your
     # choice." The *permanent* is not chosen — an Aura's ability acts on its
@@ -501,6 +496,40 @@ def _cost_picker_spec(cost) -> dict | None:
         alternatives = getattr(cost, "discard_filters", ()) or ()
         if alternatives:
             spec["filters"] = [dict(alt) for alt in alternatives]
+        return spec
+    described = getattr(cost, "exile_filter", None)
+    if described is not None:
+        # "Exile a creature you control" (City of Shadows) / "Exile a creature
+        # card from your graveyard" (Necropolis). The sacrifice picker one zone
+        # over: the *choice* is the same announcement (CR 601.2b), and only the
+        # list it is made from differs. ``exile_cost`` is what tells the client
+        # to send the answer on the cost field and to say "exile" rather than
+        # "target" — a cost is not a target (idiom 10).
+        if getattr(cost, "exile_zone", "battlefield") == "graveyard":
+            spec = {
+                "kind": GRAVEYARD_TARGET_KIND,
+                "own_graveyard_only": True,
+                "exile_cost": True,
+            }
+            wanted = described.get("type_filter")
+            if isinstance(wanted, str):
+                spec["card_type"] = wanted
+            return spec
+        spec = {
+            "kind": filter_head_noun(described),
+            "own_only": True,
+            "exile_cost": True,
+        }
+        if described.get("exclude_self"):
+            spec["exclude_source"] = True
+        narrowing = {
+            key: value
+            for key, value in described.items()
+            if key not in ("exclude_self", "controller")
+            and not (key == "type_filter" and isinstance(value, str))
+        }
+        if narrowing:
+            spec["filter"] = narrowing
         return spec
     described = getattr(cost, "sacrifice_filter", None)
     if described is not None:
@@ -670,6 +699,31 @@ def _graveyard_return_spec(payload: dict) -> dict:
     return spec
 
 
+def _graveyard_exile_spec(payload: dict) -> dict:
+    """"Exile target card from a graveyard", narrowed to the card type it may
+    take.
+
+    Any seat's graveyard, so no ``own_graveyard_only`` — the picker is the
+    reanimation one because the *choice* is identical; only where the card goes
+    afterwards differs, and that is the handler's business.
+
+    Derived from the payload rather than a fixed dict, for the reason
+    :func:`_graveyard_return_spec` is: Return to Nature takes any card, Grave
+    Robbers an artifact card and Eater of the Dead a creature card, and a fixed
+    ``any_card`` spec would offer Grave Robbers a creature its own re-check then
+    refuses. ``graveyard_card_matches`` reads the same keys in all three places.
+    """
+    spec: dict = {"kind": GRAVEYARD_TARGET_KIND}
+    card_type = payload.get("card_type")
+    if payload.get("any_card") or card_type is None:
+        spec["any_card"] = True
+    elif card_type != "creature":
+        # "creature" is the enumerator's own default, so naming it changes
+        # nothing; every other type is carried.
+        spec["card_type"] = card_type
+    return spec
+
+
 def _prevention_shield_spec(payload: dict) -> dict | None:
     """A "prevent the next N damage" shield, and who is being shielded.
 
@@ -782,6 +836,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # then done to it.
     "redirect_damage_from_target_spell_until_eot": _counter_spec,
     "return_creature_from_graveyard_to_hand": _graveyard_return_spec,
+    "exile_target_graveyard_card": _graveyard_exile_spec,
     "grant_prevention_shield": _prevention_shield_spec,
     "set_base_pt_target_until_eot": _set_base_pt_spec,
     "grant_cast_permission": _cast_permission_spec,

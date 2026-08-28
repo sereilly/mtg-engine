@@ -19,7 +19,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Union
 
-from ._core import Amount, Comparison, Cost, ObjectFilter, PlayerRef, TargetSpec, Zone
+from ._core import Amount, Comparison, ObjectFilter, PlayerRef, TargetSpec, Zone
+from .costs import Cost
 
 @dataclass(frozen=True)
 class Controls:
@@ -128,6 +129,24 @@ class DiedThisWay:
     The lowering refuses it without a producer, as every back-reference in this
     grammar is refused: with no earlier step the words name nothing, and an
     empty loop is a sentence that reports supported and does not run.
+    """
+    filter: ObjectFilter = field(default_factory=ObjectFilter)
+
+
+@dataclass(frozen=True)
+class ExiledThisWay:
+    """"for each creature **exiled this way**" (Martyr's Cry).
+
+    A sibling of :class:`DiedThisWay`, and a different set for the same reason
+    that one is different from :class:`DiedThisTurn`: a sweep that *exiles* kills
+    nothing, so nothing died and the destroy family's record is empty. Reading
+    one as the other would make the loop run zero times while the card still
+    reported supported.
+
+    Its own node rather than a verb field on ``DiedThisWay`` because what
+    separates them is which earlier step recorded the set — two records, written
+    by two handlers — and a node that carried the record's name as data would be
+    a back-reference free to name one nothing writes.
     """
     filter: ObjectFilter = field(default_factory=ObjectFilter)
 

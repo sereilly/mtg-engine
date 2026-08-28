@@ -15,10 +15,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ._core import (
-    ManaCost,
     PlayerRef,
     TargetSpec,
 )
+from .costs import ManaCost
 
 
 @dataclass(frozen=True)

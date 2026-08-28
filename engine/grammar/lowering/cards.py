@@ -6,7 +6,8 @@ families of their own: mana production in `mana.py`, the hidden-zone
 search/reveal/exile-linkage flows in `library.py`.
 """
 
-from ...oracle_types import X_FROM_COUNT, OracleInstruction
+from ...oracle_types import (PER_OBJECT_SEAT_RECORDS, X_FROM_COUNT,
+                             OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -45,10 +46,45 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
     # "Discard your hand" (Chandra, Heart of Fire) — the effect's controller
     # discards every card. Checked before the targeted forms: the subject is
     # the implied "you", which they refuse.
-    # Only the controller's own discard carries a narrowing today; every other
-    # handler below arms a prompt that takes the whole hand, so a filter reaching
-    # them would be silently dropped.
-    if node.filter is not None and node.player.kind != "you":
+    # "Target player reveals their hand and discards **all nonland cards**."
+    # (Amnesia.) Not a count at all: every card answering the phrase goes, so
+    # nobody chooses and there is no prompt — which is why it is read before the
+    # counted forms rather than as an amount one of them could carry. The filter
+    # is gated by the same reader every other card phrase is, so a narrowing the
+    # matcher cannot test refuses instead of being dropped into a discard that
+    # empties the whole hand.
+    if isinstance(node.count, ast.AllOf) and not node.whole_hand:
+        if node.player.kind not in ("target_player", "target_opponent"):
+            raise LoweringError(
+                "no handler discards every matching card from a seat nobody "
+                "targeted", node=node,
+            )
+        if node.at_random:
+            raise LoweringError(
+                "'all' names every matching card, so nothing is chosen at "
+                "random", node=node,
+            )
+        payload: dict[str, object] = {}
+        if node.filter is not None:
+            described = chargeable_card_filter(node.filter)
+            if not described:
+                raise LoweringError(
+                    "no discard can test this narrowing", node=node
+                )
+            payload["filter"] = described
+        _describe_targets(payload, node.player)
+        return (OracleInstruction("discard_all_matching_cards", "", payload),)
+    # Only the controller's own discard and the at-random one below carry a
+    # narrowing; every other handler arms a prompt that takes the whole hand, so
+    # a filter reaching them would be silently dropped.
+    if (
+        node.filter is not None
+        and node.player.kind != "you"
+        and not (
+            node.at_random
+            and node.player.kind in ("target_player", "target_opponent")
+        )
+    ):
         raise LoweringError(
             f"no {node.player.kind!r} discard handler carries a narrowing", node=node
         )
@@ -162,6 +198,18 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
         # are one handler.
         kind = "discard_x_target_cards"
         payload["amount"] = amount
+        # "…discards a **creature** card at random." (Rag Man.) The sample is
+        # drawn from the cards answering the phrase rather than from the whole
+        # hand — through the same card reader every other narrowing uses, so a
+        # phrase it cannot test refuses here instead of widening the sample to
+        # every card.
+        if node.filter is not None:
+            described = chargeable_card_filter(node.filter)
+            if not described:
+                raise LoweringError(
+                    "no random discard can test this narrowing", node=node
+                )
+            payload["filter"] = described
     else:
         kind = "discard_target_cards"
         payload["amount"] = amount
@@ -244,7 +292,21 @@ def _lower_draw(node: ast.Draw) -> tuple[OracleInstruction, ...]:
     handler with a recipient flag: ``draw_controller_cards`` draws for the
     effect's controller, ``draw_target_cards`` for the chosen player. Picking by
     the drawer keeps each one's existing contract intact."""
-    kind = "draw_controller_cards" if node.player.kind == "you" else "draw_target_cards"
+    # "For each creature exiled this way, **its controller** draws a card."
+    # (Martyr's Cry.) A possessive with no target in front of it: whose hand it
+    # is, is a fact an earlier step recorded about the loop's object, so it
+    # travels as the record's name and the handler resolves it per iteration.
+    #
+    # Without this the pronoun fell into the branch below and drew for
+    # ``context.target`` — a seat this sentence never named — which is the
+    # silent widening `PER_OBJECT_SEAT_RECORDS` exists to close.
+    drawer_seat = (
+        PER_OBJECT_SEAT_RECORDS["controller"]
+        if node.player.kind == "controller" else None
+    )
+    kind = (
+        "draw_controller_cards" if node.player.kind == "you" else "draw_target_cards"
+    )
     halved = (
         halved_count_spec(node.count, node) if isinstance(node.count, ast.Half) else None
     )
@@ -278,6 +340,8 @@ def _lower_draw(node: ast.Draw) -> tuple[OracleInstruction, ...]:
         }
     else:
         payload = {"amount": _amount_payload(node.count)}
+    if drawer_seat is not None:
+        payload["drawer_seat"] = drawer_seat
     _describe_targets(payload, node.player)
     return (OracleInstruction(kind, "", payload),)
 

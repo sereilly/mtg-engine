@@ -308,6 +308,7 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     exclude_colors = set(instruction.payload.get("exclude_colors") or ())
     attacking_only = bool(instruction.payload.get("attacking_only"))
     blocking_only = bool(instruction.payload.get("blocking_only"))
+    subtypes = tuple(instruction.payload.get("subtypes") or ())
     # "**Other** creatures you control" (Bolt Hound) — CR 109.5's exclusion of
     # the ability's own source, which no per-permanent filter can test.
     exclude_self = (
@@ -345,6 +346,12 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
             # a colourless creature is nonwhite because it is in no colour's
             # set (CR 105.2c).
             if exclude_colors and (exclude_colors & set(perm.effective_colors)):
+                continue
+            # "Other **Orc** creatures" (Orc General). Through ``has_type``, so
+            # a creature that *became* an Orc counts and one that stopped being
+            # one does not (CR 613 layer 4) — the same reader the type test
+            # above it uses, rather than the printed type line.
+            if subtypes and not any(perm.has_type(name) for name in subtypes):
                 continue
             apply_temp_pt_boost(perm, power_delta, toughness_delta)
     game.log.append(f"{card.name} buffed matching creatures")
@@ -546,13 +553,25 @@ def add_counter_to_self(game: Game, instruction: OracleInstruction, context: Ora
     if raw_count == "trigger_count":
         count = int(context.results.get("trigger_count", 0))
     else:
-        count = int(raw_count)
+        # "Put **X** +0/+1 counters on this creature" (Necropolis): the count
+        # may be the where-clause's X, resolved through the same
+        # `context.x_value` every other amount reads.
+        count = resolve_amount(raw_count, context.x_value)
     if count <= 0:
         return True, "resolved"
-    game.place_plus1_counters(source_permanent, count)
+    # Which CR 122.1a pair. Absent on every payload written before Necropolis,
+    # and those all mean the one kind this handler used to place - so the
+    # default is the whole of the compatibility, and `place_plus1_counters`
+    # stays the path for it because that kind is the one with a CR 614 event
+    # and a trigger behind it.
+    kind = str(instruction.payload.get("counter", "+1/+1"))
+    if kind == "+1/+1":
+        game.place_plus1_counters(source_permanent, count)
+    else:
+        game.place_pt_counters(source_permanent, kind, count)
     game.log.append(
-        f"{card.name} gets a +1/+1 counter" if count == 1
-        else f"{card.name} gets {count} +1/+1 counters"
+        f"{card.name} gets a {kind} counter" if count == 1
+        else f"{card.name} gets {count} {kind} counters"
     )
     return True, "resolved"
 
@@ -632,6 +651,16 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
     # place — so the default is the whole of the compatibility, and a card
     # printing "-0/-1" is this instruction with a different word in it.
     kind = str(instruction.payload.get("counter", "+1/+1"))
+    # "Put **X** +0/+1 counters on target creature." (Living Armor.) How many of
+    # that kind, resolved through the same `context.x_value` every other amount
+    # reads — absent on every payload written before it, and 1 is what those
+    # have always meant.
+    how_many = resolve_amount(instruction.payload.get("count", 1), context.x_value)
+    if how_many <= 0:
+        # A where-clause can define an X of zero (a creature with mana value 0),
+        # and CR 122.1 places no counters then. Logged as a resolution rather
+        # than a miss: the ability did what it said.
+        how_many = 0
 
     # "…put a +1/+1 counter on **the first creature**." (Infinite Authority.)
     # No target was ever chosen: the sentence names one half of the pair a block
@@ -729,8 +758,16 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
     if target_creature is None:
         game.log.append(f"{card.name}: no valid creature target")
         return True, "resolved"
-    game.place_pt_counters(target_creature, kind)
-    game.log.append(f"{target_creature.card.name} gets a {kind} counter ({card.name})")
+    if how_many:
+        game.place_pt_counters(target_creature, kind, how_many)
+        game.log.append(
+            f"{target_creature.card.name} gets a {kind} counter ({card.name})"
+            if how_many == 1
+            else f"{target_creature.card.name} gets {how_many} {kind} counters "
+                 f"({card.name})"
+        )
+    else:
+        game.log.append(f"{card.name}: no counters to place")
     # "…, then double the number of +1/+1 counters on that creature."
     # (Invigorating Surge.) Read *after* the placement, so the one just put down
     # is doubled too — and placed through the same seam, so a Conclave Mentor

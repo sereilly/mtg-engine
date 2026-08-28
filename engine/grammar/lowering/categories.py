@@ -17,7 +17,7 @@ from ...land_animation import LAND_ANIMATION_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND
 from ...oracle_types import OracleInstruction
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
-                      CREATED_TOKEN)
+                      CREATED_TOKEN, EXILED_THIS_WAY)
 INSTRUCTION_CATEGORIES: dict[str, str] = {
     "deal_damage": "damage",
     "earthquake_damage": "damage",
@@ -315,6 +315,13 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # below it, so GRAMMAR_CATEGORIES is unchanged.
     "reveal_hand": "zones",
     "reveal_hand_and_choose": "zones",
+    # CR 701.16, the reveal on its own (Amnesia, Rag Man). The same category as
+    # the template above, so GRAMMAR_CATEGORIES is unchanged: what moves is
+    # information about a hand either way.
+    "reveal_hand": "zones",
+    # "…discards **all nonland cards**" (Amnesia). A discard like the counted
+    # ones beside it; only who picks differs, and here nobody does.
+    "discard_all_matching_cards": "zones",
     "look_at_target_hand": "zones",
     "look_at_target_library_top": "zones",
     # A library search moves a card between hidden zones — same module, same
@@ -599,6 +606,11 @@ _PRODUCES: dict[str, str] = {
     "destroy_all_lands": "destroyed_this_way",
     "destroy_all_artifacts_creatures_enchantments": "destroyed_this_way",
     "destroy_all_matching": "destroyed_this_way",
+    # "Exile all white creatures. **For each creature exiled this way**, …"
+    # (Martyr's Cry.) The exile sweep's twin of the four rows above, and its own
+    # marker rather than theirs: a sweep that exiles kills nothing, so "died
+    # this way" over it would name an empty set.
+    "exile_all_matching": EXILED_THIS_WAY,
     # CR 705.2: only the player who flipped wins or loses that flip, and both
     # "if you win" and "if you lose" read the one result — so the flip records
     # it and the conditionals after it read the record, rather than each

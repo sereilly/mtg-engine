@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 from ..layer_bridge import printed_shape, printed_supertypes
 from ..oracle_types import BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER
 from ..models import Permanent, PlayerState
-from ..search_filters import name_key
+from ..search_filters import card_has_type, name_key
 
 
 def attached_host(game: "Game", source: "Permanent | None") -> "Permanent | None":
@@ -122,6 +122,18 @@ def count_from_payload(
     ledger_query = spec.get("damage_ledger")
     if isinstance(ledger_query, dict):
         return _damage_dealt_this_turn(game, context, ledger_query)
+    # "…where X is **the exiled card's mana value**" (Necropolis). What the
+    # ability's own cost ate, read off the record the activation path kept
+    # (CR 608.2h) — asked before every board-scanning branch below, because
+    # nothing on a board answers it.
+    cost_exile = spec.get("cost_exile_characteristic")
+    if cost_exile is not None:
+        exiled = (context.choices or {}).get("exiled_for_cost")
+        if exiled is None:
+            return 0
+        if cost_exile == "mana_value":
+            return max(0, int(getattr(exiled, "cmc", 0) or 0))
+        return 0
     characteristic = spec.get("object_characteristic")
     if isinstance(characteristic, dict):
         return _characteristic_of_object(game, context, characteristic, instruction)
@@ -435,6 +447,12 @@ def _card_matches_filter(card, filt: dict) -> bool:
     wanted_all_subtypes = filt.get("subtype_filter_all") or ()
     if wanted_all_subtypes and not all(s in subtypes for s in wanted_all_subtypes):
         return False
+    # "**nonland** card" (Amnesia). The negative of the test above, off the same
+    # printed line and OR'd the same way: a card naming *any* excluded type is
+    # out, which is what "noncreature, nonland" means when both are printed.
+    excluded = filt.get("exclude_types") or ()
+    if excluded and any(name in types for name in excluded):
+        return False
     # The card-level twin of `type_filter_all`: "an **artifact creature** card".
     # Off the printed type line, which for a card in a zone is the whole of
     # what there is (CR 613.1).
@@ -457,11 +475,13 @@ def _card_matches_filter(card, filt: dict) -> bool:
     # matcher uses, so "3 or less" means one thing in both zones.
     if not _comparison_holds(filt.get("mana_value"), int(getattr(card, "cmc", 0) or 0)):
         return False
-    # "the number of **white** cards in their hand" (Inquisition). Off the
-    # printed colours (CR 202.2), which for a card in a hidden zone is the whole
-    # of what there is — no layer has run and none can, so a colour *change*
-    # cannot be visible here and reading the printed value is the honest answer
-    # rather than an approximation of one.
+    # "the number of **white** cards in their hand" (Inquisition); "**white**
+    # cards in their graveyards" (Nameless Race). Off the card's printed
+    # colours (CR 202.2, derived from the mana cost), which for a card in a
+    # hidden or non-battlefield zone is the whole of what there is: no layer
+    # has run and none can, so a colour *change* cannot be visible here and
+    # reading the printed value is the honest answer rather than an
+    # approximation of one.
     color_filter = filt.get("color_filter")
     if color_filter and color_filter not in (getattr(card, "colors", ()) or ()):
         return False
@@ -593,7 +613,15 @@ def graveyard_card_matches(spec: dict, card) -> bool:
     the reanimation handlers ask of the card they put onto the battlefield.
     """
     card_types = tuple(spec.get("card_types") or ())
-    if card_types and card.primary_type not in card_types:
+    # Through ``card_has_type``, not ``primary_type``: a card has **every** type
+    # its line names (CR 205.2, idiom 15), so an Artifact Creature answers "an
+    # artifact card" and "a creature card" both. ``primary_type`` picks one of
+    # them by the order of a list, which is the reading the singular branch
+    # below already stopped making - and the union was the last reader in this
+    # function still making it. No shipped card exercises the difference today
+    # (every union in the pool is instant/sorcery), which is exactly why it
+    # would have gone on being wrong.
+    if card_types and not any(card_has_type(card, name) for name in card_types):
         return False
     color = spec.get("graveyard_color_filter")
     if color and color not in card.colors:

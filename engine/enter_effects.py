@@ -189,6 +189,62 @@ def sacrifice_any_number_on_enter(line: str, card_name: str | None = None) -> di
     return object_only_filter(payload)
 
 
+#: "As this creature enters, pay any amount of life. The amount you pay can't be
+#: more than the total number of <objects> your opponents control plus the total
+#: number of <cards> in their graveyards." (Nameless Race.)
+#:
+#: Two printed noun phrases and a cap that adds them. Both are captures read by
+#: the same noun parser every other printed phrase in the engine goes through,
+#: so what the sentence narrows by costs no code here - and a phrase the parser
+#: refuses refuses the whole line, because a cap read wider than printed is a
+#: creature its controller may pay more life for than the card allows.
+PAY_ANY_LIFE_ON_ENTER = re.compile(
+    r"^as this [a-z]+ enters, pay any amount of life\. the amount you pay can't "
+    r"be more than the total number of (?P<board_phrase>.+?) your opponents "
+    r"control plus the total number of (?P<pile_phrase>.+?) in their graveyards$"
+)
+
+
+def pay_any_life_on_enter(line: str, card_name: str | None = None) -> dict | None:
+    """The two count specs the printed cap adds together, or None.
+
+    Read by the entry state that arms the payment *and* by the support gate, so
+    what is offered and what is claimed cannot drift - the same pairing every
+    other reader in this file is half of.
+
+    The battlefield half is a permanent question and the graveyard half a card
+    question, which is why they are two specs rather than one: a card in a zone
+    has no computed characteristics at all (CR 613.1).
+    """
+    from .grammar.lowering._common import dropped_narrowings
+    from .grammar.phrases import parse_subject_filter
+    from .subject_filters import card_only_filter, object_only_filter
+
+    match = PAY_ANY_LIFE_ON_ENTER.match(_self_normalized(line, card_name))
+    if match is None:
+        return None
+    board = parse_subject_filter(match.group("board_phrase"), plural=True)
+    pile = parse_subject_filter(match.group("pile_phrase"), plural=True)
+    if board is None or pile is None:
+        return None
+    if board.zone != "battlefield" or board.is_card:
+        return None
+    if pile.zone != "battlefield" or not pile.is_card:
+        # "white **cards**" prints no zone of its own - "in their graveyards"
+        # is the sentence's, and it is what this reader supplies. A phrase that
+        # named a zone itself would be one this rule has not read.
+        return None
+    board_payload = board.to_payload()
+    pile_payload = pile.to_payload()
+    if dropped_narrowings(board, board_payload) or dropped_narrowings(pile, pile_payload):
+        return None
+    described_board = object_only_filter(board_payload)
+    described_pile = card_only_filter(pile_payload)
+    if described_board is None or described_pile is None:
+        return None
+    return {"battlefield": described_board, "graveyard": described_pile}
+
+
 #: "As this creature enters, choose a number between 0 and 7." (Shapeshifter.)
 #: The bounds are data, like every other parameter in this file: a card printed
 #: "between 1 and 5" is the same choice. Matched by shape rather than listed as
@@ -355,6 +411,8 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "chooses a number as it enters"
     if sacrifice_any_number_on_enter(normalized) is not None:
         return "sacrifices any number as it enters"
+    if pay_any_life_on_enter(normalized) is not None:
+        return "pays any amount of life as it enters"
     return None
 
 
@@ -373,6 +431,8 @@ __all__ = [
     "ENTERS_WITH_X_PLUS_1_1_COUNTERS",
     "LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER",
     "NO_MAXIMUM_HAND_SIZE",
+    "PAY_ANY_LIFE_ON_ENTER",
+    "pay_any_life_on_enter",
     "SACRIFICE_ANY_NUMBER_ON_ENTER",
     "sacrifice_any_number_on_enter",
     "SPEND_ANY_COLOR",

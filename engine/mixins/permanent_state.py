@@ -14,6 +14,7 @@ from ..enter_effects import (
     ENTERS_TAPPED,
     ENTERS_WITH_X_PLUS_1_1_COUNTERS,
     choose_number_on_enter,
+    pay_any_life_on_enter,
     enters_with_pt_counters,
     enters_with_named_counter,
     LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
@@ -86,6 +87,15 @@ def _count_dynamic_pt(
     animated land counts as a creature and a land turned into a Swamp counts as
     a Swamp — the printed type line is not the authority on either.
     """
+    # "**During your turn**, …are each equal to 2 plus the number of Swamps
+    # your opponents control. **During turns other than yours**, …are each 2."
+    # (Angry Mob.) A question about the turn rather than about a battlefield, so
+    # it is asked before the scope is read: on any other player's turn the
+    # sentence names no set at all and the printed constant is the whole answer.
+    if payload.get("only_during") == "your_turn":
+        active = game.players[game.active_player_index] if game.players else None
+        if active is not player:
+            return int(payload.get("otherwise", 0))
     scope = payload.get("scope", "you")
     if scope == "all":
         battlefields = [p.battlefield for p in game.players]
@@ -110,6 +120,11 @@ def _count_dynamic_pt(
         # nothing on a battlefield left to tally. The number was recorded where
         # it happened; this reads it back.
         return int(permanent.metadata.get("sacrificed_as_entered") or 0)
+    if what == "life_paid_as_entered":
+        # Nameless Race: the life was paid as the creature entered (CR 614.1c)
+        # and nothing on a board records it, so it rides the permanent the same
+        # way Wood Elemental's sacrifice count does.
+        return int(permanent.metadata.get("life_paid_as_entered") or 0)
     if what == "chosen_number":
         # Shapeshifter: the value is a number a player chose, not a tally of
         # anything, so it answers before the battlefield loop rather than inside
@@ -411,6 +426,37 @@ class PermanentStateMixin:
                 minimum=low, maximum=high,
                 default_number=permanent.metadata["chosen_number"],
             )
+            break
+
+        # "As this creature enters, **pay any amount of life**." (Nameless
+        # Race.) CR 614.1c puts it at entry for Shapeshifter's reason: the life
+        # paid is what the creature's characteristic-defining P/T is *defined*
+        # by, so a trigger would leave it on the battlefield as a 0/0 long
+        # enough to die to the state-based check.
+        #
+        # The cap is the printed sum, counted now — the amounts the two halves
+        # name are read through the same matchers every other filter goes
+        # through, one for permanents and one for cards, because a card in a
+        # zone has no computed characteristics at all (CR 613.1).
+        #
+        # Zero is stamped first and the prompt overwrites it, and zero is also
+        # the stated policy for a seat that never answers: an optional life
+        # payment is a cost nobody asked that seat to pay. Nameless Race then
+        # enters as a 0/0 and dies, which is what the card does when its
+        # controller declines.
+        for raw_line in entry_lines:
+            capped = pay_any_life_on_enter(raw_line, permanent.effective_card.name)
+            if capped is None:
+                continue
+            permanent.metadata["life_paid_as_entered"] = 0
+            maximum = self._nameless_race_cap(caster_index, capped)
+            if maximum > 0:
+                self.arm_pending_choice(
+                    "number_choice", caster_index,
+                    card_name=permanent.card.name, permanent=permanent,
+                    minimum=0, maximum=maximum, default_number=0,
+                    pay_life_onto=True,
+                )
             break
 
         # "As this creature enters, sacrifice any number of untapped Forests."
@@ -806,6 +852,12 @@ class PermanentStateMixin:
                     set_base_pt(permanent, value, max(0, int(complement) - value))
                 elif dynamic_pt.payload.get("defines") == "power":
                     set_base_pt(permanent, value, None)
+                elif dynamic_pt.payload.get("defines") == "toughness":
+                    # "…**toughness** is equal to the number of Forests you
+                    # control" (People of the Woods, a 0/*). The mirror of the
+                    # branch above and the same None: the printed power keeps
+                    # tracking whatever else applies to it.
+                    set_base_pt(permanent, None, value)
                 else:
                     set_base_pt(permanent, value, value)
 
@@ -1613,3 +1665,24 @@ class PermanentStateMixin:
         if isinstance(condition, dict):
             return conditional_static_holds(self, seat, source_perm, condition)
         return getattr(self, self._LORD_BUFF_CONDITIONS[condition])(source_perm)
+
+    def _nameless_race_cap(self, seat: int, described: dict) -> int:
+        """The most life "the amount you pay can't be more than …" allows.
+
+        Two halves the printed sentence adds: matching permanents the opponents
+        control, and matching cards in their graveyards. Through the control
+        seam for the first (``controls`` is a seat question, CR 109.5) and the
+        card matcher for the second, because a card in a zone has no computed
+        characteristics at all (CR 613.1).
+        """
+        from ..handlers._common import _card_matches_filter, permanent_matches_filter
+
+        total = 0
+        for opponent in self.opponents_of(seat):
+            for perm in self.controlled_by(opponent):
+                if permanent_matches_filter(perm, described["battlefield"]):
+                    total += 1
+            for card in self.players[opponent].graveyard:
+                if _card_matches_filter(card, described["graveyard"]):
+                    total += 1
+        return total

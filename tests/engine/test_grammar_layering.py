@@ -32,6 +32,8 @@ only ever reference the shared vocabulary or their own family.)
 from __future__ import annotations
 
 import ast
+import collections
+import pathlib
 from pathlib import Path
 
 import pytest
@@ -123,7 +125,10 @@ PARSE_LAYERS = [
 ]
 LOWER_LAYERS = ["lowering", "statics", "lower"]
 
-EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana"]
+# `library` joined on the parse side when The Dark pushed `effects/cards.py`
+# past the size guard: search, look-at and the library's top split off, reusing
+# `lowering/library.py`'s name so the two halves mirror rather than fork.
+EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -161,8 +166,16 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # round and on the CR's other line: CR 701.14 is a keyword action, an atomic
 # exchange between two creatures (701.14b — if either has left, neither deals
 # damage), where everything left behind is one source dealing to a recipient.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "library", "counters", "keywords", "tapping", "prevention", "redirection", "fighting", "where_x", "control_flow", "attachments"]
-AST_FAMILIES = EFFECT_FAMILIES
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "counters", "keywords", "tapping", "prevention", "redirection", "fighting", "where_x", "control_flow", "attachments"]
+# The AST side has no `library`: what a search or a look-at *is* — the pile, the
+# filter, the fate of what was found — is a handful of nodes that sit perfectly
+# well beside the other card nodes, and the split that made `library` a family
+# on the other two sides was a size guard firing on the productions and the
+# lowerings, not on the inventory. A near-empty `ast/library.py` would buy back
+# the symmetry and cost the thing symmetry is for: one home per node, findable
+# from the family name. Same asymmetry, opposite direction, as `zones`/`exile`
+# above — which the lowering side carries and the parse side does not.
+AST_FAMILIES = [family for family in EFFECT_FAMILIES if family != "library"]
 
 
 def _imports(path: Path) -> list[tuple[int, str, bool]]:
@@ -228,7 +241,11 @@ def test_layers_only_import_downward(layers):
     [
         ("effects", (), ()),
         ("lowering", ("_common", "_events", "categories", "conditions"), ()),
-        ("ast", ("_core", "_primitives", "_references"), ("statements",)),
+        # `costs` is shared beside `_core` rather than a family: a cost is
+        # charged on the way to the stack and never lowered, so it has no
+        # `effects/` or `lowering/` twin to be a family of — and both
+        # `conditions` ("if you paid the cost") and the roof read one.
+        ("ast", ("_core", "_primitives", "_references", "costs"), ("statements",)),
     ],
     ids=["effects", "lowering", "ast"],
 )
@@ -276,7 +293,7 @@ def test_the_ast_roof_only_reaches_downward():
     # `conditions` is shared with `_core` rather than a family: a condition is
     # built from every part of `_core` while nothing in `_core` is built from a
     # condition, and every family that lowers a conditional reads one.
-    allowed = {"_core", "conditions", *AST_FAMILIES}
+    allowed = {"_core", "conditions", "costs", *AST_FAMILIES}
     violations = [
         f"ast/statements.py:{line} imports {target or '__init__'}"
         for line, target, _is_sibling in _imports(GRAMMAR / "ast" / "statements.py")
@@ -429,13 +446,14 @@ def test_every_grammar_module_is_placed_or_exempt():
 # `UNLAYERED` is — see the test below.
 FAMILY_SHARED = {
     "_common", "_core", "_events", "conditions", "categories", "statements",
-    # `_core` split when The Dark pushed it past the size guard below.
-    # `_references` took the object/player/target nodes (`ObjectFilter` alone was
-    # 428 lines) and `_primitives` took the two literal amounts both halves
-    # need, since a node `_references` and `_core` both use cannot live in
-    # either without one importing the other. Both are floors, not families:
-    # `_core` re-exports everything they define, so no family imports them.
-    "_primitives", "_references",
+    # `_core` split twice in one round, when The Dark pushed it past the size
+    # guard below. `_references` took the object/player/target nodes
+    # (`ObjectFilter` alone was 428 lines), `_primitives` took the two literal
+    # amounts both halves need — a node `_references` and `_core` both use
+    # cannot live in either without one importing the other — and `costs` took
+    # the cost nodes. All three are floors, not families: `_core` re-exports
+    # what they define, so no family imports them directly.
+    "_primitives", "_references", "costs",
 }
 
 
@@ -464,4 +482,42 @@ def test_every_family_module_is_listed_or_shared(package, families):
         f"{package}/ modules that are neither a listed family nor a shared "
         f"floor: {missing}. Add each to the family list, or to FAMILY_SHARED "
         "with the reason every family may read it."
+    )
+
+
+def test_no_module_defines_the_same_name_twice():
+    """A module may not bind one top-level name twice.
+
+    Python takes the later definition silently, so a duplicate is not an error,
+    it is a *shadow*: the first definition still reads correctly, is still
+    imported by name, and never runs. The Dark's five-way parallel round landed
+    four of them in one merge, because git resolves "both branches added a
+    function" as two functions rather than as a conflict — a clean textual merge
+    that is not a clean merge (SET_PLAYBOOK, "two merge hazards where taking
+    either side passes the suite").
+
+    Each of the four failed differently, which is why this asks the shape rather
+    than any one symptom: two were harmless twins, one shadowed a *guard*
+    (`_lower_reveal_hand`'s refusal of an unhandled player kind, so "each player
+    reveals their hand" would have lowered to one player revealing), and one
+    shadowed a production that returned ``Statement | None`` with one that
+    raised instead, which the caller had just been taught to expect None from.
+    """
+    offenders = []
+    for root in ("engine", "tests", "web", "scripts"):
+        for path in sorted(pathlib.Path(root).rglob("*.py")):
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+            except SyntaxError:  # not ours to police here
+                continue
+            names = [
+                node.name for node in tree.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            ]
+            for name, count in collections.Counter(names).items():
+                if count > 1:
+                    offenders.append(f"{path}: {name} defined {count}x")
+    assert not offenders, (
+        "a top-level name is bound twice in one module — the later definition "
+        "silently wins and the earlier one never runs:\n  " + "\n  ".join(offenders)
     )

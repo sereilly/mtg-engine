@@ -23,6 +23,7 @@ this one beside `_common` in its `shared` tuple.
 
 from __future__ import annotations
 
+from ...oracle_types import EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
 from ...tokens import CREATED_TOKEN_RESULT_KEY
 from .. import ast
 from ..errors import LoweringError
@@ -122,6 +123,12 @@ BOUND_PERMANENT_ID = "bound_permanent_id"
 #: home for it, because the handler that writes it lives on the other side of
 #: the pipeline from the lowering that gates the phrase on it.
 CREATED_TOKEN = CREATED_TOKEN_RESULT_KEY
+
+#: What "**exiled this way**" names (Martyr's Cry): the `produced` marker a
+#: sweep that exiles stamps, and the scratchpad key it records the objects
+#: under. Imported rather than spelled again for ``CREATED_TOKEN``'s reason —
+#: the sweep handler writes them and this lowering gates on them, so the two
+#: sides live on opposite ends of the pipeline and a second copy would rot.
 
 #: The payload key those fire sites stamp it under. One constant for the same
 #: reason `EVENT_SUBJECT_PLAYER` is one: the fire site writes it and the handler

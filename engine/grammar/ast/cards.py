@@ -185,6 +185,25 @@ class LookTopPickToHand:
 
 
 @dataclass(frozen=True)
+class RevealHand:
+    """``<player> reveals their hand`` (CR 701.16).
+
+    The reveal on its own — Inquisition, whose next sentence reads the hand's
+    *size*, and the first half of "…**and** discards all nonland cards"
+    (Amnesia) or "…and discards a creature card at random" (Rag Man).
+
+    Its own node rather than a flag on the discard beside it, because the reveal
+    is a game action with its own consequence — the hand becomes public
+    information, which is what makes an at-random discard verifiable — and it
+    composes: a card printing a reveal in front of some *other* act on the same
+    hand needs no second production. :class:`RevealHandAndChoose` stays separate
+    because its three sentences share a *choice*, which is not composable in
+    that way: the middle sentence names a card the first one revealed.
+    """
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
 class RevealHandAndChoose:
     """``Target opponent reveals their hand. You choose a <filter> card from
     it. That player discards that card.`` (Duress.)
@@ -201,20 +220,6 @@ class RevealHandAndChoose:
     player: PlayerRef
     filter: ObjectFilter
     fate: str = "discard"
-
-
-@dataclass(frozen=True)
-class RevealHand:
-    """``<player> reveals their hand.`` (Inquisition.)
-
-    The reveal on its own (CR 701.20), with nothing chosen from it. Its own node
-    rather than a `RevealHandAndChoose` with an empty choice: that one is one
-    node *because* the three printed sentences share a card nothing else could
-    carry, and an "empty" choice there would be a picker armed over nothing. The
-    sentence after this one on Inquisition reads the hand's *size*, which the
-    reveal makes public and which no chosen card is involved in.
-    """
-    player: PlayerRef
 
 
 @dataclass(frozen=True)

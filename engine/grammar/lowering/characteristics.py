@@ -305,7 +305,7 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
             filt,
             frozenset({
                 "card_types", "colors", "excluded_colors", "controller",
-                "attacking", "blocking", "other_than_source",
+                "attacking", "blocking", "other_than_source", "subtypes",
             }),
         )
         if leftover:
@@ -324,6 +324,15 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         # testing membership rather than absence.
         if filt.excluded_colors:
             payload["exclude_colors"] = list(filt.excluded_colors)
+
+        # "Other **Orc** creatures get +1/+1 until end of turn." (Orc General.)
+        # The subtype is payload, tested through ``has_type`` like every other
+        # type question in this handler, so a card naming another tribe needs
+        # nothing here. It is a list because the noun phrase already reads a
+        # union ("Djinn or Efreet"), and the alternatives are OR'd exactly as
+        # the permanent matcher OR's them.
+        if filt.subtypes:
+            payload["subtypes"] = list(filt.subtypes)
         payload["all"] = filt.controller != "you"
         # "**Other** creatures you control get +1/+0" (Bolt Hound). Dropped, the
         # Hound buffed itself as well: a strictly better card than the one

@@ -97,6 +97,22 @@ class ActivatedAbilityCost:
     #: beside its kind: only a fixed count can make an ability unpayable, and
     #: "any number" never can, since zero is a number (CR 601.2h).
     sacrifice_count: "int | str" = 1
+    #: City of Shadows: "{T}, Exile **a creature you control**: ..." /
+    #: Necropolis: "Exile **a creature card from your graveyard**: ..." - a
+    #: *chosen* object rather than the source, which is what ``exile_self``
+    #: above names. Its own field for the reason ``sacrifice_filter`` is one
+    #: beside ``sacrifice_self``: a chosen payment needs a picker, a
+    #: payability check and a record of what it ate, and the source needs
+    #: none of the three. None means "no such cost", never "anything": an
+    #: empty filter would let the charger eat a land.
+    exile_filter: dict | None = None
+    #: Which zone that payment comes out of - ``"battlefield"`` (a permanent
+    #: the payer controls) or ``"graveyard"`` (a card in the payer's own).
+    #: Beside the filter rather than inside it because the two enumerate
+    #: different kinds of object, and a matcher for one cannot answer about
+    #: the other (CR 613.1: a card in a zone has no computed characteristics
+    #: at all).
+    exile_zone: str = "battlefield"
     # Seasoned Hallowblade: "Discard a card: …" — N cards the payer chooses,
     # where `discard_last_drawn` above names its card by history and leaves the
     # payer no choice at all. Two fields because they are two costs: a card
@@ -348,6 +364,26 @@ _MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")
 #: The value under each key is ``{permanent_id: seat}``. A loop over those same
 #: objects (``for_each``) resolves it to the one seat per iteration, which is
 #: what makes the record readable from inside a per-object effect.
+#: What "**exiled this way**" names (Martyr's Cry). The `produced` marker an
+#: exiling sweep stamps, and the ``OracleExecutionContext.results`` key it
+#: records the swept objects under — the destroy family's ``destroyed_this_way``
+#: pair one zone over, and separate from it because a sweep that exiles kills
+#: nothing, so a loop reading the destroy record would run zero times.
+#:
+#: Here rather than beside either reader, because the readers are on opposite
+#: ends of the pipeline: the lowering gates the printed phrase on the marker and
+#: the handler writes the objects. This module imports nothing from the engine,
+#: so both can reach it.
+EXILED_THIS_WAY = "exiled_this_way"
+EXILED_THIS_WAY_OBJECTS = "exiled_this_way_objects"
+
+
 PER_OBJECT_SEAT_RECORDS: dict[str, str] = {
     "controller_when_blocked": "blocked_controller_seats",
+    # "For each creature exiled this way, **its controller** draws a card."
+    # (Martyr's Cry.) The bare possessive, which inside a loop over objects an
+    # earlier step swept off the battlefield names that object's controller —
+    # and has to be read off a record, because CR 400.7 makes the exiled card a
+    # new object that no battlefield read can find a seat for (idiom 6).
+    "controller": "swept_controller_seats",
 }

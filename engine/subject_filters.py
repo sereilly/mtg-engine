@@ -142,12 +142,19 @@ def untestable_filter_keys(
 #: that a card *can*: it is printed on the face, in the same words, and nothing
 #: could have changed it.
 CARD_ONLY_FILTER_KEYS = frozenset(
-    # "the number of **white** cards in their hand" (Inquisition). Colour is one
-    # of the characteristics a card has *everywhere*: CR 202.2 reads it off the
-    # printed mana cost, so unlike a keyword or a computed power it needs no
-    # battlefield object to be asked of — the same argument `mana_value` beside
-    # it already makes.
     {"type_filter", "subtype_filter", "named", "supertypes", "mana_value",
+     # "…discards all **nonland** cards" (Amnesia). The negative of
+     # ``type_filter`` and answered the same way — off the printed type line,
+     # which for a card in a zone is the whole of what there is (CR 613.1) — so
+     # it is testable here for exactly the reason ``type_filter`` is.
+     "exclude_types",
+     # "the number of **white** cards in their hand" (Inquisition); "the total
+     # number of **white** cards in their graveyards" (Nameless Race). Colour is
+     # one of the characteristics a card has *everywhere*: CR 202.2 reads it off
+     # the printed mana cost, so unlike a keyword or a computed power it needs no
+     # battlefield object to be asked of — the same argument ``mana_value`` beside
+     # it already makes, and what puts it here rather than among the layer
+     # questions only ``subject_matches`` can answer.
      "color_filter"}
 )
 

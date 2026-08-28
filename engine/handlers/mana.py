@@ -232,6 +232,18 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
             multiplier = max(0, int((context.choices or {}).get(
                 "counters_removed_for_cost", 0
             )))
+        # "…for each **storage counter on this land**" (City of Shadows). Read
+        # off the source now, not off a payment: these counters are still there,
+        # and a land with none produces nothing at all — which is the card, and
+        # is why zero is a resolution rather than a miss.
+        on_source = instruction.payload.get("per_each_counter_on_source")
+        if on_source is not None:
+            from ..named_counters import counters_on
+
+            source = context.source_permanent
+            multiplier = (
+                counters_on(source, str(on_source)) if source is not None else 0
+            )
         # "Spend this mana only to cast an instant or sorcery spell." (Vodalian
         # Arcanist.) The mana goes into its own bucket rather than the pool;
         # `_pay_mana_cost` merges a bucket in only for a spell the restriction
@@ -271,6 +283,21 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
             instruction.payload.get("color")
             or (context.choices or {}).get("new_color")
         ) or "G"
+        # "…of any color **that a land an opponent controls could produce**"
+        # (Fellwar Stone). The choice is narrowed to that set, re-checked here
+        # rather than trusted from the picker (idiom 9) - and with the set empty
+        # the ability produces nothing at all, which is the card: an opponent
+        # with no lands offers no colour to copy.
+        narrowed_to = instruction.payload.get("any_color_from")
+        if narrowed_to is not None:
+            available = _colors_opponents_lands_produce(game, caster)
+            if not available:
+                game.log.append(
+                    f"{card.name}: no land an opponent controls produces colored mana"
+                )
+                return True, "resolved"
+            if symbol not in available:
+                symbol = sorted(available)[0]
         if amount > 0:
             caster.mana_pool[symbol] += amount
         game.log.append(f"{card.name} produced {amount} {symbol} mana")
@@ -364,3 +391,28 @@ def grant_spend_mana_as_though(game: Game, instruction: OracleInstruction, conte
         "spell(s) this turn"
     )
     return True, "resolved"
+
+
+def _colors_opponents_lands_produce(game, caster) -> frozenset[str]:
+    """The colours "a land an opponent controls could produce" names (Fellwar
+    Stone).
+
+    Through the control seam, because "controls" is a seat question (CR 109.5)
+    and ``player.battlefield`` is only a projection of it - and through
+    ``has_type`` for the land test, so an animated land still counts and a
+    permanent that stopped being one does not (CR 613 layer 4).
+
+    The per-card answer is ``commander.produced_mana_colors``, which was already
+    the engine's one reader of "what colours could this land make". A second
+    copy here would be a second answer to one question, and the direction it
+    would drift is a Stone that taps for a colour no opponent can make.
+    """
+    from ..commander import produced_mana_colors
+
+    seat = game.players.index(caster)
+    colors: set[str] = set()
+    for opponent in game.opponents_of(seat):
+        for perm in game.controlled_by(opponent):
+            if perm.has_type("land"):
+                colors |= produced_mana_colors(perm.effective_card)
+    return frozenset(colors)

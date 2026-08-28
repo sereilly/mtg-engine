@@ -57,6 +57,8 @@ def lower_where_x(
         return _lower_where_x_characteristic(node, inner, produced)
     if isinstance(node.definition, ast.CountOfDeathsThisWay):
         return _lower_where_x_this_way(node, inner, produced)
+    if isinstance(node.definition, ast.ExiledForCost):
+        return _lower_where_x_exiled_for_cost(node, inner)
     if isinstance(node.definition, ast.CountersOnSource):
         return _lower_where_x_counters(node, inner)
     if isinstance(node.definition, ast.TotalPowerSacrificedThisWay):
@@ -81,6 +83,35 @@ def lower_where_x(
     spec = count_spec(_count_filter_for(definition.filter, inner, node, event), node,
                       multiplier=factor)
     return _stamp_x_from_count(inner, spec)
+
+
+def _lower_where_x_exiled_for_cost(
+    node: ast.WhereX, inner: tuple[OracleInstruction, ...]
+) -> tuple[OracleInstruction, ...]:
+    """"…, where X is **the exiled card's mana value**." (Necropolis.)
+
+    Not a count of anything a zone holds: the card left the graveyard while the
+    ability's own cost was being paid (CR 601.2h), so the number is last-known
+    information the activation path recorded. Stamped like every other
+    definition, at the same single dispatch point, so the sentence in front of
+    it needs no special case.
+
+    Mana value alone. Power and toughness are printed characteristics of a card
+    (CR 208.2) and could be read here, but nothing records them — the channel
+    carries the card, and a card's *computed* P/T does not exist off the
+    battlefield (CR 613.1) — so admitting them would stamp a definition the
+    resolution answers with a zero.
+    """
+    if not _mentions_x(inner):
+        raise LoweringError("a where-clause defined an X nothing reads", node=node)
+    if node.definition.characteristic != "mana_value":
+        raise LoweringError(
+            "only the exiled card's mana value is recorded by a cost payment",
+            node=node,
+        )
+    return _stamp_x_from_count(
+        inner, {"cost_exile_characteristic": node.definition.characteristic}
+    )
 
 
 def _lower_where_x_counters(

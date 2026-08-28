@@ -85,6 +85,27 @@ def _lower_reveal_top(node: ast.RevealTopToHandOrBottom) -> tuple[OracleInstruct
 _REVEALED_HAND_FIELDS = frozenset({"excluded_types", "is_card"})
 
 
+def _lower_reveal_hand(node: ast.RevealHand) -> tuple[OracleInstruction, ...]:
+    """"Target player **reveals their hand**" (CR 701.16), on its own.
+
+    The first half of Amnesia and Rag Man, lowered as its own step so the
+    discard behind it is the ordinary discard instruction rather than a second
+    fused kind. Only a *chosen* player has a handler: "each player reveals their
+    hand" would be a loop nothing here performs, and "you reveal your hand"
+    reveals a zone the revealer already sees.
+
+    The whole payload is who reveals, because a reveal narrows nothing and
+    chooses nothing — what the sentence after it does with the revealed hand is
+    that sentence's business, and on Inquisition that is an ordinary counted
+    damage.
+    """
+    if node.player.kind not in ("target_player", "target_opponent"):
+        raise LoweringError(
+            f"no handler reveals {node.player.kind!r}'s hand", node=node
+        )
+    return (OracleInstruction("reveal_hand", "", _targets_only(node.player)),)
+
+
 def _lower_reveal_hand_and_choose(
     node: ast.RevealHandAndChoose,
 ) -> tuple[OracleInstruction, ...]:
@@ -106,17 +127,6 @@ def _lower_reveal_hand_and_choose(
         payload["exclude_types"] = list(node.filter.excluded_types)
     _describe_targets(payload, node.player)
     return (OracleInstruction("reveal_hand_and_choose", "", payload),)
-
-
-def _lower_reveal_hand(node: ast.RevealHand) -> tuple[OracleInstruction, ...]:
-    """"Target player reveals their hand." (Inquisition.)
-
-    The reveal alone (CR 701.20). Its whole payload is who reveals, because a
-    reveal narrows nothing and chooses nothing — what the sentence after it does
-    with the revealed hand is that sentence's business, and on Inquisition that
-    is an ordinary counted damage.
-    """
-    return (OracleInstruction("reveal_hand", "", _targets_only(node.player)),)
 
 
 def _lower_exile_graveyard(node: ast.ExileGraveyard) -> tuple[OracleInstruction, ...]:

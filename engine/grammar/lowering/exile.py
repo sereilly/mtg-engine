@@ -21,7 +21,7 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
-from ._events import CREATED_TOKEN
+from ._events import CREATED_TOKEN, EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_several_targets, _describe_targets,
     _filter_payload, _is_created_token, _is_source, _names_several_targets,
@@ -205,13 +205,17 @@ def _lower_exile(
     # Dust prints the same over artifacts.) One announcement collecting several
     # targets, resolved as a list — so it is the same instruction with the
     # several-targets description, not a second kind, exactly as the damage
-    # lowering treats Volcanic Salvo. Opted into rather than admitted by the
-    # single-target check below, which is the safety `_describe_several_targets`
-    # exists for: a handler that resolves one permanent must never be handed a
-    # two-target picker.
-    if _names_several_targets(subject):
-        assert isinstance(subject, ast.TargetSpec)
-        if subject.filter.zone != "battlefield" or subject.filter.is_card:
+    # lowering treats Volcanic Salvo. A lowering that dropped ``count`` would
+    # exile one of the two and report the card supported.
+    #
+    # Opted into rather than admitted by the single-target check below, which is
+    # the safety `_describe_several_targets` exists for: a handler that resolves
+    # one permanent must never be handed a two-target picker. The isinstance is
+    # part of the condition rather than an assert behind it, because a non-target
+    # subject reaching here is a parse this lowering simply does not read.
+    if isinstance(subject, ast.TargetSpec) and _names_several_targets(subject):
+        filt = subject.filter
+        if filt.zone != "battlefield" or filt.is_card:
             # Everything below this branch that reads another zone reaches a
             # *card* picker; the list resolver is over permanents, so a
             # graveyard or hand phrase would be collected and then looked for on
@@ -220,7 +224,7 @@ def _lower_exile(
                 "only battlefield permanents are exiled several at a time",
                 node=node,
             )
-        several = _filter_payload(subject.filter)
+        several: dict[str, object] = _filter_payload(filt)
         _describe_several_targets(several, subject)
         return (OracleInstruction("exile_target_permanent", "", several),)
     if (
@@ -236,13 +240,44 @@ def _lower_exile(
 
     filt = subject.filter
     if filt.zone == "graveyard" and filt.is_card:
-        if filt.zone_owner is not None or filt.card_types or filt.subtypes or filt.colors:
-            # The picker this lowers onto enumerates *any* card in *any*
-            # graveyard. Narrowing it is a payload-derived spec, not something
-            # to fake by dropping the narrowing here.
+        if filt.zone_owner is not None or filt.subtypes or filt.colors:
+            # The picker this lowers onto enumerates every graveyard. Whose pile
+            # it may read, and a subtype or colour narrowing, are still shapes
+            # nothing behind it tests — dropped here they would offer a card the
+            # printed line forbids, so they refuse (idiom 2).
             raise LoweringError(
                 "no graveyard picker narrows to this card or this player yet",
                 node=node,
+            )
+        if len(filt.card_types) > 1:
+            # A *union* ("target artifact or creature card") is a second key
+            # shape the picker and the re-check would each have to learn; until
+            # a card in the pool prints one from a graveyard it refuses rather
+            # than collapsing to the first type.
+            raise LoweringError(
+                "no graveyard picker reads a union of card types yet", node=node
+            )
+        if _restrictions_beyond(
+            filt, frozenset({"card_types", "zone", "is_card"})
+        ):
+            raise LoweringError(
+                "no graveyard picker narrows to this card or this player yet",
+                node=node,
+            )
+        if filt.card_types:
+            # "Exile target **artifact** card from a graveyard." (Grave
+            # Robbers.) / "…target **creature** card…" (Eater of the Dead.) The
+            # named type is carried, never collapsed: ``card_type`` is the key
+            # ``graveyard_card_matches`` tests by containment in the printed
+            # type line (CR 205.2, idiom 15), so an artifact creature answers
+            # both spellings, and one predicate serves the picker, the
+            # activation re-check and the handler.
+            return (
+                OracleInstruction(
+                    "exile_target_graveyard_card",
+                    "",
+                    {"any_card": False, "card_type": filt.card_types[0]},
+                ),
             )
         return (
             OracleInstruction("exile_target_graveyard_card", "", {"any_card": True}),
@@ -251,6 +286,43 @@ def _lower_exile(
     exile_payload = _filter_payload(filt)
     _describe_targets(exile_payload, subject)
     return (OracleInstruction("exile_target_permanent", "", exile_payload),)
+
+
+def _lower_for_each_exiled(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each creature exiled this way,** <effect>." (Martyr's Cry.)
+
+    The exile family's twin of ``_lower_for_each_destroyed``, here rather than
+    beside it for the reason this module exists at all: the set it walks is the
+    one ``exile_all_matching`` recorded, and nothing about a destruction
+    describes it.
+
+    Refused without a producer, as every back-reference in this grammar is: with
+    no earlier step that exiled anything the words name nothing, and an empty
+    loop is a sentence that reports supported and does not run.
+    """
+    if EXILED_THIS_WAY not in produced:
+        raise LoweringError(
+            "'exiled this way' with no earlier step in this effect that "
+            "exiled anything", node=node,
+        )
+    filt = node.iterator.filter
+    if filt.to_payload() != {"type_filter": "creature"} or filt.zone != "battlefield":
+        raise LoweringError(
+            "'exiled this way' iterates what the earlier step exiled and "
+            "cannot be narrowed further", node=node,
+        )
+    if not inner:
+        raise LoweringError("a per-object loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {"iterator": {"produced_by": EXILED_THIS_WAY_OBJECTS}, "effect": inner},
+        ),
+    )
 
 
 def _lower_exile_until_leaves_or_untaps(

@@ -45,6 +45,37 @@ def _parse_mana_multiplier(stream: TokenStream) -> "ast.ObjectFilter | None":
         return None
 
 
+def _parse_source_counter_multiplier(stream: TokenStream) -> str | None:
+    """``for each <kind> counter on this <noun>`` after a mana clause (City of
+    Shadows), as the counter's printed kind.
+
+    Read beside :func:`_parse_removed_counter_multiplier` and for its reason:
+    the noun-phrase reader below would take "storage counter" as an object
+    filter and then choke on "on this land", refusing a whole line the engine
+    can answer.
+
+    The counters are still *on the source* when this resolves, which is what
+    separates it from the removed-this-way spelling one function down — those
+    are gone by then, so the two clauses name numbers that differ by exactly
+    what the cost ate.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    kind = stream.peek_word()
+    if kind is not None and kind not in ("counter", "counters"):
+        stream.advance()
+        if stream.accept_word("counter", "counters") and stream.accept_word("on"):
+            # "on **this** land" — the source, and nothing else. A counter on
+            # some other permanent is a number this reads off the wrong object,
+            # so the pronoun is required rather than assumed.
+            if stream.accept_word("this") and stream.peek_word() is not None:
+                stream.advance()
+                return kind
+    stream.reset(mark)
+    return None
+
+
 def _parse_removed_counter_multiplier(stream: TokenStream) -> str | None:
     """``for each <kind> counter removed this way`` after a mana clause (the
     five Mana Batteries), as the counter's printed kind.
@@ -106,13 +137,20 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
             choice = True
     if pips:
         removed = _parse_removed_counter_multiplier(stream)
+        on_source = (
+            _parse_source_counter_multiplier(stream) if removed is None else None
+        )
         return ast.AddMana(
             tuple(sorted(pips.items())),
             choice=choice,
             source_text=_clause(),
             additional=additional,
             per_each_counter_removed=removed,
-            per_each=_parse_mana_multiplier(stream) if removed is None else None,
+            per_each_counter_on_source=on_source,
+            per_each=(
+                _parse_mana_multiplier(stream)
+                if removed is None and on_source is None else None
+            ),
         )
 
     # "Add **an amount of {B} equal to the sacrificed artifact's mana value**."
@@ -191,7 +229,19 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     # clause *text* and could only recognize the literal "one mana of any color".
     # The handler takes a number now, so any amount the enclosing sentence can
     # define is one it can add.
-    return ast.AddMana((), any_color=count, source_text=_clause())
+    # "…**that a land an opponent controls could produce**." (Fellwar Stone.)
+    # A restriction on which colours the choice may name, not a second effect -
+    # so it rides the same node, and a line printing words this cannot read
+    # leaves them unconsumed and refuses (the full-consumption invariant) rather
+    # than adding any colour at all.
+    any_color_from = None
+    if stream.accept_phrase(
+        "that", "a", "land", "an", "opponent", "controls", "could", "produce"
+    ):
+        any_color_from = "opponent_lands"
+    return ast.AddMana(
+        (), any_color=count, source_text=_clause(), any_color_from=any_color_from
+    )
 
 
 def _parse_player_adds_mana(

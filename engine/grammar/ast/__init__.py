@@ -38,6 +38,19 @@ Re-exported flat, so every caller writes ``ast.DealDamage`` and never names a
 family — which is what makes moving a node between families a non-event.
 """
 
+from .costs import (
+    ManaCost,
+    TapSelf,
+    SacrificeCost,
+    DiscardCost,
+    PutCounterCost,
+    TapPermanentsCost,
+    PayLifeCost,
+    ExileSelf,
+    ExileCost,
+    RemoveCounterCost,
+    Cost,
+)
 from ._core import (
     Fixed,
     Var,
@@ -51,6 +64,7 @@ from ._core import (
     ColorsAmong,
     GreatestPowerAmong,
     ThatMuch,
+    ExiledForCost,
     SacrificedForCost,
     TotalPowerSacrificedThisWay,
     Half,
@@ -68,16 +82,6 @@ from ._core import (
     Recipient,
     Duration,
     Zone,
-    ManaCost,
-    TapSelf,
-    SacrificeCost,
-    DiscardCost,
-    PayLifeCost,
-    PutCounterCost,
-    TapPermanentsCost,
-    ExileSelf,
-    RemoveCounterCost,
-    Cost,
     RawEffect,
 )
 from .conditions import (
@@ -90,6 +94,7 @@ from .conditions import (
     ChosenThisWay,
     DestroyedThisWay,
     DiedThisWay,
+    ExiledThisWay,
     LifeGainedThisTurn,
     DealtDamageThisTurn,
     BlockersOfBoundCreature,
@@ -280,6 +285,7 @@ __all__ = [
     "ColorsAmong",
     "GreatestPowerAmong",
     "ThatMuch",
+    "ExiledForCost",
     "SacrificedForCost",
     "TotalPowerSacrificedThisWay",
     "Half",
@@ -304,6 +310,7 @@ __all__ = [
     "PayLifeCost",
     "PutCounterCost",
     "TapPermanentsCost",
+    "ExileCost",
     "ExileSelf",
     "RemoveCounterCost",
     "Cost",
@@ -330,6 +337,7 @@ __all__ = [
     "ChosenThisWay",
     "DestroyedThisWay",
     "DiedThisWay",
+    "ExiledThisWay",
     "PutSourceIntoZone",
     "HadPlus1Counter",
     "SourceExiledWithCounter",
