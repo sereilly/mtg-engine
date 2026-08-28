@@ -29,7 +29,10 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 | LEG | 310 | 310 (100.0%) | 2 (0.6%) | 430 | 2 (0.5%) | 2 | 0.6 |
 | DRK | 119 | 119 (100.0%) | 1 (0.8%) | 167 | 1 (0.6%) | 1 | 0.8 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
+| 4ED *(measured)* | 368 | 368 (100.0%) | 30 (8.2%) | 520 | 29 (5.6%) | 32 | 8.7 |
 | **ALL (shipped, deduped)** | **1162** | **1162 (100.0%)** | **74 (6.4%)** | **1715** | **69 (4.0%)** | **80** | **6.9** |
+
+*(measured)* — 4ED are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
 **Read the rows, not the average.** The base sets are near-identical reprint lists, so four of these rows are one data point wearing four hats — and the ALL row, deduped across reprints, is dominated by it. The independent comparison is between that block and the sets printed to a different brief.
 

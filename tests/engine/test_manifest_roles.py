@@ -86,15 +86,23 @@ def test_the_catalog_does_not_load_measured_sets():
         "above all"
     )
 
-    catalog_names = {card.name for card in load_catalog()}
-    from engine.card_loader import load_cards
-
-    for path in measured_paths:
-        measured_only = {card.name for card in load_cards(str(path))} - catalog_names
-        assert measured_only, (
-            f"{path.name} shares every card name with the shipped pool, so this "
-            "test cannot tell the two apart — pick a different assertion"
-        )
+    # What a measured set contributes to a catalog that wrongly loaded it is a
+    # *printing*, and that is true of every shape of set. Card names are not:
+    # 4ED is entirely reprints, so it shares every name with the shipped pool
+    # and a name-difference probe has nothing to compare. This assertion is
+    # also the stronger one for the sets where the old probe did work — a
+    # widened `load_catalog()` would have added 368 `4ed` printings to cards
+    # whose names were already there, and the name check would have passed.
+    measured_codes = {code.lower() for code in manifest_measured_codes()}
+    leaked = {
+        card.name: card.printings
+        for card in load_catalog()
+        if measured_codes & {code.lower() for code in card.printings}
+    }
+    assert not leaked, (
+        f"load_catalog() carries printings from a measured set: "
+        f"{dict(list(leaked.items())[:5])}"
+    )
 
 
 def test_include_measured_widens_the_pool():
