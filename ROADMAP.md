@@ -1,7 +1,7 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **1,044** unique cards (LEA/LEB/2ED/ARN/ATQ/
-3ED/LEG/M21, all shipped and all supported) to the full release line — **137
+Target: grow the card pool from **1,162** unique cards (LEA/LEB/2ED/ARN/ATQ/
+3ED/LEG/DRK/M21, all shipped and all supported) to the full release line — **137
 sets, 33,594 printings, 26,113 unique cards** per `set_progress.json`.
 
 **Read this before parser or card-data work. It is the standing brief for the
@@ -30,7 +30,7 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **8,682 tests**, CI budget **120s**, recorded
+2. **The suite stays fast.** **9,110 tests**, CI budget **120s**, recorded
    local baseline **40s** (`ci.yml`). The budget catches a step change; the
    baseline is what catches creep, and it is the number to keep honest.
    Raising the budget is a decision, not maintenance — it has been raised twice
@@ -410,6 +410,51 @@ against `compile_line` before citing it.
     fails loudly when the behaviour moves, and it tells whoever moves it that
     the old answer was a placeholder rather than a rule.
 
+25. **Git resolves "both branches added a function" as two functions.** Not as a
+    conflict — as a *shadow*, because Python takes the later definition
+    silently while the earlier one still imports by name and never runs. The
+    Dark's parallel round landed four in one merge and they failed four
+    different ways: two harmless twins, one that dropped a guard
+    (`_lower_reveal_hand`'s refusal of an unhandled player kind, so "each player
+    reveals their hand" would have lowered to one player revealing), and one
+    that replaced a production returning `Statement | None` with one that raised
+    — right after the caller had been taught to expect None. Only the *shape* is
+    common, which is why `test_no_module_defines_the_same_name_twice` asks the
+    shape across the whole repo rather than any one symptom. A fifth was worse
+    and is still not caught by it: `_parse_that_object` was defined in
+    `phrases.py` **and** in `effects/board.py`, with board.py importing the
+    first and shadowing it with the second, so two families read one phrase
+    through two functions one edit apart. A cross-module shadow needs a
+    different question than a within-module one.
+26. **Carrying a dataclass field across a move is not carrying the branch.**
+    When a merge presents "ours: nothing, theirs: the whole class" — because one
+    side moved the class to a new module and the other added to it — the fields
+    are the visible half. `ObjectFilter` had also grown a line in `to_payload`
+    emitting `dealt_damage_this_turn`, and a field-only carry dropped it: the
+    class compiled, the key vanished, and Giant Shark's trigger fired against an
+    unhurt blocker. Diff the whole class, not its field list.
+27. **A guard that names one of a table's return values ages with the table.**
+    `test_static_line_support` asked `land_play_line(...) == "allowance"`. When
+    the same table grew a `"prohibition"` answer, the guard reported Worms of
+    the Earth as an unbacked static line while `_land_play_refusal` was refusing
+    land plays perfectly well. Ask whether the table claims the line, not
+    whether it claims it under the one name you happened to know — a guard that
+    re-spells part of what it checks invents a disagreement and then reports it,
+    which is the most expensive failure shape because it looks like a finding.
+28. **A payload key means one thing across the engine.** Angry Mob's
+    `dynamic_pt_count` used `otherwise` for a *number*; `handlers/control_flow.py`
+    owns that key for the else-branch of a `may`, and every guard that walks a
+    composed effect recurses into it expecting steps. The front-end-safety guard
+    crashed trying to iterate a 2. The collision is invisible until two
+    subsystems meet in one card.
+29. **"Only this card does that" is a claim about the pool, even inside a
+    guard's exemption list.** Preacher derives no activation prompt *correctly*
+    — the opponent chooses the target at resolution and the activating seat
+    never chooses at all — so the guard needed an exemption. Written as a name
+    it would expire the day a second card printed "of an opponent's choice";
+    written as "the compiled program has a `choose_permanent` whose chooser is
+    another seat" it cannot. Same rule as `card_hooks.py`, applied to a test.
+
 ---
 
 ## Where the sets landed
@@ -422,6 +467,7 @@ not commits.
 | M21 | 285 | 58% | ~140 |
 | ATQ | 85 | 56.5% | 30 |
 | LEG | 310 | 32.9% | 36 |
+| DRK | 119 | 47.9% | 12 groups, 3 waves |
 
 Legends is the useful data point and the warning: the lowest starting coverage,
 the largest card count, and the flattest ranking — after eight rounds, 113 of
@@ -432,13 +478,21 @@ set. Its first census read 121/310 (39.0%) rather than the 32.9% recorded at
 ingest, because the ingest round's own engine fixes moved it — Phase 1 says to
 treat what the suite surfaces on a new set as yield, and that gap is the yield.
 
-**Where the pool stands** (regenerate rather than trust these): 1,044 unique
-cards over 8 sets, 100% supported. Grammar parses 84.2% of lines and executes
-50.9% (`GRAMMAR_COVERAGE.md`). 7.1% of supported cards carry a name-keyed hook,
+**Where the pool stands** (regenerate rather than trust these): 1,162 unique
+cards over 9 sets, 100% supported. Grammar parses 85.2% of lines and executes
+52.3% (`GRAMMAR_COVERAGE.md`). 6.4% of supported cards carry a name-keyed hook,
 80 entries in 7 registries (`HOOK_RELIANCE.md`) — the number that decides
-whether this architecture reaches 26,113 cards. 332 of 611 tracked CR rules
-have a test (`RULES_PROGRESS.md`). 430 of 1,044 cards have a passing in-game
+whether this architecture reaches 26,113 cards. 334 of 611 tracked CR rules
+have a test (`RULES_PROGRESS.md`). 443 of 1,162 cards have a passing in-game
 result (`CARD_VERIFICATION.md`).
+
+The Dark is the first set where **every shipped set's parse rate went up with
+it** — ARN 75.0 -> 75.9, 3ED 83.5 -> 84.1, LEA 81.7 -> 82.0 — because twelve
+parallel groups all reached for general machinery under a brief that made a
+name-keyed hook the last resort. The hooked share *fell* while a set was added,
+which is the first time that has happened: 7.1% -> 6.4%, entry count flat at 80,
+because Ebony Horse's hook was retired when Maze of Ith turned out to print the
+identical sentence.
 
 ## Size watch
 
@@ -449,13 +503,22 @@ What is close, at the cull:
 
 | Module | Lines |
 | --- | ---: |
-| `lowering/damage.py` | 1000 |
+| `effects/damage.py` | 996 |
+| `lowering/_common.py` | 994 |
 | `lowering/zones.py` | 992 |
-| `ast/_core.py` | 977 |
-| `effects/characteristics.py` | 949 |
-| `effects/cards.py` | 939 |
+| `lowering/damage.py` | 981 |
+| `lower.py` | 971 |
 
-`lowering/damage.py` is **at** the cap: the next line landing in it must split
-it. Both previous splits fell along a line the CR already draws — what a noun
-phrase describes against what it points at, a sentence against a paragraph —
-and reusing the parse side's family names keeps the two halves mirrored.
+Nothing is at the cap. The Dark took **six** splits in one set, which is more
+than the previous four sets combined, and every one fell along a line the CR or
+the call graph had already drawn: `ast/_core.py` into `_primitives` +
+`_references` (`ObjectFilter` alone was 428 lines) and again into `costs`;
+`effects/cards.py` into `library`; `effects/board.py` into `control_changes`;
+`lowering/board.py` into `control_changes`; `lowering/damage.py` into
+`redirection`, `fighting` and `prevention`. Reusing the other side's family name
+each time is what kept the halves mirrored rather than forking.
+
+Two of those splits were invented **twice, independently**, by parallel branches
+that each hit the cap on the same module and cut it in the same place. Two
+agents reaching the same boundary with no knowledge of each other is the
+strongest evidence a split is structural rather than a matter of taste.

@@ -71,6 +71,35 @@ here and returned nothing, which cost the round rather than parallelising it.
 Two agents that finish beat four that die: launch the number you can afford
 to see through, and prefer one round's worth of groups at a time.
 
+**The Dark revised that number upward, with conditions.** Twelve group agents
+ran across three waves — five, then four, then three — and eleven finished. The
+budget is not the constraint it was; **integration** is. Each wave cost the
+integrator roughly as long as the wave itself, and almost all of that went on
+merges rather than on cards. Plan the round with that ratio in mind, and note
+that one agent died mid-task with committed work plus an unverified working
+tree: check a dead agent's branch before writing its work off, and finish its
+verification yourself rather than merging what nobody watched run.
+
+**Brief every group to make a name-keyed hook the last resort, explicitly.**
+Twelve independent agents under that instruction produced *one* new hook in 119
+cards and retired another, so the hooked share of the pool fell while the pool
+grew. The brief is doing the work there, not the reviewer.
+
+**Give each group a delimited block in the shared per-set test files.** Groups
+split by grammar family still collide in `tests/sets/test_<set>_*.py`, because
+the file is chosen by the card's printed type and every group has creatures. A
+`# --- G3: <topic> ---` header per group makes every one of those an
+append-conflict resolved by union, which is mechanical. Without it the
+integrator is reading two unrelated diffs in one hunk.
+
+**Two hazards specific to parallel authorship, both silent.** Git resolves
+"both branches added a function" as *two functions* rather than as a conflict,
+and Python takes the later one — see ROADMAP idiom 25, and run
+`test_no_module_defines_the_same_name_twice` after every merge. And when one
+branch *moves* a class while another *adds* to it, the conflict presents as
+"ours: nothing, theirs: the whole class"; carrying the fields across is not
+carrying the method that emits them (idiom 26).
+
 ## Known gaps / pending pre-work
 
 A drainable list of things the playbook knows are not yet true, each naming
@@ -113,6 +142,14 @@ is green, the trackers carry its row, and the census is in hand.
    set's text reaches code the old pool never executed; the M21 ingest
    surfaced a never-run import that was 66 failures waiting. These are engine
    bugs, found early and cheap — fix them now.
+
+   **First confirm the suite actually loaded the new set.** A green run over a
+   pool that does not contain it looks exactly like a green run that found
+   nothing. The catalog sweep read `load_catalog()` — shipped-only by design —
+   for three sets running, so every ingest's yield step had been measuring the
+   old pool; The Dark's 119 cards went through it untouched.
+   `test_the_sweep_covers_every_measured_set` now asserts the coverage, but the
+   habit is the point: check the count moved before believing the zero.
 3. Regenerate the trackers. The set appears as a *(measured)* row in
    `GRAMMAR_COVERAGE.md` and `HOOK_RELIANCE.md`; the floors and ceilings do
    not move, by design.
@@ -593,3 +630,43 @@ parallel section gained two merge hazards where taking either side leaves the
 suite green. Known gaps: still empty. Phase 5 stands open — Legends' 310 cards
 have no in-game result, joining M21 and Antiquities, and the three
 promoted-before-verification sets are now the whole backlog.
+
+**The Dark — 2026-08-28 (Phases 0–6; ingest to promotion in one session).**
+119 cards, 57 supported at ingest (47.9%), promoted at 119/119 with zero hollow
+lines. Twelve group agents in git worktrees across three waves (5 / 4 / 3),
+eleven finishing; the twelfth died mid-verification with committed work and an
+unverified tree, which its integrator finished and verified rather than merging
+on trust. Nine merges, six grammar-module splits, 8,682 → 9,110 tests.
+
+**Phase 1's yield step was measuring nothing, and had been for three sets.**
+`test_catalog_sweep.py` promised in its docstring that a set is swept "the
+moment it is ingested" and parametrized over `load_catalog()`, which is
+shipped-only by design — so a `measured` set was swept the moment it was
+*promoted*, after all the work the crashes could have paid for was done. The
+whole suite ran green over 119 cards it had never loaded. The sweep now reads
+both manifest roles and a guard holds it there. **Phase 1 gained a line saying
+to confirm the yield step actually loaded the new set**: a step that reports
+success over an empty set looks exactly like a step that found nothing.
+
+**Phase 4's rehearsal earned its billing again, and the three categories held.**
+Six guards red: one genuinely missing behaviour (nothing implemented Fasting's
+draw-step skip — invisible until promotion, because `parse_coverage.py` only
+sees shipped sets), one stale guard that had pinned itself to one of a table's
+return values, one payload-key collision between two subsystems that had never
+met in one card, two vocabulary tables needing new labels, and one guard whose
+*premise* was wrong for a legitimate shape. Running the card is still the only
+way to sort them.
+
+**What changed in the phase text.** The execution model now records that twelve
+agents is affordable where four once was not, that **integration** rather than
+budget is the constraint, that a dead agent's branch is worth checking before
+its work is written off, that briefing hooks as a last resort is what actually
+holds the hook ceiling down, and that each group needs a delimited block in the
+shared per-set test files. Two parallel-authorship hazards are named with their
+ROADMAP idioms (25, 26): git turning "both added a function" into a silent
+shadow, and a field-only carry dropping the branch that emits the field.
+
+**What is deliberately unchanged.** Promotion still does not gate on Phase 5,
+so The Dark is the fourth set to ship ahead of its in-game pass and the
+verification backlog grew again — 708 untested of 1,162. That is the decision
+working as stated, and the retrospective is where it stays visible.
