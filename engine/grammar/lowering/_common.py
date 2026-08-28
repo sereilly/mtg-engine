@@ -148,6 +148,13 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # reads them — the counter lowering — carries each as its own key.
     "any_classes": "any_classes",
     "targets_object": "targets_object",
+    # "…with a single target" (Reflecting Mirror). CR 115.9a's count of what a
+    # stack object chose, which has no ``to_payload`` form for the reason
+    # ``targets_object`` beside it has none — it is a question about a spell,
+    # not about a permanent. Listed here so every lowering that builds a
+    # payload from a filter refuses it by name, and the one written for it
+    # carries the count as its own key.
+    "target_count": "target_count",
     # "another permanent **of that type**" (Enchantment Alteration). Which type
     # "that" is depends on the object the sentence's *other* clause named, so
     # no read of the candidate alone can answer it and there is no payload form.

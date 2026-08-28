@@ -100,6 +100,40 @@ class CounterSpell:
 
 
 @dataclass(frozen=True)
+class ChangeTarget:
+    """``Change the target of target spell with a single target if that target
+    is you. The new target must be a player.`` (Reflecting Mirror.)
+
+    CR 115.7a: the spell keeps every other choice it announced and only *what*
+    it points at moves. It is here in the stack family for the reason
+    :class:`CounterSpell` is — the object acted on is one waiting on the stack,
+    and what this does to it is neither a board change nor a resolution of its
+    own.
+
+    Three fields because the printed sentence carries three restrictions, and
+    each of them narrows what may be done rather than describing it:
+
+    * ``subject`` is the spell, and its filter carries CR 115.9a's
+      ``target_count`` ("with a single target"). Without that count the phrase
+      would name **every** spell on the stack.
+    * ``current_target`` is "if that target is you" — who the spell has to be
+      pointing at now. Recorded rather than folded into a ``Conditional``
+      because it is a question about the *other* object's announced target,
+      which no board-state condition in this grammar can express, and because
+      the picker has to ask it before the ability is activated at all.
+    * ``new_target`` is the trailing "The new target must be a player."
+      sentence, a bound on the choice made at resolution. It arrives through a
+      rider, so it is ``None`` on a card that prints no such sentence
+      (Deflection, Divert) — and a lowering that cannot offer an unbounded
+      choice refuses that shape rather than quietly bounding it.
+    """
+
+    subject: TargetSpec
+    current_target: PlayerRef | None = None
+    new_target: str | None = None
+
+
+@dataclass(frozen=True)
 class CopyThatSpell:
     """``Copy that spell. You may choose new targets for the copy.``
     (Double Vision.)

@@ -171,6 +171,50 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
     return ast.CounterSpell(subject)
 
 
+def _parse_change_target(stream: TokenStream) -> "ast.ChangeTarget | None":
+    """``Change the target of target spell with a single target [if that target
+    is <player>].`` (Reflecting Mirror; Deflection and Divert print the first
+    sentence without the "if".)
+
+    CR 115.7a. Returns None **without consuming** when the sentence is one of
+    the other two "Change the …" templates — "change the text of" (Magical
+    Hack) and "change the base power and toughness of" (Halfdane) open on the
+    same two words — so those keep the refusals they have today.
+
+    Two things are required past the verb, and both are the full-consumption
+    invariant rather than fussiness:
+
+    * the printed head noun must be **spell**. A bare "spell" is a generic noun
+      that leaves no mark on the filter at all (only a *typed* phrase — "target
+      instant or sorcery spell" — records ``zone="stack"``), so without this
+      guard the word could be deleted with no change to the parse and "target
+      permanent with a single target" would reach the same lowering. That is
+      the dropped-rider shape, arriving through a word that describes the
+      *zone* rather than a rider.
+    * "if that target is <player>" is read here rather than left to the
+      sentence loop's trailing-``if`` fold, because it is not a condition about
+      the board: it asks what the *other* object announced, which no
+      ``Condition`` in this grammar can describe, and the picker has to be able
+      to ask it before the ability is activated at all.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("change", "the", "target", "of"):
+        stream.reset(mark)
+        return None
+    if not (stream.at_word("target") and stream.peek_word(1) == "spell"):
+        stream.reset(mark)
+        return None
+    subject = parse_target_spec(stream)
+    if subject is None:
+        raise stream.error("expected the spell whose target to change")
+    current = None
+    if stream.accept_phrase("if", "that", "target", "is"):
+        current = parse_player_ref(stream)
+        if current is None:
+            raise stream.error("expected who that target has to be")
+    return ast.ChangeTarget(subject, current_target=current)
+
+
 # The words that can count modes. `NUMBER_WORDS` minus the articles: "Choose a
 # card name other than a basic land card name." (Necromentia) opens with the
 # same two tokens as a modal head, and reading "a" as the count would put the

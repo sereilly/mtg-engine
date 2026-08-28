@@ -31,10 +31,39 @@ if TYPE_CHECKING:
     from .models import Permanent
 
 
-def _counters_on_source(game: "Game", source: "Permanent", match: re.Match) -> int:
+def _counters_on_source(
+    game: "Game", source: "Permanent", match: re.Match, target=None
+) -> int | None:
     from .named_counters import counters_on
 
     return max(0, counters_on(source, match.group(1)))
+
+
+def _twice_target_spell_mana_value(
+    game: "Game", source: "Permanent", match: re.Match, target=None
+) -> int | None:
+    """"X is twice the mana value of that spell." (Reflecting Mirror.)
+
+    "That spell" is the one the ability **targets**, so the number is not on the
+    board at all: it is on the stack, and only the activation knows which object
+    was named. That is why every reader here takes the chosen stack object
+    beside the source — a definition that could only see the permanent would
+    have to answer 0, which for a cost is the difference between an ability that
+    prices itself off its victim and a free one.
+
+    ``None`` when no spell was named, and ``None`` is refused by the activation
+    rather than treated as zero (CR 107.2 is about a number that *can't* be
+    determined; here the ability simply has not chosen its target yet).
+
+    The mana value is read through ``targeting.stack_object_mana_value``, so an
+    {X} spell on the stack is priced at what its controller announced
+    (CR 202.3b) rather than at the 0 its printed cost carries.
+    """
+    if target is None:
+        return None
+    from .targeting import stack_object_mana_value
+
+    return 2 * stack_object_mana_value(target)
 
 
 #: ``(pattern, reader)``. The pattern matches the whole sentence, lowercased and
@@ -49,6 +78,10 @@ COST_X_DEFINITIONS: tuple[tuple[re.Pattern[str], Callable[..., int]], ...] = (
         ),
         _counters_on_source,
     ),
+    (
+        re.compile(r"^x is twice the mana value of that spell$"),
+        _twice_target_spell_mana_value,
+    ),
 )
 
 
@@ -62,17 +95,37 @@ def cost_x_definition_readable(sentence: str) -> bool:
     return _match(sentence) is not None
 
 
-def cost_x_value(game: "Game", source: "Permanent", ability_line: str) -> int | None:
-    """The X the ability's cost uses, or None when the card defines none.
+def cost_x_is_defined(ability_line: str) -> bool:
+    """Whether the ability's own text defines X (CR 107.3c).
 
-    ``None`` is not zero: it means the player announces X the ordinary way
-    (CR 601.2b), which is every ability in the pool but these.
+    Separate from :func:`cost_x_value` because the two answers are different
+    questions and the activation needs both: a card that defines X and whose
+    definition cannot be computed *here* must refuse, where a card that defines
+    no X lets its activator announce one. Folding them into one ``None`` made
+    the uncomputable case look exactly like the ordinary one — which on an {X}
+    ability means free.
+    """
+    return any(_match(sentence) is not None for sentence in (ability_line or "").split("."))
+
+
+def cost_x_value(
+    game: "Game", source: "Permanent", ability_line: str, *, target=None
+) -> int | None:
+    """The X the ability's cost uses, or None when there is no number to give.
+
+    ``None`` is not zero, and it now covers two cases the caller has to tell
+    apart with :func:`cost_x_is_defined`: the card defines no X at all (the
+    player announces it, CR 601.2b — every ability in the pool but these), or it
+    defines one that this activation cannot compute.
+
+    *target* is the object the ability targeted, for a definition that reads
+    something other than the source ("twice the mana value of **that spell**").
     """
     for sentence in (ability_line or "").split("."):
         matched = _match(sentence)
         if matched is not None:
             pattern_match, reader = matched
-            return reader(game, source, pattern_match)
+            return reader(game, source, pattern_match, target)
     return None
 
 
@@ -90,5 +143,6 @@ def _match(sentence: str) -> tuple[re.Match, Callable[..., int]] | None:
 __all__ = [
     "COST_X_DEFINITIONS",
     "cost_x_definition_readable",
+    "cost_x_is_defined",
     "cost_x_value",
 ]

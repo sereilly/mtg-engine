@@ -816,7 +816,28 @@ def _graveyard_to_library_spec(payload: dict) -> dict:
     }
 
 
+def _retarget_spec(payload: dict) -> dict:
+    """Reflecting Mirror: "target spell with a single target if that target is
+    you" (CR 115.7a, CR 115.9a).
+
+    The same "stack" picker a counterspell raises — the object is chosen from
+    the same zone — narrowed by the one question this card asks about it. The
+    count and the "is you" are **one** key rather than two because they are one
+    question in the end: ``single_player_target`` answers "does this spell have
+    exactly one target, and which player is it" or refuses, and splitting them
+    would let a picker enforce half of a restriction whose halves are only
+    meaningful together.
+
+    Handed over in the shape the handler tests it in, so the spells offered and
+    the spells the ability could actually re-aim are the same set — an offer the
+    handler then refuses is {X} and a tap paid for nothing.
+    """
+    return {"kind": "stack", "stack_single_target_is": payload.get("current_target")}
+
+
 _KIND_TO_SPEC_FROM_PAYLOAD = {
+    "choose_new_target_player": _retarget_spec,
+    "change_target_spell_target": _retarget_spec,
     "put_graveyard_cards_on_library_top": _graveyard_to_library_spec,
     "sacrifice_matching_permanent": _forced_sacrifice_spec,
     "target_gains_life": _life_gain_spec,
@@ -1468,3 +1489,114 @@ def usable_activated_abilities(program):
         ability for ability in program.activated_abilities
         if ability.supported and ability.instruction is not None
     ]
+
+
+# ---------------------------------------------------------------------------
+# What an object already *on* the stack announced (CR 115.9)
+# ---------------------------------------------------------------------------
+
+#: The cast-spec kinds whose announced target can be a **player's face**. A
+#: spell whose spec is anything else chose an object, so it is never "a spell
+#: whose single target is a player" however its stack item happens to be
+#: filled in.
+_PLAYER_TARGET_SPEC_KINDS = frozenset({
+    "player", "any", "player_or_planeswalker", "divided",
+})
+
+
+def stack_object_mana_value(item) -> int:
+    """The mana value of a spell on the stack (CR 202.3, CR 202.3b).
+
+    The printed cost, **plus** whatever X was announced for each ``{X}`` in it:
+    CR 202.3b says that while a spell is on the stack, an X in its mana cost is
+    the chosen value, so Fireball cast for X=3 has mana value 4 and not 1. That
+    is the whole difference from ``handlers/zones._mana_value_of``, which asks
+    about a card in a graveyard — a zone where CR 107.3g pins X at 0.
+
+    One reader, because the number is asked by things that must agree: a cost
+    the card defines from it (Reflecting Mirror) and a counter that compares it
+    against a chosen X (Spell Blast).
+    """
+    card = getattr(item, "card", None)
+    if card is None:
+        return 0
+    base = int(getattr(card, "cmc", 0) or 0)
+    x_symbols = (getattr(card, "mana_cost", "") or "").lower().count("{x}")
+    if not x_symbols:
+        return base
+    return base + x_symbols * int(getattr(item, "x_value", 0) or 0)
+
+
+def single_player_target(game, item) -> int | None:
+    """The one player a spell on the stack chose as its **only** target
+    (CR 115.9a / CR 115.9c), or None when it did not or the engine cannot say.
+
+    Reflecting Mirror's "target spell with a single target if that target is
+    you" is the question, and it is asked twice — by the picker in front of the
+    activation and by the handler at resolution — so it is one function.
+
+    **None is a refusal, not "no".** CR 115.9a counts what was chosen as the
+    object was put on the stack, and this engine's stack item cannot always
+    say: a seat and a chosen player reach it through the same
+    ``target_player_index`` (which is why "every target is illegal" is not
+    answerable for player-targeted spells, ROADMAP), and a modal spell's
+    targets belong to the mode rather than to the card. Where the count cannot
+    be established the spell is simply not offered — an under-offer is a
+    narrower card, while an over-offer is a card redirecting spells it was
+    never allowed to.
+
+    So every way of *not* being a lone player target is checked first, and only
+    then is the seat believed:
+
+    * an **ability** on the stack has no card and is not a spell (CR 113.7a);
+    * anything the item recorded that is not a player — a permanent, a
+      graveyard card, another stack object — rules the question out at once,
+      because ``target_player_index`` beside one of those is the battlefield or
+      pile it names rather than a target;
+    * a **modal** spell announces its targets per mode (CR 115.8, CR 700.2), and
+      ``derive_cast_spec`` answers about mode 0 alone;
+    * a **divided** spell records every target it chose in ``divided_targets``,
+      so the count is read there and a face is the only single answer;
+    * and the card itself has to be one that *can* target a player, asked of
+      the compiled program rather than inferred from the field being filled in.
+    """
+    if getattr(item, "ability_instruction", None) is not None:
+        return None
+    card = getattr(item, "card", None)
+    if card is None:
+        return None
+    if getattr(item, "chosen_modes", ()) or getattr(item, "chosen_mode_index", None) is not None:
+        return None
+    if item.target_permanent_index is not None or item.target_permanent_id is not None:
+        return None
+    if getattr(item, "target_graveyard_card", None) is not None:
+        return None
+    if getattr(item, "target_stack_item", None) is not None:
+        return None
+
+    seats = range(len(game.players))
+    divided = (getattr(item, "choices", None) or {}).get("divided_targets")
+    if divided:
+        if len(divided) != 1:
+            return None
+        seat, permanent_index = divided[0]
+        if permanent_index is not None:
+            return None
+        return int(seat) if int(seat) in seats else None
+
+    seat = item.target_player_index
+    if seat is None or seat not in seats:
+        return None
+
+    from .oracle import compile_card_oracle
+
+    spec = derive_cast_spec(card, compile_card_oracle(card))
+    if spec is None or spec.get("kind") not in _PLAYER_TARGET_SPEC_KINDS:
+        return None
+    if spec.get("land_filter"):
+        # Volcanic Eruption's "X target Mountains" is a divided spell whose
+        # targets are permanents; the seat beside them is a battlefield.
+        return None
+    if spec.get("max_targets") not in (None, 1):
+        return None
+    return int(seat)

@@ -771,6 +771,46 @@ def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.St
     raise GrammarError("damage rider with no damage effect to attach to")
 
 
+# What "The new target must be a <noun>." may bound the choice to. A closed set
+# for the reason every other table in this grammar is closed: the sentence is
+# not decoration, it is the *only* thing narrowing a choice made at resolution,
+# and a noun nothing offers would be consumed here and then ignored there —
+# a retarget free to aim at anything the spell could originally have chosen.
+_NEW_TARGET_NOUNS = frozenset({"player"})
+
+
+def _attach_new_target_bound(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """Fold "The new target must be a player." into the retarget before it.
+
+    (Reflecting Mirror.) A rider rather than a step, and a rider rather than a
+    field the production reads for itself: it is a whole printed sentence about
+    the sentence in front of it, exactly like the counter cap below — the
+    previous sentence chose the spell, this one bounds what may replace what
+    that spell chose.
+
+    The noun is checked against ``_NEW_TARGET_NOUNS``, not merely consumed. A
+    bound the resolution cannot offer has to leave the line refused, because
+    consuming it would admit the card with the sentence dropped.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.ChangeTarget):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase("the", "new", "target", "must", "be"):
+        stream.reset(mark)
+        return False
+    stream.accept_word("a", "an")
+    noun = stream.peek_word()
+    if noun not in _NEW_TARGET_NOUNS:
+        stream.reset(mark)
+        return False
+    stream.advance()
+    steps[-1] = dataclasses.replace(last, new_target=noun)
+    return True
+
+
 def _attach_counter_cap(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     """Fold "This ability can't cause the total number of <kind> counters on
     this <noun> to be greater than N." into the placement before it.

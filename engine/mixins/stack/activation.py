@@ -21,7 +21,7 @@ from ...activation_restrictions import (
 )
 from ...auras import attached_ability_cost_reduction, aura_restriction_active
 from ...cost_modifiers import ability_cost_tax, ability_self_reduction_amount
-from ...cost_x_definitions import cost_x_value
+from ...cost_x_definitions import cost_x_is_defined, cost_x_value
 from ...mana_payment import is_mana_ability
 from ...events import emit
 from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
@@ -804,9 +804,26 @@ class AbilityActivationMixin:
         # (CR 601.2b) — and the definition is read from the same table the
         # grammar consumed the sentence through, because an X consumed by one
         # reader and unknown to the other is a cost nobody charges.
-        defined_x = cost_x_value(self, permanent, ability.source_line or "")
+        # The chosen spell is handed over because a definition may read it:
+        # "X is twice the mana value of **that spell**" (Reflecting Mirror) is
+        # priced off the object the ability targets, not off the board.
+        defined_x = cost_x_value(
+            self, permanent, ability.source_line or "", target=target_stack_item
+        )
         if defined_x is not None:
             x_value = defined_x
+        elif cost_x_is_defined(ability.source_line or ""):
+            # The card defines X and this activation cannot compute it — no
+            # target was named, most often. **Not zero**: an {X} nobody charges
+            # is a free ability, which is exactly the failure
+            # ``engine/cost_x_definitions.py`` exists to prevent, so the
+            # activation is refused with nothing paid (CR 601.2b via 602.2b).
+            details = (
+                f"{permanent.card.name}: the value of X is defined by the card "
+                "and nothing here determines it"
+            )
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
         if x_value and x_symbols:
             required_cost["generic"] = (
                 required_cost.get("generic", 0) + int(x_value) * x_symbols

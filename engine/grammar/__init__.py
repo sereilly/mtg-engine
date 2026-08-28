@@ -118,6 +118,11 @@ GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
         # "Choose target creature." — the targeting half of a two-sentence
         # spell, which does nothing on its own (see `choose_target_permanent`).
         "targeting",
+        # CR 115.7, changing what a spell already on the stack points at.
+        # Distinct from "targeting" above, which is a spell choosing its *own*
+        # targets, and from "counterspells", which takes the object off the
+        # stack instead of re-aiming it.
+        "retargeting",
         # A delayed triggered ability the effect creates (CR 603.7):
         # `engine/delayed_triggers.py`.
         "delayed_triggers",

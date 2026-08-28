@@ -722,3 +722,71 @@ def test_115_6_an_up_to_ability_activates_with_nothing_to_target(set_pool):
 
     assert not mandatory.supported
     assert liliana.metadata["loyalty_counters"] == 5  # nothing was paid
+
+
+# ---------------------------------------------------------------------------
+# Rule 115.7 — changing the target(s) of a spell or ability, and rule 115.9a's
+# count of what a spell chose. Reflecting Mirror (The Dark) is the pool's only
+# card that changes a target, so it is what these are asked through.
+# ---------------------------------------------------------------------------
+
+
+def _reflecting_mirror_game(set_pool, spell_name, spell_set="LEA"):
+    mirror = Permanent(card=set_pool("DRK")["Reflecting Mirror"])
+    p1 = PlayerState(name="P1", battlefield=[mirror])
+    p2 = PlayerState(name="P2", hand=[set_pool(spell_set)[spell_name]])
+    game = _two_player_game(p1, p2)
+    game._sync_control()
+    return game, p1, p2
+
+
+@pytest.mark.cr("115.7", "115.7a")
+def test_115_7a_a_changed_target_is_the_one_the_spell_affects(set_pool):
+    """An effect that changes a spell's target changes *only* that (115.7a):
+    the spell still resolves, from the same source, doing the same thing — to
+    somebody else."""
+    game, p1, p2 = _reflecting_mirror_game(set_pool, "Lightning Bolt")
+    game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+
+    game.activate_permanent_ability(0, "Reflecting Mirror", target_stack_index=0)
+    game._settle()
+
+    assert p1.life == 20
+    assert p2.life == 17
+    assert [card.name for card in p2.graveyard] == ["Lightning Bolt"]
+
+
+@pytest.mark.cr("115.7a")
+def test_115_7a_a_target_with_no_other_legal_choice_is_left_unchanged(set_pool):
+    """"If a target can't be changed to another legal target, the original
+    target is unchanged" (115.7a). Word of Command targets an opponent, so the
+    only player its own caster could legally name is the one it already
+    names."""
+    game, _p1, _p2 = _reflecting_mirror_game(set_pool, "Word of Command")
+    game.queue_from_hand(1, "Word of Command", target_player_index=0)
+
+    result = game.queue_permanent_ability(
+        0, "Reflecting Mirror", target_stack_index=0
+    )
+    game.resolve_top_of_stack()
+
+    assert result.supported, result.details
+    assert game.stack[0].target_player_index == 0, game.log
+
+
+@pytest.mark.cr("115.9a")
+def test_115_9a_a_spell_with_a_single_target_is_counted_by_what_it_chose(set_pool):
+    """"[spell] with [a number of] targets" counts the choices made when the
+    spell was put on the stack (115.9a). One Fireball is a single target and
+    one spread across two players is not, whatever else is true of the card."""
+    single, _p1, _p2 = _reflecting_mirror_game(set_pool, "Fireball")
+    single.queue_from_hand(1, "Fireball", target_player_index=0, x_value=1)
+    assert [t["name"] for t in single.activation_target_spec(0, 0)["valid_targets"]] == [
+        "Fireball"
+    ]
+
+    spread, _q1, _q2 = _reflecting_mirror_game(set_pool, "Fireball")
+    spread.queue_from_hand(
+        1, "Fireball", x_value=2, divided_targets=[(0, None), (1, None)]
+    )
+    assert spread.activation_target_spec(0, 0)["valid_targets"] == [], spread.log

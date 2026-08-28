@@ -218,6 +218,7 @@ from .cards import (
     RevealTopToHandOrBottom,
 )
 from .stack import (
+    ChangeTarget,
     ChooseTarget,
     CopySpell,
     CopyThatSpell,
@@ -452,6 +453,7 @@ __all__ = [
     "CopySpell",
     "CopyThatSpell",
     "CounterAbility",
+    "ChangeTarget",
     "ChooseTarget",
     "CreateDelayedTrigger",
     "CounterSpell",
