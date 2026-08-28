@@ -603,6 +603,14 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
     # one player and the ante comes off that player's own library (CR 407.4).
     if instruction.kind == "ante_top_card":
         return bool(player.library)
+    # "…unless they sacrifice that artifact" (Curse Artifact). An Aura that has
+    # come unattached has nothing to give up, so the offer is not made and the
+    # penalty applies — the alternative being an offer the player could accept
+    # and then keep their life total *and* their artifact, because the handler
+    # underneath treats "nothing attached" as a no-op. Read off the source's own
+    # attachment, the same field the handler reads.
+    if instruction.kind == "sacrifice_attached_permanent":
+        return source is not None and source.metadata.get("attached_to") is not None
     # "**Pay 4 life** or put the card on top of your library." (Sylvan
     # Library.) CR 119.4: a player may pay life only with a life total at least
     # the amount, so at 3 life the payment is not one of the two things this
@@ -774,8 +782,14 @@ def _offer_to_seat(
     on_reflexive = _steps(instruction, "reflexive")
 
     # An offer the player cannot afford is never made; its decline branch (a
-    # "…unless you pay" penalty) still applies.
-    if cost and not game._player_can_pay_optional(player, {"cost": cost}):
+    # "…unless you pay" penalty) still applies. The alternative payment is part
+    # of the same question — a player with the life but not the mana can still
+    # take this offer — so it is asked through the one predicate rather than by
+    # a second test here.
+    if cost and not game._player_can_pay_optional(player, {
+        "cost": cost,
+        "life_alternative": int(instruction.payload.get("life_alternative", 0) or 0),
+    }):
         if on_decline:
             _run(game, on_decline, context)
         return
@@ -809,8 +823,18 @@ def _offer_to_seat(
         "_on_reflexive": on_reflexive,
         "_context": context,
     }
+    # CR 118.8's alternative payment ("…pays {1} **or 1 life**", Erosion): one
+    # offer the payer may cover either way, so it rides the same entry rather
+    # than arming a second prompt whose decline would apply the penalty twice.
+    life_alternative = int(instruction.payload.get("life_alternative", 0) or 0)
+    if life_alternative:
+        entry["life_alternative"] = life_alternative
     if cost:
-        entry["prompt"] = f"Pay {mana_cost_label(cost)}?"
+        entry["prompt"] = (
+            f"Pay {mana_cost_label(cost)} or {life_alternative} life?"
+            if life_alternative
+            else f"Pay {mana_cost_label(cost)}?"
+        )
     # Mirror a plain "gain N life" consequence into the legacy `life` field so
     # the prompt UI keeps describing what accepting does. Display only —
     # _pay_optional runs the instruction branch and returns before reading it.

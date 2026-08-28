@@ -10,9 +10,10 @@ pass. Also holds the attack-legality query (``can_attack``),
 """
 
 from ..attack_tapping import attacking_causes_tap
-from ..auras import aura_restriction_active
+from ..auras import attached_combat_restrictions, aura_restriction_active
 from ..combat_permissions import ATTACK_AS_THOUGH_NO_DEFENDER
 from ..combat_restrictions import participation_cap
+from ..mana_payment import mana_cost_label, plan_payment, untapped_mana_lands
 from ..subject_filters import subject_matches
 from ..events import emit
 from ..models import Permanent, PlayerState
@@ -130,10 +131,12 @@ class DeclareAttackersStepMixin:
             names = ", ".join(required_attackers)
             return False, f"{names} must attack if able"
 
+        declared_attackers: list[Permanent] = []
         for idx in unique_indices:
             if idx < 0 or idx >= len(controller.battlefield):
                 return False, "attacker index out of range"
             attacker = controller.battlefield[idx]
+            declared_attackers.append(attacker)
             if not self._is_creature(attacker):
                 return False, "only creatures can attack"
             if attacker.tapped:
@@ -154,6 +157,18 @@ class DeclareAttackersStepMixin:
         )
         if band_error is not None:
             return False, band_error
+
+        # CR 508.1g, the mana half: the costs of every declared attacker are one
+        # payment, planned here - before anything is tapped and before anything
+        # is committed - so the gate and the charge below read the same board.
+        declaration_mana, mana_plan = self._declaration_mana_plan(
+            controller_index, declared_attackers
+        )
+        if declaration_mana and mana_plan is None:
+            return False, (
+                f"cannot pay {mana_cost_label(declaration_mana)} to declare "
+                "these attackers"
+            )
 
         self.combat_attackers = dict(per_attacker_defender)
         self.combat_attacked_planeswalkers = dict(per_attacker_walker)
@@ -216,6 +231,10 @@ class DeclareAttackersStepMixin:
         # so nothing here can be half-charged.
         for attacker, cost in attack_costs:
             self._pay_attack_cost(controller_index, attacker, cost)
+        # The mana half of the same rule, spending the plan made above - never a
+        # second `plan_payment`, which would read a board the attackers have
+        # since been tapped on.
+        self._pay_declaration_mana(controller_index, declaration_mana, mana_plan)
 
         self._prune_combat_state()
         self.log.append(f"{controller.name} declared {len(unique_indices)} attacker(s)")
@@ -324,6 +343,95 @@ class DeclareAttackersStepMixin:
         self.log.append(
             f"{player.name} paid {attacker.card.name}'s attack cost "
             f"({owed} sacrificed)"
+        )
+
+    def _attack_mana_costs_of(self, attacker: Permanent) -> list[dict[str, int]]:
+        """The mana costs *attacker* owes to be declared (CR 508.1g).
+
+        "Enchanted creature can't attack unless its controller pays {3}."
+        (Brainwash.) Two channels, one reader: the restriction printed on the
+        creature itself, which reaches its compiled program as an instruction,
+        and the one printed on an Aura *about* the creature, which does not -
+        that text is on the Aura, so it is read through
+        ``auras.attached_combat_restrictions``. Both come from one table
+        (``combat_restrictions._PATTERNS``) asked with the subject rewritten,
+        which is why a card printing either wording needs nothing here.
+
+        One reader for the gate in ``can_attack`` and the charge in
+        ``declare_attackers``, exactly as ``_attack_costs_of`` below is: a cost
+        checked by one rule and paid by another is how a declaration gets
+        accepted and then left unpaid.
+        """
+        costs: list[dict[str, int]] = []
+        sources = [
+            instruction.payload
+            for instruction in compile_card_oracle(attacker.effective_card).instructions
+            if instruction.kind == "cant_attack_unless_pay"
+        ]
+        sources += [
+            restriction.payload
+            for restriction in attached_combat_restrictions(attacker)
+            if restriction.kind == "cant_attack_unless_pay"
+        ]
+        for payload in sources:
+            cost = {
+                symbol: int(amount)
+                for symbol, amount in (payload.get("mana") or {}).items()
+            }
+            if cost:
+                costs.append(cost)
+        return costs
+
+    def _declaration_mana_plan(
+        self, controller_index: int, attackers: list[Permanent]
+    ):
+        """How the whole declaration's CR 508.1g mana is paid, or None.
+
+        The costs of *every* declared attacker add up into one payment, and that
+        is the difference between this and ``can_attack``: a per-creature
+        predicate can say "you could pay {3} for this one" and cannot say "and
+        {3} again for the next", so a player with three mana would declare two
+        Brainwashed creatures and be charged for one. The same reason
+        ``participation_cap`` is enforced where the declaration is assembled.
+
+        The plan is made **before** anything is tapped, so the gate and the
+        charge read one board - and the declared attackers are excluded from
+        what may pay, because CR 508.1f is about to tap them and an animated
+        land would otherwise be spent twice.
+        """
+        total: dict[str, int] = {}
+        for attacker in attackers:
+            for cost in self._attack_mana_costs_of(attacker):
+                for symbol, amount in cost.items():
+                    total[symbol] = total.get(symbol, 0) + amount
+        if not total:
+            return {}, None
+        controller = self.players[controller_index]
+        available = [
+            land
+            for land in untapped_mana_lands(self.controlled_by(controller))
+            if not any(land is attacker for attacker in attackers)
+        ]
+        return total, plan_payment(controller.mana_pool, available, total)
+
+    def _pay_declaration_mana(
+        self, controller_index: int, total: dict[str, int], plan
+    ) -> None:
+        """Spend the plan ``_declaration_mana_plan`` made (CR 508.1g).
+
+        Floating mana first and then untapped lands - the stated policy every
+        cost with no priority window behind it takes in this engine, because
+        declaring an attacker gives its controller no window in which to tap.
+        """
+        if plan is None:
+            return
+        controller = self.players[controller_index]
+        for symbol, amount in plan.from_pool.items():
+            controller.mana_pool[symbol] = int(controller.mana_pool.get(symbol, 0)) - amount
+        for land in plan.tapped:
+            self.become_tapped(land)
+        self.log.append(
+            f"{controller.name} paid {mana_cost_label(total)} to declare attackers"
         )
 
     def _attack_costs_of(self, attacker: Permanent) -> list[dict]:
@@ -510,6 +618,27 @@ class DeclareAttackersStepMixin:
             if len(self._sacrifice_candidate_indices(
                 self.players[attacker_seat], dict(cost.get("filter") or {}), attacker
             )) < int(cost.get("count", 1)):
+                return False
+
+        # "Enchanted creature can't attack unless its controller pays {3}."
+        # (Brainwash.) The mana twin, and asked here as well as over the whole
+        # declaration because this predicate is what "attacks each combat **if
+        # able**" reads: a creature whose cost its controller cannot cover is
+        # not able, and enforcing a requirement against it would make a legal
+        # declaration impossible. The declaration-wide check in
+        # `declare_attackers` is what adds several attackers' costs together;
+        # this one answers only for this creature, which is all a per-creature
+        # predicate can honestly say.
+        for cost in self._attack_mana_costs_of(attacker):
+            if plan_payment(
+                self.players[attacker_seat].mana_pool,
+                [
+                    land
+                    for land in untapped_mana_lands(self.controlled_by(attacker_seat))
+                    if land is not attacker
+                ],
+                cost,
+            ) is None:
                 return False
 
         # One-shot blanket restrictions ("Creatures can't attack this turn",

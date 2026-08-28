@@ -31,18 +31,48 @@ from .upkeep_effects import UPKEEP_EFFECTS, UpkeepContext, UpkeepEffectsMixin
 
 #: Upkeep conditions whose seat this loop can name: "at the beginning of
 #: **your** upkeep" is the source's controller, "at the beginning of **each
-#: player's** upkeep" is the player whose upkeep it is, and "at the beginning of
+#: player's** upkeep" is the player whose upkeep it is, "at the beginning of
 #: **the chosen player's** upkeep" is the seat the permanent recorded when the
-#: effect that named them resolved (`chosen_player_index`). The remaining one,
-#: `upkeep_enchanted_controller`, reads its seat off an attachment and stays with
-#: the registry that already knows how.
+#: effect that named them resolved (`chosen_player_index`), and "at the
+#: beginning of the upkeep of **enchanted <noun>'s** controller" is whoever
+#: controls the permanent the source is attached to.
 #:
 #: `upkeep_chosen` was in that second group until Takklemaggot's returning
 #: enchantment granted itself "At the beginning of that player's upkeep, this
 #: enchantment deals 1 damage to that player" — an ordinary trigger with an
 #: ordinary handler behind it, which the registry had no pair for and this loop
 #: refused to name a seat for, so it fired nowhere at all.
-_ORDINARY_UPKEEP_SEATS = frozenset({"upkeep_self", "upkeep_each", "upkeep_chosen"})
+#:
+#: `upkeep_enchanted_controller` joined it for the same reason. Its seat is not
+#: one this loop lacks — it is on the attachment, which the registry's three
+#: handlers each re-read at their own first line — and while it was excluded,
+#: every Aura printing this condition needed a registry pair whether or not
+#: anything about it was interactive. Erosion and Curse Artifact are the
+#: ordinary shape: an offer with a penalty, which the grammar reads as a `may`
+#: and the generic pending-choice queue already runs.
+_ORDINARY_UPKEEP_SEATS = frozenset({
+    "upkeep_self", "upkeep_each", "upkeep_chosen", "upkeep_enchanted_controller",
+})
+
+
+def upkeep_trigger_seat_matches(game, permanent, cond: str, player_index: int) -> bool:
+    """Whether a trigger of *cond* on *permanent* fires on *player_index*'s upkeep.
+
+    Only the two conditions that name a seat *other than* the ordinary ones
+    answer anything here; the rest already fired on the right upkeep by the
+    time this is asked. One reader for the loop below and for the support gate
+    in ``engine/auras.py``, so what the engine claims it can fire and what it
+    actually fires cannot drift.
+    """
+    if cond == "upkeep_chosen":
+        return permanent.metadata.get("chosen_player_index") == player_index
+    if cond == "upkeep_enchanted_controller":
+        attached = permanent.metadata.get("attached_to")
+        return (
+            attached is not None
+            and game.controller_index_of(attached) == player_index
+        )
+    return True
 
 
 class UpkeepStepMixin(UpkeepEffectsMixin):
@@ -656,13 +686,14 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     # "each player's upkeep" is whoever's it is, where
                     # `upkeep_enchanted_controller` and `upkeep_chosen` name a
                     # seat this loop does not have in hand.
-                    if cond == "upkeep_chosen" and (
-                        permanent.metadata.get("chosen_player_index") != player_index
+                    if not upkeep_trigger_seat_matches(
+                        self, permanent, cond, player_index
                     ):
-                        # The permanent names one seat and this is somebody
-                        # else's upkeep. `continue`, not `break`: another
-                        # ability on the same permanent may still have
-                        # triggered (CR 603.3).
+                        # The permanent names one seat — the one an effect chose
+                        # for it, or the one that controls what it is attached
+                        # to — and this is somebody else's upkeep. `continue`,
+                        # not `break`: another ability on the same permanent may
+                        # still have triggered (CR 603.3).
                         continue
                     if kind in EFFECT_HANDLERS:
                         # The target its controller picked at the prompt, if
@@ -680,9 +711,15 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                             # the condition named, which for a chosen-player
                             # trigger is the one whose upkeep this is — the
                             # gate above already checked they are the same.
+                            # "…deals 1 damage to **that player**" /
+                            # "…unless **that player** pays {1}": the seat the
+                            # condition named. For both of the conditions that
+                            # name one, the gate above has already checked it is
+                            # the seat whose upkeep this is.
                             "target_player_index": (
                                 picked[0] if picked
-                                else player_index if cond == "upkeep_chosen"
+                                else player_index
+                                if cond in ("upkeep_chosen", "upkeep_enchanted_controller")
                                 else None
                             ),
                             "target_permanent_index": picked[1] if picked else None,

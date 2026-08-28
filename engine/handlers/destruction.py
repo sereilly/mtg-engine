@@ -534,6 +534,38 @@ def destroy_self(game: Game, instruction: OracleInstruction, context: OracleExec
     return True, "resolved"
 
 
+@effect_handler("sacrifice_attached_permanent")
+def sacrifice_attached_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…unless they sacrifice **that artifact**." (Curse Artifact.)
+
+    The permanent read off the source's own attachment, exactly as
+    ``destroy_attached_permanent`` below reads it and for the same reason: the
+    trigger's condition named it ("the upkeep of enchanted artifact's
+    controller"), so the sentence chooses nothing and there is nothing for a
+    picker to have offered.
+
+    Through ``Game.sacrifice_permanent``, never a hand-rolled removal — that is
+    the one seam a sacrifice passes through (ownership, tokens, replacements,
+    Aura teardown, the death count and the dies-triggers all hang off it), and
+    a second spelling of it is how seven of those were skipped before it
+    existed.
+
+    CR 701.16b: only the permanent's controller may sacrifice it, and that is
+    who the offer was made to — ``handlers/control_flow._action_is_takeable``
+    withdraws the offer when the Aura has come unattached, so reaching here
+    with nothing attached means the offer was never narrowed and the right
+    answer is to do nothing rather than to charge a cost that cannot be paid.
+    """
+    source = context.source_permanent
+    attached = source.metadata.get("attached_to") if source is not None else None
+    if attached is None or not game.is_on_battlefield(attached):
+        game.log.append(f"{context.card.name}: nothing attached to sacrifice")
+        return True, "resolved"
+    game.sacrifice_permanent(attached)
+    game.log.append(f"{context.card.name}: {attached.card.name} was sacrificed")
+    return True, "resolved"
+
+
 @effect_handler("destroy_attached_permanent")
 def destroy_attached_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"When enchanted land becomes tapped, destroy it." (Blight.)

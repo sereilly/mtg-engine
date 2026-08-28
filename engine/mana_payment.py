@@ -28,6 +28,7 @@ matching and no reason to accept a heuristic.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Iterable, Sequence
 
@@ -188,6 +189,40 @@ def generic_cost(amount: int) -> dict[str, int]:
     return {"generic": max(0, int(amount))}
 
 
+def mana_cost_from_symbols(printed: str) -> dict[str, int] | None:
+    """``{1}{B}`` as the symbol dict a payment reads — the inverse of
+    :func:`mana_cost_label` — or None when a symbol is one this cannot spend.
+
+    Here rather than beside the reader that wants it, for the reason
+    :func:`generic_cost` is here: a cost is a symbol dict *everywhere*, and a
+    second place that turns printed symbols into one is a second answer to the
+    question of what "{1}" costs. The grammar has its own reader because it
+    works from a token stream; this is for the derivation tables, which hold the
+    printed run as a captured string.
+
+    A hybrid, Phyrexian or ``{X}`` symbol returns None rather than an
+    approximation. A restriction whose cost this cannot express must refuse its
+    line — a cost read as smaller than it is charges a player less than the card
+    says, and one read as zero charges nothing at all.
+    """
+    counts: dict[str, int] = {}
+    for symbol in _PRINTED_SYMBOL.findall(printed or ""):
+        upper = symbol.upper()
+        if upper.isdigit():
+            counts["generic"] = counts.get("generic", 0) + int(upper)
+        elif upper in COLOR_SYMBOLS:
+            counts[upper] = counts.get(upper, 0) + 1
+        else:
+            return None
+    return counts or None
+
+
+#: One printed mana symbol. Deliberately permissive about *what* is inside the
+#: braces so an unspendable one reaches the check above and refuses, rather than
+#: failing to match and being silently dropped from the cost.
+_PRINTED_SYMBOL = re.compile(r"\{([^}]+)\}")
+
+
 def total_pips(required: dict[str, int]) -> int:
     """How many mana the cost is, all told — for a log line or a prompt label,
     never for deciding whether it can be paid."""
@@ -226,7 +261,8 @@ def untapped_mana_lands(permanents: Iterable["Permanent"]) -> list["Permanent"]:
 
 
 __all__ = [
-    "COLOR_SYMBOLS", "ManaPayment", "generic_cost", "mana_cost_label", "plan_payment",
+    "COLOR_SYMBOLS", "ManaPayment", "generic_cost", "mana_cost_from_symbols",
+    "mana_cost_label", "plan_payment",
     "total_pips",
     "untapped_mana_lands",
 ]

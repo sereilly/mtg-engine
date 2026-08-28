@@ -20,7 +20,8 @@ from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS)
 from ..where_x import _parse_where_x_is
 from ..phrases import (
-    _parse_duration, _parse_mana_payment, parse_bound_subject,
+    _parse_duration, _parse_mana_payment, _parse_that_object,
+    parse_bound_subject,
 )
 
 
@@ -306,8 +307,9 @@ def _accept_damaged_this_game(stream: TokenStream) -> tuple[str, ...] | None:
 
 def _parse_damage_unless_pay(
     stream: TokenStream, damage: ast.DealDamage
-) -> ast.DamageUnlessPay | None:
-    """``… unless <player> pays <cost>`` trailing a damage clause.
+) -> "ast.Statement | None":
+    """``… unless <player> pays <cost>`` / ``… unless <player> sacrifices
+    <object>`` trailing a damage clause.
 
     The mana payment is *expected* once "unless … pay" has matched: an
     unrecognized cost raises out of ``_parse_mana_payment`` rather than
@@ -315,6 +317,15 @@ def _parse_damage_unless_pay(
     card whose damage is conditional on something unmodelled — silently
     dropping the condition would make the damage unconditional, which is the
     strictly worse of the two failures.
+
+    The **sacrifice** alternative decomposes into ``May(action=…,
+    otherwise=…)`` rather than growing a second fused node, exactly as the two
+    "unless you sacrifice" tails in the board family do (Psychic Allergy, Mold
+    Demon): an "unless" is an offer with a penalty, which is what ``May``
+    already says, and saying it that way means the offer, the penalty and the
+    "there is nothing to give up" case all come from machinery that works. The
+    mana spelling above stays fused only because two upkeep handlers implement
+    it whole.
     """
     mark = stream.mark()
     if not stream.accept_word("unless"):
@@ -323,6 +334,21 @@ def _parse_damage_unless_pay(
     if payer is None:
         stream.reset(mark)
         return None
+    # "…unless they **sacrifice that artifact**" (Curse Artifact). The object is
+    # the one the trigger already named, read through the shared bound-object
+    # fragment so the two families cannot come to disagree about what "that
+    # artifact" is — and refused when the words after the verb are something
+    # else, rather than silently sacrificing a chosen permanent.
+    if stream.accept_word("sacrifices", "sacrifice"):
+        subject = _parse_that_object(stream)
+        if subject is None:
+            stream.reset(mark)
+            return None
+        return ast.May(
+            actor=payer,
+            action=ast.Sacrifice(payer, subject),
+            otherwise=damage,
+        )
     if not stream.accept_word("pays", "pay"):
         stream.reset(mark)
         return None

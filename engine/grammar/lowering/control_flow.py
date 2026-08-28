@@ -86,6 +86,18 @@ def _may_cost_payload(node: ast.May) -> dict[str, object]:
     return payload
 
 
+#: The player references an offer can be made to. Held to what
+#: ``handlers/control_flow._offered_seats`` can actually name: "you" is the
+#: ability's controller, the two "each" references are a set of seats, and
+#: "that player"/"they" is the seat the resolution already recorded. Every
+#: other reference — "its controller", "the chosen player", "defending player"
+#: — reaches that function's fallback, which reads the resolution's target and
+#: is a different seat entirely.
+OFFERABLE_ACTORS: frozenset[str] = frozenset(
+    {"you", "each_player", "each_opponent", "that_player"}
+)
+
+
 #: Player references that name *every* opponent rather than one chosen seat.
 #: "An opponent" reaches the AST as ``target_opponent`` — the reference reader's
 #: spelling for the bare article — and it is not a target here: CR 601.2b's cost
@@ -197,6 +209,17 @@ def _lower_may(
         if node.reflexive else ()
     )
 
+    if node.actor.kind not in OFFERABLE_ACTORS:
+        # Idiom 2, for the seat an offer is made to. ``_offered_seats`` knows
+        # four references and reads every other one as ``context.target`` — so
+        # "destroy target creature unless **its controller** pays {4}" would
+        # have offered the payment to whichever player that resolution happened
+        # to carry, and the wrong seat paying is a cost the card never charged.
+        # Refused here rather than guessed, which is what leaves the card
+        # visibly unsupported naming the clause.
+        raise LoweringError(
+            f"no offer names {node.actor.kind!r} as its payer", node=node
+        )
     payload: dict[str, object] = {"actor": node.actor.kind}
     if node.cost is not None:
         if not isinstance(node.cost, ast.ManaCost):
@@ -207,6 +230,18 @@ def _lower_may(
         # a {B} had nothing to collect it with. `engine/mana_payment.py` is what
         # made the refusal unnecessary.
         payload["cost"] = _may_cost_payload(node)
+    if node.life_alternative is not None:
+        # CR 118.8's alternative payment ("…pays {1} **or 1 life**", Erosion).
+        # A second reading of the *same* offer, so it rides the one prompt
+        # rather than arming a second one — and it needs the mana half beside
+        # it, because "or 1 life" alone is a life cost and belongs in the field
+        # that already says so.
+        if node.cost is None:
+            raise LoweringError(
+                "an alternative life payment with no cost to be an alternative to",
+                node=node,
+            )
+        payload["life_alternative"] = int(node.life_alternative)
     if action:
         payload["action"] = action
     if then:

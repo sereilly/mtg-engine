@@ -12,6 +12,7 @@ should own the other's vocabulary.
 import dataclasses
 
 from .. import ast
+from ..amounts import parse_amount
 from ..errors import GrammarError
 from ..readers import accept_source_reference
 from ..references import parse_player_ref, parse_recipient, parse_target_spec
@@ -19,8 +20,8 @@ from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, NUMBER_WORDS, SUBTYPE_INDEX, match_longest)
 from ..phrases import (
     _accept_number, _accept_self_reference, _parse_for_each_this_way,
-    _parse_mana_payment, _parse_pay_life, _parse_zone, parse_counted_subject,
-    parse_pair_ordinal_subject, parse_subject_filter_at,
+    _parse_mana_payment, _parse_pay_life, _parse_that_object, _parse_zone,
+    parse_counted_subject, parse_pair_ordinal_subject, parse_subject_filter_at,
 )
 
 
@@ -359,6 +360,27 @@ def _parse_further_subjects(stream: TokenStream) -> list[ast.Recipient]:
         extra.append(nxt)
 
 
+def _accept_life_alternative(stream: TokenStream) -> int | None:
+    """``or 1 life`` trailing a mana payment (Erosion) — CR 118.8, or None.
+
+    Only the amount is carried, not a whole cost node: this is the second half
+    of one offer, and the payer covers it either way. Refuses without consuming
+    so any other "or" in the sentence keeps the reading it had.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("or"):
+        return None
+    try:
+        amount = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(amount, ast.Fixed) or not stream.accept_word("life"):
+        stream.reset(mark)
+        return None
+    return amount.value
+
+
 def _parse_destroy(stream: TokenStream) -> ast.Statement:
     """``destroy <objects> [. It can't be regenerated.]``
 
@@ -384,6 +406,34 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     # tokens unconsumed is what keeps Stone Giant and Nettling Imp failing
     # loudly instead of being destroyed a step early.
     delay = "end_of_combat" if stream.accept_phrase("at", "end", "of", "combat") else ""
+
+    # "… unless **that player** pays {1} **or 1 life**" (Erosion). Two readings
+    # away from the fused node below, and both of them matter: the payer is the
+    # seat the trigger's condition named rather than the ability's controller,
+    # and the cost has an alternative mana cannot express. So it decomposes into
+    # the `May` an "unless" already is — an offer with a penalty — the same
+    # decomposition the sacrifice alternatives take, which puts the offer on the
+    # generic pending-choice queue with the destruction as its decline branch
+    # and gets "they can afford neither" from machinery that already works.
+    #
+    # Read above the fused "unless you pay" below and guarded on the payer, so
+    # Cosmic Horror keeps the upkeep handler that implements it whole.
+    mark = stream.mark()
+    if not further and stream.accept_word("unless"):
+        payer = parse_player_ref(stream)
+        if (
+            payer is not None
+            and payer.kind != "you"
+            and stream.accept_word("pays", "pay")
+        ):
+            cost = _parse_mana_payment(stream)
+            return ast.May(
+                actor=payer,
+                cost=cost,
+                life_alternative=_accept_life_alternative(stream),
+                otherwise=ast.Destroy(subject, no_regen=False, delay=""),
+            )
+    stream.reset(mark)
 
     # "… unless you pay {3}{B}{B}{B}" (Cosmic Horror) — the destroy twin of the
     # sacrifice tail below, and read here for the same reason: the cost is the
@@ -427,48 +477,6 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
             for each in (subject, *further)
         ))
     return ast.Destroy(subject, no_regen=no_regen, delay=delay)
-
-
-def _parse_that_object(stream: TokenStream) -> ast.TargetSpec | None:
-    """``that <card type>`` — the object a trigger already named.
-
-    Not a target: the trigger bound it when it fired, so nothing is chosen on
-    resolution. It gets its own quantifier rather than being read as an ordinary
-    noun phrase, so a lowering written for "target creature" can never receive
-    it — the two reach completely different handlers, and the ones that take a
-    bound object read it out of the trigger's context instead of the payload.
-
-    Deliberately local to the destroy production. The phrase turns up all over
-    the pool ("tap that creature", "that player discards"), and teaching the
-    shared noun parser to claim it would let every one of those lines lower
-    through a filter naming a card type nobody bound.
-    """
-    # "destroy **the other** creature" (Infinite Authority) — the second member
-    # of a pair the trigger bound, read through the shared ordinal production
-    # so the counter clause in the same sentence names it the same way.
-    ordinal = parse_pair_ordinal_subject(stream)
-    if ordinal is not None:
-        return ordinal
-    mark = stream.mark()
-    if not stream.accept_word("that"):
-        return None
-    noun = stream.peek_word()
-    if noun is not None and noun in CARD_TYPES:
-        stream.advance()
-        return ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,)))
-    # "destroy that **Wall**" (Battering Ram). A subtype names the bound object
-    # just as a card type does — the trigger that fired required it, so the word
-    # is describing what was bound rather than narrowing a fresh choice. Read
-    # through the vocabulary, so a made-up noun still refuses.
-    matched = match_longest(stream.words_from(), 0, SUBTYPE_INDEX)
-    if matched is not None and matched[0] in CREATURE_TYPES:
-        stream.advance(matched[1])
-        return ast.TargetSpec(
-            "that",
-            ast.ObjectFilter(card_types=("creature",), subtypes=(matched[0],)),
-        )
-    stream.reset(mark)
-    return None
 
 
 def _parse_doesnt_untap_next_step(

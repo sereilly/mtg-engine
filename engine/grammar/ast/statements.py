@@ -271,6 +271,17 @@ class May:
     #: with a target of its own ends up pointed at whatever the producing action
     #: happened to name.
     reflexive: "Statement | None" = None
+    #: "…unless that player pays {1} **or 1 life**." (Erosion.) CR 118.8's
+    #: alternative payment: one offer the payer may cover either way, so it is a
+    #: second reading of ``cost`` rather than a second offer. Two ``May`` nodes
+    #: would be two prompts and two penalties -- declining the first would
+    #: destroy the land before the second was ever made.
+    #:
+    #: An amount rather than a whole ``Cost``, because the only alternative any
+    #: printing pairs with a mana cost this way is life; a card offering some
+    #: other second cost should grow the field into a cost union rather than
+    #: reuse this one for something it cannot say.
+    life_alternative: int | None = None
     #: "**Starting with you**, each player may …" (Eureka). Which seat is asked
     #: first. CR 101.4 already orders a multi-seat offer from the active player,
     #: and for a sorcery those are the same seat — but they are not the same
