@@ -15,9 +15,11 @@ from ..layer_bridge import printed_supertypes
 from ..handlers.tapping import UNTAP_LOCK_WHILE_TAPPED_KEY
 from ..control import LINKED_CONTROL_CONDITIONS
 from ..turn_state import record_turn_start_states
+from ..turn_state import attacked_during_seats_last_turn
 from ..untap_restrictions import (
     SELF_DOESNT_UNTAP_PHRASE,
     SELF_MAY_KEEP_TAPPED_PHRASE,
+    self_untap_attacked_last_turn,
     self_untap_counter_condition,
     self_untap_line,
     untap_restriction_for,
@@ -30,7 +32,7 @@ from ..untap_restrictions import (
 _LIMITED_TYPES = ("land", "creature", "artifact")
 
 
-def _self_untap_blocked(permanent) -> bool:
+def _self_untap_blocked(game, permanent, seat: int) -> bool:
     """Whether *permanent*'s own text keeps it tapped **this** untap step.
 
     The loose substring probe this replaced was right about every unconditional
@@ -49,6 +51,10 @@ def _self_untap_blocked(permanent) -> bool:
     ``effective_card`` throughout, so a CR 613 layer-3 text change and a granted
     line are both read; the condition is asked of the permanent, which is where
     a CR 122.1 counter lives.
+
+    *seat* is whose untap step this is — the seat "**your** untap step" and
+    "your last turn" name — so the attack condition is ordinal arithmetic
+    against that seat's own turn counter rather than against the game's.
     """
     from ..named_counters import counters_on
 
@@ -56,11 +62,21 @@ def _self_untap_blocked(permanent) -> bool:
     for line in (permanent.effective_card.oracle_text or "").splitlines():
         if SELF_DOESNT_UNTAP_PHRASE not in line.lower():
             continue
-        counter = self_untap_counter_condition(line, permanent.effective_card.name)
-        if counter is None:
-            return True
-        if counters_on(permanent, counter) > 0:
-            blocked = True
+        name = permanent.effective_card.name
+        counter = self_untap_counter_condition(line, name)
+        if counter is not None:
+            if counters_on(permanent, counter) > 0:
+                blocked = True
+            continue
+        # "…if it attacked during your last turn" (Goblin Rock Sled). The
+        # condition is re-asked every untap step off the permanent's own attack
+        # record, so a Sled that sat out untaps normally — where the loose
+        # substring reading below would have frozen it for the rest of the game.
+        if self_untap_attacked_last_turn(line, name):
+            if attacked_during_seats_last_turn(game, permanent, seat):
+                blocked = True
+            continue
+        return True
     return blocked
 
 
@@ -272,7 +288,7 @@ class UntapStepMixin:
 
             # Permanents that read "doesn't untap during your untap step" (e.g.
             # Time Vault, Basalt Monolith) stay tapped (Rule 502.4, 702 self-text).
-            if _self_untap_blocked(permanent):
+            if _self_untap_blocked(self, permanent, player_index):
                 continue
 
             # "…don't untap during their controller's next untap step" (Frost
@@ -334,7 +350,9 @@ class UntapStepMixin:
                     & printed_supertypes(permanent.effective_card.type_line)
                 ):
                     continue
-                if aura_restriction_active(permanent, "doesnt_untap"):
+                if aura_restriction_active(
+                    permanent, "doesnt_untap", game=self, seat=player_index
+                ):
                     continue
 
             # The per-type cap and the controller's choice within it, asked the

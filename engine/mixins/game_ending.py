@@ -198,6 +198,42 @@ class GameEndingMixin:
                         departing_ss.append(perm)
                 self.remove_all_from_battlefield(departing_ss)
 
+            # The positive state trigger: "When you control a Dwarf, sacrifice
+            # this creature." (Goblins of the Flarg.) CR 603.8 again, and here
+            # rather than at the upkeep for the same reason as the two above —
+            # the condition becomes true the moment the Dwarf arrives, and a
+            # trigger that waited for the next upkeep would let the Goblin
+            # attack alongside it. The noun phrase is payload, tested by
+            # ``subject_matches``, so a card naming any other tribe needs
+            # nothing here.
+            from ..subject_filters import subject_matches
+
+            for seat, player in enumerate(self.players):
+                departing_pos = []
+                for perm in list(self.controlled_by(player)):
+                    for trig in matching_triggers(
+                        perm.effective_card,
+                        condition_kinds={"controls_matching_permanent"},
+                        instruction_kinds={"sacrifice_self"},
+                    ):
+                        described = trig.condition.payload.get("controlled_filter") or {}
+                        if not any(
+                            subject_matches(
+                                self, other, described, observer=seat, source=perm
+                            )
+                            for other in self.controlled_by(seat)
+                        ):
+                            continue
+                        self._permanent_to_graveyard(player, perm)
+                        self.log.append(
+                            f"{perm.card.name} sacrificed (its controller controls "
+                            "what its state trigger names)"
+                        )
+                        changed = True
+                        departing_pos.append(perm)
+                        break
+                self.remove_all_from_battlefield(departing_pos)
+
             # Jihad: "When the chosen player controls no nontoken permanents of
             # the chosen color, sacrifice this enchantment." A state trigger
             # (CR 603.8) checked alongside SBAs like the no-lands sacrifices

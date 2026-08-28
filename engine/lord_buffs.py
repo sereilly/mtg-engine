@@ -232,10 +232,67 @@ _KEYWORD_RE = re.compile(r"^ha(?:ve|s) (?P<keywords>.+)$")
 _DURATIONS = ("until end of turn", "until end of combat", "this turn", "until your next turn")
 
 
-def _split_condition(line: str) -> tuple[str, str | None] | None:
-    """``(clause, condition key)``, or None when an unmodelled "as long as" is
+#: "**As long as enchanted land is a basic Mountain**, Goblin creatures get
+#: +0/+2." (Goblin Caves, Goblin Shrine.) The condition is printed *first*, and
+#: it is about the permanent the source is attached to rather than about a
+#: board its controller can be asked for — so it is its own row rather than a
+#: key in ``CONDITIONS``, which holds only the conditions no payload can express.
+#:
+#: Every word after "is" is payload: the noun the Aura enchants, the supertype
+#: and the land type. A card printing "as long as enchanted land is a basic
+#: Swamp" is the same sentence and needs nothing here, which is the property
+#: this whole module exists for.
+_ATTACHED_CONDITION = re.compile(
+    r"^as long as enchanted (?P<noun>[a-z]+) is a (?P<supertype>basic) "
+    r"(?P<subtype>[a-z'-]+), (?P<clause>.+)$"
+)
+
+
+@lru_cache(maxsize=1)
+def _land_types() -> frozenset[str]:
+    # Lazily, for the reason engine/land_types.py imports it lazily: the grammar
+    # package imports the engine's derivation modules.
+    from .grammar import vocabulary
+
+    return vocabulary.LAND_TYPES
+
+
+def _attached_condition(match: re.Match) -> dict | None:
+    """The lowered condition an ``_ATTACHED_CONDITION`` match states, or None.
+
+    None is a **refusal**, not "no condition": a noun or a land type this
+    cannot express has to take the whole line down, because a conditional
+    anthem with its condition dropped is a permanent one.
+
+    The payload is an ordinary subject filter, answered by ``subject_matches``
+    like every other one — so "is a basic Mountain" means the same thing here
+    as in a trigger's narrowing, and a Blood Moon Mountain (layer 4, no basic
+    supertype) fails it for the same reason a Magical Hack Mountain passes.
+    """
+    noun = match.group("noun")
+    subtype = match.group("subtype")
+    if noun != "land" or subtype not in _land_types():
+        return None
+    return {
+        "kind": "attached_matches",
+        "filter": {
+            "type_filter": noun,
+            "supertypes": [match.group("supertype")],
+            "subtype_filter": subtype,
+        },
+    }
+
+
+def _split_condition(line: str) -> tuple[str, str | dict | None] | None:
+    """``(clause, condition)``, or None when an unmodelled "as long as" is
     present. A condition that is recognized but not implemented has to take the
     whole line down: dropping it would make a conditional anthem permanent."""
+    leading = _ATTACHED_CONDITION.match(line)
+    if leading is not None:
+        condition = _attached_condition(leading)
+        if condition is None:
+            return None
+        return leading.group("clause"), condition
     index = line.find(" as long as ")
     if index < 0:
         return line, None

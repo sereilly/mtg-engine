@@ -905,3 +905,48 @@ def _mentions_x(instructions: tuple[OracleInstruction, ...]) -> bool:
                 if _mentions_x(value):
                     return True
     return False
+
+
+def _lower_described_set_damage(
+    node, recipient, amount, computed: bool
+) -> tuple[OracleInstruction, ...]:
+    """"…deals 1 damage to each **Goblin** creature." (Goblin Shrine.)
+
+    A damage sweep over a *described* set rather than a chosen one: nothing is
+    targeted, so CR 611.2c fixes the set when the effect begins and every
+    permanent the noun phrase names is dealt to. The phrase rides as the filter
+    the handler tests each permanent against, so a card printing any other noun
+    needs no instruction kind of its own.
+
+    Beside the shared helpers rather than in ``lowering/damage.py`` for the
+    reason ``zones``, ``library`` and ``mana`` are separate lowering families at
+    all: that module is at the 1,000-line cap, and idiom 13 says obey the guard
+    rather than raise it. Everything it reads is already this module's
+    vocabulary.
+
+    Every refusal below is the same rule: a narrowing the matcher cannot test
+    would be *dropped*, and a dropped narrowing on a sweep burns a strictly
+    larger part of the board than the card prints. The quantifiers this does
+    not recognise keep the refusal the damage lowering used to raise here.
+    """
+    from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+
+    if recipient.quantifier not in ("all", "each") or recipient.targeted:
+        raise LoweringError("unsupported damage target quantifier", node=node)
+    if computed:
+        raise LoweringError(
+            "a described-set damage sweep cannot carry a computed amount",
+            node=node,
+        )
+    described = _filter_payload(recipient.filter)
+    leftover = set(described) - TESTABLE_SUBJECT_FILTER_KEYS
+    if leftover:
+        raise LoweringError(
+            "the damage sweep cannot narrow by: " + ", ".join(sorted(leftover)),
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "deal_damage_each_matching", "", {"amount": amount, "filter": described}
+        ),
+    )

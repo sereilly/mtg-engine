@@ -218,6 +218,33 @@ _SELF_UNTAP_COUNTER_CONDITION = re.compile(
 )
 
 
+#: "This creature doesn't untap during your untap step **if it attacked during
+#: your last turn**." (Goblin Rock Sled.) The third member of this family and
+#: the same trap as the counter row above: the loose substring probe would see
+#: the phrase, keep the Sled tapped forever and turn a card that attacks every
+#: other turn into one that attacks once.
+#:
+#: The condition is a fact about the permanent's own attack record, not about
+#: this text, so it is answered by ``turn_state.attacked_during_seats_last_turn``
+#: — the one reader the declare-attackers step's Giant Turtle restriction also
+#: asks. Two steps refusing on one question, not two copies of the arithmetic.
+_SELF_UNTAP_ATTACKED_LAST_TURN = re.compile(
+    rf"^this {_SELF_NOUN} {re.escape(SELF_DOESNT_UNTAP_PHRASE)} "
+    r"if it attacked during your last turn$"
+)
+
+
+def self_untap_attacked_last_turn(line: str, card_name: str | None = None) -> bool:
+    """Whether *line* is the attack-conditioned form of the untap restriction.
+
+    Read by :func:`self_untap_line` — so the support gate admits the line — and
+    by ``engine/phases/untap_step.py``, so the step that keeps the permanent
+    tapped asks the same condition the gate claimed.
+    """
+    normalized = _collapse_self_name(line.strip().lower(), card_name).rstrip(".")
+    return _SELF_UNTAP_ATTACKED_LAST_TURN.match(normalized) is not None
+
+
 def self_untap_counter_condition(line: str, card_name: str | None = None) -> str | None:
     """The counter whose presence switches *line*'s untap restriction on, or
     None when the line states no such condition.
@@ -240,6 +267,7 @@ _SELF_UNTAP_LINE_PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
         "doesnt_untap",
     ),
     (_SELF_UNTAP_COUNTER_CONDITION, "doesnt_untap_with_counter"),
+    (_SELF_UNTAP_ATTACKED_LAST_TURN, "doesnt_untap_if_attacked_last_turn"),
     (
         re.compile(
             rf"^{re.escape(SELF_MAY_KEEP_TAPPED_PHRASE)} this {_SELF_NOUN} "

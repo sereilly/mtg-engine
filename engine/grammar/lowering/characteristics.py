@@ -304,8 +304,8 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         leftover = _restrictions_beyond(
             filt,
             frozenset({
-                "card_types", "colors", "controller", "attacking", "blocking",
-                "other_than_source",
+                "card_types", "colors", "excluded_colors", "controller",
+                "attacking", "blocking", "other_than_source",
             }),
         )
         if leftover:
@@ -315,6 +315,15 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         payload = {"power": power, "toughness": toughness}
         if filt.colors:
             payload["color"] = filt.colors[0]
+        # "**Nonwhite** creatures get -1/-1 until end of turn." (Holy Light.)
+        # The negative twin of the colour above, and it must be carried rather
+        # than dropped for the reason every refusal in this file names: an
+        # ignored exclusion is a strictly wider sweep than the card prints, and
+        # here it is the sweep that debuffs the caster's own white team. A
+        # colourless creature is nonwhite (CR 105.2c), which falls out of
+        # testing membership rather than absence.
+        if filt.excluded_colors:
+            payload["exclude_colors"] = list(filt.excluded_colors)
         payload["all"] = filt.controller != "you"
         # "**Other** creatures you control get +1/+0" (Bolt Hound). Dropped, the
         # Hound buffed itself as well: a strictly better card than the one

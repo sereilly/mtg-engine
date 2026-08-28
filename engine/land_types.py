@@ -209,11 +209,19 @@ class StaticLandTypeChange:
     """Lands of one type are another type while the source is on the battlefield.
 
     Both types are singular and lowercase, which is the form
-    ``_recalculate_derived_land_types`` compares against a land's type line.
+    ``_refresh_static_land_types`` compares against a land's type line.
+
+    ``from_type`` is None exactly when ``from_nonbasic`` is set: "**Nonbasic**
+    lands are Mountains" (Blood Moon) describes its subjects by a supertype
+    they lack rather than by a land type they have, so there is no word to put
+    there. The two are one field-pair rather than two tables because what
+    changes between Conversion and Blood Moon is *which lands*, and the change
+    itself — CR 305.7's replacement of every land type — is the same effect.
     """
 
-    from_type: str
+    from_type: str | None
     to_type: str
+    from_nonbasic: bool = False
 
 
 @lru_cache(maxsize=1)
@@ -245,6 +253,13 @@ def _land_subtype(word: str) -> str | None:
 # admits nothing after the second noun.
 _STATIC_TYPE_RE = re.compile(r"^all (?P<from>[a-z'-]+) are (?P<to>[a-z'-]+)$")
 
+#: "Nonbasic lands are Mountains." (Blood Moon.) The same replacement over a
+#: set named by a *missing supertype*, which no land-subtype word can express —
+#: so it is its own pattern and its own flag, rather than "nonbasic" being
+#: looked up in the land-type catalog, where it is absent and its absence would
+#: be indistinguishable from a typo.
+_STATIC_NONBASIC_RE = re.compile(r"^nonbasic lands are (?P<to>[a-z'-]+)$")
+
 
 def static_land_type_change_for(normalized_line: str) -> StaticLandTypeChange | None:
     """The static land-type change *normalized_line* imposes, or None.
@@ -252,7 +267,16 @@ def static_land_type_change_for(normalized_line: str) -> StaticLandTypeChange | 
     Takes an already-normalized line (``oracle.normalize_creature_line``), with
     or without its trailing period.
     """
-    match = _STATIC_TYPE_RE.match(normalized_line.strip().lower().rstrip("."))
+    line = normalized_line.strip().lower().rstrip(".")
+    nonbasic = _STATIC_NONBASIC_RE.match(line)
+    if nonbasic is not None:
+        to_type = _land_subtype(nonbasic.group("to"))
+        if to_type is None:
+            return None
+        return StaticLandTypeChange(
+            from_type=None, to_type=to_type, from_nonbasic=True
+        )
+    match = _STATIC_TYPE_RE.match(line)
     if match is None:
         return None
     from_type = _land_subtype(match.group("from"))
@@ -263,14 +287,47 @@ def static_land_type_change_for(normalized_line: str) -> StaticLandTypeChange | 
 
 
 def static_land_type_change_payload(change: StaticLandTypeChange) -> dict[str, object]:
-    """*change* as an ``OracleInstruction`` payload."""
-    return {"from_type": change.from_type, "to_type": change.to_type}
+    """*change* as an ``OracleInstruction`` payload.
+
+    ``from_nonbasic`` is emitted only when set, so every payload written before
+    this key existed is byte-identical.
+    """
+    payload: dict[str, object] = {"to_type": change.to_type}
+    if change.from_nonbasic:
+        payload["from_nonbasic"] = True
+    else:
+        payload["from_type"] = change.from_type
+    return payload
+
+
+def static_land_type_change_applies(payload: dict, permanent) -> bool:
+    """Whether the static change *payload* describes reaches *permanent*.
+
+    The one reader of what the payload's subject half means, so the derivation
+    and the refresh cannot disagree about which lands a source reaches. The
+    type line it asks is the **effective** one: layer 3 runs before layer 4, so
+    a land Magical Hack has rewritten into a Mountain is one of the "All
+    Mountains" Conversion means, and a supertype a text change removed really
+    is gone.
+    """
+    from .layer_bridge import printed_supertypes
+
+    type_line = permanent.effective_card.type_line
+    if payload.get("from_nonbasic"):
+        # CR 205.4a: "basic" is a supertype, and a land without it is nonbasic.
+        # Asked of the supertypes rather than by searching the line for the
+        # word, because "Snow Land — Forest" and a card *named* something with
+        # "basic" in it both answer that substring wrongly.
+        return "basic" not in printed_supertypes(type_line)
+    from_type = payload.get("from_type") or ""
+    return bool(from_type) and from_type in type_line.lower()
 
 
 __all__ = [
     "DERIVED_LAND_TYPES", "LAND_TYPE_EFFECTS", "MIRE_COUNTER",
     "STATIC_LAND_TYPE_KIND", "STATIC_SOURCE_TIMESTAMP", "StaticLandTypeChange",
     "add_derived_land_type", "change_land_type", "clear_derived_land_types",
-    "end_land_type_change", "land_type_changes", "static_land_type_change_for",
-    "static_land_type_change_payload", "static_source_timestamp",
+    "end_land_type_change", "land_type_changes", "static_land_type_change_applies",
+    "static_land_type_change_for", "static_land_type_change_payload",
+    "static_source_timestamp",
 ]

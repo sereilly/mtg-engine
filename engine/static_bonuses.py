@@ -294,6 +294,23 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
             perm.has_type("planeswalker") and perm.has_type(subtype)
             for perm in game.controlled_by(seat)
         )
+    if kind == "attached_matches":
+        # "As long as enchanted land is a basic Mountain, …" (Goblin Caves,
+        # Goblin Shrine.) The question is about the permanent the source is
+        # attached to, and it is asked through ``subject_matches`` — the one
+        # reader of what a printed noun phrase means — so the layers answer it:
+        # a land Conversion has turned into a Plains stops being a Mountain and
+        # the anthem switches off with nothing to undo, and a nonbasic land
+        # Blood Moon has made a Mountain is still not a *basic* one.
+        from .handlers._common import attached_host
+        from .subject_filters import subject_matches
+
+        host = attached_host(game, source)
+        if host is None:
+            return False
+        return subject_matches(
+            game, host, condition.get("filter") or {}, observer=seat, source=source
+        )
     if kind == "has_plus1_counter":
         return int(source.metadata.get("plus_counters", 0)) > 0
     if kind == "graveyard_size":

@@ -490,7 +490,33 @@ def aura_effect_claim(normalized_line: str, card_name: str = "") -> str | None:
     compiled_trigger = aura_compiled_trigger_claim(normalized_line, card_name)
     if compiled_trigger is not None:
         return compiled_trigger
+    anthem = aura_anthem_claim(normalized_line)
+    if anthem is not None:
+        return anthem
     return aura_continuous_claim(normalized_line)
+
+
+def aura_anthem_claim(normalized_line: str) -> str | None:
+    """Name the code behind a board-wide anthem printed on an Aura, or None.
+
+    "As long as enchanted land is a basic Mountain, Goblin creatures get +0/+2."
+    (Goblin Caves.) An Aura is a permanent, so a lord buff on one is applied by
+    ``_recalculate_lord_buffs`` exactly as a lord buff on a creature is — the
+    condition is what makes it about the enchanted permanent, and
+    ``engine/lord_buffs.py`` refuses a condition
+    ``conditional_static_holds`` cannot answer rather than dropping it.
+
+    Deliberately **not** in :func:`aura_continuous_claim`. That function tells
+    the grammar's parse claim "the engine already applies this line, do not
+    lower it"; here the opposite is true — the line has to lower, because the
+    ``lord_buff`` instruction is what the recompute reads. A claim in the wrong
+    one of the two would leave the Aura supported with no instruction behind it.
+    """
+    from .lord_buffs import lord_buff_for
+
+    if lord_buff_for(normalized_line) is None:
+        return None
+    return "board-wide anthem — lord_buffs, applied by _recalculate_lord_buffs"
 
 
 def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> str | None:
@@ -537,12 +563,23 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
             "the Aura's own enters trigger — "
             "stack/resolution._apply_self_enters_battlefield_triggers"
         )
+    from .handlers import EFFECT_HANDLERS
+
+    if cond == "leaves_battlefield" and kind in EFFECT_HANDLERS:
+        # "When this Aura leaves the battlefield, it deals 1 damage to each
+        # Goblin creature." (Goblin Shrine.) CR 603.6c's ability, announced from
+        # the one transition off the battlefield
+        # (``mixins/helpers.remove_all_from_battlefield``) rather than from the
+        # forty callers that move a permanent — which is why the claim can be
+        # made for any Aura, not just one whose host was destroyed.
+        return (
+            "the Aura's own leaves-the-battlefield trigger (CR 603.6c) — "
+            "mixins/helpers.remove_all_from_battlefield"
+        )
     from .phases.upkeep_effects import UPKEEP_EFFECTS
 
     if (cond, kind) in UPKEEP_EFFECTS:
         return f"registered upkeep pair ({cond}, {kind}) — phases/upkeep_effects.py"
-    from .handlers import EFFECT_HANDLERS
-
     if cond in ("upkeep_self", "upkeep_each") and kind in EFFECT_HANDLERS:
         return "ordinary upkeep trigger (CR 603.3) — phases/upkeep_step.py"
     return None
@@ -1143,6 +1180,24 @@ _COUNTER_UNTAP_CONDITIONS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 
+#: "Enchanted creature doesn't untap during its controller's untap step **if it
+#: attacked during its controller's last turn**." (Tangle Kelp.) The same
+#: sentence Goblin Rock Sled prints about *itself*, which is idiom 14 exactly:
+#: one question, asked with the subject rewritten. The answer is
+#: ``turn_state.attacked_during_seats_last_turn`` for both, so the Aura cannot
+#: drift from the creature that prints it — and neither can drift from the
+#: declare-attackers step, which refuses Giant Turtle's attack on the same read.
+_ATTACHED_UNTAP_ATTACKED_LAST_TURN = re.compile(
+    rf"^{_ATTACHED} {_NOUN} doesn't untap during its controller's untap step "
+    r"if it attacked during its controller's last turn$"
+)
+
+
+def aura_attacked_untap_condition(line: str) -> bool:
+    """Whether *line* is the attack-conditioned "doesn't untap" Aura clause."""
+    return _ATTACHED_UNTAP_ATTACKED_LAST_TURN.match(_line_text(line)) is not None
+
+
 def aura_counter_untap_condition(line: str) -> tuple[str, str] | None:
     """``(counter kind, holder)`` for a counter-conditioned untap line, or None.
 
@@ -1312,14 +1367,23 @@ def cant_be_enchanted_by_own_text(permanent) -> bool:
     return any(self_cant_be_enchanted_line(line) for line in text.splitlines())
 
 
-def aura_restriction_active(permanent, name: str) -> bool:
+def aura_restriction_active(
+    permanent, name: str, *, game=None, seat: int | None = None
+) -> bool:
     """Whether any Aura attached to *permanent* imposes restriction *name*.
 
     This is the whole of "does the restriction apply": when the Aura leaves it
     stops being attached, so it stops being asked. Nothing is stamped and
     nothing has to be cleaned up.
+
+    *game* and *seat* are what the conditional ``doesnt_untap`` rows need: one
+    of them reads the permanent's attack record against a seat's turn ordinal,
+    which is not readable off the permanent alone. A caller that cannot supply
+    them gets the unconditional rows only — the untap step, the one place the
+    restriction is enforced, supplies both.
     """
     from .named_counters import counters_on
+    from .turn_state import attacked_during_seats_last_turn
 
     for aura in auras_attached_to(permanent):
         text = aura.effective_card.oracle_text
@@ -1327,16 +1391,24 @@ def aura_restriction_active(permanent, name: str) -> bool:
             return True
         if name != "doesnt_untap":
             continue
-        # The counter-conditioned rows: the restriction is active exactly while
-        # the counter is present, read at ask time — so when the last counter
-        # leaves, nothing has to be cleared for the creature to untap again.
+        # The conditioned rows: the restriction is active exactly while the
+        # condition holds, read at ask time — so when the last counter leaves,
+        # or the creature sits out a turn, nothing has to be cleared for it to
+        # untap again.
         for raw_line in (text or "").splitlines():
             found = aura_counter_untap_condition(raw_line)
-            if found is None:
+            if found is not None:
+                kind, holder = found
+                holder_obj = permanent if holder == "attached" else aura
+                if counters_on(holder_obj, kind) > 0:
+                    return True
                 continue
-            kind, holder = found
-            holder_obj = permanent if holder == "attached" else aura
-            if counters_on(holder_obj, kind) > 0:
+            if (
+                aura_attacked_untap_condition(raw_line)
+                and game is not None
+                and seat is not None
+                and attacked_during_seats_last_turn(game, permanent, seat)
+            ):
                 return True
     return False
 
@@ -1546,6 +1618,8 @@ def aura_continuous_claim(line: str) -> str | None:
         return "combat/untap restriction — auras.aura_restriction_active"
     if aura_counter_untap_condition(normalized) is not None:
         return "counter-conditioned untap restriction — auras.aura_restriction_active"
+    if aura_attacked_untap_condition(normalized):
+        return "attack-conditioned untap restriction — auras.aura_restriction_active"
     if aura_combat_restriction(normalized) is not None:
         return "attached combat restriction — auras.attached_combat_restrictions"
     if aura_ability_target_immunity(normalized) is not None:

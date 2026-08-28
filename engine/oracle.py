@@ -705,6 +705,18 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"when a spell or ability an opponent controls causes you to discard this card"),
     ("no_islands",                  r"when you control no islands"),
     ("no_lands",                    r"when you control no lands"),
+    # "When you control a Dwarf, sacrifice this creature." (Goblins of the
+    # Flarg.) A state trigger (CR 603.8) like the two above, and the *positive*
+    # one: those fire while a described set is empty, this while it is not.
+    # Ordered after them because "no islands" is not an `an? ` phrase and so
+    # cannot reach this row — the ordering is the specific-before-generic rule
+    # holding even where the two cannot currently collide.
+    #
+    # The noun phrase is delimited, not described: the group is read by the noun
+    # parser and refused if `subject_matches` cannot test it, so a card printing
+    # any other tribe is the same trigger with different payload.
+    ("controls_matching_permanent",
+     r"when you control (?P<controlled_subject>an? [^,]+)"),
 )
 
 # "at the beginning of" triggers

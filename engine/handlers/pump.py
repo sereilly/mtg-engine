@@ -305,6 +305,7 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     color_sym = instruction.payload.get("color")
     power_delta = int(instruction.payload.get("power", 0))
     toughness_delta = int(instruction.payload.get("toughness", 0))
+    exclude_colors = set(instruction.payload.get("exclude_colors") or ())
     attacking_only = bool(instruction.payload.get("attacking_only"))
     blocking_only = bool(instruction.payload.get("blocking_only"))
     # "**Other** creatures you control" (Bolt Hound) — CR 109.5's exclusion of
@@ -337,6 +338,13 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
             # override this used to patch on by hand, so the two-line
             # reimplementation below it was a second copy of one rule.
             if color_sym and color_sym not in perm.effective_colors:
+                continue
+            # "Nonwhite creatures get -1/-1 until end of turn." (Holy Light.)
+            # Layer 5 again, in the other direction: a creature *made* white
+            # escapes the debuff and a white creature made blue is caught, and
+            # a colourless creature is nonwhite because it is in no colour's
+            # set (CR 105.2c).
+            if exclude_colors and (exclude_colors & set(perm.effective_colors)):
                 continue
             apply_temp_pt_boost(perm, power_delta, toughness_delta)
     game.log.append(f"{card.name} buffed matching creatures")
