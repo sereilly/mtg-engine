@@ -33,12 +33,14 @@ A rise means the pool got more expensive per card. The ceilings live in
 fails when one is exceeded; raise them with `--accept` after deciding the rise
 was worth it.
 
-**A new set will move the ALL row and that is the point.** The four base sets in
-the pool are near-identical reprint lists, so their rows are one data point
-wearing four hats; ARN is the only independent one, and it sits at more than
-twice their rate. Whether that is early-Magic weirdness or the real rate is a
-question only ingesting a modern, heavily-templated set answers — and this
-report is the instrument that reads the answer.
+**A new set will move the ALL row — unless it is a reprint set, and that
+distinction is the point.** The five base sets in the pool (LEA, LEB, 2ED, 3ED,
+4ED) are near-identical reprint lists, so their rows are one data point wearing
+five hats; ARN is the only early independent one, and it sits at more than twice
+their rate. Because the ALL row is **deduped by card**, a set that adds no new
+card cannot move it: promoting 4ED added a 368-card row at 8.2% and left ALL at
+6.4% exactly. That is the row doing its job, and it is the difference from
+`GRAMMAR_COVERAGE.md`, whose All row is printing-weighted and did move.
 
 Registries are discovered by introspection rather than listed here, so a new
 name-keyed registry is measured the day it is added instead of the day someone
@@ -418,10 +420,10 @@ def render(
         add("")
     add(
         "**Read the rows, not the average.** The base sets are near-identical "
-        "reprint lists, so four of these rows are one data point wearing four "
-        "hats — and the ALL row, deduped across reprints, is dominated by it. "
-        "The independent comparison is between that block and the sets printed "
-        "to a different brief."
+        "reprint lists, so five of these rows (LEA, LEB, 2ED, 3ED, 4ED) are one "
+        "data point wearing five hats — and the ALL row, deduped across "
+        "reprints, is dominated by it. The independent comparison is between "
+        "that block and the sets printed to a different brief."
     )
     add("")
 

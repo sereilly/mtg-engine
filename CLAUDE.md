@@ -9,8 +9,12 @@ FastAPI web app with a browser game UI. The card pool lives in `cards/` as one
 JSON per set, registered in `cards/manifest.json` (the single source of truth
 for which sets ship): Limited Edition Alpha (290 cards), Limited Edition Beta
 (292), Unlimited Edition (292 — same list as Beta), Arabian Nights (78),
-Antiquities (85), Revised Edition (296), Legends (310), The Dark (119) and
-Core Set 2021 (285), 1,162 unique cards, all classified as supported. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
+Antiquities (85), Revised Edition (296), Legends (310), The Dark (119),
+Fourth Edition (368) and Core Set 2021 (285), 1,162 unique cards, all
+classified as supported. **Ten sets, and the unique count did not move when the
+tenth arrived**: 4ED is a pure reprint set, every one of its cards already in
+the pool, so it is the one set that ships without implementing a card. Which
+is why the per-set totals sum to far more than 1,162 — they are printings. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
 the engine and web layer read; `scripts/ingest_set.py` produces them. The
 engine is **registry-based**: card support grows by adding small isolated
 entries, never by editing core control flow.
@@ -22,13 +26,18 @@ fail if one of them is unsupported. `measured` is a set ingested so its numbers
 can be read *before* the work of supporting it is done: the coverage instruments
 load it (`manifest_set_paths(include_measured=True)`), `load_catalog` does not,
 and no player can put one of its cards in a deck. **It is empty today** — M21
-went in under it at 58% supported, Antiquities at 56.5%, Legends at 32.9% and
-The Dark at 47.9%, and all four were promoted to `sets` once every card was,
-which is the role working as designed rather than a role nobody uses. The next
-ingested set goes there first.
+went in under it at 58% supported, Antiquities at 56.5%, Legends at 32.9%, The
+Dark at 47.9% and Fourth Edition at 100%, and all five were promoted to `sets`
+once every card was, which is the role working as designed rather than a role
+nobody uses. 4ED is the degenerate case that shows what the role is *for*
+rather than an exception to it: it entered `measured` fully supported and left
+the same day, and the ingest still paid — a guard proved itself unable to tell
+the roles apart for an all-reprint set, which is a finding only the measured
+step could surface. The next ingested set goes there first.
 
 **The manifest is printing-ordered, and the order is load-bearing.** Antiquities
-went in at index 4, Legends at index 6 and The Dark at index 7, each *between*
+went in at index 4, Legends at index 6, The Dark at index 7 and Fourth Edition
+at index 8, each *between*
 the sets it was printed between rather than being appended — `CardDefinition.original_printing` is the first entry in
 `printings`, so appending would have left the 19 cards Antiquities shares with
 Revised reading `3ed`, and Golgothian Sylex ("each nontoken permanent with a
@@ -36,6 +45,15 @@ name originally printed in the Antiquities expansion") would have missed every
 one of them. `test_appending_a_set_never_changes_an_existing_original_printing`
 compares prefixes of the ordering, so inserting is legal and reordering what is
 already there is not.
+
+**That prefix guard is silent for a reprint set, so the order is also asserted
+directly.** It checks the *consequence* — no card's origin moves — and a set
+whose every card already has an earlier printing cannot become anyone's origin
+from any position. Verified at the 4ED promotion by appending it after M21: the
+whole suite stayed green with the set four places out of order.
+`test_manifest_roles.test_the_shipped_sets_are_in_printing_order` compares the
+`released` dates the entries already carry, which is the invariant itself
+rather than a second list to maintain.
 
 **A measured set is nameable by the reporting scripts** — `--set <CODE>` works,
 and the label says "measured, not shipped" so its numbers can't be read as
@@ -763,7 +781,10 @@ manually validated in-game (roughly 443 of the 1,162 catalog cards passing —
 rest — almost all of M21, Antiquities, Legends and The Dark, all four promoted
 before their in-game pass — have no recorded result yet, which SET_PLAYBOOK.md Phase 5
 owns and deliberately does not gate promotion on; the summary at the top of the
-markdown is the current number). A card can also be recorded **failing**: that
+markdown is the current number). Fourth Edition is the one promotion that did
+not add to that backlog, because it added no card to verify — the tracker is
+keyed to the deduped catalog, so a reprint set inherits every result its cards
+already have. A card can also be recorded **failing**: that
 is an in-game bug report with a card name on it, and it stays in the tracker
 until the card is fixed and re-checked. **Generated automatically** — results
 are edited via the in-game Debug Menu, not by hand.

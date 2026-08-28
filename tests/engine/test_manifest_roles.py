@@ -36,6 +36,7 @@ from engine.card_loader import (
     manifest_measured_sets,
     manifest_set_codes,
     manifest_set_paths,
+    manifest_sets,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -121,3 +122,27 @@ def test_shipped_sets_are_still_the_default_everywhere():
     """`include_measured` is keyword-only and defaults off. Positional callers
     (there are several, passing a manifest path) must be unaffected."""
     assert manifest_set_paths(MANIFEST_PATH) == manifest_set_paths()
+
+
+def test_the_shipped_sets_are_in_printing_order():
+    """CLAUDE.md calls the manifest's order load-bearing, and until 4ED nothing
+    asserted it. What existed was
+    `test_card_format.test_appending_a_set_never_changes_an_existing_original_printing`,
+    which checks the *consequence* — no card's origin moves — and that guard is
+    structurally silent for a set whose every card already has an earlier
+    printing. Probed at the 4ED promotion by appending it after M21: the whole
+    suite stayed green with the set four positions out of place.
+
+    A reprint set is exactly where the consequence cannot bite and the
+    convention still has to hold, because the next set inserted near it is not
+    necessarily a reprint set. So assert the order itself, which is one
+    comparison over data the entries already carry rather than a second list
+    someone has to maintain."""
+    entries = manifest_sets()
+    dates = [(entry["code"], entry["released"]) for entry in entries]
+    assert dates == sorted(dates, key=lambda pair: pair[1]), (
+        f"cards/manifest.json is not in printing order: {dates}. Insert a set "
+        "between the sets it was printed between — appending it makes "
+        "CardDefinition.original_printing wrong for every card it shares with "
+        "a set already present."
+    )

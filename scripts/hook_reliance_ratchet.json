@@ -10,6 +10,11 @@
       "hooked_cards_pct_of_supported": 13.2,
       "hooked_lines_pct_of_supported": 9.5
     },
+    "4ED": {
+      "entries_per_100_supported_cards": 8.7,
+      "hooked_cards_pct_of_supported": 8.2,
+      "hooked_lines_pct_of_supported": 5.6
+    },
     "ALL": {
       "entries_per_100_supported_cards": 6.9,
       "hooked_cards_pct_of_supported": 6.4,

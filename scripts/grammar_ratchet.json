@@ -10,10 +10,15 @@
       "lowered_pct": 82.3,
       "parsed_pct": 84.1
     },
+    "4ED": {
+      "executed_pct": 52.1,
+      "lowered_pct": 88.3,
+      "parsed_pct": 88.7
+    },
     "ALL": {
       "executed_pct": 52.3,
-      "lowered_pct": 83.9,
-      "parsed_pct": 85.2
+      "lowered_pct": 84.6,
+      "parsed_pct": 85.7
     },
     "ARN": {
       "executed_pct": 49.1,
