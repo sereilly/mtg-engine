@@ -786,6 +786,20 @@ class StackResolutionMixin:
                 caster_index, permanent, target_player_index,
                 was_cast=True, from_zone=cast_from_zone,
             )
+            # CR 614: an entry replacement may have consumed the event, and then
+            # the permanent is on no battlefield at all - Frankenstein's Monster
+            # cast for an X its graveyard cannot pay goes to its owner's
+            # graveyard "instead of onto the battlefield".
+            #
+            # Everything below this line is something that watches a permanent
+            # *enter*: the log line, the global buff, the enters-the-battlefield
+            # trigger, the Aura's attach. Running any of them for an entry that
+            # did not happen is the "when it enters, do X instead" reading that
+            # engine/replacements.py exists to avoid, one layer up from the
+            # interceptor - and the log line saying the permanent was put onto
+            # the battlefield is the same claim in the one place a player reads.
+            if not self.is_on_battlefield(permanent):
+                return
             self.log.append(f"{caster.name} put {card.name} onto battlefield")
             self._apply_global_buff(caster, card)
             is_aura = "Aura" in card.type_line

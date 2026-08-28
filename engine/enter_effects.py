@@ -245,6 +245,164 @@ def pay_any_life_on_enter(line: str, card_name: str | None = None) -> dict | Non
     return {"battlefield": described_board, "graveyard": described_pile}
 
 
+#: "As this creature enters, exile X creature cards from your graveyard. If you
+#: can't, put this creature into its owner's graveyard instead of onto the
+#: battlefield. For each creature card exiled this way, this creature enters
+#: with a +2/+0, +1/+1, or +0/+2 counter on it." (Frankenstein's Monster.)
+#:
+#: Three printed sentences and one CR 614.1c replacement: an entry cost, what
+#: happens when it cannot be paid, and the entry state the payment buys. They
+#: are one pattern because they are one effect - a claim stopping at the first
+#: sentence would admit a card whose "if you can't" nothing performs, which is
+#: the rider-claimed-and-not-executed shape ``REPLACEMENT_LINES`` documents.
+#:
+#: Every parameter is a capture: how many cards, what kind of card, and which
+#: counters are offered. The count is ``x`` here and a printed number would read
+#: the same way; the noun phrase goes through the same parser every other
+#: printed phrase in the engine goes through; and the counters are checked
+#: against ``pt.pt_counter_deltas``, so a counter kind the engine cannot place
+#: refuses the whole line rather than entering the creature one counter short.
+#:
+#: Anchored on the whole line, and the back-reference is checked rather than
+#: assumed: "for each **creature card** exiled this way" must describe the same
+#: cards the first sentence exiles, because a card printing a different noun
+#: there is a card this rule has not read.
+EXILE_CARDS_ON_ENTER = re.compile(
+    r"^as this (?P<self>[a-z]+) enters, exile (?P<count>x|[a-z0-9]+) "
+    r"(?P<phrase>.+?) from your graveyard\. if you can't, put this (?P=self) "
+    r"into its owner's graveyard instead of onto the battlefield\. for each "
+    r"(?P<each>.+?) exiled this way, this (?P=self) enters with "
+    r"(?P<counters>.+?) counters? on it$"
+)
+
+#: How the counter alternatives are written: "a +2/+0, +1/+1, or +0/+2 counter".
+_COUNTER_SPLIT = re.compile(r",\s*or\s+|,\s*|\s+or\s+")
+
+
+def _counter_options(text: str) -> tuple[str, ...] | None:
+    """The P/T counter kinds *text* offers, in printed order, or None if any is
+    one the engine cannot place.
+
+    Read through :func:`engine.pt.pt_counter_deltas` rather than a list of the
+    kinds the pool happens to print - that function derives what a counter does
+    from its *name* (CR 122.1a), so "+2/+0" and "+0/+2" cost nothing here. A
+    kind it cannot read refuses the whole line, for the reason every other
+    reader in this file refuses: a creature entering with two of the three
+    counters its card prints is a strictly smaller card, silently.
+
+    A single kind is a list of one. The sentence reads the same with one
+    alternative as with three, so a trivial choice is the caller's business and
+    not a second pattern.
+    """
+    from .pt import pt_counter_deltas
+
+    body = re.sub(r"^an?\s+", "", text.strip())
+    options = tuple(part.strip() for part in _COUNTER_SPLIT.split(body) if part.strip())
+    if not options:
+        return None
+    if any(pt_counter_deltas(option) is None for option in options):
+        return None
+    return options
+
+
+def exile_cards_on_enter(line: str, card_name: str | None = None) -> dict | None:
+    """What the entering permanent must exile, and what each exile buys it.
+
+    ``{"count": "x" | int, "filter": <card filter payload>, "counters":
+    (kind, ...)}``, or None when the line is not this template.
+
+    Three readers, one string: the support gate (through
+    :func:`enter_effect_line`), the entry state that arms the choice, and the
+    CR 614 interceptor in ``engine/replacements.py`` that performs the "if you
+    can't" sentence. ``"x"`` is returned as itself rather than resolved here
+    because the value is announced on the *spell* (CR 601.2b) and this function
+    is handed a line, not a permanent.
+
+    A phrase the noun parser refuses, one carrying a narrowing the card matcher
+    cannot test, or a back-reference describing different cards refuses the
+    whole line - the picker lists one player's graveyard with no observer and no
+    source behind it, so a restriction the matcher cannot answer would be
+    quietly ignored and the player offered cards the sentence does not name.
+    """
+    from .grammar.lowering._common import dropped_narrowings
+    from .grammar.phrases import parse_subject_filter
+    from .grammar.vocabulary import NUMBER_WORDS
+    from .subject_filters import card_only_filter
+
+    match = EXILE_CARDS_ON_ENTER.match(_self_normalized(line, card_name))
+    if match is None:
+        return None
+    printed = match.group("count")
+    if printed == "x":
+        count: str | int = "x"
+    elif printed.isdigit():
+        count = int(printed)
+    else:
+        known = NUMBER_WORDS.get(printed)
+        # A number word the table does not know refuses the line rather than
+        # defaulting to one, for the reason `enters_with_pt_counters` gives.
+        if known is None:
+            return None
+        count = known
+    # ``plural=True`` for both halves: the first phrase is *counted* ("X
+    # creature cards") and the second names one of the same pile, which is the
+    # position that flag documents.
+    described = parse_subject_filter(match.group("phrase"), plural=True)
+    each = parse_subject_filter(match.group("each"), plural=True)
+    if described is None or each is None:
+        return None
+    if described.zone != "battlefield" or not described.is_card:
+        # "creature **cards**" prints no zone of its own - "from your graveyard"
+        # is the sentence's, and it is what this reader supplies. A phrase that
+        # named a zone itself would be one this rule has not read.
+        return None
+    payload = described.to_payload()
+    # A narrowing with no payload form leaves no key behind, so the card-only
+    # check below cannot see it go missing.
+    if dropped_narrowings(described, payload):
+        return None
+    if each.to_payload() != payload:
+        return None
+    counters = _counter_options(match.group("counters"))
+    if counters is None:
+        return None
+    described_cards = card_only_filter(payload)
+    if described_cards is None:
+        return None
+    return {"count": count, "filter": described_cards, "counters": counters}
+
+
+def entry_exile_requirement(card, x_value: int | None = None) -> dict | None:
+    """The entry exile *card*'s own lines demand, with the announced X folded in.
+
+    ``{"count": int, "filter": ..., "counters": ...}``, or None for a card that
+    prints no such line.
+
+    Two readers need the same answer about the same permanent - the CR 614
+    interceptor in ``engine/replacements.py`` that performs "if you can't", and
+    the entry state that performs the exile - and the count is the one part of
+    the answer that is not on the printed line: ``X`` is the value announced
+    when the spell was cast (CR 601.2b), read off the permanent. One function so
+    the two cannot disagree about how many cards are owed, which would be a
+    creature that entered when the card says it could not.
+
+    Through :func:`engine.oracle.expand_card_lines` rather than a split of
+    ``oracle_text``, for the reason that function documents: a reader that
+    splits the raw text is reading a different card from the gate above it.
+    """
+    from .oracle import expand_card_lines
+
+    for line in expand_card_lines(card):
+        spec = exile_cards_on_enter(line, card.name)
+        if spec is None:
+            continue
+        count = spec["count"]
+        if count == "x":
+            count = int(x_value or 0)
+        return {**spec, "count": max(0, int(count))}
+    return None
+
+
 #: "As this creature enters, choose a number between 0 and 7." (Shapeshifter.)
 #: The bounds are data, like every other parameter in this file: a card printed
 #: "between 1 and 5" is the same choice. Matched by shape rather than listed as
@@ -413,6 +571,14 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "sacrifices any number as it enters"
     if pay_any_life_on_enter(normalized) is not None:
         return "pays any amount of life as it enters"
+    # The three-sentence entry cost (Frankenstein's Monster). Claimed here
+    # because all three sentences are one CR 614.1c replacement: the exile and
+    # the counters are performed by the entry state, and the "if you can't"
+    # half by the interceptor in engine/replacements.py, which self-selects off
+    # this same reader. One string, three readers, so what is claimed and what
+    # is carried out cannot describe different cards.
+    if exile_cards_on_enter(normalized) is not None:
+        return "exiles cards from your graveyard as it enters"
     return None
 
 
@@ -429,6 +595,9 @@ __all__ = [
     "enters_with_pt_counters",
     "enters_with_named_counter",
     "ENTERS_WITH_X_PLUS_1_1_COUNTERS",
+    "EXILE_CARDS_ON_ENTER",
+    "exile_cards_on_enter",
+    "entry_exile_requirement",
     "LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER",
     "NO_MAXIMUM_HAND_SIZE",
     "PAY_ANY_LIFE_ON_ENTER",

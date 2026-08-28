@@ -4259,6 +4259,24 @@ register_choice(
 )
 
 register_choice(
+    "entry_exile",
+    resolve=lambda game, choice, r: game._resolve_entry_exile(choice, r.get("picks")),
+    default=lambda game, choice: game._default_entry_exile(choice),
+    action="entry_exile_confirm",
+    prompt_key="entry_exile",
+    blocked_detail="exile the entering permanent's cards before other actions",
+    # The resolution that armed this has to finish, so a non-interactive seat
+    # never queues it: the stated default is taken where the entry stands, which
+    # is also what keeps AI and headless play from waiting on a prompt nobody
+    # will answer.
+    default_at_arm=True,
+    # A graveyard is a public zone (CR 400.2), so there is nothing here a
+    # seatless viewer may not already see - unlike `put_from_hand_choice` and
+    # `choose_cards_in_hand`, whose candidates would publish a hand.
+    spectator_visible=True,
+)
+
+register_choice(
     "body_choice",
     resolve=lambda game, choice, r: game._resolve_body_choice(choice, r["option_index"]),
     # Primal Clay's first printed body is applied as it enters, so the default

@@ -1104,7 +1104,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2352,6 +2352,19 @@ function getBodyChoiceInfo(state = currentState) {
   return info;
 }
 
+// Frankenstein's Monster: "As this creature enters, exile X creature cards from
+// your graveyard ... For each creature card exiled this way, this creature
+// enters with a +2/+0, +1/+1, or +0/+2 counter on it." One prompt because it is
+// one decision: the cards and the counter each one buys are chosen together as
+// the permanent enters (CR 614.1c).
+function getEntryExileInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.entry_exile;
+  if (!info || info.caster_seat !== seat) return null;
+  if (!Array.isArray(info.legal_indices) || info.legal_indices.length === 0) return null;
+  return info;
+}
+
 // Drop of Honey: the tie-break choice among creatures tied for least power.
 function getLeastPowerChoiceInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -3148,6 +3161,7 @@ function isAnyPromptActive(state = currentState) {
   if (getEffectOrderInfo(state)) return true;
   if (getLandTypeChoiceInfo(state)) return true;
   if (getBodyChoiceInfo(state)) return true;
+  if (getEntryExileInfo(state)) return true;
   if (getPlayerChoiceInfo(state) || getCastChoiceInfo(state)) return true;
   if (getManaPaymentInfo(state)) return true;
   if (getBandBlockerInfo(state)) return true;
@@ -3173,7 +3187,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -5186,6 +5200,12 @@ function applyFaceDownCastPrompt(info) {
 // refuses a decline a mandatory pick never offered.
 let chooseCardsInHandSelected = [];
 
+// Frankenstein's Monster's entry exile: the graveyard slots chosen so far, each
+// with the counter it buys. Paired rather than kept in two lists because the
+// answer the server takes is pairs -- a card whose counter went missing would
+// be an exile that bought nothing.
+let entryExileSelected = [];
+
 // Sylvan Library: "choose two cards in your hand drawn this turn". The hand
 // slots offered come from the engine's own candidate rule, and Confirm is
 // enabled only at exactly the number owed — the engine refuses anything else,
@@ -5242,6 +5262,109 @@ function applyChooseCardsInHandPrompt(info) {
     const picks = [...chooseCardsInHandSelected];
     chooseCardsInHandSelected = [];
     await sendAction({ seat, action: "choose_cards_in_hand_confirm", hand_indices: picks });
+  });
+}
+
+function applyEntryExilePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const legal = new Set(info.legal_indices);
+  const counters = Array.isArray(info.counters) ? info.counters : [];
+  entryExileSelected = entryExileSelected.filter((pick) => legal.has(pick.index));
+  const wanted = Number(info.count) || 0;
+  const cards = Array.isArray(info.cards) ? info.cards : [];
+  const nameAt = (index) => (cards[index] && cards[index].name) || `card ${index}`;
+
+  title.textContent = `${info.card_name} - exile from your graveyard`;
+  body.textContent =
+    `Exile ${wanted} card${wanted === 1 ? "" : "s"} from your graveyard` +
+    (counters.length > 1 ? ", and choose the counter each one places." : ".");
+
+  const cardButtons = info.legal_indices
+    .map((index) => {
+      const chosen = entryExileSelected.some((pick) => pick.index === index);
+      return (
+        `<button type="button" class="prompt-choice-btn${chosen ? " selected" : ""}"` +
+        ` data-entry-exile-index="${index}">${escapeHtml(nameAt(index))}</button>`
+      );
+    })
+    .join("");
+
+  // One counter row per chosen card, in the order they were chosen -- the card
+  // is named on the row so a player picking three counters can see which pick
+  // each one belongs to.
+  const counterRows =
+    counters.length > 1
+      ? entryExileSelected
+          .map((pick) => {
+            const options = counters
+              .map(
+                (kind) =>
+                  `<button type="button" class="prompt-choice-btn` +
+                  `${pick.counter === kind ? " selected" : ""}"` +
+                  ` data-entry-exile-counter="${escapeHtml(kind)}"` +
+                  ` data-entry-exile-for="${pick.index}">${escapeHtml(kind)}</button>`
+              )
+              .join("");
+            return (
+              `<div class="prompt-choice-row"><span>${escapeHtml(nameAt(pick.index))}:</span>` +
+              `${options}</div>`
+            );
+          })
+          .join("")
+      : "";
+
+  const ready =
+    entryExileSelected.length === wanted &&
+    (counters.length === 0 || entryExileSelected.every((pick) => pick.counter));
+  steps.innerHTML =
+    `<div class="prompt-choice-column">${cardButtons}</div>` +
+    counterRows +
+    `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn"` +
+    `${ready ? "" : " disabled"} data-entry-exile-confirm="1">` +
+    `Confirm (${entryExileSelected.length}/${wanted})</button></div>`;
+
+  steps.querySelectorAll("[data-entry-exile-index]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const index = Number(btn.dataset.entryExileIndex);
+      entryExileSelected = entryExileSelected.some((pick) => pick.index === index)
+        ? entryExileSelected.filter((pick) => pick.index !== index)
+        : [...entryExileSelected, { index, counter: counters.length === 1 ? counters[0] : null }];
+      applyEntryExilePrompt(info);
+    });
+  });
+  steps.querySelectorAll("[data-entry-exile-counter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const index = Number(btn.dataset.entryExileFor);
+      const kind = btn.dataset.entryExileCounter;
+      entryExileSelected = entryExileSelected.map((pick) =>
+        pick.index === index ? { index, counter: kind } : pick
+      );
+      applyEntryExilePrompt(info);
+    });
+  });
+  steps.querySelector("[data-entry-exile-confirm]")?.addEventListener("click", async () => {
+    if (!ready) return;
+    const picks = entryExileSelected.map((pick) => ({
+      index: pick.index,
+      counter: pick.counter,
+    }));
+    entryExileSelected = [];
+    await sendAction({ seat, action: "entry_exile_confirm", entry_exile_picks: picks });
   });
 }
 
@@ -6934,6 +7057,12 @@ function renderActivationPrompt() {
   const bodyChoiceInfo = getBodyChoiceInfo();
   if (bodyChoiceInfo) {
     applyBodyChoicePrompt(bodyChoiceInfo);
+    return;
+  }
+
+  const entryExileInfo = getEntryExileInfo();
+  if (entryExileInfo) {
+    applyEntryExilePrompt(entryExileInfo);
     return;
   }
 
