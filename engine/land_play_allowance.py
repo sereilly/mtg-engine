@@ -59,6 +59,19 @@ class LandPlayAllowance:
 
 _ANY_NUMBER = re.compile(r"^you may play any number of lands on each of your turns$")
 
+# The other direction: no land plays at all (Worms of the Earth). CR 305.1's
+# permission withdrawn rather than a count granted, so it is its own predicate
+# and its own name — the allowance dataclass counts *extra* plays and has no
+# value meaning "none", and inventing one would make every reader of `extra`
+# have to remember a special case.
+#
+# Deliberately **not** the same rule as "lands can't enter the battlefield" on
+# the same card: that one is CR 614.17 and lives in `engine/replacements.py`,
+# because it is about a land arriving from anywhere rather than about the action
+# of playing one. A card printing only this line still lets a reanimated land
+# through, which is what it says.
+_NO_LAND_PLAYS = re.compile(r"^players can't play lands$")
+
 _ADDITIONAL = re.compile(
     rf"^you may play (?:an|(?P<count>{_COUNT_WORD})) additional lands? "
     r"on each of your turns$"
@@ -84,9 +97,32 @@ def land_play_line(normalized_line: str) -> str | None:
     line = normalized_line.strip().lower().rstrip(".")
     if _ANY_NUMBER.match(line) or _ADDITIONAL.match(line):
         return "allowance"
+    if _NO_LAND_PLAYS.match(line):
+        return "prohibition"
     if _DAMAGE_RIDER.match(line):
         return "damage_rider"
     return None
+
+
+@lru_cache(maxsize=None)
+def lands_cannot_be_played(oracle_text: str) -> bool:
+    """Whether *oracle_text* withdraws CR 305.1's permission to play a land.
+
+    Read by ``Game._may_play_another_land``, which is the one question every
+    land-drop gate asks — cast validation, the AI's land policy and the web
+    layer's playable list — so a prohibition cannot be enforced in one of them
+    and not the others. The **support gate reads this same table**
+    (``land_play_line`` above), which is what stops a card being admitted with
+    its prohibition unenforced: an unenforced "can't" is silent and wrong in the
+    player's favour.
+    """
+    lowered = oracle_text.lower()
+    if "play lands" not in lowered:
+        return False
+    return any(
+        _NO_LAND_PLAYS.match(raw_line.strip().rstrip("."))
+        for raw_line in lowered.splitlines()
+    )
 
 
 @lru_cache(maxsize=None)
@@ -131,4 +167,5 @@ __all__ = [
     "LandPlayAllowance",
     "land_play_allowance_for",
     "land_play_line",
+    "lands_cannot_be_played",
 ]

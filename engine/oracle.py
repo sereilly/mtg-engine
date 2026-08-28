@@ -2577,7 +2577,7 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # creature still refuses rather than compiling with the damage absent.
     from .land_play_allowance import land_play_line
 
-    if land_play_line(normalized) == "allowance":
+    if land_play_line(normalized) in ("allowance", "prohibition"):
         return True
     # "As this creature enters, it becomes your choice of <body>, …"
     # (Primal Clay). Carried out by _initialize_permanent_state, which reads the

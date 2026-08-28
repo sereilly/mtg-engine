@@ -175,6 +175,11 @@ DRAW_LOOKING_AT_TOP = 20  # Aladdin's Lamp
 DRAW_DISCARD_INSTEAD = 30  # Chains of Mephistopheles
 EXTRA_PLUS1_COUNTER = 10  # Conclave Mentor
 EXILE_INSTEAD_OF_ENTERING = 10  # Containment Priest
+# Before it, and before every other entry replacement. CR 614.17c: an event that
+# **can't** happen may only be replaced by a self-replacement effect, so nothing
+# else in the contention set is allowed to modify it — being asked first is how
+# a prohibition that is not itself a replacement effect keeps that promise here.
+LANDS_CANT_ENTER = 0  # Worms of the Earth
 # After it, and it has to be: the exile replacement means the permanent never
 # enters, and a rider hung on an entry that did not happen is a sacrifice for
 # nothing.
@@ -1078,6 +1083,52 @@ def _exile_instead_of_entering(game, payload: dict) -> ReplacementOutcome | None
 # once the chooser answers (immediately, for a non-interactive seat).
 # ---------------------------------------------------------------------------
 
+LANDS_CANT_ENTER_TEXT = "lands can't enter the battlefield"
+
+
+def _applies_lands_cant_enter(game, payload: dict) -> bool:
+    # Layer 4, not the printed line: an animated land is still a land, and a
+    # permanent that is a land as it *would* exist on the battlefield is what
+    # CR 614.17d says to check.
+    if not payload["permanent"].has_type("land"):
+        return False
+    # "Lands can't" is every battlefield, not just the source controller's —
+    # the sentence names no seat at all. `_player_controls_text` answers about
+    # one seat, so the question is asked of every one.
+    return any(
+        game._player_controls_text(player, LANDS_CANT_ENTER_TEXT)
+        for player in game.players
+    )
+
+
+@replacement_effect(
+    "would_enter_battlefield", LANDS_CANT_ENTER,
+    applies=_applies_lands_cant_enter,
+)
+def _lands_cannot_enter(game, payload: dict) -> ReplacementOutcome | None:
+    """Worms of the Earth: "Lands can't enter the battlefield."
+
+    CR 614.17: a "can't" effect is not a replacement effect, but it follows the
+    same rules, which is why it is registered here — this is the one place the
+    engine asks "may this permanent enter?" before it does. It is not the play
+    restriction beside it on the same card: that one (CR 305.1, enforced through
+    ``Game._may_play_another_land``) is about the *action* of playing a land,
+    and this one is about a land arriving from anywhere at all — a reanimation,
+    a search that puts one onto the battlefield, a token.
+
+    The land does not enter and nothing that watches entering sees it: no
+    permanent id, no layer contribution, no enters-the-battlefield trigger. It
+    stays a card in whatever zone the caller took it from, which is why nothing
+    is appended to a graveyard or an exile here — CR 614.17 removes the event
+    rather than redirecting it, and a destination this rule does not name would
+    be a card the effect quietly moved.
+    """
+    game.log.append(
+        f"{payload['permanent'].card.name} can't enter the battlefield"
+    )
+    return ReplacementOutcome(replaced=True)
+
+
 TOP_OF_LIBRARY_DISCARD_TEXT = (
     "if an effect causes you to discard a card, discard it, but you may put it "
     "on top of your library instead"
@@ -1583,6 +1634,11 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # stopping at the first sentence would admit the card with half its text
     # doing nothing.
     (RETURN_TO_HAND_INSTEAD_TEXT, ""),
+    # _lands_cannot_enter (Worms of the Earth): the phrase is the whole line,
+    # and every land entering from anywhere is refused — the interceptor tests
+    # the type through layer 4 rather than the printed one, so the claim covers
+    # exactly what the sentence says.
+    (LANDS_CANT_ENTER_TEXT, ""),
     # _sacrifice_after_entering (Land Equilibrium): the constant is the whole
     # sentence, "then sacrifices a land of their choice" included — the entry
     # is let through and the sacrifice is armed once the land is on the

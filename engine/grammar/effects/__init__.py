@@ -29,6 +29,7 @@ from .damage import (
     _parse_fight,
     _parse_damage,
     _parse_damage_unless_pay,
+    _parse_have_source_deal_damage,
     _parse_damage_rider_sentence,
     _parse_prevent,
     _parse_prevent_all,
@@ -135,6 +136,7 @@ from .game import (
 __all__ = [
     "_parse_damage",
     "_parse_damage_unless_pay",
+    "_parse_have_source_deal_damage",
     "_parse_for_each_destroy_unless_paid",
     "_parse_damage_rider_sentence",
     "_parse_prevent",

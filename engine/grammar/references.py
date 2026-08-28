@@ -49,6 +49,15 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     # every recipient table, picker and handler would then have to learn.
     if stream.accept_phrase("each", "other", "player"):
         return ast.PlayerRef("each_opponent")
+    # "**Any player** may sacrifice two lands …" (Worms of the Earth.) CR 101.4:
+    # an offer made to "any player" is made to each of them in turn, which is
+    # the set "each player" already names and the set `handlers/control_flow`
+    # already arms one prompt per seat of. An alias for the reason "each other
+    # player" above is one — a kind of its own would be one card's private
+    # address for a set the engine has (idiom 19), and every table, picker and
+    # handler would have to learn it.
+    if stream.accept_phrase("any", "player"):
+        return ast.PlayerRef("each_player")
     if stream.accept_phrase("target", "player"):
         return ast.PlayerRef("target_player")
     if stream.accept_phrase("target", "opponent"):

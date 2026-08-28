@@ -143,6 +143,14 @@ def _lower_unless_player_pays(
     )
 
 
+#: The actors that name a *set* of seats, and so rebind what a back-reference to
+#: a player means inside the offer. Held to ``handlers/control_flow._EACH_ACTORS``
+#: by ``tests/engine/test_grammar_offers.py``: the lowering decides what "that
+#: player" compiles to and the handler decides which seat it resolves against,
+#: and the two answering differently is the offer burning the wrong player.
+_SEAT_SET_ACTORS = frozenset({"each_player", "each_opponent"})
+
+
 def _lower_may(
     node: ast.May, produced: frozenset[str], event: str | None = None,
     event_subject: object | None = None,
@@ -170,7 +178,20 @@ def _lower_may(
     decision per player; the actor is carried as payload and
     ``handlers/control_flow.may`` arms one prompt for each named seat.
     """
-    action = lower_statement(node.action, produced, event=event, event_subject=event_subject, whole_effect=False) if node.action else ()
+    # **An offer made to a set of seats rebinds what "that player" means.**
+    # ``handlers/control_flow._offer_to_seat`` replaces ``context.target`` with
+    # the offered seat for exactly these actors, so inside the offer the words
+    # name the seat that took it — not the seat the firing event was about.
+    # Clearing the event here is what makes the two halves agree: with it in
+    # hand, "have this enchantment deal 5 damage to **that player**" (Worms of
+    # the Earth) would lower to the frozen upkeep seat and burn whoever's turn
+    # it was instead of whoever chose to take the damage.
+    #
+    # Only the offer's own branches lose it. The event is still the outer one
+    # for anything around this node, which is why it is a local rather than a
+    # rewrite of the argument.
+    inner_event = None if node.actor.kind in _SEAT_SET_ACTORS else event
+    action = lower_statement(node.action, produced, event=inner_event, event_subject=event_subject, whole_effect=False) if node.action else ()
     # "If you do" is the rest of *this* resolution, so it can read what the
     # action just recorded: Niambi's "return another target creature you
     # control…, if you do, you gain life equal to that creature's mana value"
@@ -190,10 +211,10 @@ def _lower_may(
         key for instruction in action
         if (key := _PRODUCES.get(instruction.kind)) is not None
     }
-    then = lower_statement(node.then, after_action, event=event, event_subject=event_subject, whole_effect=False) if node.then else ()
-    otherwise = lower_statement(node.otherwise, produced, event=event, event_subject=event_subject, whole_effect=False) if node.otherwise else ()
+    then = lower_statement(node.then, after_action, event=inner_event, event_subject=event_subject, whole_effect=False) if node.then else ()
+    otherwise = lower_statement(node.otherwise, produced, event=inner_event, event_subject=event_subject, whole_effect=False) if node.otherwise else ()
     reflexive = (
-        lower_statement(node.reflexive, produced, event=event, event_subject=event_subject, whole_effect=False)
+        lower_statement(node.reflexive, produced, event=inner_event, event_subject=event_subject, whole_effect=False)
         if node.reflexive else ()
     )
 
