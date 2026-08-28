@@ -670,6 +670,7 @@ def lower_statement(
                 event=event, event_subject=event_subject, whole_effect=False,
             ),
             produced,
+            event=event,
         )
 
     if isinstance(statement, ast.ForEach):

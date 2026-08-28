@@ -438,9 +438,15 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         holder = source_object(context)
         if holder is None:
             return False
-        return counters_on(holder, str(payload.get("counter", ""))) == int(
-            payload.get("count", 0)
-        )
+        held = counters_on(holder, str(payload.get("counter", "")))
+        wanted = int(payload.get("count", 0))
+        # "five **or more**" (Fasting) against All Hallow's Eve's exact zero.
+        # The comparison is read off the payload rather than assumed, because
+        # an at-least test answered as an equality is a card that destroys
+        # itself on the fifth counter and never again.
+        if str(payload.get("comparison", "exactly")) == "at_least":
+            return held >= wanted
+        return held == wanted
 
     if kind == "returned_to_hand_this_turn":
         # "a permanent was put into your hand from the battlefield this turn"

@@ -1706,6 +1706,16 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     if owner_index is None:
         owner_index = controller_index if controller_index is not None else 0
     game.players[owner_index].exile.append(perm.card)
+    # Recorded as exiled **with** the ability's source when that source is a
+    # permanent (CR 610.3), exactly as ``exile_top_of_library`` does it and for
+    # the same reason: nothing ends the link on its own — the entry carries no
+    # ``ends_on`` — so it is inert for every card that never asks, and it is
+    # everything for Safe Haven, whose upkeep trigger returns "each card exiled
+    # with this land". Without it that trigger drains an empty pile and the
+    # creatures never come back, which is the shape of a card reporting
+    # supported and quietly doing nothing.
+    if context.source_permanent is not None:
+        link_exiled_card(context.source_permanent, perm.card, owner_index)
     if controller_index is not None:
         context.results["exiled_permanent_controller"] = controller_index
     game.log.append(f"{card.name} exiled {perm.card.name}")

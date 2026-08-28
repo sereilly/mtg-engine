@@ -327,6 +327,7 @@ def _lower_condition(
             "kind": "source_counter_count",
             "counter": condition.counter,
             "count": condition.count,
+            "comparison": condition.comparison,
         }
     if isinstance(condition, ast.DealtDamageThisTurn):
         # The recipient rides the payload, exactly as the seat does on the life

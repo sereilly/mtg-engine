@@ -30,7 +30,7 @@ from .paragraphs import (
 from .references import parse_recipient
 from .stream import TokenStream
 from .phrases import (_parse_can_attack_as_though, _parse_duration,
-                      _parse_mana_payment, parse_bound_subject)
+                      _parse_mana_payment, _parse_pay_life, parse_bound_subject)
 from .vocabulary import NUMBER_WORDS
 from .effects import (
     _parse_add_mana, _parse_ante, _parse_assigns_no_combat_damage, _parse_attach,
@@ -46,7 +46,7 @@ from .effects import (
     _parse_exchange_life_totals,
     _parse_has, _parse_life_total_becomes, _parse_look_at_hand, _parse_loses,
     _parse_exile_cost_sacrifices,
-    _parse_mill, _parse_modal_head, _parse_pay_life, _parse_player_adds_mana,
+    _parse_mill, _parse_modal_head, _parse_player_adds_mana,
     _parse_prevent, _parse_put_iterated_card_on_library,
     _parse_put_counter, _parse_put_exiled_with_source,
     _parse_put_source_into_zone, _parse_remove_counter,
@@ -348,6 +348,15 @@ def parse_subject_verb(
     if stream.at_word("create"):
         return _parse_create_token(stream)
     if stream.at_word("return"):
+        # "Return each card exiled with this land to the battlefield under its
+        # owner's control." (Safe Haven.) The linked-pile production again,
+        # printed with the other verb — tried first and non-consuming on
+        # refusal, exactly as the "put" spelling is above, because the general
+        # return production reads "each card" as a noun phrase and then fails
+        # naming a missing destination zone rather than the pile.
+        linked = _parse_put_exiled_with_source(stream)
+        if linked is not None:
+            return linked
         return _parse_return(stream)
     if stream.at_word("prevent"):
         return _parse_prevent(stream)

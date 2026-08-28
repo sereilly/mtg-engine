@@ -414,6 +414,14 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The one-shot, turn-scoped blanket ("Creatures without flying can't block
     # this turn", Destructive Tampering's second mode).
     "cant_block_until_eot": "combat_restrictions",
+    # "Creatures can't attack this turn." (Festival.) The same category as its
+    # blocking twin above, so GRAMMAR_CATEGORIES is unchanged.
+    "cant_attack_until_eot": "combat_restrictions",
+    # "This creature can't attack unless you sacrifice two Islands."
+    # (Leviathan.) A restriction with a cost behind it, enforced by the
+    # declaration rather than by a handler — same category, so
+    # GRAMMAR_CATEGORIES is unchanged.
+    "cant_attack_unless_sacrifice": "combat_restrictions",
     # "…and remove it from combat" (Disharmony, CR 506.4c). A one-shot combat
     # action rather than a restriction, filed with the family whose steps
     # dispatch it.

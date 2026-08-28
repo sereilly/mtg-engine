@@ -1905,37 +1905,61 @@ def test_power_surge_binds_x_to_the_turn_start_land_count():
     ) == [("deal_damage", {"amount": "x"})]
 
 
-def test_a_where_x_count_on_another_players_permanents_refuses_the_line():
-    """The failure mode the where-clause has to keep preventing, at the layer
-    that can now name it.
+def test_a_where_x_count_on_the_upkeep_player_reads_the_seat_the_event_froze():
+    """"…deals X damage to that player, where X is the number of Mountains
+    **they** control", under "at the beginning of each player's upkeep".
 
-    "Where X is …" used to be readable only inside the pump production, so this
-    line died on full-token consumption — an unconsumed trailing clause. The
-    clause is general now (it defines X for any sentence), so the line parses,
-    and the refusal moved to lowering where it says what is wrong: the count is
-    narrowed to **their** permanents, and the counter reads only the zone's
-    owner. ``permanent_matches_filter`` does not test a controller, so admitting
-    it would hand the key over to be silently ignored and count the wrong
-    player's Mountains. Either way the card falls back visibly; only now it
-    explains itself.
+    This test used to assert the opposite, and said so: "that player" is chosen
+    by nobody, both spellings lower to the same ``recipient`` key, and the
+    admission was gated on the *picker's* description — which only a real target
+    has — so the line refused. That refusal was right about the danger and wrong
+    about the answer: a count narrowed to a controller the matcher cannot test
+    would be silently ignored, but "whose zone is scanned" is an axis the
+    counter *does* read, and the seat is sitting in the trigger's frozen context
+    under ``event_subject_player``.
 
-    Round 20 moved the restriction to the axis a counter *can* read — whose
-    zone it scans — for the one sentence that names the player unambiguously:
-    "…to **target** opponent, where X is … that player controls" (Jovial Evil).
-    This line is the control on that. Its "that player" is the upkeep player,
-    chosen by nobody, and both spellings lower to the same ``recipient`` key —
-    so the admission is gated on the *picker's* description, which only a real
-    target has, and this line keeps refusing."""
+    So the same move round 20 made for Jovial Evil's targeted spelling is made
+    here for the untargeted one, gated on the event rather than on a picker:
+    `_EVENT_SUBJECT_PLAYERS` is the table saying which conditions freeze a seat,
+    and it is the table the damage recipient beside it already reads — so the
+    count and the damage cannot land on two different players. A condition
+    outside it still refuses, which the sibling test below keeps.
+
+    Psychic Allergy is the card that asked: "at the beginning of each opponent's
+    upkeep, this enchantment deals X damage to that player, where X is the
+    number of nontoken permanents of the chosen color they control."
+    """
     result = compile_line(
         "At the beginning of each player's upkeep, this enchantment deals X damage to "
         "that player, where X is the number of Mountains they control.",
         card_name="Test",
     )
 
-    assert not result.usable
-    assert result.lowering_error == (
-        "'that player' in a count with no player target to name"
+    assert result.usable
+    assert result.instructions[0].payload["recipient"] == "event_subject_player"
+    assert result.instructions[0].payload["x_from_count"] == {
+        "zone": "battlefield",
+        "owner": "event_subject_player",
+        "filter": {"subtype_filter": "mountain"},
+    }
+
+
+def test_a_where_x_count_on_that_player_refuses_under_an_event_with_no_seat():
+    """The control on the test above: a condition that freezes **no** seat.
+
+    "Whenever this creature blocks" records the blocked creature, not a player,
+    so "that player" names nobody — and a count that fell back to the caster
+    would scan the wrong battlefield while the card reported supported. The
+    refusal is the whole point of keeping the admission table-driven rather
+    than letting any trigger through.
+    """
+    result = compile_line(
+        "Whenever this creature blocks, this creature deals X damage to "
+        "that player, where X is the number of Mountains they control.",
+        card_name="Test",
     )
+
+    assert not result.usable
 
 
 def test_karma_counts_swamps_through_the_dedicated_handler():
@@ -3244,9 +3268,19 @@ def test_as_long_as_lines_stay_unlowered_and_unusable():
 
 
 def test_an_as_long_as_condition_the_grammar_cannot_model_is_not_claimed():
-    """The ``as long as`` production still refuses Jihad's condition — it is
-    outside the grammar's condition vocabulary — and what claims the line
-    instead carries the condition rather than dropping it.
+    """The ``as long as`` production still refuses Jihad's condition, and what
+    claims the line instead carries the condition rather than dropping it.
+
+    The *reason* for the refusal moved. It used to be the noun parser: "a
+    nontoken permanent **of the chosen color**" was outside its vocabulary, so
+    `_parse_condition` failed on unconsumed words. Psychic Allergy's "nontoken
+    permanents of the chosen color they control" put that phrase in, and the
+    production would then have claimed this line and refused it a layer later
+    at `statics._lower_anthem_condition` — which is the one failure
+    ``parse_line``'s derivation-table fallback cannot recover from, since it
+    only fires on a *parse* refusal. So the production gates on the phrase
+    directly: a colour recorded on one permanent as it entered (CR 614.1c) is
+    not something a continuous buff's condition can be evaluated against.
 
     Both halves matter. Claiming the line *without* the condition would report a
     card as understood while its whole restriction had gone missing, which is

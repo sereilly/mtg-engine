@@ -444,6 +444,12 @@ class SourceCounterCount:
 
     counter: str
     count: int
+    #: How *count* is compared. "exactly" is All Hallow's Eve's zero test;
+    #: "at_least" is Fasting's "five **or more** hunger counters". A field
+    #: rather than a second node for the reason ``count`` is a number rather
+    #: than a flag — the question is one question, and the comparison is the
+    #: printed words that vary.
+    comparison: str = "exactly"
 
 
 Condition = Union[

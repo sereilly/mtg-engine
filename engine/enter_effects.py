@@ -46,6 +46,14 @@ CHOOSE_COLOR_AND_OPPONENT_ON_ENTER = (
     "as this enchantment enters, choose a color and an opponent"
 )
 
+# "As this enchantment enters, choose a color." (Psychic Allergy.) The colour
+# half alone. A separate constant from the pair above because the mixin
+# branches on which seats are asked: this one records no player at all, so the
+# prompt it arms offers a colour and nothing else. It is also a *prefix* of the
+# pair's phrase, which is why every probe for it has to ask the pair first —
+# the ordering rule the trigger tables follow for the same reason.
+CHOOSE_COLOR_ON_ENTER = "as this enchantment enters, choose a color"
+
 # "As this enchantment enters, choose a card name." (Runed Halo.) A *name*
 # rather than a quality: nothing on any board constrains it, and the choice is
 # made from the whole card pool — which is why the default below is a name the
@@ -254,6 +262,7 @@ _ENTRY_LINES: tuple[tuple[str, str], ...] = (
     (ENTERS_TAPPED, ""),
     (CHOOSE_OPPONENT_ON_ENTER, ""),
     (CHOOSE_COLOR_AND_OPPONENT_ON_ENTER, ""),
+    (CHOOSE_COLOR_ON_ENTER, ""),
     (CHOOSE_CARD_NAME_ON_ENTER, ""),
     (ENTERS_WITH_X_PLUS_1_1_COUNTERS, ""),
     (COPY_CREATURE_ON_ENTER, ""),

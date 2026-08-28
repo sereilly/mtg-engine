@@ -228,7 +228,7 @@ def test_layers_only_import_downward(layers):
     [
         ("effects", (), ()),
         ("lowering", ("_common", "_events", "categories", "conditions"), ()),
-        ("ast", ("_core",), ("statements",)),
+        ("ast", ("_core", "_primitives", "_references"), ("statements",)),
     ],
     ids=["effects", "lowering", "ast"],
 )
@@ -429,6 +429,13 @@ def test_every_grammar_module_is_placed_or_exempt():
 # `UNLAYERED` is — see the test below.
 FAMILY_SHARED = {
     "_common", "_core", "_events", "conditions", "categories", "statements",
+    # `_core` split when The Dark pushed it past the size guard below.
+    # `_references` took the object/player/target nodes (`ObjectFilter` alone was
+    # 428 lines) and `_primitives` took the two literal amounts both halves
+    # need, since a node `_references` and `_core` both use cannot live in
+    # either without one importing the other. Both are floors, not families:
+    # `_core` re-exports everything they define, so no family imports them.
+    "_primitives", "_references",
 }
 
 

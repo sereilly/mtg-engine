@@ -313,6 +313,13 @@
   ]
  },
  {
+  "card": "Siren's Call",
+  "clause": "at the beginning of the next end step, destroy all non-wall creatures that player controls that didn't attack this turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Subira, Tulzidi Caravanner",
   "clause": "another target creature with power 2 or less can't be blocked this turn",
   "ignored": [

@@ -376,6 +376,34 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                 return ast.SourceCounterCount(counter_word, 0)
     stream.reset(empty_mark)
 
+    # "if **it has five or more hunger counters on it**" (Fasting) — the same
+    # count of the same source's counters, with the comparison the card prints.
+    # A second spelling rather than a second node: `SourceCounterCount` already
+    # carries the number, and its docstring said the wider comparison should
+    # extend this production. "it has" and "there are" are the two printed
+    # subjects for one question, so both read a source reference here —
+    # `accept_source_reference` also takes the card naming itself, which is how
+    # a pre-modern printing ("if Fasting has …") reaches the same branch.
+    threshold_mark = stream.mark()
+    if accept_source_reference(stream) and stream.accept_word("has"):
+        word = stream.peek_word()
+        if word is not None and word in NUMBER_WORDS:
+            stream.advance()
+            if stream.accept_phrase("or", "more"):
+                counter_word = stream.peek_word()
+                if counter_word is not None and counter_word not in (
+                    "counter", "counters"
+                ):
+                    stream.advance()
+                    if (
+                        stream.accept_word("counters", "counter")
+                        and stream.accept_phrase("on", "it")
+                    ):
+                        return ast.SourceCounterCount(
+                            counter_word, NUMBER_WORDS[word], comparison="at_least"
+                        )
+    stream.reset(threshold_mark)
+
     # "if it had a +1/+1 counter on it" (Basri's Lieutenant). Past tense, and
     # that is the whole point: "it" is the creature that just died, so the
     # answer is last-known information (CR 603.10) recorded as the trigger

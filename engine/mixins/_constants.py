@@ -14,6 +14,11 @@ _EOT_METADATA_KEYS = (
     "destroy_if_did_not_attack_eot",
     "destroy_if_attacked_eot",
     "attacked_this_turn",
+    # "…except for creatures that **couldn't attack**." (Season of the Witch.)
+    # Stamped as the declare-attackers step begins (CR 508.1), swept here with
+    # its twin above: the two are one turn's record read together, and a stamp
+    # that outlived the turn would exempt a creature for a combat that is over.
+    "could_attack_this_turn",
     "redirect_one_damage_to_owner_until_eot",
     # Layer 7b temporary set effects (613.4b)
     "absolute_power_until_eot",

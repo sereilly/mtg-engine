@@ -180,6 +180,12 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("upkeep_self", ("the", "beginning", "of", "your", "upkeep")),
     ("upkeep_each", ("the", "beginning", "of", "each", "player", "'s", "upkeep")),
     ("upkeep_each", ("the", "beginning", "of", "each", "upkeep")),
+    # "each **opponent's** upkeep" (Psychic Allergy). The same kind, because the
+    # narrowing is payload on the compiler's side (see `upkeep_scope` in
+    # engine/oracle.py) and this table only has to agree about *which event* the
+    # words name — idiom 1's rule that a condition narrowed on one side only is
+    # a card firing on the wrong event.
+    ("upkeep_each", ("the", "beginning", "of", "each", "opponent", "'s", "upkeep")),
     # An Aura firing on the upkeep of whoever controls what it enchants
     # (Feedback, Wanderlust, Warp Artifact). Written out per enchanted type
     # rather than as "enchanted <any noun>'s controller" so the set stays

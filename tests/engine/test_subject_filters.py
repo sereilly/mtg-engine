@@ -126,6 +126,75 @@ def test_nontoken_rejects_a_token(pool):
     assert not subject_matches(game, token, {"nontoken": True})
 
 
+def test_chosen_color_is_read_off_the_ability_s_source(pool):
+    """"nontoken permanents **of the chosen color**" (Psychic Allergy).
+
+    A relative key like ``exclude_self``: the colour is not in the sentence and
+    not on the permanent being tested — it was chosen as the *source* entered
+    (CR 614.1c) and lives in that permanent's metadata. So the key needs the
+    source, and without one it must refuse every permanent rather than admit
+    every permanent, which is the direction that cannot widen an effect.
+    """
+    bears = Permanent(card=pool["Grizzly Bears"])          # green
+    knight = Permanent(card=pool["White Knight"])          # white
+    allergy = Permanent(card=pool["Grizzly Bears"], metadata={"chosen_color": "G"})
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[bears, knight, allergy]),
+            PlayerState(name="P2"),
+        ]
+    )
+
+    assert subject_matches(game, bears, {"type_filter": "creature"}), (
+        "the control: the bare noun phrase must match, or the rows below "
+        "prove nothing about the key"
+    )
+    assert subject_matches(game, bears, {"chosen_color": True}, source=allergy)
+    assert not subject_matches(game, knight, {"chosen_color": True}, source=allergy)
+    # No source to read the choice off: the narrowing is unanswerable, so
+    # nothing matches rather than everything.
+    assert not subject_matches(game, bears, {"chosen_color": True})
+
+
+def test_the_combat_records_are_read_off_the_permanent(pool):
+    """"…creatures **that didn't attack this turn**, except for creatures
+    **that couldn't attack**." (Season of the Witch.)
+
+    Two questions about one combat, and neither can be re-derived at the sweep:
+    by the end step a creature may have untapped or had its restriction end. So
+    both are per-turn records the permanent carries, and both are answerable
+    from the object alone — which is what puts them in this set rather than
+    among the relative keys below.
+    """
+    attacked = Permanent(
+        card=pool["Grizzly Bears"],
+        metadata={"attacked_this_turn": True, "could_attack_this_turn": True},
+    )
+    idle = Permanent(
+        card=pool["Grizzly Bears"], metadata={"could_attack_this_turn": True}
+    )
+    grounded = Permanent(card=pool["Grizzly Bears"])
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[attacked, idle, grounded]),
+            PlayerState(name="P2"),
+        ]
+    )
+
+    assert subject_matches(game, idle, {"type_filter": "creature"}), (
+        "the control: the bare noun phrase must match, or the rows below "
+        "prove nothing about the keys"
+    )
+    assert subject_matches(game, attacked, {"attacked_this_turn": True})
+    assert not subject_matches(game, idle, {"attacked_this_turn": True})
+    assert subject_matches(game, idle, {"not_attacked_this_turn": True})
+    assert not subject_matches(game, attacked, {"not_attacked_this_turn": True})
+    # The exemption: a creature that never could have attacked is out of the
+    # set however untapped and idle it is.
+    assert subject_matches(game, idle, {"could_attack_this_turn": True})
+    assert not subject_matches(game, grounded, {"could_attack_this_turn": True})
+
+
 def test_ownership_is_asked_separately_from_control(pool):
     """"target permanent you both **own** and control" (Obelisk of Undoing).
 
@@ -249,6 +318,10 @@ _COVERED_ELSEWHERE = {
     "not_enchanted": "test_not_enchanted_rejects_a_permanent_carrying_an_aura",
     "enchanted_only": "test_enchanted_only_rejects_a_permanent_with_no_aura",
     "attached_to_filter": "test_a_host_phrase_is_asked_of_the_host",
+    "chosen_color": "test_chosen_color_is_read_off_the_ability_s_source",
+    "attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
+    "not_attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
+    "could_attack_this_turn": "test_the_combat_records_are_read_off_the_permanent",
 }
 
 

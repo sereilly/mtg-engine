@@ -6,10 +6,13 @@ lowering can check it rather than assume it.
 """
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+from ...subject_filters import (OBJECT_ONLY_FILTER_KEYS,
+                                TESTABLE_SUBJECT_FILTER_KEYS,
+                                untestable_filter_keys)
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    _filter_payload,
     _is_source,
     _REST_OF_TURN,
     _is_target,
@@ -84,6 +87,66 @@ def _lower_combat_restriction(
     # the blocker gate tests, and cleanup sweeps the state it arms. The gate
     # tests card types and (without-)keywords; any other narrowing refuses
     # rather than being dropped.
+    # "Creatures can't attack this turn." (Festival.) The attack twin of the
+    # blanket can't-block below, and the same three gates for the same reasons:
+    # a duration, a plural subject, and a filter the enforcing gate can test.
+    # The gate here is `declare_attackers_step.can_attack`, which tests a filter
+    # payload through `subject_matches` — so what it may carry is wider than the
+    # blocker gate's three keys, and is held to `TESTABLE_SUBJECT_FILTER_KEYS`
+    # for the reason that set exists: a narrowing the matcher cannot test would
+    # ground creatures the card never named.
+    if node.kind == "cant_attack_until_eot":
+        payload = dict(node.payload)
+        if payload.get("duration") not in _REST_OF_TURN:
+            raise LoweringError(
+                "a blanket can't-attack with no end-of-turn duration is a "
+                "static ability",
+                node=node,
+            )
+        if not isinstance(node.subject, ast.TargetSpec) or node.subject.quantifier != "all":
+            raise LoweringError(
+                "the blanket can't-attack reads a plural subject", node=node
+            )
+        described = _filter_payload(node.subject.filter)
+        untestable = untestable_filter_keys(described)
+        if untestable:
+            raise LoweringError(
+                "the attack gate cannot test this restriction: "
+                + ", ".join(sorted(untestable)),
+                node=node,
+            )
+        return (
+            OracleInstruction("cant_attack_until_eot", "", {"filter": described}),
+        )
+    # "This creature can't attack unless you sacrifice two Islands." (Leviathan
+    # — "This cost is paid as attackers are declared".) CR 508.1g. The filter is
+    # held to what the *charger* can test: `_sacrifice_candidate_indices` reads
+    # a payload through the same matcher every other sacrifice does, and a
+    # narrowing it cannot answer would either charge the wrong permanents or
+    # charge none — so an untestable key refuses the line rather than riding
+    # along.
+    if node.kind == "cant_attack_unless_sacrifice":
+        payload = dict(node.payload)
+        if not _is_source(node.subject):
+            raise LoweringError(
+                "the attack cost is paid by the source's controller and "
+                "restricts the source",
+                node=node,
+            )
+        described = _filter_payload(payload["sacrifice_filter"])
+        untestable = untestable_filter_keys(described, allowed=OBJECT_ONLY_FILTER_KEYS)
+        if untestable:
+            raise LoweringError(
+                "the attack cost cannot be charged against: "
+                + ", ".join(sorted(untestable)),
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "cant_attack_unless_sacrifice", "",
+                {"filter": described, "count": int(payload["sacrifice_count"])},
+            ),
+        )
     if node.kind == "cant_block_until_eot":
         payload = dict(node.payload)
         if payload.get("duration") not in _REST_OF_TURN:

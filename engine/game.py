@@ -336,6 +336,13 @@ class Game(
     # without_keywords}, "source_name"}. Read by _can_block_attacker (which is
     # also what the legality enumerator asks), swept at cleanup.
     blocking_restrictions_until_eot: list = field(default_factory=list)
+    # "Creatures can't attack this turn." (Festival) — the attack twin of the
+    # list above, CR 506.3/508.1c. Each entry: {"filter": <subject payload>,
+    # "source_name"}. Read by `declare_attackers_step.can_attack` (which is
+    # also what the legality enumerator asks), swept at cleanup. State plus a
+    # reader rather than a flag stamped per creature, for that list's reason: a
+    # creature entering after this resolves is restricted too.
+    attack_restrictions_until_eot: list = field(default_factory=list)
     # "attacking doesn't cause creatures you control to tap this combat if
     # Johan is untapped" (Johan) — standing exemptions from CR 508.1f's tap,
     # each an ``attack_tapping.AttackTapExemption``. That module holds what a

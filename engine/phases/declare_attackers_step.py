@@ -172,9 +172,12 @@ class DeclareAttackersStepMixin:
         self._prune_combat_state()
 
         declared: list[Permanent] = []
+        attack_costs: list[tuple[Permanent, dict]] = []
         for idx in unique_indices:
             attacker = controller.battlefield[idx]
             declared.append(attacker)
+            for cost in self._attack_costs_of(attacker):
+                attack_costs.append((attacker, cost))
             # CR 508.1f, and the one place the question is asked: vigilance
             # (CR 702.20b) and an effect that prints the same exemption the long
             # way round (Johan) are both `attacking_causes_tap`'s business.
@@ -203,6 +206,16 @@ class DeclareAttackersStepMixin:
             # and the creature that carried the attack may be gone by the time
             # the question is asked.
             controller.attacked_this_turn = True
+
+        # CR 508.1g: the additional costs are paid once the declaration is
+        # legal, and after the attackers are locked in — so the sacrifices go
+        # through `Game.sacrifice_permanent` (the one seam every sacrifice
+        # passes through) and the combat maps follow their creatures through
+        # `remove_from_battlefield`'s renumbering. `can_attack` has already
+        # refused a declaration whose cost cannot be paid, off the same reader,
+        # so nothing here can be half-charged.
+        for attacker, cost in attack_costs:
+            self._pay_attack_cost(controller_index, attacker, cost)
 
         self._prune_combat_state()
         self.log.append(f"{controller.name} declared {len(unique_indices)} attacker(s)")
@@ -280,6 +293,51 @@ class DeclareAttackersStepMixin:
                     ))
         if events:
             self._enqueue_triggered_batch(events)
+
+    def _pay_attack_cost(
+        self, controller_index: int, attacker: Permanent, cost: dict
+    ) -> None:
+        """Charge one "can't attack unless you sacrifice …" cost (CR 508.1g).
+
+        The picks are the stated AI policy every other forced sacrifice uses
+        (``default_sacrifice_pick``) rather than a rule of this file's own; an
+        interactive chooser can replace it without changing what is owed. The
+        attacker itself is never eaten — it is the creature the cost is being
+        paid *for* — which also keeps a card whose cost names its own type
+        (nothing in the pool yet) from cannibalising the attack.
+        """
+        player = self.players[controller_index]
+        described = dict(cost.get("filter") or {})
+        owed = int(cost.get("count", 1))
+        for _ in range(owed):
+            # Through `permanent_at`, never a raw subscript: the candidate list
+            # is recomputed after each sacrifice precisely because the previous
+            # one renumbered the battlefield behind it.
+            candidates = [
+                perm
+                for i in self._sacrifice_candidate_indices(player, described, attacker)
+                if (perm := self.permanent_at(player, i)) is not None
+            ]
+            if not candidates:
+                return
+            self.sacrifice_permanent(self.default_sacrifice_pick(candidates))
+        self.log.append(
+            f"{player.name} paid {attacker.card.name}'s attack cost "
+            f"({owed} sacrificed)"
+        )
+
+    def _attack_costs_of(self, attacker: Permanent) -> list[dict]:
+        """The additional costs *attacker* must pay to be declared (CR 508.1g).
+
+        One reader for the gate in ``can_attack`` and the charge in
+        ``declare_attackers``: a cost checked by one rule and paid by another is
+        how a declaration gets accepted and then left unpaid.
+        """
+        return [
+            instruction.payload
+            for instruction in compile_card_oracle(attacker.effective_card).instructions
+            if instruction.kind == "cant_attack_unless_sacrifice"
+        ]
 
     def can_attack(
         self,
@@ -440,6 +498,30 @@ class DeclareAttackersStepMixin:
         # part of the record, not just its turn).
         if "cant_attack_if_attacked_last_turn" in instr_kinds:
             if attacked_during_seats_last_turn(self, attacker, attacker_seat):
+                return False
+
+        # "This creature can't attack unless you sacrifice two Islands."
+        # (Leviathan.) CR 508.1g: an additional cost to attack. This is the
+        # *gate* half — a cost its controller cannot pay makes the attack
+        # illegal — and `_attack_costs_of` is the one reader, shared with the
+        # charge in `declare_attackers`, so the declaration can never be
+        # accepted and then left unpaid (or paid and then rejected).
+        for cost in self._attack_costs_of(attacker):
+            if len(self._sacrifice_candidate_indices(
+                self.players[attacker_seat], dict(cost.get("filter") or {}), attacker
+            )) < int(cost.get("count", 1)):
+                return False
+
+        # One-shot blanket restrictions ("Creatures can't attack this turn",
+        # Festival), the attack twin of `blocking_restrictions_until_eot`.
+        # Asked here rather than stamped on each creature so a creature that
+        # entered after the spell resolved is caught too, and tested through
+        # `subject_matches` — the one reader of a filter payload — so the noun
+        # phrase means here exactly what it means anywhere else. CR 508.1c
+        # keeps it cumulative: passing every other restriction answers only
+        # those.
+        for entry in self.attack_restrictions_until_eot:
+            if subject_matches(self, attacker, dict(entry.get("filter") or {})):
                 return False
 
         # "That creature can't attack during its controller's next turn."

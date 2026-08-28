@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .handlers._common import permanent_matches_filter
+from .handlers._common import _resolve_chosen_color, permanent_matches_filter
 
 if TYPE_CHECKING:
     from .game import Game
@@ -54,6 +54,16 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     "tapped_only", "untapped_only",
     "mana_value", "power", "toughness", "with_plus1_counter",
     "nontoken", "named", "supertypes",
+    # "permanents **of the chosen color**" (Psychic Allergy). A colour the
+    # source recorded as it entered (CR 614.1c) — so it needs the ability's
+    # source, like ``exclude_self``, and is resolved into the ordinary colour
+    # key before the pure matcher is asked.
+    "chosen_color",
+    # "creatures **that didn't attack this turn**" / "…**that couldn't
+    # attack**" (Season of the Witch). Per-turn records the permanent carries,
+    # frozen when the combat asked the question — so they are answerable from
+    # the object alone, like every other state word here.
+    "attacked_this_turn", "not_attacked_this_turn", "could_attack_this_turn",
     # "target **attacking** creature" (Disharmony's untap). CR 508.1a makes
     # attacking a state of the permanent itself, so it is answerable from the
     # object alone — ``Permanent.attacking`` is stamped at declaration and
@@ -247,6 +257,11 @@ def subject_matches(
             game, host, nested_host, observer=observer, source=source
         ):
             return False
+    # "permanents **of the chosen color**" (Psychic Allergy). The colour lives
+    # on the ability's source (CR 614.1c) — resolved here, where the source is
+    # in hand, into the ordinary colour key. With no source the key survives and
+    # the pure matcher refuses, which is the direction that cannot widen the set.
+    described = _resolve_chosen_color(described, source)
     if not permanent_matches_filter(obj, described):
         return False
     controller = described.get("controller")
