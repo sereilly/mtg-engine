@@ -344,6 +344,30 @@ def _lower_put_counter(
             payload["in_combat_with_source"] = True
         _describe_targets(payload, stripped)
         return (OracleInstruction("add_counter_to_target", "", payload),)
+    # "Put **X +0/+1** counters on this creature." (Necropolis.) The source's
+    # own twin of the targeted branch above, and payload for the same reasons:
+    # which CR 122.1a pair the counter names, and how many of it, are the whole
+    # of what differs. A printed +1/+1 keeps the branch below it byte for byte,
+    # so nothing written before this changes shape.
+    if (
+        is_pt_counter(node.counter)
+        and node.counter != "+1/+1"
+        and not node.up_to
+        and _is_source(node.subject)
+    ):
+        if isinstance(node.count, ast.Fixed):
+            placed_on_self: int | str = node.count.value
+        elif isinstance(node.count, ast.Var):
+            placed_on_self = node.count.name
+        else:
+            raise LoweringError(
+                "a counter on the source is placed a fixed or variable number "
+                "at a time", node=node,
+            )
+        payload: dict[str, object] = {"counter": node.counter}
+        if placed_on_self != 1:
+            payload["count"] = placed_on_self
+        return (OracleInstruction("add_counter_to_self", "", payload),)
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)
     if isinstance(node.count, ast.ThatMuch) and _is_source(node.subject):

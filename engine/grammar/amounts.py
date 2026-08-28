@@ -195,6 +195,14 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     # The noun and the characteristic are both read as printed, so "the
     # sacrificed **artifact's** mana value" is the same production. Which of
     # them a handler can actually answer is the lowering's question.
+    # "…where X is **the exiled card's mana value**" (Necropolis) — the same
+    # shape one zone over. Its own reader so both front ends (this one and the
+    # where-clause in `where_x.py`) ask one function: two copies of a phrase
+    # that names a payment channel is how the two come to name different ones.
+    exiled = accept_exiled_for_cost(stream)
+    if exiled is not None:
+        return exiled
+
     sacrificed_mark = stream.mark()
     if stream.accept_word("sacrificed"):
         noun = stream.peek_word()
@@ -409,3 +417,27 @@ def accept_damage_dealt_by_chosen_cast(
         stream.reset(mark)
         return None
     return ast.DamageDealtByChosenCast(singular(word))
+
+
+def accept_exiled_for_cost(stream: "TokenStream") -> "ast.ExiledForCost | None":
+    """``the exiled card's <characteristic>`` — or None with the cursor unmoved.
+
+    The twin of the "sacrificed <noun>'s …" branch in :func:`parse_amount`, and
+    a named function rather than a second inline branch because two front ends
+    read it: an "equal to" amount and a where-clause. The leading "the" is the
+    caller's, exactly as it is for the sacrifice.
+    """
+    mark = stream.mark()
+    if stream.accept_word("exiled"):
+        noun = stream.peek_word()
+        if noun is not None:
+            stream.advance()
+            if stream.accept_word("'s"):
+                if stream.accept_phrase("mana", "value"):
+                    return ast.ExiledForCost("mana_value")
+                characteristic = stream.peek_word()
+                if characteristic in ("power", "toughness"):
+                    stream.advance()
+                    return ast.ExiledForCost(str(characteristic))
+    stream.reset(mark)
+    return None

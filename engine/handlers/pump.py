@@ -545,13 +545,25 @@ def add_counter_to_self(game: Game, instruction: OracleInstruction, context: Ora
     if raw_count == "trigger_count":
         count = int(context.results.get("trigger_count", 0))
     else:
-        count = int(raw_count)
+        # "Put **X** +0/+1 counters on this creature" (Necropolis): the count
+        # may be the where-clause's X, resolved through the same
+        # `context.x_value` every other amount reads.
+        count = resolve_amount(raw_count, context.x_value)
     if count <= 0:
         return True, "resolved"
-    game.place_plus1_counters(source_permanent, count)
+    # Which CR 122.1a pair. Absent on every payload written before Necropolis,
+    # and those all mean the one kind this handler used to place - so the
+    # default is the whole of the compatibility, and `place_plus1_counters`
+    # stays the path for it because that kind is the one with a CR 614 event
+    # and a trigger behind it.
+    kind = str(instruction.payload.get("counter", "+1/+1"))
+    if kind == "+1/+1":
+        game.place_plus1_counters(source_permanent, count)
+    else:
+        game.place_pt_counters(source_permanent, kind, count)
     game.log.append(
-        f"{card.name} gets a +1/+1 counter" if count == 1
-        else f"{card.name} gets {count} +1/+1 counters"
+        f"{card.name} gets a {kind} counter" if count == 1
+        else f"{card.name} gets {count} {kind} counters"
     )
     return True, "resolved"
 

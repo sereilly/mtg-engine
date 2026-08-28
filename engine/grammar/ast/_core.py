@@ -147,6 +147,24 @@ class SacrificedForCost:
 
 
 @dataclass(frozen=True)
+class ExiledForCost:
+    """A characteristic of what the ability's **own cost** exiled - "where X is
+    **the exiled card's mana value**" (Necropolis).
+
+    :class:`SacrificedForCost` one zone over, and the same channel argument: the
+    card left the graveyard while the cost was being paid (CR 601.2h), so
+    nothing on any board or in any zone answers for it at resolution and the
+    number is last-known information (CR 608.2h) the activation path recorded
+    under ``exiled_for_cost``.
+
+    Its own node rather than a flag on the sacrifice, because the two read
+    different records written by different payments - and a card printing both
+    would have them disagree.
+    """
+    characteristic: str   # "power" | "toughness" | "mana_value"
+
+
+@dataclass(frozen=True)
 class TotalPowerSacrificedThisWay:
     """"…where X is **the total power of the creatures sacrificed this way**"
     (Sword of the Ages).
@@ -325,7 +343,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject, DamageDealtThisTurn, DamageDealtByChosenCast]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, ThatMuch, SacrificedForCost, ExiledForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, PowerOfSubject, DamageDealtThisTurn, DamageDealtByChosenCast]
 
 
 # ---------------------------------------------------------------------------

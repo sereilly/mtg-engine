@@ -122,6 +122,18 @@ def count_from_payload(
     ledger_query = spec.get("damage_ledger")
     if isinstance(ledger_query, dict):
         return _damage_dealt_this_turn(game, context, ledger_query)
+    # "…where X is **the exiled card's mana value**" (Necropolis). What the
+    # ability's own cost ate, read off the record the activation path kept
+    # (CR 608.2h) — asked before every board-scanning branch below, because
+    # nothing on a board answers it.
+    cost_exile = spec.get("cost_exile_characteristic")
+    if cost_exile is not None:
+        exiled = (context.choices or {}).get("exiled_for_cost")
+        if exiled is None:
+            return 0
+        if cost_exile == "mana_value":
+            return max(0, int(getattr(exiled, "cmc", 0) or 0))
+        return 0
     characteristic = spec.get("object_characteristic")
     if isinstance(characteristic, dict):
         return _characteristic_of_object(game, context, characteristic, instruction)

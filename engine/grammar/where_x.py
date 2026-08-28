@@ -15,6 +15,7 @@ is for.
 from . import ast
 from .amounts import (
     accept_added_base, accept_counters_on_source, accept_damage_dealt_this_turn,
+    accept_exiled_for_cost,
 )
 from .lexer import NUMBER
 from .nouns import parse_object_filter
@@ -249,6 +250,13 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
     dealt = accept_damage_dealt_this_turn(stream)
     if dealt is not None:
         return dealt
+    # "…where X is **the exiled card's mana value**" (Necropolis). A
+    # characteristic of what the ability's own *cost* ate rather than an
+    # aggregate over anything a zone still holds, so it is read beside the
+    # damage history above and through the same reader `parse_amount` uses.
+    exiled = accept_exiled_for_cost(stream)
+    if exiled is not None:
+        return exiled
     # Three aggregates over one noun phrase, and the words are what tell them
     # apart: "the number of" counts the objects, "the greatest power among"
     # takes a maximum over them (Carrion Grub).
