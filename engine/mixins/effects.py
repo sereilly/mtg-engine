@@ -21,6 +21,7 @@ from ..replacements import TOP_OF_LIBRARY_DISCARD_TEXT, apply_replacements
 from ..oracle import OracleInstruction, compile_card_oracle, lex_oracle_text
 from ..auras import aura_death_damage_line
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event, matching_triggers
+from ..damage_redirects import source_matches
 
 class EffectsMixin:
     def _trigger_aura_death_effects(self, dead_permanent: Permanent, controller: PlayerState) -> None:
@@ -359,14 +360,25 @@ class EffectsMixin:
 
     def _match_chosen_damage_source(self, chosen_sources, source):
         """The entry of *chosen_sources* matching this damage's source, or None.
-        A chosen permanent matches the dealing Permanent by identity; a chosen spell
-        matches by its CardDefinition (the same object the spell deals damage with)."""
+
+        Through ``damage_redirects.source_matches``, which is the one answer to
+        "is this the source that was named?" — CR 615.8's shields and CR 614.9's
+        redirects are asking the same question about the same objects, and a
+        second reading of it is a second answer.
+
+        This *was* a second reading, and it disagreed in the direction that
+        matters. It ended with ``chosen_card is source_card``, which compares
+        two permanents by the card they share — so a Reverse Damage named on
+        one Rod of Ruin also prevented, and gained life from, the damage of a
+        **second** Rod of Ruin: 23 life where the card says 17. The docstring
+        claimed identity matching for permanents the whole time; the third
+        clause quietly took it back. It is the same look-alike bug the control
+        seam bans ``list.index`` for, one subsystem over.
+        """
         if source is None or not chosen_sources:
             return None
-        source_card = getattr(source, "card", source)
         for chosen in chosen_sources:
-            chosen_card = getattr(chosen, "card", chosen)
-            if chosen is source or chosen is source_card or chosen_card is source_card:
+            if source_matches(chosen, source):
                 return chosen
         return None
 

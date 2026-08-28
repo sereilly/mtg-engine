@@ -661,13 +661,22 @@ def _has_flying(perm: Permanent) -> bool:
 
 def _mass_damage_players_and_creatures(game: Game, card, damage: int, creature_predicate) -> None:
     """Earthquake/Hurricane sweep: damage every player, then every creature
-    passing the predicate, then destroy the lethally damaged as one SBA batch."""
+    passing the predicate, then destroy the lethally damaged as one SBA batch.
+
+    Through ``apply_damage_to_creature``, never ``_mark_damage_on_permanent``:
+    the marking is only half of a damage event, and the other half is
+    ``_fire_dealt_damage_triggers``. Every sweep in this file reached for the
+    lower call and so dealt damage that nothing could notice — Fungusaur took a
+    point from Earthquake and grew no counter across five shipped sets. The
+    per-creature triggers are correct here rather than batched: CR 603.2 puts
+    one on the stack per creature dealt to, and the state-based sweep that kills
+    them still runs once, after."""
     for player in game.players:
         game._deal_damage_to_player(player, damage, source=card)
     for player in game.players:
         for perm in list(player.battlefield):
             if perm.is_creature and creature_predicate(perm):
-                game._mark_damage_on_permanent(perm, damage, source=card)
+                apply_damage_to_creature(game, perm, damage, card)
 
 
 @effect_handler("earthquake_damage")
@@ -749,7 +758,7 @@ def deal_damage_each_attacking_creature(
     for player in game.players:
         for perm in list(player.battlefield):
             if perm.is_creature and perm.attacking:
-                game._mark_damage_on_permanent(perm, damage, source=card)
+                apply_damage_to_creature(game, perm, damage, card)
                 struck += 1
     game.log.append(f"{card.name} dealt {damage} damage to each of {struck} attacking creatures")
     return True, "resolved"
@@ -891,7 +900,7 @@ def deal_damage_to_recorded_permanents(
             observer=observer, source=context.source_permanent,
         ):
             continue
-        game._mark_damage_on_permanent(permanent, damage, source=card)
+        apply_damage_to_creature(game, permanent, damage, card)
         struck.append(permanent.card.name)
     game.log.append(
         f"{card.name} dealt {damage} damage to {', '.join(struck)}"
@@ -1413,7 +1422,7 @@ def deal_damage_each_matching(
             game, perm, described, observer=observer, source=context.source_permanent
         ):
             continue
-        game._mark_damage_on_permanent(perm, damage, source=card)
+        apply_damage_to_creature(game, perm, damage, card)
         struck.append(perm.card.name)
     game.log.append(
         f"{card.name} dealt {damage} damage to {', '.join(struck)}"

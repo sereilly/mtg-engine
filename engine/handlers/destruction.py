@@ -7,7 +7,9 @@ from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
 from ..oracle_types import PER_OBJECT_SEAT_RECORDS
 from ..resumption import run_resumable
-from ._common import permanent_matches_filter, resolve_target_permanent
+from ._common import (
+    apply_damage_to_creature, permanent_matches_filter, resolve_target_permanent,
+)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -74,7 +76,10 @@ def volcanic_eruption(game: Game, instruction: OracleInstruction, context: Oracl
         for player in game.players:
             for perm in list(player.battlefield):
                 if perm.is_creature:
-                    game._mark_damage_on_permanent(perm, destroyed, source=card)
+                    # See `_mass_damage_players_and_creatures`: marking is half
+                    # a damage event, and a sweep that stops there is damage
+                    # nothing can trigger on.
+                    apply_damage_to_creature(game, perm, destroyed, card)
     game.log.append(f"{card.name} dealt {destroyed} damage to each creature and each player")
     return True, "resolved"
 
