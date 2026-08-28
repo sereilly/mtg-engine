@@ -23,7 +23,7 @@ from ..oracle import compile_card_oracle
 from ..replacements import apply_entry_riders, apply_replacements
 from ..regeneration import regeneration_replaces_destruction
 from ..targeting import graveyard_target_spec
-from ..tokens import is_token_card
+from ..tokens import CREATED_WITH_PERMANENT_ID, is_token_card
 from ..trigger_utils import make_trigger_event, matching_triggers
 from ._constants import _MANA_SYMBOLS, _NO_PRIORITY_STEPS
 
@@ -1069,7 +1069,12 @@ class GameHelpersMixin:
         # unimplemented, because the enchantment never left the battlefield.
         from ..trigger_utils import make_trigger_event, matching_triggers
 
-        leaving: list[dict] = []
+        # Paired with the permanent whose *leaving* announces it, which is not
+        # always the event's source permanent: Dance of Many's second trigger
+        # belongs to the enchantment and fires on the token's departure, so the
+        # filter below has to ask about the token while the stack item names
+        # the enchantment.
+        leaving: list[tuple[Permanent, dict]] = []
         for perm in targets:
             seat = self.controller_index_of(perm)
             if seat is None:
@@ -1077,7 +1082,36 @@ class GameHelpersMixin:
             for trig in matching_triggers(
                 perm.effective_card, condition_kinds={"leaves_battlefield"}
             ):
-                leaving.append(make_trigger_event(seat, perm, trig))
+                leaving.append((perm, make_trigger_event(seat, perm, trig)))
+            # "When **the token** leaves the battlefield, sacrifice this
+            # enchantment." (Dance of Many.) The same CR 603.6c event about a
+            # different object: the ability belongs to the permanent that
+            # *made* this token, not to the token, so the scan above cannot
+            # reach it — the token names its maker by id (CR 400.7 makes a
+            # returning permanent a different one, and the id is what says so)
+            # and the lookup is that one hop.
+            #
+            # Read here, before the rebuild, for the reason the scan above is:
+            # by the time the batch is enqueued the maker may have left in the
+            # same sweep, and its seat would be unaskable.
+            creator = self.permanent_by_id(
+                perm.metadata.get(CREATED_WITH_PERMANENT_ID)
+            )
+            creator_seat = (
+                self.controller_index_of(creator) if creator is not None else None
+            )
+            if creator_seat is None:
+                continue
+            for trig in matching_triggers(
+                creator.effective_card,
+                condition_kinds={"created_token_leaves_battlefield"},
+            ):
+                # The **maker** is the source permanent: it is whose ability
+                # this is, and "sacrifice this enchantment" would otherwise
+                # sacrifice the token that just left.
+                leaving.append(
+                    (perm, make_trigger_event(creator_seat, creator, trig))
+                )
 
         removed: list[Permanent] = []
         for player in self.players:
@@ -1094,7 +1128,7 @@ class GameHelpersMixin:
         # for a permanent already off the battlefield would fire on nothing.
         departed = {id(perm) for perm in removed}
         self._enqueue_triggered_batch(
-            [event for event in leaving if id(event["source_permanent"]) in departed]
+            [event for watched, event in leaving if id(watched) in departed]
         )
         # "…until this creature leaves the battlefield" (Kitesail Freebooter).
         # Here because this is the one transition out: a return wired into any

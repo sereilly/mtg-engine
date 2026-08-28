@@ -234,8 +234,13 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # object that is both. The same distinction `type_match` draws
         # everywhere else, carried here so the two cannot disagree.
         if payload.get("type_match") == "all":
-            return len(matches) == len(wanted)
-        return bool(matches)
+            answer = len(matches) == len(wanted)
+        else:
+            answer = bool(matches)
+        # "If it **isn't** a land card" (Wand of Ith) — the same reading turned
+        # over at the end, after the union rule above has been applied, because
+        # negating each type separately would ask a different question.
+        return (not answer) if payload.get("negated") else answer
 
     # "Exile it. **If you do**, create a … token." (Archfiend's Vessel.) Whether
     # the step before this one actually took place, read from the record that

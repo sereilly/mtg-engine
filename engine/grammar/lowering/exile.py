@@ -201,6 +201,38 @@ def _lower_exile(
                 node=node,
             )
         return (OracleInstruction("exile_created_token", "", {}),)
+    # "Exile **the token**." (Dance of Many.) The same object one reach
+    # further out: the token this *permanent* created, rather than the token
+    # this *resolution* created. Dance of Many prints the sentence as an
+    # ability of its own, so by the time it fires the scratchpad the branch
+    # above reads is long gone — what survives is the record the token maker
+    # stamped on the token, which is why this is a payload variant of that
+    # kind and not a second kind. There is no `produced` gate for the same
+    # reason: the token maker is a different line of the same card, and a
+    # permanent that made no token has nothing to exile, which is CR 608.2b.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.filter.created_with_source
+        and subject.filter.token_only
+        and subject.quantifier == "that"
+    ):
+        if node.duration.kind is not None:
+            raise LoweringError(
+                "a timed exile of a created token has no handler", node=node
+            )
+        leftovers = _restrictions_beyond(
+            subject.filter, frozenset({"token_only", "created_with_source", "zone"})
+        )
+        if leftovers:
+            raise LoweringError(
+                f"the created-token exile does not honour {leftovers[0]!r}",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "exile_created_token", "", {"created_with_source": True}
+            ),
+        )
     # "Exile **two target** nonartifact creatures." (Ashes to Ashes; Dust to
     # Dust prints the same over artifacts.) One announcement collecting several
     # targets, resolved as a list — so it is the same instruction with the

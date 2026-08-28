@@ -415,8 +415,10 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     no_regen = False
     mark = stream.mark()
     stream.accept_punct(".", ",")
-    if stream.accept_phrase("it", "can't", "be", "regenerated") or stream.accept_phrase(
-        "they", "can't", "be", "regenerated"
+    if (
+        stream.accept_phrase("it", "can't", "be", "regenerated")
+        or stream.accept_phrase("they", "can't", "be", "regenerated")
+        or _accept_destroyed_this_way_no_regen(stream)
     ):
         no_regen = True
     else:
@@ -427,6 +429,41 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
             for each in (subject, *further)
         ))
     return ast.Destroy(subject, no_regen=no_regen, delay=delay)
+
+
+def _accept_destroyed_this_way_no_regen(stream: TokenStream) -> bool:
+    """``A <noun> destroyed this way can't be regenerated.`` (War Barge.)
+
+    CR 701.19c's rider printed as a sentence about the *effect* rather than
+    about a pronoun. The wording belongs to cards whose destruction was
+    arranged a sentence earlier — War Barge's is inside a delayed ability — so
+    there is no "it" left in the reader's hand to point at, and the noun
+    restates the type the destroy already named.
+
+    It sets the same ``no_regen`` field the two pronoun spellings do, because
+    it says the same thing: this destruction is the one regeneration cannot
+    answer. The noun is consumed against the closed type set rather than
+    skipped, so a sentence naming something the destroy did not destroy leaves
+    the words unread and fails the line loudly.
+    """
+    mark = stream.mark()
+    if (
+        stream.accept_word("a", "an")
+        and stream.accept_word(*_DESTROYED_THIS_WAY_NOUNS)
+        and stream.accept_phrase("destroyed", "this", "way")
+        and stream.accept_phrase("can't", "be", "regenerated")
+    ):
+        return True
+    stream.reset(mark)
+    return False
+
+
+#: The nouns "…destroyed this way…" is printed about. A closed set for the
+#: reason every other type word in this grammar is one: an open read would
+#: claim a sentence about something the destroy never touched.
+_DESTROYED_THIS_WAY_NOUNS: tuple[str, ...] = (
+    "creature", "artifact", "enchantment", "land", "permanent",
+)
 
 
 def _parse_that_object(stream: TokenStream) -> ast.TargetSpec | None:

@@ -465,3 +465,87 @@ def test_gaeas_touch_can_still_be_sacrificed_for_two_green(set_pool):
     assert result.supported, result.details
     assert p1.mana_pool["G"] == 2, (dict(p1.mana_pool), game.log)
     assert p1.battlefield == []
+
+
+# --- H3: delayed triggers (The Dark) ---
+
+
+def _dance_of_many_board(set_pool):
+    """Dance of Many resolved on the battlefield, with a creature to copy."""
+    from tests.helpers import _mk_creature_card, _nosick
+
+    original = _nosick(Permanent(card=_mk_creature_card("Grizzly Bears", 2, 2)))
+    p1 = PlayerState(name="P1", hand=[set_pool("DRK")["Dance of Many"]])
+    p2 = PlayerState(name="P2", battlefield=[original])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    result = game.cast_from_hand(
+        0, "Dance of Many",
+        target_player_index=1, target_permanent_ids=[original.permanent_id],
+    )
+    assert result.supported, result.details
+    game._settle()
+    dance = next(p for p in p1.battlefield if p.card.name == "Dance of Many")
+    return game, p1, p2, dance, original
+
+
+def test_dance_of_many_copies_the_creature_it_targets(set_pool):
+    """"When this enchantment enters, create a token that's a copy of target
+    nontoken creature." The line the two behind it refer back to."""
+    game, p1, _p2, _dance, _original = _dance_of_many_board(set_pool)
+
+    tokens = [p for p in p1.battlefield if p.metadata.get("is_token")]
+    assert len(tokens) == 1, game.log
+    assert tokens[0].effective_card.name == "Grizzly Bears", game.log
+
+
+def test_dance_of_many_exiles_its_token_when_the_enchantment_leaves(set_pool):
+    """"When this enchantment leaves the battlefield, exile the token."
+
+    "The token" is not "that token": the maker was a different ability of this
+    same permanent and its resolution ended turns ago, so the referent is the
+    durable record the maker stamped on what it made.
+    """
+    game, p1, _p2, dance, _original = _dance_of_many_board(set_pool)
+    token = next(p for p in p1.battlefield if p.metadata.get("is_token"))
+
+    game.remove_from_battlefield(dance)
+    game._settle()
+
+    assert not any(p is token for p in p1.battlefield), game.log
+
+
+def test_dance_of_many_sacrifices_itself_when_the_token_leaves(set_pool):
+    """"When the token leaves the battlefield, sacrifice this enchantment."
+
+    The event happens to the *token* and the ability belongs to the
+    enchantment. Read as an ordinary leaves-the-battlefield trigger the
+    condition would have watched the enchantment itself, which is a trigger
+    firing on the wrong event while the card reports itself supported.
+    """
+    game, p1, _p2, dance, _original = _dance_of_many_board(set_pool)
+    token = next(p for p in p1.battlefield if p.metadata.get("is_token"))
+
+    game.remove_from_battlefield(token)
+    game._settle()
+
+    assert not any(p is dance for p in p1.battlefield), game.log
+    assert any(card.name == "Dance of Many" for card in p1.graveyard), game.log
+
+
+def test_dance_of_many_ignores_a_token_it_did_not_create(set_pool):
+    """The record names its maker by ``permanent_id``, so somebody else's
+    look-alike token leaving is not this enchantment's event."""
+    from tests.helpers import _mk_creature_card
+
+    game, p1, p2, dance, _original = _dance_of_many_board(set_pool)
+    stranger = Permanent(
+        card=_mk_creature_card("Grizzly Bears", 2, 2), metadata={"is_token": True}
+    )
+    game._put_permanent_onto_battlefield(1, stranger, None)
+
+    game.remove_from_battlefield(stranger)
+    game._settle()
+
+    assert any(p is dance for p in p1.battlefield), game.log

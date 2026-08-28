@@ -106,6 +106,61 @@ def _lower_reveal_hand(node: ast.RevealHand) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("reveal_hand", "", _targets_only(node.player)),)
 
 
+def _lower_reveal_random_from_hand(
+    node: "ast.RevealRandomFromHand",
+) -> tuple[OracleInstruction, ...]:
+    """"Target player **reveals a card at random from their hand**." (Wand of
+    Ith.) One card nobody chose, and the record it leaves is the one every "if
+    it's a …" already reads, so the sentences behind it need no new referent.
+
+    Only a *chosen* player, for ``_lower_reveal_hand``'s reason: "you" would be
+    revealing a card to the player already holding it.
+    """
+    if node.player.kind not in ("target_player", "target_opponent"):
+        raise LoweringError(
+            f"no handler reveals a card from {node.player.kind!r}'s hand",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "reveal_random_card_from_hand", "", _targets_only(node.player)
+        ),
+    )
+
+
+def _lower_discard_revealed_unless_pay_life(
+    node: "ast.DiscardRevealedUnlessPayLife", produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"That player **discards it unless they pay 1 life**." (Wand of Ith.)
+
+    ``produced`` is the whole gate, and the same one ``RevealedCardIs`` takes:
+    "it" names the card a reveal earlier in this effect recorded, and with no
+    reveal in front of it there is nothing to discard — an offer bought off
+    against nothing would charge a player life for keeping a card that was
+    never named.
+    """
+    if "revealed_card" not in produced:
+        raise LoweringError(
+            "'it' with nothing in this effect that revealed a card", node=node
+        )
+    if node.player.kind not in ("target_player", "that_player", "target_opponent"):
+        raise LoweringError(
+            f"no handler makes {node.player.kind!r} discard the revealed card",
+            node=node,
+        )
+    payload: dict[str, object] = {}
+    if node.mana_value_of_revealed:
+        payload["life"] = "revealed_mana_value"
+    else:
+        amount = _amount_payload(node.amount)
+        if not isinstance(amount, int) or amount < 0:
+            raise LoweringError("a life payment is a printed number", node=node)
+        payload["life"] = amount
+    return (
+        OracleInstruction("discard_revealed_unless_pay_life", "", payload),
+    )
+
+
 def _lower_reveal_hand_and_choose(
     node: ast.RevealHandAndChoose,
 ) -> tuple[OracleInstruction, ...]:

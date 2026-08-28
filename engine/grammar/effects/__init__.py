@@ -36,6 +36,7 @@ from .damage import (
     _parse_damage_redirect,
     _parse_damage_cant_be_prevented,
     _parse_bound_targeting_prevention,
+    _parse_damage_dealt_riders,
 )
 from .characteristics import (
     _parse_double,
@@ -82,6 +83,7 @@ from .cards import (
     _parse_draw,
     _parse_choose_cards_in_hand,
     _parse_discard,
+    _parse_discard_revealed_unless_pay_life,
     _parse_mill,
     _parse_scry,
     _parse_cast_permission,
@@ -141,6 +143,7 @@ __all__ = [
     "_parse_damage_redirect",
     "_parse_damage_cant_be_prevented",
     "_parse_bound_targeting_prevention",
+    "_parse_damage_dealt_riders",
     "_parse_gets",
     "_parse_gains",
     "_parse_loses",
@@ -174,6 +177,7 @@ __all__ = [
     "_parse_shuffle_graveyard_into_library",
     "_parse_shuffle_hand_into_library",
     "_parse_discard",
+    "_parse_discard_revealed_unless_pay_life",
     "_parse_mill",
     "_parse_scry",
     "_parse_add_mana",

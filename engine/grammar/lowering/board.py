@@ -259,6 +259,21 @@ def _lower_destroy(
     # referent and a bare destroy would hit whatever the context happened to
     # hold.
     if spec.quantifier == "that":
+        # "…destroy **that creature**" inside a *delayed* ability (War Barge).
+        # The object is the one the creating ability bound (CR 603.7c), carried
+        # by id in the trigger's context — never a pick, and never the object
+        # the delay *watched*, which for this card is the artifact itself. Its
+        # own kind for the reason `destroy_self` and `destroy_attached_permanent`
+        # have theirs: routed through the targeted destroy the ability would ask
+        # for a choice the card never offered, and then destroy whichever
+        # permanent the resolution context happened to carry.
+        if event in _BOUND_OBJECT_DELAYED_EVENTS:
+            bound_payload = _filter_payload(filt)
+            if node.no_regen:
+                bound_payload["bypass_regeneration"] = True
+            return (
+                OracleInstruction("destroy_bound_permanent", "", bound_payload),
+            )
         if event not in _EVENT_SUBJECT_DESTROY_EVENTS:
             raise LoweringError(
                 "\"that\" names the firing event's object, and this event records none",

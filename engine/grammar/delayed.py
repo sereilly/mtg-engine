@@ -144,6 +144,15 @@ _WATCHED_OBJECTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("that", "token"), "created_token"),
 )
 
+#: The card types a permanent uses to name **itself** mid-sentence. The same set
+#: `triggers.py` reads after "this", spelled here rather than imported because
+#: the two front ends of one printed phrase are exactly the pair this codebase
+#: keeps finding drifted — and a word missing from one of them is a card whose
+#: delay opener refuses while its trigger condition reads.
+_SELF_TYPE_WORDS: tuple[str, ...] = (
+    "creature", "artifact", "enchantment", "land", "aura", "permanent",
+)
+
 
 def _parse_watched_object(stream: TokenStream) -> str | None:
     """Which object a ``leaves the battlefield`` delay watches, or None."""
@@ -157,7 +166,14 @@ def _parse_watched_object(stream: TokenStream) -> str | None:
     # card that spells its own name and a card that says "this creature" name
     # the same object to the delayed machinery.
     mark = stream.mark()
-    if stream.accept_kind(SELF) is not None or stream.accept_phrase("this", "creature"):
+    if stream.accept_kind(SELF) is not None:
+        return "source"
+    # "…when **this artifact** leaves the battlefield this turn" (War Barge).
+    # The modern templating of the same self-reference, and the type word is
+    # read against the same closed set the trigger parser reads it against:
+    # "this artifact" on an artifact and "this creature" on a creature are one
+    # referent printed two ways, not two objects.
+    if stream.accept_word("this") and stream.accept_word(*_SELF_TYPE_WORDS):
         return "source"
     stream.reset(mark)
     return None
@@ -188,10 +204,23 @@ def parse_leaves_battlefield_delay(stream: TokenStream) -> tuple[str, bool, str,
     # battlefield exactly once — a returning permanent is a new object with a
     # new id (CR 400.7), so there is nothing for a second firing to be about.
     # It waits however many turns that takes, so it does not expire with the
-    # turn; only firing removes it.
+    # turn; only firing removes it — unless the card prints the other half of
+    # CR 603.7b, a **stated duration**: War Barge's "…leaves the battlefield
+    # **this turn**" is an ability that stops waiting when the turn ends, and
+    # dropping the two words would make the boat's target answerable to a
+    # destruction three turns later.
+    duration = "end_of_turn" if stream.accept_phrase("this", "turn") else "until_it_triggers"
+    # `binds` stays False in **this** word order. Stangg prints the effect in
+    # front of the delay and both of its sentences act on an object the effect
+    # already holds — the source, and the token it just made. Granting the
+    # permission here would hand "exile that token" to
+    # ``delay_binds_an_object``, which reads a ``that`` quantifier and would
+    # send the arming handler off to resolve a target the card never chose,
+    # arming nothing at all. The leading spelling in
+    # :func:`_parse_create_delayed_trigger` is where an acted-on target is
+    # possible, and it grants the permission itself.
     return (
-        "bound_permanent_leaves_battlefield", True, "until_it_triggers",
-        False, watched,
+        "bound_permanent_leaves_battlefield", True, duration, False, watched,
     )
 
 
@@ -267,12 +296,35 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
     binds = False
     subject = None
     agent = None
+    watches: str | None = None
 
     if stream.accept_word("when"):
         # "When that creature dies this turn, …"
         subject = _delayed_bound_subject(stream)
         if subject is not None and stream.accept_phrase("dies", "this", "turn"):
             event, binds = "bound_permanent_dies", True
+        elif subject is not None and stream.accept_phrase("leaves", "the", "battlefield"):
+            # "When that creature leaves the battlefield this turn, sacrifice
+            # this artifact." (Runesword.) CR 603.6c's wider event about the
+            # same bound object the row above names — a bounce and a tuck are
+            # both this and neither is a death, which is why the two are
+            # separate events rather than one with a flag.
+            event, binds = "bound_permanent_leaves_battlefield", True
+            if not stream.accept_phrase("this", "turn"):
+                duration = "until_it_triggers"
+        elif subject is None:
+            # "When **this artifact** leaves the battlefield this turn, destroy
+            # that creature." (War Barge.) The delay printed *in front* of its
+            # effect, naming the object it watches — which here is the ability's
+            # own source, while the effect names the creature the ability
+            # targeted. Two objects, so `binds` is granted: the opener says what
+            # is watched and `delay_binds_an_object` reads the effect for what
+            # is acted on.
+            stream.reset(mark)
+            leading = parse_leaves_battlefield_delay(stream)
+            if leading is not None:
+                event, once, duration, _permitted, watches = leading
+                binds = True
     elif stream.accept_word("whenever"):
         # "Whenever that creature is dealt damage by an attacking creature this
         # turn, …" — "this turn" is CR 603.7b's stated duration, so this one
@@ -325,6 +377,7 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
             else delay_binds_an_object(binds, effect)
         ),
         subject=subject, agent=agent,
+        watches=watches,
     )
 
 

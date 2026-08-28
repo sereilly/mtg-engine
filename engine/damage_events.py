@@ -177,6 +177,43 @@ def damage_locked(recipient) -> bool:
     return bool(metadata) and bool(metadata.get(DAMAGE_LOCK))
 
 
+#: "If the creature deals damage to a creature this turn, the creature dealt
+#: damage can't be regenerated this turn. If a creature dealt damage by the
+#: targeted creature would die this turn, exile that creature instead."
+#: (Runesword.) Two markers on the **damager**, naming the riders its damage
+#: carries for the rest of the turn — the mirror of the two the damage handler
+#: stamps on a victim it hits now (`cant_be_regenerated_this_turn`,
+#: `exile_if_dies_this_turn`), and cleared with the turn by the same sweep.
+DAMAGE_DENIES_REGENERATION = "damage_it_deals_denies_regeneration_this_turn"
+DAMAGE_EXILES_INSTEAD = "damage_it_deals_exiles_instead_this_turn"
+
+#: Which marker on the damager becomes which marker on what it damaged. A pair
+#: rather than two branches, so a rider added later is one row.
+_DEALER_RIDERS: tuple[tuple[str, str], ...] = (
+    (DAMAGE_DENIES_REGENERATION, "cant_be_regenerated_this_turn"),
+    (DAMAGE_EXILES_INSTEAD, "exile_if_dies_this_turn"),
+)
+
+
+def _apply_dealer_riders(game, source, recipient) -> None:
+    """Stamp the riders *source* grants onto what it just damaged.
+
+    Here rather than at a damage path for the reason `source_seat` is derived
+    here: this is the one seam every damage event passes through, and a rider
+    read at the fire sites is a rider as many places can forget as there are
+    sites. Before the caller applies the damage, so the exile replacement is
+    already armed when state-based actions ask whether the creature died
+    (CR 704.5g, CR 614).
+    """
+    if not isinstance(source, Permanent) or not isinstance(recipient, Permanent):
+        return
+    if not recipient.is_creature:
+        return
+    for on_dealer, on_victim in _DEALER_RIDERS:
+        if source.metadata.get(on_dealer):
+            recipient.metadata[on_victim] = True
+
+
 def damage_candidates(recipient) -> list[Candidate]:
     """Every effect attempting to modify a damage event with this recipient
     before it is dealt (CR 120.4b) — shields and replacements together, in
@@ -398,6 +435,10 @@ def _announce(game, event: dict, dealt: int) -> None:
         # a toughness rewrite each wipe that while the damage stays dealt.
         # Cleared with the turn by ``_EOT_METADATA_KEYS``.
         recipient.metadata["was_dealt_damage_this_turn"] = True
+    # Before the announcement, because the riders are properties of the damage
+    # rather than consequences of it: a trigger that fires on the damage may
+    # kill the creature, and by then "it can't be regenerated" has to be true.
+    _apply_dealer_riders(game, source, recipient)
     emit(game, "damage_dealt", **payload)
     if not isinstance(recipient, PlayerState):
         # "Whenever that creature is dealt damage by an attacking creature this

@@ -812,3 +812,86 @@ def _parse_bound_targeting_prevention(stream: TokenStream) -> "ast.PreventDamage
     return ast.PreventDamage(
         ast.AllOf(), to=protected, duration=duration, from_targeting_source=True
     )
+
+
+#: How Runesword's two sentences name the creature its own ability targeted.
+#: Longest first, because "the creature" is a prefix of "the targeted creature"
+#: and a first-match reader would take the shorter one and then fail on the
+#: leftover word.
+_ABILITY_TARGET_REFERENTS: tuple[tuple[str, ...], ...] = (
+    ("the", "targeted", "creature"),
+    ("the", "creature"),
+)
+
+
+def _accept_ability_target(stream: TokenStream) -> bool:
+    """``the creature`` / ``the targeted creature`` — the creature this same
+    ability already chose (CR 601.2c), not a new target."""
+    for phrase in _ABILITY_TARGET_REFERENTS:
+        mark = stream.mark()
+        if stream.accept_phrase(*phrase):
+            return True
+        stream.reset(mark)
+    return False
+
+
+def _parse_damage_dealt_riders(stream: TokenStream) -> "ast.DamageRidersUntilEndOfTurn | None":
+    """Runesword's two trailing sentences:
+
+    ``If the creature deals damage to a creature this turn, the creature dealt
+    damage can't be regenerated this turn.``
+    ``If a creature dealt damage by the targeted creature would die this turn,
+    exile that creature instead.``
+
+    Both open like a conditional and neither is one. Nothing is tested when the
+    ability resolves: what they create is a standing property of the creature
+    the ability targeted, so that damage it deals for the rest of the turn
+    carries the two riders `Disintegrate` applies to one event of its own. That
+    is the same shape as ``_parse_bound_targeting_prevention`` (Silhouette),
+    read in the same position and for the same reason — the generic conditional
+    below would take the clause as an intervening-if over a sentence it has no
+    production for.
+
+    Returns None with the cursor untouched for every other "If …", so a
+    sentence this is not keeps the refusal it already had.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("if"):
+        return None
+    if _accept_ability_target(stream):
+        if not stream.accept_phrase(
+            "deals", "damage", "to", "a", "creature", "this", "turn"
+        ):
+            stream.reset(mark)
+            return None
+        stream.accept_punct(",")
+        # The victim is named again — "**the creature dealt damage**" — and the
+        # words are consumed rather than skipped: they say which creature of the
+        # event carries the rider, and a reader that dropped them would put it
+        # on whichever one it happened to hold.
+        if not stream.accept_phrase(
+            "the", "creature", "dealt", "damage", "can't", "be", "regenerated"
+        ):
+            stream.reset(mark)
+            return None
+        _parse_duration(stream)
+        return ast.DamageRidersUntilEndOfTurn(
+            "ability_target", ast.DamageRiders(no_regen=True)
+        )
+    if not stream.accept_phrase("a", "creature", "dealt", "damage", "by"):
+        stream.reset(mark)
+        return None
+    if not (
+        _accept_ability_target(stream)
+        and stream.accept_phrase("would", "die")
+    ):
+        stream.reset(mark)
+        return None
+    _parse_duration(stream)
+    stream.accept_punct(",")
+    if not stream.accept_phrase("exile", "that", "creature", "instead"):
+        stream.reset(mark)
+        return None
+    return ast.DamageRidersUntilEndOfTurn(
+        "ability_target", ast.DamageRiders(exile_if_dies=True)
+    )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import random
 from typing import TYPE_CHECKING
 
@@ -22,7 +23,7 @@ from ..oracle_types import (EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
 from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..resumption import run_resumable
 from ..search_filters import search_matches
-from ..tokens import CREATED_TOKEN_RESULT_KEY
+from ..tokens import CREATED_TOKEN_RESULT_KEY, tokens_created_with
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -1652,13 +1653,28 @@ def exile_created_token(game: Game, instruction: OracleInstruction, context: Ora
     fires the resolution that created the token is long over. The delayed entry
     froze the scratchpad (CR 608.2h), which is where the id then lives.
 
+    ``created_with_source`` is the same object one reach further out — "exile
+    **the token**" (Dance of Many), where the token maker is a *different
+    ability of the same permanent* and fired turns ago. No scratchpad survives
+    that, so the id comes off the durable record the maker stamped on the token
+    (``tokens_created_with``). One kind rather than two, because what differs
+    is where the id is read and not what is done with it.
+
     A token that is already gone exiles nothing (CR 608.2b, and CR 111.7 —
     a token that has left the battlefield has ceased to exist).
     """
-    recorded = (context.trigger_context or {}).get(CREATED_TOKEN_RESULT_KEY)
-    if not isinstance(recorded, int):
-        recorded = context.results.get(CREATED_TOKEN_RESULT_KEY)
-    token = game.permanent_by_id(recorded) if isinstance(recorded, int) else None
+    if instruction.payload.get("created_with_source"):
+        made = tokens_created_with(game, context.source_permanent)
+        # The phrase is singular. A permanent that made several would leave
+        # "the token" naming no one of them, so the sentence takes the one it
+        # names and nothing otherwise — the same refusal every ambiguous
+        # back-reference in this engine takes.
+        token = made[0] if len(made) == 1 else None
+    else:
+        recorded = (context.trigger_context or {}).get(CREATED_TOKEN_RESULT_KEY)
+        if not isinstance(recorded, int):
+            recorded = context.results.get(CREATED_TOKEN_RESULT_KEY)
+        token = game.permanent_by_id(recorded) if isinstance(recorded, int) else None
     if token is None:
         game.log.append(f"{context.card.name}: the token it named is gone")
         return True, "resolved"
@@ -3540,4 +3556,120 @@ def return_all_cards_from_graveyard(game: Game, instruction: OracleInstruction, 
             returned += 1
     if not returned:
         game.log.append(f"{context.card.name}: no cards to return")
+    return True, "resolved"
+
+
+#: The scratchpad key the random reveal writes beside ``revealed_card``: which
+#: slot of the hand it named. The card object alone cannot answer that — two
+#: copies of one card in a hand are literally the same object (idiom 11), so a
+#: discard by value would take whichever one ``list.remove`` reached first.
+REVEALED_HAND_INDEX = "revealed_card_hand_index"
+
+
+@effect_handler("reveal_random_card_from_hand")
+def reveal_random_card_from_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target player reveals a card at random from their hand." (Wand of Ith.)
+
+    CR 701.16 over one card nobody chose. Recorded under the same
+    ``revealed_card`` key the library reveal writes, so the sentences behind it
+    — "if it's a land card", "discards **it**" — read the one referent this
+    engine has for a revealed card rather than a second one.
+
+    The slot is recorded beside it, because the card object is not an identity
+    in a hand: two copies of one card there are the same object, and a discard
+    by value would take whichever the list reached first.
+
+    An empty hand reveals nothing, which the condition behind it reads as False
+    — a legal outcome, not an error.
+    """
+    victim = context.target if context.target is not None else context.caster
+    if not victim.hand:
+        game.log.append(f"{victim.name} has no cards in hand to reveal")
+        return True, "resolved"
+    index = random.randrange(len(victim.hand))
+    card = victim.hand[index]
+    context.results["revealed_card"] = card
+    context.results[REVEALED_HAND_INDEX] = index
+    seat = next((i for i, seated in enumerate(game.players) if seated is victim), None)
+    if seat is not None:
+        game.record_reveal(seat, [card.name])
+    game.log.append(f"{victim.name} reveals {card.name} at random from their hand")
+    return True, "resolved"
+
+
+@effect_handler("discard_revealed_card")
+def discard_revealed_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """The declined branch of "…discards it unless they pay N life".
+
+    "It" is the card the reveal recorded, taken **by slot**: a hand is the one
+    zone where two copies of a card are one object, so the index resolved at
+    reveal time is the only thing that names which of them was shown.
+
+    A hand that has changed underneath the prompt discards nothing rather than
+    guessing — the card the sentence named is not there to discard.
+    """
+    victim = context.target if context.target is not None else context.caster
+    card = context.results.get("revealed_card")
+    index = context.results.get(REVEALED_HAND_INDEX)
+    if card is None or not isinstance(index, int):
+        return True, "resolved"
+    if not (0 <= index < len(victim.hand)) or victim.hand[index] is not card:
+        game.log.append(f"{context.card.name}: {card.name} is no longer in hand")
+        return True, "resolved"
+    victim.hand.pop(index)
+    victim.graveyard.append(card)
+    game.log.append(f"{victim.name} discards {card.name}")
+    return True, "resolved"
+
+
+@effect_handler("discard_revealed_unless_pay_life")
+def discard_revealed_unless_pay_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"That player discards it unless they pay 1 life." / "…unless they pay
+    life equal to its mana value." (Wand of Ith.)
+
+    An offer to a seat that is not the ability's controller, on the same
+    ``optional_pay`` queue every other offer uses — so the same three loops in
+    ``web/prompts.py`` render it, gate the actions it blocks and answer it for
+    an AI seat, and the ability stays on the stack until it is answered
+    (CR 608.2, CR 117.3b).
+
+    The *paying* seat is put on the branches' context rather than on the
+    payment's payload: ``pay_life`` charges ``context.caster``, and replacing it
+    here is what makes one payment instruction chargeable to whoever was
+    offered it — the discard on the other branch reads the same context and so
+    cannot come apart from it.
+
+    CR 119.4: a player may pay life only with a life total at least the amount,
+    so a seat that cannot pay is never offered the choice — it simply discards,
+    which is what the sentence says happens when the cost is not paid.
+    """
+    from .life_and_game import can_pay_life
+
+    victim = context.target if context.target is not None else context.caster
+    seat = next((i for i, seated in enumerate(game.players) if seated is victim), None)
+    card = context.results.get("revealed_card")
+    if card is None or seat is None:
+        return True, "resolved"
+    printed = instruction.payload.get("life", 0)
+    # "…life equal to **its** mana value" — a number nothing knows until the
+    # card is revealed, so it is read here off the card the reveal recorded
+    # rather than resolved at lowering.
+    amount = int(card.cmc or 0) if printed == "revealed_mana_value" else int(printed)
+    discard = (_OracleInstruction("discard_revealed_card", "", {}),)
+    paying_context = dataclasses.replace(context, caster=victim)
+    if not can_pay_life(victim, amount):
+        game._execute_oracle_instruction(discard[0], paying_context)
+        return True, "resolved"
+    game.arm_pending_choice(
+        "optional_pay", seat,
+        card_name=context.card.name if context.card is not None else "",
+        cost={},
+        life=0,
+        _source_permanent=context.source_permanent,
+        _on_accept=(_OracleInstruction("pay_life", "", {"amount": amount}),),
+        _on_decline=discard,
+        _on_reflexive=(),
+        _context=paying_context,
+        prompt=f"Pay {amount} life to keep {card.name}?",
+    )
     return True, "resolved"

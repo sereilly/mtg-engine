@@ -81,6 +81,17 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     # disagreeing about the same word is the fork this repo closes elsewhere.
     if stream.accept_word("they"):
         return ast.PlayerRef("that_player")
+    # "…**the player** discards it unless they pay …" (Wand of Ith). The
+    # definite article back-refers to the player the sentence in front of this
+    # one named, which is what `that_player` means downstream — an alias, like
+    # "they" above, and not a fourth referent. Only the bare two words: "the
+    # player who …" is a *description* of a seat and belongs to the productions
+    # that read one.
+    mark_the_player = stream.mark()
+    if stream.accept_phrase("the", "player"):
+        if stream.exhausted or not stream.at_word("who", "with", "whose"):
+            return ast.PlayerRef("that_player")
+    stream.reset(mark_the_player)
     if stream.accept_phrase("its", "controller"):
         return ast.PlayerRef("controller")
     if stream.accept_phrase("their", "controller"):
@@ -391,6 +402,23 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
     if stream.accept_phrase("that", "token"):
         return ast.TargetSpec("that", ast.ObjectFilter(is_created_token=True))
     stream.reset(mark_token)
+    # "**the token**" — the token this *permanent* created, a longer reach than
+    # the phrase above and a different record.
+    #
+    # Dance of Many prints Stangg's pair of sentences as separate ability
+    # lines: one makes the token, and two more name it when either permanent
+    # leaves the battlefield, turns later. "That token" reads the resolution
+    # scratchpad and there is none by then, so the referent here is the durable
+    # record the token maker stamps on what it made — the same
+    # ``created_with_source`` relation Tetravus's "tokens created with this
+    # creature" reads, asked of one token rather than of any number.
+    mark_the_token = stream.mark()
+    if stream.accept_phrase("the", "token"):
+        return ast.TargetSpec(
+            "that",
+            ast.ObjectFilter(token_only=True, created_with_source=True),
+        )
+    stream.reset(mark_the_token)
     # The card naming itself mid-sentence ("put a loyalty counter on Garruk") —
     # the lexer already collapsed the name to one SELF token.
     token = stream.peek()

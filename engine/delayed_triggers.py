@@ -151,6 +151,20 @@ class DelayedTrigger:
     #: names its own source, the stack object carried none, and the ability
     #: resolved, logged, and granted nothing at all.
     source_permanent_id: int | None = None
+    #: CR 603.7c's *other* half: the object the **event** must be about, which
+    #: is not always the object the ability is about.
+    #:
+    #: Sandals of Abdallah watches the creature it targeted and destroys its own
+    #: source; War Barge prints the mirror — it watches its own source and
+    #: destroys the creature it targeted. One field could only spell one of the
+    #: two, and it spelled the wrong one: ``bound_permanent_id`` is what the
+    #: effect addresses, and this is what the firing event is compared against.
+    #:
+    #: None means "the same object the ability is about", which is what every
+    #: card naming only one object prints. The arming handler sets it outright
+    #: either way, so the fallback in :meth:`watched_id` serves only an entry
+    #: built by hand.
+    watched_permanent_id: int | None = None
     #: CR 603.7b. True for "when …", False for "whenever … this turn".
     once: bool = True
     duration: str = END_OF_TURN
@@ -159,6 +173,19 @@ class DelayedTrigger:
     # with a count, and "nontoken" as its own word rather than a filter payload.
     batch: bool = False
     nontoken: bool = False
+
+    @property
+    def watched_id(self) -> int | None:
+        """Which object's event this entry answers to (CR 603.7c).
+
+        The explicit ``watched_permanent_id`` when there is one, and otherwise
+        the object the ability is about — the identity every card that names
+        only one object prints, and the reading this engine had before War
+        Barge printed the mirror of it.
+        """
+        if self.watched_permanent_id is not None:
+            return self.watched_permanent_id
+        return self.bound_permanent_id
 
     def matches(
         self,
@@ -187,8 +214,9 @@ class DelayedTrigger:
 
         if self.event != event:
             return False
-        if self.bound_permanent_id is not None and subject is not None:
-            if subject.permanent_id != self.bound_permanent_id:
+        watched = self.watched_id
+        if watched is not None and subject is not None:
+            if subject.permanent_id != watched:
                 return False
         # Gated on the same question as the id above, and deliberately: the
         # printed noun re-states what the id already names, and the two arrive

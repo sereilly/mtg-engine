@@ -182,6 +182,11 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # when
     "enters_battlefield": "when this creature enters the battlefield",
     "leaves_battlefield": "when this creature leaves the battlefield",
+    # Dance of Many: the same event asked about the token this permanent
+    # created. Its own kind because the relation is what the fire site
+    # dispatches on — the ability is the enchantment's and the event is the
+    # token's.
+    "created_token_leaves_battlefield": "when the token leaves the battlefield",
     "dies": "when this creature dies",
     "becomes_target": "when this creature becomes the target of a spell",
     # Legends' two, added at its promotion. Both are announced away from a call

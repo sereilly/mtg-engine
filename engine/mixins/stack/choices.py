@@ -1488,9 +1488,9 @@ class PendingChoicesMixin:
                 # Tetravus's second upkeep trigger. Oldest first, and only as
                 # many as are still there — a token that died while the prompt
                 # was owed is not one this can take.
-                from ...handlers.board_misc import _tokens_created_with
+                from ...tokens import tokens_created_with
 
-                owned = _tokens_created_with(self, permanent)[:value]
+                owned = tokens_created_with(self, permanent)[:value]
                 for token in owned:
                     owner_index = self.owner_index_of(token)
                     self.remove_from_battlefield(token)

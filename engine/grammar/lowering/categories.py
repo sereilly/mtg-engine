@@ -20,6 +20,11 @@ from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       CREATED_TOKEN, EXILED_THIS_WAY)
 INSTRUCTION_CATEGORIES: dict[str, str] = {
     "deal_damage": "damage",
+    # "If the creature deals damage to a creature this turn, the creature
+    # dealt damage can't be regenerated this turn." (Runesword.) It deals no
+    # damage; it says what damage dealt later will do. Same family, because
+    # what the sentence is *about* is a damage event.
+    "grant_damage_riders_until_eot": "damage",
     "earthquake_damage": "damage",
     "hurricane_damage": "damage",
     "deal_damage_each_creature_and_player": "damage",
@@ -188,6 +193,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "destroy_all_lands_of_type": "destruction",
     "destroy_all_matching": "destruction",
     "destroy_attached_permanent": "destruction",
+    # "…destroy **that creature**" inside a delayed ability (War Barge):
+    # the object the creating ability bound, by id, rather than a pick.
+    "destroy_bound_permanent": "destruction",
     "destroy_self": "destruction",
     "destroy_all_artifacts_creatures_enchantments": "destruction",
     "delayed_destroy_blocked_or_blocker": "destruction",
@@ -323,6 +331,14 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the template above, so GRAMMAR_CATEGORIES is unchanged: what moves is
     # information about a hand either way.
     "reveal_hand": "zones",
+    # "Target player reveals a card at random from their hand." (Wand of Ith.)
+    # The same zone made public one card at a time, and the same category for
+    # that reason.
+    "reveal_random_card_from_hand": "zones",
+    # "…discards it unless they pay 1 life." The offer and its declined branch
+    # are one instruction because the branch acts on a card only the offer knows
+    # — the same reason `unless_player_pays` carries its own unpaid steps.
+    "discard_revealed_unless_pay_life": "zones",
     # "…discards **all nonland cards**" (Amnesia). A discard like the counted
     # ones beside it; only who picks differs, and here nobody does.
     "discard_all_matching_cards": "zones",
@@ -709,6 +725,10 @@ _PRODUCES: dict[str, str] = {
     # the conditional after it reads that record — not the library, which the
     # draw in its own branch would have changed underneath it.
     "reveal_top_of_library": "revealed_card",
+    # "Target player reveals a card at random from their hand." (Wand of
+    # Ith.) The same record, from a different zone: the sentences behind it
+    # ask what "it" is, and this is what answers.
+    "reveal_random_card_from_hand": "revealed_card",
     # "Exile it. **If you do**, create a 5/5 black Demon creature token with
     # flying." (Archfiend's Vessel.) The self-exile records that it happened, so
     # the branch after it is the ordinary if-you-do rather than a fused kind.

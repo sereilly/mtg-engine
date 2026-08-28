@@ -254,6 +254,12 @@ class RevealedCardIs:
     reader would have to branch on it.
     """
     filter: "ObjectFilter"
+    #: "If it **isn't** a land card" (Wand of Ith) — the same test read the
+    #: other way. A flag rather than a second node, because what changes is the
+    #: answer and not the question: both spellings read the same record through
+    #: the same filter, and two nodes would be two places to keep that reading
+    #: in step.
+    negated: bool = False
 
 
 @dataclass(frozen=True)
