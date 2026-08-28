@@ -106,16 +106,6 @@ A drainable list of things the playbook knows are not yet true, each naming
 the phase that clears it. A retrospective that drains an item deletes it; a
 set that hits a new one adds it.
 
-**Read an actual CI run's suite time before ingesting the next set.**
-*Clears in: Phase 0.* The budget in `ci.yml` is 120s and was sized when a local
-run took 40s, on the reasoning that a GitHub runner takes two to three times as
-long. After The Dark a local run takes ~82s at 9,110 tests. The same multiplier
-puts CI at 164–246s, which is over budget with nothing actually wrong — so
-either the multiplier has changed or the budget is too tight, and nobody has the
-number. Ingesting a set adds several hundred tests to whichever answer it is.
-Do not raise the budget or edit the baseline to make this go away: both destroy
-the evidence that would settle it (ROADMAP invariant 2).
-
 **The verification backlog is now the largest standing debt.**
 *Clears in: Phase 5, and it has not been clearing.* 708 of 1,162 cards have no
 recorded in-game result, because four sets have now promoted ahead of their
@@ -123,7 +113,15 @@ Phase 5 pass and each one added to it. Promotion deliberately does not gate on
 this and that should not change — but the item belongs here rather than only in
 a retrospective, because "deliberately deferred" and "quietly abandoned" look
 identical after the fourth set. Two cards are recorded *failing* and one of them,
-Candelabra of Tawnos, predates The Dark entirely.
+Candelabra of Tawnos, predates The Dark entirely. **4ED is the first promotion
+that did not add to it** — a reprint set has no new card to verify — so the
+number is unchanged at ten sets rather than improving, and the item stands.
+
+Drained at 4ED's Phase 0: the CI suite-time budget. The item said not to touch
+either number until someone read a real run, and reading three settled it — the
+ratio never worked because `BASELINE` was a local measurement compared against
+an `ELAPSED` measured on the runner. Both numbers were wrong in opposite
+directions; ROADMAP invariant 2 carries the evidence.
 
 Drained after the M21 promotion: `scripts/set_progress.py` and
 `CARD_VERIFICATION.md` regeneration joined CI's tracker-freshness step (the
@@ -181,6 +179,16 @@ is green, the trackers carry its row, and the census is in hand.
    refused line of every unsupported card with the grammar's exact refusal
    site, plus a rollup by site — run it too, and plan Phase 3's rounds from
    it rather than re-probing the compiler card by card.
+5. **Ask how many of the set's cards are new to the pool**, before planning any
+   round. Every phase after this one is written for a set that brings cards,
+   and a reprint set brings printings: 4ED's 378 entries were 368 unique cards
+   and *all* of them were already shipped, so the census read 368/368 supported
+   at ingest and Phases 2 and 3 had no work in them at all. Diff the ingested
+   file's `oracle_id`s against the shipped pool — one comparison, and it decides
+   whether this is a set you implement or a set you promote. Do not read a
+   100%-supported census as an anticlimax and skip the rest: the ingest still
+   pays, and where it pays is Phase 4. Ten such sets are still ahead (ROADMAP's
+   header names them), so this is a shape, not a curiosity.
 
 ## Phase 2 — Machinery census (the big rocks)
 
@@ -384,6 +392,26 @@ that, each inventing a disagreement it then reported. A guard that re-spells
 the thing it checks is the most expensive kind, because its failures look like
 real findings.
 
+**A guard that checks a proxy needs the proxy's availability asserted too**, and
+a reprint set is what collects on that. Two fired at 4ED. One proved
+`load_catalog()` ignores a measured set by finding a card name only the measured
+set has — an assertion an all-reprint set cannot supply — and it passed *because
+its author had written the self-check*: "shares every card name with the shipped
+pool, so this test cannot tell the two apart — pick a different assertion". Copy
+that habit. The other did not have it: the printing-order guard checks the
+consequence (no card's origin moves), which a set whose every card already has
+an earlier printing satisfies from *any* position, so the whole suite stayed
+green with 4ED four places out of order and nothing said so. The fix in both
+cases was to assert the invariant rather than a symptom of it — printings rather
+than names, `released` dates rather than origins.
+
+**And expect the trackers' aggregates to move on membership alone.** Promoting
+4ED raised `GRAMMAR_COVERAGE.md`'s All row from 85.2% to 85.7% parsed with no
+production touched, because that row is printing-weighted; `HOOK_RELIANCE.md`'s
+is deduped and did not move at all. Neither is a bug and the ratchets are
+re-accepted at every promotion anyway — the trap is reading the diff as
+progress. Ask what changed in the *membership* before crediting the parser.
+
 The checklist, each line naming its guard:
 
 - `tests/engine/test_front_end_safety.py` — the catalog is 100% supported,
@@ -423,12 +451,23 @@ CLAUDE.md's verification tracker section), so Phase 4's behaviour-class
 review directly shrinks this phase.
 
 1. Work the untested cards through the in-game Debug Menu (the only writer
-   of `CARD_VERIFICATION.md`).
+   of `CARD_VERIFICATION.md`). A reprint set adds none: the tracker is keyed to
+   the deduped catalog, so its cards arrive carrying whatever result they
+   already had, and this step is *derivably* empty rather than skipped.
 2. Smoke the set where a player meets it: the web app serves it, its cards
-   are deckable, one human-vs-AI pass via the `run-magic` skill.
+   are deckable, one human-vs-AI pass via the `run-magic` skill. **For a
+   reprint set this is the only step that shows what promotion bought**, and
+   what it buys is the set as a deckbuilding constraint: the deck editor's set
+   filter gains the code, and every card under it renders that set's own art.
+   Check the filter's count against the census, not just that the option exists.
 3. `scripts/simulate_ai_games.py` — a seeded run is byte-identical unless a
    fix legitimately changed AI-visible behaviour, in which case the change is
-   named in the retrospective.
+   named in the retrospective. Note that `--set <CODE>` cannot run for most
+   sets: the simulator builds one fixed deck, so any pool missing `Island`,
+   `Lightning Bolt` or `Ancestral Recall` is refused (correctly — an empty or
+   partial pool would report a clean run it never had). LEA and `--all` are the
+   runnable scopes; compare `--all` across the promotion commit, which is the
+   comparison that would actually catch a change.
 
 ## Phase 6 — Retrospective and playbook update
 
@@ -689,3 +728,44 @@ shadow, and a field-only carry dropping the branch that emits the field.
 so The Dark is the fourth set to ship ahead of its in-game pass and the
 verification backlog grew again — 708 untested of 1,162. That is the decision
 working as stated, and the retrospective is where it stays visible.
+
+**4ED — 2026-08-28 (Phases 0–6, one session).** The first set to ship without
+implementing a card. Fourth Edition is 378 printings of 368 unique cards and
+every one was already in the pool, so the census read 368/368 supported at
+ingest, Phases 2 and 3 were empty, and the promotion moved neither the unique
+count (1,162) nor the verification backlog (708). Phase 1 gained a step for it:
+diff the ingested `oracle_id`s against the shipped pool before planning rounds,
+because every phase downstream is written for a set that brings cards. Ten more
+zero-new-card sets are ahead (ROADMAP's header lists them), so this is a shape
+to plan for rather than a one-off.
+
+**The value of a reprint set's ingest is in Phase 4, and it is guards.** Two
+fired, both about premises rather than cards. `test_the_catalog_does_not_load_measured_sets`
+proved its point by finding a card name only the measured set has, which an
+all-reprint set cannot supply — and it *passed*, because its author had written
+the self-check for exactly that day ("pick a different assertion"). The
+replacement asserts printings instead of names and is the stronger probe even
+where the old one worked: a widened `load_catalog()` adds 368 `4ed` printings to
+cards whose names were already there. The printing-order guard had no such
+self-check: it verifies the consequence, no card's origin moves, which a set
+whose every card already has an earlier printing satisfies from any position.
+Probed by appending 4ED after M21 — the whole suite stayed green four places out
+of order. Phase 4 now says to assert a proxy's *availability*, and manifest
+order is asserted directly off the `released` dates.
+
+**And the two coverage trackers disagree about what "the pool" means.** Only a
+reprint set makes it visible: GRAMMAR_COVERAGE's All row is printing-weighted
+and moved 85.2% → 85.7% parsed with nothing in the parser touched, while
+HOOK_RELIANCE's is deduped and did not move at all. Both are defensible, neither
+is a hole — the ratchets are re-accepted at each promotion — but the diff reads
+as progress and is not. Phase 4 now says to ask what changed in the membership
+first, and the sentence lives in the generated report where the number is read.
+
+**Phase 0 drained its standing item.** Three real CI runs settled the suite-time
+budget: the ratio never worked because `BASELINE` was measured locally and
+compared against an `ELAPSED` measured on the runner. Both numbers were wrong in
+opposite directions — 40 → 110 (runner-measured) and 120 → 240. Phase 5's
+simulator step gained a note that `--set` is unrunnable for most sets, since the
+simulator's one fixed deck needs cards those pools lack; `--all` across the
+promotion commit is the comparison that would catch something, and it was
+byte-identical. 9,110 → 9,117 tests.

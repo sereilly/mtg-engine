@@ -1,8 +1,17 @@
 # Scaling Roadmap
 
 Target: grow the card pool from **1,162** unique cards (LEA/LEB/2ED/ARN/ATQ/
-3ED/LEG/DRK/M21, all shipped and all supported) to the full release line — **137
-sets, 33,594 printings, 26,113 unique cards** per `set_progress.json`.
+3ED/LEG/DRK/4ED/M21, all shipped and all supported) to the full release line —
+**137 sets, 33,594 printings, 26,113 unique cards** per `set_progress.json`.
+Ten sets, and 4ED did not move the card count: it is a pure reprint set, so it
+bought printings rather than cards. **That shape recurs and is worth planning
+for** — `set_progress.json` records 13 sets in the release line with zero new
+cards, and ten are still ahead: the foreign-language base sets (FBB, SUM, 4BB),
+the rest of the core-set line (5ED through 10E), and Timeshifted. Each of those
+promotes roughly the way 4ED did, so their cost is an ingest and a rehearsal
+rather than a set of rounds. Sequence them after the sets they reprint from,
+not before, or they arrive carrying cards nothing supports and the shape is
+lost.
 
 **Read this before parser or card-data work. It is the standing brief for the
 next set, and nothing else.** Every claim below is either a rule the next round
@@ -30,7 +39,7 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **9,110 tests**, CI budget **240s**, CI-measured
+2. **The suite stays fast.** **9,117 tests**, CI budget **240s**, CI-measured
    baseline **110s** (`ci.yml`). The budget catches a step change; the
    baseline is what catches creep, and it is the number to keep honest.
    Raising the budget is a decision, not maintenance — it has been raised three
