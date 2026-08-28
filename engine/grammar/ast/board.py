@@ -17,11 +17,11 @@ from dataclasses import dataclass, field
 from ._core import (
     Amount,
     Duration,
-    ManaCost,
     PlayerRef,
     Recipient,
     Zone,
 )
+from .costs import ManaCost
 
 
 @dataclass(frozen=True)

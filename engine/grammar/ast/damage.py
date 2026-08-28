@@ -16,12 +16,12 @@ from dataclasses import dataclass, field
 from ._core import (
     Amount,
     Duration,
-    ManaCost,
     ObjectFilter,
     PlayerRef,
     Recipient,
     TargetSpec,
 )
+from .costs import ManaCost
 
 
 @dataclass(frozen=True)

@@ -406,7 +406,12 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         "you need 7 life above your starting total, and sorcery timing",
     ),
     ActivationRestriction(
-        re.compile(r"^activate only as a sorcery$"),
+        # "…**and only once each turn**" (Gaea's Touch) is the same optional
+        # tail the upkeep and your-turn rows below carry, and for the same
+        # reason: the cap is enforced by `_ACTIVATION_LIMIT_SHAPES`, which
+        # *searches* the clause, so the timing half only has to stop refusing
+        # the line for the words beside it.
+        re.compile(r"^activate only as a sorcery(?: and only once each turn)?$"),
         _as_a_sorcery,
         "this ability is sorcery-speed",
     ),

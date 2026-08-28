@@ -61,6 +61,12 @@ CHOICE_KEYS = (
     # names a permanent the payer chooses, the other a *set* whose size the
     # payer chooses — and a card can print both, as this one does.
     "sacrificed_set_for_cost",
+    # What a printed **exile** cost ate (City of Shadows, Necropolis). Same
+    # channel and same reason as the three above: the object is out of the game
+    # before the ability reaches the stack, and "where X is **the exiled card's**
+    # mana value" is asked once it is (CR 608.2h). A ``CardDefinition``, not a
+    # ``Permanent``, because the graveyard spelling of the cost never had one.
+    "exiled_for_cost",
 )
 
 

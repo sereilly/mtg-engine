@@ -97,6 +97,22 @@ class ActivatedAbilityCost:
     #: beside its kind: only a fixed count can make an ability unpayable, and
     #: "any number" never can, since zero is a number (CR 601.2h).
     sacrifice_count: "int | str" = 1
+    #: City of Shadows: "{T}, Exile **a creature you control**: ..." /
+    #: Necropolis: "Exile **a creature card from your graveyard**: ..." - a
+    #: *chosen* object rather than the source, which is what ``exile_self``
+    #: above names. Its own field for the reason ``sacrifice_filter`` is one
+    #: beside ``sacrifice_self``: a chosen payment needs a picker, a
+    #: payability check and a record of what it ate, and the source needs
+    #: none of the three. None means "no such cost", never "anything": an
+    #: empty filter would let the charger eat a land.
+    exile_filter: dict | None = None
+    #: Which zone that payment comes out of - ``"battlefield"`` (a permanent
+    #: the payer controls) or ``"graveyard"`` (a card in the payer's own).
+    #: Beside the filter rather than inside it because the two enumerate
+    #: different kinds of object, and a matcher for one cannot answer about
+    #: the other (CR 613.1: a card in a zone has no computed characteristics
+    #: at all).
+    exile_zone: str = "battlefield"
     # Seasoned Hallowblade: "Discard a card: …" — N cards the payer chooses,
     # where `discard_last_drawn` above names its card by history and leaves the
     # payer no choice at all. Two fields because they are two costs: a card

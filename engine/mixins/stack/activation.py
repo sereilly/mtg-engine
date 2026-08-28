@@ -25,7 +25,7 @@ from ...cost_x_definitions import cost_x_value
 from ...mana_payment import is_mana_ability
 from ...events import emit
 from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
-from ...handlers._common import permanent_matches_filter
+from ...handlers._common import _card_matches_filter, permanent_matches_filter
 from ...oracle import LOYALTY_ANY_TIME_STATIC, OracleInstruction, compile_card_oracle
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
 
@@ -991,6 +991,29 @@ class AbilityActivationMixin:
                 f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
             )
 
+        # "Exile a creature you control" (City of Shadows) / "Exile a creature
+        # card from your graveyard" (Necropolis) — a *chosen* object rather than
+        # the source. **A cost is not a target** (CR 601.2b, idiom 10), so
+        # nothing here consults shroud or protection; what it consults is the
+        # printed noun phrase, through the same reader the picker uses.
+        #
+        # Charged before the source's own exile below, so a card printing both
+        # eats the chosen object while the source is still on the battlefield.
+        exiled_for_cost = None
+        if ability.cost.exile_filter is not None:
+            exiled_for_cost = self._pay_exile_cost(
+                ability.cost, controller, controller_index, permanent,
+                cost_permanent_index,
+            )
+            if exiled_for_cost is None:
+                details = (
+                    f"{permanent.card.name}: nothing available to exile as a cost"
+                )
+                self.log.append(details)
+                return SimulationResult(
+                    permanent.card.name, False, "unsupported", details
+                )
+
         # Ring of Ma'rûf: "Exile this artifact" is part of the cost, so the
         # permanent leaves before the ability goes on the stack — and the ability
         # still resolves from exile (CR 603.6 / 608.2: the source leaving doesn't
@@ -1055,6 +1078,7 @@ class AbilityActivationMixin:
                     # back what the cost ate must not depend on which of the
                     # two paths it came down.
                     choices={
+                        "exiled_for_cost": exiled_for_cost,
                         "counters_removed_for_cost": counters_removed_for_cost,
                         "sacrificed_set_for_cost": list(sacrifice_cost_set),
                         "sacrificed_for_cost": sacrifice_cost_permanent,
@@ -1096,6 +1120,11 @@ class AbilityActivationMixin:
                 # additional cost's sacrifice.
                 choices={
                     "chosen_source": chosen_source,
+                    # …and what an **exile** cost ate, on the same channel and
+                    # for the same reason: the object is out of the game
+                    # before this item is on the stack, so nothing else holds
+                    # it (CR 608.2h).
+                    "exiled_for_cost": exiled_for_cost,
                     # How many counters the cost's "remove any number of …"
                     # actually took (the Mana Batteries), on the same
                     # last-known-information channel as the sacrifice beside
@@ -1151,6 +1180,75 @@ class AbilityActivationMixin:
             activated_ability_item=self.stack[-1] if self.stack else None,
         )
         return SimulationResult(permanent.card.name, True, ability.effect_kind, "queued")
+    def _pay_exile_cost(
+        self, cost, controller, controller_index: int, permanent,
+        cost_permanent_index,
+    ):
+        """Charge an "Exile <noun phrase>" activation cost, returning the card
+        it ate — or ``None`` when nothing in the named zone could pay, which
+        makes the ability unactivatable (CR 602.2b) with nothing else spent.
+
+        Two zones, one rule. The battlefield enumerates the *permanents the
+        payer controls* through the control seam and asks ``subject_matches``,
+        the same predicate the picker offers by. A graveyard enumerates the
+        payer's own pile and asks the card matcher instead, because a card in a
+        zone has no computed characteristics at all (CR 613.1).
+
+        **Idiom 11**: in a graveyard, two copies of a card are literally one
+        object, so the chosen slot is resolved to its card *before* anything
+        leaves the zone and removed by index — a scan by value takes whichever
+        copy comes first.
+
+        The named choice is honoured where it is legal and otherwise the first
+        eligible object is taken, which is what every other cost payment in this
+        file does for a non-interactive seat.
+        """
+        described = cost.exile_filter or {}
+        if cost.exile_zone == "graveyard":
+            slots = [
+                index for index, card in enumerate(controller.graveyard)
+                if _card_matches_filter(card, described)
+            ]
+            if not slots:
+                return None
+            chosen = (
+                cost_permanent_index
+                if isinstance(cost_permanent_index, int)
+                and cost_permanent_index in slots
+                else slots[0]
+            )
+            card = controller.graveyard[chosen]
+            controller.graveyard.pop(chosen)
+            controller.exile.append(card)
+            self.log.append(
+                f"{controller.name} exiled {card.name} from their graveyard to "
+                f"activate {permanent.card.name}"
+            )
+            return card
+        candidates = [
+            perm for perm in self.controlled_by(controller_index)
+            if subject_matches(
+                self, perm, described, observer=controller_index, source=permanent,
+            )
+        ]
+        if not candidates:
+            return None
+        named = (
+            self.permanent_at(controller, cost_permanent_index)
+            if isinstance(cost_permanent_index, int) else None
+        )
+        victim = (
+            named if any(named is option for option in candidates) else candidates[0]
+        )
+        owner_index = self.owner_index_of(victim)
+        card = victim.card
+        self.remove_from_battlefield(victim)
+        self.players[owner_index if owner_index is not None else controller_index]            .exile.append(card)
+        self.log.append(
+            f"{controller.name} exiled {card.name} to activate {permanent.card.name}"
+        )
+        return card
+
     def activate_from_hand(
         self,
         controller_index: int,

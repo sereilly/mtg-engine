@@ -24,8 +24,8 @@ from typing import Union
 
 from .conditions import Condition
 from .conditions import ChosenThisWay, DiedThisTurn, DiedThisWay, ExiledThisWay
+from .costs import Cost
 from ._core import (
-    Cost,
     Duration,
     ObjectFilter,
     PlayerRef,

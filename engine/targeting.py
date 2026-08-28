@@ -491,6 +491,40 @@ def _cost_picker_spec(cost) -> dict | None:
         if alternatives:
             spec["filters"] = [dict(alt) for alt in alternatives]
         return spec
+    described = getattr(cost, "exile_filter", None)
+    if described is not None:
+        # "Exile a creature you control" (City of Shadows) / "Exile a creature
+        # card from your graveyard" (Necropolis). The sacrifice picker one zone
+        # over: the *choice* is the same announcement (CR 601.2b), and only the
+        # list it is made from differs. ``exile_cost`` is what tells the client
+        # to send the answer on the cost field and to say "exile" rather than
+        # "target" — a cost is not a target (idiom 10).
+        if getattr(cost, "exile_zone", "battlefield") == "graveyard":
+            spec = {
+                "kind": GRAVEYARD_TARGET_KIND,
+                "own_graveyard_only": True,
+                "exile_cost": True,
+            }
+            wanted = described.get("type_filter")
+            if isinstance(wanted, str):
+                spec["card_type"] = wanted
+            return spec
+        spec = {
+            "kind": filter_head_noun(described),
+            "own_only": True,
+            "exile_cost": True,
+        }
+        if described.get("exclude_self"):
+            spec["exclude_source"] = True
+        narrowing = {
+            key: value
+            for key, value in described.items()
+            if key not in ("exclude_self", "controller")
+            and not (key == "type_filter" and isinstance(value, str))
+        }
+        if narrowing:
+            spec["filter"] = narrowing
+        return spec
     described = getattr(cost, "sacrifice_filter", None)
     if described is not None:
         spec = {

@@ -125,6 +125,12 @@ def _lower_add_mana(
             # on these five cards is a battery that always makes exactly one
             # mana however many counters it just ate.
             payload["per_each_counter_removed"] = node.per_each_counter_removed
+        if node.per_each_counter_on_source is not None:
+            # "…for each **storage counter on this land**" (City of Shadows).
+            # Counted off the source at resolution, which is what separates it
+            # from the payment above — and carried as the counter's kind, so a
+            # card printing another word is data.
+            payload["per_each_counter_on_source"] = node.per_each_counter_on_source
         if node.per_each is not None:
             # The count is taken at resolution through the one evaluator every
             # computed amount shares, so "creature with power 4 or greater you

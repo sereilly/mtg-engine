@@ -307,6 +307,7 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     toughness_delta = int(instruction.payload.get("toughness", 0))
     attacking_only = bool(instruction.payload.get("attacking_only"))
     blocking_only = bool(instruction.payload.get("blocking_only"))
+    subtypes = tuple(instruction.payload.get("subtypes") or ())
     # "**Other** creatures you control" (Bolt Hound) — CR 109.5's exclusion of
     # the ability's own source, which no per-permanent filter can test.
     exclude_self = (
@@ -337,6 +338,12 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
             # override this used to patch on by hand, so the two-line
             # reimplementation below it was a second copy of one rule.
             if color_sym and color_sym not in perm.effective_colors:
+                continue
+            # "Other **Orc** creatures" (Orc General). Through ``has_type``, so
+            # a creature that *became* an Orc counts and one that stopped being
+            # one does not (CR 613 layer 4) — the same reader the type test
+            # above it uses, rather than the printed type line.
+            if subtypes and not any(perm.has_type(name) for name in subtypes):
                 continue
             apply_temp_pt_boost(perm, power_delta, toughness_delta)
     game.log.append(f"{card.name} buffed matching creatures")

@@ -22,7 +22,8 @@ from .effects import _expect_counter_kind
 from .phrases import _parse_card_alternatives
 from .errors import GrammarError
 from .lexer import MANA, SELF
-from .lowering._common import chargeable_tap_filter
+from .lowering._common import (_PAYLOAD_HONOURED_FILTER_FIELDS,
+                               _restrictions_beyond, chargeable_tap_filter)
 from .nouns import parse_object_filter
 from .readers import accept_source_reference
 from .references import parse_target_spec
@@ -111,6 +112,42 @@ def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
     ) is not None
 
 
+def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
+    """Whether the payment path can actually collect this exile cost.
+
+    :func:`_is_chargeable_sacrifice` one zone wider, and the same rule: the
+    charger's own reader decides (``engine/oracle.py``'s
+    ``chargeable_exile_payload``), so the two halves cannot answer differently.
+
+    Two zones and no others. The battlefield is a permanent the payer controls;
+    a **graveyard** is a card, and only the payer's own — "from your graveyard"
+    is what Necropolis prints, and a phrase naming somebody else's pile is a
+    cost this charger has no enumeration for.
+    """
+    from ..oracle import chargeable_exile_payload
+
+    if filt.zone == "graveyard":
+        if not (filt.is_card and filt.zone_owner is not None
+                and filt.zone_owner.kind == "you"):
+            return False
+    elif filt.zone != "battlefield" or filt.is_card:
+        return False
+    if not (filt.card_types or filt.subtypes):
+        # An unnamed cost would let the charger eat anything the zone holds —
+        # the same refusal `_is_chargeable_sacrifice` makes, for the same
+        # reason, and it is the one narrowing a key set cannot express.
+        return False
+    # A restriction with no ``to_payload`` key at all would vanish before the
+    # key check below ever saw it - the failure the AST gate in
+    # ``subject_filter_payload`` exists for. Asked here as well, because this
+    # reader does not go through that one.
+    if _restrictions_beyond(
+        filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {"zone", "zone_owner", "is_card"}
+    ):
+        return False
+    return chargeable_exile_payload(filt.to_payload()) is not None
+
+
 def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
     """``Remove a <kind> counter from this <permanent>`` (Scavenging Ghoul).
 
@@ -190,12 +227,22 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             stream.accept_punct(",")
             continue
         if stream.accept_word("exile"):
-            # ``ExileSelf`` names no object, so exiling anything else would be
-            # consumed and then read as the source leaving the battlefield.
+            # ``ExileSelf`` names no object, so the source gets its own entry:
+            # nothing is chosen, nothing can make the ability unpayable, and
+            # there is no record of what was eaten.
             exiled = _parse_cost_object(stream, "exile")
-            if not exiled.is_source:
-                raise stream.error("only exiling the ability's own source is a known cost")
-            costs.append(ast.ExileSelf())
+            if exiled.is_source:
+                costs.append(ast.ExileSelf())
+                stream.accept_punct(",")
+                continue
+            # "Exile **a creature you control**" (City of Shadows) / "Exile **a
+            # creature card from your graveyard**" (Necropolis). A chosen
+            # object, gated by the charger's own reader for the reason the
+            # sacrifice beside it is: two readers of one clause drift, and the
+            # direction they drift in is a cost nobody pays.
+            if not _is_chargeable_exile(exiled):
+                raise stream.error("no cost path charges an exile of this shape")
+            costs.append(ast.ExileCost(exiled))
             stream.accept_punct(",")
             continue
         if stream.at_word("pay"):

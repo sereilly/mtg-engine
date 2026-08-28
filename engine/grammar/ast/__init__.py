@@ -38,6 +38,19 @@ Re-exported flat, so every caller writes ``ast.DealDamage`` and never names a
 family — which is what makes moving a node between families a non-event.
 """
 
+from .costs import (
+    ManaCost,
+    TapSelf,
+    SacrificeCost,
+    DiscardCost,
+    PutCounterCost,
+    TapPermanentsCost,
+    PayLifeCost,
+    ExileSelf,
+    ExileCost,
+    RemoveCounterCost,
+    Cost,
+)
 from ._core import (
     Fixed,
     Var,
@@ -68,16 +81,6 @@ from ._core import (
     Recipient,
     Duration,
     Zone,
-    ManaCost,
-    TapSelf,
-    SacrificeCost,
-    DiscardCost,
-    PayLifeCost,
-    PutCounterCost,
-    TapPermanentsCost,
-    ExileSelf,
-    RemoveCounterCost,
-    Cost,
     RawEffect,
 )
 from .conditions import (
@@ -303,6 +306,7 @@ __all__ = [
     "PayLifeCost",
     "PutCounterCost",
     "TapPermanentsCost",
+    "ExileCost",
     "ExileSelf",
     "RemoveCounterCost",
     "Cost",

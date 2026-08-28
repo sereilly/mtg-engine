@@ -219,7 +219,11 @@ def test_layers_only_import_downward(layers):
     [
         ("effects", (), ()),
         ("lowering", ("_common", "_events", "categories", "conditions"), ()),
-        ("ast", ("_core",), ("statements",)),
+        # `costs` is shared beside `_core` rather than a family: a cost is
+        # charged on the way to the stack and never lowered, so it has no
+        # `effects/` or `lowering/` twin to be a family of — and both
+        # `conditions` ("if you paid the cost") and the roof read one.
+        ("ast", ("_core", "costs"), ("statements",)),
     ],
     ids=["effects", "lowering", "ast"],
 )
@@ -267,7 +271,7 @@ def test_the_ast_roof_only_reaches_downward():
     # `conditions` is shared with `_core` rather than a family: a condition is
     # built from every part of `_core` while nothing in `_core` is built from a
     # condition, and every family that lowers a conditional reads one.
-    allowed = {"_core", "conditions", *AST_FAMILIES}
+    allowed = {"_core", "conditions", "costs", *AST_FAMILIES}
     violations = [
         f"ast/statements.py:{line} imports {target or '__init__'}"
         for line, target, _is_sibling in _imports(GRAMMAR / "ast" / "statements.py")
@@ -420,6 +424,7 @@ def test_every_grammar_module_is_placed_or_exempt():
 # `UNLAYERED` is — see the test below.
 FAMILY_SHARED = {
     "_common", "_core", "_events", "conditions", "categories", "statements",
+    "costs",
 }
 
 

@@ -232,6 +232,18 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
             multiplier = max(0, int((context.choices or {}).get(
                 "counters_removed_for_cost", 0
             )))
+        # "…for each **storage counter on this land**" (City of Shadows). Read
+        # off the source now, not off a payment: these counters are still there,
+        # and a land with none produces nothing at all — which is the card, and
+        # is why zero is a resolution rather than a miss.
+        on_source = instruction.payload.get("per_each_counter_on_source")
+        if on_source is not None:
+            from ..named_counters import counters_on
+
+            source = context.source_permanent
+            multiplier = (
+                counters_on(source, str(on_source)) if source is not None else 0
+            )
         # "Spend this mana only to cast an instant or sorcery spell." (Vodalian
         # Arcanist.) The mana goes into its own bucket rather than the pool;
         # `_pay_mana_cost` merges a bucket in only for a spell the restriction

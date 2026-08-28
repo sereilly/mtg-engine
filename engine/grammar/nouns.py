@@ -498,6 +498,13 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             following = stream.peek_word()
             if following is not None and _singular(following) in CARD_TYPES:
                 continue
+            # "a **Goblin permanent** card" (Goblin Wizard). A *generic* head
+            # noun after a subtype, read by looping back to the branch that
+            # already knows how to read one rather than by a second copy of it
+            # here — which is also what keeps "permanent card" a card and not a
+            # permanent.
+            if following is not None and _singular(following) in _GENERIC_NOUNS:
+                continue
             d.is_card = _accept_card_noun(stream)
             d.saw_head = True
             break
@@ -554,6 +561,10 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     # A creature subtype implies the creature type: "destroy target Wall" means
     # a creature. Land/artifact subtypes ("destroy all Plains") must not, so the
     # implication is keyed on the vocabulary the subtype came from.
+    # It survives a *generic* head noun too: "a Goblin **permanent** card"
+    # (Goblin Wizard) is still a creature card, because CR 205.3 puts a creature
+    # type only on a creature — the printed "permanent" is future-proofing, not
+    # a wider set.
     if d.subtypes and not d.card_types and all(s in CREATURE_TYPES for s in d.subtypes):
         d.card_types.append("creature")
 
