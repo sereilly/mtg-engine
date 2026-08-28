@@ -29,6 +29,13 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # what it damages is payload, so a card printing a different narrowing
     # needs no kind. Same category, so GRAMMAR_CATEGORIES is unchanged.
     "deal_damage_each_matching_creature": "damage",
+    # "…to each opponent and planeswalker **it has dealt damage to this
+    # game**" (The Fallen). The recipients are a record on the source rather
+    # than a set on a board. Same category, so GRAMMAR_CATEGORIES is unchanged.
+    "deal_damage_to_those_damaged_this_game": "damage",
+    # Mana Clash's coin-flip loop (CR 705). The randomiser is control flow, but
+    # what the paragraph *does* is deal damage, which is what this table names.
+    "coin_flip_damage_loop": "damage",
     "deal_damage_to_recorded_permanents": "damage",
     "deal_damage_and_opponent_choice": "damage",
     "self_damage_unless_pay": "damage",
@@ -215,6 +222,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "tap_creatures_blocking_target": "tapping",
     "untap_all_matching": "tapping",
     "grant_prevention_shield": "prevention",
+    # "…prevent half that damage, rounded down" (Dark Sphere) — a CR 615.8
+    # whole-instance shield that absorbs a share of the event. Same category, so
+    # GRAMMAR_CATEGORIES is unchanged.
+    "grant_half_prevention_shield": "prevention",
     "prevent_all_combat_damage": "prevention",
     # The same blanket, narrowed to a printed noun phrase (Pack Leader). Same
     # category: what differs is who it covers, not what kind of effect it is.

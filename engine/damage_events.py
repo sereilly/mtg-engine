@@ -243,9 +243,52 @@ def deal_damage(game, event: dict, *, restart: Callable[[], Any] | None = None) 
     # forget it as there are sites. CR 120.4b's `dealt`, not 120.4c's result —
     # "the amount of damage dealt to this creature" is what was dealt.
     record_damage(game, event, dealt)
+    _record_damaged_this_game(game, event)
     result = _process_results(game, event, dealt)
     _announce(game, event, dealt)
     return DamageOutcome(consumed=False, dealt=dealt, result=result)
+
+
+#: The metadata key a permanent's own "who have I damaged" record lives under.
+#: Named once because the writer below and the handler that reads it are two
+#: places, and a literal in each is how they come to disagree.
+DAMAGED_THIS_GAME = "damaged_this_game"
+
+
+def _record_damaged_this_game(game, event: dict) -> None:
+    """Remember, on the *source permanent*, who it has dealt damage to.
+
+    "…deals 1 damage to each opponent and planeswalker **it has dealt damage to
+    this game**" (The Fallen). A window with no turn boundary, so the turn's
+    ledger beside this cannot hold it — and a fact about the source, so it lives
+    on the source, which CR 400.7 then gives exactly the right lifetime for
+    free: a Fallen that dies and returns is a new object and remembers nothing,
+    which is what the card says.
+
+    Written here rather than at any damage path, for the reason the ledger call
+    above it gives: this is the one place every damage event passes through, and
+    a history written at the fire sites has as many places to forget it as there
+    are sites.
+
+    Recipients are recorded by *identity*, never by position: a seat index for a
+    player and a ``permanent_id`` for a permanent (CR 400.7 again — a
+    planeswalker that left and came back is not the one that was damaged). Only
+    a permanent source keeps a record; a spell's source is its printed
+    ``CardDefinition``, shared by every copy in every deck, so a record on one
+    would be a record about all of them.
+    """
+    source = event.get("source")
+    if not hasattr(source, "metadata") or not hasattr(source, "permanent_id"):
+        return
+    recipient = event["recipient"]
+    record = source.metadata.setdefault(DAMAGED_THIS_GAME, {"seats": [], "permanents": []})
+    if hasattr(recipient, "permanent_id"):
+        if recipient.permanent_id not in record["permanents"]:
+            record["permanents"].append(recipient.permanent_id)
+        return
+    seat = affected_seat(game, recipient)
+    if isinstance(seat, int) and seat not in record["seats"]:
+        record["seats"].append(seat)
 
 
 def _announce(game, event: dict, dealt: int) -> None:

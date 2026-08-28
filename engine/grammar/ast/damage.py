@@ -45,6 +45,43 @@ class DealDamage:
 
 
 @dataclass(frozen=True)
+class CoinFlipDamageLoop:
+    """``You and target opponent each flip a coin. <source> deals N damage to
+    each player whose coin comes up tails. Repeat this process until both
+    players' coins come up heads on the same flip.`` (Mana Clash.)
+
+    Three printed sentences, one node, for the reason `paragraphs.py` gives:
+    the second sentence reads a pair of flips nothing else records and the third
+    is a loop over both of the others. Parsed apart, the first would flip once,
+    the second would read nothing, and the third would have no process to
+    repeat.
+
+    Only the amount is data. The two flippers, the "tails" reading and the
+    both-heads exit are what the loop *is*, and a card that varied any of them
+    would be varying the process rather than a parameter of it.
+    """
+    source: TargetSpec | None
+    amount: Amount
+
+
+@dataclass(frozen=True)
+class DamageThoseDamagedThisGame:
+    """``<source> deals N damage to each <class>[ and <class>] it has dealt
+    damage to this game.`` (The Fallen.)
+
+    Its own node rather than a `DealDamage` with another recipient shape,
+    because the recipients are not a set anything on the board describes: they
+    are a *history*, kept on the source as it deals damage, and a filter written
+    over the board could only guess at it. The classes stay data — a card
+    printing the same clause over creatures needs no new node — and lowering is
+    where they meet what a handler implements.
+    """
+    source: TargetSpec | None
+    amount: Amount
+    classes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Fight:
     """``<subject> fights <opponent>.`` (CR 701.14 — Brash Taunter, Primal Might.)
 

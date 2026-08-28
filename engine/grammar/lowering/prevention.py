@@ -28,6 +28,37 @@ from ._common import (
 )
 
 
+def _lower_prevent_half(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]:
+    """"The next time a source of your choice would deal damage to you this
+    turn, prevent half that damage, rounded down." (Dark Sphere.)
+
+    Its own instruction rather than a flag on the whole-instance shield, for the
+    reason the two Circle shapes are two: what the shield absorbs is the axis
+    the handler differs on, and a "half" flag ignored by a handler written for
+    the whole instance would prevent twice what the card prints.
+
+    Everything the sentence fixes is checked, because each part is a way this
+    could mean something larger: the shield protects its controller (a shield on
+    a chosen target is a different card), it records no colour or type (a
+    narrowed shield is strictly smaller), and the halved quantity is the event
+    itself rather than any counted amount.
+    """
+    assert isinstance(node.amount, ast.Half)
+    if not isinstance(node.amount.of, ast.ThatMuch) or node.amount.of.source is not None:
+        raise LoweringError("only 'half that damage' is halved by a shield", node=node)
+    if not _is_you(node.to):
+        raise LoweringError("a halving shield only protects its controller", node=node)
+    if node.from_filter is None or node.from_filter != ast.ObjectFilter():
+        raise LoweringError("no halving shield narrows which source it answers", node=node)
+    if node.combat_only or node.dealt_by is not None or node.dealt_by_others:
+        raise LoweringError("no halving shield is scoped to a named source", node=node)
+    return (
+        OracleInstruction(
+            "grant_half_prevention_shield", "", {"half": node.amount.rounding}
+        ),
+    )
+
+
 def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]:
     """"Prevent the next N damage …" and the Circle-of-Protection shield.
 
@@ -47,6 +78,11 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
         raise LoweringError(
             "no counted shield covers more than one source", node=node
         )
+    # "…prevent **half** that damage, rounded down." (Dark Sphere.) Read before
+    # the source-scoped branch below, which counts a shield in whole instances
+    # and would arm one that prevents the lot.
+    if isinstance(node.amount, ast.Half):
+        return _lower_prevent_half(node)
     if isinstance(node.amount, ast.AllOf):
         return _lower_prevent_all(node)
     if node.combat_only:

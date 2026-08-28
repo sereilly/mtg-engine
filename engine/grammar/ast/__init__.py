@@ -112,6 +112,8 @@ from .conditions import (
 )
 from .damage import (
     DamageRiders,
+    CoinFlipDamageLoop,
+    DamageThoseDamagedThisGame,
     DealDamage,
     DamageUnlessPay,
     Fight,
@@ -342,6 +344,8 @@ __all__ = [
     "RawEffect",
     # damage
     "DamageRiders",
+    "CoinFlipDamageLoop",
+    "DamageThoseDamagedThisGame",
     "DealDamage",
     "DamageUnlessPay",
     "Fight",

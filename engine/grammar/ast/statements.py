@@ -34,6 +34,8 @@ from ._core import (
 from .damage import (
     DamageUnlessPay,
     Fight,
+    CoinFlipDamageLoop,
+    DamageThoseDamagedThisGame,
     DealDamage,
     PreventDamage,
     RedirectDamage,
@@ -160,6 +162,7 @@ from .game import (
 
 
 Effect = Union[
+    DamageThoseDamagedThisGame,
     DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, LoseKeyword, PlayerGetsCounters, PutCounter, RemoveCounter,
     DoublePower, SwitchPT,
     GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, Mill, Scry, Destroy, Sacrifice,

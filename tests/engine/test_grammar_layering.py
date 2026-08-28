@@ -157,8 +157,11 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # the CR's own: CR 120 is a source dealing damage, CR 614.9 is a replacement
 # that changes who it reaches — the damage is still dealt, in full, by the same
 # source. The two halves shared no helper, the same asymmetry `prevention`
-# recorded above when it left the same module.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "library", "counters", "keywords", "tapping", "prevention", "redirection", "where_x", "control_flow", "attachments"]
+# recorded above when it left the same module. `fighting` left it the same
+# round and on the CR's other line: CR 701.14 is a keyword action, an atomic
+# exchange between two creatures (701.14b — if either has left, neither deals
+# damage), where everything left behind is one source dealing to a recipient.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "library", "counters", "keywords", "tapping", "prevention", "redirection", "fighting", "where_x", "control_flow", "attachments"]
 AST_FAMILIES = EFFECT_FAMILIES
 
 

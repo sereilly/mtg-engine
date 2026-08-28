@@ -74,6 +74,12 @@ PREVENT_FROM_COLOR = "prevent_from_color"
 #: damage time like every other recorded property (CR 615.9). Which phrase is
 #: payload: a card printed "by creatures with flying" needs no code here.
 PREVENT_FROM_SUBJECT = "prevent_from_subject"
+#: "The next time a source of your choice would deal damage to you this turn,
+#: prevent **half** that damage, rounded down." (Dark Sphere.) A whole-instance
+#: shield like the two above, but one that lets a computed share through — so
+#: what it absorbs is not a number the arming knows, and `half` below is the
+#: rounding rather than a point pool.
+PREVENT_HALF = "prevent_half"
 #: "If a spell or ability that targets that creature would cause a source to
 #: deal damage to that creature this turn, prevent that damage." (Silhouette.)
 #: A blanket like the one above, but the property it records is not a property
@@ -98,6 +104,8 @@ class Shield:
                    recorded property with several admissible values, not two
                    shields — CR 615.9 rechecks the property, and a source is a
                    match when it has any of them.
+    half        -- "down"/"up" when the shield absorbs a *share* of the event
+                   rather than a number of points (Dark Sphere), None otherwise
     lifetime    -- END_OF_COMBAT or END_OF_TURN
     source_name -- the card that granted it, for the UI's shield badge
     """
@@ -129,6 +137,13 @@ class Shield:
     #: ``Game.resolving_targets`` is the seam for. Rechecked when the damage
     #: would be dealt, like every other recorded property (CR 615.9).
     targets_recipient: bool = False
+    #: "…prevent **half** that damage, rounded down." (Dark Sphere.) The share
+    #: of the event this shield absorbs, with the rounding the card printed. Its
+    #: own field rather than an `amount`, because the number cannot be known
+    #: when the shield is armed: CR 615.8's whole-instance shield waits for an
+    #: event of unknown size, and half of it is only a number once that event
+    #: exists.
+    half: str | None = None
     lifetime: str = END_OF_TURN
     source_name: str | None = None
 
@@ -160,6 +175,11 @@ class Shield:
         also how "prevent all but 1" declines a 1-point event.
         """
         available = amount - self.leave
+        if self.half is not None:
+            # "…prevent half that damage, **rounded down**" (Dark Sphere).
+            # Computed here rather than at the arming, because the event's size
+            # is what is being halved and no arming knows it.
+            available = -(-available // 2) if self.half == "up" else available // 2
         if self.amount is not None:
             available = min(available, self.amount)
         return max(0, available)
@@ -425,6 +445,20 @@ def make_life_gain_source(source, source_name: str | None = None) -> Shield:
 
 def make_life_gain_charge(source_name: str | None = None) -> Shield:
     return Shield(kind=PREVENT_AND_GAIN_LIFE, uses=1, source_name=source_name)
+
+
+def make_half_source(source, rounding: str, source_name: str | None = None) -> Shield:
+    """Dark Sphere's shield against the source its controller chose."""
+    return Shield(
+        kind=PREVENT_HALF, uses=1, source=source, half=rounding,
+        source_name=source_name,
+    )
+
+
+def make_half_charge(rounding: str, source_name: str | None = None) -> Shield:
+    """The same shield with no source recorded — the AI/headless activation,
+    exactly as Reverse Damage and Forcefield each keep a generic charge."""
+    return Shield(kind=PREVENT_HALF, uses=1, half=rounding, source_name=source_name)
 
 
 def make_color_shield(colors, source_name: str | None = None) -> Shield:

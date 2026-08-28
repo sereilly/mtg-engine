@@ -90,6 +90,8 @@ from .lowering import (
     _lower_create_token,
     _lower_damage,
     _lower_damage_conjunction,
+    _lower_coin_flip_damage_loop,
+    _lower_damage_this_game_history,
     _lower_damage_unless_pay,
     _fused_conditional_counter,
     _fused_tap_enchanted_then_counters,
@@ -238,6 +240,10 @@ def lower_statement(
     dispatch_subject = event_subject if whole_effect else None
     if isinstance(statement, ast.DealDamage):
         return _lower_damage(statement, event, produced)
+    if isinstance(statement, ast.DamageThoseDamagedThisGame):
+        return _lower_damage_this_game_history(statement)
+    if isinstance(statement, ast.CoinFlipDamageLoop):
+        return _lower_coin_flip_damage_loop(statement)
     if isinstance(statement, ast.Fight):
         return _lower_fight(statement, whole_effect)
     if isinstance(statement, ast.DamageUnlessPay):

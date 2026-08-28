@@ -372,6 +372,12 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "arm_mirror_damage": {
         "kind": "permanent", "source_of_choice": True, "also_stack": True,
     },
+    # Dark Sphere prints the same phrase and so runs the same prompt — a
+    # permanent on any battlefield or a spell on the stack. What its shield then
+    # does with the chosen source is the handler's business, not the picker's.
+    "grant_half_prevention_shield": {
+        "kind": "permanent", "source_of_choice": True, "also_stack": True,
+    },
     # Nova Pentacle: "The next time **a source of your choice** would deal damage
     # to you this turn…". The same prompt those two run — a permanent on any
     # battlefield or a spell on the stack — because it is the same printed

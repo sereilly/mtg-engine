@@ -165,6 +165,14 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
     recipients: list[ast.Recipient] = []
     chooser: ast.PlayerRef | None = None
     if stream.accept_word("to"):
+        # "…to **each opponent and planeswalker it has dealt damage to this
+        # game**." (The Fallen.) Probed before the ordinary recipient parser,
+        # which reads "each opponent" happily and then leaves the rest of the
+        # phrase as unconsumed text — the narrowing is not a description of a
+        # board, so no filter it could build would carry it.
+        history = _accept_damaged_this_game(stream)
+        if history is not None:
+            return ast.DamageThoseDamagedThisGame(source, amount, history)
         recipient = _parse_damage_recipient(stream)
         if recipient is None:
             raise stream.error("expected a damage recipient")
@@ -248,6 +256,52 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
             stream.reset(mark)
 
     return first
+
+
+#: The printed classes a "it has dealt damage to this game" phrase may name,
+#: singular form first. A closed set, read as words rather than through the noun
+#: parser, because what follows them is not a filter at all — the phrase names a
+#: *history*, and `parse_object_filter` would build a description of the board
+#: instead and quietly widen the card.
+_HISTORY_CLASSES = {
+    "opponent": "opponent", "opponents": "opponent",
+    "player": "player", "players": "player",
+    "planeswalker": "planeswalker", "planeswalkers": "planeswalker",
+    "creature": "creature", "creatures": "creature",
+}
+
+
+def _accept_damaged_this_game(stream: TokenStream) -> tuple[str, ...] | None:
+    """``each <class>[ and <class>…] it has dealt damage to this game``.
+
+    Returns the classes the phrase named, or None without consuming when the
+    words are something else — every other damage recipient keeps its own
+    reading.
+
+    The whole trailing clause is expected once the class list has been read:
+    "each opponent" alone is a board sweep and a strictly larger effect, so a
+    production that read the nouns and shrugged at the history would turn The
+    Fallen into a Pestilence.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("each"):
+        stream.reset(mark)
+        return None
+    classes: list[str] = []
+    while True:
+        word = stream.peek_word()
+        if word is None or word not in _HISTORY_CLASSES:
+            break
+        classes.append(_HISTORY_CLASSES[word])
+        stream.advance()
+        if not stream.accept_word("and"):
+            break
+    if not classes or not stream.accept_phrase(
+        "it", "has", "dealt", "damage", "to", "this", "game"
+    ):
+        stream.reset(mark)
+        return None
+    return tuple(classes)
 
 
 def _parse_damage_unless_pay(
@@ -541,6 +595,31 @@ def _parse_source_of_choice_effect(
             one_shot=True,
             chooser=chooser,
         )
+    # "…, prevent **half** that damage, rounded down." (Dark Sphere.) The same
+    # sentence, absorbing a share of the event instead of all of it — so it is
+    # a branch of this production rather than a second one racing it over the
+    # same seven opening words. The rounding is read rather than assumed:
+    # `amounts.parse_amount` defaults a bare `Half` to "down", so an unread
+    # "rounded up" would prevent one point less than the card says.
+    half_mark = stream.mark()
+    if stream.accept_phrase("prevent", "half", "that", "damage"):
+        rounding = "down"
+        stream.accept_punct(",")
+        if stream.accept_word("rounded"):
+            if stream.accept_word("up"):
+                rounding = "up"
+            elif not stream.accept_word("down"):
+                raise stream.error("expected 'up' or 'down' after 'rounded'")
+        if colours or card_type:
+            # A shield that records a property *and* halves is a card nobody has
+            # printed; refusing names the gap rather than dropping one half.
+            raise stream.error("no shield both narrows its source and halves")
+        return ast.PreventDamage(
+            ast.Half(ast.ThatMuch(None), rounding),
+            to=recipient,
+            from_filter=ast.ObjectFilter(),
+        )
+    stream.reset(half_mark)
     if not stream.accept_phrase("prevent", "that", "damage"):
         stream.reset(mark)
         return None

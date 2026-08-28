@@ -341,139 +341,6 @@ def _lower_damage_unless_pay(
     )
 
 
-def _fused_prepare_then_interact(
-    steps: tuple[ast.Statement, ...]
-) -> tuple[OracleInstruction, ...] | None:
-    """"<do something to target 1>. Then <target 1> <fights|bites> target 2."
-    (Primal Might, Hunter's Edge.)
-
-    One instruction, because the second sentence's subject **is** the first
-    sentence's target: "Then **it** fights…" and "Then **that creature** deals
-    damage…" name a creature nobody picks a second time. Lowered as two steps
-    the pair compiles cleanly and does the wrong thing — Primal Might did,
-    pumping whichever creature its single picker offered and then fighting
-    nobody (round 39).
-
-    The two slots are *differently* restricted ("target creature you control",
-    "target creature you don't control"), which is what the per-slot `filters`
-    of round 40 are for.
-
-    Returning None rather than raising leaves a near-miss to the ordinary step
-    lowering, which refuses it by name.
-    """
-    if len(steps) != 2:
-        return None
-    setup, interaction = steps
-
-    if isinstance(setup, ast.Pump):
-        first = setup.subject
-        if setup.duration.kind not in _REST_OF_TURN or setup.power_negative:
-            return None
-        prepare: dict[str, object] = {
-            "kind": "pump",
-            "power": _amount_payload(setup.power),
-            "toughness": _amount_payload(setup.toughness),
-        }
-    elif isinstance(setup, ast.PutCounter):
-        first = setup.subject
-        if setup.counter != "+1/+1" or setup.up_to or setup.then_double:
-            return None
-        if not isinstance(setup.count, ast.Fixed) or setup.count.value != 1:
-            return None
-        prepare = {"kind": "counter"}
-    else:
-        return None
-
-    if isinstance(interaction, ast.Fight):
-        subject, second, mode = interaction.subject, interaction.opponent, "fight"
-    elif isinstance(interaction, ast.DealDamage):
-        # "…deals damage equal to its power to <target 2>" — the one-way half.
-        if (
-            not isinstance(interaction.amount, ast.ThatMuch)
-            or interaction.amount.source != "its_power"
-            or len(interaction.recipients) != 1
-            or interaction.riders != ast.DamageRiders()
-        ):
-            return None
-        subject, second, mode = (
-            interaction.source, interaction.recipients[0], "bite"
-        )
-    else:
-        return None
-
-    # The second sentence has to be *about* the first one's target: either the
-    # bare "it"/self reference or the bound "that <noun>". Anything else names
-    # something this instruction does not resolve.
-    if not isinstance(subject, ast.TargetSpec) or subject.quantifier not in (
-        "this", "it", "that"
-    ):
-        return None
-    if subject.quantifier in ("this", "it") and not subject.filter.is_source:
-        return None
-    if not _is_target(first) or not _is_target(second):
-        return None
-    assert isinstance(first, ast.TargetSpec) and isinstance(second, ast.TargetSpec)
-    return (
-        OracleInstruction(
-            "prepare_then_interact", "",
-            {
-                "prepare": prepare,
-                "mode": mode,
-                "targets": {
-                    "quantifier": "target",
-                    "kind": "object",
-                    "filter": _filter_payload(first.filter),
-                    "filters": [
-                        _filter_payload(first.filter),
-                        _filter_payload(second.filter),
-                    ],
-                    "count": 2,
-                },
-            },
-        ),
-    )
-
-
-def _lower_fight(
-    node: ast.Fight, whole_effect: bool = True
-) -> tuple[OracleInstruction, ...]:
-    """"This creature fights another target creature." (Brash Taunter.)
-
-    Only the shape where the ability's own source is one of the two fighters:
-    the other is a chosen target, so one picker answers the whole clause. A
-    fight between *two* chosen creatures picks twice and is a different
-    instruction; refusing it here keeps the difference visible rather than
-    quietly fighting the source instead.
-
-    ``whole_effect`` is what separates the two spellings of "it". On a
-    permanent's own ability it is the source; as the *second sentence* of a
-    spell — "Target creature you control gets +X/+X … **Then it** fights up to
-    one target creature you don't control" (Primal Might) — it back-references
-    the target the first sentence chose, and a sorcery has no source permanent
-    at all. Lowered as this instruction, Primal Might pumped whichever creature
-    the single picker offered and then fought nobody: supported, and doing
-    something else. The fused two-target pair is what that card wants.
-    """
-    if not whole_effect:
-        raise LoweringError(
-            "\"it fights\" after another sentence names that sentence's target, "
-            "which needs the two-target fused pair",
-            node=node,
-        )
-    if not _is_source(node.subject):
-        raise LoweringError(
-            "only a fight with the ability's own source has a handler", node=node
-        )
-    if not _is_target(node.opponent):
-        raise LoweringError("the creature fought must be a chosen target", node=node)
-    assert isinstance(node.opponent, ast.TargetSpec)
-    payload: dict[str, object] = {
-        "exclude_self": bool(node.opponent.filter.other_than_source),
-    }
-    _describe_targets(payload, node.opponent)
-    return (OracleInstruction("source_fights_target", "", payload),)
-
-
 def _lower_chosen_cast_damage(
     node: ast.DealDamage,
     chosen: "tuple[ast.DamageDealtByChosenCast, str | None]",
@@ -949,6 +816,67 @@ def _lower_split_recipients(
             dataclasses.replace(node, recipients=(recipient,)), event, produced
         )
     return lowered
+
+
+#: The recipient classes the history handler resolves. "player" and "creature"
+#: parse — the phrase reads the same on any of them — and refuse here, because
+#: the record holds seats and permanent ids and nothing has been written that
+#: turns those into a living creature or a non-opponent seat. A class admitted
+#: without a resolver would name nobody and deal nothing, on a card reporting
+#: itself supported.
+_HISTORY_RECIPIENTS = frozenset({"opponent", "planeswalker"})
+
+
+def _lower_coin_flip_damage_loop(
+    node: ast.CoinFlipDamageLoop,
+) -> tuple[OracleInstruction, ...]:
+    """Mana Clash's whole paragraph (CR 705).
+
+    One instruction, because the loop is the effect: a flip, a reading of both
+    coins, and a repeat that depends on both. Composed out of `flip_coin` and
+    `if_then` it would be a *fixed* number of rounds, since nothing in the
+    control-flow vocabulary repeats — and the printed sentence is unbounded.
+
+    Only the amount is payload; who flips and which face is punished are the
+    process itself.
+    """
+    return (
+        OracleInstruction(
+            "coin_flip_damage_loop", "",
+            {
+                "amount": _amount_payload(node.amount),
+                # The opponent is chosen when the spell is cast (CR 601.2c), so
+                # the picker has to be raised from the compiled program like any
+                # other target.
+                "targets": {
+                    "quantifier": "target", "kind": "player", "opponents_only": True,
+                },
+            },
+        ),
+    )
+
+
+def _lower_damage_this_game_history(
+    node: ast.DamageThoseDamagedThisGame,
+) -> tuple[OracleInstruction, ...]:
+    """"…deals 1 damage to each opponent and planeswalker it has dealt damage to
+    this game." (The Fallen.)
+
+    The recipients are a record on the source, not a set on any board, so the
+    payload carries only how much and which classes of the record to reach for.
+    """
+    unknown = sorted(set(node.classes) - _HISTORY_RECIPIENTS)
+    if unknown:
+        raise LoweringError(
+            "no handler reaches the damaged-this-game " + ", ".join(unknown),
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "deal_damage_to_those_damaged_this_game", "",
+            {"amount": _amount_payload(node.amount), "classes": list(node.classes)},
+        ),
+    )
 
 
 def _lower_damage_conjunction(node: ast.Conjunction) -> tuple[OracleInstruction, ...]:

@@ -8,6 +8,7 @@ template has one home on each side — prowess parses in
     categories       the kind -> category registry the gate reads
     damage           dealing it, and preventing it
     redirection      CR 614.9, changing who dealt damage reaches
+    fighting         CR 701.14, two creatures damaging each other
     characteristics  P/T, keywords, colour, printed text
     counters         putting and removing them, and the per-death repetition
     board            destruction, bouncing, tapping, control, exile
@@ -65,8 +66,6 @@ from ._common import (
     count_spec,
 )
 from .damage import (
-    _fused_prepare_then_interact,
-    _lower_fight,
     _sweep_kind,
     _SWAMPS_THEY_CONTROL,
     _BOARD_COUNT_DAMAGE,
@@ -76,12 +75,19 @@ from .damage import (
     _lower_damage_unless_pay,
     _lower_damage,
     _lower_damage_conjunction,
+    _lower_coin_flip_damage_loop,
+    _lower_damage_this_game_history,
+)
+from .fighting import (
+    _fused_prepare_then_interact,
+    _lower_fight,
 )
 from .redirection import (
     _lower_redirect_damage,
 )
 from .prevention import (
     _lower_prevent_damage,
+    _lower_prevent_half,
     _lower_prevent_all,
 )
 from .characteristics import (
@@ -281,7 +287,10 @@ __all__ = [
     "_lower_damage_unless_pay",
     "_lower_damage",
     "_lower_damage_conjunction",
+    "_lower_coin_flip_damage_loop",
+    "_lower_damage_this_game_history",
     "_lower_prevent_damage",
+    "_lower_prevent_half",
     "_lower_redirect_damage",
     "_lower_prevent_all",
     "_fused_tap_any_number_then_pump",

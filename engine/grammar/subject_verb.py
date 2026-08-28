@@ -20,6 +20,7 @@ from . import ast
 from .errors import GrammarError
 from .lexer import SELF, WORD
 from .paragraphs import (
+    _parse_coin_flip_damage_loop,
     _parse_exchange_greatest_mana_value, _parse_exile_graveyard_until_leaves,
     _parse_exile_until_leaves_or_untaps, _parse_name_and_strip,
     _parse_name_then_random_reveal, _parse_name_then_reveal_top,
@@ -237,6 +238,12 @@ def parse_subject_verb(
     juxtaposition = _parse_exchange_greatest_mana_value(stream)
     if juxtaposition is not None:
         return juxtaposition
+    # Mana Clash's whole three-sentence paragraph, which opens with the same
+    # "You and target opponent …" shape and would meet the same subject parser.
+    # Refuses without consuming.
+    flip_loop = _parse_coin_flip_damage_loop(stream)
+    if flip_loop is not None:
+        return flip_loop
     # Tempest Efreet's whole ability, which opens "Target opponent may pay …"
     # — a subject the noun parser reads and then a "may" no production of its
     # own would finish. Refuses without consuming.
