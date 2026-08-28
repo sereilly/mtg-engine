@@ -4,6 +4,7 @@ import re
 
 
 from ..enter_effects import (
+    entry_exile_requirement,
     sacrifice_any_number_on_enter,
     CHOOSE_COLOR_AND_OPPONENT_ON_ENTER,
     CHOOSE_COLOR_ON_ENTER,
@@ -56,7 +57,7 @@ from ..search_filters import name_key
 from ..subject_filters import subject_matches
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle, expand_card_lines
-from ..pt import clear_base_pt, set_base_pt
+from ..pt import add_pt_counters, clear_base_pt, pt_counter_deltas, set_base_pt
 from ..static_bonuses import (
     BASIC_LAND_WORDS,
     conditional_static_holds,
@@ -490,6 +491,38 @@ class PermanentStateMixin:
                     up_to=True, count_onto=permanent,
                 )
             break
+
+        # "As this creature enters, exile X creature cards from your graveyard.
+        # … For each creature card exiled this way, this creature enters with a
+        # +2/+0, +1/+1, or +0/+2 counter on it." (Frankenstein's Monster.)
+        #
+        # CR 614.1c again, and for Wood Elemental's reason: what the controller
+        # gives up is what the creature's *size* is defined by, so a trigger
+        # would leave a 0/1 on the battlefield long enough to be blocked, killed
+        # or counted at the wrong size.
+        #
+        # The other half of the same printed paragraph - "if you can't, put this
+        # creature into its owner's graveyard instead of onto the battlefield" -
+        # is the CR 614 interceptor in engine/replacements.py, asked before this
+        # runs. So by the time this arms, the graveyard is known to hold enough:
+        # the exile here is a cost that *can* be paid, and the only open
+        # question is which cards pay it and which counter each one buys.
+        required = entry_exile_requirement(
+            permanent.effective_card, permanent.metadata.get("cast_x_value")
+        )
+        if required is not None and required["count"] > 0:
+            self.arm_pending_choice(
+                "entry_exile", caster_index,
+                card_name=permanent.card.name, permanent=permanent,
+                # Stamped here as well as by `_initialize_permanent_state`,
+                # which does it only once `_perform_entry_state` returns: a
+                # non-interactive seat's default is taken *at arm*, and it
+                # needs the permanent the counters land on.
+                _entering_permanent=permanent,
+                count=required["count"],
+                filter=dict(required["filter"]),
+                counters=list(required["counters"]),
+            )
 
         # enters with fixed counters (Clockwork Beast). Track the counter count so
         # the end-of-combat trigger and the upkeep activated ability can adjust it.
@@ -967,6 +1000,124 @@ class PermanentStateMixin:
         )
         self.discard_pending_choice(choice)
         return True
+
+    # -- "As this creature enters, exile X <cards> from your graveyard" -------
+
+    def _entry_exile_candidates(self, choice) -> list[int]:
+        """Graveyard positions the printed noun phrase admits, oldest first.
+
+        The picker's hint and the answer's re-check are this one list (idiom 9):
+        a client offering the whole graveyard would otherwise turn "X creature
+        cards" into "X cards".
+        """
+        from ..handlers._common import _card_matches_filter
+
+        described = dict(choice.data.get("filter") or {})
+        graveyard = self.players[choice.player_index].graveyard
+        return [
+            index
+            for index, card in enumerate(graveyard)
+            if _card_matches_filter(card, described)
+        ]
+
+    def _resolve_entry_exile(self, choice, picks) -> bool:
+        """Exile the chosen cards and place the counter each one buys.
+
+        Every pick is validated before anything moves - a single bad entry
+        rejects the whole answer and leaves the prompt queued, so a malformed
+        request cannot exile half a payment and leave the creature the wrong
+        size. The count is exact rather than "up to": the card says *X* cards,
+        and a short answer is the case the CR 614 interceptor already refused
+        the entry for.
+        """
+        player = self.players[choice.player_index]
+        permanent = choice.data.get("_entering_permanent") or choice.data.get("permanent")
+        wanted = int(choice.data.get("count", 0))
+        offered = tuple(choice.data.get("counters") or ())
+        legal = set(self._entry_exile_candidates(choice))
+        if not isinstance(picks, list) or len(picks) != wanted:
+            return False
+        chosen: list[tuple[int, str | None]] = []
+        seen: set[int] = set()
+        for pick in picks:
+            index = pick.get("index") if isinstance(pick, dict) else None
+            counter = pick.get("counter") if isinstance(pick, dict) else None
+            if not isinstance(index, int) or index not in legal or index in seen:
+                return False
+            seen.add(index)
+            if offered:
+                if counter not in offered:
+                    return False
+            elif counter is not None:
+                return False
+            chosen.append((index, counter))
+        # Idiom 11: in a graveyard two copies of one card are literally one
+        # object, so the answer's indices are turned into removals highest-first
+        # rather than resolved by value - popping in that order is the only
+        # walk under which no earlier removal renumbers a later pick.
+        exiled: list[tuple[object, str | None]] = []
+        for index, counter in sorted(chosen, key=lambda pick: -pick[0]):
+            card = player.graveyard.pop(index)
+            player.exile.append(card)
+            exiled.append((card, counter))
+        for _card, counter in exiled:
+            if counter is None or permanent is None:
+                continue
+            if counter == "+1/+1":
+                # Through the seam: entering with counters is a counter
+                # placement like any other, so a Conclave Mentor raises it
+                # (CR 614.1c's replacement applies as the permanent enters).
+                self.place_plus1_counters(permanent, 1)
+            else:
+                add_pt_counters(permanent, counter)
+        self.log.append(
+            f"{player.name} exiled "
+            + (", ".join(card.name for card, _ in exiled) if exiled else "nothing")
+            + f" for {choice.data.get('card_name', 'an entering permanent')}"
+        )
+        self.discard_pending_choice(choice)
+        self._recompute_continuous_effects()
+        return True
+
+    def _default_entry_exile(self, choice) -> None:
+        """The stated policy for a seat nobody asks (idiom 8).
+
+        **Which cards**: the cheapest matching cards first, ties by graveyard
+        order. The exile is a cost with no upside of its own - each card bought
+        exactly one counter whichever card it was - so the only question is what
+        the graveyard loses, and mana value is the engine's own measure of that.
+
+        **Which counter**: the offered kind that raises both halves furthest
+        (``min(power, toughness)``, then the total, then printed order). For the
+        three this card prints that is ``+1/+1``: ``+2/+0`` leaves a creature
+        that dies to any ping it trades with and ``+0/+2`` leaves one that never
+        kills anything, and the balanced counter is the only one that both
+        survives and threatens.
+        """
+        player = self.players[choice.player_index]
+        wanted = int(choice.data.get("count", 0))
+        offered = tuple(choice.data.get("counters") or ())
+        candidates = sorted(
+            self._entry_exile_candidates(choice),
+            key=lambda index: (player.graveyard[index].cmc or 0, index),
+        )[:wanted]
+        counter = None
+        if offered:
+            counter = max(
+                offered,
+                key=lambda kind: (
+                    min(pt_counter_deltas(kind)),
+                    sum(pt_counter_deltas(kind)),
+                    -offered.index(kind),
+                ),
+            )
+        picks = [{"index": index, "counter": counter} for index in sorted(candidates)]
+        if not self._resolve_entry_exile(choice, picks):
+            # The graveyard cannot have shrunk between the interceptor's count
+            # and this arm, so a rejection here is a bug and not a board state.
+            # Dropping the prompt rather than leaving it queued keeps a
+            # headless seat from stalling on it forever.
+            self.discard_pending_choice(choice)
 
     def _refresh_global_statics(self, all_permanents: list[Permanent]) -> None:
         """Record which permanents each board-wide static currently applies to.

@@ -998,3 +998,220 @@ def test_scarwood_bandits_steal_when_nobody_pays(set_pool):
     game.remove_from_battlefield(bandits)
     game._settle()
     assert game.controller_index_of(relic) == 1
+
+
+# --- K1: Frankenstein's Monster (The Dark) ---
+#
+# "As this creature enters, exile X creature cards from your graveyard. If you
+# can't, put this creature into its owner's graveyard instead of onto the
+# battlefield. For each creature card exiled this way, this creature enters with
+# a +2/+0, +1/+1, or +0/+2 counter on it."
+#
+# Three printed sentences and one CR 614.1c replacement, so they are one reader
+# (engine/enter_effects.exile_cards_on_enter) with three consumers: the support
+# gate, the entry state that arms the choice, and the CR 614 interceptor that
+# performs "if you can't". The tests below take each consumer in turn.
+
+
+def _monster_game(set_pool, graveyard, *, interactive=False):
+    pool = set_pool("DRK")
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Frankenstein's Monster"]],
+        graveyard=list(graveyard),
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    if interactive:
+        game.interactive_seats = {0}
+    game.start_turn(0)
+    return game, p1
+
+
+def _monster_on(player):
+    return next(
+        (perm for perm in player.battlefield
+         if perm.card.name == "Frankenstein's Monster"),
+        None,
+    )
+
+
+def test_frankensteins_monster_is_supported(set_pool):
+    """The whole three-sentence paragraph is one claim, not one sentence of
+    three - a card admitted on its first sentence would enter for an X its
+    graveyard cannot pay."""
+    program = compile_card_oracle(set_pool("DRK")["Frankenstein's Monster"])
+    assert program.supported, program.reason
+
+
+def test_frankensteins_monster_pays_its_entry_cost_and_grows(set_pool):
+    """X=2 with two creature cards in the graveyard: both are exiled and the
+    creature enters with two counters on it.
+
+    The counters are chosen one per exiled card and they need not match - the
+    +2/+0 and the +0/+2 here take the printed 0/1 to 2/3, which is the sum a
+    single kind could not produce.
+    """
+    game, p1 = _monster_game(
+        set_pool,
+        [set_pool("LEA")["Grizzly Bears"], set_pool("LEA")["Craw Wurm"],
+         set_pool("LEA")["Mox Pearl"]],
+        interactive=True,
+    )
+
+    result = game.cast_from_hand(0, "Frankenstein's Monster", x_value=2)
+    assert result.supported, result.details
+
+    owed = [c for c in game.pending_choices if c.kind == "entry_exile"]
+    assert owed, game.log
+    assert owed[0].data["count"] == 2
+    assert owed[0].data["counters"] == ["+2/+0", "+1/+1", "+0/+2"]
+    # The Mox is in the graveyard and is not offered: the printed noun phrase is
+    # "creature cards", and the picker's list is the engine's own.
+    assert game._entry_exile_candidates(owed[0]) == [0, 1]
+
+    assert game.resolve_pending_choice(
+        "entry_exile", 0,
+        picks=[{"index": 0, "counter": "+2/+0"}, {"index": 1, "counter": "+0/+2"}],
+    ), game.log
+    game._settle()
+
+    monster = _monster_on(p1)
+    assert monster is not None, game.log
+    assert (monster.effective_power, monster.effective_toughness) == (2, 3)
+    assert sorted(card.name for card in p1.exile) == ["Craw Wurm", "Grizzly Bears"]
+    assert [card.name for card in p1.graveyard] == ["Mox Pearl"]
+
+
+def test_frankensteins_monster_that_cannot_pay_never_enters(set_pool):
+    """"If you can't, put this creature into its owner's graveyard **instead of
+    onto the battlefield**." X=2 against one creature card in the graveyard.
+
+    A CR 614 replacement rather than a sacrifice afterwards, so the card is in
+    the graveyard and nothing on any battlefield ever held it - and the exile
+    that could not be paid did not happen either.
+    """
+    game, p1 = _monster_game(
+        set_pool, [set_pool("LEA")["Grizzly Bears"], set_pool("LEA")["Mox Pearl"]]
+    )
+
+    game.cast_from_hand(0, "Frankenstein's Monster", x_value=2)
+    game._settle()
+
+    assert _monster_on(p1) is None, game.log
+    assert p1.graveyard[-1].name == "Frankenstein's Monster"
+    assert p1.exile == [], "an entry cost that cannot be paid is not part-paid"
+    assert "Grizzly Bears" in {card.name for card in p1.graveyard}
+    # The log must not claim an entry that a replacement consumed.
+    assert not any("put Frankenstein's Monster onto battlefield" in line
+                   for line in game.log), game.log
+
+
+def test_frankensteins_monster_with_an_empty_graveyard_never_enters(set_pool):
+    """The far end of the same predicate: nothing to exile at all."""
+    game, p1 = _monster_game(set_pool, [])
+
+    game.cast_from_hand(0, "Frankenstein's Monster", x_value=2)
+    game._settle()
+
+    assert _monster_on(p1) is None, game.log
+    assert [card.name for card in p1.graveyard] == ["Frankenstein's Monster"]
+
+
+def test_frankensteins_monster_for_x_zero_enters_as_printed(set_pool):
+    """"Exile zero cards" is something everyone can do, so the second sentence
+    is never reached and the creature is its printed 0/1 with no counters and no
+    prompt."""
+    game, p1 = _monster_game(set_pool, [set_pool("LEA")["Grizzly Bears"]],
+                             interactive=True)
+
+    game.cast_from_hand(0, "Frankenstein's Monster", x_value=0)
+    game._settle()
+
+    monster = _monster_on(p1)
+    assert monster is not None, game.log
+    assert (monster.effective_power, monster.effective_toughness) == (0, 1)
+    assert [c.kind for c in game.pending_choices] == []
+    assert p1.exile == []
+
+
+def test_frankensteins_monster_default_gives_up_the_cheapest_cards(set_pool):
+    """The stated policy for a seat nobody asks (idiom 8): the cheapest matching
+    cards, and the counter that raises both halves.
+
+    Grizzly Bears (2) goes and Craw Wurm (6) stays, and two +1/+1 counters take
+    the printed 0/1 to 2/3.
+    """
+    game, p1 = _monster_game(
+        set_pool,
+        [set_pool("LEA")["Craw Wurm"], set_pool("LEA")["Grizzly Bears"],
+         set_pool("LEA")["Hill Giant"]],
+    )
+
+    game.cast_from_hand(0, "Frankenstein's Monster", x_value=2)
+    game._settle()
+
+    monster = _monster_on(p1)
+    assert monster is not None, game.log
+    assert (monster.effective_power, monster.effective_toughness) == (2, 3)
+    assert sorted(card.name for card in p1.exile) == ["Grizzly Bears", "Hill Giant"]
+    assert [card.name for card in p1.graveyard] == ["Craw Wurm"]
+    assert monster.metadata.get("plus_counters") == 2, (
+        "a +1/+1 counter is a counter, not a bare bonus - CR 704.5q reads it"
+    )
+
+
+def test_frankensteins_monster_refuses_an_answer_it_did_not_offer(set_pool):
+    """The picker's list is a hint and the engine re-checks it (idiom 9): a
+    noncreature card, a repeated slot, a short answer and an unoffered counter
+    are all refused, and a refused answer leaves the prompt owed rather than
+    exiling half a payment."""
+    game, p1 = _monster_game(
+        set_pool,
+        [set_pool("LEA")["Grizzly Bears"], set_pool("LEA")["Craw Wurm"],
+         set_pool("LEA")["Mox Pearl"]],
+        interactive=True,
+    )
+    game.cast_from_hand(0, "Frankenstein's Monster", x_value=2)
+
+    def answer(picks):
+        return game.resolve_pending_choice("entry_exile", 0, picks=picks)
+
+    assert not answer([{"index": 0, "counter": "+1/+1"}]), "a short answer"
+    assert not answer([{"index": 0, "counter": "+1/+1"},
+                       {"index": 2, "counter": "+1/+1"}]), "the Mox is not a creature card"
+    assert not answer([{"index": 0, "counter": "+1/+1"},
+                       {"index": 0, "counter": "+1/+1"}]), "one card twice"
+    assert not answer([{"index": 0, "counter": "+3/+3"},
+                       {"index": 1, "counter": "+1/+1"}]), "a counter nothing offered"
+    assert p1.exile == [], "a refused answer moves nothing"
+    assert [c.kind for c in game.pending_choices] == ["entry_exile"]
+
+    assert answer([{"index": 0, "counter": "+1/+1"},
+                   {"index": 1, "counter": "+1/+1"}]), game.log
+
+
+def test_the_entry_exile_template_reads_its_parameters_off_the_line():
+    """The reader is a template, not a card: the count, the noun phrase and the
+    offered counters are all captures, and a counter kind the engine cannot
+    place refuses the whole line rather than entering the creature short."""
+    from engine.enter_effects import exile_cards_on_enter
+
+    printed = (
+        "As this creature enters, exile two artifact cards from your graveyard. "
+        "If you can't, put this creature into its owner's graveyard instead of "
+        "onto the battlefield. For each artifact card exiled this way, this "
+        "creature enters with a +1/+1 counter on it."
+    )
+    assert exile_cards_on_enter(printed) == {
+        "count": 2,
+        "filter": {"type_filter": "artifact"},
+        "counters": ("+1/+1",),
+    }
+
+    # A back-reference naming different cards is a line this rule has not read.
+    assert exile_cards_on_enter(printed.replace(
+        "For each artifact card", "For each land card")) is None
+    # And a counter kind with no P/T meaning behind it.
+    assert exile_cards_on_enter(printed.replace(
+        "a +1/+1 counter", "a soul counter")) is None

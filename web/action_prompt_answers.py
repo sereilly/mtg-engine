@@ -566,6 +566,29 @@ def _action_body_choice_confirm(session, req, seat_type):
     if not session.game.confirm_enter_body_choice(req.seat, req.hand_index):
         raise HTTPException(status_code=400, detail="no body choice is pending for you")
 
+@action_handler("entry_exile_confirm")
+def _action_entry_exile_confirm(session, req, seat_type):
+    # Frankenstein's Monster: the entry cost ("exile X creature cards from your
+    # graveyard") and the counter each exiled card buys, in one answer - they
+    # are one decision made as the permanent enters (CR 614.1c), and sending
+    # them apart would leave the creature on the battlefield at a size nobody
+    # chose. The engine re-checks every index against the graveyard positions
+    # the printed noun phrase admits, so the prompt's list is a hint.
+    if req.entry_exile_picks is None:
+        raise HTTPException(status_code=400, detail="entry_exile_picks is required")
+    picks = [
+        {"index": pick.index, "counter": pick.counter}
+        for pick in req.entry_exile_picks
+    ]
+    if not session.game.resolve_pending_choice("entry_exile", req.seat, picks=picks):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "no entry exile is pending for you, or those cards and counters "
+                "are not the ones offered"
+            ),
+        )
+
 @action_handler("mode_choice_confirm")
 def _action_mode_choice_confirm(session, req, seat_type):
     # A modal ability (Relic Bind, Trufflesnout, Elder Gargaroth): the

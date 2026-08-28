@@ -889,6 +889,32 @@ def _enter_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("entry_exile")
+def _entry_exile(ctx: PromptContext, choices: list) -> dict:
+    """The entry cost paid out of a graveyard (Frankenstein's Monster): the
+    chooser's whole graveyard with the positions the printed noun phrase admits,
+    how many of them the cost is, and the counter kinds each exiled card may
+    buy.
+
+    ``legal_indices`` is the engine's own candidate list, asked of the same
+    method the answer is re-checked against - so the picker cannot offer a card
+    the answer path would refuse (idiom 9). The graveyard is a public zone
+    (CR 400.2), which is why the whole pile is serialized rather than only the
+    legal slots: a player choosing which creatures to give up is reading the
+    order they went in.
+    """
+    choice = choices[0]
+    player = ctx.game.players[choice.player_index]
+    return {
+        "caster_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "count": int(choice.data.get("count", 0)),
+        "counters": list(choice.data.get("counters") or ()),
+        "cards": [ctx.serialize_card(card) for card in player.graveyard],
+        "legal_indices": ctx.game._entry_exile_candidates(choice),
+    }
+
+
 @prompt_renderer("body_choice")
 def _body_choice(ctx: PromptContext, choices: list) -> dict:
     """Primal Clay: "it becomes your choice of <body>". The first printed body

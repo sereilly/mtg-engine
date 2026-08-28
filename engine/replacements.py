@@ -182,6 +182,12 @@ EXILE_INSTEAD_OF_ENTERING = 10  # Containment Priest
 # else in the contention set is allowed to modify it — being asked first is how
 # a prohibition that is not itself a replacement effect keeps that promise here.
 LANDS_CANT_ENTER = 0  # Worms of the Earth
+# Between the two: an entry cost the controller cannot pay refuses the entry the
+# way Containment Priest's exile does, so it belongs with the consuming
+# replacements rather than with the rider below. After Containment Priest
+# because that one removes the entry outright - a creature exiled as it would
+# enter never had an entry cost to fail to pay.
+UNPAYABLE_ENTRY_COST = 15  # Frankenstein's Monster
 # After it, and it has to be: the exile replacement means the permanent never
 # enters, and a rider hung on an entry that did not happen is a sacrifice for
 # nothing.
@@ -1202,6 +1208,91 @@ def _exile_instead_of_entering(game, payload: dict) -> ReplacementOutcome | None
     owner.exile.append(permanent.card)
     game.log.append(
         f"{permanent.card.name} was exiled instead of entering the battlefield"
+    )
+    return ReplacementOutcome(replaced=True)
+
+
+def _entry_exile_requirement(game, payload: dict) -> dict | None:
+    """What the entering permanent's own text demands it exile, or None.
+
+    Asked of ``engine/enter_effects.entry_exile_requirement`` - the same reader
+    the entry state performs the exile with and the support gate claims the line
+    with - so the sentence that refuses the entry and the sentence that carries
+    it out cannot describe different cards.
+    """
+    from .enter_effects import entry_exile_requirement
+
+    permanent = payload["permanent"]
+    return entry_exile_requirement(
+        permanent.card, permanent.metadata.get("cast_x_value")
+    )
+
+
+def _applies_unpayable_entry_cost(game, payload: dict) -> bool:
+    """Whether the controller cannot pay the entry cost the permanent prints.
+
+    Pure, as CR 616.1 requires: it counts the graveyard rather than emptying it.
+    "From **your** graveyard" is the seat the permanent would enter under, which
+    is the payload's own ``controller_index`` - a replacement is asked about the
+    event that *would* happen, and the permanent is on no battlefield yet to
+    have a controller derived for it.
+    """
+    from .handlers._common import _card_matches_filter
+
+    required = _entry_exile_requirement(game, payload)
+    if required is None:
+        return False
+    count = int(required["count"])
+    # "Exile zero cards" is something everyone can do, so the sentence below is
+    # not reached - Frankenstein's Monster cast for X=0 enters as its printed
+    # 0/1 with nothing exiled and no counter on it.
+    if count <= 0:
+        return False
+    described = required["filter"]
+    available = sum(
+        1
+        for card in game.players[payload["controller_index"]].graveyard
+        if _card_matches_filter(card, described)
+    )
+    return available < count
+
+
+@replacement_effect(
+    "would_enter_battlefield", UNPAYABLE_ENTRY_COST,
+    applies=_applies_unpayable_entry_cost,
+)
+def _graveyard_instead_of_entering(game, payload: dict) -> ReplacementOutcome | None:
+    """Frankenstein's Monster: "If you can't, put this creature into its owner's
+    graveyard instead of onto the battlefield."
+
+    A consuming replacement, and it has to be one: the permanent never enters,
+    so nothing that watches entering sees it - no permanent id, no layer
+    contribution, no enters-the-battlefield trigger, no summoning-sickness
+    stamp. A "when it enters, sacrifice it" reading would let every one of those
+    happen first and would put a *permanent* into a graveyard, which is a death
+    (CR 700.4) and fires the dies triggers this card never should.
+
+    Its owner's graveyard, not its controller's: the card is going to the zone
+    CR 400.3 gives it, and the two differ for a creature cast off a Ring of
+    Ma'ruf or under a control effect that changed hands before it resolved.
+
+    The claim for this sentence lives in ``engine/enter_effects.py`` with the
+    other two sentences of the same CR 614.1c effect, rather than in
+    ``REPLACEMENT_LINES`` beside every other interceptor here: the three
+    sentences are one paragraph and one replacement, and claiming a sentence of
+    it twice is two claims free to drift. ``_entry_exile_requirement`` above
+    reads that module, so this interceptor still self-selects off the card's own
+    text the way every other one in this file does.
+    """
+    permanent = payload["permanent"]
+    owner_index = game.owner_index_of(permanent)
+    owner = game.players[
+        owner_index if owner_index is not None else payload["controller_index"]
+    ]
+    owner.graveyard.append(permanent.card)
+    game.log.append(
+        f"{permanent.card.name} was put into {owner.name}'s graveyard instead of "
+        f"entering the battlefield"
     )
     return ReplacementOutcome(replaced=True)
 

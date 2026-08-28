@@ -85,6 +85,7 @@ ActionKind = Literal[
     "opponent_damage_choose",
     "enter_choice_confirm",
     "body_choice_confirm",
+    "entry_exile_confirm",
     "least_power_choice_confirm",
     "player_choice_confirm",
     "cast_choice_confirm",
@@ -222,6 +223,17 @@ class SearchPickRef(BaseModel):
     index: int = Field(ge=0)
 
 
+class EntryExilePick(BaseModel):
+    # One card paying an entry cost ("As this creature enters, exile X creature
+    # cards from your graveyard"): its index in the chooser's graveyard as the
+    # prompt serialized it, and which of the offered counters that card buys.
+    # ``counter`` is absent for a line that offers none - the two travel
+    # together because the card and the counter it buys are one decision, made
+    # as the permanent enters (CR 614.1c).
+    index: int = Field(ge=0)
+    counter: str | None = Field(default=None, max_length=16)
+
+
 class ModeChoice(BaseModel):
     """One chosen mode of a multi-mode spell, with its own targets.
 
@@ -350,6 +362,11 @@ class GameActionRequest(BaseModel):
     # per found card, in the order the prompt listed the cards. Sent with
     # `search_destination_confirm`.
     search_assignments: list[int] | None = None
+    # The entry exile (Frankenstein's Monster): every card paying the cost and
+    # the counter each one buys, sent with `entry_exile_confirm`. The whole
+    # answer at once, because the prompt owes a *set* of exactly X cards and a
+    # card at a time would leave a half-paid cost the engine has no state for.
+    entry_exile_picks: list["EntryExilePick"] | None = None
     # Casting from outside the hand (engine/cast_permissions.py): which zone
     # the named card is cast or played from. Absent means the hand, so every
     # existing client is unchanged.
