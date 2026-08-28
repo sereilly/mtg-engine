@@ -85,6 +85,10 @@ class CleanupStepMixin:
         expire_end_of_turn_permissions(self)
         # "…can't block this turn" blanket restrictions end with the turn too.
         self.blocking_restrictions_until_eot.clear()
+        # "Creatures can't attack this turn." (Festival.) CR 514.2 ends it with
+        # the same cleanup, beside its blocking twin rather than anywhere else,
+        # so the two cannot come to disagree about when "this turn" is over.
+        self.attack_restrictions_until_eot.clear()
         # "Until the end of your next turn, they can't phase in." (Teferi,
         # Timeless Voyager.) The block counts the *caster's* turn ends; this
         # cleanup ends the active player's turn, so their countdowns tick.

@@ -31,11 +31,13 @@ from ._common import (
     _stamp_x_from_count,
     count_spec,
 )
+from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
 
 def lower_where_x(
     node: ast.WhereX,
     inner: tuple[OracleInstruction, ...],
     produced: frozenset[str],
+    event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"…, where X is the number of <filter>" over a whole sentence.
 
@@ -76,7 +78,7 @@ def lower_where_x(
         # them was misread. Refusing keeps that loud instead of executing the
         # sentence with the definition quietly discarded.
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    spec = count_spec(_count_filter_for(definition.filter, inner, node), node,
+    spec = count_spec(_count_filter_for(definition.filter, inner, node, event), node,
                       multiplier=factor)
     return _stamp_x_from_count(inner, spec)
 
@@ -149,7 +151,7 @@ def _names_a_player_target(inner: tuple[OracleInstruction, ...]) -> bool:
     return False
 
 
-def _count_filter_for(filt, inner: tuple[OracleInstruction, ...], node):
+def _count_filter_for(filt, inner: tuple[OracleInstruction, ...], node, event=None):
     """The filter a where-clause's count is taken over, with "that player"
     resolved into a zone owner.
 
@@ -168,7 +170,19 @@ def _count_filter_for(filt, inner: tuple[OracleInstruction, ...], node):
     """
     if filt.controller != "that_player":
         return filt
+    # "At the beginning of each opponent's upkeep, … where X is the number of
+    # nontoken permanents of the chosen color **they control**" (Psychic
+    # Allergy). Nothing was targeted: the seat is the one the *event* was about,
+    # frozen into the trigger's context by the upkeep step (CR 603.10). Which
+    # events carry one is `_EVENT_SUBJECT_PLAYERS` — the same table the damage
+    # recipient beside it reads, so the count and the damage cannot end up on
+    # two different players.
     if not _names_a_player_target(inner):
+        if event in _EVENT_SUBJECT_PLAYERS:
+            return dataclasses.replace(
+                filt, controller=None,
+                zone_owner=ast.PlayerRef(EVENT_SUBJECT_PLAYER),
+            )
         raise LoweringError(
             "'that player' in a count with no player target to name", node=node
         )

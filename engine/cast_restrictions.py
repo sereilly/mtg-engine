@@ -110,7 +110,22 @@ def _opponents_turn_after_upkeep(game: "Game", caster_index: int) -> bool:
     )
 
 
+def _during_an_opponents_upkeep(game: "Game", caster_index: int) -> bool:
+    # Festival: legal only while an opponent's upkeep step is the current step.
+    # Both halves are asked — the seat *and* the step — because either alone is
+    # a window the card does not print: "an opponent's turn" is most of the
+    # turn, and "the upkeep step" would let a player cast it in their own.
+    if game.active_player_index == caster_index:
+        return False
+    return game.current_turn_phase == "beginning" and game.current_step == "upkeep"
+
+
 CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
+    CastRestriction(
+        "cast this spell only during an opponent's upkeep",
+        _during_an_opponents_upkeep,
+        "can only be cast during an opponent's upkeep",
+    ),
     CastRestriction(
         "cast this spell only during your declare attackers step",
         _during_own_declare_attackers,

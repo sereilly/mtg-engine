@@ -179,6 +179,13 @@ class _FilterDraft:
     is_card: bool = False
     with_plus1_counter: bool = False
     nontoken: bool = False
+    # "permanents **of the chosen color**" (Psychic Allergy) — see
+    # ``ast.ObjectFilter.chosen_color``.
+    chosen_color: bool = False
+    # "…that didn't attack this turn" / "…that couldn't attack" — see
+    # ``ast.ObjectFilter``.
+    attacked_this_turn: bool | None = None
+    could_attack_this_turn: bool | None = None
     token_only: bool = False
     their_choice: bool = False
     named: str | None = None
@@ -593,6 +600,9 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         is_card=d.is_card,
         with_plus1_counter=d.with_plus1_counter,
         nontoken=d.nontoken,
+        chosen_color=d.chosen_color,
+        attacked_this_turn=d.attacked_this_turn,
+        could_attack_this_turn=d.could_attack_this_turn,
         token_only=d.token_only,
         their_choice=d.their_choice,
         named=d.named,

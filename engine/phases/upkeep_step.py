@@ -614,7 +614,32 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 if cond == "upkeep_self" and controller_seat != player_index:
                     break
 
+                # "at the beginning of each **opponent's** upkeep" (Psychic
+                # Allergy) is `upkeep_each` narrowed by a printed noun, carried
+                # as the condition's `upkeep_scope` payload rather than as a
+                # kind of its own (idiom 19). Whose opponents is CR 109.5's
+                # answer — the *source's* controller — so the card's own upkeep
+                # is not one of them. `continue`, not `break`: another ability
+                # on the same permanent may still have triggered (CR 603.3).
+                if (
+                    cond == "upkeep_each"
+                    and trig.condition.payload.get("upkeep_scope") == "opponent"
+                    and controller_seat == player_index
+                ):
+                    continue
+
                 handler = UPKEEP_EFFECTS.get((cond, kind))
+                # An amount defined by a where-clause is counted at
+                # **resolution** (CR 608.2), and the registry's handlers read
+                # their amount straight off the payload — they know a printed
+                # number and Storm World's turn-start land count, and nothing
+                # else. Psychic Allergy's "X is the number of nontoken
+                # permanents of the chosen color they control" is a third
+                # spelling they would silently read as Storm World's. So the
+                # pair is declined and the trigger goes on the stack like any
+                # other, where `count_from_payload` answers it.
+                if handler is not None and "x_from_count" in trig.instruction.payload:
+                    handler = None
                 if handler is None and cond in _ORDINARY_UPKEEP_SEATS:
                     # An upkeep trigger with nothing interactive about it —
                     # "At the beginning of your upkeep, you may search your

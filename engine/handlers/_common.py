@@ -125,7 +125,24 @@ def count_from_payload(
     characteristic = spec.get("object_characteristic")
     if isinstance(characteristic, dict):
         return _characteristic_of_object(game, context, characteristic, instruction)
-    owner = context.caster if spec.get("owner", "you") == "you" else (context.target or context.caster)
+    scope = spec.get("owner", "you")
+    if scope == "you":
+        owner = context.caster
+    elif scope == "event_subject_player":
+        # "At the beginning of each opponent's upkeep, … the number of …
+        # **they control**" (Psychic Allergy). Nobody chose this seat, so
+        # `context.target` is empty — the seat is the one the firing event was
+        # about, frozen into the trigger's context (CR 603.10) by the upkeep
+        # step. The same key the damage recipient beside it reads, so the count
+        # and the damage can never land on two different players.
+        seat = (context.trigger_context or {}).get("event_subject_player")
+        owner = (
+            game.players[seat]
+            if isinstance(seat, int) and 0 <= seat < len(game.players)
+            else context.caster
+        )
+    else:
+        owner = context.target or context.caster
     return evaluate_count(
         game, owner, spec,
         exclude=context.source_permanent, source=context.source_permanent,
@@ -243,6 +260,27 @@ def _scaled(total: int, spec: dict) -> int:
     return -(-total // 2) if rounding == "up" else total // 2
 
 
+def _resolve_chosen_color(filt: dict, source) -> dict:
+    """*filt* with a ``chosen_color`` narrowing turned into a colour key.
+
+    The colour a card chose as it entered (CR 614.1c) is recorded on the
+    permanent, not in the sentence — so a noun phrase saying "of the chosen
+    color" can only be answered by a reader holding that permanent. Callers
+    without one leave the key in place and ``permanent_matches_filter`` refuses
+    every permanent, which is the safe direction: a dropped narrowing would
+    count (or destroy) the whole board.
+    """
+    if not filt.get("chosen_color"):
+        return filt
+    color = getattr(source, "metadata", {}).get("chosen_color") if source else None
+    if not color:
+        return filt
+    resolved = dict(filt)
+    resolved.pop("chosen_color", None)
+    resolved["color_filter"] = color
+    return resolved
+
+
 def evaluate_count(
     game: "Game", owner: "PlayerState", spec: dict, *, exclude=None, source=None
 ) -> int:
@@ -311,6 +349,13 @@ def evaluate_count(
         # the caller that has a source passes one, and the continuous recompute
         # that does not never produces the key.
         skip = exclude if filt.pop("exclude_self", False) else None
+        # "permanents **of the chosen color**" (Psychic Allergy). The colour was
+        # picked as *source* entered (CR 614.1c) and lives on that permanent, so
+        # it is resolved here — where the source is in hand — into the ordinary
+        # colour key every matcher already reads. `permanent_matches_filter`
+        # refuses the unresolved key outright, so a caller with no source
+        # counts nothing rather than counting the whole board.
+        filt = _resolve_chosen_color(filt, source)
         matched = [
             perm for perm in game.controlled_by(seat)
             if perm is not skip and permanent_matches_filter(perm, filt)
@@ -588,6 +633,30 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     resolution, cast validation, and the legality enumerator so they can never
     disagree about what a filter means.
     """
+    # "of the chosen color" (Psychic Allergy) names a colour recorded on the
+    # *source* permanent (CR 614.1c), which this function does not have — it is
+    # the pure half, about one permanent alone. Refusing rather than ignoring is
+    # the direction that cannot widen an effect: `evaluate_count` and
+    # `subject_filters.subject_matches` both hold a source and resolve the key
+    # into `color_filter` before asking, so the key only survives to here when
+    # nobody could answer it.
+    if payload.get("chosen_color"):
+        return False
+    # "creatures that didn't attack this turn" / "…except for creatures that
+    # couldn't attack" (Season of the Witch). Both are per-turn records stamped
+    # on the permanent itself — the first by the declaration, the second by the
+    # declare-attackers step's turn-based action (CR 508.1) — so the pure
+    # matcher answers them. Read at the sweep rather than re-derived: by the
+    # end step a creature may have untapped or lost its restriction, and the
+    # question is about the combat, not about now.
+    if payload.get("attacked_this_turn") and not perm.metadata.get("attacked_this_turn"):
+        return False
+    if payload.get("not_attacked_this_turn") and perm.metadata.get("attacked_this_turn"):
+        return False
+    if payload.get("could_attack_this_turn") and not perm.metadata.get(
+        "could_attack_this_turn"
+    ):
+        return False
     type_filter = payload.get("type_filter")
     subtype_filter = payload.get("subtype_filter")
     color_filter = payload.get("color_filter")

@@ -1763,6 +1763,23 @@ class PendingChoicesMixin:
                 f"{permanent.metadata.get('chosen_card_name') or 'nothing'}"
             )
             return True
+        # "…choose a color." (Psychic Allergy.) A colour and no player, so
+        # there is no seat to validate — the same early return the card-name
+        # branch above takes, and for the same reason: this prompt asks one
+        # question of three different shapes and only two of them name a seat.
+        if choice.data["needs_color"] and not choice.data["opponents"]:
+            permanent = choice.data["permanent"]
+            try:
+                color = self._normalize_mana_color(mana_color)
+            except ValueError:
+                return False
+            if color is not None and self.is_on_battlefield(permanent):
+                permanent.metadata["chosen_color"] = color
+                self.log.append(f"{choice.data['card_name']}: chose {color}")
+                self._recalculate_lord_buffs()
+            self.discard_pending_choice(choice)
+            self.check_state_based_actions()
+            return True
         if opponent_index not in choice.data["opponents"]:
             return False
         permanent = choice.data["permanent"]

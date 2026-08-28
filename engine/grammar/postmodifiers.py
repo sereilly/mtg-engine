@@ -190,6 +190,39 @@ def _parse_postmodifiers(
         if stream.accept_phrase("defending", "player", "controls"):
             d.controller = "defending_player"
             continue
+        # "nontoken permanents **of the chosen color** they control" (Psychic
+        # Allergy). CR 614.1c's choice, made as the source entered and stored on
+        # it — so the phrase narrows by a colour the sentence never names and
+        # only a reader holding the *source* can answer. That is why it is its
+        # own filter key rather than a colour: `permanent_matches_filter` is the
+        # pure half and refuses the key outright, and the two readers that do
+        # have a source (`subject_matches`, `evaluate_count`) resolve it before
+        # matching.
+        if stream.accept_phrase("of", "the", "chosen", "color"):
+            d.chosen_color = True
+            continue
+        # "all untapped creatures **that didn't attack this turn**, **except
+        # for creatures that couldn't attack**" (Season of the Witch). Two
+        # narrowings of one noun phrase, both about the same combat: the first
+        # is the set the sweep takes, the second is the exemption the card
+        # prints. Read here rather than as a sentence-level exception clause
+        # because they narrow the *subject* — the sweep destroys exactly what
+        # the noun phrase names, and an exemption read anywhere else would have
+        # to be re-applied by every verb.
+        if stream.accept_phrase("that", "didn't", "attack", "this", "turn"):
+            d.attacked_this_turn = False
+            continue
+        if stream.accept_phrase("that", "attacked", "this", "turn"):
+            d.attacked_this_turn = True
+            continue
+        except_mark = stream.mark()
+        stream.accept_punct(",")
+        if stream.accept_phrase(
+            "except", "for", "creatures", "that", "couldn't", "attack"
+        ):
+            d.could_attack_this_turn = True
+            continue
+        stream.reset(except_mark)
         if stream.accept_phrase("that", "player", "controls"):
             d.controller = "that_player"
             continue

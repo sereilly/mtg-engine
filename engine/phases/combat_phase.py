@@ -292,6 +292,7 @@ class CombatPhaseMixin:
             self.combat_attackers_locked = False
             self.combat_blockers_locked = False
             self.combat_defending_player_index = self._resolve_defending_player_index()
+            self._record_who_could_attack()
         if step == "declare_blockers":
             self.combat_blockers_locked = not bool(self.combat_attackers)
         self._set_phase_and_step("combat", step)
@@ -316,6 +317,29 @@ class CombatPhaseMixin:
             self.clear_priority_window()
         elif self._receives_priority(step):
             self.start_priority_window(self.active_player_index)
+
+    def _record_who_could_attack(self) -> None:
+        """Stamp every creature that *could* have been declared an attacker.
+
+        "Destroy all untapped creatures that didn't attack this turn, **except
+        for creatures that couldn't attack**" (Season of the Witch) asks a
+        question no later reading of the board can answer: by the end step a
+        creature may have untapped, lost defender, or had its restriction end.
+        So the answer is frozen at CR 508.1's turn-based action, the moment the
+        declaration is made — and it is taken here rather than in
+        ``declare_attackers`` because that method is the *player's* action and
+        may never be called, while this step always begins.
+
+        Only the active player's creatures are asked. A creature nobody could
+        have attacked with — an opponent's, on a turn that is not theirs —
+        could not attack, which is exactly the exemption the card prints.
+        """
+        opponents = self.opponents_of(self.active_player_index)
+        for permanent in self.controlled_by(self.active_player_index):
+            if not self._is_creature(permanent):
+                continue
+            if any(self.can_attack(permanent, seat) for seat in opponents):
+                permanent.metadata["could_attack_this_turn"] = True
 
     def _reset_combat_state(self, clear_damage_marked: bool) -> None:
         self.combat_attackers = {}

@@ -498,6 +498,24 @@ def grant_banding_to_target(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
+@effect_handler("cant_attack_until_eot")
+def cant_attack_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Creatures can't attack this turn." (Festival.)
+
+    The attack twin of ``cant_block_until_eot`` below: a blanket restriction the
+    attack gate (``declare_attackers_step.can_attack``) tests for the rest of
+    the turn, swept at cleanup. State plus a reader, never a flag stamped per
+    creature — a creature entering after this resolves cannot attack either,
+    which per-permanent flags would miss.
+    """
+    game.attack_restrictions_until_eot.append({
+        "filter": dict(instruction.payload.get("filter") or {}),
+        "source_name": context.card.name,
+    })
+    game.log.append(f"{context.card.name}: the named creatures can't attack this turn")
+    return True, "resolved"
+
+
 @effect_handler("cant_block_until_eot")
 def cant_block_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Creatures without flying can't block this turn." (Destructive

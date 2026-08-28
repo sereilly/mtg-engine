@@ -19,8 +19,8 @@ from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, NUMBER_WORDS, SUBTYPE_INDEX, match_longest)
 from ..phrases import (
     _accept_number, _accept_self_reference, _parse_for_each_this_way,
-    _parse_mana_payment, _parse_zone, parse_pair_ordinal_subject,
-    parse_subject_filter_at,
+    _parse_mana_payment, _parse_pay_life, _parse_zone, parse_counted_subject,
+    parse_pair_ordinal_subject, parse_subject_filter_at,
 )
 
 
@@ -368,6 +368,24 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
         return ast.DestroyUnlessPay(subject, _parse_mana_payment(stream))
     stream.reset(mark)
 
+    # "… unless you **sacrifice two Islands**" (Psychic Allergy) — the destroy
+    # side of the alternative `_parse_sacrifice` already reads below, and the
+    # same decomposition into `May(action=…, otherwise=…)` rather than a fourth
+    # fused node. `_parse_counted_sacrifice` is the one reading of the counted
+    # noun phrase, so the two verbs cannot come to disagree about what "two
+    # Islands" asks for, and the takeability check that already knows a player
+    # with one Island cannot pay it applies unchanged.
+    mark = stream.mark()
+    if not further and stream.accept_phrase("unless", "you", "sacrifice"):
+        payer = ast.PlayerRef("you")
+        alternative = _parse_counted_sacrifice(stream, payer)
+        return ast.May(
+            actor=payer,
+            action=alternative,
+            otherwise=ast.Destroy(subject, no_regen=False, delay=""),
+        )
+    stream.reset(mark)
+
     no_regen = False
     mark = stream.mark()
     stream.accept_punct(".", ",")
@@ -589,6 +607,15 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
     another = bool(stream.accept_word("another"))
     subject = parse_recipient(stream)
     if subject is None:
+        # "You may sacrifice **two Islands**." (Leviathan.) A bare count in
+        # front of an untargeted plural, which `parse_recipient` has no reading
+        # for — the same noun phrase the "unless you sacrifice" tail below
+        # already reads, so it is the same production rather than a second
+        # spelling of "two Islands". Without it the offer refused, and
+        # Leviathan's whole upkeep line with it.
+        counted = _parse_counted_sacrifice(stream, player)
+        if counted is not None:
+            return counted
         raise stream.error("expected something to sacrifice")
     if another and isinstance(subject, ast.TargetSpec):
         subject = dataclasses.replace(
@@ -597,8 +624,27 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
     # "… unless you pay {W}{W}" — a pay-or-else prompt, kept fused because
     # that is the shape the upkeep dispatcher's handlers implement.
     mark = stream.mark()
-    if stream.accept_phrase("unless", "you", "pay"):
-        return ast.SacrificeUnlessPay(subject, _parse_mana_payment(stream))
+    if stream.accept_phrase("unless", "you"):
+        # "… unless you **pay 2 life**" (Season of the Witch). CR 118.8's
+        # payment as the alternative, decomposed to the same `May` the counted
+        # sacrifice below lowers to — not a third fused node. That decomposition
+        # is what makes the "cannot afford it" case right for free:
+        # `handlers/control_flow._action_is_takeable` asks `can_pay_life`, so a
+        # player at 1 life is never offered the payment and the enchantment goes.
+        #
+        # Read before the mana spelling because both open "unless you pay", and
+        # `_parse_mana_payment` raises rather than refusing quietly — a life
+        # amount reaching it fails the whole line naming a missing mana cost.
+        if player.kind == "you":
+            life = _parse_pay_life(stream)
+            if life is not None:
+                return ast.May(
+                    actor=player,
+                    action=life,
+                    otherwise=ast.Sacrifice(player, subject),
+                )
+        if stream.accept_word("pay"):
+            return ast.SacrificeUnlessPay(subject, _parse_mana_payment(stream))
     stream.reset(mark)
     # "… unless you **sacrifice two Swamps**" (Mold Demon) — the same
     # alternative with a cost mana cannot express. Not a second fused node: an
@@ -630,21 +676,15 @@ def _parse_counted_sacrifice(
     one noun phrase, so "an Island" and "two Swamps" are one production with
     the count as data.
     """
-    # "**an** Island" (Elder Spawn) prints its count as the article, and
-    # `NUMBER_WORDS` reads an article as one — so `_accept_number` would consume
-    # it and leave a bare noun behind, which `parse_subject_filter_at`
-    # quantifies as the sweep "all" and then refuses against the singular it was
-    # asked for. The article is left where it is instead: a singular subject is
-    # a reading that parser already has. This docstring always claimed both
-    # spellings were one production; until Elder Spawn no card printed the
-    # singular, so nothing showed that they were two.
-    count = None if stream.peek_word() in ("a", "an") else _accept_number(stream)
-    described = parse_subject_filter_at(stream, plural=(count or 1) != 1)
-    if described is None:
+    # The noun phrase itself is `phrases.parse_counted_subject`: Leviathan's
+    # "can't attack unless you sacrifice two Islands" is the same phrase read by
+    # the combat family, and one reading is what keeps the offer, the gate and
+    # the charge agreeing about what the card asks for.
+    counted = parse_counted_subject(stream)
+    if counted is None:
         raise stream.error("expected what to sacrifice")
-    return ast.Sacrifice(
-        player, ast.TargetSpec("a", described, count=count or 1)
-    )
+    count, described = counted
+    return ast.Sacrifice(player, ast.TargetSpec("a", described, count=count))
 
 
 def _parse_sacrifice_expansion_permanents(stream: TokenStream) -> ast.Statement | None:

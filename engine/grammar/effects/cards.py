@@ -773,14 +773,35 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
     permanent would be a different pile this cannot find.
     """
     mark = stream.mark()
-    if not stream.accept_phrase("put", "all", "cards", "exiled", "with"):
+    # Two printed verbs for one effect. Knowledge Vault says "**Put all cards**
+    # exiled with this artifact **into** their owner's hand"; Safe Haven says
+    # "**Return each card** exiled with this land **to** the battlefield under
+    # its owner's control". Same linked pile (CR 610.3), same drain, same
+    # handler — the difference is which zone the cards are going to and the
+    # preposition English wants in front of it.
+    if stream.accept_phrase("put", "all", "cards", "exiled", "with"):
+        preposition = "into"
+    elif stream.accept_phrase("return", "each", "card", "exiled", "with"):
+        preposition = "to"
+    else:
         stream.reset(mark)
         return None
     if not (stream.accept_word("it") or _accept_self_reference(stream)):
         stream.reset(mark)
         return None
-    stream.expect_word("into")
+    stream.expect_word(preposition)
     zone = _parse_zone(stream)
+    # "…**under its owner's control**" (CR 400.3 spelled out, because a
+    # battlefield has no possessive of its own to carry it). Read as the zone's
+    # owner rather than dropped: the lowering *requires* an owner reference —
+    # a linked pile goes to each card's own owner — so silently losing the
+    # clause would refuse the line, and consuming it without recording it would
+    # let a wording naming one player through.
+    if zone.owner is None and zone.name == "battlefield" and (
+        stream.accept_phrase("under", "its", "owner", "'s", "control")
+        or stream.accept_phrase("under", "their", "owner", "'s", "control")
+    ):
+        zone = ast.Zone(zone.name, ast.PlayerRef("owner"))
     return ast.PutExiledWithSource(zone)
 
 

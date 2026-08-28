@@ -10,7 +10,7 @@ at all.
 from .. import ast
 from ..references import parse_recipient
 from ..stream import TokenStream
-from ..phrases import BASIC_LAND_WORDS, _parse_duration
+from ..phrases import BASIC_LAND_WORDS, _parse_duration, parse_counted_subject
 
 
 # The two printed combat restrictions the engine enforces (CR 506, 509). Both
@@ -47,6 +47,39 @@ def _parse_cant_attack_or_block(
             return ast.CombatRestriction(
                 subject, "cant_attack_during_controllers_next_turn", ()
             )
+        # "Creatures can't attack this turn." (Festival.) The attack twin of
+        # the blanket can't-block below: no "unless", just a duration — the
+        # restriction is a blanket over the *subject* for the rest of the turn
+        # rather than a property of any permanent. Only the durationed form is
+        # claimed; a bare "<subject> can't attack" is a static ability and
+        # falls through to the refusal below, which is where the pool's
+        # printed statics ("This creature can't attack") already go.
+        if not stream.at_word("unless"):
+            duration_mark = stream.mark()
+            duration = _parse_duration(stream)
+            if duration.kind is not None:
+                return ast.CombatRestriction(
+                    subject, "cant_attack_until_eot", (("duration", duration.kind),)
+                )
+            stream.reset(duration_mark)
+        # "This creature can't attack **unless you sacrifice two Islands**."
+        # (Leviathan.) CR 508.1g: an additional *cost* to attack, paid as
+        # attackers are declared — not a target and not a board condition, so
+        # the declaration charges it and an unpayable cost makes the attack
+        # illegal. The noun phrase is `phrases.parse_counted_subject`, the same
+        # reading the "unless you sacrifice" tails elsewhere use, so the gate
+        # and the charge cannot disagree about what is owed.
+        unless_mark = stream.mark()
+        if stream.accept_phrase("unless", "you", "sacrifice"):
+            counted = parse_counted_subject(stream)
+            if counted is not None:
+                count, described = counted
+                return ast.CombatRestriction(
+                    subject,
+                    "cant_attack_unless_sacrifice",
+                    (("sacrifice_filter", described), ("sacrifice_count", count)),
+                )
+            stream.reset(unless_mark)
         if not stream.accept_phrase("unless", "defending", "player", "controls"):
             raise stream.error("expected 'unless defending player controls'")
         stream.expect_word("a", "an")

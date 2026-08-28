@@ -6,6 +6,7 @@ import re
 from ..enter_effects import (
     sacrifice_any_number_on_enter,
     CHOOSE_COLOR_AND_OPPONENT_ON_ENTER,
+    CHOOSE_COLOR_ON_ENTER,
     CHOOSE_CARD_NAME_ON_ENTER,
     CHOOSE_OPPONENT_ON_ENTER,
     COPY_ARTIFACT_ON_ENTER,
@@ -315,6 +316,42 @@ class PermanentStateMixin:
                     needs_color=needs_color, opponents=opponents,
                     default_seat=chosen, default_color=default_color,
                 )
+
+        # "As this enchantment enters, choose a color." (Psychic Allergy.) The
+        # colour half with no player beside it, so no seat is recorded at all —
+        # asked *after* the pair above and only when that phrase is absent,
+        # because this one is its prefix and would otherwise claim Jihad's line
+        # and drop the opponent it names.
+        #
+        # The default is the colour this permanent's controller's **opponents**
+        # hold most of among nontoken permanents. That is the stated policy for
+        # a choice nothing else constrains (idiom 8), and it is the same
+        # reasoning as Jihad's default one branch up: a colour nobody controls
+        # makes every "choose a color" effect inert, which is a legal choice no
+        # player would make and an AI seat would be stuck with.
+        if (
+            CHOOSE_COLOR_ON_ENTER in text
+            and CHOOSE_COLOR_AND_OPPONENT_ON_ENTER not in text
+        ):
+            opponents = [
+                i for i, p in enumerate(self.players)
+                if i != caster_index and not p.lost
+            ]
+            counts: dict[str, int] = {}
+            for seat in opponents:
+                for perm in self.controlled_by(seat):
+                    if perm.metadata.get("is_token"):
+                        continue
+                    for color in self._effective_colors(perm):
+                        counts[color] = counts.get(color, 0) + 1
+            default_color = max(sorted(counts), key=lambda c: counts[c]) if counts else "W"
+            permanent.metadata["chosen_color"] = default_color
+            self.arm_pending_choice(
+                "enter_choice", caster_index,
+                card_name=permanent.card.name, permanent=permanent,
+                needs_color=True, opponents=[], default_seat=None,
+                default_color=default_color,
+            )
 
         # "As this enchantment enters, choose a card name." (Runed Halo.) The
         # choice is made *as* the permanent enters (CR 614.1c), so it is stamped

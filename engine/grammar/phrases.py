@@ -24,6 +24,7 @@ from .amounts import (
     accept_added_base,
     accept_counters_on_source,
     accept_damage_dealt_this_turn,
+    parse_amount,
 )
 from .errors import GrammarError
 from .lexer import (MANA, NUMBER, PUNCT, QUOTE, WORD, tokenize)
@@ -787,3 +788,62 @@ def accept_member_state_clause(stream: TokenStream) -> tuple[str, bool] | None:
     stream.advance()
     field_name, value = state
     return field_name, (not value) if negated else value
+
+
+def _parse_pay_life(stream: TokenStream) -> "ast.PayLife | None":
+    """``pay 4 life`` (Sylvan Library) — CR 119.4.
+
+    A bare imperative whose subject is the effect's controller, like the bare
+    draw and discard beside it. Refuses without consuming, so "pay {R}{R}" and
+    every other payment sentence keeps the reading it had.
+
+    Here rather than with the life effects because two families read it: the
+    `game` family's whole sentence, and the `board` family's "sacrifice this
+    enchantment **unless you pay 2 life**" (Season of the Witch), where the
+    payment is the alternative to the destruction. A fragment two families need
+    is not an effect — the same rule `_parse_zone` and `_parse_mana_payment`
+    above are here for — and a second reading of the phrase is how the offer
+    and the payment come to disagree about what was paid.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("pay", "pays"):
+        return None
+    try:
+        amount = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("life"):
+        stream.reset(mark)
+        return None
+    return ast.PayLife(player=ast.PlayerRef("you"), amount=amount)
+
+
+def parse_counted_subject(
+    stream: TokenStream,
+) -> "tuple[int, ast.ObjectFilter] | None":
+    """``two Swamps`` / ``an Island`` — a printed count in front of a plural
+    noun phrase, as ``(count, filter)``; None with the cursor untouched when the
+    words are not that.
+
+    Here rather than with the sacrifice production that first needed it, because
+    two families read the same phrase: "unless you sacrifice **two Islands**"
+    (the `board` family's destroy and sacrifice tails) and "can't attack unless
+    you sacrifice **two Islands**" (the `combat` family's attack cost, CR
+    508.1g). One reading, so the offer, the cost gate and the charge cannot
+    disagree about what the card asks for.
+
+    "**an** Island" (Elder Spawn) prints its count as the article, and
+    ``NUMBER_WORDS`` reads an article as one — so ``_accept_number`` would
+    consume it and leave a bare noun behind, which ``parse_subject_filter_at``
+    quantifies as the sweep "all" and then refuses against the singular it was
+    asked for. The article is left where it is instead: a singular subject is a
+    reading that parser already has.
+    """
+    mark = stream.mark()
+    count = None if stream.peek_word() in ("a", "an") else _accept_number(stream)
+    described = parse_subject_filter_at(stream, plural=(count or 1) != 1)
+    if described is None:
+        stream.reset(mark)
+        return None
+    return count or 1, described

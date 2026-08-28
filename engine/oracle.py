@@ -710,7 +710,13 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
 # "at the beginning of" triggers
 AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("upkeep_self",         r"at the beginning of your upkeep"),
-    ("upkeep_each",         r"at the beginning of each (?:player's )?upkeep"),
+    # "each player's upkeep" / "each upkeep" / "each **opponent's** upkeep"
+    # (Psychic Allergy). One event asked of a narrower set of seats, so the
+    # narrowing is *payload* and not a second kind — idiom 19: a condition kind
+    # is a dispatcher's address, and spelling the subject into it gives one card
+    # its own fire site. `phases/upkeep_step.py` reads `upkeep_scope` to decide
+    # whether this firing is one the card names.
+    ("upkeep_each",         r"at the beginning of each (?:(?P<upkeep_scope>opponent|player)'s )?upkeep"),
     # Cursed Land's "enchanted land's controller" is here too: the deal_damage
     # handler (phases/upkeep_effects.py) reads `attached_to` and does not care
     # what the enchanted permanent is, so a land Aura routes through it like the
@@ -2313,7 +2319,18 @@ _DOESNT_UNTAP_LINE = "this creature doesn't untap during your untap step"
 #: condition). Both producers emit through ``lord_buff_payload``, and the
 #: pool-wide differential run when the gate widened found zero payload drift.
 _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
-    {"dynamic_pt_bonus", "lord_buff", "conditional_static"}
+    {
+        "dynamic_pt_bonus", "lord_buff", "conditional_static",
+        # "This creature can't attack unless you sacrifice two Islands."
+        # (Leviathan.) A CR 508.1g attack cost, which is a *static* property of
+        # the creature — `declare_attackers_step` reads the compiled
+        # instruction off the card at declaration, exactly as it reads the
+        # text-keyed restrictions beside it. The grammar produces it rather
+        # than `combat_restrictions.py` because the noun phrase behind the cost
+        # is a parsed one; without this row the whole card came back "text too
+        # complex" with every one of its lines grammar-clean.
+        "cant_attack_unless_sacrifice",
+    }
 )
 
 

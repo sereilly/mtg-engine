@@ -442,6 +442,16 @@ class ObjectFilter:
     # "nontoken" (Lich's sacrifice). CR 111.1: a token is not a card, so this is
     # neither an excluded card type nor an excluded subtype.
     nontoken: bool = False
+    # "permanents **of the chosen color**" (Psychic Allergy). Not a member of
+    # ``colors``: the colour was decided as the *source* entered (CR 614.1c)
+    # and is stored on that permanent, so folding it in would need a sentinel
+    # colour word every ``color_filter`` reader would then compare against.
+    chosen_color: bool = False
+    # "creatures **that didn't attack this turn**" / "…**that couldn't
+    # attack**" (Season of the Witch): two questions about one combat, both
+    # answered off the permanent's own per-turn record.
+    attacked_this_turn: bool | None = None
+    could_attack_this_turn: bool | None = None
     # "exile any number of **tokens** created with this creature" (Tetravus) —
     # the positive of ``nontoken``. Its own field rather than a tri-state,
     # because every lowering written before it exists refuses an unknown field
@@ -686,6 +696,14 @@ class ObjectFilter:
             payload["enchanted_only"] = True
         if self.nontoken:
             payload["nontoken"] = True
+        if self.chosen_color:
+            payload["chosen_color"] = True
+        if self.attacked_this_turn is True:
+            payload["attacked_this_turn"] = True
+        elif self.attacked_this_turn is False:
+            payload["not_attacked_this_turn"] = True
+        if self.could_attack_this_turn is True:
+            payload["could_attack_this_turn"] = True
         if self.token_only:
             payload["token_only"] = True
         if self.created_with_source:

@@ -452,7 +452,30 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             if _parse_cost_x_definition(stream) is not None:
                 continue
 
-        steps.append(parse_statement(stream))
+        statement = parse_statement(stream)
+        # "Destroy this enchantment **if it has five or more hunger counters on
+        # it**." (Fasting.) The trailing spelling of the "if <condition>,
+        # <statement>" sentence `statements.py` already reads — one clause, one
+        # meaning, printed at the other end. It is folded here rather than
+        # inside `parse_statement` because the condition modifies the whole
+        # sentence, and a production that consumed it would have to be written
+        # once per verb.
+        #
+        # Refusing without consuming (the reset below) is what keeps every
+        # other "if" reading intact: a clause `_parse_condition` cannot describe
+        # falls through to the "unconsumed text" error it already raised, rather
+        # than being silently dropped off a card that would then destroy itself
+        # unconditionally.
+        if not stream.exhausted and stream.at_word("if"):
+            if_mark = stream.mark()
+            stream.advance()
+            try:
+                condition = _parse_condition(stream)
+            except GrammarError:
+                stream.reset(if_mark)
+            else:
+                statement = ast.Conditional(condition, statement)
+        steps.append(statement)
         if (
             not stream.exhausted
             and not stream.at_punct(".", ";")
@@ -557,6 +580,18 @@ def _parse_static_condition_line(stream: TokenStream) -> ast.StaticAbilityNode |
         return None
     stream.accept_punct(".")
     if not stream.exhausted or not _looks_static(statement):
+        stream.reset(mark)
+        return None
+    # A fourth reducing gate, in the spirit of the three above: a condition
+    # narrowed to "**of the chosen color**" (Jihad) reads a colour recorded on
+    # the *source permanent* as it entered (CR 614.1c). Nothing a continuous
+    # buff's condition is evaluated by can see that — the answer belongs to one
+    # permanent's metadata, not to a board — and `engine/lord_buffs.py`
+    # implements this exact sentence through `chosen_color_permanent`. So the
+    # production declines the line rather than claiming it and refusing a layer
+    # later, which is the one failure the derivation-table fallback cannot
+    # recover from: `parse_line` reaches the tables only on a *parse* refusal.
+    if getattr(getattr(condition, "filter", None), "chosen_color", False):
         stream.reset(mark)
         return None
     return ast.StaticAbilityNode(statement, condition)

@@ -239,6 +239,24 @@ _SELF_UNTAP_LINE_PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
         re.compile(rf"^this {_SELF_NOUN} {re.escape(SELF_DOESNT_UNTAP_PHRASE)}$"),
         "doesnt_untap",
     ),
+    (
+        # "This creature **enters tapped and** doesn't untap during your untap
+        # step." (Leviathan.) One printed line making two claims, and both are
+        # enforced: the entry half is `enter_effects.ENTERS_TAPPED`, which
+        # `_initialize_permanent_state` probes as a *substring* and so already
+        # applies here; this half is what keeps it tapped afterwards.
+        #
+        # It needs its own row because `self_untap_line` is anchored on the
+        # whole line — the anchoring is deliberate, so a card cannot claim an
+        # untap restriction off a sentence that merely contains the words — and
+        # without a row Leviathan entered tapped and then untapped every turn,
+        # with nothing failing.
+        re.compile(
+            rf"^this {_SELF_NOUN} enters tapped and "
+            rf"{re.escape(SELF_DOESNT_UNTAP_PHRASE)}$"
+        ),
+        "doesnt_untap",
+    ),
     (_SELF_UNTAP_COUNTER_CONDITION, "doesnt_untap_with_counter"),
     (
         re.compile(
