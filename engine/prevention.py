@@ -198,6 +198,9 @@ def shield_candidates() -> list[Candidate]:
         Candidate(
             key=c.key, order=c.order, applies=c.applies, label=c.label,
             apply=lambda g, e, fn=c.apply: _consume(g, e, fn),
+            # Every entry in this file is CR 615 prevention by construction,
+            # which is what "can't be prevented" (Whippoorwill) switches off.
+            prevents_or_redirects=True,
         )
         for c in PREVENTION_EFFECTS
     ]

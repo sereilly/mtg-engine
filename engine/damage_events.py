@@ -164,14 +164,40 @@ def damage_source_seat(game, source) -> int | None:
     return game.resolving_seats[-1] if game.resolving_seats else None
 
 
+#: "Damage that would be dealt to that creature this turn can't be prevented or
+#: dealt instead to another permanent or player." (Whippoorwill.) A marker on
+#: the creature, cleared with the turn by ``mixins/_constants._EOT_METADATA_KEYS``.
+DAMAGE_LOCK = "damage_cant_be_prevented_or_redirected_until_eot"
+
+
+def damage_locked(recipient) -> bool:
+    """Whether *recipient* carries Whippoorwill's lock. Accepts a player, which
+    never does — no card in this pool prints the clause about one."""
+    metadata = getattr(recipient, "metadata", None)
+    return bool(metadata) and bool(metadata.get(DAMAGE_LOCK))
+
+
 def damage_candidates(recipient) -> list[Candidate]:
     """Every effect attempting to modify a damage event with this recipient
     before it is dealt (CR 120.4b) — shields and replacements together, in
-    default order."""
-    return sorted(
-        shield_candidates() + replacement_candidates(damage_kind(recipient)),
-        key=lambda candidate: candidate.order,
-    )
+    default order.
+
+    A locked recipient (Whippoorwill) drops the contenders that *prevent* the
+    damage or *move* it, and keeps the rest: the printed clause names those two
+    and nothing else, so a multiplier (Fiery Emancipation) and a source cap are
+    untouched. Which contenders those are is declared at each registration
+    (``Candidate.prevents_or_redirects``) rather than listed here — a list of
+    registrations goes stale silently, and the direction it goes stale in is a
+    lock that stops locking.
+
+    Filtered here rather than in each ``applies``: this is the one place a
+    damage event's contention set is assembled, so a shield added tomorrow is
+    covered without knowing the clause exists.
+    """
+    candidates = shield_candidates() + replacement_candidates(damage_kind(recipient))
+    if damage_locked(recipient):
+        candidates = [c for c in candidates if not c.prevents_or_redirects]
+    return sorted(candidates, key=lambda candidate: candidate.order)
 
 
 def _settled(game, event: dict) -> bool:

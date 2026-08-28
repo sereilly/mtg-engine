@@ -75,6 +75,7 @@ from .damage import (
     _lower_damage_unless_pay,
     _lower_damage,
     _lower_damage_conjunction,
+    _lower_damage_cant_be_prevented,
 )
 from .redirection import (
     _lower_redirect_damage,
@@ -279,6 +280,7 @@ __all__ = [
     "_lower_damage_unless_pay",
     "_lower_damage",
     "_lower_damage_conjunction",
+    "_lower_damage_cant_be_prevented",
     "_lower_prevent_damage",
     "_lower_redirect_damage",
     "_lower_prevent_all",

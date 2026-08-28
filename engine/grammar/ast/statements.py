@@ -32,6 +32,7 @@ from ._core import (
     RawEffect,
 )
 from .damage import (
+    DamageCantBePreventedOrRedirected,
     DamageUnlessPay,
     Fight,
     DealDamage,
@@ -173,7 +174,7 @@ Effect = Union[
     ExileGraveyardUntilLeaves, CastFromExiledWith,
     PhaseOut,
     AddManaForTappedLand, ProducesManaInstead, SpendManaAsThough, PreventDamage,
-    RedirectDamage,
+    RedirectDamage, DamageCantBePreventedOrRedirected,
     SearchLibrary, SearchAndExile, TransmuteBySacrifice, OwnershipExchangeUnlessPaid,
     RandomRevealOwnershipExchange,
     ExileTopOfLibrary, PutExiledWithSource, ExileGraveyard, ExileCostSacrifices,

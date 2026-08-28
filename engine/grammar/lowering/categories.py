@@ -216,6 +216,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "prevent_all_combat_damage_to_matching": "prevention",
     "prevent_damage_by_target_until_eot": "prevention",
     "prevent_damage_to_target_until_eot": "prevention",
+    # The negation of both families (Whippoorwill): no shield and no redirect
+    # may touch the marked creature's damage. Filed with prevention because
+    # that is the machinery it switches off, and GRAMMAR_CATEGORIES is
+    # unchanged.
+    "lock_damage_to_target": "prevention",
     "grant_source_class_prevention_shield": "prevention",
     "prevent_damage_from_targeting_sources_until_eot": "prevention",
     # A redirect is *not* a prevention (CR 614.9): the damage is still

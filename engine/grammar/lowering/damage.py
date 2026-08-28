@@ -835,6 +835,37 @@ def _lower_damage(
     return (OracleInstruction("deal_damage", "", payload),)
 
 
+def _lower_damage_cant_be_prevented(
+    node: ast.DamageCantBePreventedOrRedirected,
+) -> tuple[OracleInstruction, ...]:
+    """"Damage that would be dealt to that creature this turn can't be
+    prevented or dealt instead to another permanent or player." (Whippoorwill.)
+
+    Two refusals, each a way the sentence could otherwise reach further than it
+    says:
+
+    * the subject must be the object the sentence in front of it chose. A
+      described set would be a lock over permanents nobody picked, and the
+      handler has only the ability's own target to mark.
+    * the duration must be this turn, because that is what the sweep gives it.
+      A lock nothing ends is a creature no shield may ever protect.
+    """
+    subject = node.subject
+    if (
+        not isinstance(subject, ast.TargetSpec)
+        or subject.quantifier not in ("that", "it")
+        or _restrictions_beyond(subject.filter, frozenset({"card_types"}))
+    ):
+        raise LoweringError(
+            "the damage lock is armed on the creature the previous sentence "
+            "chose",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError("the damage lock lasts exactly this turn", node=node)
+    return (OracleInstruction("lock_damage_to_target", "", {}),)
+
+
 def _lower_damage_conjunction(node: ast.Conjunction) -> tuple[OracleInstruction, ...]:
     """Two damage clauses sharing a source.
 

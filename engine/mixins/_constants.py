@@ -21,6 +21,10 @@ _EOT_METADATA_KEYS = (
     # "a creature that has been dealt damage this turn" (Giant Shark) - the
     # record damage_events.deal_damage stamps on whatever took the damage.
     "was_dealt_damage_this_turn",
+    # "Damage that would be dealt to that creature this turn can't be
+    # prevented or dealt instead to another permanent or player."
+    # (Whippoorwill.)
+    "damage_cant_be_prevented_or_redirected_until_eot",
     "redirect_one_damage_to_owner_until_eot",
     # Layer 7b temporary set effects (613.4b)
     "absolute_power_until_eot",

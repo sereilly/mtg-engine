@@ -505,6 +505,41 @@ def _parse_source_of_choice_effect(
     return ast.PreventDamage(ast.Fixed(1), to=recipient, from_filter=filt)
 
 
+def _parse_damage_cant_be_prevented(
+    stream: TokenStream,
+) -> "ast.DamageCantBePreventedOrRedirected | None":
+    """``Damage that would be dealt to <subject> <duration> can't be prevented
+    or dealt instead to another permanent or player.`` (Whippoorwill.)
+
+    Returns None with the cursor untouched for anything else opening with
+    "damage", so every other sentence about damage keeps its own reader.
+
+    **Both** halves of the printed clause are required. "Can't be prevented"
+    alone is a different, weaker card, and a reader that stopped there would
+    leave every redirection working while reporting the line claimed — the
+    dropped-rider bug class, in the direction that lets the damage walk away.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("damage"):
+        return None
+    if not stream.accept_phrase("that", "would", "be", "dealt", "to"):
+        stream.reset(mark)
+        return None
+    subject = parse_recipient(stream) or parse_bound_subject(stream)
+    if subject is None:
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    for word in (
+        "can't", "be", "prevented", "or", "dealt", "instead", "to", "another",
+        "permanent", "or", "player",
+    ):
+        if not stream.accept_word(word):
+            stream.reset(mark)
+            return None
+    return ast.DamageCantBePreventedOrRedirected(subject, duration)
+
+
 def _parse_opponents_choice(
     stream: TokenStream, recipient: "ast.Recipient | None" = None
 ) -> "tuple[ast.PlayerRef | None, ast.Recipient | None]":

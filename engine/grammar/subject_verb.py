@@ -37,7 +37,8 @@ from .effects import (
     _parse_change_text, _parse_choose_cards_in_hand, _parse_choose_number,
     _parse_choose_player_who_cast,
     _parse_counter, _parse_create_token,
-    _parse_damage, _parse_damage_redirect, _parse_destroy, _parse_discard,
+    _parse_damage, _parse_damage_cant_be_prevented, _parse_damage_redirect,
+    _parse_destroy, _parse_discard,
     _parse_doesnt_untap_next_step, _parse_double, _parse_draw, _parse_enchant,
     _parse_end_the_turn, _parse_exchange_control, _parse_exile_graveyard,
     _parse_exile_top_of_library, _parse_extra_turn, _parse_fight, _parse_flip_coin,
@@ -208,6 +209,15 @@ def parse_subject_verb(
     redirect = _parse_damage_redirect(stream)
     if redirect is not None:
         return redirect
+    # "Damage that would be dealt to that creature this turn can't be prevented
+    # or dealt instead to another permanent or player." (Whippoorwill.) Another
+    # noun phrase in front of the verb, and beside the redirect above for the
+    # same reason: the sentence is *about* a damage event rather than dealing
+    # one, so the subject-verb reader below would take "Damage" for a noun
+    # phrase and fail on the modal.
+    damage_lock = _parse_damage_cant_be_prevented(stream)
+    if damage_lock is not None:
+        return damage_lock
     # "The game is a draw." — a subjectless sentence, tried before the noun
     # phrase for the same reason the colour shield is.
     game_draw = _parse_game_is_a_draw(stream)

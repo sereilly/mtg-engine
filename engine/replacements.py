@@ -188,7 +188,7 @@ REPLACED = "_replaced"
 
 
 def replacement_effect(
-    kind: str, order: int, *, applies: Applicability
+    kind: str, order: int, *, applies: Applicability, redirects: bool = False
 ) -> Callable[[Interceptor], Interceptor]:
     """Register an interceptor for an event kind.
 
@@ -212,7 +212,12 @@ def replacement_effect(
                 )
         registered.append(
             Candidate(key=fn.__name__, order=order, applies=applies, apply=fn,
-                      label=(fn.__doc__ or fn.__name__).split(":")[0].strip())
+                      label=(fn.__doc__ or fn.__name__).split(":")[0].strip(),
+                      # CR 614.9: this one *moves* the damage rather than
+                      # changing it, which is the half of Whippoorwill's clause
+                      # a replacement can be. Declared here so a new redirect
+                      # cannot quietly escape the lock.
+                      prevents_or_redirects=redirects)
         )
         registered.sort(key=lambda candidate: candidate.order)
         return fn
@@ -244,6 +249,7 @@ def replacement_candidates(kind: str) -> list[Candidate]:
         Candidate(
             key=c.key, order=c.order, applies=c.applies, label=c.label,
             apply=lambda g, e, fn=c.apply: _record(g, e, fn),
+            prevents_or_redirects=c.prevents_or_redirects,
         )
         for c in REPLACEMENTS.get(kind, ())
     ]
@@ -642,7 +648,7 @@ def _applies_bodyguard_redirect(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "damage_to_player", REDIRECT_WHOLE_EVENT, applies=_applies_bodyguard_redirect
+    "damage_to_player", REDIRECT_WHOLE_EVENT, applies=_applies_bodyguard_redirect, redirects=True
 )
 def _redirect_damage_to_bodyguard(game, payload: dict) -> ReplacementOutcome | None:
     """Veteran Bodyguard: "As long as this creature is untapped, all damage that
@@ -690,7 +696,7 @@ def _applies_jade_monolith(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "damage_to_creature", REDIRECT_WHOLE_EVENT, applies=_applies_jade_monolith
+    "damage_to_creature", REDIRECT_WHOLE_EVENT, applies=_applies_jade_monolith, redirects=True
 )
 def _redirect_damage_to_player(game, payload: dict) -> ReplacementOutcome | None:
     """Jade Monolith: "The next time a source of your choice would deal damage
@@ -717,7 +723,7 @@ def _applies_redirect_one_damage(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "damage_to_creature", REDIRECT_ONE_POINT, applies=_applies_redirect_one_damage
+    "damage_to_creature", REDIRECT_ONE_POINT, applies=_applies_redirect_one_damage, redirects=True
 )
 def _redirect_one_damage_to_owner(game, payload: dict) -> ReplacementOutcome | None:
     """Personal Incarnation: "The next 1 damage that would be dealt to this
@@ -748,10 +754,10 @@ def _applies_recorded_redirect(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "damage_to_player", RECORDED_REDIRECT, applies=_applies_recorded_redirect
+    "damage_to_player", RECORDED_REDIRECT, applies=_applies_recorded_redirect, redirects=True
 )
 @replacement_effect(
-    "damage_to_creature", RECORDED_REDIRECT, applies=_applies_recorded_redirect
+    "damage_to_creature", RECORDED_REDIRECT, applies=_applies_recorded_redirect, redirects=True
 )
 def _apply_recorded_redirect(game, payload: dict) -> ReplacementOutcome | None:
     """CR 614.9: the damage is dealt to another recipient instead.
@@ -874,7 +880,7 @@ def _applies_desert_shield(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "damage_to_creature", SOURCE_TYPE_SHIELD, applies=_applies_desert_shield
+    "damage_to_creature", SOURCE_TYPE_SHIELD, applies=_applies_desert_shield, redirects=True
 )
 def _prevent_desert_damage(game, payload: dict) -> ReplacementOutcome | None:
     """Desert Nomads: "Prevent all damage that would be dealt to this

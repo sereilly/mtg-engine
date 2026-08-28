@@ -364,6 +364,38 @@ def prevent_damage_to_target_until_eot(game: Game, instruction: OracleInstructio
     return True, "resolved"
 
 
+@effect_handler("lock_damage_to_target")
+def lock_damage_to_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Damage that would be dealt to that creature this turn can't be prevented
+    or dealt instead to another permanent or player." (Whippoorwill.)
+
+    The inverse of every other handler in this file: it arms nothing, it takes
+    the machinery *away*. `damage_events.damage_candidates` is the one place a
+    damage event's contention set is assembled, and it drops the contenders
+    that prevent or move the damage when the recipient carries this marker — so
+    a shield added later is covered without knowing the clause exists.
+
+    "That creature" is the object the sentence in front of it targeted, so no
+    target is chosen again and nothing is described for the picker.
+    """
+    from ..damage_events import DAMAGE_LOCK
+
+    perm = resolve_target_permanent(
+        game, context,
+        predicate=lambda p: p.is_creature,
+        fallback_on_invalid_choice=False,
+    )
+    if perm is None:
+        game.log.append(f"{context.card.name}: no creature to lock")
+        return True, "resolved"
+    perm.metadata[DAMAGE_LOCK] = True
+    game.log.append(
+        f"damage dealt to {perm.card.name} this turn can't be prevented or "
+        f"redirected ({context.card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("prevent_damage_by_target_until_eot")
 def prevent_damage_by_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Prevent all [combat] damage that would be dealt by target creature this

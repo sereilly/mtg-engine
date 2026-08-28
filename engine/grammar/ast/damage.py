@@ -111,6 +111,22 @@ class RedirectDamage:
 
 
 @dataclass(frozen=True)
+class DamageCantBePreventedOrRedirected:
+    """"Damage that would be dealt to that creature this turn can't be prevented
+    or dealt instead to another permanent or player." (Whippoorwill.)
+
+    The negation of the two families beside it: CR 615's shields and CR 614.9's
+    redirections both stop applying to the named creature. Its own node rather
+    than a flag on :class:`PreventDamage`, because it prevents nothing — it is a
+    statement *about* what may modify a damage event, and a reader that took it
+    for a shield would have the creature taking no damage at all, which is the
+    opposite of what the card does.
+    """
+    subject: Recipient
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
 class PreventDamage:
     amount: Amount
     to: Recipient | None = None
