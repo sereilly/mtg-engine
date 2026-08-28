@@ -237,7 +237,6 @@ class GameEndingMixin:
             from ..subject_filters import subject_matches
 
             for seat, player in enumerate(self.players):
-                departing_pos = []
                 for perm in list(self.controlled_by(player)):
                     for trig in matching_triggers(
                         perm.effective_card,
@@ -252,22 +251,26 @@ class GameEndingMixin:
                             for other in self.controlled_by(seat)
                         ):
                             continue
-                        self._permanent_to_graveyard(player, perm)
+                        # The same sacrifice seam the no-lands block above was
+                        # taught to use (CR 701.21a). These three sweeps say
+                        # "sacrificed" in their own log lines while appending to
+                        # a graveyard beside a battlefield rebuild, which skips
+                        # the `was_sacrificed` stamp and the
+                        # `you_sacrifice_permanent` announcement — so a card
+                        # watching for a sacrifice never saw one of these.
+                        self.sacrifice_permanent(perm)
                         self.log.append(
                             f"{perm.card.name} sacrificed (its controller controls "
                             "what its state trigger names)"
                         )
                         changed = True
-                        departing_pos.append(perm)
                         break
-                self.remove_all_from_battlefield(departing_pos)
 
             # Jihad: "When the chosen player controls no nontoken permanents of
             # the chosen color, sacrifice this enchantment." A state trigger
             # (CR 603.8) checked alongside SBAs like the no-lands sacrifices
             # above, so it fires the moment the last matching permanent leaves.
             for player in self.players:
-                departing_cc = []
                 for perm in list(self.controlled_by(player)):
                     if (
                         "when the chosen player controls no nontoken permanents of the chosen color"
@@ -275,14 +278,12 @@ class GameEndingMixin:
                         and isinstance(perm.metadata.get("chosen_player_index"), int)
                         and not self._chosen_color_permanent_condition(perm)
                     ):
-                        self._permanent_to_graveyard(player, perm)
+                        self.sacrifice_permanent(perm)
                         self.log.append(
                             f"{perm.card.name} sacrificed (the chosen player controls no "
                             "nontoken permanents of the chosen color)"
                         )
                         changed = True
-                        departing_cc.append(perm)
-                self.remove_all_from_battlefield(departing_cc)
 
             # City in a Bottle: "other nontoken permanents with a name
             # originally printed in [set] are on the battlefield, their
@@ -292,7 +293,6 @@ class GameEndingMixin:
             # City in a Bottle is already in play.
             if banned_set_codes:
                 for player in self.players:
-                    departing_cb = []
                     for perm in list(self.controlled_by(player)):
                         # The card's original printing, not whichever set loaded
                         # first — see _set_lockout_banning_card.
@@ -302,11 +302,9 @@ class GameEndingMixin:
                             and not perm.metadata.get("is_token")
                             and card_set in banned_set_codes
                         ):
-                            self._permanent_to_graveyard(player, perm)
+                            self.sacrifice_permanent(perm)
                             self.log.append(f"{perm.card.name} sacrificed (City in a Bottle)")
                             changed = True
-                            departing_cb.append(perm)
-                    self.remove_all_from_battlefield(departing_cb)
 
             # Old Man of the Sea: linked-duration steal ends the instant it
             # untaps OR the stolen creature's power exceeds its own (unlike
