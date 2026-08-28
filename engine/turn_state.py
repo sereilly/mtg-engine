@@ -71,3 +71,53 @@ __all__ = [
     "record_turn_start_states",
     "started_the_turn",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Which of a seat's turns a permanent last attacked on
+# ---------------------------------------------------------------------------
+#
+# "It attacked during your last turn" (Giant Turtle, Goblin Rock Sled) and "it
+# attacked during its controller's last turn" (Tangle Kelp) are the same
+# question asked by two different steps — the declare-attackers step refuses an
+# attack, the untap step refuses an untap — so the record and the arithmetic
+# over it live here rather than being read twice.
+#
+# The stamp is deliberately *not* in ``mixins/_constants._EOT_METADATA_KEYS``:
+# ``attacked_this_turn`` is swept at cleanup and this question is asked a whole
+# turn later. It dies with the permanent instead, which CR 400.7 gives for
+# free — a creature that leaves and returns is a new object that has never
+# attacked.
+
+#: The metadata key holding ``{"seat": …, "seat_turn": …}`` for the most recent
+#: attack. Overwritten on each attack: only the latest one can be "last turn".
+ATTACKED_ON_SEAT_TURN_KEY = "attacked_on_seat_turn"
+
+
+def record_attack(permanent, seat: int, seat_turn: int) -> None:
+    """Stamp that *permanent* attacked on *seat*'s turn number *seat_turn*."""
+    permanent.metadata[ATTACKED_ON_SEAT_TURN_KEY] = {
+        "seat": seat,
+        "seat_turn": seat_turn,
+    }
+
+
+def attacked_during_seats_last_turn(game, permanent, seat: int) -> bool:
+    """Whether *permanent* attacked during *seat*'s previous turn.
+
+    Ordinal arithmetic against that seat's own turn counter, which
+    ``mixins/turn_management`` increments as a turn begins — so during any step
+    of *seat*'s current turn, "your last turn" is the ordinal one below the
+    current one.
+
+    The stamp's *seat* is part of the comparison, not just its number: a
+    creature that attacked while a thief controlled it attacked during the
+    thief's turn, and once it is home it is free again.
+    """
+    stamp = permanent.metadata.get(ATTACKED_ON_SEAT_TURN_KEY)
+    if not isinstance(stamp, dict):
+        return False
+    return (
+        stamp.get("seat") == seat
+        and stamp.get("seat_turn") == game.seat_turn_counts.get(seat, 0) - 1
+    )

@@ -19,6 +19,7 @@ from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..static_bonuses import conditional_static_holds
 from ..trigger_utils import matching_triggers
+from ..turn_state import attacked_during_seats_last_turn, record_attack
 
 
 class DeclareAttackersStepMixin:
@@ -189,10 +190,11 @@ class DeclareAttackersStepMixin:
             # permanent instead (CR 400.7: a Turtle that leaves and returns is
             # a new object with no record). Overwritten on each attack; only
             # the latest one can be "your last turn".
-            attacker.metadata["attacked_on_seat_turn"] = {
-                "seat": controller_index,
-                "seat_turn": self.seat_turn_counts.get(controller_index, 0),
-            }
+            record_attack(
+                attacker,
+                controller_index,
+                self.seat_turn_counts.get(controller_index, 0),
+            )
 
         self._prune_combat_state()
         self.log.append(f"{controller.name} declared {len(unique_indices)} attacker(s)")
@@ -429,13 +431,7 @@ class DeclareAttackersStepMixin:
         # seat, not yours, and attacks freely once home (the stamp's seat is
         # part of the record, not just its turn).
         if "cant_attack_if_attacked_last_turn" in instr_kinds:
-            stamp = attacker.metadata.get("attacked_on_seat_turn")
-            if (
-                isinstance(stamp, dict)
-                and stamp.get("seat") == attacker_seat
-                and stamp.get("seat_turn")
-                == self.seat_turn_counts.get(attacker_seat, 0) - 1
-            ):
+            if attacked_during_seats_last_turn(self, attacker, attacker_seat):
                 return False
 
         # "That creature can't attack during its controller's next turn."

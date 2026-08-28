@@ -89,8 +89,11 @@ def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
     # outside that set is one the handler would quietly ignore, which would
     # tap or untap a strictly larger set than the card prints. The honoured
     # fields are only what the pool prints (round 43's rule): a bare type, a
-    # supertype (Arena of the Ancients' "legendary") and a controller
-    # ("you control", Reset).
+    # supertype (Arena of the Ancients' "legendary"), a colour ("Tap all
+    # **blue** creatures", Riptide) and a controller ("you control", Reset).
+    # The colour rides as ``color_filter``, which ``subject_matches`` answers
+    # through CR 613 layer 5 - so a creature whose colour was changed is swept
+    # by what it is, not by what it was printed as.
     # "Tap all creatures blocking target attacking creature." (Feint.) A sweep
     # whose set is not described by any characteristic of its members: they are
     # named by a *relation* to another object the same sentence chooses. So the
@@ -141,7 +144,8 @@ def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
         return (OracleInstruction("tap_creatures_blocking_target", "", payload),)
     if spec.quantifier in ("all", "each") and not spec.targeted:
         leftovers = _restrictions_beyond(
-            spec.filter, frozenset({"card_types", "supertypes", "controller"})
+            spec.filter,
+            frozenset({"card_types", "supertypes", "colors", "controller"}),
         )
         if leftovers:
             raise LoweringError(

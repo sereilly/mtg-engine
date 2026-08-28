@@ -851,6 +851,18 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
             return ast.TriggerEvent("no_islands", "when")
         if stream.accept_phrase("you", "control", "no", "lands"):
             return ast.TriggerEvent("no_lands", "when")
+        # "When you control **a Dwarf**" (Goblins of the Flarg). The positive
+        # state trigger (CR 603.8), read on this front end too because a
+        # condition only one of them sees is a card whose halves watch
+        # different sets — the narrowing has to be the same phrase on both.
+        mark_controls = stream.mark()
+        if stream.accept_phrase("you", "control"):
+            controlled = parse_subject_filter_at(stream)
+            if controlled is not None:
+                return ast.TriggerEvent(
+                    "controls_matching_permanent", "when", subject=controlled
+                )
+            stream.reset(mark_controls)
         mark = stream.mark()
         if stream.at_kind(SELF) or stream.at_word("this"):
             stream.advance()

@@ -1161,3 +1161,44 @@ def redirect_damage_from_target_spell_until_eot(
         f"{controller.name} instead"
     )
     return True, "resolved"
+
+
+@effect_handler("deal_damage_each_matching")
+def deal_damage_each_matching(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"Goblin Shrine deals 1 damage to each Goblin creature."
+
+    A sweep over a *described* set, not a chosen one: nothing is targeted and
+    nobody picks, so every permanent the printed noun phrase names is dealt to
+    (CR 611.2c fixes that set when the effect begins). The set resolves through
+    ``subject_matches`` — the one answer for what a printed noun phrase means —
+    with the resolving controller as the observer, because "you control" is
+    that seat's "you" (CR 109.5). The lowering admits only payloads that matcher
+    tests in full, so nothing here can quietly burn a wider board than the card
+    prints.
+
+    Resolved as one batch, like the attacking-creature sweep above, so
+    simultaneous lethal damage kills together.
+    """
+    from ..subject_filters import subject_matches
+
+    card = context.card
+    damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    described = instruction.payload.get("filter") or {}
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+    struck = []
+    for perm in list(game.all_permanents()):
+        if not subject_matches(
+            game, perm, described, observer=observer, source=context.source_permanent
+        ):
+            continue
+        game._mark_damage_on_permanent(perm, damage, source=card)
+        struck.append(perm.card.name)
+    game.log.append(
+        f"{card.name} dealt {damage} damage to {', '.join(struck)}"
+        if struck
+        else f"{card.name} found nothing to damage"
+    )
+    return True, "resolved"

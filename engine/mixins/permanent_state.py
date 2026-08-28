@@ -39,6 +39,7 @@ from ..land_animation import (
 from ..land_types import (
     add_derived_land_type,
     clear_derived_land_types,
+    static_land_type_change_applies,
     static_source_timestamp,
 )
 from ..layer_bridge import QUALIFIED_BUFFS, printed_supertypes
@@ -615,30 +616,24 @@ class PermanentStateMixin:
         it; the two are separate contributions and layer 4 sorts them by
         timestamp.
         """
-        changes: list[tuple[str, str, Permanent]] = []
+        changes: list[tuple[dict, Permanent]] = []
         for perm in all_permanents:
             for instr in compile_card_oracle(perm.effective_card).instructions:
                 if instr.kind == "static_land_type_change":
-                    changes.append(
-                        (
-                            instr.payload.get("from_type", ""),
-                            instr.payload.get("to_type", ""),
-                            perm,
-                        )
-                    )
+                    changes.append((instr.payload, perm))
         for perm in all_permanents:
             clear_derived_land_types(perm)
             if perm.card.primary_type != "land":
                 continue
-            # The permanent's *effective* type line: layer 3 runs before layer 4,
-            # so a land Magical Hack has rewritten into a Mountain is one of the
-            # "All Mountains" Conversion means.
-            printed = perm.effective_card.type_line.lower()
-            for from_type, to_type, source in changes:
-                if from_type and from_type in printed:
+            # Which lands a source reaches is `land_types.py`'s question, not
+            # this loop's: Conversion names a land type and Blood Moon names a
+            # missing supertype, and a second reading of either here would be
+            # the gate/dispatch split this engine keeps finding.
+            for payload, source in changes:
+                if static_land_type_change_applies(payload, perm):
                     add_derived_land_type(
                         perm,
-                        to_type,
+                        str(payload.get("to_type", "")),
                         timestamp=static_source_timestamp(source),
                         label=source.card.name,
                     )

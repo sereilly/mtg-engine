@@ -194,6 +194,7 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "when a spell or ability an opponent controls causes you to discard this card",
     "no_islands": "when you control no islands",
     "no_lands": "when you control no lands",
+    "controls_matching_permanent": "when you control a dwarf",
     # at
     "upkeep_self": "at the beginning of your upkeep",
     "upkeep_each": "at the beginning of each upkeep",

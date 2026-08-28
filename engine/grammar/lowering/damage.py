@@ -18,7 +18,7 @@ from ..errors import LoweringError
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from ...oracle_types import X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT
 from ._common import (
-    _REST_OF_TURN,
+    _lower_described_set_damage, _REST_OF_TURN,
     _describe_several_targets,
     _names_several_targets,
     count_spec,
@@ -788,7 +788,7 @@ def _lower_damage(
     elif isinstance(recipient, ast.TargetSpec) and recipient.quantifier not in (
         "any_target", "target", "this"
     ):
-        raise LoweringError("unsupported damage target quantifier", node=node)
+        return _lower_described_set_damage(node, recipient, amount, back_reference or bonus)
 
     targets = _targets_payload(recipient)
     if targets is not None:

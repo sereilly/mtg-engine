@@ -24,6 +24,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "hurricane_damage": "damage",
     "deal_damage_each_creature_and_player": "damage",
     "deal_damage_each_attacking_creature": "damage",
+    # "…deals 1 damage to each Goblin creature." (Goblin Shrine.) The
+    # generalisation of the row above: the described set is payload, so a card
+    # printing any other noun phrase needs no kind of its own.
+    "deal_damage_each_matching": "damage",
     "deal_damage_to_recorded_permanents": "damage",
     "deal_damage_and_opponent_choice": "damage",
     "self_damage_unless_pay": "damage",
