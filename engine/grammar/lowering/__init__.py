@@ -75,6 +75,8 @@ from .damage import (
     _lower_damage_unless_pay,
     _lower_damage,
     _lower_damage_conjunction,
+)
+from .redirection import (
     _lower_redirect_damage,
 )
 from .prevention import (

@@ -381,6 +381,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # until end of turn." (Spitting Slug.) The keyword family, like every other
     # grant: what differs is which permanents receive it.
     "grant_keyword_to_creatures_in_combat_with_source": "pump",
+    # The other half of Tracker's exchange: the creature the sentence before it
+    # bit, biting back. The damage family, like the one-way half it answers.
+    "bound_bites_source": "damage",
     "grant_unblockable_to_target": "evasion",
     # "Target creature can't be blocked **by Walls** this turn." (Tower of
     # Coireall.) The same evasion family: what differs is that the restriction
@@ -539,6 +542,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
 # `lower.py`) read it to thread what each step records forward.
 _PRODUCES: dict[str, str] = {
     "deal_damage": "damage_dealt",
+    # "This creature deals damage equal to its power to target creature.
+    # **That creature** deals damage equal to its power to this creature."
+    # (Tracker.) The bite records which permanent it chose, because that is the
+    # only place the sentence after it can read the creature from: the ability
+    # has one target and the second sentence names it without choosing again.
+    "source_bites_target": "damaged_permanents",
     # "…chooses a creature that this card could enchant. **If the player does**,
     # return this card … **attached to that creature**." (Takklemaggot.) The
     # chosen permanent's id, which is both what the branch tests and what the

@@ -40,6 +40,7 @@ from ._events import (
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
+    _DAMAGED_PERMANENTS,
     _RECORDED_PERMANENTS,
 )
 
@@ -586,6 +587,44 @@ def _lower_damage(
         payload["filter"] = _filter_payload(node.recipients[0].filter)
         return (OracleInstruction("source_bites_target", "", payload),)
 
+    # "**That creature** deals damage equal to its power to this creature."
+    # (Tracker.) The second half of a printed exchange: the biter is the
+    # creature the sentence in front of this one chose, and the bitten is the
+    # ability's own source. Its own kind rather than CR 701.14's fight, which
+    # this looks like and is not — a fight is all-or-nothing (701.14b), so a
+    # source that has left the battlefield stops *both* halves, while these are
+    # two sentences and the first one still happened.
+    if (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source == "its_power"
+        and node.source is not None
+        and isinstance(node.source, ast.TargetSpec)
+        and node.source.quantifier == "that"
+        and len(node.recipients) == 1
+        and _is_source(node.recipients[0])
+        and node.riders == ast.DamageRiders()
+    ):
+        if _restrictions_beyond(node.source.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound object carries no narrowing the bite could honour",
+                node=node,
+            )
+        if _DAMAGED_PERMANENTS not in produced:
+            # The handler reads the biter out of the resolution scratchpad, and
+            # with nothing recorded it would deal nothing while the card
+            # compiled clean — the discipline every back-reference here follows.
+            raise LoweringError(
+                f"back-reference to {_DAMAGED_PERMANENTS!r} with no producer "
+                "in this effect",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "bound_bites_source", "",
+                {"permanents_from": _DAMAGED_PERMANENTS},
+            ),
+        )
+
     # "…it deals **that much** damage to target opponent." (Brash Taunter.) The
     # number is the firing event's, not this effect's, so it arrives as a
     # trigger-context key rather than as an amount — the same two channels
@@ -822,179 +861,3 @@ def _lower_damage_conjunction(node: ast.Conjunction) -> tuple[OracleInstruction,
             ),
         )
     return _lower_damage(first) + _lower_damage(second)
-
-
-#: The key a Nova Pentacle-shaped redirect writes its opponent's pick under, and
-#: the key the redirect step behind it reads. Named once because the two halves
-#: are two instructions and a literal in each is how they come to disagree.
-_REDIRECT_RECIPIENT_KEY = "redirect_recipient"
-
-
-def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction, ...]:
-    """CR 614.9 — "…is dealt to <recipient> instead."
-
-    Two instructions, and the difference between them is not the effect but how
-    the moved damage's *source* is named: the ability either targets it (Shimian
-    Night Stalker's "by target attacking creature") or the player chooses it as
-    the ability is activated (Nova Pentacle's "a source of your choice"). That is
-    the axis ``engine/targeting.py``'s kind→spec table keys on — one picker runs
-    over the battlefield's attackers and the other over every source including
-    the stack — so it cannot be payload under one kind, exactly as
-    ``prevent_damage_by_target_until_eot`` and ``grant_reverse_damage_shield``
-    are two kinds for the two ways a shield names its source.
-
-    Everything else *is* payload, and every refusal below is a way this sentence
-    could otherwise mean more than it says:
-
-    * the protected recipient must be **you**. The record is armed on the
-      ability's controller; there is no handler that arms one on a chosen
-      player, and Reverberation — which names no protected recipient at all, so
-      its redirect covers everyone the spell would damage — refuses here.
-    * a source must be *named*. With neither a target nor a chosen source this
-      would move **all** damage to the new recipient, which is a strictly larger
-      effect than any of these cards prints.
-    * the duration must be this turn, because that is what the sweeps give it.
-    * the new recipient must be this permanent, or a creature an opponent picks.
-      A redirect whose recipient the engine cannot resolve would arm a record
-      pointing at nothing, and CR 614.9 makes that a redirect that silently does
-      nothing at all.
-    """
-    if node.to is None:
-        # "All damage that would be dealt this turn **by target sorcery spell**
-        # is dealt to that spell's controller instead." (Reverberation.) The one
-        # printed shape with no protected recipient: it names only the source,
-        # so it moves whatever that spell would deal, to whoever it would have
-        # damaged.
-        return _lower_spell_damage_redirect(node)
-    if not _is_you(node.to):
-        raise LoweringError(
-            "a redirect is armed on its controller; no handler protects "
-            "another recipient",
-            node=node,
-        )
-    if node.duration.kind not in _REST_OF_TURN:
-        raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
-    payload: dict[str, object] = {"to_self": True}
-    if node.one_shot:
-        # "**The next time** a source …" — one instance, not every one.
-        payload["uses"] = 1
-    recipient = node.new_recipient
-    if _is_source(recipient):
-        # "…is dealt to **this creature** instead." The permanent the ability is
-        # on, which the handler already has and nothing needs to choose.
-        payload["new_recipient"] = "source"
-    elif (
-        isinstance(recipient, ast.TargetSpec)
-        and recipient.quantifier == "target"
-        and node.chooser is not None
-    ):
-        # "…to **target creature of an opponent's choice**". The pick is the
-        # other seat's, so it is made through the general permanent prompt as
-        # the ability resolves and read back out of the resolution's results —
-        # the same course Cuombajj Witches' opposing target takes, and for the
-        # same reason: the picker in front of an activation is the activating
-        # player's.
-        payload["new_recipient"] = "chosen"
-        payload["result_key"] = _REDIRECT_RECIPIENT_KEY
-    else:
-        raise LoweringError(
-            "no handler resolves this redirect's new recipient", node=node
-        )
-    if node.from_chosen_source:
-        if node.dealt_by is not None:
-            raise LoweringError(
-                "a redirect names its source once: either a chosen source or a "
-                "target",
-                node=node,
-            )
-        instructions: tuple[OracleInstruction, ...] = (
-            OracleInstruction(
-                "redirect_damage_from_chosen_source_until_eot", "", payload
-            ),
-        )
-    else:
-        spec = node.dealt_by
-        if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "target":
-            raise LoweringError(
-                "no handler redirects the damage of a source the sentence does "
-                "not choose",
-                node=node,
-            )
-        _describe_targets(payload, spec)
-        instructions = (
-            OracleInstruction("redirect_damage_from_target_until_eot", "", payload),
-        )
-    if payload.get("new_recipient") == "chosen":
-        # The prompt runs first and the redirect reads its answer, so the two are
-        # a sequence in printed order rather than one fused instruction.
-        return (
-            OracleInstruction(
-                "choose_permanent", "",
-                {
-                    "result_key": _REDIRECT_RECIPIENT_KEY,
-                    "filter": _filter_payload(recipient.filter),
-                    "chooser": "opponent",
-                    "prompt": "Choose a creature to take the redirected damage.",
-                },
-            ),
-        ) + instructions
-    return instructions
-
-
-def _lower_spell_damage_redirect(
-    node: ast.RedirectDamage,
-) -> tuple[OracleInstruction, ...]:
-    """Reverberation: "All damage that would be dealt this turn by target
-    sorcery spell is dealt to that spell's controller instead."
-
-    A spell rather than a permanent on the source end, which is the whole reason
-    this is its own instruction: a spell is chosen from the stack, and it is
-    recognised at damage time by the *cast* rather than by the source object —
-    see ``engine/damage_redirects.resolving_object_redirects``.
-
-    "That spell's controller" reaches lowering as a bare "that player", because
-    the possessive names an object the sentence has already named — and the
-    sentence named exactly one, the spell. So the recipient is the spell's
-    controller by the only reading available, and any other player reference
-    refuses rather than being resolved to a seat nobody chose.
-    """
-    spec = node.dealt_by
-    if (
-        not isinstance(spec, ast.TargetSpec)
-        or spec.quantifier != "target"
-        or spec.filter.zone != "stack"
-    ):
-        raise LoweringError(
-            "a redirect with no protected recipient moves one chosen spell's "
-            "damage",
-            node=node,
-        )
-    if not isinstance(node.new_recipient, ast.PlayerRef) or node.new_recipient.kind != "that_player":
-        raise LoweringError(
-            "no handler resolves this redirect's new recipient", node=node
-        )
-    if node.duration.kind not in _REST_OF_TURN:
-        raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
-    if not spec.filter.card_types:
-        # "target **sorcery** spell". Without a type this reads "target spell",
-        # which is a strictly wider card — and the handler tests the chosen
-        # spell against this union at resolution (CR 608.2b), so an empty one
-        # would admit every spell on the stack.
-        raise LoweringError("this spell redirect names no kind of spell", node=node)
-    # "zone" is the printed word "spell" itself — the noun parser records it
-    # when a type is followed by that word — and it is checked above rather than
-    # dropped here.
-    if _restrictions_beyond(spec.filter, frozenset({"card_types", "zone"})):
-        raise LoweringError(
-            "the spell redirect narrows its target by type and nothing else",
-            node=node,
-        )
-    return (
-        OracleInstruction(
-            "redirect_damage_from_target_spell_until_eot", "",
-            {
-                "new_recipient": "spell_controller",
-                "card_types": list(spec.filter.card_types),
-            },
-        ),
-    )

@@ -152,7 +152,14 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # permanents* — every production in it lowers a legality measured across a pair
 # (CR 303.4j) — where the rest of `board.py` lowers effects on one permanent at
 # a time; the two shared one name, and that already lived in `_events.py`.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "library", "counters", "keywords", "tapping", "prevention", "where_x", "control_flow", "attachments"]
+# `redirection` split out of `lowering/damage.py` at exactly 1,000 lines, the
+# round Tracker's mutual bite landed. The line is one the CR already draws: a
+# redirection is a replacement effect (CR 614.9), where every other production
+# in `damage` deals, counts or shields damage — the damage is still dealt, in
+# full, by the same source, and only its recipient moves. The parse side keeps
+# the two together for the reason it keeps prevention there: they read the same
+# recipient, source and duration vocabulary.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "library", "counters", "keywords", "tapping", "prevention", "redirection", "where_x", "control_flow", "attachments"]
 AST_FAMILIES = EFFECT_FAMILIES
 
 
