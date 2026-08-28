@@ -83,6 +83,11 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "colors", "excluded_colors",
     "excluded_types", "excluded_subtypes", "with_keywords", "without_keywords",
     "controller", "tapped", "attacking", "blocking", "other_than_source",
+    # "a creature **that has been dealt damage this turn**" (Giant Shark).
+    # ``to_payload`` emits it as ``dealt_damage_this_turn``; its agent-naming
+    # sibling ``dealt_damage_to_source_this_turn`` is deliberately absent, being
+    # a relation no payload key carries.
+    "was_dealt_damage_this_turn",
     "nontoken", "named", "their_choice", "mana_value", "power", "toughness",
     "colored", "with_plus1_counter", "supertypes", "not_enchanted",
     "enchanted_only",

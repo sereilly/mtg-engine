@@ -191,6 +191,15 @@ _EVENT_QUANTITIES: dict[str, str] = {
 # an empty record.
 _UNTAPPED_PERMANENTS = "untapped_permanents"
 
+# What a one-way bite recorded it damaged, so the sentence after it can name the
+# same creature: "This creature deals damage equal to its power to target
+# creature. **That creature** deals damage equal to its power to this creature."
+# (Tracker.) Named here for the reason the key above is - the `damage` lowering
+# family and ``categories._PRODUCES`` both write the string, and a second
+# spelling would make the producer gate vacuous while the handler read an empty
+# record.
+_DAMAGED_PERMANENTS = "damaged_permanents"
+
 # The seat "Choose a player who cast one or more sorcery spells this turn."
 # records, and the number "the damage dealt by one of those sorcery spells this
 # turn" records once one of them is chosen (Backdraft). Named here beside the

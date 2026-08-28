@@ -318,6 +318,14 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r" (?P<block_pair_subject>(?:a|another) [^,]+)"),
     ("creature_blocks_or_blocked_by",
      r"whenever this creature blocks or becomes blocked by (?P<block_pair_subject>(?:a|another) [^,]+)"),
+    # The bare joined sentence (Spitting Slug). CR 509.3c/509.3d: with no noun
+    # phrase it fires **once** for the block, where the narrowed rows above fire
+    # once per creature the phrase admits — and the absence of the filter is
+    # what both dispatchers read to tell them apart. Below the narrowed rows
+    # because it is a strict prefix of them: matching it first would read
+    # "by a creature that has been dealt damage this turn" as the effect clause.
+    ("creature_blocks_or_blocked_by",
+     r"whenever this creature blocks or becomes blocked"),
     # "Whenever **enchanted creature** attacks or blocks" (Imprison). One kind
     # with the source's own spelling below it: it is the same event about the
     # same creature, and which permanent's ability watches it is the narrowing

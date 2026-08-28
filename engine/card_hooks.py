@@ -243,12 +243,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'creature loses flying."':
             _line('deal_damage', 'spell_pattern', amount=2),
     },
-    'Ebony Horse': {
-        '{2}, {t}: untap target attacking creature you control. prevent all '
-        'combat damage that would be dealt to and dealt by that creature this '
-        'turn':
-            _line('untap_attacker_and_prevent_combat_damage', 'spell_pattern'),
-    },
     'Erg Raiders': {
         "at the beginning of your end step, if this creature didn't attack this "
         "turn, it deals 2 damage to you unless it came under your control this turn":

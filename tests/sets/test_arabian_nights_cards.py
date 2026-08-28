@@ -1701,6 +1701,7 @@ def test_merchant_ship_gains_life_once_across_both_strike_passes(arn_by_name, al
 
 def test_ebony_horse_untaps_attacker_and_prevents_combat_damage(arn_by_name, all_cards):
     from tests.helpers import _nosick
+    from engine.prevention import shields_damage
 
     horse = Permanent(card=arn_by_name["Ebony Horse"])
     attacker = _nosick(Permanent(card=_get(all_cards, "Grizzly Bears")))  # 2/2
@@ -1725,7 +1726,10 @@ def test_ebony_horse_untaps_attacker_and_prevents_combat_damage(arn_by_name, all
     )
     assert result.supported
     assert attacker.tapped is False
-    assert attacker.metadata.get("prevent_combat_damage_to_and_by_until_eot") is True
+    # The shield is the two-way direction record, not a per-card boolean: the
+    # sentence moved into the grammar the round Maze of Ith printed it too.
+    assert shields_damage(attacker, dealt_to=True, combat=True)
+    assert shields_damage(attacker, dealt_to=False, combat=True)
 
     game.advance_combat_phase()  # combat damage auto-resolves (single blocker)
     # "Prevent all combat damage that would be dealt to and dealt by that
@@ -1736,15 +1740,20 @@ def test_ebony_horse_untaps_attacker_and_prevents_combat_damage(arn_by_name, all
 
 
 def test_ebony_horse_shield_expires_in_cleanup(arn_by_name, all_cards):
+    from engine.prevention import (
+        COMBAT_SHIELD_BOTH, add_directional_shield, shields_damage,
+    )
+
     horse_target = Permanent(card=_get(all_cards, "Grizzly Bears"))
-    horse_target.metadata["prevent_combat_damage_to_and_by_until_eot"] = True
+    add_directional_shield(horse_target, COMBAT_SHIELD_BOTH, combat_only=True)
     p1 = PlayerState(name="P1", battlefield=[horse_target])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
     game.resolve_cleanup_step(0)
 
-    assert horse_target.metadata.get("prevent_combat_damage_to_and_by_until_eot") is None
+    assert not shields_damage(horse_target, dealt_to=True, combat=True)
+    assert not shields_damage(horse_target, dealt_to=False, combat=True)
 
 
 # ===========================================================================

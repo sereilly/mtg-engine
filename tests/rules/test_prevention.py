@@ -29,8 +29,10 @@ import pytest
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 from engine.prevention import (
+    COMBAT_SHIELD_BOTH,
     PREVENTION_EFFECTS,
     PreventionOutcome,
+    add_directional_shield,
     prevention_effect,
 )
 from engine.shields import (
@@ -407,7 +409,7 @@ def test_615_1_creature_shield_prevents_damage_dealt_to_and_by_it():
     creature takes none and deals none."""
 
     def arm(game, attacker, blocker):
-        attacker.metadata["prevent_combat_damage_to_and_by_until_eot"] = True
+        add_directional_shield(attacker, COMBAT_SHIELD_BOTH, combat_only=True)
 
     _game_, attacker, blocker, _p2 = _blocked_combat(arm)
 
@@ -422,7 +424,7 @@ def test_615_1a_creature_combat_shield_does_not_prevent_noncombat_damage():
     game, p1, _ = _game()
     bear = Permanent(card=_mk_creature("Bear"))
     p1.battlefield.append(bear)
-    bear.metadata["prevent_combat_damage_to_and_by_until_eot"] = True
+    add_directional_shield(bear, COMBAT_SHIELD_BOTH, combat_only=True)
 
     assert game._mark_damage_on_permanent(bear, 3) == 3
 

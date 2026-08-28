@@ -41,6 +41,13 @@ class CantBe:
     subject: Recipient
     action: str                                    # "regenerated" | "blocked"
     duration: Duration = field(default_factory=Duration)
+    # "…can't be blocked **by Walls** this turn." (Tower of Coireall.) The class
+    # of blocker the restriction names, as the noun phrase that describes it.
+    # None is the unnarrowed printing (Teleport), which is a strictly *larger*
+    # restriction — so the two cannot share a lowering, and a narrowing dropped
+    # here would make a creature unblockable that the card only makes
+    # unblockable by Walls.
+    by: Recipient | None = None
 
 
 @dataclass(frozen=True)

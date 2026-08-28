@@ -451,13 +451,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # whose damage is redirected. `requires_source` is what tells the UI to run
     # the second prompt.
     "jade_monolith_redirect": {"kind": "creature", "requires_source": True},
-    # Ebony Horse: "Untap target attacking creature you control." Its handler
-    # requires `p.attacking` *and* that the creature is on the activating
-    # player's battlefield, and an explicit choice that fails either test
-    # fizzles — so both narrowings are the ability's, and both belong here.
-    "untap_attacker_and_prevent_combat_damage": {
-        "kind": "creature", "attacking_only": True, "own_only": True,
-    },
 }
 
 
@@ -991,6 +984,18 @@ def _from_instructions(instructions) -> dict | None:
             nested = _from_instructions(
                 tuple(instruction.payload.get("then") or ())
                 + tuple(instruction.payload.get("else") or ())
+            )
+            if nested is not None:
+                return nested
+            continue
+        if instruction.kind == "unless_player_pays":
+            # "Unless an opponent pays {2}, gain control of **target artifact**
+            # …" (Scarwood Bandits). The ability's target sits on the *unpaid*
+            # branch, and CR 601.2c picks it as the ability is activated —
+            # before anyone is offered the cost — so this branch is read where
+            # an offer's declined branch deliberately is not.
+            nested = _from_instructions(
+                tuple(instruction.payload.get("unpaid") or ())
             )
             if nested is not None:
                 return nested

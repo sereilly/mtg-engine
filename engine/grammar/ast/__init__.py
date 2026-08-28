@@ -124,6 +124,7 @@ from .damage import (
     Fight,
     PreventDamage,
     RedirectDamage,
+    DamageCantBePreventedOrRedirected,
 )
 from .characteristics import (
     Pump,
@@ -252,6 +253,7 @@ from .statements import (
     Conjunction,
     Conditional,
     May,
+    UnlessPlayerPays,
     ForEach,
     RepeatProcess,
     OneOf,
@@ -359,6 +361,7 @@ __all__ = [
     "Fight",
     "PreventDamage",
     "RedirectDamage",
+    "DamageCantBePreventedOrRedirected",
     # characteristics
     "Pump",
     "SetBasePT",
@@ -473,6 +476,7 @@ __all__ = [
     "Conjunction",
     "Conditional",
     "May",
+    "UnlessPlayerPays",
     "ForEach",
     "RepeatProcess",
     "OneOf",

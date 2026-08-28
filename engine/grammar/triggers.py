@@ -86,6 +86,12 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # it is a prefix of, so the longer condition matches first.
     ("attacks_unblocked", ("this", "creature", "attacks", "and", "isn't", "blocked")),
     ("creature_attacks", ("this", "creature", "attacks")),
+    # The bare joined sentence (Spitting Slug), above both halves it is a
+    # strict prefix of: matching "this creature blocks" first would leave
+    # "or becomes blocked" unconsumed and fail the line. The filtered table
+    # below carries the narrowed printing, which ends in "by".
+    ("creature_blocks_or_blocked_by",
+     ("this", "creature", "blocks", "or", "becomes", "blocked")),
     ("creature_blocks", ("this", "creature", "blocks")),
     ("creature_becomes_blocked", ("this", "creature", "becomes", "blocked")),
     ("creature_dealt_damage", ("this", "creature", "is", "dealt", "damage")),

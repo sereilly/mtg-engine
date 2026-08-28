@@ -717,6 +717,16 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     if payload.get("attacking_only") and not perm.attacking:
         return False
 
+    # "a creature **that has been dealt damage this turn**" (Giant Shark). A
+    # record stamped by `damage_events.deal_damage`, not a read of
+    # ``damage_marked``: marked damage is what is *left* on the creature, and
+    # regeneration (CR 701.19a) and a toughness rewrite both wipe it while the
+    # damage stays dealt. Swept with the turn.
+    if payload.get("dealt_damage_this_turn") and not perm.metadata.get(
+        "was_dealt_damage_this_turn"
+    ):
+        return False
+
     # "target Aura attached to a **land**" (Pyramids) / "…to a **creature or
     # land**" (Enchantment Alteration). *What* the host is, as a nested noun
     # phrase rather than the tuple of card types this was: the printed host is

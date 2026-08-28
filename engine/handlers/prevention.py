@@ -368,9 +368,19 @@ def prevent_damage_to_target_until_eot(game: Game, instruction: OracleInstructio
     Cleared by the cleanup step through ``_EOT_METADATA_KEYS``, which is what
     "this turn" means here.
     """
-    from ..prevention import COMBAT_SHIELD_TO, add_directional_shield
+    from ..prevention import (
+        COMBAT_SHIELD_BOTH, COMBAT_SHIELD_TO, add_directional_shield,
+    )
 
     combat_only = bool(instruction.payload.get("combat_only"))
+    # "…dealt **to and dealt by** that creature this turn" (Ebony Horse, Maze
+    # of Ith). The printed sentence puts one object on both ends of the event,
+    # which is a *direction* the shield reader already answers for — so it is
+    # this instruction with one payload key rather than a second kind. The word
+    # is what separates Maze of Ith from Awe Strike: one creature is harmless
+    # as well as unhurt, the other only unhurt.
+    both_ends = bool(instruction.payload.get("to_and_by"))
+    direction = COMBAT_SHIELD_BOTH if both_ends else COMBAT_SHIELD_TO
     perm = resolve_target_permanent(
         game, context,
         predicate=lambda p: p.is_creature,
@@ -381,10 +391,43 @@ def prevent_damage_to_target_until_eot(game: Game, instruction: OracleInstructio
     if perm is None:
         game.log.append(f"{context.card.name}: no permanent to shield")
         return True, "resolved"
-    add_directional_shield(perm, COMBAT_SHIELD_TO, combat_only=combat_only)
+    add_directional_shield(perm, direction, combat_only=combat_only)
     game.log.append(
         f"all {'combat ' if combat_only else ''}damage that would be dealt to "
-        f"{perm.card.name} this turn is prevented ({context.card.name})"
+        + ("and dealt by " if both_ends else "")
+        + f"{perm.card.name} this turn is prevented ({context.card.name})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("lock_damage_to_target")
+def lock_damage_to_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Damage that would be dealt to that creature this turn can't be prevented
+    or dealt instead to another permanent or player." (Whippoorwill.)
+
+    The inverse of every other handler in this file: it arms nothing, it takes
+    the machinery *away*. `damage_events.damage_candidates` is the one place a
+    damage event's contention set is assembled, and it drops the contenders
+    that prevent or move the damage when the recipient carries this marker — so
+    a shield added later is covered without knowing the clause exists.
+
+    "That creature" is the object the sentence in front of it targeted, so no
+    target is chosen again and nothing is described for the picker.
+    """
+    from ..damage_events import DAMAGE_LOCK
+
+    perm = resolve_target_permanent(
+        game, context,
+        predicate=lambda p: p.is_creature,
+        fallback_on_invalid_choice=False,
+    )
+    if perm is None:
+        game.log.append(f"{context.card.name}: no creature to lock")
+        return True, "resolved"
+    perm.metadata[DAMAGE_LOCK] = True
+    game.log.append(
+        f"damage dealt to {perm.card.name} this turn can't be prevented or "
+        f"redirected ({context.card.name})"
     )
     return True, "resolved"
 

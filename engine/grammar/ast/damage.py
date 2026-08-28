@@ -148,6 +148,22 @@ class RedirectDamage:
 
 
 @dataclass(frozen=True)
+class DamageCantBePreventedOrRedirected:
+    """"Damage that would be dealt to that creature this turn can't be prevented
+    or dealt instead to another permanent or player." (Whippoorwill.)
+
+    The negation of the two families beside it: CR 615's shields and CR 614.9's
+    redirections both stop applying to the named creature. Its own node rather
+    than a flag on :class:`PreventDamage`, because it prevents nothing — it is a
+    statement *about* what may modify a damage event, and a reader that took it
+    for a shield would have the creature taking no damage at all, which is the
+    opposite of what the card does.
+    """
+    subject: Recipient
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
 class PreventDamage:
     amount: Amount
     to: Recipient | None = None
@@ -183,3 +199,12 @@ class PreventDamage:
     # the source would shield the creature from every spell of that description
     # instead of from the ones aimed at it.
     from_targeting_source: bool = False
+    # "…that would be dealt **to and dealt by** that creature this turn."
+    # (Ebony Horse, Maze of Ith.) One printed object standing at *both* ends of
+    # the event, named once. A flag rather than leaving ``to`` and ``dealt_by``
+    # holding the same node, because those two keys are read independently and
+    # every lowering written before this existed reads one of them: seeing only
+    # ``to`` would arm the shield on the recipient end alone. A creature that
+    # cannot be hurt is not the card that also cannot hurt anything, and the
+    # half that goes missing is silent either way.
+    to_and_by: bool = False

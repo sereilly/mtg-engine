@@ -236,6 +236,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "prevent_all_combat_damage_to_matching": "prevention",
     "prevent_damage_by_target_until_eot": "prevention",
     "prevent_damage_to_target_until_eot": "prevention",
+    # The negation of both families (Whippoorwill): no shield and no redirect
+    # may touch the marked creature's damage. Filed with prevention because
+    # that is the machinery it switches off, and GRAMMAR_CATEGORIES is
+    # unchanged.
+    "lock_damage_to_target": "prevention",
     "grant_source_class_prevention_shield": "prevention",
     "prevent_damage_from_targeting_sources_until_eot": "prevention",
     # A redirect is *not* a prevention (CR 614.9): the damage is still
@@ -408,7 +413,20 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "player_loses_game": "game_end",
     "target_player_loses_game": "game_end",
     "game_is_draw": "game_end",
+    # "Each creature blocking or blocked by this creature gains first strike
+    # until end of turn." (Spitting Slug.) The keyword family, like every other
+    # grant: what differs is which permanents receive it.
+    "grant_keyword_to_creatures_in_combat_with_source": "pump",
+    # The other half of Tracker's exchange: the creature the sentence before it
+    # bit, biting back. The damage family, like the one-way half it answers.
+    "bound_bites_source": "damage",
     "grant_unblockable_to_target": "evasion",
+    # "Target creature can't be blocked **by Walls** this turn." (Tower of
+    # Coireall.) The same evasion family: what differs is that the restriction
+    # names a class of blocker instead of every blocker, and that class is
+    # payload the blockers step tests — the arrangement the static printings in
+    # engine/combat_restrictions.py already use.
+    "grant_cant_be_blocked_by_until_eot": "evasion",
     "grant_unblockable_to_low_power_target": "evasion",
     "grant_unblockable_to_self": "evasion",
     # Restrictions on declaring attackers/blockers (CR 506, 509).
@@ -559,6 +577,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "create_emblem": "tokens",
     # Optional actions. Parsed and lowered, not switched on — see _WRAPPER_KINDS.
     "may": "optional",
+    # "Unless an opponent pays {2}, …" (Scarwood Bandits) — the same family
+    # asked of another seat, so GRAMMAR_CATEGORIES is unchanged: what differs is
+    # who is offered the cost and which branch the effect sits on.
+    "unless_player_pays": "optional",
 }
 
 
@@ -568,6 +590,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
 # `lower.py`) read it to thread what each step records forward.
 _PRODUCES: dict[str, str] = {
     "deal_damage": "damage_dealt",
+    # "This creature deals damage equal to its power to target creature.
+    # **That creature** deals damage equal to its power to this creature."
+    # (Tracker.) The bite records which permanent it chose, because that is the
+    # only place the sentence after it can read the creature from: the ability
+    # has one target and the second sentence names it without choosing again.
+    "source_bites_target": "damaged_permanents",
     # "…chooses a creature that this card could enchant. **If the player does**,
     # return this card … **attached to that creature**." (Takklemaggot.) The
     # chosen permanent's id, which is both what the branch tests and what the

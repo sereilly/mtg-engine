@@ -77,6 +77,7 @@ from .damage import (
     _lower_damage_conjunction,
     _lower_coin_flip_damage_loop,
     _lower_damage_this_game_history,
+    _lower_damage_cant_be_prevented,
 )
 from .fighting import (
     _fused_prepare_then_interact,
@@ -290,6 +291,7 @@ __all__ = [
     "_lower_damage_conjunction",
     "_lower_coin_flip_damage_loop",
     "_lower_damage_this_game_history",
+    "_lower_damage_cant_be_prevented",
     "_lower_prevent_damage",
     "_lower_prevent_half",
     "_lower_redirect_damage",

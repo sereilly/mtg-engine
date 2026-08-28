@@ -104,6 +104,17 @@ class TargetImmunity:
 
     subject: str
     spell_class: str
+    # "…**unless it attacked or blocked this turn**" (Lurker). CR 611.2's "as
+    # long as" clause on a static ability, printed the other way round: the
+    # immunity exists only while the creature has stayed out of combat, and it
+    # is rechecked whenever a target is chosen rather than latched, because a
+    # creature that attacks stops being protected in the middle of a turn.
+    #
+    # A flag rather than a second spell class, because it narrows *when* the
+    # restriction holds and not *what* it stops - and a dropped condition would
+    # be a creature untargetable all game, which is strictly more protection
+    # than the card prints.
+    unless_combatant: bool = False
 
 
 @dataclass(frozen=True)
@@ -127,7 +138,8 @@ class EnchantImmunity:
 
 
 _TARGET_IMMUNITY = re.compile(
-    rf"^(?P<who>{_SELF}|{_ATTACHED}) can't be the target of (?P<spell_class>[a-z ]+?)$"
+    rf"^(?P<who>{_SELF}|{_ATTACHED}) can't be the target of (?P<spell_class>[a-z ]+?)"
+    r"(?P<unless> unless it attacked or blocked this turn)?$"
 )
 _ENCHANT_IMMUNITY = re.compile(
     rf"^(?P<who>{_SELF}|{_ATTACHED}) can't be enchanted by other auras$"
@@ -182,7 +194,13 @@ def target_immunities(line: str) -> tuple[TargetImmunity, ...]:
         )
         if spell_class is None:
             continue
-        found.append(TargetImmunity(_subject_of(match.group("who")), spell_class))
+        found.append(
+            TargetImmunity(
+                _subject_of(match.group("who")),
+                spell_class,
+                unless_combatant=match.group("unless") is not None,
+            )
+        )
     return tuple(found)
 
 
@@ -279,7 +297,7 @@ def spell_target_immunity_classes(permanent) -> frozenset[str]:
         immunity.spell_class
         for line in _lines_of(permanent.effective_card)
         for immunity in target_immunities(line)
-        if immunity.subject == SELF_SUBJECT
+        if immunity.subject == SELF_SUBJECT and _immunity_holds(immunity, permanent)
     }
     classes |= {
         immunity.spell_class
@@ -287,8 +305,43 @@ def spell_target_immunity_classes(permanent) -> frozenset[str]:
         for line in _lines_of(aura.effective_card)
         for immunity in target_immunities(line)
         if immunity.subject == ATTACHED_SUBJECT
+        and _immunity_holds(immunity, permanent)
     }
     return frozenset(classes)
+
+
+def _immunity_holds(immunity: TargetImmunity, permanent) -> bool:
+    """Whether *immunity*'s "unless" clause leaves it standing right now.
+
+    Asked here, where the protected permanent is in hand, and asked on every
+    choice rather than latched: "unless it attacked or blocked this turn"
+    (Lurker) becomes false the moment the creature is declared, and a latched
+    answer would keep protecting an attacker for the rest of the turn.
+
+    Whichever line carried the clause, the subject is the protected permanent -
+    an Aura printing it would be saying it about the creature it enchants - so
+    there is one record to read and no second reading of "it".
+    """
+    if not immunity.unless_combatant:
+        return True
+    return not _was_in_combat_this_turn(permanent)
+
+
+def _was_in_combat_this_turn(permanent) -> bool:
+    """Whether *permanent* attacked or blocked this turn (CR 508.1, CR 509.1).
+
+    Both halves come from records the declaration steps already stamp - the
+    attacker flag and the list of attackers a blocker was declared against - so
+    there is no new bookkeeping and nothing to forget to clear: both are swept
+    with the turn.
+    """
+    metadata = getattr(permanent, "metadata", None)
+    if not metadata:
+        return False
+    return bool(
+        metadata.get("attacked_this_turn")
+        or metadata.get("blocked_attacker_ids_this_turn")
+    )
 
 
 def narrow_source_immunity_subtypes(permanent, source_kind: str) -> frozenset[str]:

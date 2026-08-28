@@ -1074,6 +1074,15 @@ def source_bites_target(game, instruction, context):
         game, context,
         predicate=lambda perm: permanent_matches_filter(perm, filters),
     )
+    # What the sentence after this one means by "that creature" (Tracker), by
+    # stable id and recorded on **every** path — a producer `_PRODUCES` names
+    # that writes only when it hits would leave the next sentence silently
+    # acting on nothing. Written before the damage, not after: the damage is
+    # resumable (a replacement may ask a question mid-event), and a record
+    # stamped after the loop is a record stamped after the resumption returns.
+    context.results["damaged_permanents"] = (
+        (victim.permanent_id,) if victim is not None else ()
+    )
     if victim is None:
         game.log.append(f"{card.name}: no valid target")
         return True, "resolved"
@@ -1084,6 +1093,51 @@ def source_bites_target(game, instruction, context):
         ),
         asks=True,
     )
+    return True, "resolved"
+
+
+@effect_handler("bound_bites_source")
+def bound_bites_source(game, instruction, context):
+    """"That creature deals damage equal to its power to this creature."
+    (Tracker's second sentence.)
+
+    The mirror of the bite above with the two ends swapped: the biter is the
+    creature the sentence in front of this one chose — read out of the
+    resolution scratchpad, never chosen again — and the bitten is the ability's
+    own source.
+
+    Not CR 701.14's fight, which this pair looks like. A fight is
+    all-or-nothing (701.14b): if either creature has left the battlefield,
+    *neither* deals damage. These are two printed sentences, so the first one
+    has already happened, and a source that is gone by now simply takes
+    nothing.
+
+    The biter's power is read now rather than when the first half resolved,
+    which is what the printed order says: a creature that lost the exchange's
+    first half is still on the battlefield here (CR 704.3 checks state-based
+    actions only when a player would receive priority) and bites back at full
+    strength.
+    """
+    key = instruction.payload.get("permanents_from")
+    recorded = context.results.get(key) or ()
+    target = context.source_permanent
+    if target is None or not game.is_on_battlefield(target):
+        game.log.append(f"{context.card.name}: nothing left to bite back")
+        return True, "resolved"
+    for permanent_id in recorded:
+        biter = game.permanent_by_id(permanent_id)
+        if biter is None or not biter.is_creature:
+            # It left the battlefield, or stopped being a creature. A dead
+            # creature deals no damage (CR 608.2's last-known information is
+            # about *reading* it, not about acting from a graveyard).
+            continue
+        apply_damage_to_creature(
+            game, target, biter.effective_power, biter,
+            log_message=lambda dealt, biter=biter: (
+                f"{biter.card.name} deals {dealt} damage to {target.card.name}"
+            ),
+            asks=True,
+        )
     return True, "resolved"
 
 

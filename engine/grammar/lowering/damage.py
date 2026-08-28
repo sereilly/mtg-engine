@@ -40,6 +40,7 @@ from ._events import (
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
+    _DAMAGED_PERMANENTS,
     _RECORDED_PERMANENTS,
 )
 
@@ -525,6 +526,44 @@ def _lower_damage(
         payload["filter"] = _filter_payload(node.recipients[0].filter)
         return (OracleInstruction("source_bites_target", "", payload),)
 
+    # "**That creature** deals damage equal to its power to this creature."
+    # (Tracker.) The second half of a printed exchange: the biter is the
+    # creature the sentence in front of this one chose, and the bitten is the
+    # ability's own source. Its own kind rather than CR 701.14's fight, which
+    # this looks like and is not — a fight is all-or-nothing (701.14b), so a
+    # source that has left the battlefield stops *both* halves, while these are
+    # two sentences and the first one still happened.
+    if (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source == "its_power"
+        and node.source is not None
+        and isinstance(node.source, ast.TargetSpec)
+        and node.source.quantifier == "that"
+        and len(node.recipients) == 1
+        and _is_source(node.recipients[0])
+        and node.riders == ast.DamageRiders()
+    ):
+        if _restrictions_beyond(node.source.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound object carries no narrowing the bite could honour",
+                node=node,
+            )
+        if _DAMAGED_PERMANENTS not in produced:
+            # The handler reads the biter out of the resolution scratchpad, and
+            # with nothing recorded it would deal nothing while the card
+            # compiled clean — the discipline every back-reference here follows.
+            raise LoweringError(
+                f"back-reference to {_DAMAGED_PERMANENTS!r} with no producer "
+                "in this effect",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "bound_bites_source", "",
+                {"permanents_from": _DAMAGED_PERMANENTS},
+            ),
+        )
+
     # "…it deals **that much** damage to target opponent." (Brash Taunter.) The
     # number is the firing event's, not this effect's, so it arrives as a
     # trigger-context key rather than as an amount — the same two channels
@@ -877,6 +916,35 @@ def _lower_damage_this_game_history(
             {"amount": _amount_payload(node.amount), "classes": list(node.classes)},
         ),
     )
+def _lower_damage_cant_be_prevented(
+    node: ast.DamageCantBePreventedOrRedirected,
+) -> tuple[OracleInstruction, ...]:
+    """"Damage that would be dealt to that creature this turn can't be
+    prevented or dealt instead to another permanent or player." (Whippoorwill.)
+
+    Two refusals, each a way the sentence could otherwise reach further than it
+    says:
+
+    * the subject must be the object the sentence in front of it chose. A
+      described set would be a lock over permanents nobody picked, and the
+      handler has only the ability's own target to mark.
+    * the duration must be this turn, because that is what the sweep gives it.
+      A lock nothing ends is a creature no shield may ever protect.
+    """
+    subject = node.subject
+    if (
+        not isinstance(subject, ast.TargetSpec)
+        or subject.quantifier not in ("that", "it")
+        or _restrictions_beyond(subject.filter, frozenset({"card_types"}))
+    ):
+        raise LoweringError(
+            "the damage lock is armed on the creature the previous sentence "
+            "chose",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError("the damage lock lasts exactly this turn", node=node)
+    return (OracleInstruction("lock_damage_to_target", "", {}),)
 
 
 def _lower_damage_conjunction(node: ast.Conjunction) -> tuple[OracleInstruction, ...]:

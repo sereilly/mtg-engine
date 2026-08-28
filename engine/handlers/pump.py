@@ -391,6 +391,39 @@ def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, con
     return True, "resolved"
 
 
+@effect_handler("grant_keyword_to_creatures_in_combat_with_source")
+def grant_keyword_to_creatures_in_combat_with_source(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each creature blocking or blocked by this creature gains first strike
+    until end of turn." (Spitting Slug.)
+
+    The set is a combat relation to the ability's own source (CR 509), read
+    from the combat maps rather than from any characteristic of the candidates —
+    which is why this is not the team grant above: that one walks the caster's
+    board, and the creatures blocking this one are the opponent's.
+
+    Locked in at resolution (CR 611.2c), like every other sweep here: a creature
+    that joins the block afterwards is not one this effect named.
+    """
+    keywords = tuple(instruction.payload.get("keywords") or ())
+    source = context.source_permanent
+    if source is None:
+        game.log.append(f"{context.card.name}: no source to read the combat from")
+        return True, "resolved"
+    lifetime = grant_lifetime(game, instruction, context)
+    granted = 0
+    for perm in game.creatures_in_combat_with(source):
+        for keyword in keywords:
+            # Through the one seam, so the keyword lands where its reader looks.
+            _grant_one_keyword(game, perm, keyword, context, lifetime)
+        granted += 1
+    game.log.append(
+        f"{context.card.name}: {granted} creature(s) in combat with it gain "
+        + ", ".join(keywords)
+        + DURATION_WORDS.get(lifetime["duration"], "")
+    )
+    return True, "resolved"
+
+
 @effect_handler("grant_team_assign_unblocked_until_eot")
 def grant_team_assign_unblocked_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Garruk, Savage Herald's −7: creatures you control gain "You may have

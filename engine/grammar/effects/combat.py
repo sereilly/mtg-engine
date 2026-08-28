@@ -132,14 +132,21 @@ _CANT_BE_ACTIONS = ("regenerated", "blocked")
 
 
 def _parse_cant_be(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
-    """``<subject> can't be <participle> [duration]``.
+    """``<subject> can't be <participle> [by <blockers>] [duration]``.
 
-    Note what is deliberately *not* consumed: a trailing exception clause
-    ("… except by Walls", "… by Walls"). Those name creatures the restriction
-    does not apply to, so swallowing them would turn a conditional restriction
-    into an absolute one. Leaving the tokens makes the line fail the
-    full-consumption invariant and fall back — Invisibility and Juggernaut stay
-    visibly unclaimed rather than quietly becoming unblockable.
+    "…can't be blocked **by Walls** this turn" (Tower of Coireall) is a
+    *granted* restriction with a duration, so the class of blocker is read and
+    carried — a narrowing dropped here would make the creature unblockable
+    outright, which is a strictly larger effect than the card prints.
+
+    Note what is still deliberately *not* consumed. An "except by" clause is a
+    whitelist rather than a class, and says the opposite thing about everything
+    unnamed, so it keeps its tokens and its loud failure. And a "by" clause with
+    **no duration** is a static ability (Juggernaut, Argothian Pixies) that
+    ``engine/combat_restrictions.py`` derives; the words are put back so the
+    line falls through to that table exactly as it did before, rather than
+    parsing here and refusing at lowering — which would take those cards'
+    support away.
     """
     stream.expect_word("can't", "cannot")
     stream.expect_word("be")
@@ -147,8 +154,19 @@ def _parse_cant_be(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     if word not in _CANT_BE_ACTIONS:
         raise stream.error("unrecognized \"can't be\" restriction")
     stream.advance()
+    by = None
+    by_mark = stream.mark()
+    if word == "blocked" and stream.accept_word("by"):
+        by = parse_recipient(stream)
+        if by is None:
+            stream.reset(by_mark)
     duration = _parse_duration(stream)
-    return ast.CantBe(subject, word, duration)
+    if by is not None and duration.kind is None:
+        # The static printing. Put the phrase back and let the line fail
+        # full-consumption, which is what routes it to the derived table.
+        stream.reset(by_mark)
+        return ast.CantBe(subject, word, duration)
+    return ast.CantBe(subject, word, duration, by=by)
 
 
 def _parse_remove_from_combat(stream: TokenStream) -> ast.RemoveFromCombat | None:

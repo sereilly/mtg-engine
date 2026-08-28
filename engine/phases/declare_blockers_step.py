@@ -567,6 +567,17 @@ class DeclareBlockersStepMixin:
         # difference is only whose text it is printed on.
         from ..subject_filters import subject_matches
 
+        # "Target creature can't be blocked by Walls **this turn**" (Tower of
+        # Coireall): the same restriction granted for a turn rather than printed
+        # on the attacker. A third channel beside the two below rather than a
+        # branch of its own, because the class of blocker is the same filter
+        # payload in all three — the difference is only where the record lives.
+        from ..combat_restrictions import granted_blocker_filters
+
+        for described in granted_blocker_filters(attacker):
+            if subject_matches(self, blocker, described):
+                return False
+
         for restriction in (
             *attacker_program.instructions,
             *attached_combat_restrictions(attacker),

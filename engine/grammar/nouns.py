@@ -188,6 +188,7 @@ class _FilterDraft:
     could_attack_this_turn: bool | None = None
     token_only: bool = False
     their_choice: bool = False
+    chosen_by_opponent: bool = False
     named: str | None = None
     attached_to: str | None = None
     attached_to_filter: ast.ObjectFilter | None = None
@@ -567,6 +568,8 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     d.not_ability_targeted_by_same_name = False
     d.created_with_source = False
     d.in_combat_with_source = False
+    d.was_dealt_damage_this_turn = False
+    d.chosen_by_opponent = False
     d.dealt_damage_to_source_this_turn = False
 
     _parse_postmodifiers(stream, d, parse_object_filter)
@@ -632,6 +635,8 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         attached_to_filter=d.attached_to_filter,
         of_bound_type=d.of_bound_type,
         in_combat_with_source=d.in_combat_with_source,
+        was_dealt_damage_this_turn=d.was_dealt_damage_this_turn,
+        chosen_by_opponent=d.chosen_by_opponent,
         dealt_damage_to_source_this_turn=d.dealt_damage_to_source_this_turn,
     )
 

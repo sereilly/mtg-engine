@@ -42,7 +42,7 @@ from .lowering._events import CHOSEN_PLAYER
 from .lowering.where_x import lower_where_x
 from .statics import _lower_static_ability
 from .lowering.control_flow import (
-    _lower_may, _lower_one_of, _lower_steps,
+    _lower_may, _lower_one_of, _lower_steps, _lower_unless_player_pays,
 )
 from .lowering import (
     count_spec,
@@ -136,6 +136,7 @@ from .lowering import (
     _lower_modal_head,
     _lower_prevent_damage,
     _lower_redirect_damage,
+    _lower_damage_cant_be_prevented,
     _lower_become_creature,
     _lower_pump,
     _lower_player_gets_counters,
@@ -370,6 +371,9 @@ def lower_statement(
 
     if isinstance(statement, ast.RedirectDamage):
         return _lower_redirect_damage(statement)
+
+    if isinstance(statement, ast.DamageCantBePreventedOrRedirected):
+        return _lower_damage_cant_be_prevented(statement)
 
     if isinstance(statement, ast.Regenerate):
         return _lower_regenerate(statement)
@@ -782,6 +786,12 @@ def lower_statement(
 
     if isinstance(statement, ast.May):
         return _lower_may(
+            statement, produced, event, event_subject,
+            lower_statement=lower_statement,
+        )
+
+    if isinstance(statement, ast.UnlessPlayerPays):
+        return _lower_unless_player_pays(
             statement, produced, event, event_subject,
             lower_statement=lower_statement,
         )

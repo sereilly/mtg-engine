@@ -292,6 +292,18 @@ class ObjectFilter:
     # widening of it — which object the record is read off decides which seam
     # the handler asks, and one field meaning either would leave it guessing.
     blocked_by_target_object: "ObjectFilter | None" = None
+    # "a creature **that has been dealt damage this turn**" (Giant Shark) — a
+    # fact about the candidate alone, so it rides an ordinary payload key. Its
+    # own field rather than a reading of `damage_marked`: damage marked is what
+    # is *left* on the creature, and regeneration and a toughness rewrite both
+    # erase it while the damage stays dealt (CR 120.3).
+    was_dealt_damage_this_turn: bool = False
+    # "target creature **of an opponent's choice** they control" (Preacher) —
+    # who *picks* the object, which is not a property of any candidate. Never
+    # emitted, so a lowering not written for it refuses the phrase instead of
+    # quietly letting the ability's controller choose — which is the seat the
+    # card says must not.
+    chosen_by_opponent: bool = False
 
     def to_payload(self) -> dict[str, object]:
         """Instruction-payload dict, emitting only keys that are set.
@@ -371,6 +383,8 @@ class ObjectFilter:
             payload["owner"] = self.owner
         if self.attacking:
             payload["attacking_only"] = True
+        if self.was_dealt_damage_this_turn:
+            payload["dealt_damage_this_turn"] = True
         if self.blocking:
             payload["blocking_only"] = True
         if self.any_states:

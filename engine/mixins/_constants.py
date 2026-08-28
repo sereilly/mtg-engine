@@ -10,6 +10,10 @@ _EOT_METADATA_KEYS = (
     "animate_until_end_of_turn",
     "assign_combat_damage_as_unblocked_until_eot",
     "cant_be_blocked_until_eot",
+    # "...can't be blocked **by Walls** this turn" (Tower of Coireall):
+    # the narrowed twin of the flag above, a list of blocker classes rather
+    # than a boolean, because the class is payload.
+    "cant_be_blocked_by_until_eot",
     "must_attack_until_eot",
     "destroy_if_did_not_attack_eot",
     "destroy_if_attacked_eot",
@@ -19,6 +23,13 @@ _EOT_METADATA_KEYS = (
     # its twin above: the two are one turn's record read together, and a stamp
     # that outlived the turn would exempt a creature for a combat that is over.
     "could_attack_this_turn",
+    # "a creature that has been dealt damage this turn" (Giant Shark) - the
+    # record damage_events.deal_damage stamps on whatever took the damage.
+    "was_dealt_damage_this_turn",
+    # "Damage that would be dealt to that creature this turn can't be
+    # prevented or dealt instead to another permanent or player."
+    # (Whippoorwill.)
+    "damage_cant_be_prevented_or_redirected_until_eot",
     "redirect_one_damage_to_owner_until_eot",
     # Layer 7b temporary set effects (613.4b)
     "absolute_power_until_eot",
@@ -49,7 +60,6 @@ _EOT_METADATA_KEYS = (
     # Pyramids: unused land-destruction shield expires with the turn
     "land_destruction_shield_this_turn",
     # Ebony Horse: combat-damage shield on the untapped attacker
-    "prevent_combat_damage_to_and_by_until_eot",
     # "One or more target creatures become red until end of turn" (Dwarven Song
     # and its four Legends siblings). The indefinite `color_override` beside it
     # is a lace and must survive the turn, which is why this is a second key

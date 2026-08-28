@@ -32,6 +32,7 @@ from ._core import (
     RawEffect,
 )
 from .damage import (
+    DamageCantBePreventedOrRedirected,
     DamageUnlessPay,
     Fight,
     CoinFlipDamageLoop,
@@ -178,7 +179,7 @@ Effect = Union[
     ExileGraveyardUntilLeaves, CastFromExiledWith,
     PhaseOut,
     AddManaForTappedLand, ProducesManaInstead, SpendManaAsThough, PreventDamage,
-    RedirectDamage,
+    RedirectDamage, DamageCantBePreventedOrRedirected,
     SearchLibrary, SearchAndExile, TransmuteBySacrifice, OwnershipExchangeUnlessPaid,
     RandomRevealOwnershipExchange,
     ExileTopOfLibrary, PutExiledWithSource, ExileGraveyard, ExileCostSacrifices,
@@ -228,6 +229,28 @@ class Conditional:
     condition: Condition
     then: "Statement"
     otherwise: "Statement | None" = None
+
+
+@dataclass(frozen=True)
+class UnlessPlayerPays:
+    """"**Unless an opponent pays {2},** gain control of target artifact …"
+    (Scarwood Bandits.)
+
+    An offer made to *another* seat, with the effect as its declined branch. Its
+    own node rather than a ``May`` whose actor is an opponent, and the printed
+    sentence is why: a ``May`` is an offer whose *action* is what the payer
+    does, and its ``then``/``otherwise`` branches belong to the ability's own
+    controller. Here the payment is the whole of what the other seat may do and
+    the effect happens only when nobody takes it — reading one as the other
+    would put the steal on the accepting branch.
+
+    ``payer`` is the printed player reference, which is a *class* of seat
+    ("an opponent") rather than one chosen player: CR 601.2b's cost announcement
+    picks nobody, so every seat the phrase names is asked in turn until one pays.
+    """
+    payer: PlayerRef
+    cost: "ManaCost"
+    otherwise: "Statement"
 
 
 @dataclass(frozen=True)
@@ -386,7 +409,9 @@ class CreateDelayedTrigger:
     watches: str | None = None
 
 
-Statement = Union[Sequence, Conjunction, Conditional, May, ForEach, RepeatProcess, WhereX, CreateDelayedTrigger, Effect]
+# ``UnlessPlayerPays`` is a *statement*, not an effect, for the reason ``May``
+# is one: it wraps a whole sentence and its body is an ordinary statement.
+Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, WhereX, CreateDelayedTrigger, Effect]
 
 
 # ---------------------------------------------------------------------------

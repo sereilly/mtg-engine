@@ -226,7 +226,12 @@ def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
     # to refuse here because that handler ignored filters entirely — lowering
     # "untap target land" onto it would have untapped a creature — and the land
     # form above keeps its own handler so its payload stays byte-identical.
-    if object_only_filter(payload) is None:
+    # The handler tests the noun phrase with `subject_matches`, so the gate is
+    # what that answers — the same gate the tap above uses, and for the same
+    # reason. It used to be the object-only subset, which refused "untap target
+    # attacking creature **you control**" (Ebony Horse): a seat comparison is
+    # something the resolution can make and the pure matcher cannot.
+    if set(payload) - TESTABLE_SUBJECT_FILTER_KEYS:
         raise LoweringError("no untap handler honors this restriction", node=node)
     untap_payload = dict(payload)
     _describe_targets(untap_payload, spec)
@@ -268,7 +273,19 @@ def _lower_doesnt_untap_next_step(
         and subject.filter.is_source
         and subject.filter.to_payload() == {}
     )
-    if not bare_pronoun and (
+    # "**Target creature** doesn't untap during its controller's next untap
+    # step." (Barl's Cage.) The whole sentence, with nothing in front of it —
+    # so the subject is a choice this ability makes rather than one an earlier
+    # step recorded, and there is no producer to require. The two readings are
+    # told apart by the printed quantifier and nothing else, which is why the
+    # target form carries a ``targets`` description and the bound one carries
+    # none: emitting both would ask for a creature the sentence never chooses.
+    chosen = (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "target"
+        and subject.targeted
+    )
+    if not bare_pronoun and not chosen and (
         not isinstance(subject, ast.TargetSpec) or subject.quantifier != "those"
     ):
         raise LoweringError(
@@ -276,6 +293,20 @@ def _lower_doesnt_untap_next_step(
             "subject does not name them",
             node=node,
         )
+    if node.count < 1:
+        raise LoweringError("a skipped-untap count of none is no restriction", node=node)
+    if chosen:
+        described = _filter_payload(subject.filter)
+        # The handler tests the noun phrase with ``subject_matches``, so a key
+        # outside what that answers would be carried and ignored — the marker
+        # landing on permanents the printed phrase excludes.
+        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError(
+                "the untap marker cannot test this restriction", node=node
+            )
+        payload: dict[str, object] = {**described, "untap_steps": node.count}
+        _describe_targets(payload, subject)
+        return (OracleInstruction("skip_next_untap", "", payload),)
     if not bare_pronoun and _restrictions_beyond(subject.filter, frozenset({"card_types"})):
         raise LoweringError(
             "a bound plural carries no narrowing the marker could honour", node=node
@@ -285,8 +316,6 @@ def _lower_doesnt_untap_next_step(
             f"back-reference to {_TAPPED_PERMANENTS!r} with no producer in this effect",
             node=node,
         )
-    if node.count < 1:
-        raise LoweringError("a skipped-untap count of none is no restriction", node=node)
     return (
         OracleInstruction(
             "skip_next_untap", "",

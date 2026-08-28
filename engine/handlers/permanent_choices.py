@@ -135,7 +135,9 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
             # `subject_matches` deliberately does not answer for a named
             # *other* player — "you" it can, the spell's chosen player it
             # cannot, and both sides of one exchange need the same rule.
-            wanted = _controlled_by_seat(game, payload["controlled_by"], context)
+            wanted = _controlled_by_seat(
+                game, payload["controlled_by"], context, payload
+            )
             if wanted is None or not game.controls(wanted, perm):
                 continue
         if payload.get("legal_host_for_relative"):
@@ -172,12 +174,14 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
     return out
 
 
-def _controlled_by_seat(game, word: str, context) -> int | None:
+def _controlled_by_seat(game, word: str, context, payload: dict | None = None) -> int | None:
     """The seat a ``controlled_by`` word names.
 
-    "you" is the effect's controller and "target" is the player the spell
-    chose (CR 115.10b). Anything else names nobody rather than defaulting: a
-    side of an exchange drawn from the wrong battlefield is a different card.
+    "you" is the effect's controller, "target" is the player the spell chose
+    (CR 115.10b), and "chooser" is whoever is being asked — Preacher's "they",
+    a pronoun naming the player the phrase already named. Anything else names
+    nobody rather than defaulting: a side of an exchange drawn from the wrong
+    battlefield is a different card.
     """
     if word == "you":
         return game.players.index(context.caster)
@@ -187,6 +191,12 @@ def _controlled_by_seat(game, word: str, context) -> int | None:
             if context.target in game.players
             else None
         )
+    if word == "chooser":
+        # "…of an opponent's choice **they** control" (Preacher): the seat being
+        # asked. A pronoun naming the player the phrase already named, so the
+        # picked-from battlefield and the picking seat are one answer rather
+        # than two that can disagree once there are three players.
+        return _chooser_seat(game, payload or {}, context)
     return None
 
 
@@ -221,7 +231,7 @@ def _chooser_seat(game, payload: dict, context) -> int | None:
         # candidates were drawn from, which for this side is the spell's chosen
         # player. Payload, like every other chooser, so the picking seat and
         # the picked-from seat stay one decision.
-        return _controlled_by_seat(game, "target", context)
+        return _controlled_by_seat(game, "target", context, payload)
     if chooser != "opponent":
         return caster_seat
     return next(

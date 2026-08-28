@@ -157,15 +157,19 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # permanents* — every production in it lowers a legality measured across a pair
 # (CR 303.4j) — where the rest of `board.py` lowers effects on one permanent at
 # a time; the two shared one name, and that already lived in `_events.py`.
-# `redirection` split out of `lowering/damage.py` the round The Dark's halved
-# damage landed, at the 1,000 lines that module had been sitting on. The line is
-# the CR's own: CR 120 is a source dealing damage, CR 614.9 is a replacement
-# that changes who it reaches — the damage is still dealt, in full, by the same
-# source. The two halves shared no helper, the same asymmetry `prevention`
-# recorded above when it left the same module. `fighting` left it the same
-# round and on the CR's other line: CR 701.14 is a keyword action, an atomic
-# exchange between two creatures (701.14b — if either has left, neither deals
-# damage), where everything left behind is one source dealing to a recipient.
+# `redirection` split out of `lowering/damage.py` at exactly the 1,000 lines
+# that module had been sitting on — twice in one round, by two branches that hit
+# the cap independently and cut it in the same place (The Dark's halved damage,
+# and Tracker's mutual bite). The line is the CR's own: a redirection is a
+# replacement effect (CR 614.9), where every other production in `damage` deals,
+# counts or shields it — the damage is still dealt, in full, by the same source,
+# and only its recipient moves. The two halves shared no helper, the same
+# asymmetry `prevention` recorded above when it left the same module, and the
+# parse side keeps all three with damage because they read the same recipient,
+# source and duration vocabulary. `fighting` left `damage` the same round on the
+# CR's other line: CR 701.14 is a keyword action, an atomic exchange between two
+# creatures (701.14b — if either has left, neither deals damage), where
+# everything left behind is one source dealing to a recipient.
 LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "counters", "keywords", "tapping", "prevention", "redirection", "fighting", "where_x", "control_flow", "attachments"]
 # The AST side has no `library`: what a search or a look-at *is* — the pile, the
 # filter, the fate of what was found — is a handful of nodes that sit perfectly

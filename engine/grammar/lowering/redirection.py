@@ -1,15 +1,19 @@
-"""Lowering a damage **redirection** (CR 614.9).
+"""Lowering CR 614.9's damage redirections.
 
-Split out of `damage` at the thousand-line guard, along the line the CR itself
-draws: CR 120 is a source dealing damage, CR 614.9 is a replacement effect that
-changes who it is dealt *to*. The damage is still dealt, in full, by the same
-source — so a redirect shares the dealing module's vocabulary for naming a
-recipient and shares not one of its helpers, which is the asymmetry
-`prevention` recorded here first.
+Split out of ``damage`` at the thousand-line guard — twice over in one round,
+independently, by two branches that each hit the cap on the same module and cut
+it in the same place. Along the line the CR already draws: CR 120 is a source
+dealing damage, CR 614.9 is a **replacement effect** that changes who it is
+dealt *to*. The damage is still dealt, in full, by the same source, and only
+its recipient changes — which is why ``ast/damage.py`` gives it a node of its
+own, and why a redirect read as a shield would lose lifelink, the damage
+triggers and the dealt-damage records all at once.
 
-The parse side keeps all three with damage (`effects/damage.py`), because they
-read the same recipient and duration words. This is the fourth lowering-only
-family for that reason; see `tests/engine/test_grammar_layering.py`.
+The parse side keeps redirection with damage (``effects/damage.py``), because
+the two read the same recipient, source and duration vocabulary; the lowering
+halves share nothing but the generic helpers every family here uses. That is
+the same asymmetry ``prevention`` records one module over — a lowering half
+that outgrew its parse half. See ``tests/engine/test_grammar_layering.py``.
 """
 
 from ...oracle_types import OracleInstruction

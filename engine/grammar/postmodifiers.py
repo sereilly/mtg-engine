@@ -483,6 +483,15 @@ def _parse_postmodifiers(
                 ):
                     d.dealt_damage_to_source_this_turn = True
                     continue
+            # "…that **has been dealt damage this turn**" (Giant Shark). The
+            # passive voice with no agent, which is the whole difference from
+            # the clause above: that one asks who dealt it, this one only that
+            # some damage was. Both halves required — a clause naming another
+            # window is a different sentence, and the record is kept per turn.
+            elif stream.accept_phrase("has", "been", "dealt", "damage"):
+                if stream.accept_phrase("this", "turn"):
+                    d.was_dealt_damage_this_turn = True
+                    continue
             stream.reset(probe)
             break
         if stream.at_word("blocking") and stream.peek_word(1) == "or":
@@ -595,6 +604,22 @@ def _parse_postmodifiers(
             stream.advance()
             if stream.accept_phrase("their", "choice"):
                 d.their_choice = True
+                continue
+            # "…**of an opponent's choice** they control" (Preacher). A
+            # different fact from "of their choice" above and deliberately a
+            # different field: that one says the seat already named picks, this
+            # one names a seat that is not the ability's controller. Reading one
+            # as the other would hand Preacher's pick to the Preacher's own
+            # player, which is the opposite of what it prints.
+            #
+            # "They control" is read here rather than as a controller clause of
+            # its own, because "they" is the opponent this phrase just named —
+            # a pronoun naming the object the sentence already named (idiom 20),
+            # and there is nowhere else in the phrase it could point.
+            if stream.accept_phrase("an", "opponent", "'s", "choice"):
+                d.chosen_by_opponent = True
+                if stream.accept_phrase("they", "control"):
+                    d.controller = "opponent"
                 continue
             # "another permanent **of that type**" (Enchantment Alteration) —
             # the type of the object the sentence's earlier clause named.

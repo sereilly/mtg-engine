@@ -206,6 +206,9 @@ def shield_candidates() -> list[Candidate]:
         Candidate(
             key=c.key, order=c.order, applies=c.applies, label=c.label,
             apply=lambda g, e, fn=c.apply: _consume(g, e, fn),
+            # Every entry in this file is CR 615 prevention by construction,
+            # which is what "can't be prevented" (Whippoorwill) switches off.
+            prevents_or_redirects=True,
         )
         for c in PREVENTION_EFFECTS
     ]
@@ -252,24 +255,23 @@ def source_has_type(game, source, card_type: str) -> bool:
     return card_type in (getattr(card, "type_line", "") or "").lower()
 
 
-# Ebony Horse: "Prevent all combat damage that would be dealt to and dealt by
-# that creature this turn." — a per-creature marker set by the
-# untap_attacker_and_prevent_combat_damage handler, cleared in cleanup.
-_COMBAT_SHIELD_KEY = "prevent_combat_damage_to_and_by_until_eot"
-
-#: Which end of the event a combat shield covers. Ebony Horse's marker means
-#: BOTH, and it stays a bare boolean so nothing that reads it has to change;
-#: the Legends cards need the halves, because "Prevent all combat damage that
-#: would be dealt **by** target creature this turn" (Horn of Deafening, Lady
-#: Evangela) leaves the creature perfectly able to *take* combat damage, and
-#: folding it into the two-way shield would make those creatures unkillable in
-#: combat.
+#: Which end of the event a combat shield covers. "Prevent all combat damage
+#: that would be dealt **to and dealt by** that creature this turn" (Ebony
+#: Horse, Maze of Ith) covers both; the Legends cards need the halves, because
+#: "…that would be dealt **by** target creature this turn" (Horn of Deafening,
+#: Lady Evangela) leaves the creature perfectly able to *take* combat damage,
+#: and folding it into the two-way shield would make those creatures unkillable
+#: in combat.
+#:
+#: Ebony Horse's used to be a bare boolean on its own metadata key, written by a
+#: name-keyed hook. Maze of Ith prints the same sentence, which is what that
+#: hook's entry bar forbids — so the sentence became a grammar production and
+#: the boolean became the two-way value of this one record.
 COMBAT_SHIELD_BY = "by"
 COMBAT_SHIELD_TO = "to"
 COMBAT_SHIELD_BOTH = "to_and_by"
 
-#: The directional turn-long marker, beside Ebony Horse's boolean rather than
-#: replacing it. Both are swept by ``_EOT_METADATA_KEYS``.
+#: The directional turn-long marker, swept by ``_EOT_METADATA_KEYS``.
 #:
 #: The record is a list of ``[direction, combat_only]`` pairs rather than one
 #: direction word, because **how wide the shield is, is payload**: "Prevent all
@@ -339,9 +341,9 @@ def _shield_directions(perm, *, combat: bool) -> frozenset[str]:
     """Every direction *perm* is currently shielded in against an event of this
     width, from any of the three places a directional shield is recorded.
 
-    *combat* is the event's own ``combat`` flag. Ebony Horse's boolean and the
-    Aura form are both printed "combat damage", so they answer nothing at all
-    for a burn spell; the marker records its width per entry.
+    *combat* is the event's own ``combat`` flag. The Aura form is printed
+    "combat damage", so it answers nothing at all for a burn spell; the marker
+    records its width per entry.
 
     Accepts None and non-permanent damage sources (a spell's
     ``CardDefinition``), which carry no shield at all.
@@ -350,8 +352,6 @@ def _shield_directions(perm, *, combat: bool) -> frozenset[str]:
     if not metadata:
         return frozenset()
     directions: set[str] = set()
-    if combat and metadata.get(_COMBAT_SHIELD_KEY):
-        directions.add(COMBAT_SHIELD_BOTH)
     for entry in metadata.get(_COMBAT_SHIELD_DIRECTION_KEY) or ():
         direction, combat_only = entry
         if combat_only and not combat:
@@ -378,13 +378,6 @@ def shields_damage(perm, *, dealt_to: bool, combat: bool) -> bool:
     wanted = COMBAT_SHIELD_TO if dealt_to else COMBAT_SHIELD_BY
     return COMBAT_SHIELD_BOTH in directions or wanted in directions
 
-
-def combat_shielded(perm) -> bool:
-    """Whether *perm* carries a "prevent all combat damage to and by this
-    creature" shield. Accepts None and non-permanent damage sources (a spell's
-    CardDefinition), which never carry one."""
-    metadata = getattr(perm, "metadata", None)
-    return bool(metadata) and bool(metadata.get(_COMBAT_SHIELD_KEY))
 
 
 # ---------------------------------------------------------------------------
@@ -592,8 +585,8 @@ def _applies_combat_to_and_by(game, event: dict) -> bool:
 # The first two are turn-wide flags rather than shields a recipient holds, which
 # is why they read a game flag and a permanent's marker instead of the
 # collection: nothing is consumed, so there is no charge, no lifetime and no
-# remaining-uses bookkeeping for a Shield to carry. Ebony Horse's also has to be
-# readable off the damage's *source* ("dealt to and dealt by"), which a
+# remaining-uses bookkeeping for a Shield to carry. The directional one also has
+# to be readable off the damage's *source* ("dealt to and dealt by"), which a
 # recipient-keyed collection cannot express.
 
 @prevention_effect(COMBAT_BLANKET, applies=_applies_all_combat)
@@ -615,9 +608,9 @@ def _prevent_scoped_combat_damage(game, event: dict) -> PreventionOutcome | None
 
 @prevention_effect(COMBAT_SHIELD, applies=_applies_combat_to_and_by)
 def _prevent_combat_damage_to_and_by(game, event: dict) -> PreventionOutcome | None:
-    """Ebony Horse: "Prevent all combat damage that would be dealt to and dealt
-    by that creature this turn." Both directions are one check here — the
-    shielded creature may be either end of the event."""
+    """Ebony Horse, Maze of Ith: "Prevent all combat damage that would be dealt
+    to and dealt by that creature this turn." Both directions are one check here
+    — the shielded creature may be either end of the event."""
     return PreventionOutcome(prevented=event["amount"])
 
 
@@ -826,6 +819,13 @@ _PREVENT_ALL_FROM_SOURCE_TYPE_RE = re.compile(
     r"|walls"
     r"|creatures it's blocking"
     r"|spells that target it"
+    # "…by **creatures**" (Uncle Istvan). The bare plural, which is the same
+    # class the two-word "creature sources" names — the printed noun says what
+    # the source must be and "sources" says nothing further. Last in the
+    # alternation because two phrases above open with the same word; the
+    # pattern is anchored, so neither can be shadowed, and the order says
+    # which reading is the narrow one.
+    r"|creatures"
     r")$"
 )
 
@@ -844,6 +844,9 @@ _SOURCE_CLASSES: dict[str, dict[str, object]] = {
     "artifact creatures": {"card_type": "artifact"},
     "artifact permanents": {"card_type": "artifact"},
     "creature sources": {"card_type": "creature"},
+    # Uncle Istvan's bare plural. The same class, because the printed noun is
+    # what narrows the source and "sources" adds nothing to it.
+    "creatures": {"card_type": "creature"},
     "creature creatures": {"card_type": "creature"},
     "creature permanents": {"card_type": "creature"},
     "enchantment sources": {"card_type": "enchantment"},

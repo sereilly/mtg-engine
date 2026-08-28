@@ -197,12 +197,35 @@ def steal_target_linked_to_source(game: Game, instruction: OracleInstruction, co
             f"{context.card.name} is untapped, so the control change never starts"
         )
         return True, "resolved"
-    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
-    target_perm = resolve_target_permanent(
-        game, context,
-        predicate=lambda p: permanent_matches_filter(p, filters),
-        fallback_on_invalid_choice=False,
-    )
+    if "source_on_battlefield" in conditions and not game.is_on_battlefield(
+        source_permanent
+    ):
+        # CR 611.2b's other half again: a duration already over when the effect
+        # would first apply means the effect never starts. The Bandits can be
+        # killed in response to their own ability.
+        game.log.append(
+            f"{context.card.name} has left the battlefield, so the control "
+            "change never starts"
+        )
+        return True, "resolved"
+    recorded_key = instruction.payload.get("permanents_from")
+    if recorded_key is not None:
+        # "…gain control of target creature **of an opponent's choice** they
+        # control" (Preacher). The creature was picked by another seat as this
+        # resolution ran, so it comes out of the scratchpad rather than off the
+        # ability's own target — the same `permanents_from` reading every other
+        # step that acts on an earlier one's pick uses.
+        permanent_id = context.results.get(recorded_key)
+        target_perm = (
+            game.permanent_by_id(permanent_id) if permanent_id is not None else None
+        )
+    else:
+        filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+        target_perm = resolve_target_permanent(
+            game, context,
+            predicate=lambda p: permanent_matches_filter(p, filters),
+            fallback_on_invalid_choice=False,
+        )
     if target_perm is None:
         game.log.append(f"{context.card.name}: no valid target to gain control of")
         return True, "resolved"

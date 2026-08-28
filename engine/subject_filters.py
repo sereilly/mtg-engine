@@ -69,6 +69,10 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # object alone — ``Permanent.attacking`` is stamped at declaration and
     # cleared when the creature leaves combat.
     "attacking_only",
+    # "a creature **that has been dealt damage this turn**" (Giant Shark).
+    # A history the damage seam stamps on the creature itself, so it is
+    # answerable from the object alone like every other state word here.
+    "dealt_damage_this_turn",
     # "creatures **without** flying" (Moat). The negative twin of
     # ``with_keywords`` and a layer-6 question for the same reason: a creature
     # *granted* flying is a creature with flying (CR 613.1f), so it escapes a

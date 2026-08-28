@@ -467,6 +467,37 @@ def _blocker_noun(part: str, card_name: str | None = None) -> dict | None:
     return None
 
 
+#: A restriction *granted* for the turn rather than printed on a permanent
+#: ("Target creature can't be blocked by Walls this turn", Tower of Coireall).
+#: The record is a list of blocker-filter payloads, which is the vocabulary the
+#: printed static forms above are enforced through too - one question asked of
+#: both in the declare-blockers step, so a card printing a new noun costs
+#: neither of them a branch. Swept with the turn by
+#: ``mixins/_constants._EOT_METADATA_KEYS``.
+GRANTED_BLOCKER_RESTRICTIONS = "cant_be_blocked_by_until_eot"
+
+
+def grant_blocker_restriction(permanent, described: dict) -> None:
+    """Record that *permanent* can't be blocked by creatures matching
+    *described* for the rest of the turn (CR 509.1b).
+
+    Duplicates are folded, so two resolutions of the same effect leave one
+    entry - the restriction is a fact about the board, not a count.
+    """
+    record = [dict(entry) for entry in granted_blocker_filters(permanent)]
+    if described not in record:
+        record.append(dict(described))
+    permanent.metadata[GRANTED_BLOCKER_RESTRICTIONS] = record
+
+
+def granted_blocker_filters(permanent) -> tuple[dict, ...]:
+    """Every blocker class *permanent* has been made unblockable by this turn."""
+    metadata = getattr(permanent, "metadata", None)
+    if not metadata:
+        return ()
+    return tuple(metadata.get(GRANTED_BLOCKER_RESTRICTIONS) or ())
+
+
 def participation_cap(permanents, kind: str) -> int | None:
     """The cap the battlefield currently puts on how many creatures may *kind*
     (``"attack"`` / ``"block"``) this combat, or None when nothing caps it.

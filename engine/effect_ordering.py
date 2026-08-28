@@ -77,6 +77,14 @@ class Candidate:
     applies: Callable[[Any, dict], bool]
     apply: Callable[[Any, dict], Any]
     label: str = ""
+    # Whether this effect *prevents* the event (CR 615) or *moves* it to another
+    # recipient (CR 614.9) — the two things "damage … can't be prevented or
+    # dealt instead to another permanent or player" (Whippoorwill) switches off.
+    # Declared at registration rather than derived from a list of keys or an
+    # order range, because a list of registrations goes stale the day a new one
+    # is added and the failure is silent: the lock would quietly stop being a
+    # lock over whatever was added last.
+    prevents_or_redirects: bool = False
 
 
 @dataclass
