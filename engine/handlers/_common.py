@@ -430,6 +430,12 @@ def _card_matches_filter(card, filt: dict) -> bool:
     # matcher uses, so "3 or less" means one thing in both zones.
     if not _comparison_holds(filt.get("mana_value"), int(getattr(card, "cmc", 0) or 0)):
         return False
+    # "**white** cards in their graveyards" (Nameless Race). Off the card's own
+    # colours, which CR 202.2 derives from the printed mana cost — a card in a
+    # zone has them where it has no computed characteristics at all.
+    wanted_color = filt.get("color_filter")
+    if wanted_color and wanted_color not in (getattr(card, "colors", ()) or ()):
+        return False
     named = filt.get("named")
     # Through `name_key`, so the parser's rendering of a legendary name
     # ("chandra , flame 's catalyst") and Oracle's spelling of it compare equal —

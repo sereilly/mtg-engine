@@ -175,6 +175,13 @@ def _chosen_number(match: re.Match) -> dict[str, object]:
     return {"count": "chosen_number", "complement": int(match.group("total"))}
 
 
+def _life_paid_on_entry_count(match: re.Match) -> dict[str, object]:
+    """Nameless Race. The life its controller paid as it entered, which is not
+    on any battlefield either - the same shape Wood Elemental's row has, one
+    resource over."""
+    return {"count": "life_paid_as_entered"}
+
+
 def _sacrificed_on_entry_count(match: re.Match) -> dict[str, object]:
     """Wood Elemental. The tally its own entry sacrifice recorded."""
     return {"count": "sacrificed_as_entered"}
@@ -297,6 +304,15 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
             rf"^{_SUBJECT} {_PT} (?P<phrase>.+?) sacrificed as it entered$"
         ),
         _sacrificed_on_entry_count,
+    ),
+    (
+        # Nameless Race: "…are each equal to **the life paid as it entered**".
+        # Beside Wood Elemental's row and for its reason - the number is not on
+        # any battlefield, so it is recorded where it happened (the entry
+        # payment) and read back off the permanent here.
+        re.compile(rf"^{_SUBJECT} {_PT.replace(' the number of', '')} the life "
+                   r"paid as it entered$"),
+        _life_paid_on_entry_count,
     ),
     (
         # Shapeshifter. Both halves in one pattern, because the second is not a

@@ -1521,6 +1521,23 @@ class PendingChoicesMixin:
                     f"{choice.data.get('card_name')}: removed {removed} "
                     "+1/+1 counter(s)"
                 )
+            elif choice.data.get("pay_life_onto"):
+                # Nameless Race. The number *is* an amount of life, so it is
+                # paid rather than merely recorded - and what is recorded is
+                # the payment, which the characteristic-defining P/T reads back
+                # off the permanent. Its own branch beside the two above for
+                # their reason: the shape is one prompt, and what the answer
+                # buys is what differs.
+                # Directly, the way every other *cost* payment of life in this
+                # engine is made (`mixins/stack/activation.py` charges
+                # `cost.pay_life` the same way): CR 118.8 says paying life is
+                # not losing life, so this must not go through the life-loss
+                # seam and fire a "whenever you lose life" trigger.
+                self.players[choice.player_index].life -= value
+                permanent.metadata["life_paid_as_entered"] = value
+                self.log.append(
+                    f"{choice.data.get('card_name')}: paid {value} life"
+                )
             else:
                 permanent.metadata["chosen_number"] = value
                 self.log.append(

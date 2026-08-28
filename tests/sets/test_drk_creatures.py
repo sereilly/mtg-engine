@@ -310,3 +310,64 @@ def test_orc_general_cannot_be_activated_with_no_other_orc_or_goblin(set_pool):
 
     assert not result.supported, game.log
     assert [perm.card.name for perm in p1.battlefield] == ["Orc General"]
+
+
+def test_nameless_race_is_the_life_its_controller_paid_as_it_entered(set_pool):
+    """"As this creature enters, pay any amount of life. The amount you pay
+    can't be more than the total number of white nontoken permanents your
+    opponents control plus the total number of white cards in their
+    graveyards." / "…power and toughness are each equal to the life paid as it
+    entered."
+
+    An *entry* value, not a running count: the number is fixed as the creature
+    arrives (CR 614.1c) and nothing on any board answers for it afterwards -
+    which is why it rides the permanent the way Wood Elemental's sacrifice
+    count does.
+    """
+    pool = set_pool("DRK")
+    plains = _basic("Plains", "Plains", "W")
+    p1 = PlayerState(name="P1", hand=[pool["Nameless Race"]])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=plains)],
+        graveyard=[pool["Martyr's Cry"], pool["Angry Mob"]],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    life = p1.life
+
+    result = game.cast_from_hand(0, "Nameless Race")
+    assert result.supported, result.details
+
+    # Three white objects on the far side: the Plains is a white permanent only
+    # if its colour says so, so the cap is what the two white cards in the
+    # graveyard allow plus whatever the board adds.
+    prompt = [c for c in game.pending_choices if c.kind == "number_choice"]
+    assert prompt, game.log
+    cap = prompt[0].data["maximum"]
+    assert cap >= 2, (cap, game.log)
+
+    assert game.confirm_number_choice(0, 2), game.log
+    race = [perm for perm in p1.battlefield if perm.card.name == "Nameless Race"][0]
+    assert (race.effective_power, race.effective_toughness) == (2, 2), game.log
+    assert p1.life == life - 2, "the life is paid, not merely chosen"
+
+
+def test_nameless_race_declined_dies_as_a_zero_zero(set_pool):
+    """The control: paying nothing is a legal answer, and a 0/0 dies to the
+    state-based check — which is the card."""
+    pool = set_pool("DRK")
+    p1 = PlayerState(name="P1", hand=[pool["Nameless Race"]])
+    p2 = PlayerState(name="P2", graveyard=[pool["Martyr's Cry"]])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    life = p1.life
+
+    game.cast_from_hand(0, "Nameless Race")
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert "Nameless Race" not in {perm.card.name for perm in p1.battlefield}, game.log
+    assert p1.life == life

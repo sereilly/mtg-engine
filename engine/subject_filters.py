@@ -137,7 +137,13 @@ CARD_ONLY_FILTER_KEYS = frozenset(
      # ``type_filter`` and answered the same way — off the printed type line,
      # which for a card in a zone is the whole of what there is (CR 613.1) — so
      # it is testable here for exactly the reason ``type_filter`` is.
-     "exclude_types"}
+     "exclude_types",
+     # "the total number of **white** cards in their graveyards" (Nameless
+     # Race). Colour is a printed characteristic (CR 202.2, CR 105.2), so
+     # unlike power or a keyword it needs no battlefield object to be asked of
+     # — which is what puts it here rather than among the layer questions only
+     # ``subject_matches`` can answer.
+     "color_filter"}
 )
 
 
