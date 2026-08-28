@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 from ..layer_bridge import printed_shape, printed_supertypes
 from ..oracle_types import BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER
 from ..models import Permanent, PlayerState
-from ..search_filters import name_key
+from ..search_filters import card_has_type, name_key
 
 
 def attached_host(game: "Game", source: "Permanent | None") -> "Permanent | None":
@@ -558,7 +558,15 @@ def graveyard_card_matches(spec: dict, card) -> bool:
     the reanimation handlers ask of the card they put onto the battlefield.
     """
     card_types = tuple(spec.get("card_types") or ())
-    if card_types and card.primary_type not in card_types:
+    # Through ``card_has_type``, not ``primary_type``: a card has **every** type
+    # its line names (CR 205.2, idiom 15), so an Artifact Creature answers "an
+    # artifact card" and "a creature card" both. ``primary_type`` picks one of
+    # them by the order of a list, which is the reading the singular branch
+    # below already stopped making - and the union was the last reader in this
+    # function still making it. No shipped card exercises the difference today
+    # (every union in the pool is instant/sorcery), which is exactly why it
+    # would have gone on being wrong.
+    if card_types and not any(card_has_type(card, name) for name in card_types):
         return False
     color = spec.get("graveyard_color_filter")
     if color and color not in card.colors:

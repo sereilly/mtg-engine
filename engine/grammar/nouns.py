@@ -503,7 +503,14 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # already knows how to read one rather than by a second copy of it
             # here — which is also what keeps "permanent card" a card and not a
             # permanent.
-            if following is not None and _singular(following) in _GENERIC_NOUNS:
+            #
+            # Two of the generic nouns and not the whole set. "Goblin **spell**"
+            # names an object on the stack, and the branch below records that as
+            # ``zone`` only for a *type* union — reaching it from here would read
+            # a spell as a battlefield permanent, which is the widening this
+            # detour has to be narrow to avoid. It keeps refusing until a card
+            # prints one.
+            if following is not None and _singular(following) in ("permanent", "card"):
                 continue
             d.is_card = _accept_card_noun(stream)
             d.saw_head = True
