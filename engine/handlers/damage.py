@@ -840,50 +840,6 @@ def deal_damage_to_those_damaged_this_game(
     return True, "resolved"
 
 
-@effect_handler("deal_damage_each_matching_creature")
-def deal_damage_each_matching_creature(
-    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
-) -> tuple[bool, str]:
-    """"…it deals 2 damage to you and **each creature you control**."
-    (Sorrow's Path.)
-
-    The filtered creature sweep. What it hits is payload rather than part of
-    the kind, so the narrowing is answered by ``subject_matches`` — the one
-    reader of a printed noun phrase — and a card printing a different one needs
-    no handler.
-
-    Over the control seam, never ``player.battlefield``: "you control" is a
-    derived controller (CR 613 layer 2), and a raw read is a second opinion
-    about who controls what. The set is snapshotted before the loop because
-    damage can kill: CR 704.3 keeps state-based actions out of the middle of a
-    resolution, but an effect armed by the damage could still move a permanent,
-    and a list being mutated under the iterator would skip whichever creature
-    slid into the vacated slot.
-    """
-    from ..subject_filters import subject_matches
-
-    card = context.card
-    damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
-    described = instruction.payload.get("filter") or {}
-    caster = context.caster
-    observer = game.players.index(caster) if caster in game.players else None
-    struck = 0
-    for perm in list(game.all_permanents()):
-        if not perm.is_creature:
-            continue
-        if not subject_matches(
-            game, perm, described,
-            observer=observer, source=context.source_permanent,
-        ):
-            continue
-        apply_damage_to_creature(game, perm, damage, card)
-        struck += 1
-    game.log.append(
-        f"{card.name} dealt {damage} damage to each of {struck} creatures"
-    )
-    return True, "resolved"
-
-
 @effect_handler("deal_damage_to_recorded_permanents")
 def deal_damage_to_recorded_permanents(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext

@@ -24,15 +24,14 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "hurricane_damage": "damage",
     "deal_damage_each_creature_and_player": "damage",
     "deal_damage_each_attacking_creature": "damage",
-    # "…deals 1 damage to each Goblin creature." (Goblin Shrine.) The
+    # "…deals 1 damage to each Goblin creature." (Goblin Shrine); "…deals 2
+    # damage to **each creature you control**" (Sorrow's Path). The
     # generalisation of the row above: the described set is payload, so a card
-    # printing any other noun phrase needs no kind of its own.
+    # printing any other noun phrase needs no kind of its own. Two parallel
+    # branches landed this twice under two names in one round — a filtered
+    # sweep is the shape everyone reaches for — and the survivor is the one
+    # that batches, so simultaneous lethal damage kills together.
     "deal_damage_each_matching": "damage",
-    # "…deals 2 damage to **each creature you control**" (Sorrow's Path). The
-    # filtered creature sweep the two fused kinds above are special cases of:
-    # what it damages is payload, so a card printing a different narrowing
-    # needs no kind. Same category, so GRAMMAR_CATEGORIES is unchanged.
-    "deal_damage_each_matching_creature": "damage",
     # "…to each opponent and planeswalker **it has dealt damage to this
     # game**" (The Fallen). The recipients are a record on the source rather
     # than a set on a board. Same category, so GRAMMAR_CATEGORIES is unchanged.

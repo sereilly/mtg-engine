@@ -796,7 +796,7 @@ def _lower_damage(
             )
         return (
             OracleInstruction(
-                "deal_damage_each_matching_creature", "",
+                "deal_damage_each_matching", "",
                 {"amount": amount, "filter": described},
             ),
         )
