@@ -114,6 +114,107 @@ def _fused_conditional_counter(
     return (OracleInstruction(base.kind, base.value, payload),)
 
 
+#: Where the retarget's two steps pass the seat the controller picked. Named
+#: once because the step that writes it and the step that reads it are two
+#: instructions, and a literal in each is how they come to disagree — the same
+#: reason ``lowering/redirection._REDIRECT_RECIPIENT_KEY`` is named once.
+_NEW_TARGET_SEAT_KEY = "retarget_new_target_seat"
+
+#: The retarget honours exactly one narrowing of its spell: CR 115.9a's count
+#: of what that spell chose. Everything else about the noun phrase is refused
+#: by ``_restrictions_beyond``, because the handler locates the spell itself
+#: and would ignore anything it was not told to check.
+_CHANGE_TARGET_HONOURED_FILTER_FIELDS = frozenset({"target_count"})
+
+#: The bounds on the new target the resolution can actually offer. One row, and
+#: it is a table for the reason every other one here is: a bound consumed by the
+#: parser and unknown to the handler is a retarget free to aim anywhere.
+_CHANGE_TARGET_NEW_TARGETS = frozenset({"player"})
+
+
+def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...]:
+    """CR 115.7a — "Change the target of target spell with a single target if
+    that target is you. The new target must be a player." (Reflecting Mirror.)
+
+    **Two instructions, in printed order**, because the sentence makes two
+    decisions and the second reads the first: which player replaces you is
+    chosen as the ability resolves, and the change is made with that answer in
+    hand. That is the arrangement Backdraft's pair uses
+    (``handlers/player_choices.py``) and the one the Nova Pentacle redirect
+    uses, and it is what lets an interactive seat be *asked* — a prompt armed
+    part-way through a resolution suspends it, and the step behind the prompt
+    resumes when the answer arrives.
+
+    Every refusal below is a way the sentence could otherwise mean more than it
+    says, and each is a restriction the dispatcher would have no way to test:
+
+    * the spell must be **chosen**, not named by an earlier sentence: there is
+      no bound-spell reading of "that spell" here, and admitting one would
+      retarget whatever happened to be on the stack.
+    * the noun phrase must carry CR 115.9a's ``target_count``, and it must be
+      **one**. Without it the phrase reads "target spell", which is every spell
+      on the stack — a strictly larger card than any that prints this.
+    * the spell's current target must be **you**. There is no reading of the
+      other player's name that the picker could ask about, so anything else
+      refuses rather than being dropped into a card that redirects spells aimed
+      anywhere.
+    * the new target must be bounded, and bounded to something the resolution
+      can offer. Deflection prints no such sentence — its new target may be
+      anything the spell could legally have chosen — and that is a *different*
+      card, so it refuses here rather than quietly gaining Reflecting Mirror's
+      bound.
+    """
+    spec = node.subject
+    if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "target":
+        raise LoweringError(
+            "a retarget names the spell it changes rather than finding one",
+            node=node,
+        )
+    filt = spec.filter
+    if filt.target_count != 1:
+        raise LoweringError(
+            "no handler retargets a spell this phrase does not count the "
+            "targets of",
+            node=node,
+        )
+    leftover = _restrictions_beyond(filt, _CHANGE_TARGET_HONOURED_FILTER_FIELDS)
+    if leftover:
+        raise LoweringError(
+            "no handler honours this retarget restriction: " + ", ".join(leftover),
+            node=node,
+        )
+    current = node.current_target
+    if current is None or current.kind != "you":
+        raise LoweringError(
+            "a retarget is offered only for a spell aimed at its controller; "
+            "no picker asks about another player's",
+            node=node,
+        )
+    if node.new_target not in _CHANGE_TARGET_NEW_TARGETS:
+        raise LoweringError(
+            "no handler bounds this retarget's new target", node=node
+        )
+    payload: dict[str, object] = {
+        "result_key": _NEW_TARGET_SEAT_KEY,
+        "current_target": current.kind,
+        "new_target": node.new_target,
+    }
+    return (
+        OracleInstruction("choose_new_target_player", "", dict(payload)),
+        # The ``targets`` description rides the step that actually names the
+        # spell. It is what ``legality._ability_target_quantifiers`` reads to
+        # decide the target is **mandatory** (CR 602.2b): without it the
+        # activation gate treats the ability as targeting nothing, and the {X}
+        # and the tap are paid on an empty stack for no effect. The spec itself
+        # still comes from the kind table in ``engine/targeting.py``, which is
+        # consulted first — this says *that* it targets, not what.
+        OracleInstruction(
+            "change_target_spell_target", "",
+            {**payload, "targets": {"quantifier": "target", "count": 1}},
+        ),
+    )
+
+
 def _counter_targets_filter(inner: ast.ObjectFilter, node) -> dict[str, object]:
     """The payload for "that targets <noun phrase>", or a refusal.
 

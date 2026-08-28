@@ -200,6 +200,7 @@ class _FilterDraft:
     subtype_match: str = "any"
     any_classes: tuple[tuple[str, str], ...] = field(default_factory=tuple)
     targets_object: ast.ObjectFilter | None = None
+    target_count: int | None = None
 
 
 def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast.ObjectFilter:
@@ -600,6 +601,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         not_ability_targeted_by_same_name=d.not_ability_targeted_by_same_name,
         any_classes=d.any_classes,
         targets_object=d.targets_object,
+        target_count=d.target_count,
         created_with_source=d.created_with_source,
         controller=d.controller,
         owner=d.owned_by,

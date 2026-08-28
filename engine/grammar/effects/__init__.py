@@ -107,6 +107,7 @@ from .library import (
     _parse_search_library,
 )
 from .stack import (
+    _parse_change_target,
     _parse_counter,
     _parse_modal_head,
     _UNPAID_PENALTIES,
@@ -207,6 +208,7 @@ __all__ = [
     "_parse_look_at_hand",
     "_parse_reveal_top",
     "_parse_search_library",
+    "_parse_change_target",
     "_parse_counter",
     "_parse_modal_head",
     "_UNPAID_PENALTIES",

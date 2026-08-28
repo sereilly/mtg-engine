@@ -35,6 +35,7 @@ from .vocabulary import NUMBER_WORDS
 from .effects import (
     _parse_add_mana, _parse_ante, _parse_assigns_no_combat_damage, _parse_attach,
     _parse_becomes, _parse_cant_attack_or_block, _parse_change_base_pt,
+    _parse_change_target,
     _parse_change_text, _parse_choose_cards_in_hand, _parse_choose_number,
     _parse_choose_player_who_cast,
     _parse_counter, _parse_create_token,
@@ -353,6 +354,13 @@ def parse_subject_verb(
         base_pt = _parse_change_base_pt(stream)
         if base_pt is not None:
             return base_pt
+        # "Change the target of target spell …" (Reflecting Mirror, CR 115.7a).
+        # Third of the three "Change the …" templates, and like the first it
+        # refuses without consuming — so the text rewrite below keeps every
+        # refusal it has today.
+        retarget = _parse_change_target(stream)
+        if retarget is not None:
+            return retarget
         return _parse_change_text(stream)
     if stream.at_word("gain"):
         control = _parse_gain_control(stream)

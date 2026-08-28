@@ -83,6 +83,7 @@ from .lowering import (
     _lower_combat_restriction,
     _lower_counter_ability,
     _lower_choose_target,
+    _lower_change_target,
     _lower_counter_spell,
     _lower_create_delayed_trigger,
     _lower_create_emblem,
@@ -391,6 +392,9 @@ def lower_statement(
 
     if isinstance(statement, ast.CounterSpell):
         return _lower_counter_spell(statement)
+
+    if isinstance(statement, ast.ChangeTarget):
+        return _lower_change_target(statement)
 
     if isinstance(statement, ast.ModalNode):
         # Reached only when the head is a *step* of something larger — "Draw a

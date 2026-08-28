@@ -485,6 +485,14 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "exempt_from_attack_tapping": "combat_restrictions",
     "remove_from_combat": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
+    # CR 115.7a, changing a spell's target. Its own category rather than the
+    # counterspells one beside it: a counter removes an object from the stack
+    # and a retarget leaves it there resolving in full, so filing them together
+    # would let the report say a card countered something it did not touch.
+    # Both steps of the pair carry it — the choice of who replaces you is not a
+    # separate effect, it is the retarget deciding what it will do.
+    "choose_new_target_player": "retargeting",
+    "change_target_spell_target": "retargeting",
     # "Choose target creature." — a sentence whose whole content is CR 601.2c's
     # choosing of targets, printed by a spell whose *next* sentence says what
     # becomes of what it chose. Its own category rather than borrowing one,

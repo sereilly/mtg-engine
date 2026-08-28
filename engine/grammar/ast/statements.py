@@ -130,6 +130,7 @@ from .cards import (
     Shuffle,
 )
 from .stack import (
+    ChangeTarget,
     ChooseTarget,
     CopySpell,
     CopyThatSpell,
@@ -177,7 +178,7 @@ Effect = Union[
     ExileUntilLeavesOrUntaps, PutSourceIntoZone, Tap, Untap,
     TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped,
     DelayedSelfAction, Attach, ExchangeControl, ExchangeGreatestManaValue,
-    Regenerate, ChooseTarget, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
+    Regenerate, ChangeTarget, ChooseTarget, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
     RevealTop, RevealUntil, NameAndStrip, NameAndRandomReveal, NameThenRevealTop,
     ChooseCardsInHand, PutIteratedCardOnLibrary,

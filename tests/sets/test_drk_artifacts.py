@@ -597,3 +597,154 @@ def test_wand_of_ith_charges_a_nonland_its_mana_value(set_pool):
     # is what separates the two sentences.
     assert p2.life == 18, game.log
     assert [card.name for card in p2.hand] == ["Counterspell"], game.log
+
+
+# --- K2: Reflecting Mirror (The Dark) ---
+#
+# "{X}, {T}: Change the target of target spell with a single target if that
+# target is you. The new target must be a player. X is twice the mana value of
+# that spell." CR 115.7a, and the first card in the pool that exercises it.
+
+
+def _mirror_board(set_pool, spell_name, spell_set="LEA", enforce=False):
+    """A Reflecting Mirror on seat 0 and *spell_name* in seat 1's hand."""
+    mirror = Permanent(card=set_pool("DRK")["Reflecting Mirror"])
+    players = [PlayerState(name="P1", life=20), PlayerState(name="P2", life=20)]
+    players[0].battlefield = [mirror]
+    players[1].hand = [set_pool(spell_set)[spell_name]]
+    game = Game(players=players)
+    game.enforce_mana_costs = enforce
+    game._sync_control()
+    return game, players, mirror
+
+
+def test_reflecting_mirror_sends_a_spell_aimed_at_you_back_at_its_caster(set_pool):
+    """The whole card: an opponent's Lightning Bolt aimed at you resolves at
+    *them* instead. CR 115.7a changes the target and nothing else, so the spell
+    still deals its own damage from its own source."""
+    game, players, _mirror = _mirror_board(set_pool, "Lightning Bolt")
+    game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+
+    result = game.activate_permanent_ability(
+        0, "Reflecting Mirror", target_stack_index=0
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert players[0].life == 20, game.log
+    assert players[1].life == 17, game.log
+
+
+def test_reflecting_mirror_offers_only_spells_whose_single_target_is_you(set_pool):
+    """"…with a single target **if that target is you**." A Bolt aimed at your
+    creature is not a legal target for the ability, so it is refused at
+    activation (CR 602.2b) with nothing paid — not activated and then wasted."""
+    game, players, mirror = _mirror_board(set_pool, "Lightning Bolt")
+    bear = Permanent(card=_mk_creature_card("Bear", 2, 2))
+    players[0].battlefield.append(bear)
+    game._sync_control()
+    game.queue_from_hand(
+        1, "Lightning Bolt", target_player_index=0, target_permanent_index=1
+    )
+
+    spec = game.activation_target_spec(0, 0)
+    result = game.activate_permanent_ability(
+        0, "Reflecting Mirror", target_stack_index=0
+    )
+
+    assert spec["valid_targets"] == [], spec
+    assert not result.supported
+    assert not mirror.tapped, "the cost is paid only by an activation that happens"
+
+
+def test_reflecting_mirror_does_not_see_an_ability_on_the_stack(set_pool):
+    """"target **spell**". An activated ability on the stack is not a spell
+    (CR 113.7a), so Rod of Ruin's ping aimed at you is not offered."""
+    game, players, _mirror = _mirror_board(set_pool, "Lightning Bolt")
+    rod = _nosick(Permanent(card=set_pool("LEA")["Rod of Ruin"]))
+    players[1].battlefield = [rod]
+    game._sync_control()
+    game.queue_permanent_ability(1, "Rod of Ruin", target_player_index=0)
+
+    assert game.activation_target_spec(0, 0)["valid_targets"] == [], game.log
+
+
+def test_reflecting_mirror_charges_twice_the_targeted_spells_mana_value(set_pool):
+    """"X is twice the mana value of that spell." The activator does not
+    announce X (CR 107.3c) — Lightning Bolt's mana value is 1, so the ability
+    costs {2} and one mana is not enough."""
+    for available, expected in ((1, False), (2, True)):
+        game, players, mirror = _mirror_board(set_pool, "Lightning Bolt")
+        game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+        game.enforce_mana_costs = True
+        players[0].mana_pool["C"] = available
+
+        result = game.activate_permanent_ability(
+            0, "Reflecting Mirror", target_stack_index=0
+        )
+        game._settle()
+
+        assert result.supported is expected, (available, result.details)
+        assert mirror.tapped is expected
+        assert (players[1].life == 17) is expected, game.log
+
+
+def test_reflecting_mirror_prices_an_x_spell_at_the_x_its_caster_announced(set_pool):
+    """CR 202.3b: while a spell is on the stack, the {X} in its mana cost is
+    the announced value. Fireball cast for X=3 has mana value 4, so the mirror
+    costs {8} rather than the {2} its printed {X}{R} would suggest."""
+    game, players, mirror = _mirror_board(set_pool, "Fireball")
+    game.queue_from_hand(1, "Fireball", target_player_index=0, x_value=3)
+    game.enforce_mana_costs = True
+    players[0].mana_pool["C"] = 7
+
+    too_little = game.activate_permanent_ability(
+        0, "Reflecting Mirror", target_stack_index=0
+    )
+    assert not too_little.supported, too_little.details
+
+    players[0].mana_pool["C"] = 8
+    enough = game.activate_permanent_ability(
+        0, "Reflecting Mirror", target_stack_index=0
+    )
+    game._settle()
+
+    assert enough.supported, enough.details
+    assert mirror.tapped
+    assert players[1].life == 17, game.log
+
+
+def test_reflecting_mirror_leaves_a_spell_with_nowhere_else_to_go_alone(set_pool):
+    """CR 115.7a: "if a target can't be changed to another legal target, the
+    original target is unchanged". Word of Command targets an **opponent**, so
+    the only player its caster could legally have named is you — the ability
+    resolves and the spell keeps its target."""
+    game, players, _mirror = _mirror_board(set_pool, "Word of Command")
+    game.queue_from_hand(1, "Word of Command", target_player_index=0)
+
+    result = game.queue_permanent_ability(
+        0, "Reflecting Mirror", target_stack_index=0
+    )
+    game.resolve_top_of_stack()
+
+    assert result.supported, result.details
+    assert game.stack[0].target_player_index == 0, game.log
+    assert any("no other legal player" in line for line in game.log), game.log
+
+
+def test_reflecting_mirror_moves_a_divided_spells_one_share_too(set_pool):
+    """A spell that divides its effect records every target it chose in
+    ``divided_targets``, and that list is what the damage step reads. Writing
+    the seat and leaving the list behind would log a redirect nothing carried
+    out — the division itself is unchanged (CR 115.7f), because with one target
+    there is only one share."""
+    game, players, _mirror = _mirror_board(set_pool, "Fireball")
+    game.queue_from_hand(1, "Fireball", x_value=4, divided_targets=[(0, None)])
+
+    game.queue_permanent_ability(0, "Reflecting Mirror", target_stack_index=0)
+    game.resolve_top_of_stack()
+    assert game.stack[0].choices["divided_targets"] == [(1, None)], game.log
+
+    game._settle()
+    assert players[0].life == 20, game.log
+    assert players[1].life == 16, game.log

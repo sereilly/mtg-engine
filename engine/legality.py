@@ -1625,6 +1625,25 @@ class LegalityMixin:
                     self, item, dict(targets_filter), caster_index
                 ):
                     continue
+            # "…**with a single target if that target is you**" (Reflecting
+            # Mirror, CR 115.7a / CR 115.9a). Asked through the one reader the
+            # retarget handler asks at resolution, against the same seat every
+            # other narrowing here is measured against (CR 109.5) — so a spell
+            # this ability could not actually re-aim is never offered, and the
+            # {X} it would cost is never paid for nothing.
+            #
+            # A spell whose target set the engine cannot establish answers None
+            # and is simply not offered: under-offering is a narrower card,
+            # over-offering is a card redirecting spells it was never allowed to.
+            single_target_is = spec.get("stack_single_target_is")
+            if single_target_is is not None:
+                from .targeting import single_player_target
+
+                targeted_seat = single_player_target(self, item)
+                if targeted_seat is None:
+                    continue
+                if single_target_is != "you" or targeted_seat != caster_index:
+                    continue
             if color_filter and color_filter not in self._stack_item_colors(item):
                 continue
             stack_any_colors = spec.get("stack_any_colors")

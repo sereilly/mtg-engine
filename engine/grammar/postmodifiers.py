@@ -355,6 +355,15 @@ def _parse_postmodifiers(
             if stream.accept_word("toughness"):
                 d.toughness = parse_comparison(stream)
                 continue
+            # "…**with a single target**" (Reflecting Mirror; Deflection and
+            # Divert print the same three words). CR 115.9a counts what the
+            # object chose as it was put on the stack, so the phrase describes
+            # a spell or an ability on the stack and nothing on a battlefield.
+            # Read before the counter probe below, which opens on the same "a"
+            # and resets cleanly either way.
+            if stream.accept_phrase("a", "single", "target"):
+                d.target_count = 1
+                continue
             # "with a +1/+1 counter on it" (Tempered Veteran). Only the +1/+1
             # kind is accepted: the counters the engine records under another
             # name have no matcher, so a phrase naming one fails the line

@@ -234,6 +234,19 @@ class ObjectFilter:
     # for it carries the inner phrase as its own payload key and the handler
     # that has the stack item asks ``subject_matches`` of each target.
     targets_object: "ObjectFilter | None" = None
+    # "…**with a single target**" (Reflecting Mirror; Deflection and Divert
+    # print the same words). CR 115.9a: how many times any object or player was
+    # chosen as the target of that spell when it was put on the stack — a
+    # question only a *spell or ability on the stack* can be asked, and one
+    # that no read of a permanent can answer. So, like ``targets_object`` above
+    # it, ``to_payload`` never emits it and ``permanent_matches_filter`` is
+    # never told about it: the one lowering written for it carries the count as
+    # its own payload key, and every other lowering refuses the phrase by name.
+    #
+    # A count rather than a "single" flag, because CR 115.9a's template is
+    # "[spell or ability] with [a number of] targets" — the number is the
+    # parameter, exactly as a colour or a card type is elsewhere here.
+    target_count: int | None = None
     # "blocking or blocked by this creature" (Sentinel) — the object is in
     # combat with the ability's own source (CR 509). Relative, like
     # ``other_than_source``: no read of the object alone can answer it, so

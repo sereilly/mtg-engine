@@ -412,7 +412,14 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # chosen (None, or 0 auto-inferred from an empty pool), assume the caster
         # chose the matching value.
         if instruction.payload.get("mv_equals_x") and context.x_value:
-            target_mv = int(target.card.cmc or 0)
+            # CR 202.3b: while a spell is on the stack, an X in its mana cost is
+            # the value its controller announced — so a Fireball cast for X=3
+            # has mana value 4, not the 1 its printed cost carries. Read through
+            # the one function that knows that (``targeting``), which is also
+            # what prices Reflecting Mirror's {X}.
+            from ..targeting import stack_object_mana_value
+
+            target_mv = stack_object_mana_value(target)
             if int(context.x_value) != target_mv:
                 game.log.append(
                     f"{card.name}: X={context.x_value} does not match {target.card.name}'s mana value {target_mv}, cannot counter"
@@ -472,7 +479,10 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # scratchpad the moment it is known: the next sentence creates a
         # delayed ability that will not fire until a later phase, by which time
         # the card is in a graveyard and the stack item is gone (CR 608.2h).
-        context.results["countered_spell_mana_value"] = int(countered.card.cmc or 0)
+        # CR 202.3b again: Mana Drain on a Fireball cast for X=3 makes {C}{C}{C}{C}.
+        from ..targeting import stack_object_mana_value
+
+        context.results["countered_spell_mana_value"] = stack_object_mana_value(countered)
         if countered.is_copy:
             # 704.5e: a countered copy of a spell ceases to exist instead of
             # going to a graveyard — it has no physical card to put there.
@@ -572,4 +582,158 @@ def copy_this_spell(game: Game, instruction: OracleInstruction, context: OracleE
     )
     if instruction.payload.get("may_choose_new_target"):
         game.arm_copy_spell_target(seat, copy)
+    return True, "resolved"
+
+
+# ---------------------------------------------------------------------------
+# CR 115.7 — changing what a spell on the stack points at
+# ---------------------------------------------------------------------------
+
+
+def _retarget_subject(game: Game, context: OracleExecutionContext, instruction):
+    """The spell this retarget may still change, or None with the reason logged.
+
+    CR 608.2b asked at the moment the rule asks it. The ability chose its target
+    when it was activated, and the whole point of the stack is that time passes:
+    the spell can be countered, can resolve, or can have its own target changed
+    by something else in between. So every condition the picker checked is
+    checked again here, against the object as it stands now.
+
+    Located by **identity**, never by ``in``: ``StackItem`` compares by value, so
+    two copies of one spell aimed at one player are equal and ``in`` would find
+    the wrong one — the look-alike bug that ``permanent_id`` solves on the
+    battlefield.
+    """
+    from ..targeting import single_player_target
+
+    card_name = getattr(context.card, "name", "")
+    item = context.stack_target
+    if item is None or not any(waiting is item for waiting in game.stack):
+        game.log.append(
+            f"{card_name}: the spell it would retarget is no longer on the stack"
+        )
+        return None
+    if instruction.payload.get("current_target") != "you":
+        # Lowering admits no other value; a payload that carried one would be a
+        # restriction nothing here can test.
+        return None
+    seat = single_player_target(game, item)
+    if seat is None or seat != game.players.index(context.caster):
+        game.log.append(
+            f"{card_name}: {item.card.name} no longer has a single target that is you"
+        )
+        return None
+    return item
+
+
+def _legal_new_player_targets(game: Game, item: StackItem) -> list[int]:
+    """The players *item* could legally have been aimed at instead (CR 115.7a).
+
+    Read through ``_enumerate_targets`` — the one list the picker and the cast
+    gate already share — so "another legal target" means for this spell exactly
+    what it meant when the spell was cast. Word of Command's "target opponent"
+    therefore offers only its own caster's opponents, which is why a spell
+    aimed at you by the player it may not aim at themselves simply cannot be
+    moved.
+
+    The kind is forced to ``player``: the question is which *faces* are legal,
+    and asking a wider spec would walk both battlefields probing every
+    permanent for an answer this never uses.
+    """
+    from ..oracle import compile_card_oracle
+    from ..targeting import derive_cast_spec
+
+    spec = derive_cast_spec(item.card, compile_card_oracle(item.card))
+    if spec is None:
+        return []
+    entries = game._enumerate_targets(
+        item.caster_index, item.card, {**spec, "kind": "player"}, for_cast=True
+    )
+    return [
+        entry["seat"] for entry in entries
+        if entry.get("kind") == "player" and not game.players[entry["seat"]].lost
+    ]
+
+
+@effect_handler("choose_new_target_player")
+def choose_new_target_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"The new target must be a player." — who replaces you (CR 115.7a).
+
+    The first of the retarget's two steps. It is its own step for the reason
+    Backdraft's player choice is one (``handlers/player_choices.py``): the
+    decision is made *during* this resolution and the step behind it reads the
+    answer, so an interactive seat can be asked and the resolution suspended
+    until it answers.
+
+    The key is written before anything else, so the step behind this one finds
+    ``None`` rather than a key error when there was nobody to choose — "no legal
+    new target" is an outcome CR 115.7a names ("the original target is
+    unchanged"), not a failure.
+
+    **Another** legal target, which is what the rule says: the player the spell
+    already points at is not among the candidates, so a retarget with nowhere
+    else to go leaves the spell exactly as it was. A single candidate is taken
+    without asking, the shortcut ``choose_player_who_cast`` states — the card
+    makes the choice forced, and prompting would ask a question with one answer.
+    """
+    key = str(instruction.payload["result_key"])
+    context.results[key] = None
+    card_name = getattr(context.card, "name", "")
+    item = _retarget_subject(game, context, instruction)
+    if item is None:
+        return True, "resolved"
+    current = game.players.index(context.caster)
+    seats = [seat for seat in _legal_new_player_targets(game, item) if seat != current]
+    if not seats:
+        game.log.append(
+            f"{card_name}: {item.card.name} has no other legal player to target"
+        )
+        return True, "resolved"
+    if len(seats) == 1:
+        context.results[key] = seats[0]
+        return True, "resolved"
+    game.arm_player_choice(
+        current,
+        card_name=card_name,
+        prompt=f"Choose the new target for {item.card.name}.",
+        result_key=key,
+        seats=seats,
+        context=context,
+    )
+    return True, "resolved"
+
+
+@effect_handler("change_target_spell_target")
+def change_target_spell_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Change the target of target spell …" (Reflecting Mirror, CR 115.7a).
+
+    The spell keeps everything else it announced — its controller, its X, its
+    modes — and only what it points at moves. That is why this writes the item's
+    target fields rather than re-announcing the spell: CR 115.7a changes a
+    choice, it does not re-cast anything.
+
+    ``divided_targets`` is rewritten alongside, because for a spell that
+    recorded one it is the list that decides (CR 601.2d's division travels with
+    the targets, and CR 115.7f keeps the division itself unchanged — with a
+    single target there is only one share to keep). Writing the seat and leaving
+    that list behind would log a redirect the damage step then ignored.
+    """
+    key = str(instruction.payload["result_key"])
+    card_name = getattr(context.card, "name", "")
+    seat = context.results.get(key)
+    item = _retarget_subject(game, context, instruction)
+    if item is None:
+        return True, "resolved"
+    if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+        game.log.append(
+            f"{card_name}: {item.card.name}'s target is unchanged"
+        )
+        return True, "resolved"
+    item.target_player_index = seat
+    divided = (item.choices or {}).get("divided_targets")
+    if divided:
+        item.choices["divided_targets"] = [(seat, None)]
+    game.log.append(
+        f"{card_name}: {item.card.name} now targets {game.players[seat].name}"
+    )
     return True, "resolved"
