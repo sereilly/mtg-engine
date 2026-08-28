@@ -1705,13 +1705,16 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
         and isinstance(targets_desc.get("count"), int)
         and targets_desc["count"] > 1
     ):
-        chosen = resolve_target_permanents(game, context)
+        # The predicate rather than the default, which is "is it a creature?" —
+        # Dust to Dust names artifacts, and a slot the resolver rejects is a
+        # slot silently dropped. Idiom 9: the picker's enumeration is a hint, so
+        # the printed filter is what decides, here as at announcement.
+        chosen = resolve_target_permanents(
+            game, context,
+            predicate=lambda candidate: permanent_matches_filter(candidate, payload),
+        )
         exiled_any = False
         for target_perm in chosen:
-            if not permanent_matches_filter(target_perm, payload):
-                # Idiom 9: the picker's enumeration is a hint, so the filter is
-                # re-checked here against the answer that came back.
-                continue
             owner_idx = game.owner_index_of(target_perm)
             if owner_idx is None:
                 owner_idx = game.controller_index_of(target_perm)

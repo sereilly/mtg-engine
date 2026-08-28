@@ -80,6 +80,12 @@ class AddMana:
     #: what is sitting on the source right now — and a card whose cost adds a
     #: counter would have the two disagree by exactly one.
     per_each_counter_on_source: str | None = None
+    #: "Add one mana of any color **that a land an opponent controls could
+    #: produce**." (Fellwar Stone.) Which board decides the colours available -
+    #: ``"opponent_lands"`` today, and a value rather than a flag because the
+    #: same sentence about *your* lands or about a chosen player's is the same
+    #: production with a different word.
+    any_color_from: str | None = None
     # "**an additional** {B}" (the Mana Batteries). Recorded rather than
     # consumed and dropped: the word says this clause adds on top of the one
     # before it, which is what makes the printed sentence two statements rather

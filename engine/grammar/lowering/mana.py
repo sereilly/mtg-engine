@@ -173,16 +173,18 @@ def _lower_add_mana(
     # injection on the ``any_color`` payload key, and the AI's mana valuation
     # reads the text. Both are the same string the legacy rule wrote.
     amount = _amount_payload(node.any_color)
-    return (
-        OracleInstruction(
-            "add_mana_from_text", "",
-            {
-                "oracle_text": node.source_text,
-                "any_color": True,
-                "any_color_count": amount,
-            },
-        ),
-    )
+    payload: dict[str, object] = {
+        "oracle_text": node.source_text,
+        "any_color": True,
+        "any_color_count": amount,
+    }
+    if node.any_color_from is not None:
+        # "…that a land an opponent controls could produce" (Fellwar Stone).
+        # Which board narrows the choice, carried so the handler and the colour
+        # picker read one answer. Emitted only when printed, so every payload
+        # written before it is byte-identical.
+        payload["any_color_from"] = node.any_color_from
+    return (OracleInstruction("add_mana_from_text", "", payload),)
 
 
 # Which player the mana goes to, from the clause's own subject. Both spellings

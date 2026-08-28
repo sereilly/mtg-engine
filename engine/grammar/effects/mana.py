@@ -229,7 +229,19 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     # clause *text* and could only recognize the literal "one mana of any color".
     # The handler takes a number now, so any amount the enclosing sentence can
     # define is one it can add.
-    return ast.AddMana((), any_color=count, source_text=_clause())
+    # "…**that a land an opponent controls could produce**." (Fellwar Stone.)
+    # A restriction on which colours the choice may name, not a second effect -
+    # so it rides the same node, and a line printing words this cannot read
+    # leaves them unconsumed and refuses (the full-consumption invariant) rather
+    # than adding any colour at all.
+    any_color_from = None
+    if stream.accept_phrase(
+        "that", "a", "land", "an", "opponent", "controls", "could", "produce"
+    ):
+        any_color_from = "opponent_lands"
+    return ast.AddMana(
+        (), any_color=count, source_text=_clause(), any_color_from=any_color_from
+    )
 
 
 def _parse_player_adds_mana(

@@ -761,6 +761,32 @@ class AbilityActivationMixin:
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             tap_cost_permanents = chosen[:ability.cost.tap_count]
 
+        # "Exile a creature you control" (City of Shadows) / "Exile a creature
+        # card from your graveyard" (Necropolis) — a *chosen* object rather than
+        # the source. **A cost is not a target** (CR 601.2b, idiom 10), so
+        # nothing here consults shroud or protection; what it consults is the
+        # printed noun phrase, through the same reader the picker uses.
+        #
+        # Charged with the rest of the costs and **before the tap**, so an
+        # ability with nothing to pay it is not activated at all (CR 602.2b)
+        # rather than refused with the source already tapped for nothing. It
+        # also runs ahead of the source's own exile further down, so a card
+        # printing both eats the chosen object while the source is still there.
+        exiled_for_cost = None
+        if ability.cost.exile_filter is not None:
+            exiled_for_cost = self._pay_exile_cost(
+                ability.cost, controller, controller_index, permanent,
+                cost_permanent_index,
+            )
+            if exiled_for_cost is None:
+                details = (
+                    f"{permanent.card.name}: nothing available to exile as a cost"
+                )
+                self.log.append(details)
+                return SimulationResult(
+                    permanent.card.name, False, "unsupported", details
+                )
+
         required_cost = dict(ability.cost.mana)
         requires_tap = ability.cost.requires_tap
         # Abilities with an "{X}" in their cost (e.g. Clockwork Beast's
@@ -990,29 +1016,6 @@ class AbilityActivationMixin:
             self.log.append(
                 f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
             )
-
-        # "Exile a creature you control" (City of Shadows) / "Exile a creature
-        # card from your graveyard" (Necropolis) — a *chosen* object rather than
-        # the source. **A cost is not a target** (CR 601.2b, idiom 10), so
-        # nothing here consults shroud or protection; what it consults is the
-        # printed noun phrase, through the same reader the picker uses.
-        #
-        # Charged before the source's own exile below, so a card printing both
-        # eats the chosen object while the source is still on the battlefield.
-        exiled_for_cost = None
-        if ability.cost.exile_filter is not None:
-            exiled_for_cost = self._pay_exile_cost(
-                ability.cost, controller, controller_index, permanent,
-                cost_permanent_index,
-            )
-            if exiled_for_cost is None:
-                details = (
-                    f"{permanent.card.name}: nothing available to exile as a cost"
-                )
-                self.log.append(details)
-                return SimulationResult(
-                    permanent.card.name, False, "unsupported", details
-                )
 
         # Ring of Ma'rûf: "Exile this artifact" is part of the cost, so the
         # permanent leaves before the ability goes on the stack — and the ability
