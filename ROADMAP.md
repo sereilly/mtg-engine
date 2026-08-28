@@ -30,15 +30,16 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **9,110 tests**, CI budget **120s**, recorded
-   local baseline **40s** (`ci.yml`). The budget catches a step change; the
+2. **The suite stays fast.** **9,110 tests**, CI budget **240s**, CI-measured
+   baseline **110s** (`ci.yml`). The budget catches a step change; the
    baseline is what catches creep, and it is the number to keep honest.
-   Raising the budget is a decision, not maintenance — it has been raised twice
-   on purpose (35 → 60 ahead of a set ingestion, so the next set's tests had
-   somewhere to land; 60 → 120 because GitHub's runners take the same suite two
-   to three times as long as a local one, and a budget tuned to local timings
-   failed on the runner with nothing wrong). The baseline has only ever moved
-   as a *record* of growth: 9 → 17 → 23 → 35 → 40, proportional every time.
+   Raising the budget is a decision, not maintenance — it has been raised three
+   times on purpose (35 → 60 ahead of a set ingestion, so the next set's tests
+   had somewhere to land; 60 → 120 because GitHub's runners take the same suite
+   longer than a local one, and a budget tuned to local timings failed on the
+   runner with nothing wrong; 120 → 240 on the measurement below). The baseline
+   has only ever moved as a *record* of growth: 9 → 17 → 23 → 35 → 40 → 110,
+   proportional every time except the last, which was a **unit** change.
 
    **The 40s baseline does not reproduce here, and that is an open question.**
    Three consecutive local runs at the cull measured 86s, 88s, 87s — 72% of the
@@ -53,15 +54,21 @@ Anything that weakens these is a regression regardless of what it enables:
 
    **After The Dark the same machine measures 78s, 87s, 78s at 9,110 tests** —
    +5% tests for no change in wall time, which is evidence *against* the creep
-   explanation and for the slower-machine one. That is the useful half. The
-   unwelcome half is arithmetic nobody has checked against a real runner: the
-   120s budget was set because CI takes two to three times a local run, and the
-   local run it was sized against was 40s. At 82s local the same multiplier puts
-   CI at 164–246s, which is over budget with nothing wrong. Either the
-   multiplier has changed or the budget is now too tight, and **the next set's
-   Phase 0 should read an actual CI run before adding tests to it**. Neither
-   raising the budget nor editing the baseline is the move until someone has
-   that number.
+   explanation and for the slower-machine one.
+
+   **Settled at 4ED's Phase 0 by reading three real runs.** The budget step
+   measured 60s at run 7 (2026-08-20, pre-Legends), then 106s and 112s at runs
+   11 and 12 (2026-08-27, 9,110 tests). So the answer to "creep or slower
+   machine" is *neither*: **the ratio was comparing two machines.** `BASELINE`
+   was recorded from a local run and compared against `ELAPSED`, which the step
+   measures on the runner — the multiplier was never in the arithmetic at all,
+   it was the arithmetic's missing term. The real multiplier against ~82s local
+   is ~1.3x, not the 2–3x the 120 was sized on, and 112 of 120 is 93% of budget
+   with a set ingest about to add several hundred tests. Both numbers were
+   therefore wrong in opposite directions: `BASELINE` is now a runner-measured
+   110s so the creep warning compares like with like, and `BUDGET` is 240s,
+   roughly 2x it. Local timings are no longer an input to this gate; the way to
+   move either number is to read the step's own output across several runs.
 
 3. **Determinism.** A given seed reproduces a run exactly. Parsing and lowering
    are pure functions of card text.

@@ -54,10 +54,23 @@ jobs:
       # touching anything.
       #
       # 60 -> 120 (2026-08-21): Runs on Github take significantly longer than local runs
+      #
+      # 120 -> 240, BASELINE 40 -> 110 (2026-08-28, before the 4ED ingest). The
+      # arithmetic never added up because BASELINE was recorded from a *local*
+      # run and compared against ELAPSED, which is measured here on the runner —
+      # two different machines in one ratio. Reading actual runs settles it:
+      # this step took 60s at run 7 (2026-08-20, pre-Legends), 106s at run 11
+      # and 112s at run 12 (both 2026-08-27, 9,110 tests). Against the ~82s the
+      # same suite measures locally that is a ~1.3x multiplier, not the 2-3x the
+      # 120 was sized on — so the multiplier was wrong *and* the budget was
+      # tight: 112 of 120 is 93%, and a set ingest adds several hundred tests.
+      # BASELINE is now a runner-measured number, so the creep warning compares
+      # like with like; BUDGET sits at ~2x it, which is the headroom this gate
+      # was always documented to want.
       - name: Enforce the suite-time budget
         env:
-          BUDGET: 120
-          BASELINE: 40
+          BUDGET: 240
+          BASELINE: 110
         run: |
           START=$(date +%s)
           python -m pytest -q > /dev/null
