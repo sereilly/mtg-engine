@@ -106,12 +106,31 @@ A drainable list of things the playbook knows are not yet true, each naming
 the phase that clears it. A retrospective that drains an item deletes it; a
 set that hits a new one adds it.
 
-The list is empty. The two items it held drained after the M21 promotion:
-`scripts/set_progress.py` and `CARD_VERIFICATION.md` regeneration joined CI's
-tracker-freshness step (the deferred decision came due — the roadmap read "19
-untested cards" for a week while the true number was 299), and
-`SET_PROGRESS.md` now reports a `measured`-role set as "Measured (N/M
-supported, not shipped)" rather than a bare "Partial".
+**Read an actual CI run's suite time before ingesting the next set.**
+*Clears in: Phase 0.* The budget in `ci.yml` is 120s and was sized when a local
+run took 40s, on the reasoning that a GitHub runner takes two to three times as
+long. After The Dark a local run takes ~82s at 9,110 tests. The same multiplier
+puts CI at 164–246s, which is over budget with nothing actually wrong — so
+either the multiplier has changed or the budget is too tight, and nobody has the
+number. Ingesting a set adds several hundred tests to whichever answer it is.
+Do not raise the budget or edit the baseline to make this go away: both destroy
+the evidence that would settle it (ROADMAP invariant 2).
+
+**The verification backlog is now the largest standing debt.**
+*Clears in: Phase 5, and it has not been clearing.* 708 of 1,162 cards have no
+recorded in-game result, because four sets have now promoted ahead of their
+Phase 5 pass and each one added to it. Promotion deliberately does not gate on
+this and that should not change — but the item belongs here rather than only in
+a retrospective, because "deliberately deferred" and "quietly abandoned" look
+identical after the fourth set. Two cards are recorded *failing* and one of them,
+Candelabra of Tawnos, predates The Dark entirely.
+
+Drained after the M21 promotion: `scripts/set_progress.py` and
+`CARD_VERIFICATION.md` regeneration joined CI's tracker-freshness step (the
+deferred decision came due — the roadmap read "19 untested cards" for a week
+while the true number was 299), and `SET_PROGRESS.md` now reports a
+`measured`-role set as "Measured (N/M supported, not shipped)" rather than a
+bare "Partial".
 
 ## Phase 0 — Pre-flight
 
