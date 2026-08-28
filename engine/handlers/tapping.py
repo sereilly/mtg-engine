@@ -105,9 +105,28 @@ def untap_target_permanent(game: Game, instruction: OracleInstruction, context: 
         for key in ("type_filter", "subtype_filter", "color_filter")
     )
     if narrowed:
+        # Through `subject_matches` rather than the pure matcher, with the
+        # resolving seat as the observer, for the reason the filtered tap beside
+        # it does: "**you control**" (Ebony Horse) is a seat comparison
+        # (CR 109.5), not something readable off the permanent. The lowering
+        # admits exactly what this answers, so the list the picker offers and
+        # the list this accepts are one list.
+        from ..subject_filters import subject_matches
+
+        described = {
+            key: value for key, value in instruction.payload.items()
+            if key != "targets"
+        }
+        observer = (
+            game.players.index(context.caster)
+            if context.caster in game.players else None
+        )
         perm = resolve_target_permanent(
             game, context,
-            predicate=lambda p: permanent_matches_filter(p, instruction.payload),
+            predicate=lambda p: subject_matches(
+                game, p, described, observer=observer,
+                source=context.source_permanent,
+            ),
             fallback_on_invalid_choice=False,
         )
         if perm is not None:
@@ -137,31 +156,6 @@ def untap_target_permanent(game: Game, instruction: OracleInstruction, context: 
     # sentence after it silently acts on nothing.
     context.results["untapped_permanents"] = (
         (untapped.permanent_id,) if untapped is not None else ()
-    )
-    return True, "resolved"
-
-
-@effect_handler("untap_attacker_and_prevent_combat_damage")
-def untap_attacker_and_prevent_combat_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    # Ebony Horse: untap the chosen attacking creature you control and shield
-    # it — all combat damage that would be dealt to or by it this turn is
-    # prevented (the flag is honored in combat_damage_step and cleared in
-    # cleanup via _EOT_METADATA_KEYS).
-    caster = context.caster
-    perm = resolve_target_permanent(
-        game,
-        context,
-        predicate=lambda p: p.is_creature and p.attacking and game.controls(caster, p),
-        fallback_players=(caster,),
-        fallback_on_invalid_choice=False,
-    )
-    if perm is None:
-        game.log.append(f"{context.card.name}: no attacking creature you control to untap")
-        return True, "resolved"
-    game.become_untapped(perm)
-    perm.metadata["prevent_combat_damage_to_and_by_until_eot"] = True
-    game.log.append(
-        f"{context.card.name} untapped {perm.card.name}; all combat damage to and by it is prevented this turn"
     )
     return True, "resolved"
 
@@ -484,7 +478,33 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
     none — and is not an error.
     """
     key = instruction.payload.get("permanents_from")
-    recorded = context.results.get(key) or ()
+    if key is None:
+        # "**Target creature** doesn't untap during its controller's next untap
+        # step." (Barl's Cage.) The sentence chooses for itself instead of
+        # restating an earlier step's pick, so the permanent comes from the
+        # ability's own target — and an explicitly chosen non-matching one
+        # fizzles rather than sliding onto whatever else is legal (CR 608.2b).
+        from ..subject_filters import subject_matches
+
+        described = {
+            key_: value for key_, value in instruction.payload.items()
+            if key_ not in ("targets", "untap_steps")
+        }
+        observer = (
+            game.players.index(context.caster)
+            if context.caster in game.players else None
+        )
+        chosen = resolve_target_permanent(
+            game, context,
+            predicate=lambda p: subject_matches(
+                game, p, described, observer=observer,
+                source=context.source_permanent,
+            ),
+            fallback_on_invalid_choice=False,
+        )
+        recorded = (chosen.permanent_id,) if chosen is not None else ()
+    else:
+        recorded = context.results.get(key) or ()
     # "…next **two** untap steps" (Telekinesis). The marker is a count of steps
     # rather than a flag, because how many of the same turn-based action the
     # restriction survives is the only thing that differs between the two

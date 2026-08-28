@@ -378,6 +378,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "target_player_loses_game": "game_end",
     "game_is_draw": "game_end",
     "grant_unblockable_to_target": "evasion",
+    # "Target creature can't be blocked **by Walls** this turn." (Tower of
+    # Coireall.) The same evasion family: what differs is that the restriction
+    # names a class of blocker instead of every blocker, and that class is
+    # payload the blockers step tests — the arrangement the static printings in
+    # engine/combat_restrictions.py already use.
+    "grant_cant_be_blocked_by_until_eot": "evasion",
     "grant_unblockable_to_low_power_target": "evasion",
     "grant_unblockable_to_self": "evasion",
     # Restrictions on declaring attackers/blockers (CR 506, 509).

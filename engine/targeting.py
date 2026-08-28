@@ -450,13 +450,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # whose damage is redirected. `requires_source` is what tells the UI to run
     # the second prompt.
     "jade_monolith_redirect": {"kind": "creature", "requires_source": True},
-    # Ebony Horse: "Untap target attacking creature you control." Its handler
-    # requires `p.attacking` *and* that the creature is on the activating
-    # player's battlefield, and an explicit choice that fails either test
-    # fizzles — so both narrowings are the ability's, and both belong here.
-    "untap_attacker_and_prevent_combat_damage": {
-        "kind": "creature", "attacking_only": True, "own_only": True,
-    },
 }
 
 

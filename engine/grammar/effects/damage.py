@@ -335,10 +335,22 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
         raise stream.error("expected 'that would be dealt' in a prevention effect")
     recipient: ast.Recipient | None = None
     dealt_by: ast.Recipient | None = None
+    to_and_by = False
     if stream.accept_word("to"):
+        # "…that would be dealt **to and dealt by** that creature this turn."
+        # (Ebony Horse, Maze of Ith.) One printed object standing at both ends
+        # of the event, named once. Read here rather than as a second "by"
+        # clause below, because these words come *before* the noun: a reader
+        # expecting them after it would leave "and dealt by" unconsumed and
+        # fail the line at the noun instead of at the wording.
+        to_and_by = bool(stream.accept_phrase("and", "dealt", "by"))
         recipient = parse_recipient(stream)
+        if recipient is None and to_and_by:
+            recipient = parse_bound_subject(stream)
         if recipient is None:
             raise stream.error("expected something to shield")
+        if to_and_by:
+            dealt_by = recipient
     elif stream.accept_word("by"):
         # "…that would be dealt **by** target creature this turn." The word is
         # the whole difference between a creature that cannot be hurt and one
@@ -392,6 +404,7 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
     return ast.PreventDamage(
         ast.AllOf(), to=recipient, duration=duration, combat_only=combat_only,
         dealt_by=dealt_by, dealt_by_others=tuple(dealt_by_others),
+        to_and_by=to_and_by,
     )
 
 

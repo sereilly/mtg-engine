@@ -219,7 +219,7 @@ def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]
                 "prevent_damage_from_targeting_sources_until_eot", "", {}
             ),
         )
-    if node.dealt_by is not None:
+    if node.dealt_by is not None and not node.to_and_by:
         # "…dealt **by** target creature this turn" (Horn of Deafening, Lady
         # Evangela, Kry Shield). A shield on the damage's *source*, which is why
         # it is a different instruction from every branch below: those protect a
@@ -314,14 +314,42 @@ def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]
     if (
         node.to is not None
         and isinstance(node.to, ast.TargetSpec)
-        and node.to.quantifier in ("it", "target")
-        and node.dealt_by is None
+        # "…dealt to **that creature** this turn" (Ebony Horse, Maze of Ith).
+        # The bound quantifier reads exactly as Telekinesis' does on the other
+        # end of the event: the object the sentence in front of it targeted, so
+        # no ``targets`` description is emitted and the handler shields the
+        # ability's one target.
+        and node.to.quantifier in ("it", "target", "that")
+        and (node.dealt_by is None or node.to_and_by)
     ):
         if node.duration.kind not in _REST_OF_TURN:
             raise LoweringError(
                 "the directional shield lasts exactly this turn", node=node
             )
         payload: dict[str, object] = {"combat_only": bool(node.combat_only)}
+        if node.to_and_by:
+            # "Prevent all combat damage that would be dealt **to and dealt
+            # by** that creature this turn." Both ends of the event, which is
+            # one shield rather than two: the flag rides the payload and the
+            # handler records the two-way direction the shield reader already
+            # answers for. Refused without the printed "combat", because
+            # nothing in the pool prints the unscoped two-way form and a shield
+            # this wide would also silence the creature's ping abilities.
+            if not node.combat_only:
+                raise LoweringError(
+                    "the two-way shield covers combat damage only", node=node
+                )
+            payload["to_and_by"] = True
+        if node.to.quantifier == "that" and _restrictions_beyond(
+            node.to.filter, frozenset({"card_types"})
+        ):
+            # A bound object was chosen by the sentence in front of this one, so
+            # a restated adjective has nothing left to narrow — and would be
+            # dropped rather than honoured.
+            raise LoweringError(
+                "a bound object carries no narrowing the shield could honour",
+                node=node,
+            )
         if node.to.quantifier == "target":
             # The handler's predicate is `is_creature` and nothing else, so a
             # shield printed over a player or over a narrowed noun phrase would

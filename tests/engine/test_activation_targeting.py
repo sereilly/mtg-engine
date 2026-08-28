@@ -106,9 +106,16 @@ def test_the_target_the_old_prompt_offered_did_nothing_when_chosen(by_name):
         0, "Ebony Horse", target_player_index=1, target_permanent_index=0
     )
 
-    assert result.supported  # the cost was paid and the ability "resolved" ...
-    assert theirs.tapped is True  # ... and nothing happened to the creature
-    assert "prevent_combat_damage_to_and_by_until_eot" not in theirs.metadata
+    # The offer is refused now, with nothing paid: `activation_target_refusal`
+    # asks the same enumeration the picker does (CR 602.2b/601.2c). Before the
+    # derivation it was activated and "resolved", spending the {2} and the tap
+    # on nothing at all — both halves are asserted, because the second is what
+    # made the first a real bug rather than a cosmetic one.
+    assert result.supported is False
+    assert theirs.tapped is True  # the creature was never touched
+    from engine.prevention import shields_damage
+
+    assert not shields_damage(theirs, dealt_to=True, combat=True)
 
 
 @pytest.mark.parametrize("name,ability_index", [("King Suleiman", 0), ("Elephant Graveyard", 1)])

@@ -146,3 +146,12 @@ class PreventDamage:
     # the source would shield the creature from every spell of that description
     # instead of from the ones aimed at it.
     from_targeting_source: bool = False
+    # "…that would be dealt **to and dealt by** that creature this turn."
+    # (Ebony Horse, Maze of Ith.) One printed object standing at *both* ends of
+    # the event, named once. A flag rather than leaving ``to`` and ``dealt_by``
+    # holding the same node, because those two keys are read independently and
+    # every lowering written before this existed reads one of them: seeing only
+    # ``to`` would arm the shield on the recipient end alone. A creature that
+    # cannot be hurt is not the card that also cannot hurt anything, and the
+    # half that goes missing is silent either way.
+    to_and_by: bool = False

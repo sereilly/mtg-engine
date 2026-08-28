@@ -10,6 +10,7 @@ from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    _filter_payload,
     _is_source,
     _REST_OF_TURN,
     _is_target,
@@ -166,6 +167,47 @@ def _lower_cant_be(node: ast.CantBe) -> tuple[OracleInstruction, ...]:
         )
 
     if node.action == "blocked":
+        if node.by is not None:
+            # "Target creature can't be blocked **by Walls** this turn."
+            # (Tower of Coireall.) The blocker class is payload, exactly as it
+            # is on the static printings `engine/combat_restrictions.py`
+            # derives — a card naming another subtype, colour or card type is
+            # the same restriction, and spelling the noun into the kind would
+            # make each printed word a new kind and a new enforcement branch.
+            if filt != ast.ObjectFilter(card_types=("creature",)):
+                raise LoweringError(
+                    "the granted blocker restriction is armed on one "
+                    "unnarrowed target creature",
+                    node=node,
+                )
+            if (
+                not isinstance(node.by, ast.TargetSpec)
+                or node.by.targeted
+                or node.by.quantifier not in ("all", "each")
+            ):
+                raise LoweringError(
+                    "the granted blocker restriction describes a class of "
+                    "blocker rather than choosing one",
+                    node=node,
+                )
+            described = _filter_payload(node.by.filter)
+            # The blockers step tests the phrase with `subject_matches`, so a
+            # key outside what that answers would be carried and ignored — and
+            # a *dropped* narrowing here makes the creature unblockable by
+            # everything, which is the widening direction.
+            if not described or set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+                raise LoweringError(
+                    "the granted blocker restriction cannot test this noun "
+                    "phrase",
+                    node=node,
+                )
+            payload = _targets_only(node.subject)
+            payload["blocker_filter"] = described
+            return (
+                OracleInstruction(
+                    "grant_cant_be_blocked_by_until_eot", "", payload
+                ),
+            )
         # The unrestricted printing — "Target creature can't be blocked this
         # turn." (Teleport). There is nothing beyond the creature type for a
         # handler to honour, so the target description *is* the whole payload

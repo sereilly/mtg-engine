@@ -464,6 +464,42 @@ def grant_unblockable_to_target(game: Game, instruction: OracleInstruction, cont
     return True, "resolved"
 
 
+@effect_handler("grant_cant_be_blocked_by_until_eot")
+def grant_cant_be_blocked_by_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target creature can't be blocked by Walls this turn." (Tower of
+    Coireall.)
+
+    The granted twin of the static restriction `engine/combat_restrictions.py`
+    derives, and the *same* record the blockers step reads: the class of blocker
+    is a filter payload either way, so a card printing another subtype, colour
+    or card type needs no code here and no branch there.
+
+    Not folded into ``grant_unblockable_to_target``: that one makes the creature
+    unblockable by everything, and a narrowing this handler dropped would hand
+    the card the larger effect silently.
+    """
+    from ..combat_restrictions import grant_blocker_restriction
+
+    described = instruction.payload.get("blocker_filter") or {}
+    if not described:
+        # A restriction with no class behind it would be the unnarrowed one.
+        game.log.append(f"{context.card.name}: no blocker class to restrict")
+        return True, "resolved"
+    target_creature = resolve_target_permanent(
+        game, context, predicate=lambda p: p.is_creature,
+        fallback_on_invalid_choice=False,
+    )
+    if target_creature is None:
+        game.log.append(f"{context.card.name}: no creature to restrict")
+        return True, "resolved"
+    grant_blocker_restriction(target_creature, described)
+    game.log.append(
+        f"{target_creature.card.name} can't be blocked by matching creatures "
+        f"this turn ({context.card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("grant_unblockable_to_low_power_target")
 def grant_unblockable_to_low_power_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     # Honor the specifically chosen creature (the player picked one in the UI);

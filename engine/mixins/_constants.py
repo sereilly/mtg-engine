@@ -10,6 +10,10 @@ _EOT_METADATA_KEYS = (
     "animate_until_end_of_turn",
     "assign_combat_damage_as_unblocked_until_eot",
     "cant_be_blocked_until_eot",
+    # "...can't be blocked **by Walls** this turn" (Tower of Coireall):
+    # the narrowed twin of the flag above, a list of blocker classes rather
+    # than a boolean, because the class is payload.
+    "cant_be_blocked_by_until_eot",
     "must_attack_until_eot",
     "destroy_if_did_not_attack_eot",
     "destroy_if_attacked_eot",
@@ -44,7 +48,6 @@ _EOT_METADATA_KEYS = (
     # Pyramids: unused land-destruction shield expires with the turn
     "land_destruction_shield_this_turn",
     # Ebony Horse: combat-damage shield on the untapped attacker
-    "prevent_combat_damage_to_and_by_until_eot",
     # "One or more target creatures become red until end of turn" (Dwarven Song
     # and its four Legends siblings). The indefinite `color_override` beside it
     # is a lace and must survive the turn, which is why this is a second key
