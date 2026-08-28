@@ -204,6 +204,20 @@ class RevealHandAndChoose:
 
 
 @dataclass(frozen=True)
+class RevealHand:
+    """``<player> reveals their hand.`` (Inquisition.)
+
+    The reveal on its own (CR 701.20), with nothing chosen from it. Its own node
+    rather than a `RevealHandAndChoose` with an empty choice: that one is one
+    node *because* the three printed sentences share a card nothing else could
+    carry, and an "empty" choice there would be a picker armed over nothing. The
+    sentence after this one on Inquisition reads the hand's *size*, which the
+    reveal makes public and which no chosen card is involved in.
+    """
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
 class ExileCostSacrifices:
     """"…, then **exile this artifact and those creature cards**." (Sword of
     the Ages.)

@@ -24,6 +24,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "hurricane_damage": "damage",
     "deal_damage_each_creature_and_player": "damage",
     "deal_damage_each_attacking_creature": "damage",
+    # "…deals 2 damage to **each creature you control**" (Sorrow's Path). The
+    # filtered creature sweep the two fused kinds above are special cases of:
+    # what it damages is payload, so a card printing a different narrowing
+    # needs no kind. Same category, so GRAMMAR_CATEGORIES is unchanged.
+    "deal_damage_each_matching_creature": "damage",
     "deal_damage_to_recorded_permanents": "damage",
     "deal_damage_and_opponent_choice": "damage",
     "self_damage_unless_pay": "damage",
@@ -290,6 +295,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Sword of the Ages: what the ability's own cost sacrificed, exiled out of
     # the graveyard the cost put it in.
     "exile_cost_sacrifices": "zones",
+    # "Target player reveals their hand." (Inquisition.) The reveal on its own
+    # (CR 701.20) — a zone becoming public, the same family as the paragraph
+    # below it, so GRAMMAR_CATEGORIES is unchanged.
+    "reveal_hand": "zones",
     "reveal_hand_and_choose": "zones",
     "look_at_target_hand": "zones",
     "look_at_target_library_top": "zones",

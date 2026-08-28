@@ -224,11 +224,31 @@ def _lower_counted_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]
             and recipient.quantifier == "any_target")
         or (isinstance(recipient, ast.PlayerRef)
             and recipient.kind in ("target_player", "target_opponent"))
+        # "Target player reveals their hand. … deals damage to **that player**
+        # equal to the number of white cards in **their** hand." (Inquisition.)
+        # Admitted only when the count is taken in *that same player's* zone,
+        # and that is a property of the handler rather than a courtesy: it
+        # resolves exactly one seat off the resolution context, and uses it both
+        # as the damage's recipient and as the counted zone's owner. A clause
+        # naming two different seats — "damage to that player equal to the
+        # number of Swamps **you** control" — has no handler at all, and
+        # admitting it would count one player's board and damage the other's
+        # face on a card reporting itself supported.
+        or (_damaged_player_is(node.recipients, "that_player")
+            and node.amount.filter.zone_owner is not None
+            and node.amount.filter.zone_owner.kind != "you")
     ):
         raise LoweringError("no handler aims this counted damage", node=node)
     payload: dict[str, object] = {
         "amount": "x", X_FROM_COUNT: count_spec(node.amount.filter, node),
     }
+    if isinstance(recipient, ast.PlayerRef):
+        # The seat comes off the resolution context either way — but *that a
+        # seat is what this clause names* is recorded, for the reason
+        # `_lower_damage` records it: a sequence whose earlier sentence acted on
+        # a permanent leaves that permanent's index in the context, and a clause
+        # about a player with no key would be dealt to the permanent instead.
+        payload["recipient"] = "target_player"
     _describe_targets(payload, recipient)
     return (OracleInstruction("deal_damage", "", payload),)
 
@@ -489,6 +509,52 @@ def _lower_chosen_cast_damage(
     )
 
 
+def _lower_halved_damage(
+    node: ast.DealDamage,
+    event: str | None,
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"…deals half X damage, rounded down, to any target, **and half X damage,
+    rounded up, to you**." (Banshee; Eternal Flame prints the same half against
+    a count.)
+
+    Lowered by lowering the quantity underneath and halving the result, rather
+    than as a damage shape of its own. A half is not a different effect — the
+    recipient, the riders and the picker are the same ones the whole quantity
+    would have produced — and writing it as a shape would mean re-deciding all
+    of them beside the arithmetic, which is where the two copies start to
+    disagree.
+
+    Which key the rounding rides on is decided by what the quantity turned out
+    to be, and both were already there:
+
+    * a **count** halves inside the count evaluator (`spec["half"]`, the channel
+      Peer into the Abyss's "half the number of cards in their library" opened),
+      so the number is halved once, where it is computed;
+    * an announced **X** (CR 601.2b) is not computed at all — it is already
+      sitting in the resolution's context — so it halves at the point of use.
+
+    A single `deal_damage` is required rather than assumed. Every other shape
+    this module emits (a sweep, a fused Karma-style kind, a two-target bite)
+    reaches a handler that has no place to apply a rounding, and a payload key
+    those handlers never read would deal the *unhalved* amount on a card
+    reporting itself supported.
+    """
+    assert isinstance(node.amount, ast.Half)
+    whole = _lower_damage(
+        dataclasses.replace(node, amount=node.amount.of), event, produced
+    )
+    if len(whole) != 1 or whole[0].kind != "deal_damage":
+        raise LoweringError("no handler halves this damage amount", node=node)
+    payload = dict(whole[0].payload)
+    counted = payload.get(X_FROM_COUNT)
+    if isinstance(counted, dict):
+        payload[X_FROM_COUNT] = {**counted, "half": node.amount.rounding}
+    else:
+        payload["amount_half"] = node.amount.rounding
+    return (dataclasses.replace(whole[0], payload=payload),)
+
+
 def _lower_damage(
     node: ast.DealDamage,
     event: str | None = None,
@@ -500,6 +566,12 @@ def _lower_damage(
     chosen = _chosen_cast_amount(node.amount)
     if chosen is not None:
         return _lower_chosen_cast_damage(node, chosen, produced)
+    # "…deals **half X damage, rounded up**, to you." (Banshee, Eternal Flame.)
+    # Read before every branch below, because a half is a half *of* one of them:
+    # the halving is the last arithmetic step and the recipient, the riders and
+    # the picker are whatever the quantity underneath already lowers to.
+    if isinstance(node.amount, ast.Half):
+        return _lower_halved_damage(node, event, produced)
     if isinstance(node.amount, ast.CountOf):
         return _lower_counted_damage(node)
     if isinstance(node.amount, ast.BoardCount):
@@ -633,7 +705,7 @@ def _lower_damage(
         return (OracleInstruction(sweep, "", {"amount": amount}),)
 
     if len(node.recipients) != 1:
-        raise LoweringError("multi-recipient damage without a sweep shape", node=node)
+        return _lower_split_recipients(node, event, produced)
 
     recipient = node.recipients[0]
     payload: dict[str, object] = (
@@ -785,6 +857,43 @@ def _lower_damage(
                 },
             ),
         )
+    elif isinstance(recipient, ast.TargetSpec) and recipient.quantifier == "each":
+        # "…deals 2 damage to **each creature you control**" (Sorrow's Path).
+        # A creature sweep narrowed by a printed noun phrase, which is what
+        # `_sweep_kind`'s three fused kinds each are with the narrowing baked
+        # into the kind's name. Here the narrowing is payload, so a card
+        # printing a different one needs no code — and the fused kinds keep
+        # their cards because `_sweep_kind` is consulted first, above.
+        #
+        # Creatures only, checked rather than assumed: CR 120.3 lists what
+        # damage can even be dealt to, and a sweep written over "each
+        # permanent" would quietly mark damage on artifacts and lands that
+        # nothing would ever read.
+        if recipient.filter.card_types != ("creature",):
+            raise LoweringError(
+                "only a creature sweep is damaged by the printed noun phrase",
+                node=node,
+            )
+        if back_reference or bonus:
+            raise LoweringError(
+                "a creature sweep cannot carry a computed damage amount", node=node
+            )
+        described = _filter_payload(
+            dataclasses.replace(recipient.filter, card_types=())
+        )
+        # Idiom 2: a restriction the matcher cannot test is one the handler
+        # would silently ignore, which widens the sweep rather than narrowing
+        # it — every creature on the board instead of the printed set.
+        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError(
+                "the creature sweep cannot test this restriction", node=node
+            )
+        return (
+            OracleInstruction(
+                "deal_damage_each_matching_creature", "",
+                {"amount": amount, "filter": described},
+            ),
+        )
     elif isinstance(recipient, ast.TargetSpec) and recipient.quantifier not in (
         "any_target", "target", "this"
     ):
@@ -794,6 +903,52 @@ def _lower_damage(
     if targets is not None:
         payload["targets"] = targets
     return (OracleInstruction("deal_damage", "", payload),)
+
+
+def _lower_split_recipients(
+    node: ast.DealDamage,
+    event: str | None,
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"…it deals 2 damage to **you and each creature you control**."
+    (Sorrow's Path.)
+
+    One printed clause naming several recipients, and no sweep handler that
+    batches exactly this set. Lowered as one instruction per recipient — the
+    composition rule this engine already applies to "deal damage, then gain
+    that much life" — rather than as a fused kind per printed pairing, which is
+    what the legacy compiler did and is combinatorial in the number of shapes.
+    `_sweep_kind` is asked first, so the three sets that *do* have a batching
+    handler keep it.
+
+    CR 120.4 makes the printed clause one event and this makes it several. What
+    that can be seen through is a state-based action, and none runs between two
+    steps of one resolution (CR 704.3) — so simultaneous lethal damage still
+    kills together, which is the property the fused sweeps were written for.
+
+    The split is only legal where nothing is *chosen*. A target is announced
+    once, as the object is put on the stack (CR 601.2c); two instructions each
+    describing one would raise two pickers for one printed choice, and the
+    second would be collected against a target the card never announced. So a
+    chosen recipient refuses here, and a sentence with two whole printed clauses
+    — each announcing its own targets — goes through the conjunction below
+    instead.
+    """
+    if node.riders != ast.DamageRiders():
+        raise LoweringError(
+            "a multi-recipient damage clause carries no riders", node=node
+        )
+    if any(_targets_payload(recipient) is not None for recipient in node.recipients):
+        raise LoweringError(
+            "multi-recipient damage without a sweep shape cannot name a target",
+            node=node,
+        )
+    lowered: tuple[OracleInstruction, ...] = ()
+    for recipient in node.recipients:
+        lowered += _lower_damage(
+            dataclasses.replace(node, recipients=(recipient,)), event, produced
+        )
+    return lowered
 
 
 def _lower_damage_conjunction(node: ast.Conjunction) -> tuple[OracleInstruction, ...]:
@@ -822,179 +977,3 @@ def _lower_damage_conjunction(node: ast.Conjunction) -> tuple[OracleInstruction,
             ),
         )
     return _lower_damage(first) + _lower_damage(second)
-
-
-#: The key a Nova Pentacle-shaped redirect writes its opponent's pick under, and
-#: the key the redirect step behind it reads. Named once because the two halves
-#: are two instructions and a literal in each is how they come to disagree.
-_REDIRECT_RECIPIENT_KEY = "redirect_recipient"
-
-
-def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction, ...]:
-    """CR 614.9 — "…is dealt to <recipient> instead."
-
-    Two instructions, and the difference between them is not the effect but how
-    the moved damage's *source* is named: the ability either targets it (Shimian
-    Night Stalker's "by target attacking creature") or the player chooses it as
-    the ability is activated (Nova Pentacle's "a source of your choice"). That is
-    the axis ``engine/targeting.py``'s kind→spec table keys on — one picker runs
-    over the battlefield's attackers and the other over every source including
-    the stack — so it cannot be payload under one kind, exactly as
-    ``prevent_damage_by_target_until_eot`` and ``grant_reverse_damage_shield``
-    are two kinds for the two ways a shield names its source.
-
-    Everything else *is* payload, and every refusal below is a way this sentence
-    could otherwise mean more than it says:
-
-    * the protected recipient must be **you**. The record is armed on the
-      ability's controller; there is no handler that arms one on a chosen
-      player, and Reverberation — which names no protected recipient at all, so
-      its redirect covers everyone the spell would damage — refuses here.
-    * a source must be *named*. With neither a target nor a chosen source this
-      would move **all** damage to the new recipient, which is a strictly larger
-      effect than any of these cards prints.
-    * the duration must be this turn, because that is what the sweeps give it.
-    * the new recipient must be this permanent, or a creature an opponent picks.
-      A redirect whose recipient the engine cannot resolve would arm a record
-      pointing at nothing, and CR 614.9 makes that a redirect that silently does
-      nothing at all.
-    """
-    if node.to is None:
-        # "All damage that would be dealt this turn **by target sorcery spell**
-        # is dealt to that spell's controller instead." (Reverberation.) The one
-        # printed shape with no protected recipient: it names only the source,
-        # so it moves whatever that spell would deal, to whoever it would have
-        # damaged.
-        return _lower_spell_damage_redirect(node)
-    if not _is_you(node.to):
-        raise LoweringError(
-            "a redirect is armed on its controller; no handler protects "
-            "another recipient",
-            node=node,
-        )
-    if node.duration.kind not in _REST_OF_TURN:
-        raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
-    payload: dict[str, object] = {"to_self": True}
-    if node.one_shot:
-        # "**The next time** a source …" — one instance, not every one.
-        payload["uses"] = 1
-    recipient = node.new_recipient
-    if _is_source(recipient):
-        # "…is dealt to **this creature** instead." The permanent the ability is
-        # on, which the handler already has and nothing needs to choose.
-        payload["new_recipient"] = "source"
-    elif (
-        isinstance(recipient, ast.TargetSpec)
-        and recipient.quantifier == "target"
-        and node.chooser is not None
-    ):
-        # "…to **target creature of an opponent's choice**". The pick is the
-        # other seat's, so it is made through the general permanent prompt as
-        # the ability resolves and read back out of the resolution's results —
-        # the same course Cuombajj Witches' opposing target takes, and for the
-        # same reason: the picker in front of an activation is the activating
-        # player's.
-        payload["new_recipient"] = "chosen"
-        payload["result_key"] = _REDIRECT_RECIPIENT_KEY
-    else:
-        raise LoweringError(
-            "no handler resolves this redirect's new recipient", node=node
-        )
-    if node.from_chosen_source:
-        if node.dealt_by is not None:
-            raise LoweringError(
-                "a redirect names its source once: either a chosen source or a "
-                "target",
-                node=node,
-            )
-        instructions: tuple[OracleInstruction, ...] = (
-            OracleInstruction(
-                "redirect_damage_from_chosen_source_until_eot", "", payload
-            ),
-        )
-    else:
-        spec = node.dealt_by
-        if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "target":
-            raise LoweringError(
-                "no handler redirects the damage of a source the sentence does "
-                "not choose",
-                node=node,
-            )
-        _describe_targets(payload, spec)
-        instructions = (
-            OracleInstruction("redirect_damage_from_target_until_eot", "", payload),
-        )
-    if payload.get("new_recipient") == "chosen":
-        # The prompt runs first and the redirect reads its answer, so the two are
-        # a sequence in printed order rather than one fused instruction.
-        return (
-            OracleInstruction(
-                "choose_permanent", "",
-                {
-                    "result_key": _REDIRECT_RECIPIENT_KEY,
-                    "filter": _filter_payload(recipient.filter),
-                    "chooser": "opponent",
-                    "prompt": "Choose a creature to take the redirected damage.",
-                },
-            ),
-        ) + instructions
-    return instructions
-
-
-def _lower_spell_damage_redirect(
-    node: ast.RedirectDamage,
-) -> tuple[OracleInstruction, ...]:
-    """Reverberation: "All damage that would be dealt this turn by target
-    sorcery spell is dealt to that spell's controller instead."
-
-    A spell rather than a permanent on the source end, which is the whole reason
-    this is its own instruction: a spell is chosen from the stack, and it is
-    recognised at damage time by the *cast* rather than by the source object —
-    see ``engine/damage_redirects.resolving_object_redirects``.
-
-    "That spell's controller" reaches lowering as a bare "that player", because
-    the possessive names an object the sentence has already named — and the
-    sentence named exactly one, the spell. So the recipient is the spell's
-    controller by the only reading available, and any other player reference
-    refuses rather than being resolved to a seat nobody chose.
-    """
-    spec = node.dealt_by
-    if (
-        not isinstance(spec, ast.TargetSpec)
-        or spec.quantifier != "target"
-        or spec.filter.zone != "stack"
-    ):
-        raise LoweringError(
-            "a redirect with no protected recipient moves one chosen spell's "
-            "damage",
-            node=node,
-        )
-    if not isinstance(node.new_recipient, ast.PlayerRef) or node.new_recipient.kind != "that_player":
-        raise LoweringError(
-            "no handler resolves this redirect's new recipient", node=node
-        )
-    if node.duration.kind not in _REST_OF_TURN:
-        raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
-    if not spec.filter.card_types:
-        # "target **sorcery** spell". Without a type this reads "target spell",
-        # which is a strictly wider card — and the handler tests the chosen
-        # spell against this union at resolution (CR 608.2b), so an empty one
-        # would admit every spell on the stack.
-        raise LoweringError("this spell redirect names no kind of spell", node=node)
-    # "zone" is the printed word "spell" itself — the noun parser records it
-    # when a type is followed by that word — and it is checked above rather than
-    # dropped here.
-    if _restrictions_beyond(spec.filter, frozenset({"card_types", "zone"})):
-        raise LoweringError(
-            "the spell redirect narrows its target by type and nothing else",
-            node=node,
-        )
-    return (
-        OracleInstruction(
-            "redirect_damage_from_target_spell_until_eot", "",
-            {
-                "new_recipient": "spell_controller",
-                "card_types": list(spec.filter.card_types),
-            },
-        ),
-    )

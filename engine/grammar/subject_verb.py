@@ -49,7 +49,8 @@ from .effects import (
     _parse_prevent, _parse_put_iterated_card_on_library,
     _parse_put_counter, _parse_put_exiled_with_source,
     _parse_put_source_into_zone, _parse_remove_counter,
-    _parse_remove_from_combat, _parse_return, _parse_reveal_top, _parse_sacrifice,
+    _parse_remove_from_combat, _parse_return, _parse_reveal_hand, _parse_reveal_top,
+    _parse_sacrifice,
     _parse_scry, _parse_search_library, _parse_source_of_choice_effect, parse_player_chooses_permanent,
     _parse_switch_pt, _parse_tap_untap, _parse_wins,
 )
@@ -167,6 +168,50 @@ def _parse_copy_this_spell(stream: TokenStream) -> ast.Statement | None:
         stream.reset(mark)
         return None
     return ast.CopySpell(ast.PlayerRef("you"), may_choose_new_target=True)
+
+
+def _with_damage_conjunct(
+    stream: TokenStream,
+    statement: ast.Statement,
+    source: "ast.TargetSpec | None",
+) -> ast.Statement:
+    """``… and deals N damage to <recipient>`` trailing a clause whose subject
+    is a permanent.
+
+    "{R}{R}: This creature gets +2/+0 until end of turn **and deals 1 damage to
+    you**." (Electric Eel; Wormwood Treefolk prints the same tail behind "gains
+    forestwalk until end of turn".) The subject is printed once and does two
+    things, and the damage is dealt *by* it — so *source* is the same noun
+    phrase the pump acted on rather than a second reading of it.
+
+    Read here rather than inside `_parse_gets` and `_parse_gains` because
+    `effects/characteristics.py` may not import `effects/damage.py`: the effect
+    families are independent by test, and a pump production that could reach a
+    damage production would make the grouping stop being information. This
+    module is above both and already calls each, which is the layer the join
+    belongs at.
+
+    Not the sentence loop's job either. That loop joins a subjectless tail only
+    when the carried subject is a *player*, so a creature carried into "deals"
+    would read a sentence nobody printed — and the clause would be unconsumed
+    text that takes the whole line down. That is the argument `_parse_gets`
+    already makes for reading "and gains …" itself, applied to the other verb
+    the same cards print.
+
+    Once "and deals" has been seen the sentence is a damage clause and nothing
+    else, so a failure inside it raises rather than rewinding: a rewind would
+    leave the clause unread and blame the pump for it.
+    """
+    if source is None:
+        return statement
+    mark = stream.mark()
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return statement
+    if not stream.at_word("deals", "deal"):
+        stream.reset(mark)
+        return statement
+    return ast.Conjunction((statement, _parse_damage(stream, source)))
 
 
 def parse_subject_verb(
@@ -523,9 +568,13 @@ def parse_subject_verb(
         if token.text in ("fights", "fight"):
             return _parse_fight(stream, source_spec)
         if token.text in ("gets", "get"):
-            return _parse_gets(stream, source_spec)
+            return _with_damage_conjunct(
+                stream, _parse_gets(stream, source_spec), source_target
+            )
         if token.text in ("gains", "gain"):
-            return _parse_gains(stream, source_spec)
+            return _with_damage_conjunct(
+                stream, _parse_gains(stream, source_spec), source_target
+            )
         if token.text in ("loses", "lose"):
             return _parse_loses(stream, source_spec)
         if token.text in ("wins", "win"):
@@ -540,6 +589,12 @@ def parse_subject_verb(
             return _parse_discard(stream, source_spec)
         if token.text in ("mills", "mill") and isinstance(source_spec, ast.PlayerRef):
             return _parse_mill(stream, source_spec)
+        # "**Target player** reveals their hand." (Inquisition.) Dispatched on
+        # the verb like every other player action; the Duress paragraph that
+        # opens with the same three words is read whole, before the sentence
+        # parser ever reaches here.
+        if token.text in ("reveals", "reveal") and isinstance(source_spec, ast.PlayerRef):
+            return _parse_reveal_hand(stream, source_spec)
         # "**Each player** returns all creature cards from their graveyard to
         # the battlefield." (All Hallow's Eve.) The return production with a
         # printed subject: only the bare imperative ("Return target creature

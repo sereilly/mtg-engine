@@ -108,6 +108,17 @@ def _lower_reveal_hand_and_choose(
     return (OracleInstruction("reveal_hand_and_choose", "", payload),)
 
 
+def _lower_reveal_hand(node: ast.RevealHand) -> tuple[OracleInstruction, ...]:
+    """"Target player reveals their hand." (Inquisition.)
+
+    The reveal alone (CR 701.20). Its whole payload is who reveals, because a
+    reveal narrows nothing and chooses nothing — what the sentence after it does
+    with the revealed hand is that sentence's business, and on Inquisition that
+    is an ordinary counted damage.
+    """
+    return (OracleInstruction("reveal_hand", "", _targets_only(node.player)),)
+
+
 def _lower_exile_graveyard(node: ast.ExileGraveyard) -> tuple[OracleInstruction, ...]:
     """"Exile target player's graveyard." (Tormod's Crypt.)
 

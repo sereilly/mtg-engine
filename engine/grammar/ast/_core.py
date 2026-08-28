@@ -762,6 +762,12 @@ class PlayerRef:
     # the creature half). Set only by the production that read the union, so a
     # lowering that never sees the phrase never sees the flag.
     or_planeswalker: bool = False
+    # "target player **who attacked this turn**" (Fire and Brimstone). A printed
+    # restriction on which seats may be chosen, not a different kind of player —
+    # so it rides here rather than minting a `target_player_who_attacked`, for
+    # the reason every other narrowing is payload: a card printing the same
+    # clause on "target opponent" needs no new kind.
+    attacked_this_turn: bool = False
 
 
 @dataclass(frozen=True)

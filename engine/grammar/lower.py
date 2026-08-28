@@ -122,6 +122,7 @@ from .lowering import (
     _lower_switch_pt,
     _lower_exile_cost_sacrifices,
     _lower_exile_graveyard,
+    _lower_reveal_hand,
     _lower_reveal_hand_and_choose,
     _lower_look_at_hand,
     _lower_look_at_library_top,
@@ -442,6 +443,8 @@ def lower_statement(
     if isinstance(statement, ast.ShuffleHandIntoLibrary):
         return _lower_shuffle_hand_into_library(statement)
 
+    if isinstance(statement, ast.RevealHand):
+        return _lower_reveal_hand(statement)
     if isinstance(statement, ast.RevealHandAndChoose):
         return _lower_reveal_hand_and_choose(statement)
     if isinstance(statement, ast.ExileCostSacrifices):

@@ -1065,6 +1065,15 @@ class LegalityMixin:
                 # "target opponent" (Word of Command) can't be the caster's own seat.
                 if spec.get("opponents_only") and seat == caster_index:
                     continue
+                # "target player **who attacked this turn**" (Fire and
+                # Brimstone). The record is on the seat, not on its creatures:
+                # a player who attacked and then lost the attacker still
+                # attacked, and reading the board would forget them.
+                if (
+                    spec.get("attacked_this_turn")
+                    and not self.players[seat].attacked_this_turn
+                ):
+                    continue
                 targets.append({"kind": "player", "seat": seat})
             if kind == "player":
                 return targets

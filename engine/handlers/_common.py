@@ -412,6 +412,14 @@ def _card_matches_filter(card, filt: dict) -> bool:
     # matcher uses, so "3 or less" means one thing in both zones.
     if not _comparison_holds(filt.get("mana_value"), int(getattr(card, "cmc", 0) or 0)):
         return False
+    # "the number of **white** cards in their hand" (Inquisition). Off the
+    # printed colours (CR 202.2), which for a card in a hidden zone is the whole
+    # of what there is — no layer has run and none can, so a colour *change*
+    # cannot be visible here and reading the printed value is the honest answer
+    # rather than an approximation of one.
+    color_filter = filt.get("color_filter")
+    if color_filter and color_filter not in (getattr(card, "colors", ()) or ()):
+        return False
     named = filt.get("named")
     # Through `name_key`, so the parser's rendering of a legendary name
     # ("chandra , flame 's catalyst") and Oracle's spelling of it compare equal —

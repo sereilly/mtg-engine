@@ -82,6 +82,19 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # a property of the printed quantity and not of where its left half came
     # from.
     damage = max(0, damage + int(instruction.payload.get("amount_bonus", 0) or 0))
+    # "…deals **half X damage, rounded down**, to any target, and half X damage,
+    # **rounded up**, to you." (Banshee; Eternal Flame prints the second half.)
+    # Applied here — after every branch above and after the printed addend —
+    # because the halving is the last arithmetic the sentence does, and the two
+    # roundings in one sentence are the whole point of the card: an announced
+    # X of 5 is 2 to the target and 3 to its controller.
+    #
+    # A count that halves does *not* arrive here. It carries `half` on its own
+    # spec and is halved inside the count evaluator, where the number is
+    # computed; halving twice is what a second reader of the same rider buys.
+    halving = instruction.payload.get("amount_half")
+    if halving:
+        damage = -(-damage // 2) if halving == "up" else damage // 2
 
     # "…deals damage to each opponent equal to the number of Islands **that
     # player** controls" (Typhoon). One number per seat, so it cannot have been
@@ -722,6 +735,50 @@ def deal_damage_each_attacking_creature(
                 game._mark_damage_on_permanent(perm, damage, source=card)
                 struck += 1
     game.log.append(f"{card.name} dealt {damage} damage to each of {struck} attacking creatures")
+    return True, "resolved"
+
+
+@effect_handler("deal_damage_each_matching_creature")
+def deal_damage_each_matching_creature(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"…it deals 2 damage to you and **each creature you control**."
+    (Sorrow's Path.)
+
+    The filtered creature sweep. What it hits is payload rather than part of
+    the kind, so the narrowing is answered by ``subject_matches`` — the one
+    reader of a printed noun phrase — and a card printing a different one needs
+    no handler.
+
+    Over the control seam, never ``player.battlefield``: "you control" is a
+    derived controller (CR 613 layer 2), and a raw read is a second opinion
+    about who controls what. The set is snapshotted before the loop because
+    damage can kill: CR 704.3 keeps state-based actions out of the middle of a
+    resolution, but an effect armed by the damage could still move a permanent,
+    and a list being mutated under the iterator would skip whichever creature
+    slid into the vacated slot.
+    """
+    from ..subject_filters import subject_matches
+
+    card = context.card
+    damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    described = instruction.payload.get("filter") or {}
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+    struck = 0
+    for perm in list(game.all_permanents()):
+        if not perm.is_creature:
+            continue
+        if not subject_matches(
+            game, perm, described,
+            observer=observer, source=context.source_permanent,
+        ):
+            continue
+        apply_damage_to_creature(game, perm, damage, card)
+        struck += 1
+    game.log.append(
+        f"{card.name} dealt {damage} damage to each of {struck} creatures"
+    )
     return True, "resolved"
 
 

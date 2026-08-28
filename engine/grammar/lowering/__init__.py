@@ -7,6 +7,7 @@ template has one home on each side — prowess parses in
     _common          payload shapes and the fragments several families need
     categories       the kind -> category registry the gate reads
     damage           dealing it, and preventing it
+    redirection      CR 614.9, changing who dealt damage reaches
     characteristics  P/T, keywords, colour, printed text
     counters         putting and removing them, and the per-death repetition
     board            destruction, bouncing, tapping, control, exile
@@ -75,6 +76,8 @@ from .damage import (
     _lower_damage_unless_pay,
     _lower_damage,
     _lower_damage_conjunction,
+)
+from .redirection import (
     _lower_redirect_damage,
 )
 from .prevention import (
@@ -188,6 +191,7 @@ from .library import (
     _lower_put_exiled_with_source,
     _lower_look_top_pick,
     _lower_exile_graveyard,
+    _lower_reveal_hand,
     _lower_reveal_hand_and_choose,
     _lower_look_at_hand,
     _lower_look_at_library_top,
@@ -360,6 +364,7 @@ __all__ = [
     "_fused_prepare_then_interact",
     "_lower_fight",
     "_lower_exile_graveyard",
+    "_lower_reveal_hand",
     "_lower_reveal_hand_and_choose",
     "_lower_look_at_hand",
     "_lower_look_at_library_top",

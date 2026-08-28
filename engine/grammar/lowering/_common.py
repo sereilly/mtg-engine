@@ -478,6 +478,17 @@ def _targets_payload(
     """
     if isinstance(recipient, ast.PlayerRef):
         if recipient.kind == "target_player":
+            if recipient.attacked_this_turn:
+                # "…**who attacked this turn**" (Fire and Brimstone). Carried
+                # into the description the picker reads, because the picker is
+                # what enforces it (engine/legality.py's seat loop). A
+                # restriction the enumerator never sees is a restriction nobody
+                # applies — and unenforced, the card hits any seat at all, which
+                # is wrong in the caster's favour and silent.
+                return {
+                    "quantifier": "target", "kind": "player",
+                    "attacked_this_turn": True,
+                }
             if recipient.or_planeswalker:
                 # "target player or planeswalker" — one chosen slot answered by
                 # a player face or a planeswalker permanent, the "any target"
@@ -488,7 +499,21 @@ def _targets_payload(
             # "Target opponent" is a player target the caster's own seat cannot
             # answer (CR 115.4) — the same flag the phase-out sweep and Word of
             # Command's spec carry, so every player picker reads one vocabulary.
-            return {"quantifier": "target", "kind": "player", "opponents_only": True}
+            #
+            # "…**or planeswalker**" (Eternal Flame) widens the same slot the
+            # same way it widens "target player" above, and the narrowing
+            # survives it: the union is "a seat that is not mine, or a
+            # planeswalker". A shared `player` answer dropped the word, which
+            # silently deleted the planeswalker half of the card — the picker
+            # offers exactly what this describes.
+            return {
+                "quantifier": "target",
+                "kind": (
+                    "player_or_planeswalker" if recipient.or_planeswalker
+                    else "player"
+                ),
+                "opponents_only": True,
+            }
         return None
     if not isinstance(recipient, ast.TargetSpec):
         return None
@@ -667,7 +692,12 @@ _REST_OF_TURN = ("this_turn", "until_end_of_turn")
 # player cannot see, which changes nothing about the arithmetic and everything
 # about what a *picker* built on the same spec could offer.
 _COUNTABLE_ZONES = ("battlefield", "graveyard", "hand", "exile", "library")
-_CARD_ZONE_KEYS = frozenset({"type_filter", "named"})
+# What a *card* in a hidden or public non-battlefield zone can be tested for.
+# Held to `subject_filters.CARD_ONLY_FILTER_KEYS`, which is what the matcher
+# behind the count actually answers: a key admitted here and unanswered there is
+# a narrowing dropped on the floor, and a count that ignores its adjective is
+# larger than the card printed.
+_CARD_ZONE_KEYS = frozenset({"type_filter", "named", "color_filter"})
 
 
 def halved_count_spec(amount: "ast.Amount", node) -> dict | None:

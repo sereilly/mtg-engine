@@ -1661,6 +1661,37 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     """
     card = context.card
     payload = instruction.payload
+    # "Exile **two target** nonartifact creatures." (Ashes to Ashes.) The
+    # several-targets description says a list was collected, so it is resolved
+    # as a list — strictly, dropping a target that has left (CR 608.2b) rather
+    # than falling back to whatever a scan reaches first, which for two slots
+    # would exile a permanent the player never chose.
+    described = payload.get("targets") or {}
+    if isinstance(described.get("count"), int) and described["count"] > 1:
+        chosen = resolve_target_permanents(
+            game, context,
+            predicate=lambda candidate: permanent_matches_filter(candidate, payload),
+        )
+        if not chosen:
+            game.log.append(f"{card.name}: no valid permanent to exile")
+            return True, "resolved"
+        # Each one to its **owner's** exile, read before its own removal: the
+        # loop is one resolution and a controller read after the fact has
+        # nobody left to ask.
+        for perm in chosen:
+            controller_index = game.controller_index_of(perm)
+            owner_index = game.owner_index_of(perm)
+            game.remove_from_battlefield(perm)
+            if owner_index is None:
+                owner_index = controller_index if controller_index is not None else 0
+            game.players[owner_index].exile.append(perm.card)
+            game.log.append(f"{card.name} exiled {perm.card.name}")
+        # No `exiled_permanent_controller`: the key names *the* controller, and
+        # a several-target exile has one per permanent. A later step reading it
+        # would silently act on whichever one happened to be written last, so
+        # the key is left absent and any card that needs it refuses for want of
+        # a producer rather than acting on the wrong seat.
+        return True, "resolved"
     perm = resolve_target_permanent(
         game,
         context,
@@ -1678,6 +1709,22 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     if controller_index is not None:
         context.results["exiled_permanent_controller"] = controller_index
     game.log.append(f"{card.name} exiled {perm.card.name}")
+    return True, "resolved"
+
+
+@effect_handler("reveal_hand")
+def reveal_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target player reveals their hand." (Inquisition.)
+
+    CR 701.20: the hand becomes public information, and nothing else happens.
+    The cards are named in the log because that is what "revealed" means here —
+    a log line saying only how many were held would leave the reveal
+    indistinguishable from not revealing at all, and the sentence after it on
+    Inquisition is sized by what is in that hand.
+    """
+    victim = context.target if context.target is not None else context.caster
+    names = ", ".join(held.name for held in victim.hand) or "no cards"
+    game.log.append(f"{victim.name} revealed their hand to {context.card.name}: {names}")
     return True, "resolved"
 
 

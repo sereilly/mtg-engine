@@ -1175,6 +1175,10 @@ def _from_targets_payload(targets) -> dict | None:
         return {"kind": "divided"}
     if kind == "player":
         spec = {"kind": "player"}
+        if targets.get("attacked_this_turn"):
+            # "target player **who attacked this turn**" (Fire and Brimstone) —
+            # the printed narrowing, carried to the seat loop that enforces it.
+            spec["attacked_this_turn"] = True
         if targets.get("opponents_only"):
             # "Target opponent" — the caster's own seat is not a legal answer
             # (CR 115.4). The same flag Word of Command's kind-table entry
@@ -1184,7 +1188,15 @@ def _from_targets_payload(targets) -> dict | None:
     if kind == "player_or_planeswalker":
         # Chandra's Magmutt: player faces plus planeswalker permanents — the
         # "any" picker minus its creature half.
-        return {"kind": "player_or_planeswalker"}
+        spec = {"kind": "player_or_planeswalker"}
+        if targets.get("opponents_only"):
+            # "Target **opponent** or planeswalker" (Eternal Flame): the same
+            # union with the caster's own seat struck out (CR 115.4), carried on
+            # the same flag the plain player picker above reads. Legality's seat
+            # loop already asks it for this kind; without it here the flag never
+            # reaches the loop and the caster is offered as a legal target.
+            spec["opponents_only"] = True
+        return spec
     if kind == "spell":
         # A spell on the stack, which the UI picks from a different zone than
         # any permanent — "stack" is the name for that picker.

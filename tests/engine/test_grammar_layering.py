@@ -152,7 +152,13 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # permanents* — every production in it lowers a legality measured across a pair
 # (CR 303.4j) — where the rest of `board.py` lowers effects on one permanent at
 # a time; the two shared one name, and that already lived in `_events.py`.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "library", "counters", "keywords", "tapping", "prevention", "where_x", "control_flow", "attachments"]
+# `redirection` split out of `lowering/damage.py` the round The Dark's halved
+# damage landed, at the 1,000 lines that module had been sitting on. The line is
+# the CR's own: CR 120 is a source dealing damage, CR 614.9 is a replacement
+# that changes who it reaches — the damage is still dealt, in full, by the same
+# source. The two halves shared no helper, the same asymmetry `prevention`
+# recorded above when it left the same module.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "library", "counters", "keywords", "tapping", "prevention", "redirection", "where_x", "control_flow", "attachments"]
 AST_FAMILIES = EFFECT_FAMILIES
 
 
