@@ -205,6 +205,11 @@
       "status": "pass",
       "updated_at": 1783048805.0088525
     },
+    "Candelabra of Tawnos": {
+      "reason": "It should ask me how many lands to untap",
+      "status": "fail",
+      "updated_at": 1787807488.142274
+    },
     "Castle": {
       "reason": "",
       "status": "pass",
@@ -1005,6 +1010,11 @@
       "status": "pass",
       "updated_at": 1782005004.5772283
     },
+    "Liliana's Steward": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1787807423.861365
+    },
     "Living Artifact": {
       "reason": "",
       "status": "pass",
@@ -1390,6 +1400,11 @@
       "status": "pass",
       "updated_at": 1782107895.8262937
     },
+    "Rousing Read": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1787807527.0532143
+    },
     "Royal Assassin": {
       "reason": "",
       "status": "pass",
@@ -1399,6 +1414,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1786225052.7240102
+    },
+    "Run Afoul": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1787807108.5324829
     },
     "Sacrifice": {
       "reason": "",
@@ -1464,6 +1484,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782586190.182135
+    },
+    "Seeker": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1787807378.770963
     },
     "Sengir Vampire": {
       "reason": "",

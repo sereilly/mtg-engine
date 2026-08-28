@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **1044**
-- Passed: **430** (379 checked in-game, 51 auto-passed)
-- Failed: **1**
+- Passed: **434** (383 checked in-game, 51 auto-passed)
+- Failed: **2**
 - Equivalent to a passing card: **8**
-- Untested: **605**
+- Untested: **600**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -137,7 +137,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Camel | ✅ pass |  |
 | Camouflage | ✅ pass |  |
 | Cancel | ≡ equivalent | same behaviour as Counterspell |
-| Candelabra of Tawnos | ⬜ untested |  |
+| Candelabra of Tawnos | ❌ fail | It should ask me how many lands to untap |
 | Canopy Stalker | ⬜ untested |  |
 | Capture Sphere | ⬜ untested |  |
 | Carrion Ants | ⬜ untested |  |
@@ -545,7 +545,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Liliana's Scorn | ⬜ untested |  |
 | Liliana's Scrounger | ⬜ untested |  |
 | Liliana's Standard Bearer | ⬜ untested |  |
-| Liliana's Steward | ⬜ untested |  |
+| Liliana's Steward | ✅ pass |  |
 | Liliana, Death Mage | ⬜ untested |  |
 | Liliana, Waker of the Dead | ⬜ untested |  |
 | Living Artifact | ✅ pass |  |
@@ -752,12 +752,12 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Rod of Ruin | ✅ pass |  |
 | Rohgahh of Kher Keep | ⬜ untested |  |
 | Rookie Mistake | ⬜ untested |  |
-| Rousing Read | ⬜ untested |  |
+| Rousing Read | ✅ pass |  |
 | Royal Assassin | ✅ pass |  |
 | Rubinia Soulsinger | ⬜ untested |  |
 | Rugged Highlands | ⬜ untested |  |
 | Rukh Egg | ✅ pass |  |
-| Run Afoul | ⬜ untested |  |
+| Run Afoul | ✅ pass |  |
 | Runed Halo | ⬜ untested |  |
 | Rust | ⬜ untested |  |
 | Sabertooth Mauler | ⬜ untested |  |
@@ -789,7 +789,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Secure the Scene | ⬜ untested |  |
 | Sedge Troll | ✅ pass |  |
 | See the Truth | ⬜ untested |  |
-| Seeker | ⬜ untested |  |
+| Seeker | ✅ pass |  |
 | Segovian Leviathan | ✅ pass | auto-pass: keywords only (islandwalk) |
 | Selfless Savior | ⬜ untested |  |
 | Sengir Vampire | ✅ pass |  |
