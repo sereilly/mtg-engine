@@ -1103,6 +1103,9 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     stays seed-reproducible. The two targeted forms are the seat the spell
     already chose; they stay apart in the payload because CR 115.4 makes "target
     opponent" and "target player" different spells, and only the picker cares.
+    ``event_subject_player`` is the seat a trigger's own condition named
+    (Mana Vortex's "each player's upkeep, **that player** sacrifices"), read
+    off the context the fire site froze.
 
     An unrecognized ``who`` fails the instruction rather than defaulting to the
     controller: silently sacrificing the caster's own creature instead of the
@@ -1117,6 +1120,18 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         payers = list(game.opponents_of(caster_index))
     elif who in ("target_opponent", "target_player"):
         payers = [game.players.index(context.target)]
+    elif who == "event_subject_player":
+        # "At the beginning of each player's upkeep, **that player** sacrifices
+        # a land of their choice." (Mana Vortex.) The seat the trigger's own
+        # condition named, frozen into the trigger's context by the fire site
+        # (CR 603.10) — not the source's controller, which is the wrong seat on
+        # every upkeep but their own. An absent key is a trigger nobody froze a
+        # seat for, and guessing one is the failure the lowering's gate exists
+        # to prevent, so the instruction fails rather than falling back.
+        seat = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return False, "no seat was frozen for 'that player'"
+        payers = [seat]
     else:
         return False, f"unsupported sacrifice payer {who!r}"
     count = int(instruction.payload.get("count", 1))

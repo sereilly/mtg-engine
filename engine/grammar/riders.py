@@ -370,6 +370,17 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     else:
         stream.reset(mark)
         return False
+    # "If a player does **either**, destroy this enchantment." (Worms of the
+    # Earth.) The word points back at the two alternatives the offer printed, so
+    # it is admitted only over an offer that really has two — over a single
+    # action it would be naming a choice the card never gave, and dropping it
+    # would let the same sentence fold onto an offer of one thing.
+    if stream.accept_word("either") and not (
+        isinstance(target, ast.May) and isinstance(target.action, ast.OneOf)
+    ):
+        stream.reset(mark)
+        return False
+
     if chooser_person and _choice_step_index(steps) is not None:
         # A choice the card offers, not a payment: both branches are real, and
         # which one runs is whether anything was chosen. Handled below.

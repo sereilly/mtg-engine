@@ -791,6 +791,29 @@ def accept_member_state_clause(stream: TokenStream) -> tuple[str, bool] | None:
     return field_name, (not value) if negated else value
 
 
+def _parse_counted_sacrifice(
+    stream: TokenStream, player: ast.PlayerRef
+) -> ast.Statement:
+    """"two Swamps" / "an Island" — what an "unless you sacrifice" asks for.
+
+    The printed number is read here rather than by ``parse_recipient``, which
+    has no reading for a bare count in front of an untargeted plural: the
+    counted position is the one the noun parser wants told about
+    (``plural=True``), exactly as a counted trigger subject is. One number and
+    one noun phrase, so "an Island" and "two Swamps" are one production with
+    the count as data.
+    """
+    # The noun phrase itself is `parse_counted_subject` above: Leviathan's
+    # "can't attack unless you sacrifice two Islands" is the same phrase read by
+    # the combat family, and one reading is what keeps the offer, the gate and
+    # the charge agreeing about what the card asks for.
+    counted = parse_counted_subject(stream)
+    if counted is None:
+        raise stream.error("expected what to sacrifice")
+    count, described = counted
+    return ast.Sacrifice(player, ast.TargetSpec("a", described, count=count))
+
+
 def _parse_pay_life(stream: TokenStream) -> "ast.PayLife | None":
     """``pay 4 life`` (Sylvan Library) — CR 119.4.
 

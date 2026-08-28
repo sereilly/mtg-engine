@@ -1,0 +1,282 @@
+"""Lowering control changes: CR 613 layer 2, and CR 701.10's exchange.
+
+`_lower_gain_control` and `_lower_exchange_control`, split out of `board` when
+that module reached the thousand-line guard. The line is the one `engine/`
+already draws — `engine/control.py` and `engine/handlers/control_changes.py`
+are separate from destruction and sacrifice for the same reason: a control
+change is not a zone change, it is a timestamped *contribution* that a later
+effect can end, and what lowering owes is the source and the duration rather
+than a new owner.
+
+The parse half stays in `effects/board.py`, which is the arrangement `zones`,
+`library` and `mana` already have: a lowering family may outgrow its parse
+family without the parse family having to split with it.
+"""
+
+import dataclasses
+
+from ...oracle_types import OracleInstruction
+from ...subject_filters import object_only_filter, untestable_filter_keys
+from .. import ast
+from ..errors import LoweringError
+from ._common import (
+    _describe_several_targets,
+    _describe_targets,
+    _filter_payload,
+    _is_source,
+    _is_target,
+    _names_several_targets,
+    _restrictions_beyond,
+    _targets_only,
+)
+from ._events import CHOSEN_PERMANENT, _UNTAPPED_PERMANENTS
+
+
+def _lower_exchange_control(node: ast.ExchangeControl) -> tuple[OracleInstruction, ...]:
+    """"Exchange control of target artifact, creature, or land you control and
+    target permanent an opponent controls…" (Gauntlets of Chaos, CR 701.12b.)
+
+    Two chosen slots, described the way the two-target pump describes its pair:
+    ``filters`` carries one filter per slot so the picker can enumerate both
+    halves and the handler can re-check each at resolution (CR 608.2b), while
+    ``filter`` stays the shape every one-slot reader already expects.
+
+    ``shares_type`` and the printed type list travel as payload rather than as
+    part of the kind, because a card exchanging (say) two enchantments would be
+    this same effect with a different noun phrase.
+    """
+    if not isinstance(node.first, ast.TargetSpec) or not _is_target(node.first):
+        raise LoweringError(
+            "an exchange of control needs a chosen permanent on each side", node=node
+        )
+    if not isinstance(node.second, ast.TargetSpec) or not _is_target(node.second):
+        raise LoweringError(
+            "an exchange of control needs a chosen permanent on each side", node=node
+        )
+    first = _filter_payload(node.first.filter)
+    second = _filter_payload(node.second.filter)
+    payload: dict[str, object] = {
+        "targets": {
+            "quantifier": "target",
+            "kind": "object",
+            "filter": first,
+            "filters": [first, second],
+            "count": 2,
+            # Two permanents on two battlefields are distinct by construction,
+            # but saying so is what stops one player's own permanent filling
+            # both slots if a later card drops the controller words.
+            "distinct": True,
+        },
+        # The relation between the slots (see the node's docstring), and the
+        # types it is measured over — "one of **those** types" is the first
+        # slot's printed list, so it is read off that filter rather than
+        # spelled out again here.
+        "shares_a_type": bool(node.shares_a_type),
+        "destroy_attached_auras": bool(node.destroy_attached_auras),
+    }
+    return (OracleInstruction("exchange_control_of_targets", "", payload),)
+
+
+
+
+# The scratchpad key the tap records and this sentence reads. One name, in one
+# place, because ``engine/grammar/lower.py``'s ``_PRODUCES`` writes it and the
+# refusal below is what proves a producer ran — two spellings would make the
+# refusal vacuous while the handler read an empty record and marked nothing.
+
+
+
+
+
+
+_LINKED_STEAL_FILTER = ast.ObjectFilter(card_types=("artifact",))
+
+
+def _lower_gain_control(
+    node: ast.GainControl, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """``Gain control of <subject> <duration>.``
+
+    Four shapes, and which one a card is depends on its duration and subject:
+
+    * "…until end of turn" on a chosen target (Traitorous Greed) — an ordinary
+      targeted instruction carrying its noun phrase.
+    * "…until end of turn" on "**that creature**" (Disharmony) — the object a
+      previous step of this same effect chose, read out of the resolution
+      scratchpad; a producer must have run, the same discipline
+      ``_lower_doesnt_untap_next_step`` applies.
+    * "…for as long as you control this creature" — Aladdin's linked steal
+      when targeted, The Wretched's blocker sweep when the subject is "all
+      creatures blocking this creature".
+    * "…and this creature remains tapped" (Willow Satyr, Rubinia Soulsinger) —
+      the two-condition linked duration; the conditions ride the payload and
+      the state-based sweep re-checks them (CR 611.2b,
+      ``engine/control.LINKED_CONTROL_CONDITIONS``).
+
+    ``steal_target_permanent_linked_to_self`` takes no payload at all: it looks
+    for an artifact in its own source code and ends the control change from
+    ``ON_LEAVE_BATTLEFIELD``. So Aladdin's filter is compared for **equality**
+    against the one shape that handler implements rather than probed field by
+    field — a restriction the AST grows later then refuses here instead of
+    being silently ignored by a lowering written before it existed. No
+    ``targets`` description is emitted for it: ``engine/targeting.py`` already
+    answers "artifact" for the kind, and the payload has to stay byte-identical
+    to what the rule it replaces produced.
+    """
+    subject = node.subject
+    if not isinstance(subject, ast.TargetSpec):
+        raise LoweringError("the linked-control handler needs a named target", node=node)
+    if node.duration == "until_end_of_turn":
+        if subject.quantifier == "that":
+            # "Gain control of **that creature** until end of turn."
+            # (Disharmony.) The bound object, not a second choice — and bound
+            # by id when the earlier step resolved, so a restated narrowing
+            # would have nothing to narrow.
+            if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+                raise LoweringError(
+                    "a bound object carries no narrowing the record could honour",
+                    node=node,
+                )
+            if _UNTAPPED_PERMANENTS not in produced:
+                raise LoweringError(
+                    f"back-reference to {_UNTAPPED_PERMANENTS!r} with no "
+                    "producer in this effect",
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "gain_control_until_eot", "",
+                    {"permanents_from": _UNTAPPED_PERMANENTS},
+                ),
+            )
+        if subject.quantifier != "target":
+            raise LoweringError(
+                "the linked-control handler needs a named target", node=node
+            )
+        described = _filter_payload(subject.filter)
+        if object_only_filter(described) is None:
+            raise LoweringError(
+                "the control change cannot test this restriction", node=node
+            )
+        _describe_targets(described, subject)
+        return (OracleInstruction("gain_control_until_eot", "", described),)
+    if node.duration == "while_source_tapped":
+        # "For as long as this creature remains tapped, gain control of target
+        # creature **of an opponent's choice they control**." (Preacher.)
+        #
+        # Two instructions rather than one: the pick belongs to another seat, so
+        # it is the ordinary ``choose_permanent`` prompt — armed on the opponent,
+        # answered into the resolution's scratchpad — and the steal behind it
+        # reads that answer instead of a target. Both halves already exist; what
+        # is new is only the pairing.
+        #
+        # A deliberate, recorded deviation from CR 601.2c: the printed word is
+        # "target", and a target is chosen as the ability is *activated*. This
+        # engine's activation flow announces targets from one seat, so the
+        # opponent's pick is made at resolution instead. What that costs is the
+        # 608.2b re-check and shroud on the picked creature; what the
+        # alternative costs is a second seat inside the announcement step.
+        if subject.quantifier != "target" or not subject.filter.chosen_by_opponent:
+            raise LoweringError(
+                "the tapped-source link is printed on a choice an opponent "
+                "makes",
+                node=node,
+            )
+        described = _filter_payload(
+            subject.filter, carried_separately=frozenset({"chosen_by_opponent"})
+        )
+        # The candidate rule asks `subject_matches` with the ability's seat as
+        # observer, so the gate is what that answers — including `controller`,
+        # which is exactly the key this phrase carries and which the
+        # object-only subset the other branches use would refuse.
+        if untestable_filter_keys(described):
+            raise LoweringError(
+                "the control change cannot test this restriction", node=node
+            )
+        return (
+            OracleInstruction(
+                "choose_permanent", "",
+                {
+                    "result_key": CHOSEN_PERMANENT,
+                    "chooser": "opponent",
+                    # The candidates come from the chooser's own battlefield —
+                    # "they control" — which is a seat question the filter's
+                    # `controller` key answers only relative to the *ability's*
+                    # controller. In a two-player game the two agree; with three
+                    # seats they do not, and the printed word is "they".
+                    "controlled_by": "chooser",
+                    "filter": described,
+                    "prompt": "Choose a creature you control.",
+                },
+            ),
+            OracleInstruction(
+                "steal_target_linked_to_source", "",
+                {
+                    "permanents_from": CHOSEN_PERMANENT,
+                    "link_conditions": ["source_remains_tapped"],
+                },
+            ),
+        )
+    if node.duration == "while_source_on_battlefield":
+        # "…for as long as this creature remains on the battlefield" (Scarwood
+        # Bandits). The same monitored contribution the two-condition steal
+        # records, with the one weaker condition — so it is that instruction
+        # with a different `link_conditions` list rather than a kind of its own:
+        # what differs is which fact the sweep re-checks, and that is data.
+        if subject.quantifier != "target":
+            raise LoweringError(
+                "the linked-control handler needs a named target", node=node
+            )
+        described = _filter_payload(subject.filter)
+        if object_only_filter(described) is None:
+            raise LoweringError(
+                "the control change cannot test this restriction", node=node
+            )
+        _describe_targets(described, subject)
+        described["link_conditions"] = ["source_on_battlefield"]
+        return (OracleInstruction("steal_target_linked_to_source", "", described),)
+    if node.duration == "while_you_control_source_tapped":
+        # Willow Satyr / Rubinia Soulsinger. The filter must be one the
+        # resolution can test (Willow's "legendary" is the supertypes key),
+        # and the conditions are payload data so the sweep stays one reader.
+        if subject.quantifier != "target":
+            raise LoweringError(
+                "the linked-control handler needs a named target", node=node
+            )
+        described = _filter_payload(subject.filter)
+        if object_only_filter(described) is None:
+            raise LoweringError(
+                "the control change cannot test this restriction", node=node
+            )
+        _describe_targets(described, subject)
+        described["link_conditions"] = [
+            "you_control_source", "source_remains_tapped",
+        ]
+        return (OracleInstruction("steal_target_linked_to_source", "", described),)
+    # while_you_control_source
+    if (
+        subject.quantifier == "all"
+        and subject.filter.blocking_source
+        and not _restrictions_beyond(
+            subject.filter, frozenset({"card_types", "blocking_source"})
+        )
+        and subject.filter.card_types == ("creature",)
+    ):
+        # "Gain control of all creatures blocking this creature…"
+        # (The Wretched.) The set was fixed when the trigger fired
+        # (CR 611.2c): the end-of-combat dispatcher captures the blockers by
+        # id into the trigger context, because by resolution the combat
+        # record has been cleared.
+        return (
+            OracleInstruction(
+                "steal_blockers_of_source", "",
+                {"link_conditions": ["you_control_source"]},
+            ),
+        )
+    if subject.quantifier != "target":
+        raise LoweringError("the linked-control handler needs a named target", node=node)
+    if subject.filter != _LINKED_STEAL_FILTER:
+        raise LoweringError(
+            "the only linked-control handler gains control of an artifact", node=node
+        )
+    return (OracleInstruction("steal_target_permanent_linked_to_self", "", {}),)

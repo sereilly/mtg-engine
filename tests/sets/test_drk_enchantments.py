@@ -649,3 +649,159 @@ def test_brainwash_tolls_add_up_across_attackers(set_pool, catalog_by_name):
 
     assert not declared, game.log
     assert "{6}" in message, message
+
+# --- H2: land denial and prohibitions (The Dark) ---
+
+
+def test_mana_vortex_counters_itself_when_no_land_is_sacrificed(set_pool):
+    """"When you cast this spell, counter it unless you sacrifice a land."
+
+    CR 603.6d: the ability is on the object being cast and triggers from the
+    stack, so no battlefield scan can find it. With no land to give, the offer
+    is never made and the decline branch counters the spell — the enchantment
+    reaches a graveyard rather than the battlefield.
+    """
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.players[0].hand = [set_pool("DRK")["Mana Vortex"]]
+
+    game.cast_from_hand(0, "Mana Vortex")
+    game.auto_resolve_pending_choices()
+    while game.stack:
+        game.resolve_top_of_stack()
+        game.auto_resolve_pending_choices()
+
+    assert [p.card.name for p in game.players[0].battlefield] == [], game.log
+    assert game.players[0].graveyard[-1].name == "Mana Vortex", game.log
+
+
+def test_mana_vortex_takes_a_land_from_whoever_is_in_upkeep(set_pool):
+    """"At the beginning of each player's upkeep, **that player** sacrifices a
+    land of their choice."
+
+    The seat is the one the trigger's condition named, frozen by the fire site
+    — not the source's controller, which is the wrong seat on every upkeep but
+    their own. So P2's upkeep costs P2 a land and leaves P1's alone.
+    """
+    lea = set_pool("LEA")
+    vortex = Permanent(card=set_pool("DRK")["Mana Vortex"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[vortex, Permanent(card=lea["Forest"])]),
+        PlayerState(name="P2", battlefield=[Permanent(card=lea["Swamp"])]),
+    ])
+    game._sync_control()
+
+    _run_upkeep(game, 1)
+    game.auto_resolve_pending_choices()
+
+    assert [p.card.name for p in game.players[1].battlefield] == [], game.log
+    assert "Forest" in [p.card.name for p in game.players[0].battlefield], game.log
+
+
+def test_mana_vortex_sacrifices_itself_once_every_land_is_gone(set_pool):
+    """"When there are no lands on the battlefield, sacrifice this enchantment."
+
+    A state trigger (CR 603.8) over *every* battlefield, not the controller's:
+    the Vortex stays while an opponent still has a land and goes the moment the
+    last one anywhere leaves.
+    """
+    lea = set_pool("LEA")
+    vortex = Permanent(card=set_pool("DRK")["Mana Vortex"])
+    swamp = Permanent(card=lea["Swamp"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[vortex]),
+        PlayerState(name="P2", battlefield=[swamp]),
+    ])
+    game._sync_control()
+
+    game.check_state_based_actions()
+    assert game.is_on_battlefield(vortex), game.log
+
+    game.sacrifice_permanent(swamp)
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(vortex), game.log
+    assert game.players[0].graveyard[-1].name == "Mana Vortex"
+
+
+def _worms_board(set_pool, *, p1_lands: int = 3, p2_lands: int = 3):
+    lea = set_pool("LEA")
+    worms = Permanent(card=set_pool("DRK")["Worms of the Earth"])
+    game = Game(players=[
+        PlayerState(
+            name="P1",
+            battlefield=[worms] + [Permanent(card=lea["Forest"]) for _ in range(p1_lands)],
+        ),
+        PlayerState(
+            name="P2",
+            battlefield=[Permanent(card=lea["Swamp"]) for _ in range(p2_lands)],
+        ),
+    ])
+    # A real game's setting: the land-drop gate — the printed one-per-turn and
+    # the prohibition alike — is only asked where costs are enforced.
+    game.enforce_mana_costs = True
+    game._sync_control()
+    return game, worms
+
+
+def test_worms_of_the_earth_stops_every_seat_playing_a_land(set_pool):
+    """"Players can't play lands." CR 305.1's permission withdrawn, and the
+    refusal names the card rather than a land drop nobody has taken — the one
+    gate every land-drop path asks is what makes those the same answer."""
+    game, _ = _worms_board(set_pool)
+    game.players[1].hand = [set_pool("LEA")["Swamp"]]
+
+    assert game._may_play_another_land(1) is False
+    result = game.cast_from_hand(1, "Swamp")
+
+    assert not result.supported
+    assert "Worms of the Earth" in result.details
+    assert len(game.players[1].battlefield) == 3
+
+
+def test_worms_of_the_earth_keeps_a_land_off_the_battlefield_entirely(set_pool):
+    """"Lands can't enter the battlefield." CR 614.17, and a different rule from
+    the play restriction beside it: this one stops a land arriving from anywhere,
+    so a permanent put onto the battlefield by an effect never enters."""
+    game, _ = _worms_board(set_pool)
+    arriving = Permanent(card=set_pool("LEA")["Island"])
+
+    game._put_permanent_onto_battlefield(1, arriving, None)
+
+    assert "Island" not in [p.card.name for p in game.players[1].battlefield], game.log
+
+
+def test_worms_of_the_earth_offers_every_seat_its_own_two_lands(set_pool):
+    """"At the beginning of each upkeep, any player may sacrifice two lands of
+    their choice or have this enchantment deal 5 damage to that player. If a
+    player does either, destroy this enchantment."
+
+    "Any player" is every player in turn (CR 101.4), and each of them acts on
+    their **own** board: the offer's controller used to sacrifice their own
+    lands for every other player's answer, because only the back-reference and
+    not the acting seat moved to the seat that was offered.
+    """
+    game, worms = _worms_board(set_pool)
+
+    _run_upkeep(game, 0)
+    game.auto_resolve_pending_choices()
+
+    assert [p.card.name for p in game.players[0].battlefield] == ["Forest"], game.log
+    assert [p.card.name for p in game.players[1].battlefield] == ["Swamp"], game.log
+    assert not game.is_on_battlefield(worms), game.log
+
+
+def test_worms_of_the_earth_burns_the_seat_that_took_the_damage(set_pool):
+    """The other alternative, and who it hits: "have this enchantment deal 5
+    damage to **that player**" is the seat that chose it, not the seat whose
+    upkeep it is and not the enchantment's controller. With one land each,
+    sacrificing two is not an offer either player can take, so both take the
+    damage."""
+    game, worms = _worms_board(set_pool, p1_lands=1, p2_lands=1)
+
+    _run_upkeep(game, 0)
+    game.auto_resolve_pending_choices()
+
+    assert game.players[0].life == 15, game.log
+    assert game.players[1].life == 15, game.log
+    assert not game.is_on_battlefield(worms), game.log

@@ -163,6 +163,52 @@ def graveyard_trigger_events(game: Game, kind: str, players=None) -> list[dict]:
     return events
 
 
+#: Trigger conditions that fire **from the stack**, about the object being cast
+#: (CR 603.6d, CR 113.6a). A condition rather than a ``FUNCTIONS_FROM`` stamp,
+#: because here the condition *is* the claim: "when you cast this spell" can
+#: only ever be about the object being cast, so there is nothing for a card to
+#: declare and nothing for a second reader to disagree with.
+_STACK_CAST_CONDITIONS: frozenset[str] = frozenset({"self_cast"})
+
+
+def cast_trigger_events(game: Game, event: Event) -> list[dict]:
+    """The cast object's own triggers matching *event*, as enqueueable dicts.
+
+    The fourth zone a trigger can fire from, after the battlefield, the command
+    zone and a graveyard — and the one where the object is not a permanent at
+    all. CR 603.6d: an ability that triggers on its own object being cast
+    triggers from the stack, and only for that object; CR 113.6a is why no
+    battlefield scan can answer it, and ``_self_cast_filter`` below is why one
+    does not try.
+
+    The seat is the caster's (CR 109.5), and the card rides the event as
+    ``card`` for :func:`graveyard_trigger_events`'s reason: a spell on the
+    stack is a card, not a permanent, and giving it a stand-in permanent would
+    be inventing an object the game does not have.
+    """
+    if event.kind not in _STACK_CAST_CONDITIONS:
+        return []
+    from .trigger_utils import matching_triggers
+
+    card = event.payload.get("cast_card")
+    seat = event.payload.get("caster_index")
+    if card is None or not isinstance(seat, int):
+        return []
+    return [
+        {
+            "controller_index": seat,
+            "source_permanent": None,
+            "card": card,
+            "instruction": trig.instruction,
+            "effect_kind": trig.effect_kind,
+            "ability_text": trig.source_line,
+            "trigger_context": dict(event.payload) or None,
+        }
+        for trig in matching_triggers(card, condition_kinds={event.kind})
+        if trig.instruction is not None
+    ]
+
+
 def collect(game: Game, event: Event) -> list[dict]:
     """Every trigger that fires for *event*, as enqueueable event dicts.
 
@@ -210,6 +256,10 @@ def collect(game: Game, event: Event) -> list[dict]:
     # And from a graveyard (CR 113.6m), for the same reason: no battlefield scan
     # can find a card that is not on one.
     events.extend(graveyard_trigger_events(game, event.kind, scoped))
+    # And from the stack, for the object being cast (CR 603.6d). Beside the
+    # other two rather than at the cast site, so APNAP ordering and the enqueue
+    # path treat every zone's triggers alike.
+    events.extend(cast_trigger_events(game, event))
     return events
 
 
@@ -298,6 +348,22 @@ def _self_untapped_filter(
     event and nobody else's, so a board of Pilferers does not all fire when one
     untaps. By identity, because two of them compare equal by value."""
     return event.subject is permanent
+
+
+@event_filter("self_cast")
+def _self_cast_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"When you cast this spell" never fires from the battlefield.
+
+    CR 113.6a: a permanent's abilities function on the battlefield, and this one
+    is about *this spell* — an object that is on the stack and that a permanent
+    on the battlefield is not. Without this, a resolved Mana Vortex would counter
+    every later spell its controller cast, because the battlefield scan matches
+    on the condition kind alone and the kind is the same one.
+    ``cast_trigger_events`` is what does fire it, over the card being cast.
+    """
+    return False
 
 
 @event_filter("spell_cast")

@@ -6,6 +6,7 @@ from ..dexterity import flip_lands_on
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
 from ..oracle_types import PER_OBJECT_SEAT_RECORDS
+from ..resumption import run_resumable
 from ._common import permanent_matches_filter, resolve_target_permanent
 from .registry import effect_handler
 
@@ -597,4 +598,83 @@ def destroy_attached_permanent(game: Game, instruction: OracleInstruction, conte
     )
     if destroyed:
         game.log.append(f"{context.card.name} destroyed {attached.card.name}")
+    return True, "resolved"
+
+
+@effect_handler("destroy_each_unless_life_paid")
+def destroy_each_unless_life_paid(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"For each land, destroy that land unless any player pays 1 life."
+    (Cleansing.)
+
+    A sweep whose members are bought off one at a time. The offer goes to
+    **every** player in APNAP order (CR 101.4) about **each** land in turn, and
+    the first seat to pay ends that land's round — so a seat that saved one
+    land has said nothing about the next, which is the whole difference between
+    this and "destroy all lands unless a player pays".
+
+    The loop is resumable (``engine/resumption.py``): a human seat's offer
+    suspends it and answering carries it on from the land it stopped at. That
+    is why the destruction is a *step of the loop* — the ``None`` seat at the
+    end of each land's round — rather than work written after it. Work after a
+    resumable loop does not run when a step suspends, and nothing records it.
+
+    The lands are frozen as ids before the first offer (CR 400.7: an index is
+    not an identity, and this loop removes permanents as it goes). A land that
+    has left by the time its round comes up is simply skipped: it is no longer
+    there to destroy, and nobody should be charged to save it.
+    """
+    filters = dict(instruction.payload.get("filter") or {})
+    life = int(instruction.payload.get("life", 1))
+    seats = len(game.players)
+    active = game.active_player_index if game.active_player_index is not None else 0
+    apnap = [(active + offset) % seats for offset in range(seats)]
+    targets = [
+        perm.permanent_id
+        for perm in sorted(game.all_permanents(), key=lambda p: p.permanent_id)
+        if permanent_matches_filter(perm, filters)
+    ]
+    if not targets:
+        game.log.append(f"{context.card.name}: nothing to destroy")
+        return True, "resolved"
+    saved: set[int] = set()
+    # One flat list of steps rather than a loop inside a loop: `run_resumable`
+    # records the rest of *itself* before each step, and a nested loop would
+    # need its own record for the offers still owed about the land it stopped
+    # on. The `None` seat is that land's verdict.
+    steps = [
+        (permanent_id, seat)
+        for permanent_id in targets
+        for seat in [*apnap, None]
+    ]
+
+    def _step(item) -> None:
+        permanent_id, seat = item
+        permanent = game.permanent_by_id(permanent_id)
+        if permanent is None or permanent_id in saved:
+            return
+        if seat is None:
+            controller = game.controller_index_of(permanent)
+            if controller is None:
+                return
+            game._destroy_swept_permanents(
+                game.players[controller],
+                lambda candidate, target=permanent: candidate is target,
+            )
+            game.log.append(
+                f"{context.card.name} destroyed {permanent.card.name} "
+                "(nobody paid to save it)"
+            )
+            return
+        if game.players[seat].lost:
+            return
+        game.arm_pending_choice(
+            "pay_life_to_save", seat,
+            permanent_id=permanent_id,
+            permanent_name=permanent.card.name,
+            life=life,
+            card_name=context.card.name,
+            _saved=saved,
+        )
+
+    run_resumable(game, steps, _step)
     return True, "resolved"

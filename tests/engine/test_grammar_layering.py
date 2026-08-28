@@ -170,7 +170,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # CR's other line: CR 701.14 is a keyword action, an atomic exchange between two
 # creatures (701.14b — if either has left, neither deals damage), where
 # everything left behind is one source dealing to a recipient.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "counters", "keywords", "tapping", "prevention", "redirection", "fighting", "where_x", "control_flow", "attachments"]
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "counters", "keywords", "tapping", "prevention", "redirection", "fighting", "where_x", "control_flow", "attachments", "control_changes"]
 # The AST side has no `library`: what a search or a look-at *is* — the pile, the
 # filter, the fate of what was found — is a handful of nodes that sit perfectly
 # well beside the other card nodes, and the split that made `library` a family
@@ -525,3 +525,20 @@ def test_no_module_defines_the_same_name_twice():
         "a top-level name is bound twice in one module — the later definition "
         "silently wins and the earlier one never runs:\n  " + "\n  ".join(offenders)
     )
+
+
+def test_the_lowering_and_the_handler_agree_which_actors_name_a_set_of_seats():
+    """`may`'s two halves have to name the same actors.
+
+    The lowering decides what a back-reference to a player *compiles to* inside
+    an offer (``lowering/control_flow._SEAT_SET_ACTORS``) and the handler
+    decides which seat it *resolves against*
+    (``handlers/control_flow._EACH_ACTORS``, the rebind). An actor in one set
+    and not the other is an offer that burns, or sacrifices for, whoever the
+    other half happened to pick — silent, because both halves resolve to a real
+    seat.
+    """
+    from engine.grammar.lowering.control_flow import _SEAT_SET_ACTORS
+    from engine.handlers.control_flow import _EACH_ACTORS
+
+    assert _SEAT_SET_ACTORS == _EACH_ACTORS

@@ -172,6 +172,7 @@ from .board import (
     PutOnLibraryTop,
     PutOntoBattlefield,
     DestroyUnlessPay,
+    DestroyEachUnlessPaid,
     SacrificeUnlessPay,
 )
 from .mana import (
@@ -402,6 +403,7 @@ __all__ = [
     "PutOnLibraryTop",
     "PutOntoBattlefield",
     "DestroyUnlessPay",
+    "DestroyEachUnlessPaid",
     "SacrificeUnlessPay",
     # cards
     "Draw",

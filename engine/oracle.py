@@ -709,9 +709,21 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # hand. The one discard seam (`Game._discard_card`) is what announces it,
     # and CR 109.5's "an opponent" is read off the seat resolving the spell or
     # ability that caused the discard.
+    # "When **you cast this spell**, counter it unless you sacrifice a land."
+    # (Mana Vortex.) CR 603.6d: an ability that triggers on its own object
+    # being cast, so it functions from the stack rather than from the
+    # battlefield the permanent has not reached yet (CR 113.6a). The cast
+    # path is what announces it, over the card it is casting.
+    ("self_cast",                   r"when you cast this spell"),
     ("discarded_by_opponent_effect",
      r"when a spell or ability an opponent controls causes you to discard this card"),
     ("no_islands",                  r"when you control no islands"),
+    # "When there are **no lands on the battlefield**, sacrifice this
+    # enchantment." (Mana Vortex.) The same state trigger (CR 603.8) asked
+    # about every battlefield rather than the source controller's — a
+    # different set, so a different kind: a Mana Vortex whose controller has
+    # no land is not sacrificed while an opponent still has one.
+    ("no_lands_anywhere",           r"when there are no lands on the battlefield"),
     ("no_lands",                    r"when you control no lands"),
     # "When you control a Dwarf, sacrifice this creature." (Goblins of the
     # Flarg.) A state trigger (CR 603.8) like the two above, and the *positive*
@@ -2565,7 +2577,7 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # creature still refuses rather than compiling with the damage absent.
     from .land_play_allowance import land_play_line
 
-    if land_play_line(normalized) == "allowance":
+    if land_play_line(normalized) in ("allowance", "prohibition"):
         return True
     # "As this creature enters, it becomes your choice of <body>, …"
     # (Primal Clay). Carried out by _initialize_permanent_state, which reads the

@@ -15,6 +15,7 @@ import dataclasses
 from .. import ast
 from ..amounts import parse_amount, parse_equal_to
 from ..errors import GrammarError
+from ..readers import accept_source_reference
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS)
@@ -838,3 +839,30 @@ def _parse_bound_targeting_prevention(stream: TokenStream) -> "ast.PreventDamage
     return ast.PreventDamage(
         ast.AllOf(), to=protected, duration=duration, from_targeting_source=True
     )
+
+
+def _parse_have_source_deal_damage(stream: TokenStream) -> "ast.Statement | None":
+    """``have <source> deal <amount> damage to <recipient>`` (Worms of the Earth).
+
+    The same event as "<source> deals <amount> damage to <recipient>" printed as
+    something a *player chooses to do* rather than something that happens, which
+    is why it is a branch in front of `_parse_damage` and not a node of its own:
+    the effect, the riders and the recipients are read by the one production, so
+    the alternative a player picks and the damage the engine deals cannot come to
+    describe different events.
+
+    Only the ability's own source may be named. A sentence handing a third
+    object the verb would be an effect this reading has nothing to point at, so
+    it refuses without consuming and every other "have …" sentence keeps its own
+    reading.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("have"):
+        return None
+    if not accept_source_reference(stream):
+        stream.reset(mark)
+        return None
+    if not stream.at_word("deal", "deals"):
+        stream.reset(mark)
+        return None
+    return _parse_damage(stream, ast.TargetSpec("this", ast.ObjectFilter(is_source=True)))

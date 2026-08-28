@@ -193,6 +193,8 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "discarded_by_opponent_effect":
         "when a spell or ability an opponent controls causes you to discard this card",
     "no_islands": "when you control no islands",
+    "no_lands_anywhere": "when there are no lands on the battlefield",
+    "self_cast": "when you cast this spell",
     "no_lands": "when you control no lands",
     "controls_matching_permanent": "when you control a dwarf",
     # at

@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from ._core import (
     Amount,
     Duration,
+    ObjectFilter,
     PlayerRef,
     Recipient,
     Zone,
@@ -422,6 +423,28 @@ class DestroyUnlessPay:
     subject: Recipient
     cost: ManaCost
     damage_if_destroyed: int | None = None
+
+
+@dataclass(frozen=True)
+class DestroyEachUnlessPaid:
+    """``For each <objects>, destroy that <object> unless any player pays N life.``
+    (Cleansing.)
+
+    A sweep whose every member can be bought off one at a time, which is what
+    keeps it apart from :class:`Destroy` over a quantified noun phrase: the
+    offer is made per permanent, and a seat that pays for one land has said
+    nothing about the next.
+
+    ``payer`` is the printed noun phrase's kind rather than a seat, because
+    "**any** player" means the offer goes round every one of them in turn — the
+    lowering refuses any other spelling instead of narrowing it to the
+    controller, since a buyout nobody but the caster is offered is a different
+    card.
+    """
+
+    filter: ObjectFilter
+    life: int
+    payer: str = "any_player"
 
 
 @dataclass(frozen=True)

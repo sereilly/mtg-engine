@@ -359,8 +359,9 @@ class SpellCastingMixin:
         extra_generic_tax = 0
 
         if self.enforce_mana_costs and card.primary_type == "land":
-            if not self._may_play_another_land(caster_index):
-                details = "already played a land this turn"
+            refusal = self._land_play_refusal(caster_index)
+            if refusal is not None:
+                details = refusal
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 

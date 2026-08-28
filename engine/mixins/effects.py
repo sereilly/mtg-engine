@@ -10,7 +10,9 @@ from ..auras import aura_restriction_active
 from ..auras import aura_enchants
 from ..damage_events import damage_source_seat, deal_damage, lifelink_life_gained
 from ..events import Event, collect, emit
-from ..land_play_allowance import LandPlayAllowance, land_play_allowance_for
+from ..land_play_allowance import (
+    LandPlayAllowance, land_play_allowance_for, lands_cannot_be_played,
+)
 from ..models import CardDefinition, Permanent, PlayerState
 from ..pt import add_plus1_counters, add_pt_counters
 from ..regeneration import regeneration_replaces_destruction
@@ -1382,17 +1384,46 @@ class EffectsMixin:
                 found.append((permanent, allowance))
         return found
 
-    def _may_play_another_land(self, player_index: int) -> bool:
-        """Whether the seat may still play a land this turn (CR 305.2).
+    def _land_play_refusal(self, player_index: int) -> str | None:
+        """Why the seat may not play a land right now, or None if they may.
 
-        One per turn, plus whatever the allowances on their battlefield add.
-        Every land-drop gate — cast validation, the AI's land policy, the web
-        layer's playable list — asks this one question, so they cannot disagree
-        about what a card grants.
+        The reason and the permission are one answer, the shape
+        ``equip_refusal`` and ``cast_target_refusal`` already use: the land-drop
+        path wants a message and every other caller wants a boolean, and two
+        readings of the same question are two chances to disagree — which is
+        exactly what a Worms of the Earth refused with "already played a land
+        this turn" looks like.
         """
+        # "Players can't play lands." (Worms of the Earth.) CR 305.1's
+        # permission withdrawn, asked before the count because no number of
+        # extra plays adds up to one a player may take — a Fastbond beside a
+        # Worms of the Earth is still no land drops. Every battlefield, because
+        # the sentence names no seat.
+        banning = next(
+            (
+                perm for perm in self.all_permanents()
+                if lands_cannot_be_played(perm.effective_card.oracle_text)
+            ),
+            None,
+        )
+        if banning is not None:
+            return f"no player can play lands ({banning.card.name})"
         allowed = 1
         for _, allowance in self._land_play_allowances(player_index):
             if allowance.extra is None:
-                return True
+                return None
             allowed += allowance.extra
-        return self.lands_played_this_turn.get(player_index, 0) < allowed
+        if self.lands_played_this_turn.get(player_index, 0) < allowed:
+            return None
+        return "already played a land this turn"
+
+    def _may_play_another_land(self, player_index: int) -> bool:
+        """Whether the seat may still play a land this turn (CR 305.2).
+
+        One per turn, plus whatever the allowances on their battlefield add,
+        and nothing at all while a prohibition stands. Every land-drop gate —
+        cast validation, the AI's land policy, the web layer's playable list —
+        asks this one question, so they cannot disagree about what a card
+        grants or takes away.
+        """
+        return self._land_play_refusal(player_index) is None

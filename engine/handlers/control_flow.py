@@ -767,7 +767,17 @@ def _offer_to_seat(
     """
     player = game.players[player_index]
     if rebind:
-        context = dataclasses.replace(context, target=player)
+        # **Both ends of the sentence move to the offered seat.** ``target`` is
+        # what a back-reference to a player reads ("that player's life total
+        # becomes 20", Rebirth), and ``caster`` is who is *performing* the
+        # branch — a bare imperative inside the offer ("any player may
+        # **sacrifice two lands of their choice**", Worms of the Earth) means
+        # the seat that took it, and CR 601.2b makes that seat the one who
+        # picks between printed alternatives. Rebinding only the first left the
+        # ability's controller sacrificing their own lands for every other
+        # player's answer, and choosing, out of their own board, which
+        # alternative each other player was offered.
+        context = dataclasses.replace(context, target=player, caster=player)
     # The whole printed cost, symbol by symbol — "you may pay {1}{B}" (Liliana's
     # Devotee) is a dict, not the number 2, because a payment that counted to a
     # number could only ever collect generic mana.

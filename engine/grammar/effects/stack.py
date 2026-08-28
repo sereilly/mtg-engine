@@ -10,7 +10,7 @@ from .. import ast
 from ..lexer import DASH, WORD
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import _parse_mana_payment
+from ..phrases import _parse_counted_sacrifice, _parse_mana_payment
 from ..vocabulary import NUMBER_WORDS
 
 
@@ -129,6 +129,27 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         if counter_condition_readable(sentence):
             return ast.CounterSpell(subject, only_if=sentence)
     stream.reset(condition_mark)
+
+    # "…**unless you sacrifice a land**" (Mana Vortex). The counter's twin of
+    # the destroy and sacrifice tails in the `board` family, decomposed to the
+    # same `May(action=…, otherwise=…)` for the same reason: an "unless" is an
+    # offer with a penalty, and saying it that way means the offer, the penalty
+    # and the "you have no land to give" case all come from machinery that
+    # already works — where `_parse_unless_pays` below is the *countered*
+    # object's controller paying mana, which is the counter flow's own job.
+    #
+    # Read before that clause because both open with "unless", and it raises on
+    # a payer it does not admit rather than refusing quietly — so "you" would
+    # fail the whole line naming the wrong reason.
+    sacrifice_mark = stream.mark()
+    if stream.accept_phrase("unless", "you", "sacrifice"):
+        payer = ast.PlayerRef("you")
+        return ast.May(
+            actor=payer,
+            action=_parse_counted_sacrifice(stream, payer),
+            otherwise=ast.CounterSpell(subject),
+        )
+    stream.reset(sacrifice_mark)
 
     payment = _parse_unless_pays(stream)
     if payment is not None:

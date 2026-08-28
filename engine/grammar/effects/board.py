@@ -14,13 +14,16 @@ import dataclasses
 from .. import ast
 from ..amounts import parse_amount
 from ..errors import GrammarError
+from ..nouns import parse_object_filter
+from ..lexer import NUMBER
 from ..readers import accept_source_reference
 from ..references import parse_player_ref, parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, NUMBER_WORDS, SUBTYPE_INDEX, match_longest)
 from ..phrases import (
-    _accept_number, _accept_self_reference, _parse_for_each_this_way,
-    _parse_mana_payment, _parse_pay_life, _parse_that_object, _parse_zone,
+    _accept_number, _accept_self_reference, _parse_counted_sacrifice,
+    _parse_for_each_this_way, _parse_mana_payment, _parse_pay_life,
+    _parse_that_object, _parse_zone,
     parse_counted_subject, parse_pair_ordinal_subject, parse_subject_filter_at,
 )
 
@@ -698,29 +701,6 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
     return ast.Sacrifice(player, subject)
 
 
-def _parse_counted_sacrifice(
-    stream: TokenStream, player: ast.PlayerRef
-) -> ast.Statement:
-    """"two Swamps" / "an Island" — what an "unless you sacrifice" asks for.
-
-    The printed number is read here rather than by ``parse_recipient``, which
-    has no reading for a bare count in front of an untargeted plural: the
-    counted position is the one the noun parser wants told about
-    (``plural=True``), exactly as a counted trigger subject is. One number and
-    one noun phrase, so "an Island" and "two Swamps" are one production with
-    the count as data.
-    """
-    # The noun phrase itself is `phrases.parse_counted_subject`: Leviathan's
-    # "can't attack unless you sacrifice two Islands" is the same phrase read by
-    # the combat family, and one reading is what keeps the offer, the gate and
-    # the charge agreeing about what the card asks for.
-    counted = parse_counted_subject(stream)
-    if counted is None:
-        raise stream.error("expected what to sacrifice")
-    count, described = counted
-    return ast.Sacrifice(player, ast.TargetSpec("a", described, count=count))
-
-
 def _parse_sacrifice_expansion_permanents(stream: TokenStream) -> ast.Statement | None:
     """``Each nontoken permanent with a name originally printed in the <Set>
     expansion is sacrificed by its controller.`` (Golgothian Sylex.)
@@ -924,3 +904,74 @@ def parse_player_chooses_permanent(
     # branches; the rider that reads "If they don't" is what says so, and it
     # sets the flag through `dataclasses.replace`.
     return ast.ChoosePermanent(chooser, spec, host_for_source=host_for_source)
+
+
+def _parse_for_each_destroy_unless_paid(
+    stream: TokenStream,
+) -> "ast.DestroyEachUnlessPaid | None":
+    """``For each <objects>, destroy that <object> unless any player pays N life.``
+    (Cleansing.)
+
+    Read as one production rather than as `phrases._parse_for_each` over a
+    destroy, because the buyout is *per member*: the offer is made about one
+    permanent at a time and paying for one says nothing about the next. A
+    decomposed reading would have had to invent an iteration node whose body
+    could suspend, and the only thing that node would ever carry is this
+    sentence.
+
+    Every part is required and nothing is dropped:
+
+    * the back-reference must name the same noun the loop does ("for each
+      **land** … destroy that **land**"), so a sentence iterating one set and
+      destroying another refuses rather than compiling into the wrong sweep;
+    * the payer must be printed "any player" — the lowering has nowhere to put
+      a narrower one, and a buyout offered to fewer seats than the card names
+      is a different card;
+    * the cost must be a printed number of life, since the loop charges it
+      literally.
+
+    Returns None with the cursor untouched for every other sentence opening
+    "for each", so `statements._parse_leading_for_each`'s "this way" windows
+    keep their own reader.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not (stream.accept_punct(",") and stream.accept_word("destroy")):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("that"):
+        stream.reset(mark)
+        return None
+    noun = stream.peek_word()
+    # The printed noun, compared against the set the loop named rather than
+    # skipped: "that land" is a back-reference (idiom 20) and a production that
+    # accepted any word there would happily read "destroy that creature".
+    if noun is None or noun not in filt.card_types:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("unless", "any", "player", "pays"):
+        stream.reset(mark)
+        return None
+    # A printed integer, read straight off the token rather than through
+    # `parse_amount`: the loop charges the number literally, and an `Amount`
+    # this production cannot evaluate would be a cost nobody is asked for.
+    life_token = stream.accept_kind(NUMBER)
+    if life_token is None:
+        word = _accept_number(stream)
+        if word is None:
+            stream.reset(mark)
+            return None
+        life = word
+    else:
+        life = int(life_token.text)
+    if not stream.accept_word("life"):
+        stream.reset(mark)
+        return None
+    return ast.DestroyEachUnlessPaid(filt, life)

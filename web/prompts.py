@@ -690,6 +690,23 @@ def _optional_pay(ctx: PromptContext, choices: list) -> dict:
     ]}
 
 
+@prompt_renderer("pay_life_to_save")
+def _pay_life_to_save(ctx: PromptContext, choices: list) -> dict:
+    """Cleansing: "…unless any player pays 1 life", asked about one permanent.
+
+    One offer at a time — the sweep asks each seat in turn about each land — so
+    the first queued choice is the whole prompt.
+    """
+    data = choices[0].data
+    return {
+        "player_index": choices[0].player_index,
+        "card_name": data.get("card_name", ""),
+        "permanent_id": data.get("permanent_id"),
+        "permanent_name": data.get("permanent_name", ""),
+        "life": int(data.get("life", 1)),
+    }
+
+
 @prompt_renderer("hand_reveal")
 def _hand_reveal(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]
