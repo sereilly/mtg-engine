@@ -60,6 +60,12 @@ BASE_CONTROLLER = "base_controller_index"
 #                               Wretched; CR 611.2b's Master Thief example).
 #   "source_remains_tapped"   — the source must still be tapped (the "…and
 #                               this creature remains tapped" half).
+#   "source_on_battlefield"    — the source must still be on the battlefield
+#                               ("…for as long as this creature remains on the
+#                               battlefield", Scarwood Bandits). Weaker than
+#                               the first, and deliberately not folded into it:
+#                               an opponent who gains control of the Bandits
+#                               does not thereby hand the artifact back.
 #
 # The steal handlers stamp it through ``take_control(extra_meta=…)`` and the
 # state-based sweep in ``mixins/game_ending.py`` reads it from the *stolen*

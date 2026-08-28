@@ -290,6 +290,14 @@ class GameEndingMixin:
                             not self.is_on_battlefield(source)
                             or not source.tapped
                         )
+                    ) or (
+                        # "…for as long as this creature remains on the
+                        # battlefield" (Scarwood Bandits). Weaker than the
+                        # control condition above and not the same test: an
+                        # opponent stealing the Bandits breaks that one and not
+                        # this one, and the artifact stays where it is.
+                        "source_on_battlefield" in conditions
+                        and not self.is_on_battlefield(source)
                     )
                     if not broken:
                         continue

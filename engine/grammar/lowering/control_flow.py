@@ -86,6 +86,63 @@ def _may_cost_payload(node: ast.May) -> dict[str, object]:
     return payload
 
 
+#: Player references that name *every* opponent rather than one chosen seat.
+#: "An opponent" reaches the AST as ``target_opponent`` — the reference reader's
+#: spelling for the bare article — and it is not a target here: CR 601.2b's cost
+#: announcement chooses nobody, so each opponent is asked in turn until one pays.
+_OPPONENT_PAYERS = frozenset({"target_opponent", "each_opponent", "opponent"})
+
+
+def _lower_unless_player_pays(
+    node: ast.UnlessPlayerPays, produced: frozenset[str],
+    event: str | None = None, event_subject: object | None = None,
+    *,
+    lower_statement,
+) -> tuple[OracleInstruction, ...]:
+    """"Unless an opponent pays {2}, gain control of target artifact …"
+    (Scarwood Bandits.)
+
+    The unpaid branch is an ordinary instruction sequence, exactly as an
+    offer's branches are, so any effect can sit behind the payment.
+
+    Two refusals, each a way the sentence could otherwise mean more than it
+    says:
+
+    * the payer must be a reference the handler can enumerate seats from. "You"
+      is an offer to the ability's own controller, which is a ``May`` and a
+      different card; a payer nobody is asked is the effect happening
+      unconditionally.
+    * the branch must lower to something. A clause bought off with nothing
+      behind it is a payment charged for no reason.
+    """
+    if node.payer.kind not in _OPPONENT_PAYERS:
+        raise LoweringError(
+            "the only payer this clause can enumerate is an opponent", node=node
+        )
+    unpaid = lower_statement(
+        node.otherwise, produced, event=event, event_subject=event_subject,
+        whole_effect=False,
+    )
+    if not unpaid:
+        raise LoweringError("an unpaid clause with no consequence", node=node)
+    return (
+        OracleInstruction(
+            "unless_player_pays", "",
+            {
+                "payer": "opponent",
+                "cost": {symbol: count for symbol, count in node.cost.pips},
+                # ``unpaid``, never ``otherwise`` and never ``steps``: the first
+                # is the offer's *declined* branch, which every reader that
+                # walks a program deliberately skips (a declined branch chooses
+                # no targets), and this branch is the one carrying the ability's
+                # target. The second name is reserved for a composed effect's
+                # nested instructions.
+                "unpaid": unpaid,
+            },
+        ),
+    )
+
+
 def _lower_may(
     node: ast.May, produced: frozenset[str], event: str | None = None,
     event_subject: object | None = None,

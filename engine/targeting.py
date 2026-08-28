@@ -927,6 +927,18 @@ def _from_instructions(instructions) -> dict | None:
             if nested is not None:
                 return nested
             continue
+        if instruction.kind == "unless_player_pays":
+            # "Unless an opponent pays {2}, gain control of **target artifact**
+            # …" (Scarwood Bandits). The ability's target sits on the *unpaid*
+            # branch, and CR 601.2c picks it as the ability is activated —
+            # before anyone is offered the cost — so this branch is read where
+            # an offer's declined branch deliberately is not.
+            nested = _from_instructions(
+                tuple(instruction.payload.get("unpaid") or ())
+            )
+            if nested is not None:
+                return nested
+            continue
         if instruction.kind == "may":
             # An optional action still targets — "you may tap or untap target
             # creature" names a creature whether or not the offer is taken.

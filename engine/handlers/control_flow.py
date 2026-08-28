@@ -816,6 +816,64 @@ def _offer_to_seat(
     game.arm_pending_choice("optional_pay", player_index, **entry)
 
 
+@effect_handler("unless_player_pays")
+def unless_player_pays(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Unless an opponent pays {2}, gain control of target artifact …"
+    (Scarwood Bandits.)
+
+    An offer made to *another* seat, on the same ``optional_pay`` queue every
+    other offer uses — and a chain rather than a batch: each opponent is asked
+    in turn, and the ability's effect rides the **last** decline. Asking them
+    all at once would arm several prompts whose answers could not see each
+    other, and one payment has to stop the rest (CR 601.2b: once the cost is
+    paid the clause is satisfied, and nobody else is asked).
+
+    The chain is a prompt armed by *answering* an earlier one, which is how a
+    sequence of decisions stays one resolution — the stack object is held until
+    the last of them is answered (CR 608.2, CR 117.3b).
+    """
+    payload = dict(instruction.payload)
+    unpaid = tuple(payload.get("unpaid") or ())
+    cost = dict(payload.get("cost") or {})
+    caster = context.caster
+    if caster is None or caster not in game.players:
+        return True, "resolved"
+    caster_index = game.players.index(caster)
+    # Every seat the printed reference names, in seat order. A player who has
+    # left the game is not one of them (CR 800.4a), read off the engine's own
+    # state-based-action flag.
+    seats = [
+        index for index in range(len(game.players))
+        if index != caster_index and not getattr(game.players[index], "lost", False)
+    ]
+    asked = int(payload.get("asked_seats", 0))
+    if asked >= len(seats):
+        # Everyone declined (or there was nobody to ask), so the clause is not
+        # bought off and the effect happens.
+        for step in unpaid:
+            game._execute_oracle_instruction(step, context)
+        return True, "resolved"
+    seat = seats[asked]
+    game.arm_pending_choice(
+        "optional_pay", seat,
+        card_name=context.card.name if context.card is not None else "",
+        cost=cost,
+        life=0,
+        _source_permanent=context.source_permanent,
+        # Paying ends the chain: nothing runs, and no later opponent is asked.
+        _on_accept=(),
+        _on_decline=(
+            OracleInstruction(
+                "unless_player_pays", "", {**payload, "asked_seats": asked + 1}
+            ),
+        ),
+        _on_reflexive=(),
+        _context=context,
+        prompt=f"Pay {mana_cost_label(cost)}?" if cost else "Pay?",
+    )
+    return True, "resolved"
+
+
 #: The last item :func:`repeat_offer_round` walks: the end of one round, where
 #: whether there is another one is decided.
 _END_OF_ROUND = object()

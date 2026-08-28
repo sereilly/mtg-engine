@@ -42,7 +42,7 @@ from .lowering._events import CHOSEN_PLAYER
 from .lowering.where_x import lower_where_x
 from .statics import _lower_static_ability
 from .lowering.control_flow import (
-    _lower_may, _lower_one_of, _lower_steps,
+    _lower_may, _lower_one_of, _lower_steps, _lower_unless_player_pays,
 )
 from .lowering import (
     count_spec,
@@ -760,6 +760,12 @@ def lower_statement(
 
     if isinstance(statement, ast.May):
         return _lower_may(
+            statement, produced, event, event_subject,
+            lower_statement=lower_statement,
+        )
+
+    if isinstance(statement, ast.UnlessPlayerPays):
+        return _lower_unless_player_pays(
             statement, produced, event, event_subject,
             lower_statement=lower_statement,
         )

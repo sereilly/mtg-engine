@@ -533,6 +533,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "create_emblem": "tokens",
     # Optional actions. Parsed and lowered, not switched on — see _WRAPPER_KINDS.
     "may": "optional",
+    # "Unless an opponent pays {2}, …" (Scarwood Bandits) — the same family
+    # asked of another seat, so GRAMMAR_CATEGORIES is unchanged: what differs is
+    # who is offered the cost and which branch the effect sits on.
+    "unless_player_pays": "optional",
 }
 
 

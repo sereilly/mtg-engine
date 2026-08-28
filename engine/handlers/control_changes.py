@@ -197,6 +197,17 @@ def steal_target_linked_to_source(game: Game, instruction: OracleInstruction, co
             f"{context.card.name} is untapped, so the control change never starts"
         )
         return True, "resolved"
+    if "source_on_battlefield" in conditions and not game.is_on_battlefield(
+        source_permanent
+    ):
+        # CR 611.2b's other half again: a duration already over when the effect
+        # would first apply means the effect never starts. The Bandits can be
+        # killed in response to their own ability.
+        game.log.append(
+            f"{context.card.name} has left the battlefield, so the control "
+            "change never starts"
+        )
+        return True, "resolved"
     filters = (instruction.payload.get("targets") or {}).get("filter") or {}
     target_perm = resolve_target_permanent(
         game, context,

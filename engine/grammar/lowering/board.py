@@ -570,6 +570,24 @@ def _lower_gain_control(
             )
         _describe_targets(described, subject)
         return (OracleInstruction("gain_control_until_eot", "", described),)
+    if node.duration == "while_source_on_battlefield":
+        # "…for as long as this creature remains on the battlefield" (Scarwood
+        # Bandits). The same monitored contribution the two-condition steal
+        # records, with the one weaker condition — so it is that instruction
+        # with a different `link_conditions` list rather than a kind of its own:
+        # what differs is which fact the sweep re-checks, and that is data.
+        if subject.quantifier != "target":
+            raise LoweringError(
+                "the linked-control handler needs a named target", node=node
+            )
+        described = _filter_payload(subject.filter)
+        if object_only_filter(described) is None:
+            raise LoweringError(
+                "the control change cannot test this restriction", node=node
+            )
+        _describe_targets(described, subject)
+        described["link_conditions"] = ["source_on_battlefield"]
+        return (OracleInstruction("steal_target_linked_to_source", "", described),)
     if node.duration == "while_you_control_source_tapped":
         # Willow Satyr / Rubinia Soulsinger. The filter must be one the
         # resolution can test (Willow's "legendary" is the supertypes key),

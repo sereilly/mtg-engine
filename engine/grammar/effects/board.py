@@ -62,7 +62,22 @@ def _parse_gain_control(stream: TokenStream) -> ast.GainControl | None:
     # CR 611.2c ends it at cleanup instead.
     if stream.accept_phrase("until", "end", "of", "turn"):
         return ast.GainControl(subject, "until_end_of_turn")
-    if not stream.accept_phrase("for", "as", "long", "as", "you", "control"):
+    if not stream.accept_phrase("for", "as", "long", "as"):
+        raise stream.error(
+            "no handler for a control change without a duration the engine ends"
+        )
+    # "…for as long as **this creature remains on the battlefield**" (Scarwood
+    # Bandits). A weaker link than "you control this creature": an opponent who
+    # steals the Bandits breaks that one and not this one, so the two are
+    # different durations and the sweep tests them separately. Read before the
+    # control clause because the two share only the four words above.
+    mark = stream.mark()
+    if _accept_self_reference(stream) and stream.accept_phrase(
+        "remains", "on", "the", "battlefield"
+    ):
+        return ast.GainControl(subject, "while_source_on_battlefield")
+    stream.reset(mark)
+    if not stream.accept_phrase("you", "control"):
         raise stream.error(
             "no handler for a control change without a duration the engine ends"
         )

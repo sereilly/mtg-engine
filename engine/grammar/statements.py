@@ -264,6 +264,36 @@ def _distribute_duration(
     return dataclasses.replace(statement, duration=duration)
 
 
+def _parse_unless_player_pays(stream: TokenStream) -> "ast.UnlessPlayerPays | None":
+    """``Unless <player> pays <cost>, <statement>.`` (Scarwood Bandits.)
+
+    Returns None with the cursor untouched for anything else opening with
+    "unless", so the trailing "…unless <condition>" every other sentence can
+    carry keeps its own reader.
+
+    The payer must be a *player reference the engine can enumerate seats from*;
+    the cost must be mana. Both are refused rather than skipped, because a payer
+    nobody is asked and a cost nobody is charged are the same failure — the
+    effect happening unconditionally, which is the card without its clause.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("unless"):
+        return None
+    payer = parse_player_ref(stream)
+    if payer is None or not stream.accept_word("pays", "pay"):
+        stream.reset(mark)
+        return None
+    try:
+        cost = _parse_mana_payment(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if cost is None or not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    return ast.UnlessPlayerPays(payer, cost, _parse_statement_body(stream))
+
+
 def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     """One sentence's worth of effect, including ``if``/``may`` wrappers."""
     # "**Starting with you**, each player may …" (Eureka.) Which seat answers a
@@ -291,6 +321,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # spans three printed sentences: the sentence loop above would hand the
     # first one to the subject-verb reader, which has no "reveals" and would
     # fail the line on a word that is only the opening of a longer template.
+    # "**Unless an opponent pays {2},** gain control of target artifact …"
+    # (Scarwood Bandits.) A leading clause that governs the whole sentence, so
+    # it is read here rather than inside the effect behind it — the same rule
+    # the leading duration and the leading "for each" below follow. The body is
+    # an ordinary statement, which is what keeps this from being one production
+    # per effect that can be bought off.
+    unless_paid = _parse_unless_player_pays(stream)
+    if unless_paid is not None:
+        return unless_paid
     revealed = _parse_reveal_hand_and_choose(stream)
     if revealed is not None:
         return revealed
