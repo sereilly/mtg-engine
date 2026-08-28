@@ -549,6 +549,55 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'creatures the active player controls attack this turn if able':
             _line('force_active_player_creatures_to_attack', 'spell_pattern'),
     },
+    # **The one blocker swap Magic ever printed.** Three sentences that no
+    # other card carries: two targets chosen with a relation *between* them, a
+    # hypothetical about blocking legality asked of a block that has not
+    # happened, and a reassignment of who blocks what. Written as an invented
+    # card with the same text and no name, every clause of it would still be
+    # unique — "could block all creatures that the other is blocking" appears on
+    # this card and nowhere else in the game — so a production for it would be
+    # a substring match in a grammar hat, claiming a sentence no second card
+    # could ever share. The `targets` description is ordinary roles data
+    # (engine/targeting.py), so the picker, the CR 602.2b gate and the CR 608.2b
+    # re-check all read this entry rather than knowing the card.
+    "Sorrow's Path": {
+        "{t}: choose two target blocking creatures controlled by the same "
+        "opponent. if each of those creatures could block all creatures that "
+        "the other is blocking, remove both of them from combat. each one then "
+        "blocks all creatures the other was blocking":
+            _line(
+                "swap_block_assignments", "activated_combat",
+                targets={
+                    "kind": "roles",
+                    "roles": [
+                        {
+                            "role": "first",
+                            "kind": "object",
+                            "count": 1,
+                            "filter": {
+                                "type_filter": "creature",
+                                "blocking_only": True,
+                                "controller": "opponent",
+                            },
+                        },
+                        {
+                            "role": "second",
+                            "kind": "object",
+                            "count": 1,
+                            "filter": {
+                                "type_filter": "creature",
+                                "blocking_only": True,
+                                "controller": "opponent",
+                            },
+                            # "…controlled by **the same** opponent": which
+                            # opponent is not a property of either creature, so
+                            # it is a role dependency rather than a filter key.
+                            "same_controller_role": "first",
+                        },
+                    ],
+                },
+            ),
+    },
     'Stone Giant': {
         "{t}: target creature you control with toughness less than this creature's "
         "power gains flying until end of turn. destroy that creature at the "

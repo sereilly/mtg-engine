@@ -69,6 +69,12 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # object alone — ``Permanent.attacking`` is stamped at declaration and
     # cleared when the creature leaves combat.
     "attacking_only",
+    # "target **blocking** creature" (Righteousness), "two target blocking
+    # creatures controlled by the same opponent" (Sorrow's Path). CR 509.1g
+    # makes blocking a state of the permanent itself, recorded on it by the
+    # declare-blockers step, so it is answerable from the object alone exactly
+    # as ``attacking_only`` is.
+    "blocking_only",
     # "a creature **that has been dealt damage this turn**" (Giant Shark).
     # A history the damage seam stamps on the creature itself, so it is
     # answerable from the object alone like every other state word here.

@@ -82,6 +82,11 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     # the damage seam stamps; a bear nothing has hit does not carry it, and a
     # matcher ignoring the key would fire the Shark's trigger on every block.
     ("dealt_damage_this_turn", {"dealt_damage_this_turn": True}, "Grizzly Bears"),
+    # CR 509.1g: blocking is a state of the permanent itself, stamped when
+    # blockers are declared — a bear standing outside combat is not blocking,
+    # and a matcher that ignored the key would let Righteousness pump it and
+    # Sorrow's Path name it as one of its two blockers.
+    ("blocking_only", {"blocking_only": True}, "Grizzly Bears"),
 )
 
 

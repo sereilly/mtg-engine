@@ -218,7 +218,7 @@ def _narrowing_flags(source: dict) -> dict:
     from the same compiled payload; only the vocabulary differs.
     """
     flags: dict = {}
-    for key in ("attacking_only", "flying_only"):
+    for key in ("attacking_only", "blocking_only", "flying_only"):
         if source.get(key):
             flags[key] = True
     # Carried by value, not flattened to a flag: "attacking or blocking" and
@@ -1114,15 +1114,34 @@ def roles_spec(targets: dict) -> dict | None:
 #: A relation the grammar can describe and this table does not know refuses —
 #: ``legality`` offers nothing for it and the re-check answers False — because
 #: an unanswerable narrowing must never widen to "any".
+#:
+#: Each test takes ``(earlier, candidate, game)``. The game is there for the
+#: relations that are not readable off the two objects: control is CR 613
+#: layer 2 and only ``Game.controller_index_of`` answers it, and a relation
+#: that read ``base_controller_index`` instead would be a second opinion about
+#: who controls what — the thing the control seam exists to abolish. A test
+#: that does not need it simply ignores the argument.
 ROLE_RELATION_TESTS = {
     # "target creature that **target Wall** blocked this turn" (Glyph of
     # Delusion). The record is stamped on the blocker by the declare-blockers
     # step and read by id, never by slot: both permanents may leave and return
     # between the cast and the resolution, and CR 400.7 makes the returning one
     # a different object.
-    "blocked_by_role": lambda earlier, candidate: (
+    "blocked_by_role": lambda earlier, candidate, game: (
         candidate.permanent_id
         in set(earlier.metadata.get("blocked_attacker_ids_this_turn") or ())
+    ),
+    # "two target blocking creatures controlled by **the same opponent**"
+    # (Sorrow's Path). Which opponent is not a property of either creature —
+    # each role's own filter already says "an opponent controls this one", and
+    # two roles carrying that filter would admit one blocker from each of two
+    # opponents in a CR 802 multi-defender combat. The relation is what makes
+    # the second choice depend on the first, and it is asked of the control
+    # seam because control moves (CR 613 layer 2).
+    "same_controller_role": lambda earlier, candidate, game: (
+        game is not None
+        and game.controller_index_of(earlier) is not None
+        and game.controller_index_of(earlier) == game.controller_index_of(candidate)
     ),
 }
 
@@ -1148,12 +1167,18 @@ def role_dependency(role: dict) -> tuple[str | None, str | None]:
     return None, None
 
 
-def role_relation_holds(role: dict, earlier, candidate) -> bool:
+def role_relation_holds(role: dict, earlier, candidate, game=None) -> bool:
     """Whether *candidate* satisfies *role*'s dependency on *earlier*.
 
     True when the role has no dependency at all — the question does not arise
     for role 0 — and False whenever it has one this engine cannot answer or the
     earlier role resolves to nothing.
+
+    *game* is passed by both callers (the picker in ``engine/legality.py`` and
+    the CR 608.2b re-check in ``engine/handlers/_common.py``) and consumed by
+    the relations that need it. It defaults to None so a relation asked without
+    one refuses rather than answering from a narrower reading — the same
+    direction an unknown relation takes.
     """
     relation, _depends_on = role_dependency(role)
     if relation is None:
@@ -1161,7 +1186,7 @@ def role_relation_holds(role: dict, earlier, candidate) -> bool:
     test = ROLE_RELATION_TESTS.get(relation)
     if test is None or earlier is None or candidate is None:
         return False
-    return bool(test(earlier, candidate))
+    return bool(test(earlier, candidate, game))
 
 
 def spec_roles(spec: dict | None) -> list[dict]:

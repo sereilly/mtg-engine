@@ -265,3 +265,146 @@ def test_maze_of_ith_is_supported(set_pool):
     ]
     # One ability, lowered as a sequence of the two printed sentences.
     assert kinds == ["sequence"]
+
+
+# --- K3: Sorrow's Path (The Dark) ---
+
+
+def _k3_creature(name, power, toughness, *, keywords=()):
+    from engine.models import CardDefinition
+
+    return CardDefinition(
+        name=name,
+        mana_cost="",
+        cmc=0.0,
+        type_line="Creature - Test",
+        oracle_text="",
+        colors=(),
+        color_identity=(),
+        keywords=keywords,
+        produced_mana=(),
+        raw={
+            "name": name,
+            "type_line": "Creature - Test",
+            "power": str(power),
+            "toughness": str(toughness),
+        },
+    )
+
+
+def _sorrows_path_combat(set_pool, *, beta_flies=False):
+    """A real combat with Sorrow's Path: two attackers, each blocked by a
+    different creature the *defender* controls, and the Path untapped beside
+    the attackers.
+
+    Seat 0 controls Sorrow's Path and attacks with Alpha and Beta; seat 1
+    blocks Alpha with Ex and Beta with Why. The Path is on the attacking side
+    because the card names "two target blocking creatures controlled by the
+    same **opponent**" — the blockers have to be on the other side of the table
+    from the land.
+
+    Returns ``(game, attacker_alpha, attacker_beta, blocker_ex, blocker_why)``.
+    """
+    # Tough enough to survive the Path's *own* second ability: tapping it to
+    # activate the swap deals 2 damage to its controller and each creature they
+    # control (the card is famous for it), and a 2/2 attacker dying mid-stack
+    # would renumber the combat maps before the swap ever resolved.
+    alpha = _nosick(Permanent(card=_k3_creature("Alpha", 2, 5)))
+    beta = _nosick(
+        Permanent(card=_k3_creature("Beta", 3, 5, keywords=("Flying",) if beta_flies else ()))
+    )
+    path = Permanent(card=set_pool("DRK")["Sorrow's Path"])
+    ex = Permanent(card=_k3_creature("Ex", 1, 4))
+    # Why can block the flier (CR 702.17b) so the declaration below is legal;
+    # Ex cannot, which is what makes the swap illegal in the second test.
+    why = Permanent(card=_k3_creature("Why", 1, 5, keywords=("Reach",) if beta_flies else ()))
+    p1 = PlayerState(name="P1", battlefield=[alpha, beta, path])
+    p2 = PlayerState(name="P2", battlefield=[ex, why], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning of combat
+    game.advance_combat_phase()  # declare attackers
+    assert game.declare_attackers(0, [0, 1])[0], game.log
+    game.advance_combat_phase()  # declare blockers
+    # Ex blocks Alpha (attacker slot 0); Why blocks Beta (attacker slot 1).
+    assert game.declare_blockers(1, {0: 0, 1: 1})[0], game.log
+    assert game.combat_blockers[1] == {0: [0], 1: [1]}, game.log
+    return game, alpha, beta, ex, why
+
+
+def test_sorrows_path_swaps_two_blockers_in_a_real_combat(set_pool):
+    """The board changes, not just the compile.
+
+    Ex blocks Alpha and Why blocks Beta; after the ability resolves Ex blocks
+    Beta and Why blocks Alpha, both attackers stay blocked the whole way
+    through (CR 509.1h), and the combat damage lands on the swapped pairs.
+    """
+    game, alpha, beta, ex, why = _sorrows_path_combat(set_pool)
+
+    result = game.activate_permanent_ability(
+        0, "Sorrow's Path",
+        target_permanent_ids=[ex.permanent_id, why.permanent_id],
+    )
+    game._settle()
+
+    assert result.supported, game.log
+    assert game.combat_blockers[1] == {0: [1], 1: [0]}, game.log
+    assert ex.blocking_attacker_index == 1, "Ex now blocks Beta"
+    assert why.blocking_attacker_index == 0, "Why now blocks Alpha"
+    # CR 509.1h: a creature remains blocked even while its blockers are gone.
+    assert alpha.blocked and beta.blocked, game.log
+
+    game.advance_combat_phase()  # combat damage
+    assert game.players[1].life == 20, "nothing got through the swap"
+    assert ex.damage_marked == 3, "Ex took Beta's 3"
+    assert why.damage_marked == 2, "Why took Alpha's 2"
+
+
+def test_sorrows_path_does_nothing_when_one_creature_could_not_block(set_pool):
+    """"If each of those creatures could block all creatures that the other is
+    blocking" — Beta flies and Ex has neither flying nor reach, so the swap is
+    refused whole: nothing is removed from combat and the declared blocks stand.
+    """
+    game, alpha, beta, ex, why = _sorrows_path_combat(set_pool, beta_flies=True)
+
+    result = game.activate_permanent_ability(
+        0, "Sorrow's Path",
+        target_permanent_ids=[ex.permanent_id, why.permanent_id],
+    )
+    game._settle()
+
+    assert result.supported, game.log
+    assert game.combat_blockers[1] == {0: [0], 1: [1]}, "the blocks did not move"
+    assert ex.blocking_attacker_index == 0 and why.blocking_attacker_index == 1
+
+
+def test_sorrows_path_refuses_a_target_that_is_not_blocking(set_pool):
+    """CR 602.2b, before any cost is paid: "two target **blocking** creatures".
+    A creature that never blocked is not one the picker offers, so naming it
+    refuses the activation rather than tapping the land for nothing."""
+    game, alpha, beta, ex, why = _sorrows_path_combat(set_pool)
+    bystander = Permanent(card=_k3_creature("Bystander", 1, 1))
+    game.players[1].battlefield.append(bystander)
+    game._sync_control()
+
+    result = game.activate_permanent_ability(
+        0, "Sorrow's Path",
+        target_permanent_ids=[ex.permanent_id, bystander.permanent_id],
+    )
+
+    assert not result.supported, game.log
+    assert game.combat_blockers[1] == {0: [0], 1: [1]}
+
+
+def test_sorrows_path_activated_ability_is_no_longer_hollow(set_pool):
+    """The hollow-line census's own question, asked of this card: a supported
+    card whose ability compiles to no instruction reports success and does
+    nothing."""
+    program = compile_card_oracle(set_pool("DRK")["Sorrow's Path"])
+    assert program.supported
+    assert [a.instruction.kind for a in program.activated_abilities] == [
+        "swap_block_assignments"
+    ]
+    assert all(a.supported for a in program.activated_abilities)

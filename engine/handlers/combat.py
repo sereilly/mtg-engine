@@ -7,7 +7,9 @@ from ._common import (
     block_pair_permanents,
     flip_coin,
     resolve_own_combatant,
+    resolve_role_permanent,
     resolve_target_permanent,
+    roles_still_legal,
 )
 from .registry import effect_handler
 from ..keywords import grant_keyword
@@ -267,6 +269,128 @@ def _take_permanent_out_of_combat(game: Game, perm: Permanent) -> bool:
         game.log.append(f"{perm.card.name} was removed from combat")
         return True
     return False
+
+
+def _blocked_attacker_indices(game: Game, defender_seat: int, blocker_index: int) -> list[int]:
+    """Which attacker slots *blocker_index* is blocking for *defender_seat*."""
+    return list(game.combat_blockers.get(defender_seat, {}).get(blocker_index, []))
+
+
+def _could_block_all(game: Game, blocker: Permanent, attacker_indices: list[int]) -> bool:
+    """CR 509.1b asked of a block that has not happened.
+
+    "If each of those creatures **could block** all creatures that the other is
+    blocking" (Sorrow's Path) is a hypothetical, so it is asked of exactly the
+    gate a real declaration passes — ``_can_block_attacker``, per pair, plus
+    ``_max_blocks_for`` for how many at once. Two questions would be two
+    answers: a card that reads flying, protection and "can't be blocked by
+    Walls" for the swap but not for the declaration would let a creature end up
+    blocking something it could never have been declared against.
+
+    Menace is deliberately not here. CR 702.111b restricts the *declaration as
+    a whole* (CR 509.1c) rather than any one pairing, and this sentence asks
+    about one creature at a time — the same reading ``declare_blockers``' own
+    Lure and "must be blocked" loops make when they ask ``_can_block_attacker``
+    per pair.
+    """
+    if len(attacker_indices) > game._max_blocks_for(blocker):
+        return False
+    attacker_controller = (
+        game.players[game.active_player_index]
+        if 0 <= game.active_player_index < len(game.players)
+        else None
+    )
+    if attacker_controller is None:
+        return False
+    for attacker_index in attacker_indices:
+        attacker = game.permanent_at(attacker_controller, attacker_index)
+        if attacker is None or not game._can_block_attacker(blocker, attacker):
+            return False
+    return True
+
+
+@effect_handler("swap_block_assignments")
+def swap_block_assignments(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Sorrow's Path: "Choose two target blocking creatures controlled by the
+    same opponent. If each of those creatures could block all creatures that the
+    other is blocking, remove both of them from combat. Each one then blocks all
+    creatures the other was blocking."
+
+    **Removing and re-blocking is not the same as swapping two map entries**,
+    and the card says the former. Three things fall out of it that a swap would
+    get wrong:
+
+    * CR 509.1h keeps each *attacker* blocked the whole way through — "a
+      creature remains blocked even if all the creatures blocking it are removed
+      from combat" — so nothing becomes unblocked in between and no damage goes
+      to the face.
+    * CR 506.4 makes each blocker stop being a blocking creature, so CR 509.3a's
+      "whenever this creature blocks" fires **again** when the effect blocks it
+      (it "wasn't a blocking creature at that time"), and the division of its
+      combat damage among what it used to block goes with the block.
+    * CR 509.3c's "whenever this creature becomes blocked" does *not* fire, for
+      the first reason: the attacker never stopped being blocked. Its
+      per-blocker sibling CR 509.3d does, which is the ``already_blocked`` flag.
+
+    The whole reassignment is refused unless the hypothetical holds for **both**
+    creatures — one clause, checked before anything moves, because "if each of
+    those creatures could block all creatures that the other is blocking" is a
+    single condition over the pair rather than a filter applied to each.
+    """
+    observer = game.players.index(context.caster)
+    payload = instruction.payload
+    # CR 608.2b, through the same table the picker narrowed with: both roles
+    # still on the battlefield, still blocking, still an opponent's, and still
+    # each other's — a creature that left and returned is a new object (CR
+    # 400.7) and is not the one that was chosen.
+    if not roles_still_legal(game, context, payload, observer=observer):
+        game.log.append(f"{context.card.name}: its chosen creatures are no longer legal targets")
+        return True, "targets illegal"
+    first = resolve_role_permanent(game, context, payload, "first")
+    second = resolve_role_permanent(game, context, payload, "second")
+    if first is None or second is None or first is second:
+        return True, "no targets"
+
+    defender_seat = game.controller_index_of(first)
+    first_index = game.battlefield_index_of(first)
+    second_index = game.battlefield_index_of(second)
+    if defender_seat is None or first_index is None or second_index is None:
+        return True, "no targets"
+
+    first_blocks = _blocked_attacker_indices(game, defender_seat, first_index)
+    second_blocks = _blocked_attacker_indices(game, defender_seat, second_index)
+    if not first_blocks or not second_blocks:
+        return True, "not blocking"
+
+    if not (
+        _could_block_all(game, first, second_blocks)
+        and _could_block_all(game, second, first_blocks)
+    ):
+        game.log.append(
+            f"{context.card.name}: {first.card.name} and {second.card.name} "
+            "could not block each other's creatures — nothing happens"
+        )
+        return True, "swap illegal"
+
+    game._remove_blocker_from_combat(defender_seat, first_index)
+    game._remove_blocker_from_combat(defender_seat, second_index)
+    swapped = {first_index: second_blocks, second_index: first_blocks}
+    blocks = game.combat_blockers.setdefault(defender_seat, {})
+    blocks.update(swapped)
+    # The per-permanent combat flags and the band propagation are the
+    # projection of these maps, exactly as they are after a declaration — the
+    # attackers whose only blocker was removed a line ago become blocked again
+    # here, which is CR 509.1h's "remains blocked" arriving by the shortest
+    # route the engine has.
+    game._prune_combat_state()
+    game._record_block_history(defender_seat, swapped)
+    game._fire_creature_blocks_triggers(defender_seat, swapped)
+    game._fire_becomes_blocked_triggers(defender_seat, swapped, already_blocked=True)
+    game.log.append(
+        f"{context.card.name}: {first.card.name} and {second.card.name} "
+        "swapped the creatures they were blocking"
+    )
+    return True, "resolved"
 
 
 @effect_handler("remove_from_combat")
