@@ -115,6 +115,7 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
         "702.22",  # Banding
         "702.26",  # Phasing (M21: Teferi, Master of Time)
         "702.23",  # Rampage
+        "702.24",  # Cumulative upkeep (ICE: 24 cards)
         "702.25",  # Flanking
         "702.36",  # Fear
         "702.108", # Prowess

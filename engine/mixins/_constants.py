@@ -119,6 +119,10 @@ _UPKEEP_PAY_KINDS = {
     # counter-many damage to each creature and each player.
     "upkeep_wind_counter_pay_or_sacrifice",
     "upkeep_pay_or_sacrifice_self",
+    # Cumulative upkeep (CR 702.24a): pay the printed cost once per age counter
+    # or sacrifice. Its escalation is the same `per_counter` payload key
+    # Cyclone's is, read by `cumulative_upkeep.scaled_cost`.
+    "cumulative_upkeep",
     "upkeep_pay_or_deal_damage_to_controller",
     "upkeep_pay_or_tap_and_sacrifice_opponent_land",
     # Rohgahh of Kher Keep: pay {R}{R}{R} or tap Rohgahh and every creature

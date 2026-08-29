@@ -686,6 +686,86 @@ Third, **alternative costs (CR 118.9) do not exist** — `cast_costs.py` impleme
 *additional* costs well, and "alternative cost" appears once in the engine, in a
 comment — which blocks the buyback/flashback/evoke/madness family wholesale.
 
+## Ice Age (ICE) — in progress
+
+The set's journal, kept here while it runs so the "next set" section above stays
+a *forecast* and this stays the record. Numbers live here; the process is
+`SET_PLAYBOOK.md`.
+
+**Phase 1 (ingest and measure).** 383 printings, 373 unique cards, **346 new to
+the pool** — the largest set ingested and the first since M21 that is mostly new
+cards. Census at ingest: **184/373 supported (49.3%)**, 58.9% of lines parsed
+against the shipped pool's 85.7%, the lowest of any set. All 383 are layout
+`normal`, so nothing gates promotion the way a planeswalker or a split card
+would. The suite was green with the set loaded and the ingest yielded no engine
+bug — confirmed against the sweep's parametrization count (1163 → 1509) rather
+than against the green run, which is the check Phase 1 asks for.
+
+**Phase 2 (census).** The forecast above was right about the big rock and wrong
+about nothing that mattered. Two pieces of machinery carry the set:
+
+* **Cumulative upkeep (CR 702.24)**, 27 cards, sitting in
+  `oracle.UNSUPPORTED_KEYWORDS` — which outranks every line gate, so those cards
+  refused before a line was read.
+* **Snow**, 33 cards: a supertype on five basic lands plus a family of
+  references (snow landwalk, "as long as you control a snow land", "the number
+  of snow lands you control").
+
+The refusal rollup's own top line is **not** either of them — "expected a
+subject" leads at 97 lines over 80 cards and is the generic refusal, exactly the
+"a refusal site is a work-list entry, not a diagnosis" warning in the playbook.
+Cumulative upkeep is most of what sits under it.
+
+**Round 1 — cumulative upkeep (CR 702.24). 184 → 205 supported.**
+
+Built as the rewrite `engine/rampage.py` and `engine/equipment.py` established:
+the printed keyword line becomes the triggered ability CR 702.24a says it *is*
+(`engine/cumulative_upkeep.py`), and from there the upkeep step's ordinary
+`upkeep_self` dispatch fires it. Nothing downstream of the compiler knows the
+word. Non-mana costs — "Pay 2 life", "Sacrifice a land", 3 cards — refuse the
+keyword line naming the clause rather than shipping a permanent whose upkeep is
+silently free.
+
+Three findings worth more than the card count:
+
+1. **The rewrite reached creatures only, and the cards it missed reported
+   *supported*.** A creature's lines and a non-creature permanent's are parsed
+   by different loops, and the first version hooked the creature loop. Ten Ice
+   Age enchantments that print cumulative upkeep beside another ability compiled
+   clean with the keyword silently dropped — strictly worse than not
+   implementing it, because the card reads as done and plays as a better card
+   than the one printed. `oracle.keyword_line_triggers` is now the one reader
+   both loops ask. **A keyword rewrite belongs to a line, not to a card type**,
+   and the count that exposed it was per-card instrumentation written before
+   believing the census (+11 became +23 once both front ends agreed).
+
+2. **A widened gate hid a static line.** The land support gate asked for unread
+   static text only `if not any((activated_abilities, triggered_abilities))` —
+   so the moment a land's cumulative upkeep became an ability, the land was
+   exempt from the check entirely and Halls of Mist went supported with
+   "Creatures that attacked during their controller's last turn can't attack"
+   unimplemented and now invisible. The guard was standing in for "is this line
+   read?" and answering "does this card have *some* ability?". It reads every
+   land now, with the parsed abilities passed in so their own lines are skipped.
+   Measured over the whole pool before changing it: 2 cards move, both ICE,
+   **no shipped card affected**. This is Phase 3's widened-gate rule paying
+   for itself in the round that wrote it.
+
+3. **Cyclone was cumulative upkeep printed longhand.** Its escalating {G}-per-
+   wind-counter cost was hardcoded twice — once in its handler, once as an
+   `if kind == …` branch in the prompt loop — so the card and the keyword had
+   two copies of one arithmetic. Both now go through `per_counter` payload and
+   `cumulative_upkeep.scaled_cost`, and the branch naming a card's instruction
+   kind is gone. The **two callers stand on opposite sides of the counter being
+   placed**, which the first shared version got wrong: one function that looked
+   the count up charged Cyclone double. The count is a parameter now and
+   `upcoming_cost` is the prompt's separate question.
+
+Hollow lines: 8 → 10 cards, and the rise is honest. Cold Snap and Mystic Remora
+were unsupported before this round and are now supported-with-a-gap, so the debt
+moved from one report to the other rather than appearing. Phase 3's exit is both
+numbers at zero.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

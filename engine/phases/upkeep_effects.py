@@ -92,16 +92,23 @@ class UpkeepEffectsMixin:
 
     @upkeep_effect("upkeep_self", "upkeep_wind_counter_pay_or_sacrifice")
     def _on__upkeep_self__upkeep_wind_counter_pay_or_sacrifice(self, ctx: UpkeepContext) -> None:
+        from ..cumulative_upkeep import scaled_cost
+        from ..named_counters import add_counters
+
         controller = ctx.controller
         human_choices = ctx.human_choices
         permanent = ctx.permanent
         # Cyclone: add a wind counter, then pay {G} per counter
         # or sacrifice; paying deals counter-many damage to each
         # creature and each player.
-        counters = int(permanent.metadata.get("wind_counters", 0)) + 1
-        permanent.metadata["wind_counters"] = counters
+        #
+        # The counter goes through `named_counters` and the cost through
+        # `scaled_cost` — the same two seams cumulative upkeep uses, because
+        # this is CR 702.24a's sentence with "wind" printed where the keyword
+        # says "age". What stays this card's is the damage rider below.
+        counters = add_counters(permanent, "wind", 1)
         self.log.append(f"{permanent.card.name} gains a wind counter ({counters} total)")
-        cost = {"G": counters}
+        cost = scaled_cost(ctx.trig.instruction, counters)
         if human_choices is not None and permanent.card.name in human_choices:
             paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
                 controller, cost
@@ -125,6 +132,54 @@ class UpkeepEffectsMixin:
         else:
             self.sacrifice_permanent(permanent)
             self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
+
+    @upkeep_effect("upkeep_self", "cumulative_upkeep")
+    def _on__upkeep_self__cumulative_upkeep(self, ctx: UpkeepContext) -> None:
+        """Cumulative upkeep (CR 702.24a), the ability the keyword *is*.
+
+        "Put an age counter on this permanent. Then you may pay [cost] for each
+        age counter on it. If you don't, sacrifice it." The counter goes on
+        first and unconditionally, so the cost this resolution asks for already
+        counts it — which is why ``scaled_cost`` is handed the new total
+        rather than being left to look one up.
+
+        Partial payment is not allowed (702.24a's last sentence), which is what
+        ``can_pay_upkeep_mana`` already answers: it is asked about the whole
+        escalated cost, and a player who cannot cover all of it pays none.
+        """
+        from ..cumulative_upkeep import AGE_COUNTER, scaled_cost
+        from ..named_counters import add_counters
+
+        controller = ctx.controller
+        permanent = ctx.permanent
+        counter = str(ctx.trig.instruction.payload.get("per_counter") or AGE_COUNTER)
+        total = add_counters(permanent, counter, 1)
+        self.log.append(
+            f"{permanent.card.name} gains an {counter} counter ({total} total)"
+        )
+        cost = scaled_cost(ctx.trig.instruction, total)
+        # `can_pay_upkeep_mana` / `_spend_upkeep_mana`, the pair every other
+        # upkeep cost in this file uses — never a hand-rolled pool read. They
+        # know that generic mana can come from floating mana *or* from tapping a
+        # land during upkeep, which is the difference between a {1} that is free
+        # and a {1} that costs a land.
+        human_choices = ctx.human_choices
+        if human_choices is not None and permanent.card.name in human_choices:
+            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
+                controller, cost
+            )
+        else:
+            paid = self.can_pay_upkeep_mana(controller, cost)
+        if paid:
+            self._spend_upkeep_mana(controller, cost)
+            self.log.append(
+                f"{controller.name} paid cumulative upkeep for {permanent.card.name}"
+            )
+        else:
+            self.sacrifice_permanent(permanent)
+            self.log.append(
+                f"{controller.name} sacrificed {permanent.card.name} to cumulative upkeep"
+            )
 
     @upkeep_effect("upkeep_self", "upkeep_pay_or_sacrifice_enchantment")
     def _on__upkeep_self__upkeep_pay_or_sacrifice_enchantment(self, ctx: UpkeepContext) -> None:

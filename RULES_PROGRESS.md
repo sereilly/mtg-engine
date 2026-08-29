@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**334 / 611 tracked rules covered (54%)** — 1604 tests, 0 unannotated.
+**335 / 612 tracked rules covered (54%)** — 1615 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -88,7 +88,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
 | [700. General](#700-general) | 2/15 | 13% |
 | [701. Keyword Actions](#701-keyword-actions) | 19/19 | 100% |
-| [702. Keyword Abilities](#702-keyword-abilities) | 26/26 | 100% |
+| [702. Keyword Abilities](#702-keyword-abilities) | 27/27 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 0/4 | 0% |
 | [704. State-Based Actions](#704-state-based-actions) | 5/8 | 62% |
 | [705. Flipping a Coin](#705-flipping-a-coin) | 2/3 | 66% |
@@ -888,6 +888,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
 - [x] **702.22** Banding *(35 tests, subrules abcdefghjk)*
 - [x] **702.23** Rampage *(6 tests, subrules abc)*
+- [x] **702.24** Cumulative Upkeep *(11 tests, subrules ab)*
 - [x] **702.25** Flanking *(3 tests, subrules a)*
 - [x] **702.26** Phasing *(5 tests, subrules ad)*
 - [x] **702.36** Fear *(4 tests, subrules b)*

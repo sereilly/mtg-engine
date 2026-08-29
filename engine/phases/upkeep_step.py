@@ -25,6 +25,7 @@ from ..models import Permanent
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities, matching_triggers
 from ..mixins._constants import _UPKEEP_PAY_KINDS
+from ..cumulative_upkeep import upcoming_cost
 from ..effect_labels import triggered_label
 from ..handlers import EFFECT_HANDLERS
 from .upkeep_effects import UPKEEP_EFFECTS, UpkeepContext, UpkeepEffectsMixin
@@ -128,12 +129,15 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             instruction_kinds=_UPKEEP_PAY_KINDS,
             players=[controller],
         ):
-            mana = trig.instruction.payload.get("mana", {})
-            # Cyclone: the cost escalates with its wind counters — the counter
-            # for THIS upkeep is added when the trigger resolves, so the prompt
-            # quotes counters + 1 green.
-            if trig.instruction.kind == "upkeep_wind_counter_pay_or_sacrifice":
-                mana = {"G": int(permanent.metadata.get("wind_counters", 0)) + 1}
+            # The cost a counter-escalating upkeep will ask for (CR 702.24a's
+            # cumulative upkeep, and Cyclone printing the same sentence
+            # longhand): the counter for THIS upkeep is added when the trigger
+            # resolves, so the prompt quotes the counters already on it plus
+            # one. `upcoming_cost` and the handlers' `scaled_cost` share that
+            # arithmetic — this used to be a branch naming one card's
+            # instruction kind, which is a second copy of it and the way a
+            # player gets quoted one number and charged another.
+            mana = upcoming_cost(permanent, trig.instruction)
             choices.append({
                 "card_name": permanent.card.name,
                 "mana": mana,

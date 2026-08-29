@@ -57,6 +57,7 @@ from .lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
 from .modal_triggers import (MODAL_INSTRUCTION_KIND,
                              modal_trigger_mode_is_derivable,
                              modal_trigger_targeting_refusal)
+from .cumulative_upkeep import cumulative_upkeep_triggers
 from .rampage import rampage_amount, rampage_triggers
 from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
@@ -110,7 +111,6 @@ __all__ = [
 # compiles a card carrying each implemented keyword *in its ingested field* for
 # exactly that reason.
 UNSUPPORTED_KEYWORDS = {
-    "Cumulative upkeep",
     "Phasing",
 }
 
@@ -2020,6 +2020,15 @@ def _qualified_keyword_part(part: str) -> bool:
     # the qualities `_protection_qualities` models.
     if rampage_amount(part) is not None:
         return True
+    # Cumulative upkeep carries a cost rather than a quality (CR 702.24a), and
+    # the cost is the whole of it. Same rule as rampage one line up: the reader
+    # that *implements* the keyword admits it, so a cost `engine/
+    # cumulative_upkeep.py` cannot charge keeps the line refused instead of
+    # shipping a permanent whose upkeep is silently free.
+    from .cumulative_upkeep import cumulative_upkeep_cost
+
+    if cumulative_upkeep_cost(part) is not None:
+        return True
     # "Bands with other legendary creatures" (CR 702.22b). The quality is a
     # printed noun phrase rather than a word from a list, so what admits the
     # line is the reader that *implements* it — engine/banding.py, which turns
@@ -2780,12 +2789,7 @@ def _parse_creature_program(
             normalized = normalize_creature_line(line)
             instructions.append(OracleInstruction("keyword_line", normalized))
             static_lines.append(normalized)
-            # Rampage is a keyword whose rules text *is* a triggered ability
-            # (CR 702.23a), so the line produces one — the same rewrite equip
-            # gets, one layer earlier because the grammar has no production for
-            # "for each creature blocking it beyond the first". From here the
-            # becomes-blocked dispatcher fires it like any other trigger.
-            for trig in rampage_triggers(normalized):
+            for trig in keyword_line_triggers(normalized):
                 triggered.append(trig)
                 instructions.append(trig.instruction)
             continue
@@ -2899,7 +2903,11 @@ def _parse_creature_program(
 
 
 
-def _unread_land_text(oracle_text: str, card_name: str | None) -> str | None:
+def _unread_land_text(
+    oracle_text: str,
+    card_name: str | None,
+    abilities: tuple[Any, ...] = (),
+) -> str | None:
     """A land's first printed line that nothing in the engine reads, or None.
 
     Reminder text (CR 305.6) is dropped first: a basic's whole "ability" is a
@@ -2907,13 +2915,33 @@ def _unread_land_text(oracle_text: str, card_name: str | None) -> str | None:
     printing rules text no reader claims is a land that taps for mana and does
     nothing else while reporting supported.
 
-    Asked only of a land with **no** parsed ability, because a land that has one
-    is degraded by an unreadable *bonus* line rather than broken by it — the
-    distinction the gate above already draws.
+    *abilities* are the land's parsed activated and triggered abilities, whose
+    printed lines are read by definition and are skipped here. It used to be
+    asked only of a land with **no** parsed ability, which is a different
+    question and answered a weaker one: a land with an ability was exempt from
+    the check entirely, so an unread *static* beside a working ability went
+    unreported. Halls of Mist is what showed it — its cumulative upkeep was the
+    unread line the old guard caught, and teaching the engine that keyword
+    turned the card supported while "Creatures that attacked during their
+    controller's last turn can't attack" stayed unimplemented and now invisible.
+    A line is claimed or it is not; whether some *other* line on the card parsed
+    is not part of that question.
     """
+    from .oracle import keyword_line_triggers  # noqa: PLC0415  (self, for clarity)
+
+    ability_lines = {
+        re.sub(r"\([^)]*\)", "", ability.source_line or "").strip()
+        for ability in abilities
+    }
     for raw in (oracle_text or "").splitlines():
         line = re.sub(r"\([^)]*\)", "", raw).strip()
-        if not line:
+        if not line or line in ability_lines:
+            continue
+        # A keyword line the CR defines *as* an ability (cumulative upkeep,
+        # rampage) is claimed by the rewrite that turns it into one, and reaches
+        # here only when the rewrite refused it — a cost this engine cannot
+        # charge. Then it is genuinely unread and naming it is the point.
+        if keyword_line_triggers(normalize_creature_line(line)):
             continue
         # Through the same collapse every other static reader uses: a land that
         # names itself ("Tapped Land enters tapped") is saying "this permanent",
@@ -2945,6 +2973,32 @@ def _parse_noncreature_abilities(
         if ability is not None:
             abilities.append(ability)
     return tuple(abilities)
+
+
+def keyword_line_triggers(normalized_line: str) -> tuple[ParsedTriggeredAbility, ...]:
+    """The triggered abilities a *keyword line* is, for every keyword whose
+    rules text the CR defines as one.
+
+    Two today — rampage (CR 702.23a) and cumulative upkeep (CR 702.24a) — and
+    both are the rewrite ``engine/equipment.py`` established for equip, one
+    layer earlier because the grammar has no production for "for each creature
+    blocking it beyond the first" or for an escalating upkeep. From here the
+    ordinary dispatchers fire them: the becomes-blocked step and the upkeep
+    step, neither of which knows the word.
+
+    **One reader because there are two front ends.** A creature's lines and a
+    non-creature permanent's are parsed by different loops, and cumulative
+    upkeep was added to the creature loop alone: the six Ice Age enchantments
+    that print it alongside another ability compiled *supported* with the
+    keyword silently dropped, which is strictly worse than not implementing it
+    — the card reads as done and plays as a better card than the one printed.
+    A keyword rewrite belongs to a line rather than to a card type, so both
+    loops ask here.
+    """
+    return (
+        *rampage_triggers(normalized_line),
+        *cumulative_upkeep_triggers(normalized_line),
+    )
 
 
 def _parse_noncreature_triggered(
@@ -2987,6 +3041,12 @@ def _parse_noncreature_triggered(
             continue
         index += 1
         if not line:
+            continue
+        # A keyword line the CR defines *as* a triggered ability, read on this
+        # side too — see `keyword_line_triggers` for why both loops ask.
+        keyword_triggers = keyword_line_triggers(normalize_creature_line(line))
+        if keyword_triggers:
+            abilities.extend(keyword_triggers)
             continue
         trig = _parse_triggered_ability(line, card_name)
         if trig is not None:
@@ -3535,15 +3595,28 @@ def _compile_card_oracle(
         #
         # Parenthetical spans are dropped first, because CR 305.6 reminder text
         # is exactly what a basic and a dual print and is not an ability.
-        if not any((activated_abilities, triggered_abilities)):
-            unread = _unread_land_text(oracle_text, name)
-            if unread is not None:
-                return OracleProgram(
-                    False,
-                    "unsupported",
-                    f"no static ability of this land is implemented: {unread}",
-                    normalized_text,
-                )
+        #
+        # Asked of **every** land, not only of one with no parsed ability. The
+        # guard used to be `not any((activated_abilities, triggered_abilities))`,
+        # which exempted a land the moment any one of its lines became an
+        # ability — so an unread static beside a working ability was invisible.
+        # Halls of Mist is the card that showed it: its cumulative upkeep was
+        # the unread line the old guard caught, and implementing that keyword
+        # turned the land supported with "Creatures that attacked during their
+        # controller's last turn can't attack" still unimplemented and now
+        # unreported. The abilities are passed in instead, so their own lines
+        # are skipped as read — which is the question the guard was standing in
+        # for. Two ICE lands are what this newly names; no shipped card moved.
+        unread = _unread_land_text(
+            oracle_text, name, (*activated_abilities, *triggered_abilities)
+        )
+        if unread is not None:
+            return OracleProgram(
+                False,
+                "unsupported",
+                f"no static ability of this land is implemented: {unread}",
+                normalized_text,
+            )
 
         # **Passing the gate is not doing the thing.** The check above says a
         # reader claims the land's static line; this is the line being carried,

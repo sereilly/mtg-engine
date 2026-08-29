@@ -189,7 +189,13 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'each wind counter on it. if you pay, this enchantment deals damage '
         'equal to the number of wind counters on it to each creature and each '
         'player':
-            _line('upkeep_wind_counter_pay_or_sacrifice', 'upkeep_effect'),
+            # {G} per wind counter is CR 702.24a's escalation printed longhand,
+            # so it rides the same `per_counter` payload cumulative upkeep does
+            # and `cumulative_upkeep.scaled_cost` is what reads it. The card
+            # keeps a hook for the sentence *after* the payment — the damage
+            # rider — which no other card shares.
+            _line('upkeep_wind_counter_pay_or_sacrifice', 'upkeep_effect',
+                mana={'G': 1}, per_counter='wind'),
     },
     'Cyclopean Tomb': {
         "{2}, {t}: put a mire counter on target non-swamp land. that land is a "
