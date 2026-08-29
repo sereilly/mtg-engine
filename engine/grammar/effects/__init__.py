@@ -120,7 +120,6 @@ from .stack import (
 from .combat import (
     _parse_assigns_no_combat_damage,
     _parse_attacking_doesnt_tap,
-    _BASIC_LAND_WORDS,
     _parse_cant_attack_or_block,
     _CANT_BE_ACTIONS,
     _parse_cant_be,
@@ -217,7 +216,6 @@ __all__ = [
     "_parse_unpaid_penalty_sentence",
     "_parse_activation_restriction",
     "_parse_cost_x_definition",
-    "_BASIC_LAND_WORDS",
     "_parse_cant_attack_or_block",
     "_parse_assigns_no_combat_damage",
     "_parse_attacking_doesnt_tap",

@@ -12,7 +12,7 @@ pass. Also holds the attack-legality query (``can_attack``),
 from ..attack_tapping import attacking_causes_tap
 from ..auras import attached_combat_restrictions, aura_restriction_active
 from ..combat_permissions import ATTACK_AS_THOUGH_NO_DEFENDER
-from ..combat_restrictions import participation_cap
+from ..combat_restrictions import declaration_company_required, participation_cap
 from ..mana_payment import mana_cost_label, plan_payment, untapped_mana_lands
 from ..subject_filters import subject_matches
 from ..events import emit
@@ -151,19 +151,13 @@ class DeclareAttackersStepMixin:
             ):
                 return False, f"{attacker.card.name} cannot attack"
 
-        # "…**can only attack alone**." (Errantry.) CR 506.5 read as a
-        # restriction on the declaration: the creature may attack only where it
-        # is the sole attacker. It cannot live in `can_attack`, which is a
-        # per-creature predicate with no way to say "and nobody else" — the same
-        # reason the attack cap above is checked over the set.
-        #
-        # Asked of the collected `Permanent` objects rather than by re-reading
-        # the battlefield by index: an index is unstable and this loop has the
-        # objects already.
-        if len(declared_attackers) > 1:
-            for lone in declared_attackers:
-                if self._can_only_attack_alone(lone):
-                    return False, f"{lone.card.name} can only attack alone"
+        # The restrictions that are about the **set** (CR 508.1c) rather than
+        # about any one creature — the same reason the attack cap above is
+        # checked here. They live behind one named predicate because the AI asks
+        # it too; see `attack_declaration_refusal`.
+        refusal = self.attack_declaration_refusal(declared_attackers)
+        if refusal is not None:
+            return False, refusal[1]
 
         # CR 702.22c: validate any declared attacking bands before committing.
         validated_bands, band_error = self._validate_attacking_bands(
@@ -487,36 +481,50 @@ class DeclareAttackersStepMixin:
         program = compile_card_oracle(attacker.effective_card)
         instr_kinds = {i.kind for i in program.instructions}
 
-        # The land type is *data* on the instruction rather than baked into its
-        # name: a creature printed "unless defending player controls a Mountain"
-        # is the same restriction with a different type. The chain that used to
-        # produce this instruction matched an exact string naming Island, so any
-        # other type fell through to a bare `static_line` and the creature
-        # attacked freely while still reporting supported.
-        without_land = next(
-            (i for i in program.instructions if i.kind == "cant_attack_without_land_type"),
+        # What the defending player controls, and which answer forbids the
+        # attack. Both are *data*: "unless … an Island" (Sea Serpent) and "if …
+        # an untapped creature with power 3 or greater" (Goblin Mutant) are one
+        # question under two polarities, and the noun is a whole printed phrase
+        # rather than the five basic land words this used to hold. That
+        # narrowing was the enforcement's, not the card's — the scan matched a
+        # land by name — so a creature naming anything else had nowhere to go.
+        #
+        # `subject_matches` is the one reader of a filter payload, so a text
+        # changed land type (Magical Hack, Phantasmal Terrain) counts here for
+        # the same reason it counts everywhere else, and no re-scoping to lands
+        # is needed: CR 205.3i puts a land subtype only on a land.
+        #
+        # CR 508.1c makes restrictions cumulative — "if any restrictions are
+        # being disobeyed, the declaration is illegal" — so satisfying this
+        # one answers only this one. This used to `return` the answer, which
+        # let a Sea Serpent attack a player under Island Sanctuary the moment
+        # they controlled an Island; Sea Serpent's own clause *requires* that
+        # Island, so the two cards contradict each other on exactly the board
+        # where both are played, and they have shipped together since Alpha.
+        # It also skipped the defender check below, so a Wall printed with
+        # this clause could attack at all.
+        defender_board = next(
+            (
+                i for i in program.instructions
+                if i.kind == "cant_attack_unless_defender_controls"
+            ),
             None,
         )
-        if without_land is not None:
-            required = str(without_land.payload.get("land_type") or "island")
-            # Honor text-changed land types (Magical Hack / Phantasmal Terrain):
-            # a land turned into the named type counts, matching the upkeep
-            # "no_islands" check. Scoped to lands so a creature subtype like
-            # "Island Fish" never satisfies the restriction.
-            #
-            # CR 508.1c makes restrictions cumulative — "if any restrictions are
-            # being disobeyed, the declaration is illegal" — so satisfying this
-            # one answers only this one. This used to `return` the answer, which
-            # let a Sea Serpent attack a player under Island Sanctuary the moment
-            # they controlled an Island; Sea Serpent's own clause *requires* that
-            # Island, so the two cards contradict each other on exactly the board
-            # where both are played, and they have shipped together since Alpha.
-            # It also skipped the defender check below, so a Wall printed with
-            # this clause could attack at all.
-            if not any(
-                perm.card.primary_type == "land" and perm.has_type(required)
+        if defender_board is not None:
+            described = dict(defender_board.payload.get("subject") or {})
+            held = any(
+                subject_matches(
+                    self, perm, described,
+                    # CR 109.5: "you" inside the noun phrase would be the
+                    # ability's controller, which is the attacker's seat — not
+                    # the defender whose board is being scanned. The scan picks
+                    # the board; the observer answers the phrase.
+                    observer=self.controller_index_of(attacker),
+                    source=attacker,
+                )
                 for perm in self.controlled_by(defending_player_index)
-            ):
+            )
+            if held is not bool(defender_board.payload.get("required", True)):
                 return False
 
         # "…unless you control four or more artifacts" (Gadrak). The attacker's
@@ -758,6 +766,41 @@ class DeclareAttackersStepMixin:
             return True
         program = compile_card_oracle(attacker.effective_card)
         return any(i.kind == "must_attack_each_combat" for i in program.instructions)
+
+    def attack_declaration_refusal(
+        self, declared_attackers: list[Permanent]
+    ) -> "tuple[Permanent, str] | None":
+        """Which declared attacker's restriction this **set** disobeys, and why.
+
+        CR 508.1c asks its restrictions of the declaration as a whole — "if any
+        restrictions are being disobeyed, the declaration is illegal" — so
+        neither of these can live in `can_attack`, a per-creature predicate with
+        no way to say "and nobody else" (Errantry's "can only attack alone") or
+        "and at least two more of you" (Orcish Conscripts).
+
+        **Public, and returning the offending permanent, because the AI asks it
+        too.** `ai_policy.choose_attackers` builds its set out of
+        `legal_attackers`, which is that per-creature predicate — so it happily
+        proposed a set the declaration then refused *whole*, and a Conscripts
+        beside one Bear grounded the Bear as well. A second reading of the rule
+        inside the AI would drift from this one; the permanent is what lets the
+        AI drop the creature it named instead.
+
+        Asked of the collected `Permanent` objects rather than of indices: an
+        index is unstable, and both callers have the objects already.
+        """
+        if len(declared_attackers) > 1:
+            for lone in declared_attackers:
+                if self._can_only_attack_alone(lone):
+                    return lone, f"{lone.card.name} can only attack alone"
+        for attacker in declared_attackers:
+            needed = declaration_company_required(attacker, "attack")
+            if needed is not None and len(declared_attackers) - 1 < needed:
+                return attacker, (
+                    f"{attacker.card.name} needs at least {needed} other "
+                    "attacking creature(s)"
+                )
+        return None
 
     def _can_only_attack_alone(self, attacker: Permanent) -> bool:
         """CR 506.5 — whether *attacker* may attack only as the sole attacker.

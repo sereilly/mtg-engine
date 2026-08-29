@@ -15,6 +15,7 @@ from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
+from tests.helpers import _nosick
 
 
 def _cu_trigger(card):
@@ -1265,3 +1266,93 @@ def test_the_two_blasts_differ_only_by_the_colour_in_the_payload(set_pool):
         {"kind": "target_is_color", "color": "U", "negated": False, "target": "spell"},
         {"kind": "target_is_color", "color": "U", "negated": False, "target": "permanent"},
     ]
+
+
+# --- Round 23: a combat restriction is about the declaration, not the creature ---
+
+
+def test_goblin_mutant_is_grounded_by_an_untapped_defender(set_pool):
+    """"This creature can't attack **if** defending player controls an untapped
+    creature with power 3 or greater."
+
+    The same question Sea Serpent's "unless defending player controls an
+    Island" asks, one polarity over — so both are one kind carrying the printed
+    noun phrase and the printed word. The noun used to be one of five basic
+    land *words*, because the enforcing check scanned the defender's lands by
+    name; it reads a filter through `subject_matches` now, which is what lets
+    "an untapped creature with power 3 or greater" be the same restriction.
+    """
+    pool = set_pool("ICE")
+
+    def _may_attack(defender_creature: str | None, tapped: bool = False) -> bool:
+        mutant = _nosick(Permanent(card=pool["Goblin Mutant"]))
+        theirs = []
+        if defender_creature is not None:
+            blocker = Permanent(card=pool[defender_creature])
+            blocker.tapped = tapped
+            theirs.append(blocker)
+        game = Game(players=[
+            PlayerState(name="P1", battlefield=[mutant], life=20),
+            PlayerState(name="P2", battlefield=theirs, life=20),
+        ])
+        return game.can_attack(mutant, 1)
+
+    assert _may_attack(None)
+    assert _may_attack("Balduvian Bears")           # 2/2 — under the threshold
+    assert not _may_attack("Balduvian Barbarians")  # 3/1 — at it
+    assert _may_attack("Balduvian Barbarians", tapped=True), (
+        "the clause says untapped, and the word is part of the filter"
+    )
+
+
+def test_orcish_conscripts_needs_company_to_attack(set_pool):
+    """"This creature can't attack **unless at least two other creatures
+    attack**."
+
+    CR 508.1c asks a restriction of the whole declaration — "if any
+    restrictions are being disobeyed, the declaration is illegal" — so this one
+    is not a fact about the creature and `can_attack`, which sees one creature
+    at a time, cannot answer it. It is checked where Errantry's "can only
+    attack alone" already is, which is the same rule read from the other end.
+    """
+    pool = set_pool("ICE")
+    conscripts = _nosick(Permanent(card=pool["Orcish Conscripts"]))
+    friends = [_nosick(Permanent(card=pool["Balduvian Bears"])) for _ in range(2)]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[conscripts, *friends], life=20),
+        PlayerState(name="P2", life=20),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+
+    assert game.can_attack(conscripts, 1), "nothing about the creature forbids it"
+    assert not game.declare_attackers(0, [0])[0]
+    assert not game.declare_attackers(0, [0, 1])[0]
+    assert game.declare_attackers(0, [0, 1, 2])[0]
+
+
+def test_orcish_conscripts_needs_company_to_block(set_pool):
+    """The blocking twin, CR 509.1b — the same restriction read on the other
+    side of combat, so the count is payload and the word is the only
+    difference."""
+    pool = set_pool("ICE")
+    attackers = [_nosick(Permanent(card=pool["Balduvian Bears"])) for _ in range(3)]
+    conscripts = Permanent(card=pool["Orcish Conscripts"])
+    friends = [Permanent(card=pool["Balduvian Bears"]) for _ in range(2)]
+
+    def _may_block(with_friends: int) -> bool:
+        game = Game(players=[
+            PlayerState(name="P1", battlefield=attackers, life=20),
+            PlayerState(
+                name="P2", battlefield=[conscripts, *friends[:with_friends]], life=20
+            ),
+        ])
+        _combat(game, [0, 1, 2])
+        assignments = {slot: slot for slot in range(with_friends + 1)}
+        return game.declare_blockers(1, assignments)[0]
+
+    assert not _may_block(0)
+    assert not _may_block(1)
+    assert _may_block(2)

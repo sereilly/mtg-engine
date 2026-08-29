@@ -10,7 +10,8 @@ These used to be an ``elif`` chain of **exact string equality** inside
 "unless defending player controls a Mountain" fell through to a bare
 ``static_line``: the card reported `supported` and then attacked freely, with
 the restriction silently absent. The land type is data, and is carried in the
-payload.
+payload — as an ordinary object filter now, so what the enforcement can test is
+the printed noun phrase rather than the five basics this regex names.
 
 Each entry names the code that enforces it, because a restriction recognized
 here but dispatched nowhere is worse than one that fails to parse.
@@ -24,10 +25,10 @@ from dataclasses import dataclass, field
 from .grammar.vocabulary import COLOR_WORDS, CREATURE_TYPES, IMPLEMENTED_KEYWORDS
 from .mana_payment import mana_cost_from_symbols
 
-# Basic land types a "controls a <type>" clause can name. Restricted to the five
-# basics deliberately: the enforcing check in declare_attackers_step scopes its
-# search to lands, and a nonbasic type would need the same scoping decided
-# per card.
+# Basic land types a "controls a <type>" clause can name. Five, because a regex
+# has to name what it matches — **not** because the engine can only enforce
+# those: the check reads a filter through `subject_matches` now, and the
+# grammar's production of the same kind reads any printed noun phrase.
 _LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
 
 # Colour words a blocker narrowing can name, as one alternation. Read from the
@@ -54,7 +55,7 @@ class CombatRestriction:
 
 
 # (pattern, kind) — enforced by:
-#   cant_attack_without_land_type   phases/declare_attackers_step.can_attack
+#   cant_attack_unless_defender_controls  phases/declare_attackers_step.can_attack
 #   cant_attack_without_controlled_count  phases/declare_attackers_step.can_attack
 #   cant_attack                     phases/declare_attackers_step.can_attack
 #   controlled_creatures_cant_attack  phases/declare_attackers_step.can_attack
@@ -73,6 +74,8 @@ class CombatRestriction:
 #   must_be_blocked_by_all_able     phases/declare_blockers_step
 #   max_attackers_each_combat       phases/declare_attackers_step.declare_attackers
 #   max_blockers_each_combat        phases/declare_blockers_step.declare_blockers
+#   cant_attack_unless_others_attack  phases/declare_attackers_step.declare_attackers
+#   cant_block_unless_others_block  phases/declare_blockers_step.declare_blockers
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         # "No more than two creatures can attack each combat." (Caverns of
@@ -95,11 +98,18 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "max_blockers_each_combat",
     ),
     (
+        # The payload is the printed noun as an ordinary **filter**, the same
+        # shape the grammar's production emits and the same shape
+        # `subject_matches` reads — so the two producers of this kind stay
+        # comparable byte for byte, and the enforcing check has one reader
+        # rather than a land scan of its own. The five basics stay in the
+        # *pattern* because a regex has to name what it matches; what the
+        # engine can then enforce is no longer limited to them.
         re.compile(
             rf"^this creature can't attack unless defending player controls "
-            rf"an? (?P<land_type>{'|'.join(_LAND_TYPES)})$"
+            rf"an? (?P<defender_land>{'|'.join(_LAND_TYPES)})$"
         ),
-        "cant_attack_without_land_type",
+        "cant_attack_unless_defender_controls",
     ),
     # "Enchanted creature can't attack unless its controller pays {3}."
     # (Brainwash.) CR 508.1g: an additional *cost* to attack, paid as attackers
@@ -368,6 +378,18 @@ def combat_restriction_for(
             if cost is None:
                 return None
             payload["mana"] = cost
+        # "…unless defending player controls an Island." The captured land type
+        # becomes the ordinary `subject` filter payload the enforcement site
+        # hands to `subject_matches`, and the polarity rides beside it — the
+        # same two keys the grammar's production emits for the same kind, so
+        # the two producers stay comparable byte for byte. Converted here for
+        # the reason every other capture on this page is: a payload whose shape
+        # depends on which regex matched is how a restriction silently stops
+        # being testable.
+        defender_land = payload.pop("defender_land", None)
+        if defender_land is not None:
+            payload["subject"] = {"subtype_filter": defender_land}
+            payload["required"] = True
         subtype = payload.get("blocker_subtype")
         if subtype is not None and subtype not in CREATURE_TYPES:
             return None
@@ -595,3 +617,32 @@ def participation_cap(permanents, kind: str) -> int | None:
         if instruction.kind == wanted
     ]
     return min(caps) if caps else None
+
+def declaration_company_required(permanent, kind: str) -> int | None:
+    """How many **other** creatures must *kind* alongside *permanent*, or None.
+
+    "This creature can't attack unless at least two other creatures attack."
+    (Orcish Conscripts, and its blocking twin.) The sibling of
+    :func:`participation_cap` one rule over: that one is a ceiling the board
+    puts on a declaration, this one is a floor a creature puts on the
+    declaration it joins — and both are CR 508.1c / CR 509.1b restrictions
+    asked of the declaration as a whole, which is why neither can live in the
+    per-creature predicates beside them.
+
+    The number is payload, so a card printing "at least three" is this same
+    restriction. Read off ``effective_card`` like every other combat
+    restriction here, so a copy or a text change is answered without a second
+    reader.
+    """
+    from .oracle import compile_card_oracle
+
+    wanted = f"cant_{kind}_unless_others_{kind}"
+    needed = [
+        int(instruction.payload.get("count", 0))
+        for instruction in compile_card_oracle(permanent.effective_card).instructions
+        if instruction.kind == wanted
+    ]
+    # The **largest** floor wins, for the mirror of the reason the smallest
+    # ceiling does: each clause is a restriction in its own right, and
+    # satisfying only the loosest would disobey the tighter one.
+    return max(needed) if needed else None

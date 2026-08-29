@@ -10,21 +10,24 @@ at all.
 from .. import ast
 from ..references import parse_recipient
 from ..stream import TokenStream
-from ..phrases import BASIC_LAND_WORDS, _parse_duration, parse_counted_subject
+from ..phrases import _accept_number, _parse_duration, parse_counted_subject
 
 
-# The two printed combat restrictions the engine enforces (CR 506, 509). Both
-# are already derived from raw text by engine/combat_restrictions.py for the
-# legacy path; this production lets the *grammar* claim them, lowering to the
-# same instruction kinds with the same payloads so the differential can hold
-# the two to agreement.
+# The printed combat restrictions the engine enforces (CR 506, 509). Several are
+# also derived from raw text by engine/combat_restrictions.py for the legacy
+# path; these productions let the *grammar* claim them, lowering to the same
+# instruction kinds with the same payloads so the differential can hold the two
+# to agreement.
 #
-# The land type and the power threshold are captured, not baked into the
-# production, for the same reason they are payload rather than kind names: a
-# card naming Mountain, or a threshold of 4, is the same restriction.
-#: Moved to `phrases` when the choose-a-type grant needed the same five
-#: words; re-bound here so this file reads as it always did.
-_BASIC_LAND_WORDS = BASIC_LAND_WORDS
+# Everything printed is captured rather than baked into a production: the noun
+# phrase the defending player controls, the power threshold, the count of other
+# attackers. A card naming a Mountain, a threshold of 4 or three companions is
+# the same restriction, and spelling any of them into a kind would make each
+# printed word a new kind and a new enforcement branch.
+#
+# The five basic land words used to be re-bound here, because the defender-board
+# clause could name only those. It reads a whole noun phrase now, so the list is
+# gone with the restriction it was.
 
 
 def _parse_cant_attack_or_block(
@@ -69,6 +72,26 @@ def _parse_cant_attack_or_block(
         # illegal. The noun phrase is `phrases.parse_counted_subject`, the same
         # reading the "unless you sacrifice" tails elsewhere use, so the gate
         # and the charge cannot disagree about what is owed.
+        # "This creature can't attack **unless at least two other creatures
+        # attack**." (Orcish Conscripts.) CR 508.1c reads a restriction against
+        # the *whole* declaration — "if any restrictions are being disobeyed,
+        # the declaration is illegal" — so this is not a fact about the creature
+        # and no per-creature predicate can answer it. Its own kind for that
+        # reason, checked where Errantry's "can only attack alone" already is.
+        #
+        # The threshold is payload: "at least three" is the same restriction,
+        # and spelling the number into the kind would make each printed count a
+        # new kind and a new check.
+        others_mark = stream.mark()
+        if stream.accept_phrase("unless", "at", "least"):
+            count = _accept_number(stream)
+            if count is not None and stream.accept_phrase(
+                "other", "creatures", "attack"
+            ):
+                return ast.CombatRestriction(
+                    subject, "cant_attack_unless_others_attack", (("count", count),)
+                )
+            stream.reset(others_mark)
         unless_mark = stream.mark()
         if stream.accept_phrase("unless", "you", "sacrifice"):
             counted = parse_counted_subject(stream)
@@ -80,21 +103,48 @@ def _parse_cant_attack_or_block(
                     (("sacrifice_filter", described), ("sacrifice_count", count)),
                 )
             stream.reset(unless_mark)
+        # "…**unless** defending player controls an Island" (Sea Serpent) and
+        # "…**if** defending player controls an untapped creature with power 3
+        # or greater" (Goblin Mutant) are one restriction under two printed
+        # polarities: both ask whether the defender's board holds something
+        # answering a description, and differ in which answer forbids the
+        # attack. The word travels as payload for the reason the noun does — a
+        # card printing the other one is the same question.
+        required = True
         if not stream.accept_phrase("unless", "defending", "player", "controls"):
-            raise stream.error("expected 'unless defending player controls'")
-        stream.expect_word("a", "an")
-        land = stream.peek_word()
-        if land not in _BASIC_LAND_WORDS:
-            # A nonbasic or unknown type: the enforcing check scopes its search
-            # to basic land types, so claiming this would promise more than the
-            # engine does.
-            raise stream.error("expected a basic land type")
-        stream.advance()
+            if not stream.accept_phrase("if", "defending", "player", "controls"):
+                raise stream.error("expected 'unless defending player controls'")
+            required = False
+        # The whole noun phrase, through the reader every counted subject uses.
+        # It was five basic land *words* welded into the payload, because the
+        # enforcing check scanned lands by name; the check tests the printed
+        # phrase with `subject_matches` now, so "a Forest" and "an untapped
+        # creature with power 3 or greater" are the same production.
+        counted = parse_counted_subject(stream)
+        if counted is None:
+            raise stream.error("expected what the defending player controls")
+        _count, described = counted
         return ast.CombatRestriction(
-            subject, "cant_attack_without_land_type", (("land_type", land),)
+            subject,
+            "cant_attack_unless_defender_controls",
+            (("subject", described), ("required", required)),
         )
 
     if stream.accept_word("block"):
+        # "…**unless at least two other creatures block**." (Orcish Conscripts.)
+        # The blocking twin of the attack clause above, CR 509.1b's side of the
+        # same rule, and read here before the two shapes below because it opens
+        # on a word neither of them takes.
+        block_others = stream.mark()
+        if stream.accept_phrase("unless", "at", "least"):
+            count = _accept_number(stream)
+            if count is not None and stream.accept_phrase(
+                "other", "creatures", "block"
+            ):
+                return ast.CombatRestriction(
+                    subject, "cant_block_unless_others_block", (("count", count),)
+                )
+            stream.reset(block_others)
         # "Creatures without flying can't block this turn." (Destructive
         # Tampering's second mode): no object after "block" — the restriction
         # is a blanket over the *subject*, scoped by the printed duration.

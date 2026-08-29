@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from engine.ai_policy import (
     choose_activation_action,
+    choose_attackers,
     choose_cast_action,
     choose_combat_blockers,
     choose_combat_instant_cast_action,
@@ -317,3 +318,43 @@ def test_object_targeted_activation_is_skipped_with_no_legal_target(set_pool):
     action = choose_activation_action(game, 0)
 
     assert action is None or action.permanent_name != "Silent Dart"
+
+
+def test_a_declaration_level_restriction_does_not_ground_the_whole_team(set_pool):
+    """The AI's attack set has to be legal as a *set*, not creature by creature.
+
+    `legal_attackers` is a per-creature predicate, and CR 508.1c asks its
+    restrictions of the whole declaration — so a creature that needs company
+    ("can't attack unless at least two other creatures attack", Orcish
+    Conscripts) made the AI propose a set `declare_attackers` refused **whole**.
+    The refusal is all-or-nothing, so a Bear that could legally have attacked
+    alone stayed home too, every turn, for the rest of the game.
+
+    The rule is asked of the engine rather than re-read in the AI, and the
+    engine names the creature — which is what turns this into a prune.
+    """
+    pool = set_pool("ICE")
+
+    def _picked(friends: int) -> tuple[list[int], bool]:
+        conscripts = Permanent(card=pool["Orcish Conscripts"])
+        others = [Permanent(card=pool["Balduvian Bears"]) for _ in range(friends)]
+        for perm in (conscripts, *others):
+            perm.metadata["summoning_sickness_turn"] = -99
+        game = Game(players=[
+            PlayerState(name="P1", battlefield=[conscripts, *others], life=20),
+            PlayerState(name="P2", life=20),
+        ])
+        game.start_turn(0)
+        game._close_current_priority_step()
+        game.advance_combat_phase()  # beginning_of_combat
+        game.advance_combat_phase()  # declare_attackers
+        chosen = choose_attackers(game, 0)
+        return chosen, game.declare_attackers(0, chosen)[0]
+
+    one_friend, declared = _picked(1)
+    assert declared, "the declaration the AI proposes has to be legal"
+    assert one_friend == [1], "the Bear attacks; the Conscripts lack company"
+
+    two_friends, declared = _picked(2)
+    assert declared
+    assert two_friends == [0, 1, 2], "with company the Conscripts attack too"

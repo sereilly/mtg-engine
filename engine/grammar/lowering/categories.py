@@ -462,7 +462,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_unblockable_to_low_power_target": "evasion",
     "grant_unblockable_to_self": "evasion",
     # Restrictions on declaring attackers/blockers (CR 506, 509).
-    "cant_attack_without_land_type": "combat_restrictions",
+    "cant_attack_unless_defender_controls": "combat_restrictions",
+    # CR 508.1c / 509.1b: a restriction on the whole declaration rather
+    # than on the creature, so the count is payload and the check lives
+    # where the declaration is assembled.
+    "cant_attack_unless_others_attack": "combat_restrictions",
+    "cant_block_unless_others_block": "combat_restrictions",
     # "That creature can't attack during its controller's next turn." (Wall of
     # Dust's block trigger) — a one-shot stamp on the blocked creature, read
     # back by `can_attack` for exactly one of that controller's turns.

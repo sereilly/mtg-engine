@@ -292,6 +292,42 @@ def legal_attackers(game: Game, attacking_player_index: int, against: int | None
     ]
 
 
+def _legal_declaration(
+    game: Game, attacking_player_index: int, chosen: list[int]
+) -> list[int]:
+    """*chosen*, pruned until the **declaration** itself is legal (CR 508.1c).
+
+    `legal_attackers` above is a per-creature predicate, and a restriction can
+    be about the set: "can only attack alone" (Errantry), "can't attack unless
+    at least two other creatures attack" (Orcish Conscripts). Proposing a set
+    that disobeys one is not a partial failure — `declare_attackers` refuses the
+    **whole** declaration, so a Conscripts beside one Bear kept the Bear home
+    too, and the seat attacked with nobody all game.
+
+    The rule is asked of the engine rather than re-read here: a second copy in
+    the AI would drift from the one the declaration enforces, and the direction
+    it would drift is a seat that stops attacking for reasons the rules do not
+    give. The engine names the offending permanent, which is what makes this a
+    prune rather than a search — each pass drops exactly one creature, so it
+    terminates.
+    """
+    # Through the seam (`permanent_at`), which is where an index becomes a
+    # permanent: the AI carries slots because that is what the declaration takes,
+    # and a raw `battlefield[i]` here would be a second place that has to be
+    # right about what a slot means.
+    pruned = [
+        (idx, game.permanent_at(attacking_player_index, idx)) for idx in chosen
+    ]
+    pruned = [(idx, perm) for idx, perm in pruned if perm is not None]
+    while pruned:
+        refusal = game.attack_declaration_refusal([perm for _idx, perm in pruned])
+        if refusal is None:
+            break
+        offender, _reason = refusal
+        pruned = [(idx, perm) for idx, perm in pruned if perm is not offender]
+    return [idx for idx, _perm in pruned]
+
+
 def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     """Return indices of creatures that should attack this turn.
 
@@ -329,7 +365,7 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         if perm.card.primary_type == "creature" and not perm.tapped
     ]
     if not opponent_blockers:
-        return legal_attackers_list
+        return _legal_declaration(game, attacking_player_index, legal_attackers_list)
 
     chosen = list(forced)
     for idx in legal_attackers_list:
@@ -342,6 +378,7 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
         # Attack when the best possible block is not clearly profitable for the opponent.
         if best_defender_score <= _permanent_value(attacker):
             chosen.append(idx)
+    chosen = _legal_declaration(game, attacking_player_index, chosen)
 
     # Go all-in when lethal is on the table.
     if sum(player.battlefield[i].effective_power for i in legal_attackers_list) >= opponent.life:

@@ -2516,6 +2516,20 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
         # is a parsed one; without this row the whole card came back "text too
         # complex" with every one of its lines grammar-clean.
         "cant_attack_unless_sacrifice",
+        # "This creature can't attack **if** defending player controls an
+        # untapped creature with power 3 or greater." (Goblin Mutant.) The same
+        # static property one polarity over from the clause
+        # `combat_restrictions.py` derives, and here for the reason the cost
+        # above is: the noun phrase behind it is a parsed one, so no regex table
+        # can hold it and without this row the whole card came back "text too
+        # complex" with its only unread line grammar-clean.
+        "cant_attack_unless_defender_controls",
+        # "…unless at least two other creatures attack/block." (Orcish
+        # Conscripts.) A static property of the creature that is checked
+        # against the *declaration* (CR 508.1c, CR 509.1b) — the printed
+        # count is a parsed number, so the grammar reads it here.
+        "cant_attack_unless_others_attack",
+        "cant_block_unless_others_block",
     }
 )
 

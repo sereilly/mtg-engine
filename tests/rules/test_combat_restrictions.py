@@ -35,7 +35,14 @@ def test_506_3_the_required_land_type_is_read_from_the_text():
     """The restriction names a land type, and that type is data. It used to be
     baked into the instruction's *name*, matched by exact string equality
     against the Island wording — so a card naming any other type compiled to a
-    bare static line and attacked freely while still reporting supported."""
+    bare static line and attacked freely while still reporting supported.
+
+    The payload is an ordinary object **filter** now rather than a land-type
+    word, which is what lets the same kind carry a phrase no regex could: the
+    enforcing check reads it through `subject_matches` like every other printed
+    noun, and needs no land scan of its own (CR 205.3i puts a land subtype only
+    on a land).
+    """
     for land_type in ("Island", "Mountain", "Forest", "Plains", "Swamp"):
         line = normalize_creature_line(
             f"This creature can't attack unless defending player controls a {land_type}."
@@ -43,8 +50,11 @@ def test_506_3_the_required_land_type_is_read_from_the_text():
         restriction = combat_restriction_for(line)
 
         assert restriction is not None, land_type
-        assert restriction.kind == "cant_attack_without_land_type"
-        assert restriction.payload == {"land_type": land_type.lower()}
+        assert restriction.kind == "cant_attack_unless_defender_controls"
+        assert restriction.payload == {
+            "subject": {"subtype_filter": land_type.lower()},
+            "required": True,
+        }
 
 
 @pytest.mark.cr("506.3")
@@ -186,10 +196,34 @@ def test_506_3_an_unrecognized_restriction_rider_is_unsupported_not_silently_dro
     for text in (
         "This creature can't block creatures with flying.",
         "This creature can't attack unless you control a Wall.",
-        "This creature can't attack unless defending player controls a Desert.",
+        "This creature can't attack unless defending player controls a snowfield.",
     ):
         program = compile_card_oracle(_orc(text))
         assert not program.supported, f"silently admitted: {text}"
+
+
+@pytest.mark.cr("506.3")
+def test_506_3_a_nonbasic_land_requirement_is_read_and_enforced():
+    """The other side of the guard above, and the reason it had to change.
+
+    "…unless defending player controls a **Desert**" was unsupported, and the
+    limit was the *enforcement's* rather than the card's: the check scanned the
+    defender's lands for one of five basic type words. It reads a filter through
+    `subject_matches` now, so any printed land type is the same restriction —
+    which is what the payload being a noun phrase buys, one card beyond the one
+    that needed it.
+    """
+    program = compile_card_oracle(_orc(
+        "This creature can't attack unless defending player controls a Desert."
+    ))
+    assert program.supported
+    restriction = next(
+        i for i in program.instructions
+        if i.kind == "cant_attack_unless_defender_controls"
+    )
+    assert restriction.payload == {
+        "subject": {"subtype_filter": "desert"}, "required": True,
+    }
 
 
 # ---------------------------------------------------------------------------

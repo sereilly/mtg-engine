@@ -692,13 +692,13 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, twenty-two rounds in. 184 → 256 of 373 supported
+**Where it stands: Phase 3, twenty-three rounds in. 184 → 258 of 373 supported
 (69%), hollow lines 10 cards.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
 
-**The remaining 117 are a long tail, and the shape is Legends' rather than
+**The remaining 115 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
@@ -1271,6 +1271,49 @@ done the descent through control-flow wrappers since Lesser Werewolf; this was
 a second reading of the same question that did not, so the reader is public now
 (`legality.targeting_instruction`) and the web layer asks it. One reader asked
 twice is what stops a picker and a gate describing different cards.
+
+**Round 23 — a combat restriction is about the declaration, not the creature.
+256 → 258.**
+
+Goblin Mutant's "can't attack **if** defending player controls an untapped
+creature with power 3 or greater" is the question Sea Serpent's "**unless**
+defending player controls an Island" already asks, one polarity over. Both are
+one kind now, carrying the printed noun phrase and the printed word. The noun
+used to be one of five basic land *words* — and the five were the
+**enforcement's** limit, not the card's: the check scanned the defender's lands
+by name, so a creature naming anything else had nowhere to go and the
+production refused a phrase the noun parser reads perfectly well. It reads a
+filter through `subject_matches` now, and the land scoping the old check spelled
+out is CR 205.3i's rather than the payload's — a land subtype can only be on a
+land. A card printing "a Desert" works, which is one card past the one that
+needed the change.
+
+Orcish Conscripts is the other half of the title: "can't attack unless at least
+two other creatures attack", and its blocking twin. CR 508.1c and CR 509.1b ask
+their restrictions of the **declaration** — "if any restrictions are being
+disobeyed, the declaration is illegal" — so neither can live in `can_attack` or
+`_can_block_attacker`, which see one creature at a time. They join Errantry's
+"can only attack alone" where the declaration is assembled, through one reader
+(`combat_restrictions.declaration_company_required`) whose count is payload.
+
+**The defect is what an all-or-nothing refusal does to a seat that cannot see
+it.** `ai_policy.choose_attackers` builds its set out of `legal_attackers`,
+which is the per-creature predicate — so it proposed a declaration the engine
+refused *whole*, and a Conscripts beside one Bear kept the **Bear** home too,
+every turn, for the rest of the game. Nothing crashed and nothing logged a
+rules violation; the seat simply stopped attacking. The fix is that the AI asks
+the engine (`attack_declaration_refusal`) rather than carrying a second reading
+of CR 508.1c, and the engine names the offending permanent — which is what
+makes the AI's response a prune rather than a search. Errantry has the same
+shape and had the same bug; no card in the shipped pool prints either clause,
+which is why it had never been seen.
+
+Two guards fired on the way and both were right to. The blocker check reached
+for `defender.battlefield[idx]` when the loop above it had already resolved the
+permanent, and the AI's prune did the same with a slot from the wire — the
+positional-indexing ratchet named both. They read the collected objects and
+`game.permanent_at` now, which is the seam's whole purpose: an index becomes a
+permanent once.
 
 ## Where the sets landed
 

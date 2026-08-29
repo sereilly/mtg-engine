@@ -148,6 +148,43 @@ def _lower_combat_restriction(
                 {"filter": described, "count": int(payload["sacrifice_count"])},
             ),
         )
+    # "…unless defending player controls an Island" (Sea Serpent) / "…if
+    # defending player controls an untapped creature with power 3 or greater"
+    # (Goblin Mutant). One kind, one payload: the printed noun phrase and the
+    # polarity. It was five basic land *words* welded into a `land_type`
+    # string, because the enforcing check scanned the defender's lands by name —
+    # so a card naming any other kind of permanent had nowhere to go, and this
+    # production refused a phrase the noun parser reads perfectly well.
+    #
+    # The land scoping the old check spelled out is CR 205.3i's, not this
+    # payload's: a land subtype can only be on a land, so "an Island" describes
+    # a land whether or not the word is repeated.
+    if node.kind == "cant_attack_unless_defender_controls":
+        payload = dict(node.payload)
+        if not _is_source(node.subject):
+            raise LoweringError(
+                "the defender-board restriction is read off the creature it "
+                "restricts",
+                node=node,
+            )
+        described = _filter_payload(payload["subject"])
+        # Idiom 2: the gate tests the phrase with `subject_matches`, so a key
+        # that matcher cannot answer would be carried and ignored — and ignoring
+        # a narrowing *lifts* the restriction (every board satisfies "controls
+        # something"), which is the widening direction.
+        untestable = untestable_filter_keys(described)
+        if untestable or not described:
+            raise LoweringError(
+                "the attack gate cannot test what the defender controls: "
+                + (", ".join(sorted(untestable)) or "nothing was described"),
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "cant_attack_unless_defender_controls", "",
+                {"subject": described, "required": bool(payload["required"])},
+            ),
+        )
     if node.kind == "cant_block_until_eot":
         payload = dict(node.payload)
         if payload.get("duration") not in _REST_OF_TURN:

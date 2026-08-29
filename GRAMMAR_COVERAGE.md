@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 65.9% | 60.7% | 40.3% | 190 |
+| ICE *(measured)* | 373 | 601 | 66.4% | 61.2% | 40.8% | 191 |
 | **All (shipped)** | **2415** | **3404** | **85.8%** | **84.7%** | **52.4%** | **1544** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -47,10 +47,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | 11 | 8 | expected 'a' |  |
 | 10 | 4 | expected a colour or a creature body after 'becomes' |  |
 | 10 | 4 | expected a keyword ability |  |
-| 10 | 10 | expected 'unless defending player controls' |  |
 | 9 | 5 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 8 | 3 | no lowering for RawEffect |  |
 | 8 | 3 | expected 'the number of' in a where-clause |  |
+| 8 | 8 | expected 'unless defending player controls' |  |
 | 7 | 3 | expected 'card' |  |
 | 5 | 1 | expected 'equal to' quantity for damage |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
@@ -1116,6 +1116,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Other Goblins get +1/+1 and have mountainwalk.`
   - `Other Goblins get +1/+1 and have mountainwalk.`
 - **Goblin Mutant**
+  - `This creature can't attack if defending player controls an untapped creature with power 3 or greater.`
   - `This creature can't block creatures with power 3 or greater.`
 - **Goblin Rock Sled**
   - `This creature can't attack unless defending player controls a Mountain.`
@@ -1876,6 +1877,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{T}: This creature deals 2 damage to any target and 3 damage to you.`
 - **Orcish Cannoneers**
   - `{T}: This creature deals 2 damage to any target and 3 damage to you.`
+- **Orcish Conscripts**
+  - `This creature can't attack unless at least two other creatures attack.`
+  - `This creature can't block unless at least two other creatures block.`
 - **Orcish Healer**
   - `{R}{R}, {T}: Target creature can't be regenerated this turn.`
   - `{B}{B}{R}, {T}: Regenerate target black or green creature.`

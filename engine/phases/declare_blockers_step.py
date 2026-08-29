@@ -13,7 +13,7 @@ import random
 import re
 
 from ..auras import attached_combat_restrictions, aura_restriction_active
-from ..combat_restrictions import participation_cap
+from ..combat_restrictions import declaration_company_required, participation_cap
 from ..evasion_negation import negated_evasion_abilities
 from ..landwalk import LANDWALK, land_satisfies, landwalk_requirement
 from ..layer_bridge import computed_abilities
@@ -79,6 +79,12 @@ class DeclareBlockersStepMixin:
         }
         assignments: dict[int, list[int]] = {}
         resolved_attackers: dict[int, Permanent] = {}
+        # The blockers this declaration names, collected as the loop below
+        # resolves them. The set-level restrictions further down read *objects*
+        # rather than re-reading the battlefield by index, for the reason the
+        # attack side gives: an index is unstable, and this loop has the
+        # permanent in hand already.
+        resolved_blockers: dict[int, Permanent] = {}
 
         for blocker_idx, raw_attackers in blocker_to_attacker.items():
             # A blocker may be assigned one attacker (the common case) or several
@@ -88,6 +94,7 @@ class DeclareBlockersStepMixin:
             if blocker_idx < 0 or blocker_idx >= len(defender.battlefield):
                 return False, "blocker index out of range"
             blocker = defender.battlefield[blocker_idx]
+            resolved_blockers[blocker_idx] = blocker
             if not blocker.is_creature:
                 return False, "only creatures can block"
             if blocker.tapped:
@@ -257,6 +264,29 @@ class DeclareBlockersStepMixin:
                 if already + len(assignments) > block_cap:
                     return False, (
                         f"no more than {block_cap} creature(s) can block each combat"
+                    )
+
+        # "…can't block **unless at least two other creatures block**." (Orcish
+        # Conscripts.) The floor to the cap above, and counted the same way and
+        # for the same reason: CR 509.1b asks its restrictions of the whole
+        # declaration, and a creature blocking under another defender's
+        # declaration does not stop being a blocker because this seat declares
+        # next. Camouflage is exempt beside the cap, for that block's reason —
+        # the piles were matched at random, so there is no declaration to
+        # declare illegal.
+        if not _camouflage_resolution:
+            blocking_total = len(assignments) + sum(
+                len(other)
+                for seat, other in self.combat_blockers.items()
+                if seat != controller_index
+            )
+            for blocker_idx in assignments:
+                blocker = resolved_blockers[blocker_idx]
+                needed = declaration_company_required(blocker, "block")
+                if needed is not None and blocking_total - 1 < needed:
+                    return False, (
+                        f"{blocker.card.name} needs at least {needed} other "
+                        "blocking creature(s)"
                     )
 
         # Nested by defender (CR 802): only this defender's own entry is replaced,
