@@ -124,11 +124,15 @@ from .zones import (
     _lower_random_reveal_ownership_exchange,
     _lower_shuffle_graveyard_into_library,
     _lower_shuffle_hand_into_library,
-    _reads_no_return_restriction,
+
     _lower_put_onto_battlefield,
+
+    _lower_put_on_library_top,
+)
+from .returns import (
+    _reads_no_return_restriction,
     _lower_return_to_zone,
     _lower_put_source_into_zone,
-    _lower_put_on_library_top,
 )
 from .exile import (
     _EXILED_CREATURE,

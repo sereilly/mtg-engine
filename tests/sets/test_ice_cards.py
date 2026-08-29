@@ -525,3 +525,45 @@ def test_flow_of_maggots_can_only_be_blocked_by_walls(set_pool):
     _combat(game, [0])
     assert not game.declare_blockers(1, {1: 0})[0], "a non-Wall may not block"
     assert game.declare_blockers(1, {0: 0})[0], "a Wall may"
+
+
+# --- Round 8: a self-reference's noun is not a filter ---
+
+
+def test_the_self_bouncers_return_their_own_source(set_pool):
+    """"{cost}: Return this <noun> to its owner's hand" on four cards and three
+    different nouns.
+
+    The lowering refused the printed noun as an unhonoured restriction. On a
+    self-reference there is nothing to restrict: "this creature", "this
+    enchantment" and "this permanent" all name the object the ability is
+    printed on (CR 109.5), which is why the engine's own collapser reads the
+    three as one phrase.
+    """
+    pool = set_pool("ICE")
+    for name in ("Blinking Spirit", "Foul Familiar", "Leshrac's Sigil",
+                 "Freyalise's Charm"):
+        program = compile_card_oracle(pool[name])
+        assert program.supported, name
+        kinds = {
+            ability.instruction.kind
+            for ability in program.activated_abilities
+            if ability.instruction is not None
+        }
+        assert "return_source_card_to_owners_hand" in kinds, name
+
+
+def test_blinking_spirit_bounces_itself(set_pool):
+    """Run rather than asserted off the program: the ability is free, so what
+    it does is the whole card."""
+    pool = set_pool("ICE")
+    spirit = Permanent(card=pool["Blinking Spirit"])
+    p1 = PlayerState(name="P1", battlefield=[spirit], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    result = game.activate_permanent_ability(0, "Blinking Spirit", permanent_index=0)
+    assert result.supported, result.details
+    game._settle()
+
+    assert spirit not in p1.battlefield
+    assert [c.name for c in p1.hand] == ["Blinking Spirit"]

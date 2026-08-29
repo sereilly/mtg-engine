@@ -925,6 +925,25 @@ greedily and the union collapses into one creature nobody is named. The retry
 is after a member fails instead, which leaves every phrase that already worked
 untouched.
 
+**Round 8 — a self-reference's noun is not a filter. 228 → 232 supported.**
+
+Four cards printing "{cost}: Return this <noun> to its owner's hand" across
+three different nouns (Blinking Spirit, Foul Familiar, Leshrac's Sigil,
+Freyalise's Charm). The lowering refused the printed noun as an unhonoured
+restriction — correct machinery (`_restrictions_beyond` refuses by default, so
+a filter field added later cannot be silently ignored) applied to a phrase that
+is not a restriction. "This creature", "this enchantment" and "this permanent"
+all name the object the ability is printed on (CR 109.5); nothing is being
+selected, so there is no set for the type to narrow, which is why the engine's
+own self-reference collapser already reads the three as one phrase.
+
+**The size guard fired on the way out and the split was taken with the work in
+hand**, as Phase 3 asks. `lowering/zones.py` reached 1,004 lines and one
+function was 618 of them: `lowering/returns.py` is that function and its three
+helpers. The boundary is the file's own — the rest of `zones` decides where an
+object *goes* when something puts it somewhere, while a return also names where
+it comes **from**, and it is the pair of zones that picks the handler.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

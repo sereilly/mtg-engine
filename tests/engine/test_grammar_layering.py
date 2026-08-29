@@ -170,7 +170,15 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # CR's other line: CR 701.14 is a keyword action, an atomic exchange between two
 # creatures (701.14b — if either has left, neither deals damage), where
 # everything left behind is one source dealing to a recipient.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "exile", "counters", "keywords", "tapping", "prevention", "redirection", "fighting", "where_x", "control_flow", "attachments"]
+# `returns` split out of `lowering/zones.py` at 1,004 lines, along a boundary
+# the file already had: one function was 618 of them. The rest of `zones`
+# decides where an object *goes* when something puts it somewhere; a return
+# also names where it comes **from**, and it is the pair of zones that picks
+# the handler — graveyard->hand, graveyard->battlefield and
+# battlefield->owner's hand read three different kinds of index. Asymmetric
+# like `zones` itself and for the same reason: the parse side is one
+# production.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "counters", "keywords", "tapping", "prevention", "redirection", "fighting", "where_x", "control_flow", "attachments"]
 # The AST side has no `library`: what a search or a look-at *is* — the pile, the
 # filter, the fate of what was found — is a handful of nodes that sit perfectly
 # well beside the other card nodes, and the split that made `library` a family
