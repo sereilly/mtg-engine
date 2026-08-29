@@ -23,7 +23,8 @@ from ..search_filters import SEARCH_COMPARISONS
 from ..subject_filters import OBJECT_ONLY_FILTER_KEYS
 from . import ast
 from .errors import LoweringError
-from .lowering import _is_source, _lower_condition, _lower_pump, _signed
+from .lowering import (_is_enchanted, _is_source, _lower_condition, _lower_pump,
+                       _signed)
 
 
 def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
@@ -219,7 +220,17 @@ def _lower_self_conditional_static(
     node: ast.StaticAbilityNode, effects: tuple[ast.Statement, ...]
 ) -> tuple[OracleInstruction, ...]:
     """"This creature <effect> as long as <condition>", with the condition read
-    by the grammar's noun parser (Beasts of Bogardan).
+    by the grammar's noun parser (Beasts of Bogardan) — and the same sentence
+    printed about an Aura's host, "Enchanted creature gets +2/+2 as long as an
+    opponent controls a black permanent" (Ice Age's five Scarabs).
+
+    Those two differ in **which permanent the bonus lands on** and in nothing
+    else: same effect, same condition, same evaluator, same seat (CR 109.5 — the
+    ability is the Aura's, so its controller is who "an opponent" is measured
+    against). So the subject rides the payload as ``subject: "attached"`` and
+    the P/T refresh reads it, rather than the sentence getting a second
+    lowering, a second condition reader and a chance to disagree about what "a
+    black permanent" is.
 
     ``engine/static_bonuses.py`` owns the same instruction kind and the same
     evaluator, and every condition it reads is about **you** or about the
@@ -280,6 +291,20 @@ def _lower_self_conditional_static(
         payload["toughness"] = toughness
     if keywords:
         payload["keywords"] = keywords
+    if _is_enchanted(getattr(effects[0], "subject", None) if effects else None):
+        # The bonus goes to the permanent this one is attached to, not to
+        # itself. Only the P/T half is carried across today: the keyword half
+        # of a conditional static is rebuilt by `_recalculate_lord_buffs` on
+        # the permanent that prints it, and pointing that at a host is a
+        # separate change — so a keyword grant on an attached subject refuses
+        # rather than being lowered onto a channel that would drop it.
+        if keywords:
+            raise LoweringError(
+                "the derived-grant channel rebuilds a conditional keyword on "
+                "the permanent that prints it, not on its host",
+                node=node,
+            )
+        payload["subject"] = "attached"
     return (OracleInstruction("conditional_static", "", payload),)
 
 
@@ -329,7 +354,7 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
         # as long as it's untapped" — still belongs to engine/static_bonuses.py,
         # whose derivation the compiler consults after this refusal.
         subject = getattr(effects[0], "subject", None) if effects else None
-        if _is_source(subject):
+        if _is_source(subject) or _is_enchanted(subject):
             # "This creature gets +1/+1 as long as **an opponent** controls a
             # nontoken white permanent." (Beasts of Bogardan.) The same
             # conditional static the derivation table produces, on the same

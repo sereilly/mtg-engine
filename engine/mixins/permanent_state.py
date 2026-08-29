@@ -52,7 +52,7 @@ from ..lord_buffs import (
     LordBuff,
     lord_buff_from_payload,
 )
-from ..handlers._common import evaluate_count, resolve_amount
+from ..handlers._common import attached_host, evaluate_count, resolve_amount
 from ..search_filters import name_key
 from ..subject_filters import subject_matches
 from ..models import CardDefinition, Permanent, PlayerState
@@ -954,8 +954,26 @@ class PermanentStateMixin:
                 holds = conditional_static_holds(
                     self, seat, permanent, cs.payload.get("condition") or {}
                 )
+                # "**Enchanted** creature gets +2/+2 as long as an opponent
+                # controls a black permanent" (Ice Age's five Scarabs). The
+                # sentence an Aura prints about its host, on the same
+                # instruction and the same evaluator as the one a creature
+                # prints about itself — only the permanent the delta lands on
+                # differs, and that is what `subject` says.
+                #
+                # The seat stays the Aura's controller (CR 109.5: the ability is
+                # the Aura's), so "an opponent" is measured from whoever
+                # controls the Aura rather than from whoever controls the
+                # creature it is stuck to. Those are different players whenever
+                # the Aura is on an opponent's creature, which is exactly what
+                # these five cards are for.
+                recipient = permanent
+                if cs.payload.get("subject") == "attached":
+                    recipient = attached_host(self, permanent)
+                    if recipient is None:
+                        continue
                 _apply_conditional_bonus(
-                    permanent, "conditional_static", holds, cs_power, cs_toughness
+                    recipient, "conditional_static", holds, cs_power, cs_toughness
                 )
 
     def _apply_chosen_body(self, permanent: Permanent, body: dict) -> None:

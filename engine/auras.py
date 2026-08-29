@@ -493,6 +493,9 @@ def aura_effect_claim(normalized_line: str, card_name: str = "") -> str | None:
     anthem = aura_anthem_claim(normalized_line)
     if anthem is not None:
         return anthem
+    conditional = aura_conditional_static_claim(normalized_line)
+    if conditional is not None:
+        return conditional
     return aura_continuous_claim(normalized_line)
 
 
@@ -517,6 +520,41 @@ def aura_anthem_claim(normalized_line: str) -> str | None:
     if lord_buff_for(normalized_line) is None:
         return None
     return "board-wide anthem — lord_buffs, applied by _recalculate_lord_buffs"
+
+
+def aura_conditional_static_claim(normalized_line: str) -> str | None:
+    """Name the code behind "Enchanted creature gets +N/+N as long as …", or None.
+
+    Ice Age's five Scarabs ("as long as an opponent controls a black
+    permanent"). Like :func:`aura_anthem_claim` and unlike
+    :func:`aura_continuous_claim`, this claim says **the line must lower**: the
+    ``conditional_static`` instruction carrying ``subject: "attached"`` is what
+    the P/T refresh reads, so a claim on the other side would leave the Aura
+    supported with nothing behind the sentence.
+
+    Asked of the grammar rather than of a pattern here, which is the point of
+    lowering it there: "an opponent controls a black permanent" has one reader
+    (``subject_matches``, through the condition lowering), and a regex in this
+    file would be a second one free to disagree about what a black permanent is.
+    """
+    from .grammar import ast as grammar_ast
+    from .grammar import compile_line
+
+    compiled = compile_line(normalized_line)
+    if compiled.parse_error is not None or compiled.lowering_error is not None:
+        return None
+    if not isinstance(compiled.node, grammar_ast.StaticAbilityNode):
+        return None
+    if not any(
+        instruction.kind == "conditional_static"
+        and instruction.payload.get("subject") == "attached"
+        for instruction in compiled.instructions
+    ):
+        return None
+    return (
+        "conditional static on the enchanted permanent — lowered by the "
+        "grammar, applied by _refresh_dynamic_creatures"
+    )
 
 
 def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> str | None:
@@ -754,7 +792,18 @@ def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
         match = _STATIC_PT_GRANT.search(line)
         if match is None:
             continue
-        if line[match.end():].lstrip().startswith("until end of turn"):
+        tail = line[match.end():].lstrip()
+        if tail.startswith("until end of turn"):
+            continue
+        # "…gets +2/+2 **as long as an opponent controls a black permanent**"
+        # (Ice Age's five Scarabs), and "for as long as this artifact remains
+        # tapped". A conditional grant is not a flat one, and this pattern
+        # matches the prefix of both — so answering here would attach the bonus
+        # unconditionally, which is the condition-dropping bug the per-counter
+        # decline above exists for. The conditional grant lowers to a
+        # ``conditional_static`` instruction instead (grammar/statics.py) and
+        # the P/T refresh asks the condition on every recompute.
+        if re.match(r"(?:for )?as long as\b", tail):
             continue
         return int(match.group(1)), int(match.group(2))
     return None

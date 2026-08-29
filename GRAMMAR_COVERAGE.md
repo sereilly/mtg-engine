@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 58.9% | 50.7% | 31.3% | 158 |
+| ICE *(measured)* | 373 | 601 | 58.9% | 51.6% | 32.1% | 163 |
 | **All (shipped)** | **2415** | **3404** | **85.7%** | **84.6%** | **52.3%** | **1541** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -54,7 +54,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | 7 | 3 | expected 'card' |  |
 | 6 | 2 | expected 'equal to' quantity for damage |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
-| 5 | 5 | a conditional static bonus is derived by engine/static_bonuses.py |  |
 | 5 | 5 | expected a quantity |  |
 | 4 | 1 | the only payer this clause can enumerate is an opponent |  |
 | 4 | 1 | expected 'that' |  |
@@ -64,6 +63,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | 4 | 4 | the self-return does not honour 'card_types' |  |
 | 4 | 3 | expected 'controller' |  |
 | 3 | 3 | static abilities need the CR 613 layers engine | phase 6 (CR 613 layers) |
+| 2 | 2 | a destroy sweep over a source relation stays with its card hook until the probe review takes it |  |
 
 ## Cards executing through the grammar
 
@@ -292,6 +292,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{T}, Remove any number of charge counters from this artifact: Add {B}, then add an additional {B} for each charge counter removed this way.`
   - `{2}, {T}: Put a charge counter on this artifact.`
   - `{T}, Remove any number of charge counters from this artifact: Add {B}, then add an additional {B} for each charge counter removed this way.`
+- **Black Scarab**
+  - `Enchanted creature gets +2/+2 as long as an opponent controls a black permanent.`
 - **Black Vise**
   - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.`
   - `At the beginning of the chosen player's upkeep, this artifact deals X damage to that player, where X is the number of cards in their hand minus 4.`
@@ -340,6 +342,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{T}, Remove any number of charge counters from this artifact: Add {U}, then add an additional {U} for each charge counter removed this way.`
   - `{2}, {T}: Put a charge counter on this artifact.`
   - `{T}, Remove any number of charge counters from this artifact: Add {U}, then add an additional {U} for each charge counter removed this way.`
+- **Blue Scarab**
+  - `Enchanted creature gets +2/+2 as long as an opponent controls a blue permanent.`
 - **Bolt Hound**
   - `Whenever this creature attacks, other creatures you control get +1/+0 until end of turn.`
 - **Bone Flute**
@@ -1143,6 +1147,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{T}, Remove any number of charge counters from this artifact: Add {G}, then add an additional {G} for each charge counter removed this way.`
   - `{2}, {T}: Put a charge counter on this artifact.`
   - `{T}, Remove any number of charge counters from this artifact: Add {G}, then add an additional {G} for each charge counter removed this way.`
+- **Green Scarab**
+  - `Enchanted creature gets +2/+2 as long as an opponent controls a green permanent.`
 - **Griffin Aerie**
   - `At the beginning of your end step, if you gained 3 or more life this turn, create a 2/2 white Griffin creature token with flying.`
 - **Grim Tutor**
@@ -2066,6 +2072,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{T}, Remove any number of charge counters from this artifact: Add {R}, then add an additional {R} for each charge counter removed this way.`
   - `{2}, {T}: Put a charge counter on this artifact.`
   - `{T}, Remove any number of charge counters from this artifact: Add {R}, then add an additional {R} for each charge counter removed this way.`
+- **Red Scarab**
+  - `Enchanted creature gets +2/+2 as long as an opponent controls a red permanent.`
 - **Reflecting Mirror**
   - `{X}, {T}: Change the target of target spell with a single target if that target is you. The new target must be a player. X is twice the mana value of that spell.`
 - **Regeneration**
@@ -2923,6 +2931,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{T}, Remove any number of charge counters from this artifact: Add {W}, then add an additional {W} for each charge counter removed this way.`
   - `{2}, {T}: Put a charge counter on this artifact.`
   - `{T}, Remove any number of charge counters from this artifact: Add {W}, then add an additional {W} for each charge counter removed this way.`
+- **White Scarab**
+  - `Enchanted creature gets +2/+2 as long as an opponent controls a white permanent.`
 - **Wildwood Scourge**
   - `Whenever one or more +1/+1 counters are put on another non-Hydra creature you control, put a +1/+1 counter on this creature.`
 - **Will-o'-the-Wisp**

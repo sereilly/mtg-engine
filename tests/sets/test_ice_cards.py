@@ -118,3 +118,94 @@ def test_halls_of_mist_still_reports_its_unread_static_line(set_pool):
 
     assert not program.supported
     assert "can't attack" in (program.reason or "")
+
+
+# --- Round 2: the Scarab cycle — a conditional static on an Aura's host ---
+
+
+def _scarab_board(set_pool, scarab_name: str, opponent_permanent: str | None):
+    """A 2/2 bear wearing *scarab_name*, with the opponent's board as named.
+
+    The Aura is attached with ``attach_aura`` rather than cast, because what is
+    under test is the continuous effect while attached (CR 611.3a) — recomputed
+    on every read, never applied once at attachment.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])  # a vanilla 2/2, no text at all
+    scarab = Permanent(card=pool[scarab_name])
+    p1 = PlayerState(name="P1", battlefield=[bear, scarab], life=20)
+    theirs = [Permanent(card=pool[opponent_permanent])] if opponent_permanent else []
+    p2 = PlayerState(name="P2", battlefield=theirs, life=20)
+    game = Game(players=[p1, p2])
+    attach_aura(scarab, bear)
+    game._settle()
+    return game, bear, scarab
+
+
+def test_black_scarab_grants_nothing_while_no_opponent_has_a_black_permanent(set_pool):
+    game, bear, _ = _scarab_board(set_pool, "Black Scarab", None)
+
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+
+
+def test_black_scarab_grants_plus_two_while_an_opponent_has_a_black_permanent(set_pool):
+    game, bear, _ = _scarab_board(set_pool, "Black Scarab", "Moor Fiend")  # a black creature
+
+    assert (bear.effective_power, bear.effective_toughness) == (4, 4)
+
+
+def test_black_scarab_reads_the_condition_on_every_recompute(set_pool):
+    """CR 611.3a — the condition is asked continuously, not locked in when the
+    Aura attached. Removing the opponent's black permanent removes the bonus
+    with nothing to undo."""
+    game, bear, _ = _scarab_board(set_pool, "Black Scarab", "Moor Fiend")
+    assert bear.effective_power == 4
+
+    game.remove_from_battlefield(game.players[1].battlefield[0])
+    game._settle()
+
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+
+
+def test_scarab_condition_is_measured_from_the_auras_controller(set_pool):
+    """CR 109.5: the ability is the Aura's, so "an opponent" is an opponent of
+    whoever controls the Aura — not of whoever controls the creature.
+
+    The cycle exists to be put on an opponent's creature, so this is the case
+    the card is printed for rather than a corner: P1's Scarab on P1's own black
+    creature must see P1's board as "you", find no *opponent* with a black
+    permanent, and grant nothing.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    black_bear = Permanent(card=pool["Moor Fiend"])
+    scarab = Permanent(card=pool["Black Scarab"])
+    p1 = PlayerState(name="P1", battlefield=[black_bear, scarab], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    attach_aura(scarab, black_bear)
+    game._settle()
+
+    assert (black_bear.effective_power, black_bear.effective_toughness) == (3, 3)
+
+
+def test_every_scarab_in_the_cycle_compiles_to_the_same_shape(set_pool):
+    """Five cards, one sentence with the colour word changed — the reason this
+    is a production rather than five entries."""
+    pool = set_pool("ICE")
+    colors = {
+        "Black Scarab": "B", "Blue Scarab": "U", "Green Scarab": "G",
+        "Red Scarab": "R", "White Scarab": "W",
+    }
+    for name, symbol in colors.items():
+        program = compile_card_oracle(pool[name])
+        assert program.supported, name
+        static = next(
+            i for i in program.instructions if i.kind == "conditional_static"
+        )
+        assert static.payload["subject"] == "attached", name
+        assert static.payload["power"] == 2 and static.payload["toughness"] == 2
+        assert static.payload["condition"]["who"] == "opponent", name
+        assert static.payload["condition"]["filter"]["color_filter"] == symbol, name

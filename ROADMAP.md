@@ -766,6 +766,28 @@ were unsupported before this round and are now supported-with-a-gap, so the debt
 moved from one report to the other rather than appearing. Phase 3's exit is both
 numbers at zero.
 
+**Round 2 — a conditional static on an Aura's host. 205 → 210 supported.**
+
+The Scarab cycle: five cards printing one sentence with the colour word
+changed, which is the shape Phase 2 says to rank a backlog by. "Enchanted
+creature gets +2/+2 as long as an opponent controls a black permanent" is the
+sentence a creature already prints about *itself* (Beasts of Bogardan) — same
+effect, same condition, same evaluator, same seat (CR 109.5) — differing only in
+which permanent the delta lands on. So it lowers through the one conditional
+static, with `subject: "attached"` as payload, and the P/T refresh reads that.
+No second reader of "a black permanent", which is what the existing lowering's
+own comment asks for.
+
+**The round's finding is what the flat reader was already doing.**
+`auras.aura_static_pt_grant`'s pattern is `gets ([+-]\d+)/([+-]\d+)`, which
+matches the *prefix* of a conditional grant — so the layer bridge would have
+attached +2/+2 unconditionally, and making the card supported without touching
+that would have shipped five Auras whose printed condition does nothing. It now
+declines an "as long as" tail exactly as it declines a per-counter one, and the
+decline is the second of its kind in this file. No shipped card is affected:
+that reader is only asked of attachments, and every shipped card matching the
+same prefix is a creature talking about itself.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,
