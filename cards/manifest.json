@@ -63,5 +63,12 @@
     }
   ],
   "measured_description": "Sets ingested for measurement but NOT shipped: the coverage instruments (scripts/hook_reliance.py, scripts/grammar_coverage.py) read them, and nothing else does. `sets` above is what the engine plays, and it stays 100% supported — the web app offers those cards to players and two guards assert every one of them compiles as supported. A set lands here first so its numbers can be read before the work of supporting it is done, and moves up to `sets` when it is fully supported. Keeping them in one file rather than two is deliberate: the roles differ, the registry does not.",
-  "measured": []
+  "measured": [
+    {
+      "code": "ICE",
+      "name": "Ice Age",
+      "released": "1995-06-03",
+      "file": "ICE_cards.json"
+    }
+  ]
 }
