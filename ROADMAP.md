@@ -986,6 +986,32 @@ sentence prints rather than a template:
   and `evaluate_count` only knew one player's. `exclude_self` covers "other
   Rats", by identity rather than by name.
 
+**Round 10 — a sweep and a grant over the set the sentence names. 235 → 237.**
+
+Jokulhaups and Stampede, and both were a *routing* fix rather than new
+machinery. "Destroy all artifacts, creatures, and lands" is a type union no
+per-scope sweep kind names, and the filtered sweep beside them already answers
+it — `type_filter` takes a list and the matcher reads one as a union — so an
+unlisted scope routes there instead of refusing, and a fourth union costs no
+row. The named kinds stay for the unions that have one, because the compiler
+and the behaviour snapshots key on them.
+
+Stampede is the more interesting half. "Attacking creatures get +1/+0 **and
+gain trample** until end of turn": both halves of one sentence name one set,
+and only the P/T half could read it — the keyword grant refused any narrowing
+and was scoped to the caster's board besides. Supporting the card without
+fixing that would have pumped every attacker and given trample to none of them.
+The grant carries the narrowing as a filter now, asked through
+`subject_matches` so the two halves are one question, plus `every_seat` for the
+fact the sentence names no controller — Stampede is castable by the *defending*
+player, whose board holds none of the creatures it names.
+
+The deletion probe moved, and in the good direction: "each" stopped being a
+word the combat-pair rule could ignore, because the widened branch is reached
+first and refuses an unnarrowed "creatures" with no controller. A shrunk
+finding still reads as new to the ratchet, which is worth knowing before
+accepting one.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

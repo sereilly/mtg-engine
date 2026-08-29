@@ -625,3 +625,54 @@ def test_pestilence_rats_counts_the_other_rats(set_pool):
 
     assert (first.effective_power, first.effective_toughness) == (1, 3)
     assert (second.effective_power, second.effective_toughness) == (1, 3)
+
+
+# --- Round 10: sweeps and grants over a set the sentence names ---
+
+
+def test_jokulhaups_destroys_three_types_and_beats_regeneration(set_pool):
+    """"Destroy all artifacts, creatures, and lands. They can't be regenerated."
+
+    A type union no per-scope sweep kind names. The filtered sweep already
+    answers it — `type_filter` takes a list and the matcher reads one as a
+    union — so this routes rather than needing a fourth hand-written scope.
+    """
+    pool = set_pool("ICE")
+    creature = Permanent(card=pool["Balduvian Bears"])
+    land = Permanent(card=pool["Forest"])
+    enchantment = Permanent(card=pool["Snowfall"])
+    p1 = PlayerState(name="P1", battlefield=[creature, land, enchantment], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+
+    program = compile_card_oracle(pool["Jokulhaups"])
+    assert program.supported
+    instruction = program.instructions[0]
+    assert instruction.kind == "destroy_all_matching"
+    assert set(instruction.payload["type_filter"]) == {"artifact", "creature", "land"}
+    assert instruction.payload["bypass_regeneration"] is True
+
+
+def test_stampede_reaches_attacking_creatures_the_caster_does_not_control(set_pool):
+    """"Attacking creatures get +1/+0 and gain trample until end of turn."
+
+    Both halves of the sentence name the same set, and only the P/T half read
+    it: the keyword half refused the narrowing, so supporting the card without
+    this would have pumped every attacker and given trample to none of them.
+    The set is also not the caster's board — Stampede is castable by the
+    defending player, which is what `every_seat` carries.
+    """
+    pool = set_pool("ICE")
+    attacker = Permanent(card=pool["Balduvian Bears"])
+    home = Permanent(card=pool["Balduvian Barbarians"])
+    p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
+    p2 = PlayerState(name="P2", battlefield=[home], hand=[pool["Stampede"]], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    _combat(game, [0])
+    game.cast_from_hand(1, "Stampede")
+    game._settle()
+
+    assert attacker.has_keyword("trample"), "the opponent's attacker is in the set"
+    assert not home.has_keyword("trample"), "a creature that is not attacking is not"

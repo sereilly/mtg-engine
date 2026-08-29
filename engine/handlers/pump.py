@@ -370,19 +370,41 @@ def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, con
     read by ``_can_be_targeted`` and indestructible by ``_is_indestructible``,
     neither of which cares what type it is — so the only thing that changes is
     who is in the loop."""
+    from ..subject_filters import subject_matches
+
     caster_index = game.players.index(context.caster)
     keywords = tuple(instruction.payload.get("keywords") or ())
     every_permanent = bool(instruction.payload.get("every_permanent"))
+    # "**Attacking** creatures gain trample until end of turn" (Stampede). Two
+    # payload keys the plain "creatures you control" printing does not carry:
+    # the narrowing, and the fact that the sentence named no controller at all.
+    # Stampede is castable by the *defending* player, so a grant scoped to the
+    # caster's board would reach none of the creatures it names.
+    described = instruction.payload.get("filter")
+    seats = (
+        range(len(game.players))
+        if instruction.payload.get("every_seat")
+        else (caster_index,)
+    )
     lifetime = grant_lifetime(game, instruction, context)
     granted = 0
-    for perm in game.controlled_by(caster_index):
-        if not every_permanent and not perm.is_creature:
-            continue
-        for keyword in keywords:
-            # Through the one seam, so a team grant puts a keyword where its
-            # reader looks for the same reasons a single-target grant does.
-            _grant_one_keyword(game, perm, keyword, context, lifetime)
-        granted += 1
+    for seat in seats:
+        for perm in game.controlled_by(seat):
+            if not every_permanent and not perm.is_creature:
+                continue
+            # Through the one reader of what a printed noun phrase means, with the
+            # caster as observer (CR 109.5), so "attacking" here and "attacking" on
+            # the P/T half of the very same sentence are one question.
+            if described and not subject_matches(
+                game, perm, described, observer=caster_index,
+                source=context.source_permanent,
+            ):
+                continue
+            for keyword in keywords:
+                # Through the one seam, so a team grant puts a keyword where its
+                # reader looks for the same reasons a single-target grant does.
+                _grant_one_keyword(game, perm, keyword, context, lifetime)
+            granted += 1
     noun = "permanent(s)" if every_permanent else "creature(s)"
     game.log.append(
         f"{context.card.name}: {granted} {noun} gain {', '.join(keywords)}"

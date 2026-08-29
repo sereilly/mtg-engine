@@ -85,7 +85,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Shelkin Brownie | `target creature loses all "bands with other" abilities until end of tu` | all abilities |
 | Shipwreck Dowser | `return target instant or sorcery card from your graveyard to your hand` | or |
 | Siren's Call | `at the beginning of the next end step, destroy all non-wall creatures ` | all |
-| Spitting Slug | `you may pay {1}{g}. if you do, this creature gains first strike until ` | each creature |
+| Spitting Slug | `you may pay {1}{g}. if you do, this creature gains first strike until ` | creature |
 | Subira, Tulzidi Caravanner | `another target creature with power 2 or less can't be blocked this tur` | another |
 | Sylvan Library | `you may draw two additional cards. if you do, choose two cards in your` | additional |
 | The Wretched | `gain control of all creatures blocking this creature for as long as yo` | all |

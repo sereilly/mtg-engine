@@ -18,12 +18,14 @@ import dataclasses
 from ...banding import BANDS_WITH_OTHER
 from ...keywords import LINE_DERIVED_KEYWORDS, keyword_ability_name
 from ...oracle_types import OracleInstruction
+from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS, NUMERIC_ARGUMENT_KEYWORDS
 from ._common import (
     _describe_several_targets,
     _describe_targets,
+    _filter_payload,
     _durationless_reason,
     _restrictions_beyond,
     _is_enchanted,
@@ -157,7 +159,7 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         isinstance(node.subject, ast.TargetSpec)
         and node.subject.quantifier == "all"
         and node.subject.filter.card_types in ((), ("creature",))
-        and node.subject.filter.controller == "you"
+        and node.subject.filter.controller in ("you", None)
         # The handler resolves the board once, at resolution (CR 611.2c), so a
         # duration it can end is the only requirement — which the table above
         # has already checked.
@@ -166,16 +168,41 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         leftover = _restrictions_beyond(
             node.subject.filter, frozenset({"card_types", "controller"})
         )
+        described = _filter_payload(node.subject.filter)
         if leftover:
+            # "**Attacking** creatures get +1/+0 and gain trample until end of
+            # turn" (Stampede). A narrowing the *matcher* can test is carried as
+            # a filter rather than refused — the P/T half of this very sentence
+            # already goes to `buff_creatures_global` with the same narrowing,
+            # so refusing here shipped a card whose two halves reached two
+            # different sets of creatures.
+            #
+            # Only a testable one: an untestable key dropped from a grant is a
+            # keyword given to more creatures than the card names, which is the
+            # one direction this must never go.
+            if untestable_filter_keys(described):
+                raise LoweringError(
+                    "the team keyword grant cannot narrow by: " + ", ".join(leftover),
+                    node=node,
+                )
+        elif node.subject.filter.controller is None:
+            # No controller word and no other narrowing is "all creatures",
+            # which the board-wide grant below is not — it walks one seat.
             raise LoweringError(
-                "the team keyword grant cannot narrow by: " + ", ".join(leftover),
-                node=node,
+                "the team keyword grant reads one player's board", node=node
             )
         for keyword in node.keywords:
             _check_grantable(keyword, node)
         team_payload: dict[str, object] = {"keywords": tuple(node.keywords)}
         if not node.subject.filter.card_types:
             team_payload["every_permanent"] = True
+        if leftover:
+            # The narrowing travels whole, and with it the fact that the
+            # sentence named no controller: "attacking creatures" is every
+            # attacking creature, and Stampede is castable by the defending
+            # player.
+            team_payload["filter"] = described
+            team_payload["every_seat"] = node.subject.filter.controller is None
         team_payload["duration"] = duration
         return (OracleInstruction("grant_team_keyword_until_eot", "", team_payload),)
     # "**X** target creatures gain islandwalk until end of turn." (Part Water.)

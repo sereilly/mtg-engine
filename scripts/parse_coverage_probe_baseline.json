@@ -407,7 +407,6 @@
   "card": "Spitting Slug",
   "clause": "you may pay {1}{g}. if you do, this creature gains first strike until end of turn. otherwise, each creature blocking or blocked by this creature gains first strike until end of turn",
   "ignored": [
-   "each",
    "creature"
   ]
  },

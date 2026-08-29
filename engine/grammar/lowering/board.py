@@ -213,7 +213,28 @@ def _lower_destroy(
             )
         kind = _DESTROY_ALL_KINDS.get(tuple(sorted(filt.card_types)))
         if kind is None:
-            raise LoweringError("no sweep handler for this destroy scope", node=node)
+            # A type union no per-scope kind names — "Destroy all artifacts,
+            # creatures, and lands" (Jokulhaups). The **filtered** sweep already
+            # answers it: `type_filter` takes a list and
+            # `permanent_matches_filter` reads one as a union, which is the same
+            # question the per-scope kinds ask with the answer baked into the
+            # kind. So this routes rather than refuses, and a set printing a
+            # fourth union costs no row.
+            #
+            # The named kinds stay for the unions that have one: the compiler,
+            # this table and the behaviour snapshots all key on them, and
+            # rewriting a shipped card's instruction kind is a change to what
+            # those snapshots describe rather than to what the card does.
+            if not filt.card_types:
+                raise LoweringError(
+                    "no sweep handler for this destroy scope", node=node
+                )
+            union_payload = dict(described)
+            if node.no_regen:
+                union_payload["bypass_regeneration"] = True
+            return (
+                OracleInstruction("destroy_all_matching", "", union_payload),
+            )
         payload = {"bypass_regeneration": True} if node.no_regen else {}
         return (OracleInstruction(kind, "", payload),)
 
