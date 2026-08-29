@@ -278,3 +278,109 @@ def _all_instructions(program):
     for ability in (*program.activated_abilities, *program.triggered_abilities):
         if ability.instruction is not None:
             yield from walk(ability.instruction)
+
+
+# --- Round 4: combat-relation target descriptions ---
+
+
+def _combat(game: Game, attacker_indices: list[int]) -> None:
+    """Advance seat 0's turn to the declare-blockers step with those attackers."""
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, msg = game.declare_attackers(0, attacker_indices)
+    assert ok, msg
+    game.advance_combat_phase()  # declare_blockers
+    assert game.current_step == "declare_blockers"
+
+
+def test_goblin_snowman_can_only_ping_the_creature_it_blocks(set_pool):
+    """"{T}: This creature deals 1 damage to target creature it's blocking."
+
+    The picker is what is under test, not the handler: an ability that offered
+    every creature on the board would let a player point this at a creature the
+    card cannot hit.
+    """
+    pool = set_pool("ICE")
+    attacker = Permanent(card=pool["Balduvian Bears"])
+    bystander = Permanent(card=pool["Balduvian Barbarians"])
+    snowman = Permanent(card=pool["Goblin Snowman"])
+    p1 = PlayerState(name="P1", battlefield=[attacker, bystander], life=20)
+    p2 = PlayerState(name="P2", battlefield=[snowman], life=20)
+    game = Game(players=[p1, p2])
+
+    _combat(game, [0])
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert ok, msg
+    game._settle()
+
+    program = compile_card_oracle(snowman.card)
+    ability = program.activated_abilities[0]
+    from engine.targeting import derive_activation_spec
+
+    spec = derive_activation_spec(ability)
+    offered = game._enumerate_targets(
+        1, snowman.card, spec, for_cast=False,
+        ability_instruction=ability.instruction,
+        source_permanent=snowman, ability_source=snowman,
+    )
+    named = {
+        game.players[t["seat"]].battlefield[t["index"]].card.name
+        for t in offered if t["kind"] == "permanent"
+    }
+    assert named == {"Balduvian Bears"}, named
+
+
+def test_goblin_snowman_offers_nothing_while_it_blocks_nothing(set_pool):
+    """Out of combat the relation names no creature, so the ability has no legal
+    target — refused, rather than offered the board."""
+    pool = set_pool("ICE")
+    snowman = Permanent(card=pool["Goblin Snowman"])
+    other = Permanent(card=pool["Balduvian Bears"])
+    p1 = PlayerState(name="P1", battlefield=[snowman, other], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    from engine.targeting import derive_activation_spec
+
+    ability = compile_card_oracle(snowman.card).activated_abilities[0]
+    offered = game._enumerate_targets(
+        0, snowman.card, derive_activation_spec(ability), for_cast=False,
+        ability_instruction=ability.instruction,
+        source_permanent=snowman, ability_source=snowman,
+    )
+    assert offered == []
+
+
+def test_snow_fortress_only_reaches_creatures_attacking_its_controller(set_pool):
+    """"…target creature without flying that's attacking you."
+
+    Two narrowings at once, and the second is a *seat* question: a creature
+    attacking somebody else is attacking, and is not a legal target.
+    """
+    pool = set_pool("ICE")
+    ground = Permanent(card=pool["Balduvian Bears"])       # 2/2, no flying
+    flier = Permanent(card=pool["Silver Erne"])          # flying
+    fortress = Permanent(card=pool["Snow Fortress"])
+    p1 = PlayerState(name="P1", battlefield=[ground, flier], life=20)
+    p2 = PlayerState(name="P2", battlefield=[fortress], life=20)
+    game = Game(players=[p1, p2])
+
+    _combat(game, [0, 1])
+
+    from engine.targeting import derive_activation_spec
+
+    ability = next(
+        a for a in compile_card_oracle(fortress.card).activated_abilities
+        if a.instruction is not None and "damage" in a.instruction.kind
+    )
+    offered = game._enumerate_targets(
+        1, fortress.card, derive_activation_spec(ability), for_cast=False,
+        ability_instruction=ability.instruction,
+        source_permanent=fortress, ability_source=fortress,
+    )
+    named = {
+        game.players[t["seat"]].battlefield[t["index"]].card.name
+        for t in offered if t["kind"] == "permanent"
+    }
+    assert named == {"Balduvian Bears"}, named

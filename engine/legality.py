@@ -1177,6 +1177,25 @@ class LegalityMixin:
                 # "Sacrifice **another** …" — the source cannot pay for itself.
                 if spec.get("exclude_source") and perm is source_permanent:
                     continue
+                # The two combat *relations* a target description can print.
+                # Both are asked through ``subject_matches`` — the one reader of
+                # what a printed noun phrase means — with the observer and
+                # source this loop holds, so the list the picker offers and the
+                # set the handler affects are decided by the same function.
+                # A flag with nothing to answer it against offers nothing, which
+                # is the direction that cannot widen a target description.
+                if spec.get("blocked_by_source") or spec.get("attacking_you"):
+                    relation = {
+                        key: True
+                        for key in ("blocked_by_source", "attacking_you")
+                        if spec.get(key)
+                    }
+                    if not subject_matches(
+                        self, perm, relation,
+                        observer=caster_index,
+                        source=ability_source or source_permanent,
+                    ):
+                        continue
                 # Whatever the printed noun phrase says beyond its head noun
                 # ("a creature **with defender**", Portcullis Vine). The same
                 # matcher the payment path runs, so the list offered here and

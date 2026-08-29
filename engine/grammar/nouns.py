@@ -169,6 +169,8 @@ class _FilterDraft:
     blocking_bound_target: bool = False
     blocked_by_bound_object: bool = False
     blocked_by_target_object: ast.ObjectFilter | None = None
+    blocked_by_source: bool = False
+    attacking_you: bool = False
     power: ast.Comparison | None = None
     mana_value: ast.Comparison | None = None
     toughness: ast.Comparison | None = None
@@ -193,6 +195,16 @@ class _FilterDraft:
     attached_to: str | None = None
     attached_to_filter: ast.ObjectFilter | None = None
     of_bound_type: bool = False
+    # Five relative narrowings the postmodifier scan writes. Declared here like
+    # every other field rather than defaulted onto the instance mid-parse, which
+    # is where they used to live: two conventions for "a field of the draft" is
+    # one convention too many, and only a declared field can be checked against
+    # what `_build_object_filter` copies.
+    not_ability_targeted_by_same_name: bool = False
+    created_with_source: bool = False
+    in_combat_with_source: bool = False
+    was_dealt_damage_this_turn: bool = False
+    dealt_damage_to_source_this_turn: bool = False
     zone: str = "battlefield"
     zone_owner: ast.PlayerRef | None = None
     saw_head: bool = False
@@ -566,13 +578,6 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     if not d.saw_head and not allow_bare:
         raise stream.error("expected an object noun")
 
-    d.not_ability_targeted_by_same_name = False
-    d.created_with_source = False
-    d.in_combat_with_source = False
-    d.was_dealt_damage_this_turn = False
-    d.chosen_by_opponent = False
-    d.dealt_damage_to_source_this_turn = False
-
     _parse_postmodifiers(stream, d, parse_object_filter)
 
 
@@ -586,6 +591,23 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
     if d.subtypes and not d.card_types and all(s in CREATURE_TYPES for s in d.subtypes):
         d.card_types.append("creature")
 
+    return _build_object_filter(d)
+
+
+def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
+    """*d* as the frozen filter it becomes.
+
+    A free function rather than a method on the draft, and rather than the
+    inline expression it used to be: the mirror is hand-written, so a field the
+    postmodifier parsers set and this does not copy is **silently dropped** — a
+    draft is an ordinary dataclass, so the assignment succeeds, the phrase
+    parses, and the restriction vanishes. "target creature it's blocking" was
+    written that way and dropped its whole relation.
+
+    Naming it is what lets `tests/engine/test_grammar_parser.py` build an empty
+    draft and check that every declared field arrives, which no reading of an
+    inline expression could do.
+    """
     return ast.ObjectFilter(
         card_types=tuple(d.card_types),
         type_match=d.type_match,
@@ -614,6 +636,8 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
         blocking_bound_target=d.blocking_bound_target,
         blocked_by_bound_object=d.blocked_by_bound_object,
         blocked_by_target_object=d.blocked_by_target_object,
+        blocked_by_source=d.blocked_by_source,
+        attacking_you=d.attacking_you,
         blocked=d.blocked,
         power=d.power,
         toughness=d.toughness,

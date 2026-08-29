@@ -810,6 +810,33 @@ its own event, announced unseated exactly as `next_end_step` is, and
 `tests/rules/test_delayed_triggered_abilities.py` asserts the two apart in both
 directions.
 
+**Round 4 — combat-relation target descriptions. 216 → 220 supported.**
+
+"Target creature **it's blocking**" (Goblin Snowman, Tinder Wall) and "target
+creature without flying **that's attacking you**" (Ice Floe, Snow Fortress,
+Giant Trap Door Spider). Both are relations rather than characteristics, so
+neither is answerable by `permanent_matches_filter`: the first needs the
+ability's source, the second the seat it is controlled by — which is exactly
+what `subject_matches` takes, so both are testable there and nowhere else.
+`creatures_blocked_by` is the mirror of `creatures_blocking`, extracted out of
+`creatures_in_combat_with` so the relation keeps one reader in both directions.
+
+**The round's real finding is a whole bug class, and it is silent.**
+`nouns._FilterDraft` is a hand-written mirror of `ast.ObjectFilter`, and a
+draft is an ordinary dataclass — so a postmodifier that sets a field the draft
+does not declare *succeeds*, the phrase parses, and the restriction vanishes
+before the filter is built. "target creature it's blocking" was written that
+way and compiled to a bare "target creature": every creature on the board, for
+a ping the card aims at exactly one. Nothing raised and nothing failed; it was
+found by printing the payload by hand.
+
+So the construction is now a named `_build_object_filter`, and
+`tests/engine/test_grammar_parser.py` builds an empty draft and checks that
+every declared field arrives. Writing that guard found five more fields already
+living outside the convention — defaulted onto the instance mid-parse rather
+than declared — which is two conventions for "a field of the draft" and one too
+many. They are declared now.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

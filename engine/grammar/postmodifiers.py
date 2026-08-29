@@ -240,6 +240,21 @@ def _parse_postmodifiers(
         # down, and this alternative testing first would probe, fail on "or"
         # and break the whole postmodifier scan before that one is asked —
         # the round-11 merge found exactly that.
+        # "target creature **it's blocking**" (Goblin Snowman, Tinder Wall) and
+        # "target creature **that's attacking you**" (Ice Floe, Snow Fortress).
+        # Both are a relation to somebody other than the creature described, so
+        # both are relative filter fields rather than state adjectives — see
+        # `ObjectFilter.blocked_by_source` / `attacking_you`.
+        #
+        # Read before the "blocking …" branch below because that one probes on
+        # the bare word: "it's blocking" would enter it, fail to find a subject
+        # after "blocking", reset, and break the whole postmodifier scan.
+        if stream.accept_phrase("it", "'s", "blocking"):
+            d.blocked_by_source = True
+            continue
+        if stream.accept_phrase("that", "'s", "attacking", "you"):
+            d.attacking_you = True
+            continue
         if stream.at_word("blocking") and stream.peek_word(1) != "or":
             probe = stream.mark()
             stream.advance()

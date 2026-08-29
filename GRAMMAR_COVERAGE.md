@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 62.4% | 55.1% | 35.6% | 169 |
+| ICE *(measured)* | 373 | 601 | 63.1% | 55.7% | 36.3% | 170 |
 | **All (shipped)** | **2415** | **3404** | **85.7%** | **84.6%** | **52.3%** | **1541** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -41,7 +41,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | ---: | ---: | --- | --- |
 | 305 | 157 | expected a subject |  |
 | 133 | 60 | unrecognized effect verb |  |
-| 99 | 62 | unconsumed text |  |
+| 95 | 58 | unconsumed text |  |
 | 40 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 11 | 8 | expected 'a' |  |
@@ -1115,6 +1115,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `When this Aura leaves the battlefield, it deals 1 damage to each Goblin creature.`
 - **Goblin Snowman**
   - `Whenever this creature blocks, prevent all combat damage that would be dealt to and dealt by it this turn.`
+  - `{T}: This creature deals 1 damage to target creature it's blocking.`
 - **Goblin Wizard**
   - `{T}: You may put a Goblin permanent card from your hand onto the battlefield.`
   - `{R}: Target Goblin gains protection from white until end of turn.`
@@ -1271,6 +1272,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Whenever this creature deals damage to an opponent, that player discards a card at random.`
   - `Whenever this creature deals damage to an opponent, that player discards a card at random.`
   - `Whenever this creature deals damage to an opponent, that player discards a card at random.`
+- **Ice Floe**
+  - `{T}: Tap target creature without flying that's attacking you. It doesn't untap during its controller's untap step for as long as this land remains tapped.`
 - **Ice Storm**
   - `Destroy target land.`
   - `Destroy target land.`
@@ -2403,6 +2406,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 - **Snow Fortress**
   - `{1}: This creature gets +1/+0 until end of turn.`
   - `{1}: This creature gets +0/+1 until end of turn.`
+  - `{3}: This creature deals 1 damage to target creature without flying that's attacking you.`
 - **Sol Ring**
   - `{T}: Add {C}{C}.`
   - `{T}: Add {C}{C}.`
@@ -2693,6 +2697,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Take an extra turn after this one.`
 - **Tinder Wall**
   - `Sacrifice this creature: Add {R}{R}.`
+  - `{R}, Sacrifice this creature: It deals 2 damage to target creature it's blocking.`
 - **Titanic Growth**
   - `Target creature gets +4/+4 until end of turn.`
 - **Tivadar's Crusade**

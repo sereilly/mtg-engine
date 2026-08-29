@@ -286,6 +286,22 @@ class ObjectFilter:
     # lowering refuses them by name.
     blocking_target: "ObjectFilter | None" = None
     blocking_bound_target: bool = False
+    # "target creature **it's blocking**" (Goblin Snowman, Tinder Wall). The
+    # mirror of ``blocking_source``: there the source is the attacker and the
+    # set is its blockers, here the source is the *blocker* and the set is the
+    # attackers it is blocking (CR 509.1a again, read the other way). Relative
+    # like its twin, and unlike it this one *is* emitted, because
+    # ``subject_matches`` can answer it: it needs the source, which that
+    # function already takes.
+    blocked_by_source: bool = False
+    # "target creature **that's attacking you**" (Ice Floe, Snow Fortress,
+    # Giant Trap Door Spider). Not a state of the creature alone: CR 508.1a
+    # makes attacking a state, but *whom* it attacks is the defending player it
+    # was declared against, so the phrase is answered against the ability's
+    # controller. Emitted, and testable for the same reason ``controller`` is —
+    # a caller with no observer refuses rather than dropping the narrowing,
+    # which would offer every attacker in a multiplayer game.
+    attacking_you: bool = False
     # "…all creatures that were **blocked by that creature this turn**"
     # (Glyph of Doom). A history relative to the object a delayed triggered
     # ability was bound to, answered from the block record that creature
@@ -396,6 +412,10 @@ class ObjectFilter:
             payload["owner"] = self.owner
         if self.attacking:
             payload["attacking_only"] = True
+        if self.blocked_by_source:
+            payload["blocked_by_source"] = True
+        if self.attacking_you:
+            payload["attacking_you"] = True
         if self.was_dealt_damage_this_turn:
             payload["dealt_damage_this_turn"] = True
         if self.blocking:

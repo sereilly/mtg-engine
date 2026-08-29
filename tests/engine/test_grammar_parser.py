@@ -586,3 +586,53 @@ def test_the_rebinding_reaches_a_pronoun_inside_a_wrapper():
     assert isinstance(node, ast.TriggeredAbilityNode)
     assert isinstance(node.statement, ast.May)
     assert node.statement.action.subject.filter.is_enchanted
+
+
+# ---------------------------------------------------------------------------
+# The filter draft mirrors the filter it becomes
+# ---------------------------------------------------------------------------
+
+
+def test_every_filter_draft_field_is_carried_into_the_object_filter():
+    """``nouns._FilterDraft`` is a hand-written mirror of ``ast.ObjectFilter``,
+    and the postmodifier parsers write onto the draft.
+
+    A draft is an ordinary dataclass, so a field the parser sets that the draft
+    does not declare is created on the instance and then **silently dropped** —
+    the phrase parses, the restriction vanishes, and the effect reaches a
+    strictly larger set than the card prints. That is this codebase's worst bug
+    class and it is invisible: nothing raises, nothing fails, the card compiles.
+    It happened while adding "target creature it's blocking" and was found only
+    because the payload was printed by hand.
+
+    Two halves, and both are needed. The draft may declare nothing the filter
+    cannot hold, and — the half that actually bites — every field the parsers
+    write must reach ``ObjectFilter``, which is checked by setting a marker on a
+    fresh draft and reading it back off the built filter.
+    """
+    import dataclasses
+
+    from engine.grammar import ast
+    from engine.grammar.nouns import _FilterDraft, _build_object_filter
+
+    draft_fields = {f.name for f in dataclasses.fields(_FilterDraft)}
+    filter_fields = {f.name for f in dataclasses.fields(ast.ObjectFilter)}
+    # `saw_head` and the two `*_by` spellings are the draft's own bookkeeping —
+    # named here so a new one is a deliberate decision rather than an omission.
+    draft_only = draft_fields - filter_fields - {"saw_head", "owned_by"}
+    assert not draft_only, (
+        f"draft fields with nowhere to go in ObjectFilter: {sorted(draft_only)}"
+    )
+
+    carried = {
+        name
+        for name in draft_fields
+        if getattr(_build_object_filter(_FilterDraft()), name, "?") != "?"
+    }
+    missing = sorted(
+        name for name in draft_fields - {"saw_head", "owned_by"} if name not in carried
+    )
+    assert not missing, (
+        "these draft fields are never copied into ObjectFilter, so a parser "
+        f"setting one drops the restriction silently: {missing}"
+    )

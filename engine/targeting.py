@@ -286,6 +286,19 @@ def _narrowing_flags(source: dict) -> dict:
         # `legality.py` has honoured `exclude_source` all along — nothing read
         # the filter key into it.
         flags["exclude_source"] = True
+    if source.get("blocked_by_source"):
+        # "target creature **it's blocking**" (Goblin Snowman, Tinder Wall).
+        # A relation to the ability's own source, so the enumerator applies it —
+        # it holds the source, and ``permanent_matches_filter`` could not answer
+        # it from the candidate alone. Without the flag the picker offered every
+        # creature on the board for a ping the card aims at exactly one.
+        flags["blocked_by_source"] = True
+    if source.get("attacking_you"):
+        # "target creature **that's attacking you**" (Ice Floe, Snow Fortress).
+        # A seat test like ``own_only`` — which player the creature was declared
+        # against — and the enumerator's for the same reason: the seat choosing
+        # is the one it is relative to.
+        flags["attacking_you"] = True
     return flags
 
 

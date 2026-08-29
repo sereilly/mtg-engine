@@ -100,6 +100,15 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # naming something untestable refuses the whole line, because a dropped
     # host narrowing is an Aura sweep taking every Aura on the board.
     "attached_to_filter",
+    # "target creature **it's blocking**" (Goblin Snowman, Tinder Wall) and
+    # "target creature **that's attacking you**" (Ice Floe, Snow Fortress,
+    # Giant Trap Door Spider). Both are relations rather than characteristics,
+    # so both need what this function takes and the pure matcher does not: the
+    # first needs the ability's source, the second the seat it is controlled
+    # by. That makes them testable *here* and nowhere else — and untestable for
+    # a caller with neither, which is the direction that cannot widen a set.
+    "blocked_by_source",
+    "attacking_you",
 })
 
 #: The keys :func:`subject_matches` answers from the object alone. The other two
@@ -330,6 +339,27 @@ def subject_matches(
     # granted flying stops matching, whatever its printed keyword list says.
     for keyword in described.get("without_keywords") or ():
         if game._has_keyword(obj, keyword):
+            return False
+    # "target creature **it's blocking**" — the attacker the ability's own
+    # source is currently blocking (CR 509.1a). Asked of the combat maps
+    # through the one reader of the relation, so "blocking it" and "it's
+    # blocking" are the same record read in two directions rather than two
+    # walks free to disagree; with no source there is no relation to test and
+    # the answer is no, which refuses the target rather than offering the board.
+    if described.get("blocked_by_source"):
+        if source is None:
+            return False
+        if not any(attacker is obj for attacker in game.creatures_blocked_by(source)):
+            return False
+    # "target creature **that's attacking you**". Attacking is a state of the
+    # creature (CR 508.1a), but *whom* it attacks is the defending player it was
+    # declared against — so this is two questions, and answering only the first
+    # would offer every attacker in a multiplayer game including the ones aimed
+    # at somebody else.
+    if described.get("attacking_you"):
+        if observer is None or not obj.attacking:
+            return False
+        if obj.defending_player_index != observer:
             return False
     # "Another" (CR 109.5) excludes the ability's own source by identity — a
     # look-alike on the same battlefield is a different permanent.

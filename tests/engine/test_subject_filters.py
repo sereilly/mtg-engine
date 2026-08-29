@@ -331,6 +331,8 @@ _COVERED_ELSEWHERE = {
     "attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "not_attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "could_attack_this_turn": "test_the_combat_records_are_read_off_the_permanent",
+    "blocked_by_source": "test_blocked_by_source_names_only_what_the_source_blocks",
+    "attacking_you": "test_attacking_you_is_two_questions_not_one",
 }
 
 
@@ -460,6 +462,69 @@ def test_any_colors_admits_an_object_answering_either_colour(pool):
     assert subject_matches(game, bears, {"any_colors": ["G", "W"]})
     assert subject_matches(game, bears, {"any_colors": ["G"]})
     assert not subject_matches(game, bears, {"any_colors": ["W"]})
+
+
+def test_blocked_by_source_names_only_what_the_source_blocks(pool):
+    """"target creature **it's blocking**" (Goblin Snowman, Tinder Wall).
+
+    A relation rather than a characteristic, so it is demonstrated in a real
+    combat rather than by a row in ``_REJECTIONS``: the rejected creature is an
+    ordinary attacker that this blocker simply is not blocking, and no property
+    of the creature itself tells the two apart.
+
+    With no source there is no relation, and the answer must be **no** — a
+    matcher that shrugged and returned True would turn "it's blocking" into
+    "any creature", which is the whole board.
+    """
+    attacker = Permanent(card=pool["Grizzly Bears"])
+    other = Permanent(card=pool["Grizzly Bears"])
+    blocker = Permanent(card=pool["Grizzly Bears"])
+    p1 = PlayerState(name="P1", battlefield=[attacker, other])
+    p2 = PlayerState(name="P2", battlefield=[blocker])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0, 1])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+
+    described = {"blocked_by_source": True}
+    assert subject_matches(game, attacker, described, source=blocker)
+    assert not subject_matches(game, other, described, source=blocker)
+    assert not subject_matches(game, attacker, described)
+
+
+def test_attacking_you_is_two_questions_not_one(pool):
+    """"target creature **that's attacking you**" (Ice Floe, Snow Fortress).
+
+    Attacking is a state of the creature (CR 508.1a); *whom* it attacks is the
+    defending player it was declared against. Answering only the first would
+    offer every attacker in a multiplayer game, including the ones aimed at
+    somebody else — so the seat is asserted with three players, where the two
+    readings actually differ.
+    """
+    attacker = Permanent(card=pool["Grizzly Bears"])
+    idle = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker, idle]),
+        PlayerState(name="P2"),
+        PlayerState(name="P3"),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+
+    described = {"attacking_you": True}
+    assert subject_matches(game, attacker, described, observer=1)
+    assert not subject_matches(game, attacker, described, observer=2), (
+        "attacking somebody else is not attacking you"
+    )
+    assert not subject_matches(game, idle, described, observer=1)
+    assert not subject_matches(game, attacker, described)
 
 
 def test_no_key_is_promised_without_a_matcher_behind_it():
