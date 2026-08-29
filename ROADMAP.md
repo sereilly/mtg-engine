@@ -1012,6 +1012,29 @@ first and refuses an unnarrowed "creatures" with no controller. A shrunk
 finding still reads as new to the ratchet, which is worth knowing before
 accepting one.
 
+**Round 11 — "If that land was a snow land, …" (CR 608.2h). 237 → 239.**
+
+Icequake and Thermokarst: a destroy with a rider about the permanent it just
+destroyed. The rider's *effects* both already lowered ("you gain 1 life",
+"deals 1 damage to that land's controller"); only the condition in front of
+them refused. It is a back-reference like `ItWas` and gated the same way —
+nothing in front of it that destroyed a permanent, no condition.
+
+**The table that declares those records could not say what this needs**, which
+is the finding. `_PRODUCES` maps one instruction kind to one scratchpad key,
+and `destroy_target_permanent` has written *two* for as long as both riders
+have existed (the victim's mana value and its controller's seat) — so the
+declaration has been under-describing the handler. A value may be a tuple now,
+with the **first** entry the primary: that is the one "if you do" tests, since
+that rider asks whether the step took place.
+
+The production sits after "that <noun> was **destroyed this way**", whose
+prefix it is. Tried first it consumed "that creature was", failed on the rest
+and stopped Infinite Authority's condition parsing — four Legends tests caught
+it, which is the ordering rule this grammar keeps re-learning: a production
+whose opening is another's prefix goes second, and guards its own tail so a
+near-miss rewinds instead of raising.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

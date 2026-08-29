@@ -19,7 +19,7 @@ from __future__ import annotations
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from .categories import _PRODUCES
+from .categories import _PRODUCES, primary_produced, produced_keys
 
 
 def _lower_one_of(
@@ -223,8 +223,7 @@ def _lower_may(
     # compile where nothing will have written it, and an unwritten quantity
     # reads as zero.
     after_action = produced | {
-        key for instruction in action
-        if (key := _PRODUCES.get(instruction.kind)) is not None
+        key for instruction in action for key in produced_keys(instruction.kind)
     }
     then = lower_statement(node.then, after_action, event=inner_event, event_subject=event_subject, whole_effect=False) if node.then else ()
     otherwise = lower_statement(node.otherwise, produced, event=inner_event, event_subject=event_subject, whole_effect=False) if node.otherwise else ()
@@ -362,10 +361,7 @@ def _records_produced(instruction: OracleInstruction) -> frozenset[str]:
     Read through ``_PRODUCES`` at every level rather than a second table, so an
     instruction's record has one declaration however deeply it is nested.
     """
-    keys = set()
-    key = _PRODUCES.get(instruction.kind)
-    if key is not None:
-        keys.add(key)
+    keys = set(produced_keys(instruction.kind))
     if instruction.kind == "may":
         for branch in _MAY_BRANCHES_VISIBLE_AFTER:
             for nested in instruction.payload.get(branch) or ():
@@ -505,7 +501,7 @@ def _lower_steps(
             # the rider asks whether **this** step happened.
             inner = _records_produced(instruction)
             produced = produced | inner
-            result = _PRODUCES.get(instruction.kind)
+            result = primary_produced(instruction.kind)
             if result is not None:
                 last_produced = result
             if instruction.kind == "may" and inner:

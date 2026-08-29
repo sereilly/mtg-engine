@@ -113,6 +113,26 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             evaluate_condition(game, context, part) for part in parts
         )
 
+    if kind == "destroyed_target_was":
+        # "Destroy target land. **If that land was a snow land**, …" (Icequake,
+        # Thermokarst.) The permanent the destroy in front of this chose,
+        # recorded by that handler *before* it destroyed anything — CR 608.2h's
+        # last-known information, because by now the land is a card in a
+        # graveyard and has no characteristics to ask about at all.
+        #
+        # Asked through the one matcher, with no observer and no source: the
+        # question is about the object itself, and the lowering refuses any
+        # narrowing that would need either.
+        from ..subject_filters import subject_matches
+
+        victim = context.results.get("destroyed_target")
+        if victim is None:
+            # The spell resolved with its target gone (CR 608.2b leaves a
+            # legal-target check to the resolution). Nothing was destroyed, so
+            # the clause asking what it was is False rather than a guess.
+            return False
+        return subject_matches(game, victim, payload.get("filter") or {})
+
     if kind == "blockers_of_bound_creature":
         # "if at least one other Wall creature is blocking that creature"
         # (Wall of Caltrops). CR 509.1a's relation, asked of the creature the

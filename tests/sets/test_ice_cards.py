@@ -676,3 +676,52 @@ def test_stampede_reaches_attacking_creatures_the_caster_does_not_control(set_po
 
     assert attacker.has_keyword("trample"), "the opponent's attacker is in the set"
     assert not home.has_keyword("trample"), "a creature that is not attacking is not"
+
+
+# --- Round 11: "If that land was a snow land, …" (CR 608.2h) ---
+
+
+def _cast_land_destroyer(set_pool, spell: str, land: str):
+    """Cast *spell* at a *land* the opponent controls; return the board."""
+    pool = set_pool("ICE")
+    victim = Permanent(card=pool[land])
+    p1 = PlayerState(name="P1", hand=[pool[spell]], life=20)
+    p2 = PlayerState(name="P2", battlefield=[victim], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(
+        0, spell, target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+    return game, p1, p2, victim
+
+
+def test_thermokarst_gains_life_only_for_a_snow_land(set_pool):
+    """"Destroy target land. If that land was a snow land, you gain 1 life."
+
+    The condition is asked **after** the land is a card in a graveyard, so it
+    reads the object as it was (CR 608.2h) — nothing on the board can answer it.
+    """
+    _game, p1, p2, snow = _cast_land_destroyer(
+        set_pool, "Thermokarst", "Snow-Covered Forest"
+    )
+    assert snow not in p2.battlefield
+    assert p1.life == 21
+
+    _game, p1, p2, plain = _cast_land_destroyer(set_pool, "Thermokarst", "Forest")
+    assert plain not in p2.battlefield
+    assert p1.life == 20, "an ordinary Forest is not a snow land"
+
+
+def test_icequake_damages_the_controller_only_for_a_snow_land(set_pool):
+    """The other half of the cycle, whose rider names the land's controller —
+    a seat the destruction has to have recorded for the same reason."""
+    _game, p1, p2, snow = _cast_land_destroyer(
+        set_pool, "Icequake", "Snow-Covered Swamp"
+    )
+    assert snow not in p2.battlefield
+    assert p2.life == 19
+
+    _game, p1, p2, plain = _cast_land_destroyer(set_pool, "Icequake", "Swamp")
+    assert plain not in p2.battlefield
+    assert p2.life == 20

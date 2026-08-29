@@ -322,6 +322,31 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         return ast.DestroyedThisWay(bound.filter)
     stream.reset(this_way)
 
+    # "if **that land** was a snow land" (Icequake, Thermokarst). The same
+    # past tense as the pronoun further up, naming its referent with the noun
+    # the destroy in front of it used — and asked of a *permanent*, so the whole
+    # noun phrase is read rather than a printed type line. The repeated noun is
+    # consumed and dropped: it is the object the earlier step chose, and
+    # lowering is what checks a step in front of it destroyed one.
+    #
+    # **Read after "that <noun> was destroyed this way"**, whose prefix this is:
+    # tried first it would consume "that creature was" and then fail on
+    # "destroyed this way", and Infinite Authority's condition would stop
+    # parsing. The filter parse is guarded for the same reason — a `that …
+    # was …` opening that is some other clause has to rewind rather than raise
+    # out of the whole condition.
+    that_mark = stream.mark()
+    if stream.accept_word("that"):
+        if stream.peek_word() is not None and stream.peek_word(1) == "was":
+            stream.advance(2)
+            stream.accept_word("a", "an")
+            try:
+                return ast.DestroyedTargetWas(parse_object_filter(stream))
+            except GrammarError:
+                pass
+    stream.reset(that_mark)
+    stream.reset(this_way)
+
     if stream.accept_phrase("a", "creature", "died"):
         _parse_duration(stream)
         return ast.DiedThisTurn(ast.ObjectFilter(card_types=("creature",)))

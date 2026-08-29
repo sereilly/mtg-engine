@@ -384,6 +384,15 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
             # Through `effective_card` so a copy effect's cost is the one read
             # (CR 707.2), which is the same reading Crumble's fused kind takes.
             context.results["its_mana_value"] = int(victim.effective_card.cmc or 0)
+            # "**If that land was a snow land**, …" (Icequake, Thermokarst).
+            # The permanent itself, recorded here for the same reason its mana
+            # value is and one moment earlier than it would survive: after the
+            # destroy it is a card in a graveyard with no characteristics at all
+            # (CR 613.1), so a condition asking what it *was* has to read the
+            # object it was (CR 608.2h). The `Permanent` keeps its state after
+            # leaving the battlefield, which is exactly what last-known
+            # information means.
+            context.results["destroyed_target"] = victim
     destroyed = game._destroy_target_permanent(
         target,
         type_filter=instruction.payload.get("type_filter"),

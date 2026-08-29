@@ -281,6 +281,30 @@ class ItWas:
 
 
 @dataclass(frozen=True)
+class DestroyedTargetWas:
+    """"Destroy target land. **If that land was a snow land**, …" (Icequake,
+    Thermokarst.)
+
+    A back-reference to the permanent an earlier step of this same effect
+    destroyed, read as last-known information (CR 608.2h): by the time the
+    condition is asked the land is a card in a graveyard, so the answer is what
+    it was on the battlefield and no read of the board can give it.
+
+    Its own node beside :class:`ItWas`, which asks the same tense of a *card* by
+    its printed type line. This one asks a **permanent** a whole noun phrase —
+    "a snow land" is a supertype and a card type together, and the object it is
+    asked of had computed characteristics right up until it left (CR 613.1). One
+    node carrying a tense flag would have to branch on it at every reader.
+
+    The noun the sentence repeats ("that **land**") is not carried: it is the
+    self-same object the destroy chose, and lowering refuses the condition
+    outright when no step in front of it destroyed anything.
+    """
+
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class ObjectHasKeyword:
     """"If **it doesn't have rampage**, …" (Rapid Fire).
 
@@ -478,7 +502,8 @@ class SourceCounterCount:
 
 
 Condition = Union[
-    EveryOf, CoinFlipResult, Controls, DestroyedThisWay, DiscardedCardWas,
+    EveryOf, CoinFlipResult, Controls, DestroyedThisWay, DestroyedTargetWas,
+    DiscardedCardWas,
     IsState, StartedTheTurnState, DiedThisTurn,
     ObjectHasKeyword,
     HadPlus1Counter, ItWas,

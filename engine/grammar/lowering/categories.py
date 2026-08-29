@@ -623,7 +623,15 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
 # back-reference ("that much") can verify it has a producer. A registry like
 # the table above rather than logic: `_lower_may` and `_lower_steps` (in
 # `lower.py`) read it to thread what each step records forward.
-_PRODUCES: dict[str, str] = {
+#
+# **A value may be a tuple**, because a handler may record more than one thing
+# and this table was under-describing when it could not say so:
+# `destroy_target_permanent` has written both the victim's mana value and its
+# controller's seat for as long as both riders have existed, and the table named
+# one of them. The **first** entry is the *primary* record — the one "if you do"
+# tests, because that rider asks whether the step took place and the primary is
+# what a step of that kind always writes when it does.
+_PRODUCES: dict[str, str | tuple[str, ...]] = {
     "deal_damage": "damage_dealt",
     # "This creature deals damage equal to its power to target creature.
     # **That creature** deals damage equal to its power to this creature."
@@ -774,8 +782,29 @@ _PRODUCES: dict[str, str] = {
     # permanent it was aimed at — read *before* the destroy, so a regenerated
     # or indestructible artifact still supplies the number the second sentence
     # asks for: the words name the object, not the outcome.
-    "destroy_target_permanent": "its_mana_value",
+    # "Destroy target land. **If that land was a snow land**, you gain 1 life."
+    # (Thermokarst, Icequake.) The destruction also records the permanent it
+    # was aimed at, read before the destroy for the reason the mana value is
+    # (CR 608.2h, last-known information) — a condition asking what the land
+    # *was* has nothing on the board left to look at.
+    "destroy_target_permanent": ("its_mana_value", "destroyed_target"),
 }
+
+
+def produced_keys(kind: str) -> frozenset[str]:
+    """Every scratchpad value *kind* records."""
+    recorded = _PRODUCES.get(kind)
+    if recorded is None:
+        return frozenset()
+    return frozenset((recorded,) if isinstance(recorded, str) else recorded)
+
+
+def primary_produced(kind: str) -> str | None:
+    """The record "if you do" tests — the first of *kind*'s, or None."""
+    recorded = _PRODUCES.get(kind)
+    if recorded is None:
+        return None
+    return recorded if isinstance(recorded, str) else (recorded[0] if recorded else None)
 
 
 # Control-flow wrappers take the categories of whatever they wrap, so gating

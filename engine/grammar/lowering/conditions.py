@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from .. import ast
 from ..errors import LoweringError
+from ...subject_filters import untestable_filter_keys
 from ._common import _filter_payload, _restrictions_beyond
 from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
 
@@ -135,6 +136,30 @@ def _lower_condition(
             "kind": "exiled_card_was",
             "card_types": list(condition.filter.card_types),
         }
+    if isinstance(condition, ast.DestroyedTargetWas):
+        # "Destroy target land. **If that land was a snow land**, …" The
+        # referent is the permanent the destroy in front of this chose, so a
+        # step that destroyed one must be in front of it — round 33's rule for
+        # every back-reference: with nothing to read, `evaluate_condition` would
+        # answer False and the card would compile supported and never do its
+        # second half.
+        if "destroyed_target" not in produced:
+            raise LoweringError(
+                "'that <noun> was …' with nothing in this effect that "
+                "destroyed one",
+                node=condition,
+            )
+        described = _filter_payload(condition.filter)
+        if not described or untestable_filter_keys(described):
+            # The object has left the battlefield, so what is asked of it is
+            # last-known information — but it is still asked through the one
+            # matcher, and a narrowing that matcher cannot test would be a
+            # condition answering about a different set than the card names.
+            raise LoweringError(
+                "the last-known-information test cannot ask this of a "
+                "permanent", node=condition,
+            )
+        return {"kind": "destroyed_target_was", "filter": described}
     if isinstance(condition, ast.ObjectHasKeyword):
         # "If **it** doesn't have rampage" (Rapid Fire). The pronoun names the
         # object the sentence in front of it chose — which for a spell or an
