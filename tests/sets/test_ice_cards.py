@@ -209,3 +209,72 @@ def test_every_scarab_in_the_cycle_compiles_to_the_same_shape(set_pool):
         assert static.payload["power"] == 2 and static.payload["toughness"] == 2
         assert static.payload["condition"]["who"] == "opponent", name
         assert static.payload["condition"]["filter"]["color_filter"] == symbol, name
+
+
+# --- Round 3: the cantrip cycle — "at the beginning of the next turn's upkeep" ---
+
+
+def test_pyknite_draws_at_the_next_turns_upkeep(set_pool):
+    """The cantrip run end to end: the creature enters, arms the delayed
+    ability, and the card arrives at the *next* upkeep — not this one, and not
+    at resolution."""
+    pool = set_pool("ICE")
+    pyknite = Permanent(card=pool["Pyknite"])
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[pyknite],
+        library=[pool["Balduvian Bears"], pool["Balduvian Bears"]],
+        life=20,
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game._apply_self_enters_battlefield_triggers(0, pyknite, None, None)
+    game._settle()
+    assert p1.hand == [], "the draw is delayed, not part of the enters trigger"
+
+    game.resolve_upkeep(0)
+    game._settle()
+    assert len(p1.hand) == 1
+
+
+def test_the_cantrip_cycle_arms_the_unseated_upkeep_event(set_pool):
+    """Seven cards, one sentence. What makes it one round rather than seven is
+    that they all compile to the same delayed event — and it is the *unseated*
+    one, because "the next turn's upkeep" is whichever comes next."""
+    pool = set_pool("ICE")
+    for name in (
+        "Portent", "Krovikan Fetish", "Panic", "Pyknite",
+        "Touch of Vitae", "Barbed Sextant",
+    ):
+        program = compile_card_oracle(pool[name])
+        assert program.supported, name
+        events = {
+            instruction.payload.get("event")
+            for instruction in _all_instructions(program)
+            if instruction.kind == "create_delayed_trigger"
+        }
+        assert events == {"next_turns_upkeep"}, (name, events)
+
+
+def _all_instructions(program):
+    """Every instruction the program carries, card-level and per-ability.
+
+    The cycle prints its cantrip in three places — a spell's second sentence, an
+    Aura's enters trigger, an artifact's activated ability — so a reader that
+    looked only at ``program.instructions`` would find the clause on some of
+    them and quietly miss it on the rest.
+    """
+    def walk(instruction):
+        yield instruction
+        # A `sequence` is how two sentences on one line compose (Barbed
+        # Sextant's "Add one mana of any color. Draw a card at …"), so a reader
+        # that stopped at the top level would find the clause on five of the
+        # seven and report the other two clean.
+        for step in instruction.payload.get("steps", ()):
+            yield from walk(step)
+
+    for instruction in program.instructions:
+        yield from walk(instruction)
+    for ability in (*program.activated_abilities, *program.triggered_abilities):
+        if ability.instruction is not None:
+            yield from walk(ability.instruction)

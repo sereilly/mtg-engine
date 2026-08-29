@@ -788,6 +788,28 @@ decline is the second of its kind in this file. No shipped card is affected:
 that reader is only asked of attachments, and every shipped card matching the
 same prefix is a creature talking about itself.
 
+**Round 3 — "at the beginning of the next turn's upkeep". 210 → 216 supported.**
+
+Ice Age's cantrip cycle: Portent, Pyknite, Panic, Touch of Vitae, Krovikan
+Fetish, Barbed Sextant and Urza's Bauble all print the same trailing sentence,
+on five different card types and in three different positions (a spell's second
+sentence, an Aura's enters trigger, an artifact's activated ability). Six of the
+seven shipped; Urza's Bauble is held by its *other* clause.
+
+It is a delayed triggered ability (CR 603.7) and the machinery was all there —
+one row in `grammar/delayed.py`'s opener table, one key in `DELAYED_EVENTS`, one
+`fire_delayed_triggers` call in the upkeep step.
+
+**What is not there is a second spelling of an existing event.** The engine
+already had `controllers_next_upkeep` for "at the beginning of **your** next
+upkeep", and folding this into it would have been wrong by a whole turn: "your
+next upkeep" skips every opponent's, "the next turn's upkeep" is whichever
+upkeep comes next. A cantrip cast on an opponent's turn would have drawn a turn
+late — no crash, no failing test, and the wrong card. So `next_turns_upkeep` is
+its own event, announced unseated exactly as `next_end_step` is, and
+`tests/rules/test_delayed_triggered_abilities.py` asserts the two apart in both
+directions.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

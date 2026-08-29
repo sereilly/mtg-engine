@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 58.9% | 51.6% | 32.1% | 163 |
+| ICE *(measured)* | 373 | 601 | 62.4% | 55.1% | 35.6% | 169 |
 | **All (shipped)** | **2415** | **3404** | **85.7%** | **84.6%** | **52.3%** | **1541** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -41,7 +41,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | ---: | ---: | --- | --- |
 | 305 | 157 | expected a subject |  |
 | 133 | 60 | unrecognized effect verb |  |
-| 120 | 66 | unconsumed text |  |
+| 99 | 62 | unconsumed text |  |
 | 40 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 11 | 8 | expected 'a' |  |
@@ -234,6 +234,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `At the beginning of the end step, sacrifice this creature.`
 - **Banshee**
   - `{X}, {T}: This creature deals half X damage, rounded down, to any target, and half X damage, rounded up, to you.`
+- **Barbed Sextant**
+  - `{1}, {T}, Sacrifice this artifact: Add one mana of any color. Draw a card at the beginning of the next turn's upkeep.`
 - **Barl's Cage**
   - `{3}: Target creature doesn't untap during its controller's next untap step.`
 - **Barrin, Tolarian Archmage**
@@ -304,6 +306,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `When this creature dies, it deals X damage to target creature, where X is 3 plus the amount of damage dealt to this creature this turn by other sources named Blazing Effigy.`
 - **Blessed Wine**
   - `You gain 1 life.`
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Blessing**
   - `{W}: Enchanted creature gets +1/+1 until end of turn.`
   - `{W}: Enchanted creature gets +1/+1 until end of turn.`
@@ -501,6 +504,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{T}: Add {C} for each storage counter on this land.`
 - **Clairvoyance**
   - `Look at target player's hand.`
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Clay Statue**
   - `{2}: Regenerate this creature.`
   - `{2}: Regenerate this creature.`
@@ -833,6 +837,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Tap target untapped creature you control. If you do, add an amount of {C} equal to that creature's mana value.`
 - **Enervate**
   - `Tap target artifact, creature, or land.`
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Epitaph Golem**
   - `{2}: Put target card from your graveyard on the bottom of your library.`
 - **Erhnam Djinn**
@@ -917,6 +922,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{R}: This creature gets +1/+0 until end of turn.`
 - **Flare**
   - `Flare deals 1 damage to any target.`
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Flash Counter**
   - `Counter target instant spell.`
 - **Flash Flood**
@@ -949,6 +955,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Counter target spell unless its controller pays {1}.`
 - **Force Void**
   - `Counter target spell unless its controller pays {1}.`
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Force of Nature**
   - `At the beginning of your upkeep, this creature deals 8 damage to you unless you pay {G}{G}{G}{G}.`
   - `At the beginning of your upkeep, this creature deals 8 damage to you unless you pay {G}{G}{G}{G}.`
@@ -959,6 +966,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `At the beginning of your upkeep, sacrifice this artifact unless you pay {3}.`
 - **Formation**
   - `Target creature gains banding until end of turn. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding a player controls are blocking or being blocked by a creature, that player divides that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Fortified Area**
   - `Wall creatures you control get +1/+0 and have banding. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
   - `Wall creatures you control get +1/+0 and have banding. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
@@ -966,6 +974,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{2}, {T}: You gain 1 life.`
 - **Foxfire**
   - `Untap target attacking creature. Prevent all combat damage that would be dealt to and dealt by that creature this turn.`
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Frantic Inventory**
   - `Draw a card, then draw cards equal to the number of cards named Frantic Inventory in your graveyard.`
 - **Frost Breath**
@@ -1133,6 +1142,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{B}, {T}: Exile target artifact card from a graveyard. You gain 2 life.`
 - **Gravebind**
   - `Target creature can't be regenerated this turn.`
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Gravity Sphere**
   - `All creatures lose flying.`
 - **Great Defender**
@@ -1168,6 +1178,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Whenever you sacrifice a permanent, this creature deals 1 damage to any target.`
 - **Heal**
   - `Prevent the next 1 damage that would be dealt to any target this turn.`
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Healing Salve**
   - `• Target player gains 3 life.`
   - `• Prevent the next 3 damage that would be dealt to any target this turn.`
@@ -1310,6 +1321,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{3}: Remove a time counter from this artifact. Any player may activate this ability but only during any upkeep step.`
 - **Infuse**
   - `Untap target artifact, creature, or land.`
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Inquisition**
   - `Target player reveals their hand. Inquisition deals damage to that player equal to the number of white cards in their hand.`
 - **Instill Energy**
@@ -1471,6 +1483,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 - **Krovikan Elementalist**
   - `{2}{R}: Target creature gets +1/+0 until end of turn.`
   - `{U}{U}: Target creature you control gains flying until end of turn. Sacrifice it at the beginning of the next end step.`
+- **Krovikan Fetish**
+  - `When this Aura enters, draw a card at the beginning of the next turn's upkeep.`
 - **Kry Shield**
   - `{2}, {T}: Prevent all damage that would be dealt this turn by target creature you control. That creature gets +0/+X until end of turn, where X is its mana value.`
 - **Lady Caleria**
@@ -1541,6 +1555,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Whenever a Forest an opponent controls becomes tapped, you gain 1 life.`
 - **Lightning Blow**
   - `Target creature gains first strike until end of turn.`
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Lightning Bolt**
   - `Lightning Bolt deals 3 damage to any target.`
   - `Lightning Bolt deals 3 damage to any target.`
@@ -1697,6 +1712,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Each player may discard up to three cards. Mind Bomb deals damage to each player equal to 3 minus the number of cards they discarded this way.`
 - **Mind Ravel**
   - `Target player discards a card.`
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Mind Rot**
   - `Target player discards two cards.`
 - **Mind Twist**
@@ -1858,6 +1874,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `At the beginning of your upkeep, sacrifice Palladia-Mors unless you pay {R}{G}{W}.`
 - **Palladium Myr**
   - `{T}: Add {C}{C}.`
+- **Panic**
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Paralyze**
   - `When this Aura enters, tap enchanted creature.`
   - `At the beginning of the upkeep of enchanted creature's controller, that player may pay {4}. If the player does, untap the creature.`
@@ -1927,6 +1945,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{G}{G}{G}, {T}: Target creature gains flying until end of turn.`
 - **Portcullis Vine**
   - `{2}, {T}, Sacrifice a creature with defender: Draw a card.`
+- **Portent**
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Power Sink**
   - `Counter target spell unless its controller pays {X}. If that player doesn't, they tap all lands with mana abilities they control and lose all unspent mana.`
   - `Counter target spell unless its controller pays {X}. If that player doesn't, they tap all lands with mana abilities they control and lose all unspent mana.`
@@ -1997,6 +2017,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
 - **Pursued Whale**
   - `When this creature enters, each opponent creates a 1/1 red Pirate creature token with "This token can't block" and "Creatures you control attack each combat if able."`
+- **Pyknite**
+  - `When this creature enters, draw a card at the beginning of the next turn's upkeep.`
 - **Pyramids**
   - `• Destroy target Aura attached to a land.`
 - **Pyroclasm**
@@ -2045,6 +2067,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Target creature gains first strike until end of turn. If it doesn't have rampage, that creature gains rampage 2 until end of turn. (Whenever the creature becomes blocked, it gets +2/+2 until end of turn for each creature blocking it beyond the first.)`
 - **Ray of Erasure**
   - `Target player mills a card.`
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Read the Tides**
   - `• Draw three cards.`
   - `• Return up to two target creatures to their owners' hands.`
@@ -2688,6 +2711,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `One or more target creatures become black until end of turn.`
 - **Touch of Death**
   - `Touch of Death deals 1 damage to target player or planeswalker. You gain 1 life.`
+  - `Draw a card at the beginning of the next turn's upkeep.`
+- **Touch of Vitae**
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Tower of Coireall**
   - `{T}: Target creature can't be blocked by Walls this turn.`
 - **Track Down**
@@ -2774,6 +2800,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Search your library for a basic land card, put that card onto the battlefield, then shuffle.`
 - **Updraft**
   - `Target creature gains flying until end of turn.`
+  - `Draw a card at the beginning of the next turn's upkeep.`
 - **Urborg**
   - `{T}: Add {B}.`
   - `{T}: Target creature loses first strike or swampwalk until end of turn.`

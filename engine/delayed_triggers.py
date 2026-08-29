@@ -87,6 +87,15 @@ DELAYED_EVENTS: dict[str, str] = {
     # The controller's own upkeep, however many turns away it is — so unlike
     # the "this turn" rows it survives the turn and is removed only by firing.
     "controllers_next_upkeep": "the upkeep step",
+    # "…at the beginning of **the next turn's** upkeep" (Ice Age's cantrip
+    # cycle: Portent, Pyknite, Urza's Bauble, …). Not the same event as the row
+    # above, and the difference is the one that matters at the table: "your
+    # next upkeep" waits for an upkeep belonging to the ability's controller,
+    # skipping every opponent's, while "the next turn's upkeep" is whichever
+    # upkeep comes next. On the opponent's turn those are one turn apart, and a
+    # cantrip that drew a turn late would be the wrong card. So it is announced
+    # unseated, exactly as `next_end_step` is and for the same reason.
+    "next_turns_upkeep": "the upkeep step",
 }
 
 

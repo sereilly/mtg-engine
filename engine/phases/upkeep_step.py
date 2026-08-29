@@ -907,6 +907,12 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # which is what "your" says: an upkeep belongs to one player, so an
         # ability an opponent created is not waiting for this one.
         fire_delayed_triggers(self, "controllers_next_upkeep", seat=player_index)
+        # "…at the beginning of **the next turn's** upkeep" (Ice Age's cantrip
+        # cycle). Unseated: the ability names whichever upkeep comes next, not
+        # one of its controller's, so an entry armed on an opponent's turn fires
+        # on yours. Announced beside the seated one because both are CR 603.7
+        # abilities triggering at the same moment as the battlefield's own.
+        fire_delayed_triggers(self, "next_turns_upkeep")
 
         # Put the collected non-interactive upkeep triggers on the stack in APNAP
         # order; they resolve through the upkeep priority window opened below.

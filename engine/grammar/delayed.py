@@ -80,6 +80,12 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     # the step rather than expiring with the turn.
     (("at", "the", "beginning", "of", "your", "next", "upkeep"),
      "controllers_next_upkeep", True, "until_it_triggers", False),
+    # "…at the beginning of **the next turn's** upkeep" (Ice Age's cantrip
+    # cycle). Whichever upkeep comes next rather than the controller's own —
+    # see `delayed_triggers.DELAYED_EVENTS` for why that is a separate event
+    # and not a second spelling of the row above.
+    (("at", "the", "beginning", "of", "the", "next", "turn", "'s", "upkeep"),
+     "next_turns_upkeep", True, "until_it_triggers", False),
 )
 
 

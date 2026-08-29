@@ -310,3 +310,82 @@ def test_a_delayed_ability_is_never_doubled_by_an_extra_triggers_effect():
     game = Game(players=[p1, p2])
 
     assert additional_triggers(game, doubler, 0, delayed=True) == 0
+
+
+# ---------------------------------------------------------------------------
+# "…at the beginning of the next turn's upkeep" (Ice Age's cantrip cycle)
+# ---------------------------------------------------------------------------
+
+
+def _draw(amount: int = 1) -> OracleInstruction:
+    return OracleInstruction("draw_controller_cards", "", {"amount": amount})
+
+
+def _library(player: PlayerState, count: int) -> None:
+    player.library.extend(_creature(f"Top {i}") for i in range(count))
+
+
+@pytest.mark.cr("603.7")
+def test_the_next_turns_upkeep_is_whichever_upkeep_comes_next():
+    """"At the beginning of the next turn's upkeep" names an upkeep, not one of
+    the controller's — so an ability P1 creates fires in P2's upkeep.
+
+    That is the difference from ``controllers_next_upkeep`` beside it, and it is
+    a whole turn wide: a cantrip cast on an opponent's turn would otherwise draw
+    a turn late.
+    """
+    game, p1, p2, _watched = _board()
+    _library(p1, 3)
+    game.delayed_triggers.append(DelayedTrigger(
+        controller_index=0, event="next_turns_upkeep",
+        instruction=_draw(), card=_SOURCE,
+    ))
+
+    game.resolve_upkeep(1)  # P2's upkeep
+    game._settle()
+
+    assert len(p1.hand) == 1
+    assert not game.delayed_triggers, "CR 603.7b: a 'when' delay fires once"
+
+
+@pytest.mark.cr("603.7")
+def test_the_controllers_next_upkeep_skips_an_opponents():
+    """The twin, asserted so the two events cannot quietly become one: "your"
+    next upkeep waits for the controller's."""
+    game, p1, p2, _watched = _board()
+    _library(p1, 3)
+    game.delayed_triggers.append(DelayedTrigger(
+        controller_index=0, event="controllers_next_upkeep",
+        instruction=_draw(), card=_SOURCE,
+    ))
+
+    game.resolve_upkeep(1)
+    game._settle()
+    assert p1.hand == []
+
+    game.resolve_upkeep(0)
+    game._settle()
+    assert len(p1.hand) == 1
+
+
+@pytest.mark.cr("603.7b")
+def test_a_next_turns_upkeep_delay_survives_the_turn_it_was_created_in():
+    """It names a future step rather than carrying a "this turn" duration, so
+    the end-of-turn sweep must not take it (CR 603.7b's "stated duration").
+
+    The duration is what the grammar's opener row writes, and it is the whole
+    card here: swept at end of turn, a cantrip created on any turn but the last
+    step of one would be swept before the upkeep it names ever arrived."""
+    from engine.delayed_triggers import UNTIL_IT_TRIGGERS
+
+    game, p1, _p2, _watched = _board()
+    _library(p1, 3)
+    game.delayed_triggers.append(DelayedTrigger(
+        controller_index=0, event="next_turns_upkeep",
+        instruction=_draw(), card=_SOURCE, duration=UNTIL_IT_TRIGGERS,
+    ))
+
+    game.resolve_end_step(0)
+    game.resolve_cleanup_step(0)
+
+    assert game.delayed_triggers, "the ability waits for the step it names"
