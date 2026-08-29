@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**335 / 612 tracked rules covered (54%)** — 1634 tests, 0 unannotated.
+**336 / 612 tracked rules covered (54%)** — 1638 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [306. Planeswalkers](#306-planeswalkers) | 9/9 | 100% |
 | [307. Sorceries](#307-sorceries) | 1/5 | 20% |
 | [400. General](#400-general) | 5/12 | 41% |
-| [401. Library](#401-library) | 2/7 | 28% |
+| [401. Library](#401-library) | 3/7 | 42% |
 | [402. Hand](#402-hand) | 3/3 | 100% |
 | [403. Battlefield](#403-battlefield) | 3/5 | 60% |
 | [404. Graveyard](#404-graveyard) | 1/3 | 33% |
@@ -492,7 +492,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 401. Library
 
-- [ ] **401.1** When a game begins, each player’s deck becomes their library.
+- [x] **401.1** When a game begins, each player’s deck becomes their library. *(1 tests)*
 - [x] **401.2** Each library must be kept in a single face-down pile. Players can’t look at or change the order o... *(1 tests)*
 - [ ] **401.3** Any player may count the number of cards remaining in any player’s library at any time.
 - [ ] **401.4** If an effect puts two or more cards in a specific position in a library at the same time, the own...
@@ -502,7 +502,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 402. Hand
 
-- [x] **402.1** The hand is where a player holds cards that have been drawn. Cards can be put into a player’s han... *(2 tests)*
+- [x] **402.1** The hand is where a player holds cards that have been drawn. Cards can be put into a player’s han... *(4 tests)*
 - [x] **402.2** Each player has a maximum hand size, which is normally seven cards. A player may have any number ... *(5 tests)*
 - [x] **402.3** A player may arrange their hand in any convenient fashion and look at it at any time. A player ca... *(3 tests)*
 
@@ -730,7 +730,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(31 tests, subrules bcdhn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(33 tests, subrules bcdhn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects

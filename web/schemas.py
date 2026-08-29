@@ -61,6 +61,7 @@ ActionKind = Literal[
     "reorder_library_confirm",
     "scry_confirm",
     "discard_confirm",
+    "hand_to_library_confirm",
     "revealed_hand_pick_confirm",
     "leng_discard_confirm",
     "optional_damage_redirect_confirm",

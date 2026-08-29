@@ -494,3 +494,29 @@ def _lower_for_each_chosen(
             {"iterator": {"produced_by": CHOSEN_HAND_CARDS_RESULT}, "effect": inner},
         ),
     )
+
+
+def _lower_put_hand_cards_on_library(
+    node: ast.PutHandCardsOnLibrary,
+) -> tuple[OracleInstruction, ...]:
+    """Brainstorm, Stunted Growth.
+
+    One kind for both printings: the seat is payload, under the same
+    ``recipient`` key ``_lower_mill`` reads, so "who does this happen to" has
+    one convention rather than one per effect family.
+
+    A seat this cannot name refuses rather than defaulting to the caster —
+    putting the *wrong player's* cards back would be a strictly different card,
+    and silently so, since both spellings move the same number of cards.
+    """
+    payload: dict[str, object] = {"amount": _amount_payload(node.count)}
+    if node.player.kind in ("target_player", "target_opponent"):
+        _describe_targets(payload, node.player)
+        return (OracleInstruction("put_hand_cards_on_library", "", payload),)
+    if node.player.kind == "you":
+        payload["recipient"] = "caster"
+        return (OracleInstruction("put_hand_cards_on_library", "", payload),)
+    raise LoweringError(
+        f"no handler puts {node.player.kind!r}'s hand cards on their library",
+        node=node,
+    )

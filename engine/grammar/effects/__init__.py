@@ -103,6 +103,8 @@ from .cards import (
     _parse_reveal_hand,
     _parse_reveal_hand_and_choose,
     _parse_put_exiled_with_source,
+    _parse_put_hand_cards_on_library,
+    _parse_player_puts_hand_cards_on_library,
 )
 from .library import (
     _parse_exile_top_of_library,
@@ -203,6 +205,8 @@ __all__ = [
     "_parse_reveal_hand_and_choose",
     "_parse_exile_top_of_library",
     "_parse_put_exiled_with_source",
+    "_parse_put_hand_cards_on_library",
+    "_parse_player_puts_hand_cards_on_library",
     "_parse_player_adds_mana",
     "_parse_produces_instead",
     "_parse_you_tap_produces_instead",

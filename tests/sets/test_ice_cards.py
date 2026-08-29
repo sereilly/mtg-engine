@@ -1856,3 +1856,137 @@ def test_melting_does_not_stop_a_land_being_basic(set_pool):
 
     assert island.has_supertype("basic")
     assert island.has_type("island"), "and still an Island"
+
+
+# --- Round 28: N cards from a hand back onto the top of a library ---
+
+
+def _casting(set_pool, spell: str, *, hand=(), library=(), opponent_hand=(), opponent_library=()):
+    """The caster holding *spell*, with both seats' hidden zones set."""
+    pool = set_pool("ICE")
+    from engine.card_loader import load_catalog
+
+    shipped = {card.name: card for card in load_catalog()}
+
+    def card(name):
+        return pool.get(name) or shipped[name]
+
+    p1 = PlayerState(
+        name="P1", hand=[card(spell), *[card(n) for n in hand]],
+        library=[card(n) for n in library], life=20,
+    )
+    p2 = PlayerState(
+        name="P2", hand=[card(n) for n in opponent_hand],
+        library=[card(n) for n in opponent_library], life=20,
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.interactive_seats = {0, 1}
+    return game, p1, p2
+
+
+def test_brainstorm_draws_three_then_asks_for_two_back(set_pool):
+    """"Draw three cards, then put two cards from your hand on top of your
+    library in any order."
+
+    Two steps of one resolution: the prompt is armed *after* the draw, so the
+    cards just drawn are among the ones that may go back — which is the whole
+    card.
+    """
+    game, p1, _p2 = _casting(
+        set_pool, "Brainstorm",
+        hand=["Balduvian Bears"],
+        library=["Icy Manipulator", "Dark Banishing", "Hoar Shade", "Snow Fortress"],
+    )
+
+    result = game.cast_from_hand(0, "Brainstorm")
+    game._settle()
+
+    assert result.supported, result.details
+    assert len(p1.hand) == 4, "the Bear plus the three drawn"
+    choice = game.pending_choice_of("hand_to_library", 0)
+    assert choice is not None and choice.data["count"] == 2
+    assert game.waiting_prompt(), "the resolution waits on the answer (CR 608.2)"
+
+    names = [c.name for c in p1.hand]
+    game.confirm_hand_to_library(
+        0, [names.index("Hoar Shade"), names.index("Balduvian Bears")]
+    )
+    game._settle()
+
+    assert len(p1.hand) == 2
+    assert [c.name for c in p1.library[:2]] == ["Hoar Shade", "Balduvian Bears"], (
+        "the first card named goes on top"
+    )
+
+
+def test_stunted_growth_asks_the_targeted_player(set_pool):
+    """"Target player chooses three cards from their hand and puts them on top
+    of their library in any order."
+
+    The same effect over a printed subject: the seat that owns the hand is the
+    seat that chooses, and it is not the caster.
+    """
+    game, p1, p2 = _casting(
+        set_pool, "Stunted Growth",
+        library=["Hoar Shade"],
+        opponent_hand=["Balduvian Bears", "Hoar Shade", "Icy Manipulator", "Snow Fortress"],
+        opponent_library=["Dark Banishing"],
+    )
+
+    result = game.cast_from_hand(0, "Stunted Growth", target_player_index=1)
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.pending_choice_of("hand_to_library", 0) is None, "not the caster's choice"
+    choice = game.pending_choice_of("hand_to_library", 1)
+    assert choice is not None and choice.data["count"] == 3
+
+    game.confirm_hand_to_library(1, [0, 1, 2])
+    game._settle()
+
+    assert len(p2.hand) == 1
+    assert len(p2.library) == 4
+
+
+def test_stunted_growth_takes_what_a_short_hand_has(set_pool):
+    """CR 608.2: a spell does as much as it can. A player holding fewer cards
+    than the card names puts back what they have rather than the effect
+    refusing."""
+    game, _p1, p2 = _casting(
+        set_pool, "Stunted Growth",
+        library=["Hoar Shade"],
+        opponent_hand=["Balduvian Bears"],
+        opponent_library=["Dark Banishing"],
+    )
+
+    game.cast_from_hand(0, "Stunted Growth", target_player_index=1)
+    game._settle()
+
+    choice = game.pending_choice_of("hand_to_library", 1)
+    assert choice is not None and choice.data["count"] == 1
+
+
+def test_putting_a_card_back_is_not_a_discard(set_pool):
+    """CR 701.9a: discarding moves a card to a **graveyard**. Neither card here
+    does that, so neither may reach the discard prompt — reusing it with its
+    Library of Leng destination flag would have fired every "whenever you
+    discard" ability in the game on a Brainstorm."""
+    game, p1, _p2 = _casting(
+        set_pool, "Brainstorm",
+        hand=["Balduvian Bears"],
+        library=["Icy Manipulator", "Dark Banishing", "Hoar Shade", "Snow Fortress"],
+    )
+
+    game.cast_from_hand(0, "Brainstorm")
+    game._settle()
+
+    assert game.pending_choice_of("discard", 0) is None
+    names = [c.name for c in p1.hand]
+    game.confirm_hand_to_library(0, [names.index("Hoar Shade"), 0])
+    game._settle()
+
+    assert p1.graveyard == [] or all(
+        c.name == "Brainstorm" for c in p1.graveyard
+    ), "only the spell itself went to the graveyard"

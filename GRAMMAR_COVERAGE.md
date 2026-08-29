@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 68.1% | 62.9% | 42.4% | 200 |
+| ICE *(measured)* | 373 | 601 | 68.4% | 63.2% | 42.8% | 202 |
 | **All (shipped)** | **2415** | **3404** | **85.8%** | **84.7%** | **52.4%** | **1544** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -41,10 +41,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | ---: | ---: | --- | --- |
 | 296 | 148 | expected a subject |  |
 | 128 | 55 | unrecognized effect verb |  |
-| 83 | 49 | unconsumed text |  |
+| 82 | 48 | unconsumed text |  |
 | 40 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
-| 11 | 8 | expected 'a' |  |
+| 10 | 7 | expected 'a' |  |
 | 10 | 4 | expected a keyword ability |  |
 | 9 | 3 | expected a colour or a creature body after 'becomes' |  |
 | 9 | 5 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -377,6 +377,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Target player draws X cards.`
   - `Target player draws X cards.`
   - `Target player draws X cards.`
+- **Brainstorm**
+  - `Draw three cards, then put two cards from your hand on top of your library in any order.`
 - **Brash Taunter**
   - `Whenever this creature is dealt damage, it deals that much damage to target opponent.`
   - `{2}{R}, {T}: This creature fights another target creature.`
@@ -2579,6 +2581,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{T}, Sacrifice this land: Destroy target land.`
 - **Stromgald Cabal**
   - `{T}, Pay 1 life: Counter target white spell.`
+- **Stunted Growth**
+  - `Target player chooses three cards from their hand and puts them on top of their library in any order.`
 - **Su-Chi**
   - `When this creature dies, add {C}{C}{C}{C}.`
 - **Subdue**

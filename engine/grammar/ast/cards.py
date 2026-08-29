@@ -49,6 +49,28 @@ class Discard:
 
 
 @dataclass(frozen=True)
+class PutHandCardsOnLibrary:
+    """``Put two cards from your hand on top of your library in any order.``
+    (Brainstorm.) ``Target player chooses three cards from their hand and puts
+    them on top of their library in any order.`` (Stunted Growth.)
+
+    A zone change like :class:`Discard`, and **not** one: CR 701.9a makes
+    discarding a specific action that a "whenever you discard" ability sees
+    (Necropotence exiles what you discard). Putting a card back on your library
+    is none of those things, so it is its own node and its own prompt rather
+    than the discard one with a destination flag — the flag exists, for Library
+    of Leng, and means "this discard lands somewhere else", which is a different
+    sentence.
+
+    Both printings choose *which* cards and, with "in any order", what order
+    they land in; the player who owns the hand is the player who chooses
+    (CR 103.4-style: a hand is a hidden zone its owner reads).
+    """
+    player: PlayerRef
+    count: Amount = field(default_factory=lambda: Fixed(1))
+
+
+@dataclass(frozen=True)
 class Mill:
     """"Target player mills N cards." (CR 701.13a, Millstone.)
 

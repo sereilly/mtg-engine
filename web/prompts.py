@@ -609,6 +609,25 @@ def _discard(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("hand_to_library")
+def _hand_to_library(ctx: PromptContext, choices: list) -> dict:
+    """The whole hand, and how many of it go back on top of the library.
+
+    Every card is eligible — neither printing narrows what may be chosen — so
+    there is no `eligible` list here, unlike the discard prompt beside it. What
+    the client does carry is the *order*: the card says "in any order", so the
+    sequence the player confirms is the answer, and the first named lands on
+    top.
+    """
+    choice = choices[0]
+    player = ctx.game.players[choice.player_index]
+    return {
+        "player_seat": choice.player_index,
+        "count": choice.data["count"],
+        "cards": [ctx.serialize_card(card) for card in player.hand],
+    }
+
+
 @prompt_renderer("commander_zone_change")
 def _commander_zone_change(ctx: PromptContext, choices: list) -> dict:
     """CR 903.9: one commander at a time, naming where it was headed and which

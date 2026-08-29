@@ -3728,3 +3728,41 @@ def discard_revealed_unless_pay_life(game: Game, instruction: OracleInstruction,
         prompt=f"Pay {amount} life to keep {card.name}?",
     )
     return True, "resolved"
+
+
+@effect_handler("put_hand_cards_on_library")
+def put_hand_cards_on_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Brainstorm: "…then put two cards from your hand on top of your library
+    in any order." Stunted Growth: "Target player chooses three cards from
+    their hand and puts them on top of their library in any order."
+
+    The seat that owns the hand chooses which cards and in what order, so this
+    arms a prompt rather than moving anything: a hand is a hidden zone and
+    nothing but its owner can read it.
+
+    **Not a discard.** CR 701.9a makes discarding a specific action that
+    abilities watch — Necropotence exiles what you discard, Library of Leng
+    redirects it — and none of that is happening here. Reusing the discard
+    prompt with its ``to_library`` flag would have fired every one of those on a
+    Brainstorm.
+
+    Fewer cards in hand than the card names is not a failure: CR 608.2 does as
+    much as it can.
+    """
+    recipient = instruction.payload.get("recipient")
+    player = context.caster if recipient == "caster" else context.target
+    if player is None or player not in game.players:
+        game.log.append(f"{context.card.name}: no player to put cards back")
+        return True, "resolved"
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    actual = min(amount, len(player.hand))
+    if actual <= 0:
+        game.log.append(f"{player.name} has no cards to put back")
+        return True, "resolved"
+    game.arm_pending_choice(
+        "hand_to_library", game.players.index(player), count=actual,
+    )
+    game.log.append(
+        f"{player.name} must choose {actual} card(s) to put on top of their library"
+    )
+    return True, "pending_hand_to_library"

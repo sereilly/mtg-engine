@@ -188,6 +188,7 @@ from .cards import (
     _fused_draw_then_discard,
     _lower_draw,
     _lower_mill,
+    _lower_put_hand_cards_on_library,
     _lower_scry,
 )
 from .mana import (
@@ -384,6 +385,7 @@ __all__ = [
     "_fused_draw_then_discard",
     "_lower_draw",
     "_lower_mill",
+    "_lower_put_hand_cards_on_library",
     "_lower_scry",
     "_lower_add_mana",
     "_TAPPED_LAND_MANA_RECIPIENTS",

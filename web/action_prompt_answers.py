@@ -328,6 +328,18 @@ def _action_discard_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="invalid discard selection")
 
+@action_handler("hand_to_library_confirm")
+def _action_hand_to_library_confirm(session, req, seat_type):
+    # Brainstorm, Stunted Growth: which cards go back and in what order. The
+    # order of `hand_indices` is the order the card gives ("in any order"), so
+    # it is passed through rather than sorted — sorting it would silently take
+    # the choice the card offers away.
+    if req.hand_indices is None:
+        raise HTTPException(status_code=400, detail="hand_indices is required")
+    ok = session.game.confirm_hand_to_library(req.seat, list(req.hand_indices))
+    if not ok:
+        raise HTTPException(status_code=400, detail="invalid card selection")
+
 @action_handler("commander_zone_change_confirm")
 def _action_commander_zone_change_confirm(session, req, seat_type):
     # CR 903.9: the owner chooses the command zone, or lets the commander go

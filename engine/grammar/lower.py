@@ -137,6 +137,7 @@ from .lowering import (
     _lower_lose_game,
     _lower_lose_life,
     _lower_mill,
+    _lower_put_hand_cards_on_library,
     _lower_scry,
     _lower_modal_head,
     _lower_prevent_damage,
@@ -326,6 +327,8 @@ def lower_statement(
         return _lower_exchange_greatest_mana_value(statement)
     if isinstance(statement, ast.Draw):
         return _lower_draw(statement)
+    if isinstance(statement, ast.PutHandCardsOnLibrary):
+        return _lower_put_hand_cards_on_library(statement)
     if isinstance(statement, ast.Mill):
         return _lower_mill(statement)
     if isinstance(statement, ast.Scry):

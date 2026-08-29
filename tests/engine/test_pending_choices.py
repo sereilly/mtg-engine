@@ -316,6 +316,11 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # resolution destroys that land — and, one step earlier than that,
         # whether the seat behind this one is offered it at all.
         "pay_life_to_save",
+        # "Draw three cards, **then** put two cards from your hand on top of
+        # your library in any order." (Brainstorm.) The two halves are one
+        # resolution, and the second reshapes the hand and the library the
+        # first filled, so nothing after it may read either.
+        "hand_to_library",
     }, suspending
 
 

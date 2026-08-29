@@ -534,3 +534,94 @@ def _parse_discard_revealed_unless_pay_life(
         stream.reset(mark)
         return None
     return ast.DiscardRevealedUnlessPayLife(player, amount=amount)
+
+
+def _accept_hand_to_library_tail(
+    stream: TokenStream, possessive: str
+) -> bool:
+    """``… on top of <possessive> library in any order``, consumed whole.
+
+    Shared by the two printed spellings so they cannot come to disagree about
+    the destination. Every word is required. Dropping "on top of" would let a
+    sentence putting cards on the *bottom* read as this one, and dropping "in
+    any order" would silently discard the ordering the card gives the player —
+    the rider bug this grammar refuses by construction. The possessive is the
+    caller's, because it agrees with the subject the sentence already named:
+    "**your** hand … **your** library", "**their** hand … **their** library".
+    """
+    return bool(
+        stream.accept_phrase("on", "top", "of", possessive, "library")
+        and stream.accept_phrase("in", "any", "order")
+    )
+
+
+def _parse_put_hand_cards_on_library(
+    stream: TokenStream,
+) -> "ast.PutHandCardsOnLibrary | None":
+    """``Put two cards from your hand on top of your library in any order.``
+    (Brainstorm.)
+
+    The bare imperative, so the player is "you" (CR 608.2: an instruction with
+    no printed subject is about the spell's controller). Refuses without
+    consuming, because "put" opens a counter, a permanent and three zone moves;
+    every one of those keeps the production it already had.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("put"):
+        return None
+    count = _accept_hand_card_count(stream)
+    if count is None or not stream.accept_phrase("from", "your", "hand"):
+        stream.reset(mark)
+        return None
+    if not _accept_hand_to_library_tail(stream, "your"):
+        stream.reset(mark)
+        return None
+    return ast.PutHandCardsOnLibrary(ast.PlayerRef("you"), count)
+
+
+def _parse_player_puts_hand_cards_on_library(
+    stream: TokenStream, player: ast.PlayerRef
+) -> "ast.PutHandCardsOnLibrary | None":
+    """``<player> chooses three cards from their hand and puts them on top of
+    their library in any order.`` (Stunted Growth.)
+
+    One sentence and one action: "chooses … and puts them" names the choice and
+    the move the choice is for, which is the same prompt. Reading the halves as
+    two steps would leave "them" bound to nothing.
+
+    Refuses without consuming, so "chooses a card name…" (Petra Sphinx) and
+    "chooses a creature…" (Takklemaggot) keep their own productions.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("chooses", "choose"):
+        return None
+    count = _accept_hand_card_count(stream)
+    if count is None or not stream.accept_phrase("from", "their", "hand"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("and", "puts", "them"):
+        stream.reset(mark)
+        return None
+    if not _accept_hand_to_library_tail(stream, "their"):
+        stream.reset(mark)
+        return None
+    return ast.PutHandCardsOnLibrary(player, count)
+
+
+def _accept_hand_card_count(stream: TokenStream) -> "ast.Amount | None":
+    """``two cards`` / ``a card`` — how many leave the hand.
+
+    The noun is required and is what tells this apart from "put **a counter**"
+    and "put **that card**": a bare number with nothing after it is not this
+    sentence.
+    """
+    mark = stream.mark()
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("cards", "card"):
+        stream.reset(mark)
+        return None
+    return count

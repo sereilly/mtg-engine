@@ -55,6 +55,8 @@ from .effects import (
     _parse_mill, _parse_modal_head, _parse_player_adds_mana,
     _parse_prevent, _parse_put_iterated_card_on_library,
     _parse_put_counter, _parse_put_exiled_with_source,
+    _parse_put_hand_cards_on_library,
+    _parse_player_puts_hand_cards_on_library,
     _parse_put_source_into_zone, _parse_remove_counter,
     _parse_remove_from_combat, _parse_return, _parse_reveal_hand, _parse_reveal_top,
     _parse_sacrifice,
@@ -328,6 +330,13 @@ def parse_subject_verb(
         iterated = _parse_put_iterated_card_on_library(stream)
         if iterated is not None:
             return iterated
+        # "Put two cards from your hand on top of your library in any order."
+        # (Brainstorm.) Same treatment and the same reason as the two above:
+        # the counter production reads "two" as a count and then refuses with a
+        # site naming counters.
+        from_hand = _parse_put_hand_cards_on_library(stream)
+        if from_hand is not None:
+            return from_hand
         # "Put it into your graveyard." (All Hallow's Eve.) The ability moving
         # its own source; same treatment and same reason as the two above.
         moved = _parse_put_source_into_zone(stream)
@@ -670,6 +679,13 @@ def parse_subject_verb(
             chosen = parse_player_chooses_permanent(stream, source_spec)
             if chosen is not None:
                 return chosen
+            # "…**chooses three cards from their hand and puts them on top of
+            # their library**" (Stunted Growth). Same reason it is read here:
+            # it declines without consuming, and the paragraph below would fail
+            # the line on "three".
+            to_library = _parse_player_puts_hand_cards_on_library(stream, source_spec)
+            if to_library is not None:
+                return to_library
             return _parse_name_then_reveal_top(stream, source_spec)
         # "Each opponent sacrifices a creature" (Goremand). The AST node has
         # carried its player since it was written; only the *bare* imperative

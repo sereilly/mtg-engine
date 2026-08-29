@@ -32,6 +32,11 @@ let discardToLibrarySelected = false;
 // the hand indices picked so far, by clicking cards in hand. Held client-side
 // and submitted as one discard_confirm once the required count is reached.
 let discardSelection = [];
+// Brainstorm / Stunted Growth: which cards go back on top of the library, and
+// in what order. Kept in click order rather than sorted, because the card says
+// "in any order" and the first named ends up on top -- sorting it would
+// quietly take that choice away.
+let handToLibrarySelection = [];
 // Balance: the indices the player has currently picked to sacrifice/discard.
 let balanceSelection = { lands: [], creatures: [], hand: [] };
 // Forced sacrifice (Lich): the battlefield indices the player has currently
@@ -1104,7 +1109,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2252,6 +2257,17 @@ function getDiscardSelectInfo(state = currentState) {
   return info;
 }
 
+// Brainstorm: "put two cards from your hand on top of your library in any
+// order." Not a discard (CR 701.9a) and so not the discard prompt: nothing
+// that watches discards may see this.
+function getHandToLibraryInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.hand_to_library;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  return info;
+}
+
 function getLengDiscardInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.leng_discard;
@@ -3190,7 +3206,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -3715,6 +3731,61 @@ async function toggleDiscardSelection(handIndex) {
   discardSelection = [];
   discardToLibrarySelected = false;
   await sendAction({ seat, action: "discard_confirm", discard_indices: indices, to_library: toLibrary });
+}
+
+function applyHandToLibraryPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  const target = Math.min(Math.max(1, Number(info.count || 1)), (info.cards || []).length);
+  const selectedCount = handToLibrarySelection.length;
+  const remaining = Math.max(0, target - selectedCount);
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = target === 1 ? "Put a Card Back" : `Put ${target} Cards Back`;
+  body.textContent =
+    `Select ${target} card(s) from your hand to put on top of your library.`;
+  // The order matters and the player is told so: the first click ends up on top.
+  steps.innerHTML = [
+    `<div><strong>Selected ${selectedCount} of ${target}</strong> (${remaining} more)</div>`,
+    "<div>Action: click cards in your hand to select; click a highlighted card again to unselect it.</div>",
+    "<div>The first card you pick goes on top.</div>",
+  ].join("");
+}
+
+// A card in hand was clicked while the put-back prompt is open: toggle it, and
+// submit the whole batch once the count is reached (the engine takes all the
+// indices at once, in the order they were picked).
+async function toggleHandToLibrarySelection(handIndex) {
+  const info = getHandToLibraryInfo();
+  if (!info) return;
+  const target = Math.min(Math.max(1, Number(info.count || 1)), (info.cards || []).length);
+  const at = handToLibrarySelection.indexOf(handIndex);
+  if (at >= 0) handToLibrarySelection.splice(at, 1);
+  else if (handToLibrarySelection.length < target) handToLibrarySelection.push(handIndex);
+
+  if (handToLibrarySelection.length < target) {
+    const remaining = target - handToLibrarySelection.length;
+    renderBoard(currentState);
+    renderActivationPrompt();
+    updateActionHint(`Select ${remaining} more card(s) to put back.`);
+    return;
+  }
+  const indices = [...handToLibrarySelection];
+  handToLibrarySelection = [];
+  await sendAction({ seat, action: "hand_to_library_confirm", hand_indices: indices });
 }
 
 // Library of Leng: a card was discarded (random/forced/cleanup) and the optional
@@ -6988,6 +7059,12 @@ function renderActivationPrompt() {
   const discardSelectInfo = getDiscardSelectInfo();
   if (discardSelectInfo) {
     applyDiscardSelectPrompt(discardSelectInfo);
+    return;
+  }
+
+  const handToLibraryInfo = getHandToLibraryInfo();
+  if (handToLibraryInfo) {
+    applyHandToLibraryPrompt(handToLibraryInfo);
     return;
   }
 
@@ -10582,6 +10659,7 @@ function createCardElement(card, options = {}) {
     cleanupSelectable = false,
     mulliganBottomSelectable = false,
     discardSelectable = false,
+    handToLibrarySelectable = false,
     balanceHandSelectable = false,
     selected = false,
     targetSeat = null,
@@ -10628,7 +10706,7 @@ function createCardElement(card, options = {}) {
   if (tapped) cardEl.classList.add("tapped");
   if (hidden) cardEl.classList.add("card-hidden");
   if (interactive) cardEl.classList.add("clickable");
-  if (cleanupSelectable || mulliganBottomSelectable || discardSelectable || balanceHandSelectable)
+  if (cleanupSelectable || mulliganBottomSelectable || discardSelectable || handToLibrarySelectable || balanceHandSelectable)
     cardEl.classList.add("cleanup-selectable", "clickable");
   if (selected) cardEl.classList.add("selected-card");
   if (playable && !selected) cardEl.classList.add("playable");
@@ -10814,7 +10892,7 @@ function createCardElement(card, options = {}) {
   }
 
   if (
-    (castOnClick || mulliganBottomSelectable || discardSelectable || balanceHandSelectable) &&
+    (castOnClick || mulliganBottomSelectable || discardSelectable || handToLibrarySelectable || balanceHandSelectable) &&
     typeof card === "object"
   ) {
     cardEl.classList.add("clickable");
@@ -10864,6 +10942,11 @@ function createCardElement(card, options = {}) {
 
         if (discardSelectable) {
           await toggleDiscardSelection(handIndex);
+          return;
+        }
+
+        if (handToLibrarySelectable) {
+          await toggleHandToLibrarySelection(handIndex);
           return;
         }
 
@@ -12928,6 +13011,12 @@ function renderBoard(state) {
   const requiresDiscardSelection = !!discardSelectInfo;
   // A stale selection from a previous prompt would mis-index this one's hand.
   if (!requiresDiscardSelection && discardSelection.length) discardSelection = [];
+  const handToLibraryInfo = getHandToLibraryInfo(state);
+  const requiresHandToLibrarySelection = !!handToLibraryInfo;
+  // Same reason as the line above: this selection indexes a hand that has moved.
+  if (!requiresHandToLibrarySelection && handToLibrarySelection.length) {
+    handToLibrarySelection = [];
+  }
   const mulliganBottomInfo = pregameInfo?.phase === "bottom_select" && pregameInfo.is_my_turn ? pregameInfo : null;
   const requiresMulliganBottomSelection = !!mulliganBottomInfo;
   // Balance's discard half: its permanents are picked on the board, its cards to
@@ -12960,7 +13049,7 @@ function renderBoard(state) {
 
   renderHandFan("selfHand", me.hand, {
     draggable:
-      !requiresCleanupSelection && !requiresDiscardSelection && !requiresBalanceHandSelection && !isPregame,
+      !requiresCleanupSelection && !requiresDiscardSelection && !requiresHandToLibrarySelection && !requiresBalanceHandSelection && !isPregame,
     dragKind: "hand",
     zoneKind: "hand",
     castOnClick: !isPregame,
@@ -12968,9 +13057,12 @@ function renderBoard(state) {
     cleanupSelectable: requiresCleanupSelection,
     mulliganBottomSelectable: requiresMulliganBottomSelection,
     discardSelectable: requiresDiscardSelection,
+    handToLibrarySelectable: requiresHandToLibrarySelection,
     balanceHandSelectable: requiresBalanceHandSelection,
     selectedHandIndices: requiresDiscardSelection
       ? discardSelection
+      : requiresHandToLibrarySelection
+      ? handToLibrarySelection
       : requiresBalanceHandSelection
       ? balanceSelection.hand
       : cleanupDiscard?.selected_indices || mulliganBottomInfo?.selected_indices || [],

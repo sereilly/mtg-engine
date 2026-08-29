@@ -652,3 +652,81 @@ def test_402_3_a_spectator_may_not_look_at_anyones_hand_either():
         view = _serialize_player(player, None, seat, game)
         assert view["hand"] == ["<hidden>"]
         assert view["hand_count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Hand back onto the library — Brainstorm, Stunted Growth
+# ---------------------------------------------------------------------------
+
+
+def _hand_to_library_game(hand: list[str], library: list[str]) -> Game:
+    p1 = PlayerState(
+        name="P1",
+        hand=[_mk_card(name, "Instant") for name in hand],
+        library=_library(library),
+        life=20,
+    )
+    p2 = PlayerState(name="P2", library=_library(["L1", "L2"]), life=20)
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {0, 1}
+    return game
+
+
+@pytest.mark.cr("401.1", "402.1")
+def test_401_1_cards_put_back_land_on_top_in_the_order_chosen():
+    """"…on top of your library **in any order**." The first card named is the
+    first one the player will draw, so the order the answer gives is the order
+    the library ends up in — sorting the answer would silently take the choice
+    the card offers away."""
+    game = _hand_to_library_game(["A", "B", "C"], ["X", "Y"])
+    game.arm_pending_choice("hand_to_library", 0, count=2)
+
+    assert game.confirm_hand_to_library(0, [2, 0]) is True
+
+    assert [c.name for c in game.players[0].hand] == ["B"]
+    assert [c.name for c in game.players[0].library[:4]] == ["C", "A", "X", "Y"]
+
+
+@pytest.mark.cr("402.1")
+def test_402_1_only_one_copy_of_a_repeated_card_leaves_the_hand():
+    """A hand is a list of card *definitions* and a deck repeats one object per
+    copy, so an identity filter over it removes every copy while the caller puts
+    exactly one somewhere. ``take_card_from_hand`` is the seam that makes it one,
+    and this is the shape that finds it: two copies in hand, one named."""
+    game = _hand_to_library_game(["A", "A", "B"], ["X"])
+    # The deck builder repeats one object per copy; the fixture must too, or the
+    # test passes against the broken version.
+    game.players[0].hand[1] = game.players[0].hand[0]
+    game.arm_pending_choice("hand_to_library", 0, count=1)
+
+    assert game.confirm_hand_to_library(0, [0]) is True
+
+    assert sorted(c.name for c in game.players[0].hand) == ["A", "B"]
+    assert [c.name for c in game.players[0].library[:2]] == ["A", "X"]
+
+
+@pytest.mark.cr("608.2")
+def test_608_2_an_answer_that_names_too_few_cards_is_refused():
+    """The prompt is owed until it is answered in full. Accepting a short answer
+    would resume the steps behind it against a decision nobody made."""
+    game = _hand_to_library_game(["A", "B", "C"], ["X"])
+    game.arm_pending_choice("hand_to_library", 0, count=2)
+
+    assert game.confirm_hand_to_library(0, [0]) is False
+    assert game.pending_choice_of("hand_to_library", 0) is not None
+    assert len(game.players[0].hand) == 3
+
+
+@pytest.mark.cr("608.2")
+def test_608_2_a_non_interactive_seat_answers_with_the_default():
+    """An AI seat queues the prompt and the auto-resolver drains it; a prompt
+    left owed would wedge every later resumable loop, because this kind
+    suspends."""
+    game = _hand_to_library_game(["A", "B", "C"], ["X"])
+    game.interactive_seats = set()
+    game.arm_pending_choice("hand_to_library", 0, count=2)
+    game.auto_resolve_pending_choices()
+
+    assert game.pending_choices == []
+    assert [c.name for c in game.players[0].hand] == ["C"]
+    assert [c.name for c in game.players[0].library[:2]] == ["A", "B"]

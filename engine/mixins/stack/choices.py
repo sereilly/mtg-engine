@@ -1393,6 +1393,62 @@ class PendingChoicesMixin:
         )
         return True
 
+    # -- Hand back onto the library ------------------------------------------
+
+    def confirm_hand_to_library(self, player_index: int, hand_indices: list[int]) -> bool:
+        """Resolve a pending "put N cards from your hand on top of your library"
+        (Brainstorm, Stunted Growth) with the player's chosen cards.
+
+        The order of *hand_indices* is the order the card gives them ("in any
+        order"): the first named ends up on top.
+        """
+        return self.resolve_pending_choice(
+            "hand_to_library", player_index, hand_indices=hand_indices
+        )
+
+    def _resolve_hand_to_library(
+        self, choice: PendingChoice, hand_indices: list[int]
+    ) -> bool:
+        """Move the chosen cards, last-named first, so the first is on top.
+
+        Each card is taken through ``take_card_from_hand`` and put through
+        ``put_card_into_library`` — the two seams, both of which exist because
+        the obvious spelling is wrong: a hand holds the *same object* for every
+        copy of a card, and CR 903.9b can divert a card headed for a library.
+
+        The cards are read out **before** any of them move, because taking one
+        renumbers the hand behind it — the same reason ``_default_discard``
+        re-reads its candidate list each time round, arrived at from the other
+        direction.
+        """
+        count = int(choice.data["count"])
+        hand = self.players[choice.player_index].hand
+        chosen = [i for i in dict.fromkeys(hand_indices) if 0 <= i < len(hand)][:count]
+        if len(chosen) != count:
+            return False
+        player = self.players[choice.player_index]
+        cards = [hand[index] for index in chosen]
+        for card in reversed(cards):
+            if self.take_card_from_hand(player, card):
+                self.put_card_into_library(player, card, position="top")
+        self.log.append(
+            f"{player.name} put {len(cards)} card(s) on top of their library"
+        )
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_hand_to_library(self, choice: PendingChoice) -> None:
+        """Put the lowest-index cards back, in hand order.
+
+        Lowest-index is the same stated policy ``_default_discard`` takes, and
+        for the same reason: which cards are *legal* answers is the card's
+        business and there is no restriction here, so anything past "enough of
+        them" is AI valuation rather than rules.
+        """
+        count = min(int(choice.data["count"]), len(self.players[choice.player_index].hand))
+        if not self._resolve_hand_to_library(choice, list(range(count))):
+            self.discard_pending_choice(choice)
+
     def _default_discard(self, choice: PendingChoice) -> None:
         """Discard the lowest-index *eligible* cards, keeping them in the
         graveyard.
@@ -3728,6 +3784,24 @@ register_choice(
     # The one kind that has always suspended: CR 616.1e stops an event dead, and
     # the loop that event was a step of has to stop with it. The flag it used to
     # set by hand in engine/replacements.py is this field.
+    suspends=True,
+)
+
+register_choice(
+    "hand_to_library",
+    resolve=lambda game, choice, r: game._resolve_hand_to_library(
+        choice, r["hand_indices"]
+    ),
+    default=lambda game, choice: game._default_hand_to_library(choice),
+    action="hand_to_library_confirm",
+    prompt_key="hand_to_library",
+    blocked_detail="choose which cards go back on top of your library",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # Brainstorm draws three and then puts two back, and the two are steps of
+    # one resolution: nothing after the prompt may read a hand the answer has
+    # not reshaped yet (CR 608.2, CR 117.3b).
     suspends=True,
 )
 

@@ -692,13 +692,13 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, twenty-seven rounds in. 184 → 267 of 373 supported
+**Where it stands: Phase 3, twenty-eight rounds in. 184 → 269 of 373 supported
 (72%), hollow lines 10 cards.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
 
-**The remaining 106 are a long tail, and the shape is Legends' rather than
+**The remaining 104 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
@@ -1526,6 +1526,53 @@ does to power is a layer-7 consequence. The one fragment the two families shared
 went down into `phrases.py`, which is where the layering rule sends a production
 two families need — `phrases` rising without new work of its own for the second
 time, exactly as its note predicts.
+
+**Round 28 — N cards from a hand back onto the top of a library. 267 → 269.**
+
+Brainstorm ("Draw three cards, then put two cards from your hand on top of your
+library in any order.") and Stunted Growth ("Target player chooses three cards
+from their hand and puts them on top of their library in any order."). One
+effect printed twice, differing in who does it — so the seat is payload, on the
+same `recipient` key `_lower_mill` already reads, and a seat the lowering cannot
+name refuses rather than defaulting to the caster.
+
+**It is not a discard, and that is the whole design decision.** CR 701.9a moves
+a discarded card to a *graveyard*, and CR 701.9b makes the choice of which card
+part of the discard — so the engine's `discard` prompt already does almost
+exactly what these two cards need, and it even carries a `to_library` flag for
+Library of Leng. Reusing it would have been three lines and would have fired
+every "whenever you discard" ability in the pool on a Brainstorm (Necropotence
+exiles what you discard). A new `hand_to_library` prompt instead: one
+`register_choice`, one renderer, one arming site, which is what
+`engine/pending_choices.py` says adding a prompt costs.
+
+It **suspends**, because Brainstorm's two halves are one resolution and the
+second reshapes the hand and the library the first filled (CR 608.2, CR 117.3b).
+Three ratchets caught the parts that go with that, which is the registry working
+as designed rather than three separate lessons: the simulator's drain list (a
+suspending prompt left owed wedges every later resumable loop), the
+completeness guard (no web renderer, no `ActionKind`), and the client-coverage
+guard (`app.js` never read `state.hand_to_library`, so the seat owing it could
+never have answered).
+
+The order is the card's, not the engine's. "In any order" means the player picks
+which of the two goes on top, so the answer is a *sequence* and both the client
+selection and the resolver keep it — sorting the indices anywhere along the way
+would have silently taken the choice away. The cards are read out of the hand
+before any of them move, because taking one renumbers the rest, and each one
+travels through `take_card_from_hand` and `put_card_into_library`: the two seams
+that exist because a hand holds the *same object* for every copy of a card and
+CR 903.9b can divert a card headed for a library. A test puts one of two
+identical cards back and checks the other is still in hand.
+
+**No in-game verification, and that is the `measured` role doing its job.**
+Neither card can be decked — ICE is not in `load_catalog`, and the Debug Menu's
+raw-state injection looks cards up in the shipped catalog too — so the browser
+cannot reach either prompt. What was checked in the running app is what the
+change could break for *shipped* cards: `app.js` parses, the three new functions
+load, the board renders, console clean. The prompt's own behaviour is covered by
+the engine tests, and the in-game pass waits for promotion, which is what
+SET_PLAYBOOK Phase 5 says it should.
 
 ## Where the sets landed
 

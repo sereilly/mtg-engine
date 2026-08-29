@@ -68,6 +68,11 @@ _SIMULATED_CHOICES = (
     # simulator builds arms one today, so the position cannot change an
     # existing seed — and the counter form suspends.
     "number_choice",
+    # "Put two cards from your hand on top of your library" (Brainstorm,
+    # Stunted Growth). Appended, and this one a simulated deck really can arm —
+    # it suspends, so a seat left owing it would wedge every later resumable
+    # loop, which is what the guard beside this list checks for.
+    "hand_to_library",
 )
 
 
