@@ -1557,3 +1557,162 @@ def test_magus_of_the_unseen_is_ray_of_command_over_a_noun(set_pool):
             "permanents_from": "untapped_permanents", "tap_when_lost": True,
         }
         assert haste.payload["keywords"] == ("haste",)
+
+
+# --- Round 26: a printed restriction clause is a conjunction of restrictions ---
+
+
+def _restricted_combat(set_pool, source_name: str, *, defender_lands=(), extra=()):
+    """*source_name* on the battlefield, mid-combat, with the defender's board
+    set. Combat because all three cards this round buys print "only during
+    combat" or a step inside it."""
+    pool = set_pool("ICE")
+    source = Permanent(card=pool[source_name])
+    p1 = PlayerState(name="P1", battlefield=[source, *extra], life=20)
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=pool[n]) for n in defender_lands], life=20
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    game._sync_control()
+    for perm in (source, *extra):
+        _nosick(perm)
+    return game, source
+
+
+def test_arcums_sleigh_needs_the_defender_to_hold_a_snow_land(set_pool):
+    """"{2}, {T}: Target creature gains vigilance until end of turn. Activate
+    only during combat and only if defending player controls a snow land."
+
+    Both halves are enforced, which is what the clause being a *conjunction*
+    buys: the sentence used to match no row at all, so the line refused and the
+    card was unsupported.
+    """
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    game, _sleigh = _restricted_combat(
+        set_pool, "Arcum's Sleigh", defender_lands=["Plains"], extra=[bear]
+    )
+
+    refused = game.activate_permanent_ability(
+        0, "Arcum's Sleigh", target_player_index=0, target_permanent_index=1
+    )
+    assert not refused.supported
+    assert not bear.has_keyword("vigilance")
+
+    game.players[1].battlefield.append(Permanent(card=pool["Snow-Covered Plains"]))
+    game._sync_control()
+    allowed = game.activate_permanent_ability(
+        0, "Arcum's Sleigh", target_player_index=0, target_permanent_index=1
+    )
+    game._settle()
+
+    assert allowed.supported, allowed.details
+    assert bear.has_keyword("vigilance")
+
+
+def test_kjeldoran_guard_is_the_same_clause_negated(set_pool):
+    """"…only if defending player controls **no** snow lands." One row with the
+    other polarity — the article is the quantifier, so this card needed no code
+    of its own once Arcum's Sleigh's did."""
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    game, _guard = _restricted_combat(
+        set_pool, "Kjeldoran Guard",
+        defender_lands=["Snow-Covered Plains"], extra=[bear],
+    )
+
+    refused = game.activate_permanent_ability(
+        0, "Kjeldoran Guard", target_player_index=0, target_permanent_index=1
+    )
+    assert not refused.supported
+    assert bear.effective_power == 2
+
+    game.players[1].battlefield.clear()
+    game._sync_control()
+    allowed = game.activate_permanent_ability(
+        0, "Kjeldoran Guard", target_player_index=0, target_permanent_index=1
+    )
+    game._settle()
+
+    assert allowed.supported, allowed.details
+    assert (bear.effective_power, bear.effective_toughness) == (3, 3)
+
+
+def test_kjeldoran_guard_dies_with_the_creature_it_pumped(set_pool):
+    """"When that creature leaves the battlefield this turn, sacrifice this
+    creature." CR 603.7's delayed trigger, already read by the grammar — the
+    card was unsupported for its restriction clause alone, three sentences
+    later."""
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    game, guard = _restricted_combat(set_pool, "Kjeldoran Guard", extra=[bear])
+
+    result = game.activate_permanent_ability(
+        0, "Kjeldoran Guard", target_player_index=0, target_permanent_index=1
+    )
+    game._settle()
+    assert result.supported, result.details
+
+    game.remove_from_battlefield(bear)
+    game._settle()
+
+    assert not any(perm is guard for perm in game.all_permanents())
+
+
+def test_grizzled_wolverine_prints_three_restrictions_in_one_sentence(set_pool):
+    """"Activate only during the declare blockers step, only if at least one
+    creature is blocking this creature, and only once each turn."
+
+    Three conjuncts joined by commas, and the third is the per-turn cap the
+    optional tails on three rows used to carry. All three are enforced.
+    """
+    pool = set_pool("ICE")
+    wolverine = Permanent(card=pool["Grizzled Wolverine"])
+    blocker = Permanent(card=pool["Balduvian Bears"])
+    p1 = PlayerState(name="P1", battlefield=[wolverine], life=20)
+    p2 = PlayerState(name="P2", battlefield=[blocker], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    game._sync_control()
+    _nosick(wolverine)
+    _nosick(blocker)
+
+    ok, message = game.declare_attackers(0, [0])
+    assert ok, message
+    game.current_step = "declare_blockers"
+
+    unblocked = game.activate_permanent_ability(0, "Grizzled Wolverine")
+    assert not unblocked.supported
+    assert wolverine.effective_power == 2
+
+    ok, message = game.declare_blockers(1, {0: 0})
+    assert ok, message
+
+    pumped = game.activate_permanent_ability(0, "Grizzled Wolverine")
+    game._settle()
+    assert pumped.supported, pumped.details
+    assert wolverine.effective_power == 4
+
+    again = game.activate_permanent_ability(0, "Grizzled Wolverine")
+    assert not again.supported, "…and only once each turn"
+    assert wolverine.effective_power == 4
+
+
+def test_grizzled_wolverine_is_refused_outside_the_declare_blockers_step(set_pool):
+    """The first conjunct on its own. A creature blocking it in the damage step
+    is still blocking it, so the step half is the only thing refusing here —
+    which is what makes the three conjuncts three rules rather than one."""
+    game, wolverine = _restricted_combat(set_pool, "Grizzled Wolverine")
+    game.current_step = "combat_damage"
+
+    refused = game.activate_permanent_ability(0, "Grizzled Wolverine")
+
+    assert not refused.supported
+    assert "only during the declare blockers step" in refused.details

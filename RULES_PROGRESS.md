@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**335 / 612 tracked rules covered (54%)** — 1625 tests, 0 unannotated.
+**335 / 612 tracked rules covered (54%)** — 1631 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -601,7 +601,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 506. Combat Phase
 
 - [x] **506.1** The combat phase has five steps, which proceed in order: beginning of combat, declare attackers, ... *(6 tests)*
-- [x] **506.2** During the combat phase, the active player is the attacking player; creatures that player control... *(3 tests)*
+- [x] **506.2** During the combat phase, the active player is the attacking player; creatures that player control... *(5 tests)*
 - [x] **506.3** Only a creature can attack or block. Only a player, a planeswalker, or a battle can be attacked. *(13 tests, subrules ab)*
 - [x] **506.4** A permanent is removed from combat if it leaves the battlefield, if its controller changes, if it... *(7 tests, subrules bc)*
 - [x] **506.5** A creature attacks alone if it’s the only creature declared as an attacker during the declare att... *(5 tests)*
@@ -675,7 +675,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(18 tests, subrules ab)*
 - [ ] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou...
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
-- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(22 tests, subrules ac)*
+- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(28 tests, subrules ac)*
 
 ### 603. Handling Triggered Abilities
 

@@ -24,12 +24,23 @@ Two things follow and are load-bearing:
   you control a creature with flying" cannot be satisfied by a rule written for
   "Activate only if you control a creature": a restriction matching a prefix
   would be a *weaker* restriction wearing the card's words.
+* **A sentence conjoining restrictions is several restrictions**, split by
+  `_conjuncts` and all of them required. CR 602.5 puts no limit on how many a
+  clause states, and the cards print them as one sentence: "Activate only during
+  combat **and only if** defending player controls a snow land" is two rules, and
+  Grizzled Wolverine prints three. This was an optional
+  ``(?: and only once each turn)?`` tail on three rows -- one row per *pairing*,
+  which is quadratic in the clauses that exist and left Speaker of the Heavens as
+  a single row reading two rules under one name. A conjunct no row reads makes
+  the whole clause unreadable, so a card cannot be admitted with half its
+  sentence enforced.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
@@ -60,6 +71,15 @@ class ActivationRestriction:
     #: than sniffed: a signature guessed by introspection is a signature that
     #: silently stops being guessed right.
     reads_payload: bool = False
+    #: Whether the clause's *payload* is one this file can act on, asked of the
+    #: match alone. A row whose capture ends in `.+` matches more sentences than
+    #: it implements -- "controls a snow land" and "controls the highest life
+    #: total" are one pattern -- and a clause admitted here with a phrase the
+    #: predicate then cannot read would be a restriction that answers "no" for
+    #: every board: silent over-restriction, which is this file's own failure
+    #: mode pointed the other way. A row that declares one is unmatched where it
+    #: says no, so its card is unsupported naming the sentence.
+    payload_readable: "Callable[[re.Match[str]], bool] | None" = None
 
 
 def _as_a_sorcery(game: "Game", controller_index: int, source) -> bool:
@@ -81,29 +101,138 @@ def _a_creature_died_this_turn(game: "Game", controller_index: int, source) -> b
     return int(getattr(game, "creatures_died_this_turn", 0) or 0) > 0
 
 
-def _control_a_creature_with_flying(game: "Game", controller_index: int, source) -> bool:
-    """"Activate only if you control a creature with flying." (Celestial
-    Enforcer.)
+@lru_cache(maxsize=None)
+def _controlled_board_phrase(phrase: str) -> "tuple[dict, bool] | None":
+    """"a creature with flying" / "no snow lands" as ``(filter, present)``.
 
-    Through `is_creature` and `has_keyword`, not the printed line: a granted
-    flying counts (CR 613 layer 6) and an animated land is a creature.
+    The noun phrase is read by **the grammar's noun parser**, exactly as
+    `static_bonuses._controls_noun_condition` reads the identical phrase after
+    "as long as you control": `subject_matches` is what answers this clause at
+    every activation, and a second reader of "a snow land" would be free to
+    disagree with it about what a snow land is.
+
+    The article is the quantifier and it is what the clause means: "**a** snow
+    land" is a presence test and "**no** snow lands" its negation. Anything else
+    -- "two or more", "three" -- is a threshold this does not read, and it
+    refuses rather than answering as presence, because a threshold silently read
+    as "at least one" is a restriction lifted on a board the card does not name.
     """
-    return any(
-        perm.is_creature and perm.has_keyword("flying")
-        for perm in game.controlled_by(controller_index)
+    from .grammar.errors import GrammarError
+    from .grammar.lexer import tokenize
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+    from .subject_filters import untestable_filter_keys
+
+    article, _, rest = phrase.strip().partition(" ")
+    if article not in ("a", "an", "no") or not rest:
+        return None
+    stream = TokenStream(tokenize(rest).tokens)
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    payload = described.to_payload()
+    if not payload or untestable_filter_keys(payload):
+        return None
+    return payload, article != "no"
+
+
+def _readable_controlled_board(match: "re.Match[str]") -> bool:
+    """Whether the noun phrase in a "controls …" clause is one this can test."""
+    return _controlled_board_phrase(match.group("board")) is not None
+
+
+def _defending_seat(game: "Game") -> int | None:
+    """The seat "defending player" names right now, or None when nothing does.
+
+    CR 506.2 defines the defending player *during the combat phase*, so outside
+    combat the clause has nothing to ask about and is unanswerable rather than
+    vacuously true. ``_resolve_defending_player_index`` is the engine's one
+    answer to "which single seat is defending": the other player in a duel, and
+    in a CR 802 multi-defender combat only once exactly one opponent is under
+    attack. A clause printed in the singular that no single seat answers refuses
+    the activation -- the same direction `legality._enumerate_targets` takes for
+    ``defending_player_only`` with no seat beside it, because a narrowing nobody
+    can answer must never widen.
+    """
+    if getattr(game, "current_turn_phase", None) != "combat":
+        return None
+    return game._resolve_defending_player_index()
+
+
+def _controls_the_printed_noun(
+    game: "Game", controller_index: int, source, match
+) -> bool:
+    """"Activate only if you control a snow Mountain." (Goblin Ski Patrol.)
+    "…only if defending player controls a snow land." (Arcum's Sleigh.)
+    "…only if defending player controls no snow lands." (Kjeldoran Guard.)
+
+    One row: the seat and the noun phrase are both payload, which is the same
+    choice `combat_restrictions.py` makes about its land type and for the same
+    reason -- a card printed with another seat, another noun or the other
+    polarity is this clause, not a new one, and baking any of the three into the
+    pattern made every variation a row, a predicate and a gate entry.
+
+    `subject_matches` answers the phrase, so a text-changed land type (Magical
+    Hack) counts here as it counts everywhere, and CR 109.5's observer is the
+    *activating* seat even when the board being scanned is the defender's: "you"
+    inside the noun phrase would mean the ability's controller.
+    """
+    read = _controlled_board_phrase(match.group("board"))
+    if read is None:
+        return False
+    described, present = read
+    if match.group("who") == "you":
+        seat: int | None = controller_index
+    else:
+        seat = _defending_seat(game)
+    if seat is None:
+        return False
+    from .subject_filters import subject_matches
+
+    held = any(
+        subject_matches(
+            game, perm, described, observer=controller_index, source=source
+        )
+        for perm in game.controlled_by(seat)
     )
+    return held is present
+
+
+def _blocked_by_at_least(game: "Game", controller_index: int, source, match) -> bool:
+    """"Activate only if at least one creature is blocking this creature."
+    (Grizzled Wolverine.)
+
+    ``creatures_blocking`` is the engine's one reader of that relation, so a
+    band-propagated block (CR 702.22h) counts here exactly as it counts in the
+    damage step. The number is payload; a source that has left the battlefield
+    is blocked by nothing.
+    """
+    from .grammar.vocabulary import NUMBER_WORDS
+
+    if source is None:
+        return False
+    needed = NUMBER_WORDS.get(match.group("count"))
+    if needed is None:
+        return False
+    return len(game.creatures_blocking(source)) >= needed
 
 
 def _seven_life_above_starting(game: "Game", controller_index: int, source) -> bool:
     """"Activate only if you have at least 7 life more than your starting life
-    total and only as a sorcery." (Speaker of the Heavens.)
+    total…" (Speaker of the Heavens.)
 
-    Both halves, because the card prints both -- the life comparison *and* the
-    sorcery timing. Reading one would be a restriction the card does not have.
+    The life half alone. The card prints "…and only as a sorcery" after it, and
+    this used to read both halves because the clause arrived here whole; a
+    conjoined clause is now split into the restrictions it conjoins, so the
+    sorcery half is the sorcery row's business and this one stops being two
+    rules with one name.
     """
     player = game.players[controller_index]
     starting = int(getattr(game, "starting_life_total", 20) or 20)
-    return player.life >= starting + 7 and _as_a_sorcery(game, controller_index, source)
+    return player.life >= starting + 7
 
 
 def _during_any_upkeep(game: "Game", controller_index: int, source) -> bool:
@@ -393,25 +522,42 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         "no creature died this turn",
     ),
     ActivationRestriction(
-        re.compile(r"^activate only if you control a creature with flying$"),
-        _control_a_creature_with_flying,
-        "you control no creature with flying",
+        # "Activate only if **you control** a creature with flying" (Celestial
+        # Enforcer), "…**defending player controls** a snow land" (Arcum's
+        # Sleigh), "…**no** snow lands" (Kjeldoran Guard). One row where the
+        # first of those was a row with a hand-written predicate: the seat, the
+        # noun phrase and the polarity are all payload, so the next card to
+        # print the clause about another board or another noun costs nothing.
+        # The phrase is read by the grammar's noun parser and validated here —
+        # a row ending in `.+` that admitted a phrase its predicate could not
+        # read would refuse every activation, silently.
+        re.compile(
+            r"^activate only if (?P<who>you|defending player) controls? (?P<board>.+)$"
+        ),
+        _controls_the_printed_noun,
+        "that clause's board condition is not met",
+        reads_payload=True,
+        payload_readable=_readable_controlled_board,
+    ),
+    ActivationRestriction(
+        re.compile(
+            r"^activate only if at least (?P<count>\w+) creatures? "
+            r"(?:is|are) blocking this creature$"
+        ),
+        _blocked_by_at_least,
+        "not enough creatures are blocking it",
+        reads_payload=True,
     ),
     ActivationRestriction(
         re.compile(
             r"^activate only if you have at least 7 life more than your "
-            r"starting life total and only as a sorcery$"
+            r"starting life total$"
         ),
         _seven_life_above_starting,
-        "you need 7 life above your starting total, and sorcery timing",
+        "you need 7 life above your starting total",
     ),
     ActivationRestriction(
-        # "…**and only once each turn**" (Gaea's Touch) is the same optional
-        # tail the upkeep and your-turn rows below carry, and for the same
-        # reason: the cap is enforced by `_ACTIVATION_LIMIT_SHAPES`, which
-        # *searches* the clause, so the timing half only has to stop refusing
-        # the line for the words beside it.
-        re.compile(r"^activate only as a sorcery(?: and only once each turn)?$"),
+        re.compile(r"^activate only as a sorcery$"),
         _as_a_sorcery,
         "this ability is sorcery-speed",
     ),
@@ -434,18 +580,12 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         "only during an upkeep step",
     ),
     ActivationRestriction(
-        # "…**and only once each turn**" (Gate to Phyrexia) is the same optional
-        # tail the "your turn" row below carries, and for the same reason: the
-        # once-a-turn half is per-permanent state rather than a property of the
-        # game, so it stays in mixins/stack/activation.py where that state lives
-        # and this row reads the timing half. Without the tail the whole clause
-        # matched nothing and the timing went unenforced.
-        re.compile(r"^activate only during your upkeep(?: and only once each turn)?$"),
+        re.compile(r"^activate only during your upkeep$"),
         _during_your_upkeep,
         "only during your upkeep",
     ),
     ActivationRestriction(
-        re.compile(r"^activate only during your turn(?: and only once each turn)?$"),
+        re.compile(r"^activate only during your turn$"),
         _during_your_turn,
         "only during your turn",
     ),
@@ -537,8 +677,71 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
 )
 
 
+#: Where one printed sentence stops being one restriction. "Activate only during
+#: combat **and only** if defending player controls a snow land" and "Activate
+#: only during the declare blockers step**, only** if at least one creature is
+#: blocking this creature**, and only** once each turn" are lists, joined the
+#: three ways English joins them. The lookahead is what keeps the comma in
+#: "Activate only during an opponent's turn, before attackers are declared" from
+#: being a separator: only a comma or "and" *followed by another "only"* opens a
+#: new conjunct.
+_CONJUNCTION = re.compile(r",?\s+and\s+(?=only\b)|,\s+(?=only\b)")
+
+
+def _conjuncts(clause: str) -> list[str]:
+    """One printed restriction sentence as the restrictions it conjoins.
+
+    CR 602.5 puts no limit on how many restrictions a clause states, and the
+    cards print them as one sentence: every conjunct is a rule of its own, and
+    the activation is legal only when all of them are.
+
+    This replaced an optional ``(?: and only once each turn)?`` tail on three
+    rows -- one row per *pairing*, which is quadratic in the clauses that exist
+    and left "Activate only if you have at least 7 life more than your starting
+    life total and only as a sorcery" as a single row reading two rules under
+    one name. A conjunct that no row reads leaves the whole clause unreadable,
+    so a card cannot be admitted with half its sentence enforced.
+
+    The verb travels to the tail: the conjuncts after the first are printed
+    without it ("…and only if…"), and every pattern here is anchored on the
+    sentence as it would be printed alone.
+
+    **Punctuation is normalised here because two callers spell it differently.**
+    `_clauses` splits the printed text and keeps "step, only"; the grammar
+    rebuilds the sentence by joining its tokens and produces "step , only", the
+    comma having been a token of its own. The rows are written the printed way,
+    so a clause with a comma in it matched from one caller and not the other --
+    latent until now only because Nettling Imp, the single shipped card printing
+    one, is unsupported for reasons three sentences earlier.
+    """
+    cleaned = re.sub(r"\s+([,;])", r"\1", " ".join((clause or "").split()))
+    parts = [part for part in _CONJUNCTION.split(cleaned) if part]
+    if len(parts) < 2:
+        return [cleaned] if cleaned else []
+    verb = "activate " if parts[0].startswith("activate ") else ""
+    return [parts[0]] + [verb + part for part in parts[1:]]
+
+
+def _matching_entry(clause: str) -> "tuple[ActivationRestriction, re.Match[str]] | None":
+    """The one row that reads *clause*, with its match, or None.
+
+    One lookup for the gate and the enforcement, so a clause the gate calls
+    readable is the same clause -- and the same row -- the activation path then
+    asks. They used to loop the table separately, which is two answers to "which
+    rule is this sentence?" waiting to differ.
+    """
+    for entry in ACTIVATION_RESTRICTIONS:
+        match = entry.pattern.match(clause)
+        if match is None:
+            continue
+        if entry.payload_readable is not None and not entry.payload_readable(match):
+            continue
+        return entry, match
+    return None
+
+
 def _clauses(text: str) -> list[str]:
-    """Every printed "Activate only ..." sentence in *text*.
+    """Every printed "Activate only ..." restriction in *text*, one per rule.
 
     Sentences rather than lines: the clause is the tail of an ability line
     ("{1}{B}, {T}: Each opponent loses 2 life. Activate only if ..."), so a
@@ -575,7 +778,10 @@ def _clauses(text: str) -> list[str]:
             # printed clause with no row here refuse its card instead of being
             # dropped.
             if cleaned.startswith("activate ") or cleaned.startswith("only during"):
-                found.append(cleaned)
+                # Split here rather than at each of the three call sites: the
+                # gate, the enforcement and the per-turn cap all want the same
+                # list, and a sentence conjoining two rules is two entries in it.
+                found.extend(_conjuncts(cleaned))
     return found
 
 
@@ -584,9 +790,17 @@ def activation_restriction_line(sentence: str) -> bool:
 
     Read by the support gate and by `scripts/parse_coverage.py`, so what is
     enforced and what is claimed cannot drift.
+
+    **Every** conjunct, because a sentence conjoining two restrictions is two
+    restrictions: reading one and consuming the line would leave the other
+    unenforced, which is the failure this module was written for arriving
+    through the joining word instead of through a missing row.
     """
     cleaned = (sentence or "").strip().lower().rstrip(".")
-    return any(entry.pattern.match(cleaned) for entry in ACTIVATION_RESTRICTIONS)
+    conjuncts = _conjuncts(cleaned)
+    return bool(conjuncts) and all(
+        _matching_entry(clause) is not None for clause in conjuncts
+    )
 
 
 def unreadable_activation_clauses(oracle_text: str) -> list[str]:
@@ -610,18 +824,17 @@ def activation_denial(game, controller_index: int, source, ability_text: str) ->
     gate one ability with the other's rule.
     """
     for clause in _clauses(ability_text):
-        cleaned = clause.rstrip(".")
-        for entry in ACTIVATION_RESTRICTIONS:
-            match = entry.pattern.match(cleaned)
-            if match is None:
-                continue
-            legal = (
-                entry.is_legal(game, controller_index, source, match)
-                if entry.reads_payload
-                else entry.is_legal(game, controller_index, source)
-            )
-            if not legal:
-                return entry.denial
+        found = _matching_entry(clause.rstrip("."))
+        if found is None:
+            continue
+        entry, match = found
+        legal = (
+            entry.is_legal(game, controller_index, source, match)
+            if entry.reads_payload
+            else entry.is_legal(game, controller_index, source)
+        )
+        if not legal:
+            return entry.denial
     return None
 
 

@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 67.1% | 61.9% | 41.4% | 195 |
+| ICE *(measured)* | 373 | 601 | 67.6% | 62.4% | 41.9% | 198 |
 | **All (shipped)** | **2415** | **3404** | **85.8%** | **84.7%** | **52.4%** | **1544** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -39,7 +39,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 299 | 151 | expected a subject |  |
+| 296 | 148 | expected a subject |  |
 | 130 | 57 | unrecognized effect verb |  |
 | 83 | 49 | unconsumed text |  |
 | 40 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -157,6 +157,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{W}: Arcades Sabboth gets +0/+1 until end of turn.`
 - **Archfiend's Vessel**
   - `When this creature enters, if it entered from your graveyard or you cast it from your graveyard, exile it. If you do, create a 5/5 black Demon creature token with flying.`
+- **Arcum's Sleigh**
+  - `{2}, {T}: Target creature gains vigilance until end of turn. Activate only during combat and only if defending player controls a snow land.`
 - **Arena of the Ancients**
   - `When this artifact enters, tap all legendary creatures.`
 - **Arenson's Aura**
@@ -1178,6 +1180,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `At the beginning of your end step, if you gained 3 or more life this turn, create a 2/2 white Griffin creature token with flying.`
 - **Grim Tutor**
   - `Search your library for a card, put that card into your hand, then shuffle. You lose 3 life.`
+- **Grizzled Wolverine**
+  - `{R}: This creature gets +2/+0 until end of turn. Activate only during the declare blockers step, only if at least one creature is blocking this creature, and only once each turn.`
 - **Gwendlyn Di Corci**
   - `{T}: Target player discards a card at random. Activate only during your turn.`
 - **Halfdane**
@@ -1486,6 +1490,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{B}: Regenerate this creature.`
 - **Kjeldoran Elite Guard**
   - `{T}: Target creature gets +2/+2 until end of turn. When that creature leaves the battlefield this turn, sacrifice this creature. Activate only during combat.`
+- **Kjeldoran Guard**
+  - `{T}: Target creature gets +1/+1 until end of turn. When that creature leaves the battlefield this turn, sacrifice this creature. Activate only during combat and only if defending player controls no snow lands.`
 - **Kjeldoran Knight**
   - `{1}{W}: This creature gets +1/+0 until end of turn.`
   - `{W}{W}: This creature gets +0/+2 until end of turn.`

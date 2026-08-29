@@ -692,13 +692,13 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, twenty-five rounds in. 184 → 262 of 373 supported
-(70%), hollow lines 10 cards.** The set is still under `measured`, which is the
+**Where it stands: Phase 3, twenty-six rounds in. 184 → 265 of 373 supported
+(71%), hollow lines 10 cards.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
 
-**The remaining 111 are a long tail, and the shape is Legends' rather than
+**The remaining 108 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
@@ -716,6 +716,14 @@ vocabulary drifting from the registry both ways, a substring scan granting plain
 forestwalk from "snow forestwalk", a lowering emitting an amount key nothing
 read, and four damage branches dropping a printed rider. None had a failing test
 and none would have been found by reading the census.
+
+Round 26's is the first that points the *other* way and is worth keeping for
+that: two callers spelling one sentence differently, so a printed clause was
+readable from the raw text and not from the grammar's token rebuild. The
+direction is over-restriction — a card refused for a sentence the engine does in
+fact implement — which is the failure this journal had not yet seen, and it was
+hidden by a second refusal three sentences earlier on the only shipped card
+printing it.
 
 **Phase 1 (ingest and measure).** 383 printings, 373 unique cards, **346 new to
 the pool** — the largest set ingested and the first since M21 that is mostly new
@@ -1399,6 +1407,63 @@ in the other direction, a record with no reader rather than a reader with no
 record. Deleted rather than declared, because the sentences that follow reach
 the creature through the rescope.
 
+**Round 26 — a printed restriction clause is a conjunction of restrictions.
+262 → 265.**
+
+Arcum's Sleigh ("Activate only during combat and only if defending player
+controls a snow land"), Kjeldoran Guard (the same clause with "no snow lands")
+and Grizzled Wolverine ("Activate only during the declare blockers step, only if
+at least one creature is blocking this creature, and only once each turn"). Every
+other sentence on all three already compiled — Kjeldoran Guard's CR 603.7
+delayed sacrifice included — and each card was unsupported for its **last**
+sentence alone.
+
+CR 602.5 puts no limit on how many restrictions a clause states, and the cards
+print them as one sentence. `engine/activation_restrictions.py` read a clause
+whole, so a conjunction was a row of its own: three rows carried an optional
+`(?: and only once each turn)?` tail, which is **one row per pairing** — quadratic
+in the clauses that exist — and Speaker of the Heavens' "…7 life more than your
+starting life total **and only as a sorcery**" was a single row whose predicate
+read two rules under one name. `_conjuncts` splits the sentence and every
+conjunct must have a row, so the tails are gone, the life row is the life half
+alone, and the pairings a future card prints cost nothing. A conjunct no row
+reads makes the *whole* clause unreadable, which is what stops a card being
+admitted with half its sentence enforced.
+
+Beside it, one row where there were two hand-written ones: "only if <seat>
+controls <noun phrase>" with the seat, the noun and the polarity all payload —
+`combat_restrictions.py`'s choice about its land type, on this table. The phrase
+is read by the grammar's noun parser and answered by `subject_matches`, the same
+pair `static_bonuses._controls_noun_condition` uses for the identical phrase
+after "as long as", so a second reader of "a snow land" cannot disagree with the
+first about what one is. It absorbed `_control_a_creature_with_flying`
+(Celestial Enforcer), and the article is the quantifier: "a" is presence, "no"
+its negation, and a *threshold* ("two or more") refuses rather than being read as
+presence. A row ending in `.+` matches sentences it does not implement, so it
+declares a `payload_readable` and is unmatched where the phrase is one nothing
+can test — over-restriction is as silent as under-restriction, and this file's
+whole subject is the silent direction.
+
+CR 506.2 defines the defending player *during the combat phase*, so outside
+combat the clause is unanswerable rather than vacuously true and refuses in both
+polarities. `_resolve_defending_player_index` is the one reader — the other seat
+in a duel, and in a CR 802 multi-defender combat only once exactly one opponent
+is under attack — because a clause printed in the singular that no single seat
+answers must refuse rather than widen.
+
+**The defect: the two callers of this module spell the same sentence
+differently.** `_clauses` splits the printed oracle text and keeps "step, only";
+the grammar consumes the sentence token by token and rebuilds it with `" ".join`,
+producing "step , only" — the comma having been a token of its own. Every row is
+written the printed way, so a clause with a comma inside it matched from one
+caller and not the other: the gate would call it readable and the parser would
+refuse the line, or the reverse, depending on which asked. It has been latent
+since the row was added, because Nettling Imp is the only shipped card printing
+one and it is unsupported three sentences earlier — the refusal that hides a
+second refusal behind it. Grizzled Wolverine is the card that reaches the clause
+with everything before it working. Normalised in `_conjuncts`, which is the one
+place both callers now pass through.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,
@@ -1421,9 +1486,9 @@ ingest, because the ingest round's own engine fixes moved it — Phase 1 says to
 treat what the suite surfaces on a new set as yield, and that gap is the yield.
 
 **Where the pool stands** (regenerate rather than trust these): 1,162 unique
-cards over **10** sets, 100% supported. Grammar parses 85.7% of lines and
-executes 52.3% (`GRAMMAR_COVERAGE.md`). 6.4% of supported cards carry a
-name-keyed hook, 80 entries in **6** registries (`HOOK_RELIANCE.md`) — the
+cards over **10** sets, 100% supported. Grammar parses 85.8% of lines and
+executes 52.4% (`GRAMMAR_COVERAGE.md`). 6.3% of supported cards carry a
+name-keyed hook, 79 entries in **6** registries (`HOOK_RELIANCE.md`) — the
 number that decides whether this architecture reaches 26,113 cards.
 `RULES_PROGRESS.md` is the CR coverage tracker. `CARD_VERIFICATION.md` is a log,
 not a target — see the accepted-backlog decision above.

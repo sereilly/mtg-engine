@@ -21,10 +21,55 @@ from engine.activation_restrictions import (
 )
 from engine.card_loader import load_catalog
 from engine.named_counters import add_counters
-from engine.models import Permanent, PlayerState
+from engine.models import CardDefinition, Permanent, PlayerState
 from tests.helpers import _nosick
 
 _CATALOG = {c.name: c for c in load_catalog()}
+
+
+def _clause_card(clause: str) -> CardDefinition:
+    """An artifact whose one ability prints *clause* as its restriction.
+
+    Invented rather than named, because these rows are templates: the seat, the
+    noun phrase and the polarity are payload, so a test driven from one card
+    would demonstrate that card and not the row. The per-card tests for the
+    printings live in ``tests/sets/``.
+    """
+    text = f"{{T}}: You gain 1 life. {clause}"
+    return CardDefinition(
+        name="Clause Engine",
+        mana_cost="{1}",
+        cmc=1.0,
+        type_line="Artifact",
+        oracle_text=text,
+        colors=(),
+        color_identity=(),
+        keywords=(),
+        produced_mana=(),
+        raw={"name": "Clause Engine", "type_line": "Artifact"},
+    )
+
+
+def _land(snow: bool) -> CardDefinition:
+    """A Plains, with or without CR 205.4a's snow supertype.
+
+    Invented for the reason the clause card is: the shipped pool has no snow
+    land — they arrive with Ice Age, which is still `measured` — and this row is
+    a template over any noun phrase, not over that set's five basics.
+    """
+    type_line = f"Basic {'Snow ' if snow else ''}Land — Plains"
+    return CardDefinition(
+        name="Snowy Plains" if snow else "Bare Plains",
+        mana_cost="",
+        cmc=0.0,
+        type_line=type_line,
+        oracle_text="({T}: Add {W}.)",
+        colors=(),
+        color_identity=("W",),
+        keywords=(),
+        produced_mana=("W",),
+        raw={"name": "Snowy Plains" if snow else "Bare Plains", "type_line": type_line},
+    )
 
 
 def _board(card_name: str, *, extra=()):
@@ -316,3 +361,163 @@ def test_602_5_a_printed_cap_above_one_is_the_same_clause_with_a_number():
     )
     game.turn += 1
     assert activation_denial(game, 0, bats, line) is None
+
+
+# ---------------------------------------------------------------------------
+# ICE round 26: a printed clause is a *conjunction* of restrictions.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("602.5")
+def test_602_5_a_conjoined_clause_is_every_restriction_it_names():
+    """"Activate only during combat and only if defending player controls a
+    snow land." (Arcum's Sleigh.) Two rules in one sentence, and CR 602.5 puts
+    no limit on how many: Grizzled Wolverine prints three, joined by commas.
+
+    Asked of the splitter rather than of a card, because the property is about
+    the sentence and a card can only demonstrate the pairing it happens to
+    print.
+    """
+    from engine.activation_restrictions import _conjuncts
+
+    assert _conjuncts(
+        "activate only during combat and only if defending player controls a snow land"
+    ) == [
+        "activate only during combat",
+        "activate only if defending player controls a snow land",
+    ]
+    assert _conjuncts(
+        "activate only during the declare blockers step, only if at least one "
+        "creature is blocking this creature, and only once each turn"
+    ) == [
+        "activate only during the declare blockers step",
+        "activate only if at least one creature is blocking this creature",
+        "activate only once each turn",
+    ]
+
+
+@pytest.mark.cr("602.5")
+def test_602_5_a_comma_that_does_not_start_a_new_restriction_is_not_a_join():
+    """"Activate only during an opponent's turn, before attackers are declared."
+    (Nettling Imp.) One rule with a comma in it — the separator is a comma or
+    "and" *followed by another "only"*, which is what keeps this sentence whole.
+
+    The same test covers the punctuation the two callers spell differently: the
+    grammar rebuilds a sentence by joining its tokens and produces "turn ,
+    before", where `_clauses` splits the printed text and keeps "turn, before".
+    Both must reach the same row.
+    """
+    from engine.activation_restrictions import _conjuncts, activation_restriction_line
+
+    printed = "activate only during an opponent's turn, before attackers are declared"
+    tokenised = "activate only during an opponent's turn , before attackers are declared"
+
+    assert _conjuncts(printed) == [printed]
+    assert activation_restriction_line(printed)
+    assert activation_restriction_line(tokenised)
+
+
+@pytest.mark.cr("602.5")
+def test_602_5_a_conjunct_no_row_reads_makes_the_whole_clause_unreadable():
+    """Half a sentence enforced is the failure this module exists for. A clause
+    conjoining a rule the table knows with one it does not must be unreadable,
+    so its card is unsupported rather than admitted with the second half
+    dropped."""
+    from engine.activation_restrictions import activation_restriction_line
+
+    assert activation_restriction_line("Activate only during combat.")
+    assert not activation_restriction_line(
+        "Activate only during combat and only if the moon is full."
+    )
+
+
+@pytest.mark.cr("602.5", "506.2")
+@pytest.mark.parametrize(
+    "clause, snow_on_defender, allowed",
+    [
+        ("Activate only if defending player controls a snow land", True, True),
+        ("Activate only if defending player controls a snow land", False, False),
+        ("Activate only if defending player controls no snow lands", True, False),
+        ("Activate only if defending player controls no snow lands", False, True),
+    ],
+)
+def test_602_5_a_board_clause_reads_a_seat_a_noun_and_a_polarity(
+    clause, snow_on_defender, allowed
+):
+    """"…only if defending player controls a snow land" (Arcum's Sleigh) and
+    "…controls no snow lands" (Kjeldoran Guard) are **one row**: the seat, the
+    noun phrase and the polarity are payload.
+
+    CR 506.2 makes the nonactive player the defending player during combat, so
+    the board scanned is that seat's rather than the activator's. Driven from an
+    invented card rather than either printing, because what is being checked is
+    the template — the two cards that print it are in ``tests/sets/``.
+    """
+    card = _clause_card(f"{clause}.")
+    source = Permanent(card=card)
+    p1 = PlayerState(name="P1", battlefield=[source])
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=_land(snow_on_defender))], life=20
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    game._sync_control()
+    _nosick(source)
+
+    denial = activation_denial(game, 0, source, card.oracle_text)
+
+    assert (denial is None) is allowed, denial
+
+
+@pytest.mark.cr("602.5", "506.2")
+def test_602_5_no_defending_player_refuses_rather_than_answering_vacuously():
+    """CR 506.2 defines the defending player *during the combat phase*, so
+    outside combat the clause has nothing to ask about.
+
+    Refusing is the direction that cannot widen: read as vacuously true,
+    "…controls no snow lands" would be satisfied every main phase — a
+    restriction lifted on a board that does not exist. Both polarities refuse,
+    which is the point: the question is unanswerable, not answered "no".
+    """
+    for clause in (
+        "Activate only if defending player controls a snow land.",
+        "Activate only if defending player controls no snow lands.",
+    ):
+        card = _clause_card(clause)
+        source = Permanent(card=card)
+        p1 = PlayerState(name="P1", battlefield=[source])
+        p2 = PlayerState(name="P2", battlefield=[], life=20)
+        game = Game(players=[p1, p2])
+        game.active_player_index = 0
+        game.current_turn_phase = "precombat_main"
+        game.current_step = "precombat_main"
+        game._sync_control()
+
+        assert activation_denial(game, 0, source, card.oracle_text) is not None, clause
+
+
+@pytest.mark.cr("602.5")
+def test_602_5_a_board_clause_whose_noun_nothing_can_test_is_unreadable():
+    """The row ends in ``.+``, so it matches sentences it does not implement.
+    A phrase the noun parser cannot read, or one carrying a key
+    ``subject_matches`` cannot test, must leave the clause **unreadable** — the
+    predicate would otherwise answer "no" for every board, which is a
+    restriction nothing satisfies wearing the card's words.
+    """
+    from engine.activation_restrictions import activation_restriction_line
+
+    assert activation_restriction_line("Activate only if you control a snow Mountain.")
+    assert activation_restriction_line(
+        "Activate only if defending player controls no snow lands."
+    )
+    assert not activation_restriction_line(
+        "Activate only if you control the highest life total."
+    )
+    # A *threshold* is not a presence test, and must not be read as one: "two or
+    # more" silently answered as "at least one" is a restriction lifted early.
+    assert not activation_restriction_line(
+        "Activate only if you control two or more snow lands."
+    )
