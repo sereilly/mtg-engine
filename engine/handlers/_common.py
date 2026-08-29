@@ -385,7 +385,16 @@ def evaluate_count(
                 seen.update(permanent_effective_colors(perm))
             return _scaled(len(seen), spec)
         return _scaled(len(matched), spec)
-    cards = getattr(owner, zone, None)
+    # "the number of creature cards in **all graveyards**" (Lhurgoyf). Every
+    # player's copy of the zone rather than one player's, which is a property of
+    # the printed phrase and so rides the spec — the same key that already says
+    # "your graveyard". A caller that names no owner still gets the one it
+    # passed, so nothing that worked changes.
+    if spec.get("owner") == "all":
+        piles = [getattr(player, zone, None) for player in game.players]
+        cards = [card for pile in piles if pile is not None for card in pile]
+    else:
+        cards = getattr(owner, zone, None)
     if cards is None:
         return 0
     matched_cards = [card for card in cards if _card_matches_filter(card, filt)]

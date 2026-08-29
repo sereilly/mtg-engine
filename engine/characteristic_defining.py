@@ -200,6 +200,66 @@ def _attacking_split_land_count(match: re.Match) -> dict[str, object]:
     }
 
 
+def _snow_land_count(match: re.Match) -> dict[str, object]:
+    """Drift of the Dead: "…equal to the number of **snow lands** you control."
+
+    A land count narrowed by a **supertype** rather than a subtype (CR 205.4),
+    which is one more payload key rather than one more counter: "snow Swamps"
+    is the same sentence with both narrowings, and the counter asks
+    `subject_matches` about each.
+    """
+    payload: dict[str, object] = {
+        "count": "land", "scope": "you", "supertype": match.group("supertype"),
+    }
+    if match.group("land_type"):
+        payload["land_type"] = match.group("land_type")
+    return payload
+
+
+def _all_graveyards_type_count(match: re.Match) -> dict[str, object]:
+    """Lhurgoyf: "…power is equal to the number of creature cards in **all
+    graveyards** and its toughness is equal to **that number plus 1**."
+
+    Two clauses in one row for the reason Angry Mob's and Gaea's Liege's are:
+    a rule claiming the first would leave the second unread, and Lhurgoyf is
+    printed */1+* — the toughness clause is half the card. What it adds is a
+    printed constant, so it rides the payload as `toughness_plus`.
+
+    Counted through ``evaluate_count`` like Kinetic Augur's row, because the
+    objects are cards in a zone and have no computed characteristics at all
+    (CR 613.1) — a different question of a different matcher.
+    """
+    types = [word.strip() for word in match.group("types").split(" and ")]
+    return {
+        "defines": "power",
+        "toughness_plus": int(match.group("plus")),
+        "count_spec": {
+            "zone": "graveyard",
+            "owner": "all",
+            "filter": {"type_filter": types},
+        },
+    }
+
+
+def _other_subtype_count(match: re.Match) -> dict[str, object]:
+    """Pestilence Rats: "…power is equal to the number of **other Rats** on the
+    battlefield."
+
+    Every battlefield (the sentence names no controller), the source itself
+    excluded — which is what "other" means (CR 109.5) and is why it is a
+    separate key rather than a subtype filter that would count the Rat asking.
+    The printed toughness stands (Pestilence Rats is */3), exactly as it does
+    for Kinetic Augur.
+    """
+    return {
+        "defines": "power",
+        "count": "subtype",
+        "subtype": match.group("subtype"),
+        "scope": "all",
+        "exclude_self": True,
+    }
+
+
 # (pattern, payload builder). Ordered: the attacking-split form contains a
 # plain land-count clause as its first half, so it must be tried first or the
 # generic pattern would claim half the line and drop the rest — the dropped-
@@ -284,6 +344,33 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
             r"each (?P<otherwise>\d+)$"
         ),
         _turn_split_land_count,
+    ),
+    (
+        # Drift of the Dead. Read before the plain land row below, which its
+        # tail is a suffix of: matched there, "snow" would be dropped and the
+        # Wall would count every land.
+        re.compile(
+            rf"^{_SUBJECT} {_PT} (?P<supertype>snow) "
+            rf"(?:(?P<land_type>{_LAND_ALTERNATION})s|lands) you control$"
+        ),
+        _snow_land_count,
+    ),
+    (
+        # Lhurgoyf.
+        re.compile(
+            rf"^{_SUBJECT} power is equal to the number of "
+            r"(?P<types>[a-z]+(?: and [a-z]+)*) cards in all graveyards and "
+            r"its toughness is equal to that number plus (?P<plus>\d+)$"
+        ),
+        _all_graveyards_type_count,
+    ),
+    (
+        # Pestilence Rats.
+        re.compile(
+            rf"^{_SUBJECT} power is equal to the number of other "
+            r"(?P<subtype>[a-z]+)s on the battlefield$"
+        ),
+        _other_subtype_count,
     ),
     (
         # Keldon Warlord, and the unqualified "creatures you control" form.

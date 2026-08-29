@@ -135,10 +135,29 @@ def _count_dynamic_pt(
     excluded = payload.get("exclude_type")
     land_type = payload.get("land_type")
     card_type = payload.get("card_type")
+    # "the number of **snow** lands you control" (Drift of the Dead). A
+    # supertype (CR 205.4), which no layer computes — the effective type line
+    # is the whole answer, and `printed_supertypes` is the reader every other
+    # supertype question in the engine goes through.
+    supertype = payload.get("supertype")
+    # "the number of **other** Rats on the battlefield" (Pestilence Rats): the
+    # source itself is excluded by identity (CR 109.5), never by name — a
+    # second Rat with the same name is a different permanent.
+    subtype = payload.get("subtype")
+    exclude_self = bool(payload.get("exclude_self"))
 
     total = 0
     for battlefield in battlefields:
         for perm in battlefield:
+            if supertype is not None:
+                from ..layer_bridge import printed_supertypes
+
+                if supertype not in printed_supertypes(
+                    perm.effective_card.type_line
+                ):
+                    continue
+            if exclude_self and perm is permanent:
+                continue
             if what == "land":
                 # No ``land_type`` on the payload is the unnarrowed printing —
                 # "the number of lands you control" — so the question is the
@@ -153,6 +172,10 @@ def _count_dynamic_pt(
                 total += perm.card.name == permanent.card.name
             elif what == "card_type":
                 total += bool(card_type and perm.has_type(str(card_type)))
+            elif what == "subtype":
+                # Through `has_type` like every other type question here, so a
+                # creature *given* the subtype counts (CR 613 layer 4).
+                total += bool(subtype and perm.has_type(str(subtype)))
     # "…equal to **1 plus** the number of …" (Gaea's Avenger). A printed
     # constant added to the tally, on the payload because it is part of the
     # sentence rather than part of the counting — a card printed "2 plus" is
@@ -884,7 +907,19 @@ class PermanentStateMixin:
                 if complement is not None:
                     set_base_pt(permanent, value, max(0, int(complement) - value))
                 elif dynamic_pt.payload.get("defines") == "power":
-                    set_base_pt(permanent, value, None)
+                    # "…and its toughness is equal to **that number plus 1**"
+                    # (Lhurgoyf, printed */1+*). Derived from the same value
+                    # rather than counted again — the same reason Shapeshifter's
+                    # complement is one number and not a second template — so a
+                    # card printed "plus 2" is this row with a different
+                    # payload. Absent, the printed toughness stands (Kinetic
+                    # Augur is */4), which is what the None says.
+                    bonus = dynamic_pt.payload.get("toughness_plus")
+                    set_base_pt(
+                        permanent,
+                        value,
+                        None if bonus is None else value + int(bonus),
+                    )
                 elif dynamic_pt.payload.get("defines") == "toughness":
                     # "…**toughness** is equal to the number of Forests you
                     # control" (People of the Woods, a 0/*). The mirror of the

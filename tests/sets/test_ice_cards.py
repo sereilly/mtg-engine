@@ -567,3 +567,61 @@ def test_blinking_spirit_bounces_itself(set_pool):
 
     assert spirit not in p1.battlefield
     assert [c.name for c in p1.hand] == ["Blinking Spirit"]
+
+
+# --- Round 9: characteristic-defining P/T (CR 604.3) ---
+
+
+def test_drift_of_the_dead_counts_snow_lands_only(set_pool):
+    """"…power and toughness are each equal to the number of **snow** lands you
+    control." A supertype narrowing the land count (CR 205.4), which no layer
+    computes — the effective type line is the whole answer."""
+    pool = set_pool("ICE")
+
+    def _drift_on(*land_names: str) -> Permanent:
+        drift = Permanent(card=pool["Drift of the Dead"])
+        lands = [Permanent(card=pool[name]) for name in land_names]
+        p1 = PlayerState(name="P1", battlefield=[drift, *lands], life=20)
+        Game(players=[p1, PlayerState(name="P2", life=20)])._refresh_dynamic_creatures()
+        return drift
+
+    bare = _drift_on()
+    assert (bare.effective_power, bare.effective_toughness) == (0, 0)
+
+    # The plain Forest must not count, which is the whole of the supertype.
+    snowy = _drift_on("Snow-Covered Swamp", "Snow-Covered Forest", "Forest")
+    assert (snowy.effective_power, snowy.effective_toughness) == (2, 2)
+
+
+def test_lhurgoyf_counts_every_graveyard_and_its_toughness_is_that_plus_one(set_pool):
+    """Lhurgoyf is printed */1+*, so the toughness clause is half the card — and
+    "in **all** graveyards" is every player's, not the controller's."""
+    pool = set_pool("ICE")
+    lhurgoyf = Permanent(card=pool["Lhurgoyf"])
+    p1 = PlayerState(
+        name="P1", battlefield=[lhurgoyf],
+        graveyard=[pool["Balduvian Bears"], pool["Moor Fiend"]], life=20,
+    )
+    p2 = PlayerState(
+        name="P2", graveyard=[pool["Balduvian Bears"], pool["Icequake"]], life=20,
+    )
+    game = Game(players=[p1, p2])
+    game._refresh_dynamic_creatures()
+
+    # Three creature cards across both graveyards; Icequake is a sorcery.
+    assert (lhurgoyf.effective_power, lhurgoyf.effective_toughness) == (3, 4)
+
+
+def test_pestilence_rats_counts_the_other_rats(set_pool):
+    """"…the number of **other** Rats on the battlefield" — the source excluded
+    by identity (CR 109.5), and the printed toughness (3) left standing."""
+    pool = set_pool("ICE")
+    first = Permanent(card=pool["Pestilence Rats"])
+    second = Permanent(card=pool["Pestilence Rats"])
+    p1 = PlayerState(name="P1", battlefield=[first], life=20)
+    p2 = PlayerState(name="P2", battlefield=[second], life=20)
+    game = Game(players=[p1, p2])
+    game._refresh_dynamic_creatures()
+
+    assert (first.effective_power, first.effective_toughness) == (1, 3)
+    assert (second.effective_power, second.effective_toughness) == (1, 3)

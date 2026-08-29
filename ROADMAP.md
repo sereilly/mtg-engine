@@ -944,6 +944,24 @@ helpers. The boundary is the file's own — the rest of `zones` decides where an
 object *goes* when something puts it somewhere, while a return also names where
 it comes **from**, and it is the pair of zones that picks the handler.
 
+**Round 9 — three characteristic-defining P/Ts (CR 604.3). 232 → 235.**
+
+Drift of the Dead, Lhurgoyf and Pestilence Rats, all three through the one
+`dynamic_pt_count` instruction and its one counter — three rows in the pattern
+table and three payload keys, no new dispatch. Each key is a parameter the
+sentence prints rather than a template:
+
+* `supertype` — "the number of **snow** lands you control". No layer computes a
+  supertype (CR 205.4), so the effective type line is the whole answer, through
+  the same `printed_supertypes` reader landwalk uses.
+* `toughness_plus` — Lhurgoyf is printed **\*/1+\***, so "its toughness is
+  equal to that number plus 1" is half the card. Derived from the same value
+  rather than counted twice, which is what makes it a number instead of a
+  second template.
+* `owner: "all"` on a zone count — "in **all** graveyards" is every player's,
+  and `evaluate_count` only knew one player's. `exclude_self` covers "other
+  Rats", by identity rather than by name.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,
