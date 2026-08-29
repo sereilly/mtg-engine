@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 65.2% | 60.1% | 39.6% | 188 |
+| ICE *(measured)* | 373 | 601 | 65.9% | 60.7% | 40.3% | 190 |
 | **All (shipped)** | **2415** | **3404** | **85.8%** | **84.7%** | **52.4%** | **1544** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -41,7 +41,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | ---: | ---: | --- | --- |
 | 301 | 153 | expected a subject |  |
 | 130 | 57 | unrecognized effect verb |  |
-| 87 | 53 | unconsumed text |  |
+| 83 | 49 | unconsumed text |  |
 | 40 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 11 | 8 | expected 'a' |  |
@@ -1275,6 +1275,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Hurricane deals X damage to each creature with flying and each player.`
 - **Hyalopterous Lemure**
   - `{0}: This creature gets -1/-0 and gains flying until end of turn.`
+- **Hydroblast**
+  - `• Counter target spell if it's red.`
+  - `• Destroy target permanent if it's red.`
 - **Hymn of Rebirth**
   - `Put target creature card from a graveyard onto the battlefield under your control.`
 - **Hyperion Blacksmith**
@@ -2052,6 +2055,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `When this creature enters, draw a card at the beginning of the next turn's upkeep.`
 - **Pyramids**
   - `• Destroy target Aura attached to a land.`
+- **Pyroblast**
+  - `• Counter target spell if it's blue.`
+  - `• Destroy target permanent if it's blue.`
 - **Pyroclasm**
   - `Pyroclasm deals 2 damage to each creature.`
 - **Pyrotechnics**

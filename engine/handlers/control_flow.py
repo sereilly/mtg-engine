@@ -382,6 +382,45 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             any(name in card.type_line.lower() for name in wanted) for card in cards
         )
 
+    if kind == "target_is_color":
+        # "Counter target spell **if it's red**." (Hydroblast, Pyroblast.)
+        # CR 608.2c: the colour is read while the instruction is followed, not
+        # when the target was chosen — so a spell that was red at announcement
+        # and is not now goes uncountered, and the picker offers every spell
+        # because "target spell" is the whole of the printed restriction
+        # (CR 608.2b).
+        #
+        # Which object the pronoun names was decided at lowering, off the
+        # effect this guards, and the two halves are resolved by the readers
+        # those effects use: a counter reads `context.stack_target`, a destroy
+        # resolves the chosen permanent. Asking one and falling back to the
+        # other would answer about whatever object happened to be in reach.
+        wanted = payload.get("color")
+        if payload.get("target") == "spell":
+            chosen = context.stack_target
+            colors = (
+                game._stack_item_colors(chosen)
+                if chosen is not None and chosen in game.stack
+                else ()
+            )
+        else:
+            from ._common import permanent_effective_colors, resolve_target_permanent
+
+            target = resolve_target_permanent(
+                game, context,
+                predicate=lambda perm: True,
+                fallback_players=(),
+                fallback_on_invalid_choice=False,
+            )
+            colors = permanent_effective_colors(target) if target is not None else ()
+        # An object that is gone answers no to both readings, rather than
+        # letting the negated one say yes about something that is not there —
+        # the same call the keyword condition below makes.
+        if not colors and payload.get("negated"):
+            return False
+        matched = wanted in colors
+        return (not matched) if payload.get("negated") else matched
+
     if kind == "target_has_keyword":
         # "If it doesn't have rampage" (Rapid Fire). Asked of the same target
         # the grant beside it resolves against, and through the same resolver,

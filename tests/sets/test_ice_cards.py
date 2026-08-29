@@ -1165,3 +1165,103 @@ def test_lim_duls_cohort_denies_regeneration_to_what_it_blocks(set_pool):
     game._settle()
 
     assert attacker not in p1.battlefield, "2 damage is lethal and unregenerable"
+
+
+# --- Round 22: "if it's <colour>" — the colour is payload, the pronoun is not ---
+
+
+def _blast_board(set_pool, blast: str, spell: str, **cast):
+    """Seat 0 holding *blast*, with seat 1's *spell* already on the stack."""
+    pool = set_pool("ICE")
+    library = [pool["Balduvian Bears"] for _ in range(5)]
+    p1 = PlayerState(name="P1", hand=[pool[blast]], library=library, life=20)
+    p2 = PlayerState(name="P2", hand=[pool[spell]], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.queue_from_hand(1, spell, **cast)
+    assert [item.card.name for item in game.stack] == [spell]
+    return game
+
+
+def test_hydroblast_counters_a_red_spell(set_pool):
+    """"Counter target spell **if it's red**." CR 608.2c: the colour is read
+    while the instruction is followed, so the clause lowers to an `if_then`
+    over the ordinary counter rather than to a colour narrowing on it."""
+    game = _blast_board(set_pool, "Hydroblast", "Incinerate", target_player_index=0)
+
+    game.cast_from_hand(0, "Hydroblast", mode_index=0, target_stack_index=0)
+    game.resolve_stack()
+    game._settle()
+
+    assert game.players[0].life == 20, "the burn never resolved"
+    assert "Incinerate" in [c.name for c in game.players[1].graveyard]
+
+
+def test_hydroblast_may_target_a_spell_it_cannot_counter(set_pool):
+    """The half that separates this from "counter target **red** spell".
+
+    "Target spell" is the whole of the printed restriction (CR 608.2b), so a
+    blue spell is a legal target and Hydroblast simply does nothing to it —
+    where a colour narrowing on the counter would have refused the cast and
+    narrowed the picker. Lowering it as `counter_top_stack_spell` with a
+    `color_filter` would have been the smaller diff and the wrong card.
+    """
+    game = _blast_board(
+        set_pool, "Hydroblast", "Ray of Erasure", target_player_index=0
+    )
+
+    game.cast_from_hand(0, "Hydroblast", mode_index=0, target_stack_index=0)
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.stack
+    # The blue spell resolved: its mill took a card off the library it named.
+    assert len(game.players[0].library) == 4
+    assert "Balduvian Bears" in [c.name for c in game.players[0].graveyard]
+    assert "Ray of Erasure" in [c.name for c in game.players[1].graveyard]
+
+
+def test_pyroblast_destroys_a_blue_permanent_and_spares_the_rest(set_pool):
+    """The second mode, and the colour read off a *permanent* rather than a
+    spell. Same printed condition, different half of the resolution context —
+    which is why the referent is bound at lowering, from the effect beside it,
+    rather than guessed at resolution."""
+    pool = set_pool("ICE")
+
+    def _destroys(victim: str) -> bool:
+        target = Permanent(card=pool[victim])
+        p1 = PlayerState(name="P1", hand=[pool["Pyroblast"]], life=20)
+        p2 = PlayerState(name="P2", battlefield=[target], life=20)
+        game = Game(players=[p1, p2])
+        game.enforce_mana_costs = False
+        game.cast_from_hand(
+            0, "Pyroblast", mode_index=1,
+            target_player_index=1, target_permanent_index=0,
+        )
+        game._settle()
+        return target not in p2.battlefield
+
+    assert _destroys("Illusionary Wall")      # blue
+    assert not _destroys("Balduvian Bears")   # red
+
+
+def test_the_two_blasts_differ_only_by_the_colour_in_the_payload(set_pool):
+    """One production, two cards. The colour is a payload symbol — the spelling
+    every filter and colour accessor in the engine already uses — so a third
+    card printing "if it's white" needs no parser change at all."""
+    pool = set_pool("ICE")
+    conditions = {}
+    for name in ("Hydroblast", "Pyroblast"):
+        program = compile_card_oracle(pool[name])
+        conditions[name] = [
+            mode.instruction.payload["condition"] for mode in program.modes
+        ]
+
+    assert conditions["Hydroblast"] == [
+        {"kind": "target_is_color", "color": "R", "negated": False, "target": "spell"},
+        {"kind": "target_is_color", "color": "R", "negated": False, "target": "permanent"},
+    ]
+    assert conditions["Pyroblast"] == [
+        {"kind": "target_is_color", "color": "U", "negated": False, "target": "spell"},
+        {"kind": "target_is_color", "color": "U", "negated": False, "target": "permanent"},
+    ]

@@ -142,15 +142,24 @@ def _cant_be_enchanted_by_auras(perm) -> bool:
 # restriction than the kind alone (a tapped/coloured destroy, a non-Wall attack
 # mark). The enumerator gates candidates through these so an ability offers
 # exactly what it could legally affect, matching its resolution.
-def _targeting_instruction(instruction):
+def targeting_instruction(instruction):
     """The instruction inside *instruction* that actually names a target.
 
     An ability's own instruction may be a control-flow wrapper — Lesser
-    Werewolf's whole sentence is an ``if_then`` — and the per-kind filter check
-    below reads the *targeting* instruction, so a wrapper handed to it looks
-    like a kind with no filter and every restriction the card printed is
-    dropped. The same recursion ``engine/targeting.py`` already does to derive
-    the spec: the two must agree, or the picker offers what the gate refuses.
+    Werewolf's whole sentence is an ``if_then``, and Hydroblast's two modes are
+    each one — and the per-kind filter check below reads the *targeting*
+    instruction, so a wrapper handed to it looks like a kind with no filter and
+    every restriction the card printed is dropped. The same recursion
+    ``engine/targeting.py`` already does to derive the spec: the two must
+    agree, or the picker offers what the gate refuses.
+
+    **Public because the web layer asks it too.** `web/serialization.py` derives
+    a modal mode's picker kind from the mode's instruction, and it read the kind
+    off the wrapper — a second descent that was not one. A mode wrapped in an
+    `if_then` fell past every branch of that table to its "designates a player"
+    default, so Hydroblast would have offered a *player* as the target of
+    "counter target spell". One reader, asked twice, is what stops the picker
+    and the gate describing different cards.
     """
     from .targeting import _nested_steps
 
@@ -178,7 +187,7 @@ def _targeting_instruction(instruction):
     if isinstance(instruction.payload.get("targets"), dict):
         return instruction
     for step in _nested_steps(instruction):
-        found = _targeting_instruction(step)
+        found = targeting_instruction(step)
         if found is not None:
             return found
     return None
@@ -655,7 +664,7 @@ class LegalityMixin:
         # Pyramids' "attached to a land". Reading it off the ability that
         # supplied the spec is what keeps a two-ability permanent from narrowing
         # one ability's prompt with the other ability's filter.
-        ability_instruction = _targeting_instruction(
+        ability_instruction = targeting_instruction(
             getattr(spec_ability, "instruction", None)
         )
         spec["requires_target"] = spec["kind"] != "none"
@@ -733,7 +742,7 @@ class LegalityMixin:
             spec["requires_target"] = spec["kind"] != "none"
             valid = self._enumerate_targets(
                 controller_index, card, spec, for_cast=False,
-                ability_instruction=_targeting_instruction(mode_instruction),
+                ability_instruction=targeting_instruction(mode_instruction),
                 source_permanent=source_permanent,
                 ability_source=source_permanent,
             )
@@ -788,7 +797,7 @@ class LegalityMixin:
             # ``_validate_cast_targets`` and an activation has nothing of the
             # sort — so the whole announcement is checked here, through the very
             # walk the picker was built from.
-            ability_instruction = _targeting_instruction(instruction)
+            ability_instruction = targeting_instruction(instruction)
             refused = f"no valid target for {card.name}"
             named = [
                 self.permanent_by_id(pid)
@@ -824,7 +833,7 @@ class LegalityMixin:
             # a *named* target still has to be legal, which the per-kind pickers
             # and the resolution already check for these.
             return None
-        ability_instruction = _targeting_instruction(instruction)
+        ability_instruction = targeting_instruction(instruction)
         valid = self._enumerate_targets(
             controller_index, card, spec, for_cast=False,
             ability_instruction=ability_instruction,

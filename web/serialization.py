@@ -15,7 +15,7 @@ import re
 
 from engine import Game
 from engine.activation_permissions import card_widens_activation
-from engine.legality import cast_target_kind
+from engine.legality import cast_target_kind, targeting_instruction
 from engine.models import Permanent, PlayerState
 from engine.layer_bridge import displayed_type_line
 from engine.library_top import top_is_public
@@ -409,7 +409,16 @@ def _serialize_modes(card, game: Game | None = None, caster_index: int | None = 
         return []
     modes = []
     for index, mode in enumerate(program.modes):
-        kind = _mode_target_kind(mode.instruction)
+        # Unwrapped once, here, and both readers below get the instruction that
+        # actually names a target. A mode may be a control-flow wrapper —
+        # Hydroblast's "Counter target spell **if it's red**" is a whole
+        # `if_then` — and reading the kind off the wrapper fell past every
+        # branch of `_mode_target_kind` to its "designates a player" default.
+        # `targeting_instruction` is the engine's own descent, the one
+        # `legality.py`'s gate asks, so the picker and the gate cannot describe
+        # different cards.
+        instruction = targeting_instruction(mode.instruction) or mode.instruction
+        kind = _mode_target_kind(instruction)
         entry = {
             "index": index,
             "label": mode.label,
@@ -418,7 +427,7 @@ def _serialize_modes(card, game: Game | None = None, caster_index: int | None = 
         }
         if game is not None and caster_index is not None and kind not in ("none",):
             entry["valid_targets"] = game.enumerate_targets_for_kind(
-                caster_index, card, kind, **_mode_target_flags(mode.instruction)
+                caster_index, card, kind, **_mode_target_flags(instruction)
             )
         else:
             entry["valid_targets"] = []

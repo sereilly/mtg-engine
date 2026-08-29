@@ -692,13 +692,13 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, twenty-one rounds in. 184 → 254 of 373 supported
-(68%), hollow lines 10 cards.** The set is still under `measured`, which is the
+**Where it stands: Phase 3, twenty-two rounds in. 184 → 256 of 373 supported
+(69%), hollow lines 10 cards.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
 
-**The remaining 119 are a long tail, and the shape is Legends' rather than
+**The remaining 117 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
@@ -1234,6 +1234,43 @@ node. `lowering/_amounts.py` took the counted quantities out of
 the family rule is that families do not import each other. That is
 `ast/_primitives.py`'s argument exactly, and it is the answer whenever a leaf
 turns out to be what a family needs.
+
+**Round 22 — "if it's <colour>", where the colour is payload and the pronoun
+is not. 254 → 256.**
+
+Hydroblast and Pyroblast: one printed template, mirrored by a colour word, and
+both halves of each card already lowered. What was missing was the trailing
+condition — which the grammar has read since "destroy target creature **if it
+has flying**", so the whole card is one condition node, one lowering and one
+evaluator branch, with the colour riding as the symbol every filter in the
+engine already uses. A third card printing "if it's white" needs no parser
+change.
+
+**The pronoun is the part that does not generalise, and that is the design.**
+"Counter target spell if it's red" and "Destroy target permanent if it's red"
+print the *identical* condition about a spell on the stack and a permanent on
+the battlefield — two objects resolved from different halves of the resolution
+context, with nothing in the condition's own words to separate them. So the
+referent is read off the effect the clause guards (`pronoun_target_referent`),
+at the one point where CR 608.2c's single sentence has both its halves in view,
+and an unbound referent **refuses**. A resolver that asked one half and fell
+back to the other would have answered about whichever object happened to be in
+reach — which is the bug `target_has_keyword` beside it already names.
+
+Lowering the counter as `counter_top_stack_spell` with a `color_filter` was the
+smaller diff and the wrong card: "target spell" is the whole of the printed
+restriction (CR 608.2b), so Hydroblast may legally target a blue spell and do
+nothing, where the narrowing would have refused the cast and greyed the picker.
+
+**The defect was in the second reader.** `web/serialization.py` derives a modal
+mode's picker kind from the mode's instruction, keyed by instruction *kind* —
+and both Hydroblast modes lower to a whole `if_then`, which fell past every
+branch of that table to its "designates a player" default. The card would have
+offered a **player** as the target of a counterspell. `engine/legality.py` has
+done the descent through control-flow wrappers since Lesser Werewolf; this was
+a second reading of the same question that did not, so the reader is public now
+(`legality.targeting_instruction`) and the web layer asks it. One reader asked
+twice is what stops a picker and a gate describing different cards.
 
 ## Where the sets landed
 

@@ -622,6 +622,45 @@ def test_modal_spell_serializes_modes_in_hand():
     assert modes[1]["target_kind"] == "any"
 
 
+def test_a_modal_mode_wrapped_in_a_conditional_still_names_what_it_targets():
+    """A mode's picker kind is read off the instruction that **targets**, not
+    off the wrapper around it.
+
+    "Counter target spell if it's red" (Hydroblast) lowers to a whole
+    ``if_then``, and `_mode_target_kind`'s table is keyed by instruction kind —
+    so the wrapper fell past every branch to the "designates a player" default
+    and the mode would have offered a *player* as the target of a counterspell.
+    `engine/legality.py` had the descent already; this was a second reading of
+    the same question that did not do it, which is the shape that makes a
+    picker and a gate describe different cards.
+    """
+    created = client.post(
+        "/api/sessions", json={"mode": "human_vs_human", "seed": 4212},
+    ).json()
+    sid = created["session_id"]
+    session = store.get(sid)
+    blast = _mk_card(
+        name="Blast Modal Test",
+        mana_cost="{U}",
+        type_line="Instant",
+        oracle_text=(
+            "Choose one —\n"
+            "• Counter target spell if it's red.\n"
+            "• Destroy target permanent if it's red."
+        ),
+    )
+    session.game.players[0].hand = [blast]
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    card = next(
+        c for c in state["players"][0]["hand"] if c["name"] == "Blast Modal Test"
+    )
+    kinds = [mode["target_kind"] for mode in card["modes"]]
+
+    assert kinds == ["stack", "permanent"]
+    assert all(mode["supported"] for mode in card["modes"])
+
+
 def test_modal_spell_resolves_chosen_mode_via_action():
     """Casting a modal spell with mode_index resolves that mode's effect."""
     created = client.post(

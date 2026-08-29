@@ -180,6 +180,7 @@ from .lowering import (
     _lower_delayed_self_action,
     _lower_doesnt_untap_while_source_tapped,
     _lower_condition,
+    pronoun_target_referent,
     _lower_tap,
     _lower_tap_or_untap,
     _lower_attach,
@@ -800,7 +801,16 @@ def lower_statement(
             OracleInstruction(
                 "if_then", "",
                 {
-                    "condition": _lower_condition(statement.condition, produced),
+                    # The branch is lowered first so the condition can be told
+                    # what "it" names (`pronoun_target_referent`): a spell and a
+                    # permanent are targeted by the same printed clause and
+                    # answered from different halves of the resolution context,
+                    # and this is the only place both the condition and the
+                    # effect it guards are in view.
+                    "condition": _lower_condition(
+                        statement.condition, produced,
+                        referent=pronoun_target_referent(then),
+                    ),
                     "then": then,
                     "else": otherwise,
                 },

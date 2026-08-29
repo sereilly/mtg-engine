@@ -28,7 +28,7 @@ from .readers import accept_source_reference
 from .references import parse_player_ref, parse_target_spec
 from .phrases import _parse_duration, _parse_keywords, parse_bound_subject
 from .stream import TokenStream
-from .vocabulary import NUMBER_WORDS
+from .vocabulary import COLOR_WORDS, NUMBER_WORDS
 
 
 #: What every state condition below is asked *about*: the ability's own source.
@@ -303,6 +303,17 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # second one — two readings of one record are two places for it to drift.
     negated = bool(stream.at_word("it")) and _accept_it_is(stream, negated=True)
     if negated or stream.accept_phrase("it", "'s") or stream.accept_phrase("it", "is"):
+        # "…**if it's red**" (Hydroblast, Pyroblast). A bare colour word, read
+        # before the article below because that is what separates the two
+        # clauses sharing these two words: "if it's **a** red creature card"
+        # keeps its article and is a question about a revealed card, where this
+        # is a question about the object the effect targets. The colour is
+        # consumed against `COLOR_WORDS` rather than through the noun parser,
+        # which needs a head noun and would refuse the phrase outright.
+        colour = stream.peek_word()
+        if colour in COLOR_WORDS:
+            stream.advance()
+            return ast.ItIsColor(COLOR_WORDS[colour], negated=negated)
         stream.accept_word("a", "an")
         try:
             revealed_filter = parse_object_filter(stream)

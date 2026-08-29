@@ -501,11 +501,40 @@ class SourceCounterCount:
     comparison: str = "exactly"
 
 
+@dataclass(frozen=True)
+class ItIsColor:
+    """"Counter target spell **if it's red**." (Hydroblast, Pyroblast.)
+
+    A present-tense colour test on the pronoun, and the pronoun names *the
+    object this effect targets* — which is the referent :class:`ObjectHasKeyword`
+    beside it reads, one characteristic over.
+
+    Its own node rather than a colour on :class:`RevealedCardIs`, which is the
+    other clause opening "if it's": that one asks what a card an earlier
+    sentence **revealed** is, and this one asks about a target nothing revealed.
+    Same words, different producer, so different nodes — the rule that already
+    keeps :class:`ItWas` and :class:`DiscardedCardWas` apart.
+
+    The colour is a symbol (``"R"``), the spelling every filter and every
+    colour accessor in the engine already uses, so the two cards printing this
+    differ by payload alone.
+
+    **Which object the pronoun names is not settled here.** A spell targets and
+    a permanent targets, and the two are resolved from different halves of the
+    resolution context; lowering reads it off the effect this condition guards,
+    because that is the only place both are in view (CR 608.2c: the instruction
+    and its "if" are one sentence).
+    """
+
+    color: str
+    negated: bool = False
+
+
 Condition = Union[
     EveryOf, CoinFlipResult, Controls, DestroyedThisWay, DestroyedTargetWas,
     DiscardedCardWas,
     IsState, StartedTheTurnState, DiedThisTurn,
-    ObjectHasKeyword,
+    ItIsColor, ObjectHasKeyword,
     HadPlus1Counter, ItWas,
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,

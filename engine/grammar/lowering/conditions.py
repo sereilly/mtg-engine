@@ -26,10 +26,43 @@ from ...subject_filters import untestable_filter_keys
 from ._common import _filter_payload, _restrictions_beyond
 from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
 
+#: What ``targets.kind`` on a guarded effect says the pronoun "it" names, and
+#: therefore which half of the resolution context answers a question about it.
+#: A closed map: a target kind not in it leaves the referent unbound, and an
+#: unbound referent refuses rather than picking one.
+_PRONOUN_REFERENTS: dict[str, str] = {"spell": "spell", "object": "permanent"}
+
+
+def pronoun_target_referent(instructions) -> str | None:
+    """Which object "it" names, read off the effect the clause guards.
+
+    "Counter target spell **if it's red**" and "Destroy target permanent **if
+    it's red**" (Hydroblast, Pyroblast) print the identical condition about two
+    different kinds of object — a spell on the stack and a permanent on the
+    battlefield — which are resolved from different halves of the resolution
+    context. Nothing in the condition's own words separates them, so the
+    referent is taken from the branch beside it: CR 608.2c makes the
+    instruction and its "if" one sentence, and this is the only place both are
+    in view.
+
+    Deliberately strict. One instruction, one recognized target kind, or None —
+    and None refuses at the caller. A resolver picked by trying one half of the
+    context and then the other would answer about whichever object happened to
+    be there, which is the "the branch and the effect disagree about which
+    object the pronoun meant" bug the keyword condition beside it already
+    names.
+    """
+    if len(instructions) != 1:
+        return None
+    described = instructions[0].payload.get("targets") or {}
+    return _PRONOUN_REFERENTS.get(described.get("kind"))
+
+
 def _lower_condition(
     condition: ast.Condition,
     produced: frozenset[str] = frozenset(),
     event: str | None = None,
+    referent: str | None = None,
 ) -> dict[str, object]:
     """*produced* names the scratchpad values earlier steps of this same effect
     recorded. It defaults to empty, which is what refuses a coin-flip condition
@@ -40,6 +73,11 @@ def _lower_condition(
     the effect lowerings take it: "that player" is only a resolvable referent
     when the event named a player, and which events do is
     :data:`_EVENT_SUBJECT_PLAYERS` rather than a rule.
+
+    *referent* is :func:`pronoun_target_referent`'s answer for the effect this
+    condition guards — what "it" names. Only the conditional lowering can supply
+    it, so every other caller leaves it None and the clauses that need one
+    refuse there.
     """
     if isinstance(condition, ast.CoinFlipResult):
         # A back-reference names its producer or refuses (round 33). Without a
@@ -160,6 +198,30 @@ def _lower_condition(
                 "permanent", node=condition,
             )
         return {"kind": "destroyed_target_was", "filter": described}
+    if isinstance(condition, ast.ItIsColor):
+        # "Counter target spell **if it's red**." (Hydroblast, Pyroblast.) The
+        # pronoun names the object this effect targets, the same referent the
+        # keyword clause below reads — and under a trigger it names the event's
+        # subject instead, which nothing here can tell apart, so it refuses
+        # there for that clause's reason.
+        if event is not None:
+            raise LoweringError(
+                "'it' names no chosen target under this trigger", node=condition
+            )
+        if referent is None:
+            # No branch to read the referent off, or a branch that targets
+            # something this cannot ask about. Refusing is what keeps the
+            # condition from being answered about the wrong half of the
+            # resolution context — silently, and forever the same way.
+            raise LoweringError(
+                "'it' has no target to be a colour of here", node=condition
+            )
+        return {
+            "kind": "target_is_color",
+            "color": condition.color,
+            "negated": condition.negated,
+            "target": referent,
+        }
     if isinstance(condition, ast.ObjectHasKeyword):
         # "If **it** doesn't have rampage" (Rapid Fire). The pronoun names the
         # object the sentence in front of it chose — which for a spell or an
@@ -238,7 +300,11 @@ def _lower_condition(
         return {
             "kind": "all_of",
             "conditions": [
-                _lower_condition(part, produced, event)
+                # The referent travels down with the rest: "it" means the same
+                # object in every part of one printed "if", so a conjunction
+                # that dropped it would refuse a clause the same sentence
+                # answers on its own.
+                _lower_condition(part, produced, event, referent)
                 for part in condition.conditions
             ],
         }

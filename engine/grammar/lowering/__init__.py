@@ -31,7 +31,7 @@ cannot do.
 
 from .categories import INSTRUCTION_CATEGORIES, _PRODUCES, categories_of
 from .where_x import lower_where_x
-from .conditions import _lower_condition
+from .conditions import _lower_condition, pronoun_target_referent
 from ._events import (CREATED_TOKEN, 
     _BLOCK_PAIR_EVENTS,
     binds_block_pair,
@@ -263,6 +263,7 @@ from .game import (
 __all__ = [
     "lower_where_x",
     "_lower_condition",
+    "pronoun_target_referent",
     "INSTRUCTION_CATEGORIES",
     "_PRODUCES",
     "categories_of",
