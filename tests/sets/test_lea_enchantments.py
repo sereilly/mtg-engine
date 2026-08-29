@@ -1204,6 +1204,11 @@ def test_kudzu_destroys_land_when_tapped(all_cards):
     assert result.supported
 
     game.tap_land_for_mana(1, "Plains")
+    # CR 603.3: the trigger goes on the stack, exactly as Psychic Venom's does.
+    # It used to resolve inside the tap, which is what kept it from seeing any
+    # other way a land becomes tapped.
+    assert [item.card.name for item in game.stack] == ["Kudzu"]
+    game.resolve_top_of_stack()
 
     assert not any(perm.card.name == "Plains" for perm in p2.battlefield)
     kudzu_perm = next((perm for perm in p1.battlefield if perm.card.name == "Kudzu"), None)
@@ -1671,6 +1676,34 @@ def test_psychic_venom_fires_when_the_land_is_tapped_by_anything(all_cards):
     assert [item.card.name for item in game.stack] == ["Psychic Venom"]
     game.resolve_top_of_stack()
     assert p2.life == 18, "the damage goes to the land's controller, not the Aura's"
+
+
+def test_psychic_venom_damages_the_lands_controller_not_the_opponent(all_cards):
+    """The discriminating fixture for "that land's controller".
+
+    The test above asserts exactly this in its docstring and cannot show it:
+    there the land belongs to P2, who is also the Aura controller's only
+    opponent, so "the land's controller" and "the other player" are the same
+    seat and a wrong reading passes. Enchanting **your own** land separates
+    them — and it separated them the wrong way, because the phrase fell through
+    to a `target_player` recipient (a choice this card never offers) instead of
+    the seat the tap froze.
+    """
+    from engine.auras import attach_aura
+
+    venom = _get(all_cards, "Psychic Venom")
+    forest = _get(all_cards, "Forest")
+    aura, land = Permanent(card=venom), Permanent(card=forest)
+    p1 = PlayerState(name="P1", battlefield=[aura, land], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    attach_aura(aura, land)
+
+    game.become_tapped(land)
+    game.resolve_top_of_stack()
+
+    assert p1.life == 18, "the land's controller takes it, even when that is you"
+    assert p2.life == 20
 
 
 def test_red_ward_grants_protection_from_red(all_cards):

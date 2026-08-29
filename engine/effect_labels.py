@@ -97,9 +97,16 @@ ACTIVATED_LABELS: dict[str, str] = {
     "pump_target_creature_until_eot": "activated_pump",
     "remove_counter_from_self": "activated_counters",
     # A composed effect (Orcish Artillery's "deals damage to X and damage to
-    # you"). The label names what the ability is *for*, which is why it cannot
-    # be read off the wrapper kind.
-    "sequence": "activated_damage",
+    # you"). A wrapper kind cannot say what the ability is *for* — it says only
+    # that there is more than one step — so the label names the shape, exactly
+    # as `triggered_sequence` does on the other side. It read
+    # `activated_damage` for four sets, which was right for Orcish Artillery
+    # and wrong for the other 53 abilities that lower to a `sequence`: six Mana
+    # Batteries, Maze of Ith, Preacher, Knowledge Vault and five planeswalkers
+    # were all reported as damage. Naming a leaf bucket from a wrapper is
+    # guessing, and the guess is wrong in proportion to how well the wrapper
+    # generalises.
+    "sequence": "activated_sequence",
     "set_base_pt_target_until_eot": "activated_pump",
     "steal_target_permanent_linked_to_self": "activated_steal",
     "tap_target_permanent": "activated_tapping",
@@ -114,8 +121,9 @@ ACTIVATED_LABELS: dict[str, str] = {
     # Every one of these would otherwise take the `activated_<category>`
     # fallback, which is a label the support report has never bucketed by. Each
     # is placed in the bucket the *ability* belongs to rather than the one its
-    # instruction kind reads like: a label answers "what is this ability for?",
-    # which is why "sequence" above is `activated_damage`.
+    # instruction kind reads like: a label answers "what is this ability for?".
+    # Where the kind is a *wrapper* the question has no answer and the label
+    # names the shape instead — see "sequence" and "if_then" above.
     #
     # Damage, however it is spelled. A fight (Brash Taunter) and a bite
     # (Heartfire Immolator) differ in who deals back, not in what the ability is
@@ -180,10 +188,14 @@ ACTIVATED_LABELS: dict[str, str] = {
     # Priest of Yawgmoth eats a permanent and pays out mana; the mana is the
     # point, which is what the bucket answers.
     "sacrifice_creature_for_mana": "activated_mana",
-    # The Urza's cycle. Its assembled bonus is a conditional, and the branch it
-    # guards produces mana — so the wrapper takes the bucket of what it does,
-    # exactly as `sequence` above takes damage's.
-    "if_then": "activated_mana",
+    # A conditional, and the same wrapper rule as `sequence` above. This
+    # entry used to read `activated_mana` and justify itself by citing
+    # `sequence`'s `activated_damage` — the two wrong entries in this table
+    # held each other up. It was true of the Urza's cycle, whose guarded branch
+    # produces mana, and false of the other half of its cards: Eater of the
+    # Dead exiles, Land's Edge deals damage, Lesser Werewolf debuffs. A
+    # condition is not an effect family.
+    "if_then": "activated_conditional",
     # Tawnos's Coffin and Bronze Tablet both move objects out of the game and
     # decide later what becomes of them. Exile is where they go.
     "exile_until_leaves_or_untaps": "activated_recursion",
@@ -237,8 +249,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     "grant_spend_mana_as_though": "activated_permission",
     # Hyperion Blacksmith's "You may tap or untap …". The `may` wrapper says
     # nothing about what it wraps, exactly as `sequence` does not — and with no
-    # trigger condition to name the moment, the honest label names the shape,
-    # which is what `triggered_sequence` does on the other side.
+    # trigger condition to name the moment, the honest label names the shape.
+    # This was the one wrapper on this side that always got that right; the
+    # triggered table reaches the same answer a different way, by letting the
+    # *condition* name the moment (`TRIGGERED_LABELS_BY_CONDITION`).
     "may": "activated_optional",
     # Petra Sphinx: the top card is seen and then sorted. `activated_look` is
     # the bucket for an ability whose point is cards being looked at.

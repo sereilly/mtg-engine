@@ -53,6 +53,20 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     # it, so "that creature's controller" is the seat `deal_damage` derives for
     # every event and freezes into the announcement.
     "damage_dealt",
+    # Psychic Venom — the tapped land's. Both tap announcements stamp the key
+    # (`become_tapped`), because the words name the object the event was about
+    # and not the seat that did the tapping: an Icy Manipulator taps a land its
+    # controller does not own, and the printed sentence still means the land's
+    # controller. Absent from this table the phrase fell through to
+    # `target_player`, which is a choice the card never offers — so Psychic
+    # Venom damaged the Aura controller's opponent, and did it even when the
+    # enchanted land was the Aura controller's own.
+    "permanent_becomes_tapped",
+    # Haunting Wind, Artifact Possession — the tapped artifact's, for the same
+    # reason and from the same stamp. This condition has two announcements (a
+    # tap, and an ability activated without {T}); both freeze the *subject's*
+    # controller, which is the artifact's, never the activating seat.
+    "permanent_tapped_or_ability_activated",
 })
 
 

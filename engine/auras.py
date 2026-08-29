@@ -427,16 +427,18 @@ def attached_trigger_claim(normalized_line: str, card_name: str = "") -> str | N
        one attached trigger the engine performs without an instruction: the
        toughness must be read while the creature is still on the battlefield
        (CR 603.10), so no payload can carry it.
-    2. **A name-keyed hook**, for an attached trigger whose behaviour is
-       genuinely bespoke (Kudzu's destroy-and-reattach). Asked of the registry,
-       never written out — a card name in a comparison here would be the
-       dispatch `card_hooks.py` exists to keep in one place.
-    3. **The additional-mana clause** above, which has a dispatcher and no
+    2. **The additional-mana clause** above, which has a dispatcher and no
        trigger.
+
+    There used to be a third: a name-keyed registry of Aura behaviour dispatched
+    from inside ``tap_land_for_mana``, whose only entry was Kudzu. It is a
+    ``card_hooks.CARD_LINE_INSTRUCTIONS`` line now, so claim 1 above covers it —
+    which is the point of that registry over a bespoke dispatcher. The
+    instruction is announced by the tap seam, so the trigger fires however the
+    land became tapped rather than on the one path its dispatcher lived in.
 
     Anything else is unclaimed, and its Aura is unsupported naming the line.
     """
-    from .card_hooks import ENCHANTED_LAND_TAPPED_FOR_MANA
     from .oracle import _parse_triggered_ability
 
     if not _ATTACHED_TRIGGER.match(normalized_line):
@@ -449,8 +451,6 @@ def attached_trigger_claim(normalized_line: str, card_name: str = "") -> str | N
     # `aura_death_damage_line` for the card that cost.
     if aura_death_damage_line(normalized_line):
         return "attached trigger — death damage, mixins/effects.py"
-    if card_name in ENCHANTED_LAND_TAPPED_FOR_MANA:
-        return "attached trigger — card_hooks.ENCHANTED_LAND_TAPPED_FOR_MANA"
     if aura_additional_mana_on_tap_line(normalized_line) is not None:
         return "attached trigger — additional mana on tap"
     return None

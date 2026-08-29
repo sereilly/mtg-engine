@@ -340,8 +340,20 @@ class TestKudzu:
 
         # Tap the Forest; choose to re-attach to the Plains (index 1 after the
         # Forest is removed: battlefield becomes [Island, Plains, Kudzu]).
-        game.tap_land_for_mana(0, "Forest", chosen_color="G", permanent_index=0, kudzu_reattach_index=1)
+        #
+        # The re-attach is answered through the ordinary pending-choice queue
+        # rather than as an argument to the tap. It used to be
+        # ``kudzu_reattach_index=`` on ``tap_land_for_mana``, which existed
+        # because the effect was dispatched from inside that method — the same
+        # arrangement that kept it from firing on any other way a land becomes
+        # tapped. Now the trigger uses the stack (CR 603.3) and its offer is a
+        # prompt like every other, so the seat has to be interactive to be asked.
+        game.interactive_seats = {0}
+        game.tap_land_for_mana(0, "Forest", chosen_color="G", permanent_index=0)
+        game.resolve_top_of_stack()
         assert not any(p.card.name == "Forest" for p in p1.battlefield)
+
+        assert game.confirm_kudzu_reattach(0, 1)
         assert kudzu.metadata.get("attached_to") is plains
 
 

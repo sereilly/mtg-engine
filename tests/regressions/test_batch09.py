@@ -290,27 +290,41 @@ class TestPhantasmalTerrain:
 # ---------------------------------------------------------------------------
 
 class TestKudzuReattach:
-    def _setup(self, cards):
+    """Kudzu's re-attach offer.
+
+    Whether the controller is *asked* used to be a ``defer_choice`` argument
+    threaded through the tap; it is the seat's interactivity now, which is the
+    answer ``interactive_seats`` already gives every other prompt. The tap also
+    no longer resolves the effect: the trigger uses the stack (CR 603.3), so
+    each test drives it there.
+    """
+
+    def _setup(self, cards, interactive=()):
         forest = Permanent(card=cards["Forest"])
         island = Permanent(card=cards["Island"])
         plains = Permanent(card=cards["Plains"])
         p1 = PlayerState(name="P1", hand=[cards["Kudzu"]], battlefield=[forest, island, plains])
         game = _game(p1, PlayerState(name="P2"))
+        game.interactive_seats = set(interactive)
         game.cast_from_hand(0, "Kudzu", target_player_index=0, target_permanent_index=0)
         kudzu = next(p for p in p1.battlefield if p.card.name == "Kudzu")
         return game, p1, kudzu, forest, island, plains
 
+    def _tap_and_resolve(self, game):
+        game.tap_land_for_mana(0, "Forest", chosen_color="G", permanent_index=0)
+        game.resolve_top_of_stack()
+
     def test_deferred_tap_arms_pending_choice(self, cards):
-        game, _, kudzu, forest, _, _ = self._setup(cards)
+        game, _, kudzu, forest, _, _ = self._setup(cards, interactive=(0,))
         assert kudzu.metadata.get("attached_to") is forest
-        game.tap_land_for_mana(0, "Forest", chosen_color="G", permanent_index=0, defer_kudzu_choice=True)
+        self._tap_and_resolve(game)
         # Land destroyed; Aura detached and awaiting the controller's choice.
         assert game.pending_kudzu_reattach is not None
         assert kudzu.metadata.get("attached_to") is None
 
     def test_confirm_attaches_to_chosen_land(self, cards):
-        game, p1, kudzu, _, _, plains = self._setup(cards)
-        game.tap_land_for_mana(0, "Forest", chosen_color="G", permanent_index=0, defer_kudzu_choice=True)
+        game, p1, kudzu, _, _, plains = self._setup(cards, interactive=(0,))
+        self._tap_and_resolve(game)
         # Battlefield is now [Island, Plains, Kudzu]; pick Plains (index 1).
         assert game.confirm_kudzu_reattach(0, 1) is True
         assert kudzu.metadata.get("attached_to") is plains
@@ -318,8 +332,22 @@ class TestKudzuReattach:
 
     def test_headless_path_auto_attaches_first_land(self, cards):
         game, _, kudzu, _, island, _ = self._setup(cards)
-        game.tap_land_for_mana(0, "Forest", chosen_color="G", permanent_index=0)
+        self._tap_and_resolve(game)
         assert game.pending_kudzu_reattach is None
+        assert kudzu.metadata.get("attached_to") is island
+
+    def test_it_fires_when_the_land_is_tapped_by_anything(self, cards):
+        """The reason the effect moved off the mana path at all.
+
+        "When enchanted land **becomes tapped**" (CR 701.26a) is any tap, and
+        the dispatcher this replaced lived inside ``tap_land_for_mana`` — so an
+        opponent's Icy Manipulator tapping the enchanted land destroyed
+        nothing, silently, for ten sets.
+        """
+        game, p1, kudzu, forest, island, _ = self._setup(cards)
+        game.become_tapped(forest)
+        game.resolve_top_of_stack()
+        assert not any(p.card.name == "Forest" for p in p1.battlefield)
         assert kudzu.metadata.get("attached_to") is island
 
 

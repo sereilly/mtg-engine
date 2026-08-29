@@ -144,6 +144,15 @@ def test_kudzu_tap_prompts_controller_to_reattach():
     )
     assert resp.status_code == 200
 
+    # The trigger uses the stack now (CR 603.3), so the offer arrives when it
+    # resolves rather than during the tap. It used to be dispatched from inside
+    # `tap_land_for_mana`, which is why it only ever saw a mana tap.
+    stack = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()["stack"]
+    assert [item["card"]["name"] for item in stack] == ["Kudzu"]
+    assert stack[0]["is_triggered"] is True
+    resp = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "pass_priority"})
+    assert resp.status_code == 200
+
     state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
     info = state["kudzu_reattach"]
     assert info is not None

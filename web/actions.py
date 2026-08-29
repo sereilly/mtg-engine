@@ -258,7 +258,6 @@ def _action_tap(session, req, seat_type):
             permanent.card.name,
             chosen_color=req.mana_color or "G",
             permanent_index=permanent_index,
-            defer_kudzu_choice=_seat_type(session, req.seat) != "ai",
         )
     else:
         tapped = session.game.tap_permanent(
@@ -324,7 +323,6 @@ def _action_activate(session, req, seat_type):
             permanent.card.name,
             chosen_color=req.mana_color or "G",
             permanent_index=permanent_index,
-            defer_kudzu_choice=_seat_type(session, req.seat) != "ai",
         )
         if not tapped:
             raise HTTPException(status_code=400, detail="failed to tap land for mana")

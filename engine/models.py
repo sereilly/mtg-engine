@@ -333,6 +333,31 @@ class Permanent:
             current = [produced if sym == replaced else sym for sym in current]
         return tuple(current)
 
+    def produced_symbol_for(self, requested: str | None) -> str | None:
+        """The symbol this land actually makes when a seat asks for *requested*.
+
+        A colour can be asked for and no longer produced. A seat names the
+        symbol the land **prints** — that is what its picker offers and what a
+        payment plan was built against — and the swaps decide what comes out,
+        so the request is mapped through the same swaps ``_swapped_mana``
+        applied rather than discarded.
+
+        The alternative, falling back to the first entry of
+        ``effective_produced_mana``, is right only on a land that makes one
+        symbol. Quarum Trench Gnomes on a Tundra swaps {W} for {C} and leaves
+        ``("U", "C")``; asking for white then paid **{U}** — the other colour,
+        not the colourless the Gnomes grant — because the printed order happens
+        to put the island first. Returns None when the request maps to nothing
+        this land makes, which is the caller's cue to pick a default.
+        """
+        if not requested:
+            return None
+        produced = self.effective_produced_mana
+        if requested in produced:
+            return requested
+        swapped = self._swapped_mana((requested,))[0]
+        return swapped if swapped in produced else None
+
     @property
     def copied_from(self) -> str | None:
         """The name of the object this permanent is currently a copy of.

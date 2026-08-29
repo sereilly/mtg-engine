@@ -8178,6 +8178,29 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
+  // An ability naming **several targets of one kind** — "Untap X target lands"
+  // (Candelabra of Tawnos). Asked before every per-kind branch below, for the
+  // reason the cast side asks it first too: the spec's `kind` is "land" here,
+  // so the single-land picker below would claim it, send one target and never
+  // ask for X. That is what made this card unplayable — it resolved untapping
+  // nothing, which is the one shipped card recorded *failing* in
+  // CARD_VERIFICATION.md.
+  //
+  // `startCastSeveralTargetsPrompt` runs the X prompt first and comes back
+  // here sized by the answer, so the announced X and the number of targets are
+  // one value the player named once (CR 601.2b then 601.2c).
+  if (cardRequiresSeveralTargets(card)) {
+    const fields = pendingTargetFields(card);
+    if (fields.validKeys.size === 0) {
+      updateActionHint(`No valid targets in play for ${cardName}.`, true);
+      return;
+    }
+    startCastSeveralTargetsPrompt(card, "activate", null, null, {
+      sourcePermanentIndex: permanentIndex, abilityIndex,
+    });
+    return;
+  }
+
   // An ability naming several targets of **different kinds**, chosen in
   // dependency order (Sorrow's Path: "two target blocking creatures controlled
   // by the same opponent", where the second is settled by whose creature the
@@ -8414,23 +8437,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // before the ability is sent — without it the engine receives X = 0 and e.g.
   // Illusionary Mask finds no castable creature regardless of the hand.
   if (/\{x\}/i.test(activationCost)) {
-    pendingCastX = {
-      kind: "cast_x",
-      card,
-      cardName,
-      targetSeat,
-      targetPermanentIndex: null,
-      targetStackIndex: null,
-      castAction: "activate",
-      activatePermanentIndex: permanentIndex,
-      activateAbilityIndex: abilityIndex,
-      manaRequirement: parseManaCostSymbols(activationCost),
-      costString: activationCost,
-      costCard: null,
-      maxX: getMaxAffordableX(getCurrentPlayerState()?.mana_pool, activationCost, null),
-      awaitingCustomValue: false,
-    };
-    renderActivationPrompt();
+    startActivationXPrompt(card, cardName, targetSeat, permanentIndex, abilityIndex);
     return;
   }
 
@@ -9046,7 +9053,7 @@ function confirmRoleTargets() {
     .finally(() => clearPendingHandCast());
 }
 
-function startCastSeveralTargetsPrompt(card, castAction = "cast", validTargets = null, announced = null) {
+function startCastSeveralTargetsPrompt(card, castAction = "cast", validTargets = null, announced = null, extra = {}) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
   if (announced === null && cardNamesXTargets(card)) {
@@ -9054,6 +9061,18 @@ function startCastSeveralTargetsPrompt(card, castAction = "cast", validTargets =
     // first — it is also the prompt that recomputes the affordable maximum as
     // the caster taps mana — and `resolvePendingCastX` comes back here with the
     // answer. One choke point rather than a branch in every cast cascade.
+    //
+    // An *ability* that names X targets (Candelabra of Tawnos) comes through
+    // here too, and its X is priced against the activation cost rather than
+    // the card's mana cost — so it goes to the activation X prompt, which is
+    // the one that reads that cost.
+    if (castAction === "activate") {
+      startActivationXPrompt(
+        card, cardName, getDefaultTargetSeat(cardName),
+        extra.sourcePermanentIndex, extra.abilityIndex,
+      );
+      return;
+    }
     startCastXPrompt(card, getDefaultTargetSeat(cardName), null, castAction);
     return;
   }
@@ -9069,6 +9088,11 @@ function startCastSeveralTargetsPrompt(card, castAction = "cast", validTargets =
     maxTargets: max,
     announcedX: announced,
     severalTargets: [], // [{ seat, idx }] — all on one seat; see confirm below
+    // Set only for an activated ability, and read by the confirm below to send
+    // the `activate` action instead of a cast — the same two fields
+    // `confirmRoleTargets` carries for the same reason.
+    sourcePermanentIndex: extra.sourcePermanentIndex,
+    abilityIndex: extra.abilityIndex,
     ...pendingTargetFields(card, validTargets),
   };
   renderActivationPrompt();
@@ -9132,7 +9156,23 @@ function confirmSeveralTargets() {
     .map((t) => permanentIdAt(t.seat, t.idx))
     .filter((pid) => Number.isInteger(pid));
   const oneSeat = severalTargets.every((t) => t.seat === targetSeat);
-  const body = { seat, action: castAction || "cast", card_name: cardName, target_seat: targetSeat };
+  // An activated ability that names several targets (Candelabra of Tawnos:
+  // "Untap X target lands") is addressed by its source permanent and ability,
+  // never by a card in hand — the same shape `confirmRoleTargets` sends.
+  const activating = castAction === "activate";
+  const body = activating
+    ? withPermanentId(
+        {
+          seat,
+          action: "activate",
+          permanent_name: cardName,
+          permanent_index: p.sourcePermanentIndex,
+          target_seat: targetSeat,
+        },
+        "permanent_id", seat, p.sourcePermanentIndex,
+      )
+    : { seat, action: castAction || "cast", card_name: cardName, target_seat: targetSeat };
+  if (activating && Number.isInteger(p.abilityIndex)) body.ability_index = p.abilityIndex;
   // "X target creatures": how many were chosen is the announced X. Sent here
   // rather than asked for separately, so the picker and the cost cannot
   // disagree about a number the player named once.
@@ -9149,9 +9189,9 @@ function confirmSeveralTargets() {
     return;
   }
   clearPendingCastTargeting();
-  updateActionHint(`Casting ${cardName}...`);
+  updateActionHint(`${activating ? "Activating" : "Casting"} ${cardName}...`);
   sendAction(body)
-    .then(() => updateActionHint(`Cast ${cardName}.`))
+    .then(() => updateActionHint(`${activating ? "Activated" : "Cast"} ${cardName}.`))
     .catch((e) => updateActionHint(e.message, true))
     .finally(() => clearPendingHandCast());
 }
@@ -9360,6 +9400,35 @@ function sendForkCopyCast(forkPending, stackArrayIndex, targetSeat, permanentInd
       clearPendingHandCast();
       updateActionHint(e.message, true);
     });
+}
+
+// The X prompt for an **activated ability**, priced against the activation cost
+// rather than the card's mana cost. Candelabra of Tawnos is {1} and its ability
+// costs {X}, {T} — reading the card would offer an X the player cannot pay and
+// charge one they did not announce.
+//
+// A function rather than a branch inside `startCastXPrompt` because there are
+// two callers now: the ordinary activation cascade, and the several-targets
+// prompt for an ability whose X *is* how many targets it names.
+function startActivationXPrompt(card, cardName, targetSeat, permanentIndex, abilityIndex) {
+  const activationCost = getActivatedAbilityCost(card, abilityIndex);
+  pendingCastX = {
+    kind: "cast_x",
+    card,
+    cardName,
+    targetSeat,
+    targetPermanentIndex: null,
+    targetStackIndex: null,
+    castAction: "activate",
+    activatePermanentIndex: permanentIndex,
+    activateAbilityIndex: abilityIndex,
+    manaRequirement: parseManaCostSymbols(activationCost),
+    costString: activationCost,
+    costCard: null,
+    maxX: getMaxAffordableX(getCurrentPlayerState()?.mana_pool, activationCost, null),
+    awaitingCustomValue: false,
+  };
+  renderActivationPrompt();
 }
 
 function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAction = "cast", targetStackIndex = null) {
@@ -9714,13 +9783,17 @@ function resolvePendingCastX(xValue) {
   // creatures" (Winter Blast). The announced X is how many targets the spell
   // names, so the picker comes *after* the X prompt and is sized by it. X = 0
   // names nothing and falls straight through to the ordinary cast below.
-  if (
-    pending.castAction !== "activate"
-    && selectedX > 0
-    && cardNamesXTargets(pending.card)
-  ) {
+  // An *activated* ability that names X targets comes back here too. It used to
+  // be excluded, which is what made Candelabra of Tawnos unplayable: the X
+  // prompt sent the ability immediately with no targets, so it untapped
+  // nothing — and the single-land picker it hit first never asked for X at all.
+  if (selectedX > 0 && cardNamesXTargets(pending.card)) {
     startCastSeveralTargetsPrompt(
       pending.card, pending.castAction || "cast", null, selectedX,
+      {
+        sourcePermanentIndex: pending.activatePermanentIndex,
+        abilityIndex: pending.activateAbilityIndex,
+      },
     );
     return;
   }

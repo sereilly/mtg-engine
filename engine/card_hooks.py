@@ -31,9 +31,6 @@ Hook registries:
                         they are templates, derived from oracle text by
                         engine/untap_restrictions.py and
                         engine/draw_step_modifiers.py.
-- ENCHANTED_LAND_TAPPED_FOR_MANA — bespoke behavior for the Aura on a land tapped
-                        for mana (Kudzu), keyed by Aura name, consumed by
-                        engine/mixins/turn_management.
 Cost taxes left this file too: "<colour> spells cost {N} more to cast" is a
 template, derived from oracle text by engine/cost_modifiers.py. So did the
 land-tapping triggers (Mana Flare, Gauntlet of Might, Lifetap) — the compiler
@@ -353,6 +350,20 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "{t}: ante this artifact. if you do, put all other cards you own from the "
         "ante into your graveyard, then draw a card":
             _line("ante_self_then_clear_ante_and_draw", "activated_ante"),
+    },
+    # The whole card, as one line. Bespoke by the entry bar's own test: give an
+    # invented card this text and it still needs a destroy whose subject is the
+    # trigger's, plus an attach whose chooser is that subject's controller and
+    # whose host is unchosen — three things the grammar reads separately and
+    # none of which it composes yet. It was a dispatcher inside
+    # ``tap_land_for_mana`` (``ENCHANTED_LAND_TAPPED_FOR_MANA``) until this
+    # entry: as an instruction the line is announced by the tap seam, so it
+    # fires however the land became tapped and goes on the stack like any other
+    # trigger.
+    'Kudzu': {
+        "when enchanted land becomes tapped, destroy it. that land's controller "
+        "may attach this aura to a land of their choice":
+            _line("destroy_tapped_land_and_reoffer_aura", "triggered_destruction"),
     },
     'Lord of the Pit': {
         "at the beginning of your upkeep, sacrifice a creature other than this "
@@ -916,69 +927,6 @@ DRAW_STEP_MODIFIERS: dict[str, DrawStepModifier] = {
 # --------------------------------------------------------------------------
 # Enchanted-land "when tapped for mana" bespoke effects
 # --------------------------------------------------------------------------
-# Fired for the Aura enchanting a land that was just tapped for mana, when the
-# Aura needs behavior the generic paths can't express — beyond the
-# enchanted_land_tapped trigger (Psychic Venom) and the "adds an additional"
-# mana clause (Wild Growth) both handled inline in tap_land_for_mana. Keyed by
-# Aura name. Signature: (game, controller_index, land, land_index, aura,
-# reattach_index, defer_choice).
-
-EnchantedLandTappedHook = Callable[
-    ["Game", int, "Permanent", int, "Permanent", "int | None", bool], None
-]
-
-
-def _kudzu_on_land_tapped(
-    game: Game,
-    controller_index: int,
-    land: Permanent,
-    land_index: int,
-    aura: Permanent,
-    reattach_index: int | None,
-    defer_choice: bool,
-) -> None:
-    """Kudzu: "Whenever enchanted land is tapped for mana, destroy that land.
-    That land's controller may attach Kudzu to a land of their choice." The
-    reattach target comes from ``reattach_index``; with no explicit choice a
-    human controller defers to an interactive prompt (``pending_kudzu_reattach``,
-    resolved by ``confirm_kudzu_reattach``), while AI/headless play deterministically
-    takes the first other land."""
-    player = game.players[controller_index]
-    game.remove_from_battlefield(land)
-    player.graveyard.append(land.card)
-    aura.metadata.pop("attached_to", None)
-    detach_aura(aura, land)
-    game.log.append(f"Kudzu destroyed {land.card.name}")
-    new_land = None
-    if (
-        isinstance(reattach_index, int)
-        and 0 <= reattach_index < len(player.battlefield)
-        and player.battlefield[reattach_index].card.primary_type == "land"
-    ):
-        new_land = player.battlefield[reattach_index]
-    # A controller who is being asked picks the land to re-enchant: defer when no
-    # choice was supplied and there is a land to move to. Headless/AI play keeps
-    # the deterministic "first other land" default below.
-    if new_land is None and defer_choice and any(
-        p.card.primary_type == "land" for p in game.controlled_by(controller_index)
-    ):
-        game.arm_pending_choice("kudzu_reattach", controller_index, aura=aura)
-        return
-    if new_land is None:
-        new_land = next(
-            (p for p in game.controlled_by(controller_index) if p.card.primary_type == "land"),
-            None,
-        )
-    if new_land is not None:
-        attach_aura(aura, new_land)
-        game.log.append(f"Kudzu attached to {new_land.card.name}")
-
-
-ENCHANTED_LAND_TAPPED_FOR_MANA: dict[str, EnchantedLandTappedHook] = {
-    "Kudzu": _kudzu_on_land_tapped,
-}
-
-
 # --------------------------------------------------------------------------
 # Cost modifiers — moved out
 # --------------------------------------------------------------------------

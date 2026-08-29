@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..auras import detach_aura
 from ..dexterity import flip_lands_on
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
@@ -718,4 +719,56 @@ def destroy_each_unless_life_paid(game: Game, instruction: OracleInstruction, co
         )
 
     run_resumable(game, steps, _step)
+    return True, "resolved"
+
+
+@effect_handler("destroy_tapped_land_and_reoffer_aura")
+def destroy_tapped_land_and_reoffer_aura(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Kudzu: "When enchanted land becomes tapped, destroy it. That land's
+    controller may attach this Aura to a land of their choice."
+
+    This used to be a name-keyed dispatcher (``ENCHANTED_LAND_TAPPED_FOR_MANA``)
+    called from inside ``tap_land_for_mana``, which is the bug ``become_tapped``
+    was built to end: the card says "becomes tapped" (CR 701.26a) and the
+    dispatcher only saw the mana path, so an Icy Manipulator tapping the
+    enchanted land destroyed nothing. As an instruction the line is *announced*
+    by the tap seam like any other trigger, which fixes both halves at once —
+    every tap path reaches it, and it goes on the stack (CR 603.3) rather than
+    resolving inline where a name-keyed pass had put it.
+
+    The land is read by the id the announcement froze rather than off the Aura's
+    ``attached_to`` at resolution: the Aura may have been removed in response,
+    and CR 603.10 says the ability uses the information the game had.
+    """
+    aura = context.source_permanent
+    land_id = (context.trigger_context or {}).get("event_subject_permanent_id")
+    land = game.permanent_by_id(land_id) if land_id is not None else None
+    if aura is None or land is None:
+        game.log.append("Kudzu: the enchanted land is gone, nothing to destroy")
+        return True, "resolved"
+
+    # The seat the announcement froze, not a board read (CR 603.10): "that
+    # land's controller" is the controller it had when it became tapped, and a
+    # control change in response does not move who is offered the re-attach.
+    controller_index = (context.trigger_context or {}).get("event_subject_controller")
+    if not isinstance(controller_index, int) or not (0 <= controller_index < len(game.players)):
+        game.log.append("Kudzu: no recorded controller, nothing destroyed")
+        return True, "resolved"
+    player = game.players[controller_index]
+    game.remove_from_battlefield(land)
+    player.graveyard.append(land.card)
+    aura.metadata.pop("attached_to", None)
+    detach_aura(aura, land)
+    game.log.append(f"{aura.card.name} destroyed {land.card.name}")
+
+    # "…**may** attach this Aura to a land of their choice" — the land's
+    # controller decides, not the Aura's. One `pending_choice`, so an
+    # interactive seat is asked and every other seat takes the registered
+    # default (the first land it controls) at once; that is the same split the
+    # caller's old ``defer_choice`` flag hand-computed, asked of the registry
+    # instead so a new seat kind needs no new argument.
+    if any(perm.card.primary_type == "land" for perm in game.controlled_by(controller_index)):
+        game.arm_pending_choice("kudzu_reattach", controller_index, aura=aura)
     return True, "resolved"

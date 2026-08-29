@@ -617,7 +617,7 @@ adding entries, not editing dispatch**:
   table**, which is what stops a card being admitted with its clause ignored.
 - `engine/card_hooks.py` — name-keyed registries for truly bespoke behavior
   (spell-resolved and counterspell riders, leave-battlefield effects,
-  draw-step modifiers, the Aura on a land tapped for mana) plus
+  draw-step modifiers) plus
   `CARD_LINE_INSTRUCTIONS`, the instruction one printed *line* of one card
   compiles to. The compiler reads it after the grammar refuses and there is
   nothing after it, so a line that later grows a production makes its entry dead

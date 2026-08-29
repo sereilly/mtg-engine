@@ -49,7 +49,7 @@ from .continuous import (
 )
 from .keywords import ability_effects, derived_grants, derived_removals
 from .landwalk import landwalk_requirement
-from .land_types import land_type_changes
+from .land_types import land_type_changes, lost_abilities_to_type_change
 from .lord_buffs import QUALIFIER_FIELDS
 
 if TYPE_CHECKING:
@@ -502,6 +502,28 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
                 remove_abilities(
                     only, sorted(_printed_abilities(perm.effective_card)),
                     timestamp=0, label=static.name,
+                )
+            )
+
+    # CR 305.7's losing half. A land whose subtype an effect *set* to basic
+    # land types loses the abilities its rules text generated — the same
+    # removal Titania's Song makes above, on a different condition, so it is
+    # built the same way and from the same printed-ability read (which is what
+    # keeps a *granted* ability, as 305.7's "Note that this doesn't remove any
+    # abilities that were granted to the land by other effects" requires).
+    #
+    # The timestamp is the type change's own, not 0: an ability granted after
+    # the land became a Mountain is later in the order and survives (CR 613.7).
+    if lost_abilities_to_type_change(perm):
+        printed = sorted(_printed_abilities(perm.effective_card))
+        if printed:
+            effects.append(
+                remove_abilities(
+                    only, printed,
+                    timestamp=max(
+                        int(change.get("timestamp", 0)) for change in land_type_changes(perm)
+                    ),
+                    label="CR 305.7",
                 )
             )
 

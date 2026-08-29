@@ -1214,6 +1214,43 @@ def test_quarum_trench_gnomes_refuses_a_land_that_is_not_a_plains(set_pool):
     assert lands[0].effective_produced_mana == ("B",)
 
 
+def test_quarum_trench_gnomes_on_a_dual_pays_the_swapped_symbol(set_pool):
+    """Asking for the colour that was swapped away pays what the swap grants.
+
+    Every earlier test here taps a basic Plains, whose ``produced_mana`` has one
+    entry — so the tap seam's "the colour asked for is gone, take the first
+    thing this land makes" fallback was right by having nothing else to pick.
+    A Tundra is a Plains too, and it prints ``("U", "W")``: the Gnomes leave
+    ``("U", "C")``, and asking for white paid **{U}**. A seat names the symbol
+    the land prints, so the request is mapped through the swaps rather than
+    dropped.
+    """
+    game, p1, _gnomes, lands = _gnomes_game(set_pool, land_name="Tundra")
+    tundra = lands[0]
+    assert tundra.effective_produced_mana == ("U", "W")
+
+    assert _aim_gnomes(game, 1).supported
+    assert tundra.effective_produced_mana == ("U", "C")
+
+    p1.mana_pool = {sym: 0 for sym in ("W", "U", "B", "R", "G", "C")}
+    game.tap_land_for_mana(0, "Tundra", permanent_index=1, chosen_color="W")
+    assert p1.mana_pool["C"] == 1, "the swap's symbol, not the other colour"
+    assert p1.mana_pool["U"] == 0
+
+
+def test_quarum_trench_gnomes_leaves_the_other_half_of_a_dual_alone(set_pool):
+    """The swap names one symbol, so the colour it did not name still answers
+    for itself — the half of the fix that a first-entry fallback would also
+    have got right, asserted so the mapping cannot start swallowing it."""
+    game, p1, _gnomes, lands = _gnomes_game(set_pool, land_name="Tundra")
+    assert _aim_gnomes(game, 1).supported
+
+    p1.mana_pool = {sym: 0 for sym in ("W", "U", "B", "R", "G", "C")}
+    game.tap_land_for_mana(0, "Tundra", permanent_index=1, chosen_color="U")
+    assert p1.mana_pool["U"] == 1
+    assert p1.mana_pool["C"] == 0
+
+
 def test_quarum_trench_gnomes_effect_lasts_past_the_turn(set_pool):
     """"(This effect lasts indefinitely.)" — no duration, so no cleanup sweep
     takes it back."""

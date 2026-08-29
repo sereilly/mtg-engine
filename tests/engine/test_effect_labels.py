@@ -29,6 +29,7 @@ from engine.effect_labels import (
     TRIGGERED_LABELS,
     TRIGGERED_LABELS_BY_CONDITION,
 )
+from engine.oracle_types import OracleInstruction
 
 
 @pytest.fixture(scope="module")
@@ -134,3 +135,63 @@ def test_a_trigger_the_grammar_reads_keeps_its_triggered_prefix():
         program = oracle.compile_card_oracle(catalog[name])
         labels = [t.effect_kind for t in program.triggered_abilities]
         assert label in labels, (name, labels)
+
+
+def _composes_instructions(payload) -> bool:
+    """Whether *payload* carries other instructions — i.e. its kind is a wrapper.
+
+    Structural rather than a list of kind names, because a list of wrappers is
+    the same thing this module exists to avoid: a frozen description of a pool
+    that moves. `engine/handlers/control_flow.py` registers nine handlers and
+    only some of them compose (a coin flip and a chosen number do not), so the
+    question is asked of the compiled payload instead of the registry.
+    """
+    if isinstance(payload, OracleInstruction):
+        return True
+    if isinstance(payload, dict):
+        return any(_composes_instructions(value) for value in payload.values())
+    if isinstance(payload, (list, tuple, set)):
+        return any(_composes_instructions(value) for value in payload)
+    return False
+
+
+def test_a_wrapper_kind_never_borrows_a_leaf_effects_bucket(grammar_abilities):
+    """A composed effect is labelled by its shape, never by one of its steps.
+
+    `sequence` read `activated_damage` and `if_then` read `activated_mana` for
+    four sets, each true of the card that prompted the entry (Orcish Artillery,
+    the Urza's cycle) and false of most of the cards that later lowered to the
+    same wrapper — 54 abilities in the damage bucket, of which six were Mana
+    Batteries and five were planeswalkers. The failure is silent by
+    construction: a wrapper generalises, so the better the grammar gets at
+    composing effects the more cards the wrong label collects.
+
+    The check needs no list of wrappers and no list of buckets. A wrapper is a
+    kind whose payload carries other instructions; borrowing is that kind's
+    label also being produced by a kind that composes nothing. A shape label
+    (`activated_sequence`, `activated_conditional`, `activated_optional`) is
+    unshared by construction, so it passes without being named here.
+    """
+    activated, _triggered = grammar_abilities
+    wrappers: set[str] = set()
+    leaves: set[str] = set()
+    for card in load_catalog():
+        program = oracle.compile_card_oracle(card)
+        for ability in program.activated_abilities:
+            if ability.instruction is None or ability.instruction.kind not in ACTIVATED_LABELS:
+                continue
+            side = wrappers if _composes_instructions(ability.instruction.payload) else leaves
+            side.add(ability.instruction.kind)
+
+    borrowed = sorted(
+        (kind, ACTIVATED_LABELS[kind], sorted(
+            leaf for leaf in leaves if ACTIVATED_LABELS[leaf] == ACTIVATED_LABELS[kind]
+        ))
+        for kind in wrappers
+        if any(ACTIVATED_LABELS[leaf] == ACTIVATED_LABELS[kind] for leaf in leaves)
+    )
+    assert not borrowed, (
+        "activated wrapper kinds whose label is also a leaf effect's bucket — "
+        "the wrapper cannot say what the ability is for, so give it a label "
+        f"naming its shape: {borrowed}"
+    )

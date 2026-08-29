@@ -306,7 +306,6 @@ def test_no_acknowledgement_has_gone_stale(entry):
 POSITIONAL_BASELINE: dict[str, int] = {
     "engine/ai_policy.py": 11,
     "engine/ai_simulator.py": 2,
-    "engine/card_hooks.py": 2,
     "engine/handlers/_common.py": 2,
     "engine/handlers/board_misc.py": 2,
     "engine/handlers/combat.py": 2,

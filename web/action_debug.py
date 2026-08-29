@@ -173,8 +173,11 @@ def _action_debug_tap_permanent(session, req, seat_type):
     make_tapped = req.action == "debug_tap_permanent"
     # Same write path Twiddle uses: a raw state flip that also turns a
     # face-down creature (Illusionary Mask) face up when it becomes tapped.
-    # City of Brass's "whenever this land becomes tapped" deliberately does
-    # not fire — the engine scopes that trigger to the tap-for-mana path.
+    # It goes around `become_tapped`, so no "becomes tapped" trigger fires
+    # (City of Brass, Psychic Venom, Kudzu). That is deliberate for a debug
+    # write — the menu sets up a board rather than playing a turn — and it is
+    # the *only* reason those triggers stay quiet here: the engine stopped
+    # scoping them to the tap-for-mana path, so any real tap does fire them.
     session.game._tap_or_untap_target(
         session.game.players[controller_seat], make_tapped, req.target_permanent_index
     )

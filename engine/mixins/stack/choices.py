@@ -4169,10 +4169,13 @@ register_choice(
     default=lambda game, choice: game._default_kudzu_reattach(choice),
     action="kudzu_reattach_confirm",
     prompt_key="kudzu_reattach",
-    # Whether the controller is asked at all is the caller's ``defer_choice``,
-    # not the seat's interactivity: a tap that already names the land re-attaches
-    # inline. So an armed Kudzu choice queues for every seat and is drained by
-    # the auto-resolver, rather than defaulting the moment it is armed.
+    # Whether the controller is *asked* is the seat's interactivity, read here
+    # rather than passed in. It used to be a ``defer_choice`` flag threaded from
+    # ``tap_land_for_mana`` down through a name-keyed dispatcher, which is the
+    # same question ``interactive_seats`` already answers for every other
+    # prompt — and the web layer computed it a second way ("not ai" against this
+    # table's "is human"). One answer, so a new seat kind needs no new argument.
+    default_at_arm=True,
     blocked_detail="choose where Kudzu moves before other actions",
 )
 

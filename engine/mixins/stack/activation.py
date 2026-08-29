@@ -234,6 +234,26 @@ class AbilityActivationMixin:
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
 
+        # CR 305.7, for the same reason and at the same place: a land whose
+        # subtype an effect *set* to basic land types loses the abilities its
+        # rules text generated. Layer 6 drops the keywords; an activated ability
+        # is read off the compiled program, so it has to be refused here or the
+        # rule is half-implemented — a Mishra's Factory under Blood Moon read as
+        # a Mountain and still animated itself.
+        #
+        # It does not touch tapping for mana: that path is `tap_land_for_mana`,
+        # which reads `effective_produced_mana` and already gives the land the
+        # mana ability of its new type, which is 305.7's other half.
+        from ...land_types import lost_abilities_to_type_change
+
+        if lost_abilities_to_type_change(permanent):
+            details = (
+                f"{permanent.card.name} lost its abilities when its land type "
+                "was set (CR 305.7)"
+            )
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
+
         # Through the seam rather than off the card directly: Conspicuous Snoop
         # has the activated abilities of whatever is on top of its controller's
         # library, and that is a grant no read of the permanent alone can see.
@@ -916,6 +936,13 @@ class AbilityActivationMixin:
             emit(
                 self, "permanent_tapped_or_ability_activated",
                 subject=permanent, seat=controller_index,
+                # The other announcement of this condition stamps the same key
+                # (``become_tapped``), because "that artifact's controller"
+                # (Haunting Wind) reads the subject's seat whichever half of the
+                # printed ability fired. It is the *artifact's* controller, not
+                # the activating seat above — those differ whenever an ability
+                # is activated on a permanent someone else controls.
+                event_subject_controller=self.controller_index_of(permanent),
             )
 
         # All guards/costs passed — tally an activation of a capped ability.

@@ -106,16 +106,26 @@ A drainable list of things the playbook knows are not yet true, each naming
 the phase that clears it. A retrospective that drains an item deletes it; a
 set that hits a new one adds it.
 
-**The verification backlog is now the largest standing debt.**
-*Clears in: Phase 5, and it has not been clearing.* 708 of 1,162 cards have no
-recorded in-game result, because four sets have now promoted ahead of their
-Phase 5 pass and each one added to it. Promotion deliberately does not gate on
-this and that should not change — but the item belongs here rather than only in
-a retrospective, because "deliberately deferred" and "quietly abandoned" look
-identical after the fourth set. Two cards are recorded *failing* and one of them,
-Candelabra of Tawnos, predates The Dark entirely. **4ED is the first promotion
-that did not add to it** — a reprint set has no new card to verify — so the
-number is unchanged at ten sets rather than improving, and the item stands.
+Drained 2026-08-28: **the verification backlog is accepted as-is.** It sat here
+as the largest standing debt — 708 of 1,162 cards with no recorded in-game
+result, grown by four promotions — with derived `equivalent` named as the lever
+that would clear it. That lever is exhausted and the arithmetic says so:
+`engine/behaviour_signature.py` distinguishes **1,049 behaviours across 1,162
+cards**, only 148 cards share a class at all, and 48 unverified cards are
+covered by a passing peer. It cannot reach 708 no matter who pulls it, because
+the pool really is that diverse.
+
+So the decision is made rather than deferred a fifth time: **an in-game pass is
+not a required validation step.** What gates a promotion is Phase 4, and what
+catches regressions is the suite plus `simulate_ai_games.py`. The tracker stays
+what it is — a record of what a human has actually checked, and the place an
+in-game bug report lands with a card name on it — and it is read as a log, never
+as a coverage target. Nothing is owed to it and no phase is blocked on it.
+
+What that does *not* change: a card recorded **failing** is still a live bug.
+Both open failures were closed in the same round this decision was written
+(Candelabra of Tawnos, an unplayable `{X}` activation, and Silent Dart, already
+fixed by the CR 602.2b gate and never re-checked), and each now has a test.
 
 Drained at 4ED's Phase 0: the CI suite-time budget. The item said not to touch
 either number until someone read a real run, and reading three settled it — the

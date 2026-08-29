@@ -698,14 +698,34 @@ class GameHelpersMixin:
         if permanent.tapped:
             return False
         permanent.tapped = True
-        emit(self, "permanent_becomes_tapped", subject=permanent)
+        # The subject's controller, frozen into the announcement (CR 603.10).
+        # "…deals 2 damage to **that land's controller**" (Psychic Venom) is a
+        # back-reference to the object this event is about, and the seat has to
+        # come from here: by resolution the trigger has only a resolution
+        # context, whose player slot is whatever a targetless resolution
+        # defaults to. Stamped for both emits below because a card printing the
+        # phrase can hang off either event.
+        tapped_seat = self.controller_index_of(permanent)
+        emit(
+            self, "permanent_becomes_tapped",
+            subject=permanent, event_subject_controller=tapped_seat,
+            # The tapped object itself, by id (CR 400.7 — an index is not an
+            # identity). A trigger that acts *on* it rather than on its
+            # controller ("destroy it" — Kudzu) reads it here, frozen at the
+            # announcement, because by resolution the land may have moved and a
+            # board search would find a look-alike.
+            event_subject_permanent_id=permanent.permanent_id,
+        )
         # "Whenever an artifact becomes tapped **or** a player activates an
         # artifact's ability without {T} in its activation cost" (Haunting
         # Wind, Powerleech) — one printed ability with two trigger events, so
         # one condition kind announced from both. This is the tapping half; the
         # other is in stack/activation.py, where an ability whose cost has no
         # {T} finishes paying.
-        emit(self, "permanent_tapped_or_ability_activated", subject=permanent)
+        emit(
+            self, "permanent_tapped_or_ability_activated",
+            subject=permanent, event_subject_controller=tapped_seat,
+        )
         return True
 
     def playable_card_of(self, permanent: "Permanent"):

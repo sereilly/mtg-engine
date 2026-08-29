@@ -39,7 +39,7 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **9,162 tests**, CI budget **240s**, CI-measured
+2. **The suite stays fast.** **9,176 tests**, CI budget **240s**, CI-measured
    baseline **110s** (`ci.yml`). The budget catches a step change; the
    baseline is what catches creep, and it is the number to keep honest.
    Raising the budget is a decision, not maintenance — it has been raised three
@@ -175,11 +175,23 @@ carries a number should be re-run before it is cited.
   implements the line only from the mana-tap path, which is the half of that
   round's finding it did not close.
 
-  **The census reads three today** — Creature Bond, Howling Mine, Kudzu.
-  Paralyze and Capture Sphere left it during Legends, when the machinery under
-  them grew a real instruction; nothing about them was individually rescued, and
-  the number is the census's to report rather than this bullet's to carry. Rock
-  Hydra's automatic counter shield — the
+  **The census reads two today** — Creature Bond and Howling Mine, each a line a
+  registry implements in full and the compiler cannot see (the death-damage
+  template, which must read a toughness no payload can hold; the draw-step
+  table). Kudzu left it on 2026-08-28, and it is the entry that shows why the
+  census is worth running: applying the Rock Hydra test to all three found that
+  two were fine and the third **had never fired at all**. Its dispatcher lived
+  inside `tap_land_for_mana`, so a land tapped by an Icy Manipulator destroyed
+  nothing — the exact bug `become_tapped`'s docstring says that seam was built
+  to end, still present in the one card that predates it. As a
+  `CARD_LINE_INSTRUCTIONS` line the trigger is announced by the seam like any
+  other, so it fires however the land became tapped *and* uses the stack
+  (CR 603.3) instead of resolving inline. Hooked cards and entries did not
+  move (74 / 80); one registry went away.
+  Paralyze and Capture Sphere left the census during Legends, when the machinery
+  under them grew a real instruction; nothing about them was individually
+  rescued, and the number is the census's to report rather than this bullet's to
+  carry. Rock Hydra's automatic counter shield — the
   one the bullet below used to call "the Nine Lives class hiding behind a
   verified-sounding acknowledgement" — is implemented
   (`prevention.py:_remove_counter_per_damage`) rather than acknowledged, and
@@ -189,22 +201,79 @@ carries a number should be re-run before it is cited.
   Phase 3 exit criterion, not only a Phase 2 reading** — Antiquities read 85/85
   supported for thirty rounds with three cards in it (ATQ 30), and reaching zero
   took a round of its own.
-- **The verification tracker holds 708 unrecorded cards** of 1,162 — M21,
-  Antiquities, Legends and The Dark, all four promoted before their in-game pass
-  (SET_PLAYBOOK Phase 5 owns that delta and promotion deliberately does not
-  gate on it); 443 pass (383 checked in-game, 60 auto-passed), two are recorded
-  **failing**, and more read `equivalent` off a passing peer. Four sets have
-  now been promoted ahead of Phase 5 and the backlog has grown with each, which
-  is the decision working as stated rather than drifting — but the derived
-  `equivalent` results across 35 behaviour classes are still the lever nobody
-  has pulled, and this is now the largest standing debt in the repo. **Candelabra
-  of Tawnos is one of the two failures** and has been since before The Dark
-  began: it resolves without asking how many lands to untap. A headless sweep is not a manual in-game pass: `card_verification.json`
-  records what a human checked, including a **failure**, which is a bug report
-  with a card name on it. A stale generated number does not read as stale, it
-  reads as an answer — this bullet said "19 untested" for a week after M21
-  shipped, which is why CI regenerates the tracker now and why
-  `CARD_VERIFICATION.md`, not this line, is the number.
+- **The verification backlog is accepted, by decision, 2026-08-28.** It stood
+  here as the largest standing debt in the repo, with derived `equivalent`
+  named as the lever nobody had pulled. The lever was measured and it is
+  exhausted: `behaviour_signature.py` distinguishes **1,049 behaviours over
+  1,162 cards**, 148 cards share a class at all, and 48 unverified cards are
+  covered by a passing peer. It cannot reach 708 — the pool is that diverse —
+  so no amount of pulling clears the debt. An in-game pass is therefore **not a
+  required validation step**: promotion gates on Phase 4, regressions are caught
+  by the suite and `simulate_ai_games.py`, and `CARD_VERIFICATION.md` is read as
+  a log of what a human happened to check rather than as a coverage target. See
+  SET_PLAYBOOK.md's Known gaps for the same decision stated where the phases
+  are.
+
+  **A card recorded *failing* is still a live bug**, and that is the half this
+  decision does not touch. Both open failures were closed in the round that
+  wrote it: Candelabra of Tawnos (below) and Silent Dart, which the CR 602.2b
+  activation gate had already fixed without anyone re-checking the row. The
+  count that matters is failures, not blanks.
+
+- ~~**Three shipped cards damaged the wrong player.**~~ *Fixed 2026-08-28.*
+  Psychic Venom, Haunting Wind and Artifact Possession all print "that
+  <object>'s controller" and all hang off the two tap announcements that
+  `emit`ted with no payload — so the phrase fell through to `target_player` and
+  hit the *trigger controller's opponent*. Psychic Venom on your own land
+  damaged your opponent; Haunting Wind did it when you tapped your own Mox.
+  `become_tapped` now freezes `event_subject_controller` (and the subject's
+  `permanent_id`) into both announcements, and the two conditions joined
+  `_EVENT_SUBJECT_CONTROLLERS`.
+
+  **The tests that should have caught it could not**, and that is the reusable
+  part: every existing fixture put the object on the *opposing* seat, where "the
+  land's controller", "the seat that tapped it" and "the trigger controller's
+  opponent" are one player. One of them even asserted the right claim in its own
+  docstring — "the damage goes to the land's controller, not the Aura's" — and
+  passed either way. The discriminating fixture is the one nobody plays:
+  enchanting your **own** permanent.
+
+- ~~**Candelabra of Tawnos resolves without asking how many lands to untap.**~~
+  *Fixed 2026-08-28*, and the engine was never the problem — given an X and a
+  list of ids it untapped exactly those lands, and `tests/sets/` proved it. The
+  whole gap was the client, in three places that each hid the next: the
+  activation cascade asked "does this target a land?" before "does it name
+  several?", so the single-land picker claimed the card; the ability X prompt
+  ran *after* that cascade and sent the ability the moment a number was chosen,
+  with no targets; and `resolvePendingCastX` explicitly excluded
+  `castAction === "activate"` from continuing into the picker. **An engine test
+  that supplies the X and the targets itself cannot see any of this** — which is
+  the general lesson, and the reason the new test is a wire test.
+
+- **A trigger's "that player" back-reference falls through to `target_player`
+  rather than refusing.** `lowering/_events.py` says in its own docstring that
+  "a condition absent from a table refuses the line instead", and the damage
+  family's last `elif` breaks that contract: a condition in neither
+  `_EVENT_SUBJECT_CONTROLLERS` nor `_EVENT_SUBJECT_PLAYERS` silently becomes a
+  *target* the card never offers. Censused at **11 triggered abilities**, of
+  which only Brash Taunter genuinely prints "target opponent". Three were live
+  bugs and are fixed (below); the other seven are correct **by accident** —
+  Ankh of Mishra and Dingus Egg because their hand-written fire sites replace
+  the compiled instruction outright with a `deal_damage_to_player` carrying
+  their own `victim_player_index`, Manabarbs and the four
+  `upkeep_enchanted_controller` Auras because a registry supplies the seat.
+  Closing the fall-through therefore means moving those fire sites onto the
+  compiled instruction first, or Ankh of Mishra becomes unsupported. **Its own
+  round, and the census above is its work list.**
+- **Two layer reads still disagree about the same land.**
+  `_refresh_static_land_types` tests its *from* side against
+  `effective_card.type_line` (layer 3) rather than `has_type` (layer 4), so
+  Conversion cannot see a Mountain that Blood Moon made — two layer-4 effects
+  CR 613.7 says should chain by timestamp. Deliberately **not** taken with the
+  305.7 round above: asking `has_type` there reads layer 4's result while
+  computing layer 4's inputs, so the fix is a dependency ordering rather than a
+  changed accessor. Its `break` after the first matching source is the same
+  round's second half — CR 613.7 chains statics, it does not pick one.
 
 - **CR 608.2b is enforced for instants and sorceries only, and the rest is
   blocked on a different bug.** The rule ("if all its targets are now illegal,
@@ -242,39 +311,40 @@ carries a number should be re-run before it is cited.
   fixed, because a fix with no card to verify it is a guess (the same reason
   "a filter with no card behind it is untested by construction" sits below).
 
-- **CR 305.7's ability-loss half does not exist.** "Nonbasic lands are
-  Mountains" changes a land's *types* and its mana, and stops there. Verified in
-  a game: with Blood Moon out, Mishra's Factory reads as a Mountain, produces
-  {R} — and still carries all three of its activated abilities, animation
-  included; City of Brass keeps its damage trigger. The rule says a land whose
-  basic land types are set loses its old abilities and gains the mana ability
-  for those types. `Permanent.effective_produced_mana` implements only the
-  second half. This has applied to Evil Presence, Phantasmal Terrain, Conversion
-  and Cyclopean Tomb the whole time; Blood Moon (The Dark) is the first card
-  that makes it reachable on every nonbasic land at once, which is how it was
-  found. The seam already exists — `global_statics.removes_abilities` is
-  enforced in `mixins/stack/activation.py` for Titania's Song — so this wants
-  the same refusal plus a layer-6 removal, keyed on the land's derived basic
-  types differing from its printed ones. **A whole CR rule, one round.**
-- **`ACTIVATED_LABELS["sequence"]` reports 54 shipped abilities as damage.**
-  Verified by compiling the pool: every activated ability that lowers to a
-  `sequence` takes the `activated_damage` bucket, which is right for Banshee and
-  wrong for six Mana Batteries, Bottle of Suleiman, Ebony Horse, Ashnod's
-  Transmogrant and four planeswalkers. The triggered side already fixed exactly
-  this with a `triggered_sequence` label; the activated side never got the twin.
-  Nothing crashes — it is the support report and `SimulationResult` describing a
-  third of their damage bucket wrongly. Cheap, and its own round because
-  re-bucketing 54 cards is a diff worth reading.
-- **A land whose colour was swapped away gives the wrong colour, not
-  colourless.** `tap_land_for_mana` ends its symbol choice with
-  `mana_symbol = produced[0]` when the requested colour is no longer in
-  `effective_produced_mana` — so a Quarum Trench Gnomes'd dual asked for its
-  swapped colour yields *the other one* rather than the {C} the Gnomes grant. A
-  basic Plains is right only because its list has one entry. Recorded from the
-  code path rather than a game: arming the effect headlessly needs the activation
-  API the web picker uses, and the fallback line is unambiguous. The fix is to
-  map the chosen colour through the land's swaps instead of falling back to the
-  first entry.
+- ~~**CR 305.7's ability-loss half does not exist.**~~ *Fixed 2026-08-28.*
+  `land_types.lost_abilities_to_type_change` is the one predicate and it has
+  **three** readers, because an ability can act three ways and the rule has to
+  reach all of them: layer 6 drops the printed keywords, the activation gate
+  refuses the activated ones (beside Titania's Song, for the same reason), and
+  `iter_triggered_abilities` skips the triggered ones. The last was the reader
+  the recorded entry did not name — City of Brass's trigger is read off the card
+  by the scan, not from the ability channel layer 6 strips, so a layer-6-only
+  fix would have left it firing.
+
+  The condition is that an effect **set** the type, asked of the *contributions*
+  and never of the layer-4 result: "is this a Mountain?" is true of a printed
+  Mountain, which has lost nothing. 305.7's last sentence — a land that gains a
+  type *in addition* keeps its rules text — is the same distinction, and those
+  live on the separate `GAINED_TYPES` channel the predicate deliberately does
+  not read.
+- ~~**`ACTIVATED_LABELS["sequence"]` reports 54 shipped abilities as damage.**~~
+  *Fixed 2026-08-28.* Both wrapper kinds were wrong, not one:
+  `sequence` → `activated_damage` and `if_then` → `activated_mana`, and each
+  comment justified itself by citing the other. `if_then` was true of the
+  Urza's cycle and false of Eater of the Dead, Land's Edge and Lesser Werewolf.
+  They are `activated_sequence` and `activated_conditional` now, and the guard
+  is structural rather than a list: a wrapper is a kind whose payload carries
+  other instructions, and borrowing is that kind's label also being produced by
+  a kind that composes nothing. **A wrapper label cannot be a leaf's bucket**,
+  which is the general form of the bug and needs no list of either.
+- ~~**A land whose colour was swapped away gives the wrong colour.**~~ *Fixed
+  2026-08-28, and it was reachable from the shipped pool after all.* Quarum
+  Trench Gnomes on a **Tundra** (a Plains, printed `("U", "W")`) leaves
+  `("U", "C")`; asking for white paid **{U}**. `Permanent.produced_symbol_for`
+  maps the request through the same swaps rather than falling back to
+  `produced[0]`. The reason it read as unreachable is worth keeping: every
+  existing test tapped a *basic*, whose one-entry list makes the fallback right
+  by having nothing else to pick.
 - **Two layer reads that disagree about the same land.**
   `_refresh_static_land_types` tests its *from* side against
   `effective_card.type_line` (layer 3) rather than `has_type` (layer 4), so
@@ -551,46 +621,58 @@ against `compile_line` before citing it.
 
 ## The next set, measured rather than guessed
 
-Sixteen candidates were ingested to a scratch directory and censused against the
-live compiler before The Dark was chosen. Re-run the numbers before acting on
-them — that is this file's standing rule — but the shape of the answer is worth
-keeping, because it took a morning to produce and it will not have changed much.
+**Re-censused 2026-08-28** against the live compiler, ten candidates fetched to
+a scratch directory (never `cards/`). 4ED has shipped, so the free option is
+spent. The standing rule held: the shape did not change much, and the numbers
+below are the current ones.
 
-**Fourth Edition is free, now, and should be taken next.** 368 cards, **zero**
-outside the shipped pool and **zero** unsupported — verified against the pool as
-it stands after this promotion, not projected. Every one of the 32 cards it held
-that the pool lacked was a The Dark card, and all 11 of its unsupported ones
-were among them. It costs an ingest, a manifest entry at index 8 and a Phase 4
-rehearsal; it buys a completed set, 368 recorded printings and the reprint data
-for every card it shares. There is no Phase 3 at all. Nothing else on the list
-is close to that ratio, and the ratio only exists because The Dark went first.
+**The leverage is gone everywhere, and the measurement is now sharper than
+"1.00 to 1.15".** Lines-per-distinct-sentence over each candidate's refused
+backlog:
 
-**After that the leverage is gone and the sets are all long tails.** Every one
-of the sixteen has a refusal backlog whose lines-per-distinct-sentence is
-between 1.00 and 1.15 — one refused sentence per refused line, everywhere. The
-generalise-first rule that carried Alpha through Revised has run out; Legends
-was the warning and it is now the universal condition. Rank candidates by
-unsupported-card count and by what machinery they force, not by hoping for a
-production that clears thirty cards.
+| Set | Cards | New to pool | New & unsupported | New per unit work | Lines/distinct | Blocked by exactly one line |
+| --- | --: | --: | --: | --: | --: | --: |
+| 6ED | 335 | 200 | 75 | 2.7 | **1.00** | 69 of 75 |
+| FEM | 102 | 102 | 39 | 2.6 | **1.00** | 32 of 39 |
+| HML | 115 | 115 | 48 | 2.4 | 1.02 | 39 of 48 |
+| 5ED | 434 | 147 | 66 | 2.2 | 1.01 | 55 of 66 |
+| TMP | 335 | 315 | 145 | 2.2 | — | — |
+| ICE | 373 | 346 | 189 | 1.8 | **1.09** | 135 of 189 |
+| VIS | 167 | 167 | 96 | 1.7 | — | — |
+| MIR | 335 | 317 | 183 | 1.7 | — | — |
+| WTH | 167 | 167 | 99 | 1.7 | — | — |
+| ALL | 144 | 144 | 99 | 1.5 | — | — |
 
-Ranked by new cards per unsupported card, after The Dark:
+**6ED and FEM measure exactly 1.00** — 81 refused lines over 81 distinct
+sentences, 45 over 45. Not "nearly a long tail": every single refused line in
+those sets is a different sentence, so 75 cards cost 75 separate pieces of work
+and no production is shared by even two of them. The best "new per unit work"
+ratio in the table belongs to the set with the least reusable work in it, which
+is the trap that ratio sets.
 
-| Set | Cards | New to pool | New & unsupported | New per unit work |
-| --- | --: | --: | --: | --: |
-| 4ED | 368 | 0 | **0** | free |
-| 6ED | 335 | ~200 | ~74 | 2.7 |
-| M19 | 298 | 273 | 102 | 2.7 |
-| 5ED | 434 | 147 | 66 | 2.2 |
-| ORI | 268 | 251 | 108 | 2.3 |
-| ICE | 373 | 346 | 195 | 1.8 |
+**ICE is the only candidate where a production buys more than one card**, and
+its three most repeated sentences are all cumulative upkeep (8x, 6x, 5x). Its
+1.09 is not noise around the others' 1.00; it is one keyword.
 
-**Ice Age is where the rules coverage is**, when card count stops being the
-question. Its big rock is named in advance: **cumulative upkeep (CR 702.24)**,
-30 of its own cards and 63 across the Ice Age block (ALL, MIR, VIS, WTH), of
-which 61 are unsupported today. The engine already has both seams it needs — the
-upkeep registry and the counter API — so it is one keyword plus one
-registration for 61 cards. Nothing else in any candidate set comes close to that
-ratio, and it is the only genuine subsystem any of them forces.
+**Ice Age is therefore where the rules coverage is**, and the big rock is
+confirmed rather than remembered: **cumulative upkeep (CR 702.24)**, re-counted
+at 30 of its own cards and **63 across the block** (ALL 9, MIR 5, VIS 5, WTH
+14), of which **61 are unsupported today**. Within ICE, 14 of those 30 are
+blocked by the cumulative-upkeep line **and nothing else** — one keyword ships
+them outright — and the other 16 have it plus one more clause. The engine
+already has both seams it needs (the upkeep registry, the counter API). Nothing
+else in any candidate comes close, and it is still the only genuine subsystem
+any of them forces.
+
+**The three remaining zero-new-card sets are not 4ED again.** FBB, SUM and 4BB
+are the only sets that would bring nothing new to *this* pool, and they are the
+Revised and Fourth lists a second and third time: they buy printings and no
+cards, and 4ED already produced the one finding that shape had to give (a guard
+that could not tell the manifest roles apart). `set_progress.json` lists ten
+more zero-new-card sets, but that field is relative to the whole **release
+line**, not to this pool — 5ED and 6ED read 0 there and bring 147 and 200 cards
+here, because the sets they reprint from are not ingested. Sequence a core set
+after its sources or it arrives carrying cards nothing supports.
 
 **Three structural gaps bound everything after Innistrad**, and the first is a
 hard wall rather than a backlog. `card_loader.REQUIRED_FIELDS` demands a
@@ -626,12 +708,23 @@ ingest, because the ingest round's own engine fixes moved it — Phase 1 says to
 treat what the suite surfaces on a new set as yield, and that gap is the yield.
 
 **Where the pool stands** (regenerate rather than trust these): 1,162 unique
-cards over 9 sets, 100% supported. Grammar parses 85.2% of lines and executes
-52.3% (`GRAMMAR_COVERAGE.md`). 6.4% of supported cards carry a name-keyed hook,
-80 entries in 7 registries (`HOOK_RELIANCE.md`) — the number that decides
-whether this architecture reaches 26,113 cards. 334 of 611 tracked CR rules
-have a test (`RULES_PROGRESS.md`). 443 of 1,162 cards have a passing in-game
-result (`CARD_VERIFICATION.md`).
+cards over **10** sets, 100% supported. Grammar parses 85.7% of lines and
+executes 52.3% (`GRAMMAR_COVERAGE.md`). 6.4% of supported cards carry a
+name-keyed hook, 80 entries in **6** registries (`HOOK_RELIANCE.md`) — the
+number that decides whether this architecture reaches 26,113 cards.
+`RULES_PROGRESS.md` is the CR coverage tracker. `CARD_VERIFICATION.md` is a log,
+not a target — see the accepted-backlog decision above.
+
+**One ratchet moved up on 2026-08-28 and the reason is worth keeping**, because
+a ceiling that rises usually means a regression and this one did not. Retiring
+Kudzu's dispatcher moved its line into `CARD_LINE_INSTRUCTIONS`, which is the
+registry the *line* measure counts — so hooked lines read 69 → 70 while hooked
+cards (74) and entries (80) did not move at all and the registry count fell from
+7 to 6. Reliance did not rise; the old number was under-reporting a line that
+was hooked all along in a registry the measure could not see. Read a ratchet
+move as a measurement change before crediting it as a regression — the mirror of
+4ED's lesson about reading a promotion diff as membership before crediting the
+parser.
 
 The Dark is the first set where **every shipped set's parse rate went up with
 it** — ARN 75.0 -> 75.9, 3ED 83.5 -> 84.1, LEA 81.7 -> 82.0 — because twelve

@@ -308,3 +308,85 @@ def test_305_7_a_type_the_catalog_does_not_know_refuses():
 
     assert static_land_type_change_for("all deserts are islands") is not None
     assert static_land_type_change_for("all wombats are islands") is None
+
+
+# ---------------------------------------------------------------------------
+# CR 305.7's losing half — "it loses all abilities generated from its rules
+# text, its old land types, and any copiable effects affecting that land"
+# ---------------------------------------------------------------------------
+#
+# Implemented ten sets after the gaining half. With Blood Moon out, Mishra's
+# Factory read as a Mountain and produced {R} — and still animated itself and
+# pumped; City of Brass still had its damage trigger. An ability can act three
+# ways, so the rule needs three enforcement points, and each is asserted here:
+# the keyword (layer 6), the activated ability (the activation gate) and the
+# triggered ability (the trigger scan).
+
+
+@pytest.mark.cr("305.7")
+def test_305_7_a_set_land_type_removes_an_activated_ability(catalog):
+    factory = Permanent(card=catalog["Mishra's Factory"])
+    game, _p1, p2 = _game(factory)
+    game.start_turn(1)
+
+    assert game.activate_permanent_ability(1, "Mishra's Factory", permanent_index=0).supported
+
+    change_land_type(factory, "mountain", source="test")
+    game._recompute_continuous_effects()
+
+    result = game.activate_permanent_ability(1, "Mishra's Factory", permanent_index=0)
+    assert not result.supported
+    assert "305.7" in result.details
+
+
+@pytest.mark.cr("305.7")
+def test_305_7_a_set_land_type_removes_a_triggered_ability(catalog):
+    city = Permanent(card=catalog["City of Brass"])
+    game, _p1, p2 = _game(city)
+    game.start_turn(1)
+    p2.life = 20
+
+    change_land_type(city, "mountain", source="test")
+    game._recompute_continuous_effects()
+
+    p2.mana_pool = {sym: 0 for sym in ("W", "U", "B", "R", "G", "C")}
+    game.tap_land_for_mana(1, "City of Brass", permanent_index=0, chosen_color="R")
+    game._settle()
+
+    assert p2.life == 20, "the damage trigger came from rules text the change removed"
+    assert p2.mana_pool["R"] == 1, "and the new type's mana ability is what it gained"
+
+
+@pytest.mark.cr("305.7")
+def test_305_7_keeps_an_ability_granted_by_another_effect(catalog):
+    """"Note that this doesn't remove any abilities that were granted to the
+    land by other effects." The removal is built from the *printed* abilities
+    for exactly this reason, so a grant made afterwards outlives it."""
+    from engine.keywords import grant_keyword
+
+    factory = Permanent(card=catalog["Mishra's Factory"])
+    game, _p1, _p2 = _game(factory)
+
+    change_land_type(factory, "mountain", source="test")
+    grant_keyword(factory, "flying")
+    game._recompute_continuous_effects()
+
+    assert factory.has_keyword("flying")
+
+
+@pytest.mark.cr("305.7")
+def test_305_7_leaves_a_printed_basic_land_alone(catalog):
+    """The condition is that an effect *set* the type, not that the land has a
+    basic land type — a printed Mountain has lost nothing. Asserted because the
+    cheap reading of this rule ("is it a basic type?") is true of both."""
+    mountain = Permanent(card=catalog["Mountain"])
+    city = Permanent(card=catalog["City of Brass"])
+    game, _p1, p2 = _game(mountain, city)
+    game.start_turn(1)
+    p2.life = 20
+
+    p2.mana_pool = {sym: 0 for sym in ("W", "U", "B", "R", "G", "C")}
+    game.tap_land_for_mana(1, "City of Brass", permanent_index=1, chosen_color="R")
+    game._settle()
+
+    assert p2.life == 19, "an untouched City of Brass still has its trigger"

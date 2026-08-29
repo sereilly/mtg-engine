@@ -125,6 +125,44 @@ def test_artifact_possession_fires_only_for_the_artifact_it_enchants(set_pool):
     assert [item.card.name for item in game.stack] == ["Artifact Possession"]
 
 
+def test_the_tap_triggers_damage_the_artifacts_controller(set_pool):
+    """"…deals damage to **that artifact's controller**" reads the subject of
+    the event, not the seat that caused it and not the trigger controller's
+    opponent.
+
+    Every other test in this block puts the artifact on the opposing seat,
+    where those three answers coincide — so a wrong reading passed. Both cards
+    are asserted together because they share one condition kind with two
+    announcements, and the seat has to be frozen at both: Haunting Wind watches
+    every artifact, so the discriminating case is its controller's **own**
+    artifact, and Artifact Possession's is the Aura on an artifact its own
+    controller has.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ATQ")
+    wind = Permanent(card=pool["Haunting Wind"])
+    mine = Permanent(card=pool["Ornithopter"])
+    p1 = PlayerState(name="P1", battlefield=[wind, mine], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    game.become_tapped(mine)
+    game.resolve_top_of_stack()
+    assert (p1.life, p2.life) == (19, 20), "the artifact's controller, who is also you"
+
+    aura = Permanent(card=pool["Artifact Possession"])
+    thopter = Permanent(card=pool["Ornithopter"])
+    p1 = PlayerState(name="P1", battlefield=[aura, thopter], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    attach_aura(aura, thopter)
+
+    game.become_tapped(thopter)
+    game.resolve_top_of_stack()
+    assert (p1.life, p2.life) == (18, 20)
+
+
 # ---------------------------------------------------------------------------
 # Circle of Protection: Artifacts (round 8)
 # ---------------------------------------------------------------------------

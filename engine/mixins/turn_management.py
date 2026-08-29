@@ -4,7 +4,6 @@ import dataclasses
 import random
 
 from ..auras import aura_additional_mana_on_tap
-from ..card_hooks import ENCHANTED_LAND_TAPPED_FOR_MANA
 from ..hand_locks import expire_hand_locks
 from .. import land_mana_swaps
 from ..game_types import OracleExecutionContext, SimulationResult
@@ -336,8 +335,6 @@ class TurnManagementMixin:
         land_name: str,
         chosen_color: str = "G",
         permanent_index: int | None = None,
-        kudzu_reattach_index: int | None = None,
-        defer_kudzu_choice: bool = False,
     ) -> bool:
         player = self.players[player_index]
         resolved = self._find_controlled_permanent(player, land_name, permanent_index)
@@ -412,10 +409,12 @@ class TurnManagementMixin:
             mana_symbol = chosen_color
             produced = land.effective_produced_mana
             if produced:
-                if chosen_color in produced:
-                    mana_symbol = chosen_color
-                else:
-                    mana_symbol = produced[0]
+                # A colour swapped away is still a legitimate request: the seat
+                # names the symbol the land prints and the swap decides what
+                # comes out, so the request is mapped through the swaps rather
+                # than dropped. `produced[0]` is the answer only when nothing
+                # maps — a land asked for a colour it never made.
+                mana_symbol = land.produced_symbol_for(chosen_color) or produced[0]
             else:
                 symbols = land.basic_land_mana
                 if symbols:
@@ -439,21 +438,12 @@ class TurnManagementMixin:
 
         self.log.append(f"{player.name} tapped {land_name} for mana")
 
-        # An Aura enchanting this land may have bespoke "when tapped for mana"
-        # behavior (Kudzu destroys the land and re-attaches). Keyed by Aura name
-        # in card_hooks so the card name stays out of this core flow; the hook
-        # may set pending_kudzu_reattach for the interactive reattach choice. It
-        # detaches the Aura from this land, so the generic trigger pass below
-        # then sees no Aura here.
-        aura = land.metadata.get("attached_aura")
-        if aura is not None:
-            tapped_hook = ENCHANTED_LAND_TAPPED_FOR_MANA.get(aura.card.name)
-            if tapped_hook is not None:
-                tapped_hook(
-                    self, player_index, land, resolved[0], aura,
-                    kudzu_reattach_index, defer_kudzu_choice,
-                )
-
+        # Kudzu's "when enchanted land becomes tapped" used to be dispatched
+        # here, from inside the *mana* path — so it was the one attached trigger
+        # that could not see a land tapped any other way (CR 701.26a). It is an
+        # ordinary compiled trigger now, announced by `become_tapped` above like
+        # City of Brass's and Psychic Venom's, and nothing about it belongs in
+        # this method.
         attached_aura = land.metadata.get("attached_aura")
         if attached_aura is not None:
             # Wild Growth: "Whenever enchanted land is tapped for mana, its controller

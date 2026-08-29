@@ -646,3 +646,30 @@ def test_silent_dart_with_no_named_target_hits_a_creature_not_the_player(set_poo
     assert result.supported
     assert [c.name for c in p2.graveyard] == ["Alpine Watchdog"]
     assert p2.life == 20
+
+
+def test_silent_dart_with_no_creature_pays_nothing(set_pool):
+    """The refusal spends nothing — the half the in-game report was about.
+
+    CARD_VERIFICATION.md records Silent Dart *failing*: "I get an error saying
+    no valid creature targets but the card sacrifices itself." The gate that
+    fixed it is `legality.activation_target_refusal`, asked before any cost is
+    paid (CR 602.2b/601.2c), and CLAUDE.md names this card as its worked
+    example — but nothing asserted the *cost* half, only that the AI declines
+    to propose the activation. A gate asked after the sacrifice would satisfy
+    that test and still burn the artifact.
+    """
+    pool = set_pool("M21")
+    dart = _nosick(Permanent(card=pool["Silent Dart"]))
+    p1 = PlayerState(name="P1", battlefield=[dart])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(0, "Silent Dart", permanent_index=0)
+    game._settle()
+
+    assert not result.supported
+    assert [p.card.name for p in p1.battlefield] == ["Silent Dart"], "not sacrificed"
+    assert p1.graveyard == []
+    assert not dart.tapped, "and {T} was not paid either"

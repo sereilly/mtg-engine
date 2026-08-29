@@ -186,6 +186,37 @@ def land_type_changes(perm: Permanent) -> tuple[dict, ...]:
     )
 
 
+def lost_abilities_to_type_change(perm: Permanent) -> bool:
+    """Whether CR 305.7 has taken *perm*'s printed abilities away.
+
+    "If an effect **sets** a land's subtype to one or more of the basic land
+    types … it loses all abilities generated from its rules text, its old land
+    types, and any copiable effects affecting that land, and it gains the
+    appropriate mana ability for each new basic land type."
+
+    The engine implemented only the gaining half for ten sets: with Blood Moon
+    out, Mishra's Factory read as a Mountain and produced {R} — and still
+    animated itself and pumped, and City of Brass still had its damage trigger.
+    Every basic-land-type change in this engine is a *set* (that is what
+    :func:`change_land_type` records and what the "All X are Y" statics derive),
+    so the presence of a contribution is the rule's own condition.
+
+    Deliberately **not** answered from the layer-4 result. "Is this land a
+    Mountain?" is true of a printed Mountain too, and a printed Mountain has
+    lost nothing; the question here is whether an *effect* set the type, which
+    only the contributions can say. The last sentence of 305.7 — a land that
+    gains a type *in addition* keeps its rules text — is the same distinction,
+    and those are recorded on the separate ``GAINED_TYPES`` channel that this
+    deliberately does not read.
+
+    Three readers, because an ability can act in three ways: layer 6 drops the
+    keywords, the activation gate refuses the activated ones, and the trigger
+    scan skips the triggered ones. One predicate for all three, so a land
+    cannot lose half its abilities.
+    """
+    return bool(land_type_changes(perm))
+
+
 # ---------------------------------------------------------------------------
 # The static reading: "All <type>s are <type>s." (Conversion, Blood Moon)
 # ---------------------------------------------------------------------------
