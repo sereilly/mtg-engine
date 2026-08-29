@@ -566,30 +566,20 @@ class DeclareBlockersStepMixin:
                 continue
             if restriction.kind != "cant_be_blocked_by":
                 continue
-            described = {}
-            subtype = restriction.payload.get("blocker_subtype")
-            if subtype:
-                described["subtype_filter"] = subtype
-            blocker_type = restriction.payload.get("blocker_type")
-            if blocker_type:
-                # "artifact **creatures**" — both halves, so a non-creature
-                # artifact (which could not block anyway) is not what is
-                # described and an animated one is.
-                described["type_filter_all"] = [blocker_type, "creature"]
-            colour = restriction.payload.get("blocker_color")
-            if colour:
-                # Through `subject_matches`, so it is layer 5 that answers: a
-                # Grizzly Bears laced red is a red creature, and the printed
-                # line would say otherwise.
-                described["color_filter"] = colour
-            power = restriction.payload.get("blocker_power")
-            if power is not None:
-                # "power 3 **or greater**", against the blocker's *effective*
-                # power (CR 613 layer 7) — a 2/2 that has been pumped stops
-                # being a legal blocker while it is pumped.
-                described["power"] = {"op": "ge", "value": int(power)}
-            if described and subject_matches(self, blocker, described):
-                return False
+            # The printed noun phrase, already read into subject filters by
+            # `combat_restrictions._blocker_union` — the same vocabulary the
+            # whitelist form above uses. This used to be four payload keys
+            # translated back into filter keys by four branches here: two
+            # vocabularies for one thing, so a noun both parsers could read
+            # needed a capture *and* a branch, and without the branch the
+            # restriction was parsed and never applied.
+            #
+            # Every field still goes through `subject_matches`, so the layers
+            # answer: a Grizzly Bears laced red is a red creature, an animated
+            # artifact is an artifact creature, and a pumped 2/2 has power 4.
+            for described in restriction.payload.get("blocker_filters") or ():
+                if subject_matches(self, blocker, described):
+                    return False
 
         # Invisibility's "can't be blocked except by Walls" used to be its own
         # aura restriction and its own check here. It is not any more: the loop

@@ -480,3 +480,48 @@ def test_woolly_mammoths_tramples_only_while_you_control_a_snow_land(set_pool):
     game.remove_from_battlefield(snow)
     game._settle()
     assert not mammoths.has_keyword("trample")
+
+
+# --- Round 7: "can't be blocked by <noun phrase>", one vocabulary ---
+
+
+def test_stone_spirit_cannot_be_blocked_by_a_flier(set_pool):
+    """"This creature can't be blocked by creatures with flying."
+
+    A keyword in the blocker noun, which the restriction table had no capture
+    for — the four it had (subtype, card type, colour, power) were each
+    translated back into a subject filter by a matching branch at the
+    enforcement site, so a fifth noun needed both halves and was unenforced
+    without the second. One filter vocabulary now, read by `_blocker_union`.
+    """
+    pool = set_pool("ICE")
+    spirit = Permanent(card=pool["Stone Spirit"])
+    flier = Permanent(card=pool["Silver Erne"])
+    ground = Permanent(card=pool["Balduvian Bears"])
+    p1 = PlayerState(name="P1", battlefield=[spirit], life=20)
+    p2 = PlayerState(name="P2", battlefield=[flier, ground], life=20)
+    game = Game(players=[p1, p2])
+
+    _combat(game, [0])
+    assert not game.declare_blockers(1, {0: 0})[0], "the flier may not block"
+    assert game.declare_blockers(1, {1: 0})[0], "the ground creature may"
+
+
+def test_flow_of_maggots_can_only_be_blocked_by_walls(set_pool):
+    """"…can't be blocked by **non-Wall** creatures" — the negation of a
+    subtype, which is a different set from any of the positive forms."""
+    pool = set_pool("ICE")
+    maggots = Permanent(card=pool["Flow of Maggots"])
+    wall = Permanent(card=pool["Glacial Wall"])
+    bear = Permanent(card=pool["Balduvian Bears"])
+    # A land to pay the cumulative upkeep with: `start_turn` runs the upkeep,
+    # and an unpaid Flow of Maggots is sacrificed before it can attack.
+    p1 = PlayerState(
+        name="P1", battlefield=[maggots, Permanent(card=pool["Swamp"])], life=20
+    )
+    p2 = PlayerState(name="P2", battlefield=[wall, bear], life=20)
+    game = Game(players=[p1, p2])
+
+    _combat(game, [0])
+    assert not game.declare_blockers(1, {1: 0})[0], "a non-Wall may not block"
+    assert game.declare_blockers(1, {0: 0})[0], "a Wall may"

@@ -219,35 +219,24 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # produce `cant_be_blocked_by` and one enforcement site asks
     # `subject_matches` about the blocker.
     (
-        re.compile(r"^this creature can't be blocked by (?P<blocker_subtype>[a-z]+)s$"),
-        "cant_be_blocked_by",
-    ),
-    (
-        re.compile(
-            r"^this creature can't be blocked by "
-            r"(?P<blocker_type>artifact|enchantment|land) creatures$"
-        ),
-        "cant_be_blocked_by",
-    ),
-    (
-        # "…can't be blocked by **red** creatures" (Elder Spawn). A colour, and
-        # payload for the reason the subtype above is: the restriction is the
-        # same sentence with a different word in it.
-        re.compile(
-            rf"^this creature can't be blocked by (?P<blocker_color>{_COLOR_WORD}) creatures$"
-        ),
-        "cant_be_blocked_by",
-    ),
-    (
-        # "…can't be blocked by creatures with power 3 or greater" (Amrou
-        # Kithkin). The mirror of `cant_block_power_n_or_greater` below, which
-        # reads the same threshold off the *blocker's* text instead — one says
-        # "nothing that big may block me" and the other "I may not block
-        # anything that big", and they are different cards.
-        re.compile(
-            r"^this creature can't be blocked by creatures with power "
-            r"(?P<blocker_power>\d+) or greater$"
-        ),
+        # "…can't be blocked by **Walls**" (Invisibility's mirror), "…by
+        # **artifact creatures**" (Argothian Pixies), "…by **red** creatures"
+        # (Elder Spawn), "…by creatures with **power 3 or greater**" (Amrou
+        # Kithkin), "…by creatures with **flying**" (Stone Spirit).
+        #
+        # **One row, and the noun phrase is read by `_blocker_union`** — the
+        # same parser the whitelist form below already uses. It was four rows
+        # with four capture names, each translated back into a subject filter by
+        # a matching branch at the enforcement site: two vocabularies for one
+        # thing, so a printed noun both parsers could read needed a fifth
+        # capture, a fifth branch, and would be silently unenforced without the
+        # second. Stone Spirit is the card that needed the fifth.
+        #
+        # The regex ends in `.+`, so the union is parsed in
+        # `combat_restriction_for` and a phrase it cannot read refuses the whole
+        # line — admitting the match and leaving the tail unread is the widening
+        # direction, an evasion ability nobody enforces.
+        re.compile(r"^this creature can't be blocked by (?P<blockers>.+)$"),
         "cant_be_blocked_by",
     ),
     (
@@ -387,6 +376,12 @@ def combat_restriction_for(
         # enforcement site would be a restriction the gate accepts and nobody
         # applies. That is the widening direction: an evasion ability nothing
         # enforces makes the creature blockable by everything.
+        blockers = payload.pop("blockers", None)
+        if blockers is not None:
+            filters = _blocker_union(blockers, card_name)
+            if filters is None:
+                return None
+            payload["blocker_filters"] = filters
         allowed = payload.pop("allowed", None)
         if allowed is not None:
             filters = _blocker_union(allowed)
@@ -458,7 +453,20 @@ def _blocker_union(phrase: str, card_name: str | None = None) -> list[dict] | No
             continue
         described = _blocker_noun(part, card_name)
         if described is None:
-            return None
+            # **A phrase the split broke may still be one noun.** "creatures
+            # with power 2 or greater" contains the word "or" and is not a
+            # union, so splitting it produced two members neither of which
+            # reads — and the whole line refused, for a threshold this engine
+            # has enforced since Amrou Kithkin.
+            #
+            # The retry is here, after a member fails, rather than before the
+            # split: read whole-first, "creatures named Akron Legionnaire and
+            # artifact creatures" fullmatches the *name* pattern greedily and
+            # the union collapses into one creature nobody is named. Trying the
+            # split first keeps every phrase that already worked working, and
+            # this is only reached where it did not.
+            whole = _blocker_noun(phrase.strip(), card_name)
+            return [whole] if whole is not None else None
         filters.append(described)
     return filters or None
 
@@ -491,12 +499,32 @@ def _blocker_noun(part: str, card_name: str | None = None) -> dict | None:
         if word not in IMPLEMENTED_KEYWORDS:
             return None
         return {"type_filter": "creature", "with_keywords": [word]}
+    power = re.fullmatch(r"creatures with power (\d+) or greater", part)
+    if power is not None:
+        # Against the blocker's **effective** power (CR 613 layer 7), which is
+        # what `subject_matches` asks — a 2/2 that has been pumped stops being a
+        # legal blocker while it is pumped. Read here rather than as its own
+        # capture, so the whitelist form ("…except by creatures with power 3 or
+        # greater") gets it for free and cannot disagree.
+        return {"type_filter": "creature", "power": {"op": "ge", "value": int(power.group(1))}}
     colored = re.fullmatch(rf"({_COLOR_WORD}) creatures", part)
     if colored is not None:
         return {"type_filter": "creature", "color_filter": COLOR_WORDS[colored.group(1)]}
     typed = re.fullmatch(r"(artifact|enchantment|land) creatures", part)
     if typed is not None:
         return {"type_filter_all": [typed.group(1), "creature"]}
+    # "non-Wall creatures" (Flow of Maggots). The negation of the typed forms
+    # above, and its own branch rather than a flag on one of them: what it
+    # names is every creature *except* one subtype, and the matcher has a key
+    # for exactly that. A card printing "nonartifact creatures" is the same
+    # sentence and is left for the card that prints it — this reads the subtype
+    # form the pool has.
+    negated = re.fullmatch(r"non-?([a-z]+) creatures", part)
+    if negated is not None:
+        subtype = negated.group(1)
+        if subtype in CREATURE_TYPES:
+            return {"type_filter": "creature", "exclude_subtypes": [subtype]}
+        return None
     singular = part[:-1] if part.endswith("s") else part
     if singular in CREATURE_TYPES:
         return {"subtype_filter": singular}

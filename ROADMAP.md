@@ -900,6 +900,31 @@ rather than gaps:
   A comment stating an assumption is worth reading as a to-do list: this set is
   where that one came due.
 
+**Round 7 — "can't be blocked by <noun phrase>", one vocabulary. 226 → 228.**
+
+Two cards, and the reason it took a change rather than a row: the restriction
+was **four** rows with four capture names (`blocker_subtype`, `blocker_type`,
+`blocker_color`, `blocker_power`), each translated back into a subject filter
+by a matching branch at the enforcement site. Two vocabularies for one thing —
+so a printed noun both parsers could already read needed a fifth capture *and* a
+fifth branch, and with only the first it would parse and never be enforced.
+Stone Spirit ("creatures with flying") is the card that needed the fifth, and
+`_blocker_noun` — the parser the *whitelist* form has used all along — could
+already read the phrase.
+
+One row now, one filter list on the payload, one `subject_matches` loop at the
+enforcement site. The power threshold moved into `_blocker_noun` on the way, so
+the whitelist form gains it for free and the two cannot disagree.
+
+**The union splitter needed a fallback, and where it goes is the finding.**
+"creatures with power 2 or greater" contains the word "or" and is not a union,
+so the split produced two unreadable members. Retrying the whole phrase as one
+noun *before* splitting looked right and broke Akron Legionnaire: "creatures
+named Akron Legionnaire and artifact creatures" fullmatches the name pattern
+greedily and the union collapses into one creature nobody is named. The retry
+is after a member fails instead, which leaves every phrase that already worked
+untouched.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,
