@@ -10,13 +10,14 @@ its phrases into the grammar; they differ only in what that code produces:
   the instruction *and* its payload — the grammar's whole job is to hand that
   over unchanged.
 
-Four tables qualify today, each of them already the single source of truth for
+Five entries qualify today, each of them already the single source of truth for
 its family:
 
 ============================  =======================================
 ``engine/land_animation.py``  "All Swamps are 1/1 black creatures that
                               are still lands." (Kormus Bell, Living Lands)
-``engine/land_types.py``      "All Mountains are Plains." (Conversion)
+``engine/land_types.py``      "All Mountains are Plains." (Conversion) and
+                              "All lands are no longer snow." (Melting)
 ``engine/lord_buffs.py``      a continuous anthem carrying a condition
                               the grammar's own condition vocabulary does
                               not model (Jihad)
@@ -55,8 +56,11 @@ from ..enter_tapped_statics import (
 )
 from ..land_types import (
     STATIC_LAND_TYPE_KIND,
+    STATIC_SUPERTYPE_REMOVAL_KIND,
     static_land_type_change_for,
     static_land_type_change_payload,
+    static_supertype_removal_for,
+    static_supertype_removal_payload,
 )
 from ..lord_buffs import LORD_BUFF_KIND, lord_buff_for, lord_buff_payload
 from ..oracle_types import OracleInstruction
@@ -88,6 +92,12 @@ TABLES: tuple[DerivationTable, ...] = (
         static_land_type_change_for,
         STATIC_LAND_TYPE_KIND,
         static_land_type_change_payload,
+    ),
+    DerivationTable(
+        "static_supertype_removal",
+        static_supertype_removal_for,
+        STATIC_SUPERTYPE_REMOVAL_KIND,
+        static_supertype_removal_payload,
     ),
     DerivationTable("lord_buffs", lord_buff_for, LORD_BUFF_KIND, lord_buff_payload),
     DerivationTable(

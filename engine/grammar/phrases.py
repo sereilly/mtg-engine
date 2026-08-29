@@ -28,7 +28,7 @@ from .amounts import (
     parse_amount,
 )
 from .errors import GrammarError
-from .lexer import (MANA, NUMBER, PUNCT, QUOTE, WORD, tokenize)
+from .lexer import (GToken, MANA, NUMBER, PT, PUNCT, QUOTE, WORD, tokenize)
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
 from .references import parse_target_spec
 from .stream import TokenStream
@@ -963,3 +963,30 @@ def _parse_opponents_choice(
             ),
         )
     return None, recipient
+
+
+# A fragment two ``effects/`` families need, so it lives here rather than in
+# either of them — the layering rule sends a production two families share down
+# to ``phrases``. ``counters`` reads it for "put a <kind> counter on…" and
+# ``characteristics`` for "<player> gets a <kind> counter"; leaving it with
+# either would have made one family import the other.
+def _expect_counter_kind(stream: TokenStream, suffix: str = "") -> GToken:
+    """The counter's written name, as its token.
+
+    The kind must be *written out*. Defaulting a bare "put a counter on it" to
+    +1/+1 would silently invent the wrong counter for cards that use any other
+    kind — the deletion probe flagged exactly this by removing the "+1/+1"
+    token and getting the same instruction back — and reading the head noun as
+    the kind would invent a counter called "counter".
+
+    A plain word is admitted as well as a P/T token, because CR 122.1 lets a
+    counter have any name and the pool prints several ("corpse", "wind",
+    "mire"). Which of those anything can actually *do* is a question for the
+    caller: the two callers differ precisely there, so the check stays with
+    them rather than being frozen into one shared list here.
+    """
+    token = stream.peek()
+    if token is None or token.kind not in (PT, WORD) or token.is_word("counter", "counters"):
+        raise stream.error("expected a counter kind" + suffix)
+    stream.advance()
+    return token

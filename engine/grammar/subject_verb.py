@@ -35,6 +35,7 @@ from .vocabulary import NUMBER_WORDS
 from .effects import (
     _parse_add_mana, _parse_ante, _parse_assigns_no_combat_damage, _parse_attach,
     _parse_becomes, _parse_cant_attack_or_block, _parse_change_base_pt,
+    _parse_no_longer_supertype,
     _parse_change_target,
     _parse_change_text, _parse_choose_cards_in_hand, _parse_choose_number,
     _parse_choose_player_who_cast,
@@ -729,6 +730,13 @@ def parse_subject_verb(
                 return no_damage
         if token.text in ("becomes", "become"):
             return _parse_becomes(stream, source_spec)
+        # "Target snow land **is no longer snow**." (Arcum's Weathervane.)
+        # Non-consuming on refusal: "is" opens sentences this has no business
+        # claiming, so anything it cannot finish keeps its own refusal.
+        if token.text in ("is", "are"):
+            thawed = _parse_no_longer_supertype(stream, source_spec)
+            if thawed is not None:
+                return thawed
         if token.text in ("phases", "phase"):
             # "Target creature you don't control phases out." (Teferi, Master
             # of Time) / "Each creature target opponent controls phases out.

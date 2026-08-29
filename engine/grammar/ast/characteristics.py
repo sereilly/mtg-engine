@@ -306,6 +306,32 @@ class GainType:
 
 
 @dataclass(frozen=True)
+class ChangeSupertype:
+    """``<subject> becomes snow.`` / ``<subject> is no longer snow.``
+    (Arcum's Weathervane, both of its abilities.)
+
+    CR 205.4a's half of the type line, changed in CR 613 layer 4 like any other
+    type. One node for both directions rather than a pair, because what differs
+    between the Weathervane's two abilities is a single word and the effect,
+    the layer, the channel and the handler are otherwise identical — the same
+    reason ``combat_restrictions`` carries its polarity as payload beside the
+    noun it applies to.
+
+    A supertype needs no "in addition to its other types" tail the way
+    :class:`GainType` does: CR 205.4a puts supertypes in front of the card
+    types and adding one never displaces anything, so the printed sentence has
+    nothing more to say.
+
+    ``duration`` with no kind means permanently, which is what both printed
+    abilities mean: the land stays thawed after the Weathervane is gone.
+    """
+    subject: Recipient
+    supertype: str
+    gained: bool = True
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
 class SwitchPT:
     """``Switch <subject>'s power and toughness [duration].`` (Transmutation.)
 

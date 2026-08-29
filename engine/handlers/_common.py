@@ -886,13 +886,15 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     wanted_supertypes = payload.get("supertypes") or ()
     excluded_supertypes = payload.get("exclude_supertypes") or ()
     if wanted_supertypes or excluded_supertypes:
-        held = printed_supertypes(perm.effective_card.type_line)
+        # Through ``has_supertype``, which computes layer 4 — not off the
+        # effective type line. The line is the *seed*: Arcum's Weathervane makes
+        # a Plains snow and unmakes a snow land, so "a snow land" has to be the
+        # computed answer for the same reason "a creature" is.
+        held = perm.effective_supertypes
         if not all(word in held for word in wanted_supertypes):
             return False
         # "target **nonsnow** land" (Hallowed Ground). The negative of the key
-        # above, off the same line and for the same reason: no layer computes a
-        # supertype, so what the permanent *effectively* says is the whole
-        # answer.
+        # above, off the same answer and for the same reason.
         if any(word in held for word in excluded_supertypes):
             return False
     # "nontoken permanent" (Lich). CR 111.1: not a card type, so it is its own

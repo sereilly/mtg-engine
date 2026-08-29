@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 67.6% | 62.4% | 41.9% | 198 |
+| ICE *(measured)* | 373 | 601 | 68.1% | 62.9% | 42.4% | 200 |
 | **All (shipped)** | **2415** | **3404** | **85.8%** | **84.7%** | **52.4%** | **1544** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -40,13 +40,13 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 296 | 148 | expected a subject |  |
-| 130 | 57 | unrecognized effect verb |  |
+| 128 | 55 | unrecognized effect verb |  |
 | 83 | 49 | unconsumed text |  |
 | 40 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 11 | 8 | expected 'a' |  |
-| 10 | 4 | expected a colour or a creature body after 'becomes' |  |
 | 10 | 4 | expected a keyword ability |  |
+| 9 | 3 | expected a colour or a creature body after 'becomes' |  |
 | 9 | 5 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 8 | 3 | no lowering for RawEffect |  |
 | 8 | 3 | expected 'the number of' in a where-clause |  |
@@ -159,6 +159,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `When this creature enters, if it entered from your graveyard or you cast it from your graveyard, exile it. If you do, create a 5/5 black Demon creature token with flying.`
 - **Arcum's Sleigh**
   - `{2}, {T}: Target creature gains vigilance until end of turn. Activate only during combat and only if defending player controls a snow land.`
+- **Arcum's Weathervane**
+  - `{2}, {T}: Target snow land is no longer snow.`
+  - `{2}, {T}: Target nonsnow basic land becomes snow.`
 - **Arena of the Ancients**
   - `When this artifact enters, tap all legendary creatures.`
 - **Arenson's Aura**
@@ -1728,6 +1731,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{T}, Put a page counter on this artifact: Scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
   - `{2}, {T}, Put a page counter on this artifact: Draw a card.`
   - `When there are four or more page counters on this artifact, exile it. If you do, you gain 4 life.`
+- **Melting**
+  - `All lands are no longer snow.`
 - **Merchant Ship**
   - `This creature can't attack unless defending player controls an Island.`
   - `Whenever this creature attacks and isn't blocked, you gain 2 life.`

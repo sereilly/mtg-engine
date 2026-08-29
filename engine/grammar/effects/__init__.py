@@ -42,6 +42,11 @@ from .prevention import (
     _parse_damage_cant_be_prevented,
     _parse_bound_targeting_prevention,
 )
+from .counters import (
+    _expect_counter_kind,
+    _parse_put_counter,
+    _parse_remove_counter,
+)
 from .characteristics import (
     _parse_double,
     _parse_switch_pt,
@@ -50,14 +55,12 @@ from .characteristics import (
     _parse_loses,
     _parse_has,
     _parse_has_base_pt,
-    _expect_counter_kind,
     _parse_for_each,
-    _parse_put_counter,
-    _parse_remove_counter,
     _TEXT_CHANGE_MODES,
     _parse_change_base_pt,
     _parse_change_text,
     _parse_becomes,
+    _parse_no_longer_supertype,
 )
 from .board import (
     _parse_for_each_destroy_unless_paid,
@@ -168,6 +171,7 @@ __all__ = [
     "_parse_change_base_pt",
     "_parse_change_text",
     "_parse_becomes",
+    "_parse_no_longer_supertype",
     "_parse_gain_control",
     "parse_player_chooses_permanent",
     "_parse_return",

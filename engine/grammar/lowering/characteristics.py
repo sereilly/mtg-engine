@@ -922,3 +922,33 @@ def _lower_gain_type(node: ast.GainType) -> tuple[OracleInstruction, ...]:
             _describe_targets(payload, node.subject)
         return (OracleInstruction("gain_type", "", payload),)
     raise LoweringError("a gained type needs a single named permanent", node=node)
+
+
+def _lower_change_supertype(node: ast.ChangeSupertype) -> tuple[OracleInstruction, ...]:
+    """Arcum's Weathervane, both abilities.
+
+    One kind for both directions: the supertype and the polarity are payload,
+    which is what makes "becomes snow" and "is no longer snow" one handler
+    rather than two — and what makes a card printing "becomes legendary" cost
+    nothing.
+
+    The duration must be one the handler's channel can hold, and the subject a
+    single named permanent, for the reason ``_lower_gain_type`` requires both:
+    the record goes on one permanent, and a quantified subject names a set that
+    is a *static* ability rather than a one-shot (see
+    ``_parse_no_longer_supertype``).
+    """
+    if node.duration.kind not in _GAINED_TYPE_DURATIONS:
+        raise LoweringError(
+            f"no handler holds a supertype change for {node.duration.kind}", node=node
+        )
+    payload: dict[str, object] = {
+        "supertype": node.supertype,
+        "gained": bool(node.gained),
+        "duration": node.duration.kind or "permanent",
+    }
+    if isinstance(node.subject, ast.TargetSpec) and node.subject.quantifier in ("target", "that"):
+        if node.subject.quantifier == "target":
+            _describe_targets(payload, node.subject)
+        return (OracleInstruction("change_supertype", "", payload),)
+    raise LoweringError("a supertype change needs a single named permanent", node=node)

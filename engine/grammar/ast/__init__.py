@@ -145,6 +145,7 @@ from .characteristics import (
     CHOSEN_COLOR,
     CHOSEN_COLORS,
     BecomeColor,
+    ChangeSupertype,
     GainType,
     BecomeCreature,
 )
@@ -389,6 +390,7 @@ __all__ = [
     "CHOSEN_COLOR",
     "CHOSEN_COLORS",
     "BecomeColor",
+    "ChangeSupertype",
     "GainType",
     "BecomeCreature",
     # board

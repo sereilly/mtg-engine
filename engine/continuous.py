@@ -436,6 +436,7 @@ def remove_types(
     *,
     card_types: Iterable[str] = (),
     subtypes: Iterable[str] = (),
+    supertypes: Iterable[str] = (),
     timestamp: int,
     label: str = "",
 ) -> ContinuousEffect:
@@ -448,12 +449,20 @@ def remove_types(
     :func:`add_types` and after it in timestamp order, so a later effect that
     adds the subtype back wins — which is what CR 613.7 says and what a
     ``replace_subtypes`` spelling of the same idea could not express.
+
+    ``supertypes`` is the same word about CR 205.4a's half of the line: "Target
+    snow land **is no longer snow**" (Arcum's Weathervane), "All lands are no
+    longer snow" (Melting). Its mirror in :func:`add_types` has been here since
+    the layer system was written; this side had not, because nothing could
+    remove one until Ice Age.
     """
     card_types, subtypes = tuple(card_types), tuple(subtypes)
+    supertypes = tuple(supertypes)
 
     def modify(char: Characteristics) -> None:
         char.card_types.difference_update(card_types)
         char.subtypes.difference_update(subtypes)
+        char.supertypes.difference_update(supertypes)
 
     return ContinuousEffect(
         layer=LAYER_TYPE, modify=modify, applies_to=target,

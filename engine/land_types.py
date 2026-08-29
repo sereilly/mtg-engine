@@ -331,6 +331,88 @@ def static_land_type_change_payload(change: StaticLandTypeChange) -> dict[str, o
     return payload
 
 
+# ---------------------------------------------------------------------------
+# The other static: "All lands are no longer snow." (Melting)
+# ---------------------------------------------------------------------------
+#
+# A sibling of the table above rather than a field on it: CR 305.7's replacement
+# of a land's *subtypes* and CR 205.4a's removal of a **supertype** are different
+# effects that happen to share a layer, and folding the second into
+# ``StaticLandTypeChange`` would give every Conversion a supertype field it must
+# not set.
+#
+# It is a derivation table, and not a production in ``engine/grammar/``, for the
+# reason "All Mountains are Plains" is one: a board-wide static is a continuous
+# effect recomputed from the board, and the grammar's one-shot lowering for the
+# targeted spelling (Arcum's Weathervane) would fire it once and never again.
+
+STATIC_SUPERTYPE_REMOVAL_KIND = "static_supertype_removal"
+
+
+@dataclass(frozen=True)
+class StaticSupertypeRemoval:
+    """Permanents of one card type lose a supertype while the source is out.
+
+    ``from_type`` is the printed noun the sentence names ("lands"), singular and
+    lowercase — a *card* type rather than a land subtype, because the sentence
+    reaches every land whatever its subtypes.
+    """
+
+    from_type: str
+    supertype: str
+
+
+# Anchored at both ends, so a sentence saying more than this is not read as this
+# one with its rider dropped.
+_STATIC_NO_LONGER_RE = re.compile(
+    r"^all (?P<from>[a-z'-]+) are no longer (?P<supertype>[a-z]+)$"
+)
+
+
+def static_supertype_removal_for(normalized_line: str) -> StaticSupertypeRemoval | None:
+    """The static supertype removal *normalized_line* imposes, or None.
+
+    Both words are validated: the noun against the engine's card types and the
+    supertype against ``data/vocabulary``. A word neither catalog has heard of
+    would produce a static that reaches nothing, and a static reaching nothing
+    is indistinguishable from one nobody implemented — so the line refuses and
+    its card is reported unsupported instead.
+    """
+    from .grammar.vocabulary import CARD_TYPES, TYPE_LINE_SUPERTYPES
+
+    match = _STATIC_NO_LONGER_RE.match(
+        normalized_line.strip().lower().rstrip(".")
+    )
+    if match is None:
+        return None
+    word = match.group("from")
+    singular = word[:-1] if word.endswith("s") else word
+    if singular not in CARD_TYPES:
+        return None
+    supertype = match.group("supertype")
+    if supertype not in TYPE_LINE_SUPERTYPES:
+        return None
+    return StaticSupertypeRemoval(from_type=singular, supertype=supertype)
+
+
+def static_supertype_removal_payload(
+    removal: StaticSupertypeRemoval,
+) -> dict[str, object]:
+    """*removal* as an ``OracleInstruction`` payload."""
+    return {"from_type": removal.from_type, "supertype": removal.supertype}
+
+
+def static_supertype_removal_applies(payload: dict, permanent) -> bool:
+    """Whether the static removal *payload* describes reaches *permanent*.
+
+    Through ``has_type``, so an animated land is still a land and a permanent
+    a type change made one is reached — the one reader of the payload's subject
+    half, so the derivation and the refresh cannot disagree.
+    """
+    from_type = str(payload.get("from_type") or "")
+    return bool(from_type) and permanent.has_type(from_type)
+
+
 def static_land_type_change_applies(payload: dict, permanent) -> bool:
     """Whether the static change *payload* describes reaches *permanent*.
 
@@ -341,15 +423,14 @@ def static_land_type_change_applies(payload: dict, permanent) -> bool:
     Mountains" Conversion means, and a supertype a text change removed really
     is gone.
     """
-    from .layer_bridge import printed_supertypes
-
     type_line = permanent.effective_card.type_line
     if payload.get("from_nonbasic"):
         # CR 205.4a: "basic" is a supertype, and a land without it is nonbasic.
-        # Asked of the supertypes rather than by searching the line for the
+        # Asked of ``has_supertype`` rather than by searching the line for the
         # word, because "Snow Land — Forest" and a card *named* something with
-        # "basic" in it both answer that substring wrongly.
-        return "basic" not in printed_supertypes(type_line)
+        # "basic" in it both answer that substring wrongly — and because layer 4
+        # computes the word, so a Blood Moon reads whatever the board says now.
+        return not permanent.has_supertype("basic")
     from_type = payload.get("from_type") or ""
     return bool(from_type) and from_type in type_line.lower()
 

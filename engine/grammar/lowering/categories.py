@@ -14,7 +14,7 @@ convention.
 from ...lord_buffs import (LORD_BUFF_KIND)
 from ...enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
 from ...land_animation import LAND_ANIMATION_KIND
-from ...land_types import STATIC_LAND_TYPE_KIND
+from ...land_types import STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND
 from ...oracle_types import OracleInstruction
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       CREATED_TOKEN, EXILED_THIS_WAY)
@@ -59,6 +59,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "shuffle_graveyard_into_library": "zones",
     "shuffle_hand_into_library": "zones",
     "gain_type": "characteristics",
+    "change_supertype": "characteristics",
     "restrict_untap_while_source_tapped": "tapping",
     "arm_self_action_at_next_end_step": "destruction",
     "add_power_counters_to_self": "counters",
@@ -92,6 +93,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # one switch would tie two migrations together.
     LAND_ANIMATION_KIND: "land_statics",
     STATIC_LAND_TYPE_KIND: "land_statics",
+    STATIC_SUPERTYPE_REMOVAL_KIND: "land_statics",
     # A permanent's board-wide replacement of how *other* permanents enter
     # (CR 614.1c, Kismet). Its own category rather than either of the two
     # above: nothing about it is a P/T contribution or a land, and the

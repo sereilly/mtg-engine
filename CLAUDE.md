@@ -243,9 +243,9 @@ ast/           damage characteristics board cards stack combat game
 ast/statements.py  the roof: Effect / Statement / AbilityNode unions
 phrases.py     word tables + fragment productions   |  lowering/_common.py
                                                     |  lowering/_amounts.py
-effects/       damage characteristics board cards   |  lowering/  (those seven,
+effects/       damage characteristics board cards   |  lowering/  (those eight,
                stack combat game prevention         |  + zones library mana
-                                                    |    counters prevention …)
+               counters                             |    returns keywords …)
 statements.py  one whole sentence                   |  lowering/categories.py
 parser.py      one printed line (parse_line)        |  lower.py (dispatch)
 ```
@@ -256,9 +256,11 @@ The lowering side carries families the parse side does not — `zones`, `library
 (`test_grammar_layering.py` documents every one with its reason). If an
 `effects/` module splits, reuse those names so the mirror re-forms instead of
 forking: `effects/prevention.py` did, when the damage productions crossed the
-cap. It carries the redirects too, which the lowering side keeps separate — one
-printed sentence returns either node, so two parse modules would be one
-importing the other.
+cap, and `effects/counters.py` did a set later — `lowering/counters.py` had
+carried the name since it left the same family, so the boundary was found twice,
+one package and one set apart. `prevention` carries the redirects too, which the
+lowering side keeps separate — one printed sentence returns either node, so two
+parse modules would be one importing the other.
 
 **A module a family imports is a floor, not a family** — the family rule is
 "families do not import each other", so a leaf several lowerings read sits
@@ -269,6 +271,10 @@ one package over.
 
 Prowess gets a node in `ast/characteristics.py`, parses in
 `effects/characteristics.py` and lowers in `lowering/characteristics.py`.
+A **derivation table** the grammar falls back to (`engine/grammar/derived.py`)
+is reached only where every production refuses the line *in full*, so a
+production whose sentence a table also reads must refuse in the **parse**:
+parsed-but-unlowered is still parsed, and takes the table's line away.
 `tests/engine/test_grammar_layering.py` enforces the layer order, family
 independence, and flat re-export from each `__init__` — a fragment two families
 need goes in `phrases`/`_common`/`_core`, never in one of them, because that

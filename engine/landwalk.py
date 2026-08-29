@@ -117,13 +117,11 @@ def land_satisfies(permanent: "Permanent", requirement: LandwalkRequirement) -> 
     """Whether *permanent* is the land CR 702.14c asks the defender to control.
 
     Types go through the computed accessors, so an animated land, a copy or a
-    basic-land-type change answers with what it *currently* is. The supertype
-    arm reads the effective type line for the reason ``printed_supertypes``
-    documents: no layer computes a supertype, so the line an object effectively
-    has is the whole answer.
+    basic-land-type change answers with what it *currently* is — and the
+    supertype arm does too, since layer 4 computes those as well: a land Arcum's
+    Weathervane has thawed is no longer the snow Forest a snow forestwalker
+    needs.
     """
-    from .layer_bridge import printed_supertypes
-
     if not permanent.has_type("land"):
         return False
     supertypes = None
@@ -133,7 +131,7 @@ def land_satisfies(permanent: "Permanent", requirement: LandwalkRequirement) -> 
                 return False
             continue
         if supertypes is None:
-            supertypes = printed_supertypes(permanent.effective_card.type_line)
+            supertypes = permanent.effective_supertypes
         held = quality.quality in supertypes
         if held == quality.negated:
             return False

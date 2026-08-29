@@ -9,7 +9,6 @@ from ..control import (
     end_control_change,
 )
 from ..equipment import is_equipment, unattach_illegal_equipment
-from ..layer_bridge import printed_supertypes
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
 from ..trigger_utils import matching_triggers
@@ -511,12 +510,12 @@ class GameEndingMixin:
                     # Layer 3 rides along for free (a text change rewrites the
                     # type line before anything reads it).
                     #
-                    # `printed_supertypes` and not `has_type`: has_type computes
-                    # layer 4's card types and subtypes, which do not include
-                    # supertypes at all — CR 205.4a puts "legendary" in front of
-                    # the card types, and nothing in this engine derives it.
+                    # `has_supertype` and not the printed line: layer 4
+                    # computes supertypes now (CR 205.4a), so a "legendary" an
+                    # effect added or took away is counted where the printed
+                    # read would have missed both.
                     effective = perm.effective_card
-                    if "legendary" in printed_supertypes(effective.type_line):
+                    if perm.has_supertype("legendary"):
                         legendary_by_name.setdefault(effective.name, []).append(perm)
                 for name, perms in legendary_by_name.items():
                     if len(perms) > 1:
@@ -535,7 +534,8 @@ class GameEndingMixin:
                 for seat, perm in self.permanents_with_controller()
                 # The world supertype is a copiable value too (CR 707.2), and
                 # the same printed read hid a copy of a world permanent here.
-                if "world" in printed_supertypes(perm.effective_card.type_line)
+                # Layer 4 folds the copy in and any change to the word on top.
+                if perm.has_supertype("world")
             ]
             if len(world_perms) > 1:
                 # Keep last (most recent timestamp = highest position), remove rest

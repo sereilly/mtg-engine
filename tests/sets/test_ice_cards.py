@@ -1716,3 +1716,143 @@ def test_grizzled_wolverine_is_refused_outside_the_declare_blockers_step(set_poo
 
     assert not refused.supported
     assert "only during the declare blockers step" in refused.details
+
+
+# --- Round 27: a supertype is a computed characteristic (CR 205.4, layer 4) ---
+
+
+def _board(set_pool, *names, opponent=()):
+    """A board of ICE cards, mine and the opponent's, ready to activate."""
+    pool = set_pool("ICE")
+    mine = [Permanent(card=pool[n]) for n in names]
+    theirs = [Permanent(card=pool[n]) for n in opponent]
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=mine, life=20),
+            PlayerState(name="P2", battlefield=theirs, life=20),
+        ]
+    )
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    for perm in mine:
+        _nosick(perm)
+    return game, mine, theirs
+
+
+def test_arcums_weathervane_freezes_a_nonsnow_basic_land(set_pool):
+    """"{2}, {T}: Target nonsnow basic land becomes snow."
+
+    CR 205.4a's half of the type line, changed in layer 4. No "in addition to
+    its other types" tail, because a supertype displaces nothing — and the
+    Plains is still basic afterwards (CR 205.4b).
+    """
+    game, (vane, plains), _ = _board(set_pool, "Arcum's Weathervane", "Plains")
+    assert not plains.has_supertype("snow")
+
+    result = game.activate_permanent_ability(
+        0, "Arcum's Weathervane", ability_index=1,
+        target_player_index=0, target_permanent_index=1,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert plains.has_supertype("snow")
+    assert plains.has_supertype("basic"), "CR 205.4b: the other supertypes stay"
+
+
+def test_arcums_weathervane_thaws_a_snow_land(set_pool):
+    """"{2}, {T}: Target snow land is no longer snow." The same handler with
+    the polarity flipped — one row, because what differs between the
+    Weathervane's two abilities is a single printed word."""
+    game, (vane, snow), _ = _board(
+        set_pool, "Arcum's Weathervane", "Snow-Covered Forest"
+    )
+    assert snow.has_supertype("snow")
+
+    result = game.activate_permanent_ability(
+        0, "Arcum's Weathervane", ability_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert not snow.has_supertype("snow")
+    assert snow.has_supertype("basic")
+
+
+def test_a_thawed_forest_stops_satisfying_snow_forestwalk(set_pool):
+    """The finding, stated as behaviour. Nine call sites asked what supertypes
+    a permanent had by reading its printed type line, which was right while
+    nothing in the pool could change one — and Arcum's Weathervane is the card
+    that makes it wrong. Snow forestwalk (CR 702.14c) is one of the nine.
+    """
+    from engine.landwalk import land_satisfies, landwalk_requirement
+
+    game, (vane,), (forest,) = _board(
+        set_pool, "Arcum's Weathervane", opponent=["Snow-Covered Forest"]
+    )
+    requirement = landwalk_requirement("snow forestwalk")
+    assert land_satisfies(forest, requirement)
+
+    result = game.activate_permanent_ability(
+        0, "Arcum's Weathervane", ability_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert not land_satisfies(forest, requirement), (
+        "a thawed forest is not the snow Forest CR 702.14c asks for"
+    )
+
+
+def test_melting_thaws_every_land_and_gives_it_back(set_pool):
+    """"All lands are no longer snow." A board-wide static, so it is a
+    derivation-table entry beside "All Mountains are Plains" rather than a
+    production: a continuous effect recomputed from the board, where the
+    targeted spelling's one-shot lowering would fire once and never again.
+
+    CR 611.3a/b: the lands are snow again the moment Melting leaves.
+    """
+    game, (melting, island), (their_forest,) = _board(
+        set_pool, "Melting", "Snow-Covered Island",
+        opponent=["Snow-Covered Forest"],
+    )
+    game._refresh_dynamic_creatures()
+
+    assert not island.has_supertype("snow")
+    assert not their_forest.has_supertype("snow"), "every land, not just yours"
+
+    game.remove_from_battlefield(melting)
+    game._refresh_dynamic_creatures()
+
+    assert island.has_supertype("snow")
+    assert their_forest.has_supertype("snow")
+
+
+def test_meltings_contribution_does_not_accumulate(set_pool):
+    """A derived channel is cleared and rebuilt on every continuous-effects
+    refresh (CR 611.3a), which runs constantly. Recording it the way a resolved
+    effect is recorded would leave one entry per pass, forever — the reason
+    `land_types.py` has two channels and this one is the second."""
+    game, (melting, island), _ = _board(
+        set_pool, "Melting", "Snow-Covered Island"
+    )
+
+    for _ in range(5):
+        game._refresh_dynamic_creatures()
+
+    assert island.metadata.get("derived_lost_supertypes") == ["snow"]
+
+
+def test_melting_does_not_stop_a_land_being_basic(set_pool):
+    """The sentence names one supertype. A land Melting has thawed is still a
+    basic land, so Blood Moon still passes it by (CR 205.4b)."""
+    game, (melting, island), _ = _board(
+        set_pool, "Melting", "Snow-Covered Island"
+    )
+    game._refresh_dynamic_creatures()
+
+    assert island.has_supertype("basic")
+    assert island.has_type("island"), "and still an Island"

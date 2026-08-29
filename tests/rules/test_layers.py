@@ -20,6 +20,7 @@ from engine.continuous import (
     grant_abilities,
     modify_pt,
     remove_abilities,
+    remove_types,
     scope_only,
     set_colors,
     set_pt,
@@ -522,3 +523,64 @@ def test_a_grant_after_a_removal_still_wins_by_timestamp():
     apply_layers([lord, removal, grant], state)
 
     assert state[1].abilities == {"trample", "flying"}
+
+
+# ---------------------------------------------------------------------------
+# Layer 4's supertype half (CR 205.4, CR 613.1d)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("613.1d", "205.4a")
+def test_613_1d_a_supertype_is_added_and_removed_in_layer_four():
+    """CR 613.1d: "type-changing effects … include effects that change an
+    object's card type, subtype, **and/or supertype**."
+
+    ``Characteristics.supertypes`` and ``add_types``' keyword had been here
+    since the layer system was written, with nothing seeding the set and nothing
+    reading it back — a channel built at both ends and connected at neither. The
+    seed and the removal are the two ends.
+    """
+    state = _state(o1=Characteristics(card_types={"land"}, supertypes={"basic"}))
+
+    apply_layers(
+        [add_types(scope_only(1), supertypes=["snow"], timestamp=1)], state
+    )
+    assert state[1].supertypes == {"basic", "snow"}
+
+    apply_layers(
+        [remove_types(scope_only(1), supertypes=["snow"], timestamp=2)], state
+    )
+    assert state[1].supertypes == {"basic"}
+
+
+@pytest.mark.cr("205.4b")
+def test_205_4b_gaining_or_losing_one_supertype_keeps_the_others():
+    """"When an object gains or loses a supertype, it retains any other
+    supertypes it had." A set operation rather than a replacement, which is
+    what keeps a thawed Snow-Covered Forest basic."""
+    state = _state(
+        o1=Characteristics(card_types={"land"}, supertypes={"basic", "snow"})
+    )
+
+    apply_layers(
+        [remove_types(scope_only(1), supertypes=["snow"], timestamp=1)], state
+    )
+
+    assert state[1].supertypes == {"basic"}
+
+
+@pytest.mark.cr("613.7", "205.4a")
+def test_613_7_a_later_supertype_addition_beats_an_earlier_removal():
+    """Two effects in one layer are ordered by timestamp, and the supertype
+    half is no exception: a land thawed and then frozen again is snow."""
+    state = _state(o1=Characteristics(card_types={"land"}, supertypes={"snow"}))
+
+    apply_layers(
+        [
+            add_types(scope_only(1), supertypes=["snow"], timestamp=2),
+            remove_types(scope_only(1), supertypes=["snow"], timestamp=1),
+        ],
+        state,
+    )
+
+    assert state[1].supertypes == {"snow"}

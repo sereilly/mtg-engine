@@ -16,9 +16,11 @@ from ..lexer import (GToken, PT, PUNCT, QUOTE, SELF, WORD, tokenize)
 from ..nouns import parse_object_filter
 from ..references import parse_recipient
 from ..stream import TokenStream
-from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS, SUBTYPE_INDEX, match_longest)
+from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS, SUBTYPE_INDEX,
+                          TYPE_LINE_SUPERTYPES, match_longest)
 
-from ..phrases import (is_pt_counter, _parse_can_attack_as_though, _parse_duration,
+from ..phrases import (is_pt_counter, _expect_counter_kind,
+                       _parse_can_attack_as_though, _parse_duration,
                        _parse_for_each, _parse_keywords,
                        parse_pair_ordinal_subject)
 from ..where_x import parse_where_x_definition
@@ -268,7 +270,6 @@ def _token_shape(tokens) -> tuple[str, ...]:
     return tuple(token.text.lower() for token in kept)
 
 
-
 def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     """``<subject> loses <the game|keywords|life>``."""
     stream.expect_word("loses", "lose")
@@ -370,139 +371,6 @@ def _parse_has_base_pt(stream: TokenStream, subject: ast.Recipient) -> ast.State
     return ast.SetBasePT(subject, power, None, duration)
 
 
-def _expect_counter_kind(stream: TokenStream, suffix: str = "") -> GToken:
-    """The counter's written name, as its token.
-
-    The kind must be *written out*. Defaulting a bare "put a counter on it" to
-    +1/+1 would silently invent the wrong counter for cards that use any other
-    kind — the deletion probe flagged exactly this by removing the "+1/+1"
-    token and getting the same instruction back — and reading the head noun as
-    the kind would invent a counter called "counter".
-
-    A plain word is admitted as well as a P/T token, because CR 122.1 lets a
-    counter have any name and the pool prints several ("corpse", "wind",
-    "mire"). Which of those anything can actually *do* is a question for the
-    caller: the two callers differ precisely there, so the check stays with
-    them rather than being frozen into one shared list here.
-    """
-    token = stream.peek()
-    if token is None or token.kind not in (PT, WORD) or token.is_word("counter", "counters"):
-        raise stream.error("expected a counter kind" + suffix)
-    stream.advance()
-    return token
-
-
-def _parse_put_counter(stream: TokenStream) -> ast.Statement:
-    """``put [up to] N <counter> counter(s) on <subject> [for each …]`` — and
-    the object-moving "put" family, tried first because its object is a noun
-    phrase rather than a counter: ``put <objects> on top of its owner's
-    library`` (Teferi, Timeless Voyager) and ``put <objects> onto the
-    battlefield [under your control]`` (Ugin, Liliana's emblem)."""
-    stream.expect_word("put")
-    move_mark = stream.mark()
-    try:
-        moved = parse_recipient(stream)
-    except GrammarError:
-        moved = None
-    if moved is not None and stream.at_word("on", "onto"):
-        # "…on top of **their** library" (Drafna's Restoration) is the same
-        # destination as "its owner's": CR 404.1 puts a card in the graveyard of
-        # the player who owns it, so the cards this sentence moves are already
-        # that player's. One node, two spellings.
-        if stream.accept_phrase("on", "top", "of", "its", "owner", "'s", "library") or (
-            stream.accept_phrase("on", "top", "of", "their", "library")
-        ):
-            in_any_order = bool(stream.accept_phrase("in", "any", "order"))
-            return ast.PutOnLibraryTop(moved, in_any_order=in_any_order)
-        # "Put target card from your graveyard on the bottom of your library."
-        # (Epitaph Golem.) The zone the card leaves rides the noun phrase, as
-        # in every return; the destination decides the node.
-        if stream.accept_phrase("on", "the", "bottom", "of", "your", "library"):
-            return ast.PutOnLibraryBottom(moved)
-        if stream.accept_word("onto"):
-            stream.expect_word("the")
-            stream.expect_word("battlefield")
-            under = bool(stream.accept_phrase("under", "your", "control"))
-            # "…**under its owner's control**" (Glyph of Reincarnation) — the
-            # other seat CR 400.3 lets a card arrive under. Read only when
-            # "under your control" was not, so one sentence cannot claim both.
-            owners = not under and bool(
-                stream.accept_phrase("under", "its", "owner", "'s", "control")
-            )
-            return ast.PutOntoBattlefield(
-                moved, under_your_control=under, under_owners_control=owners,
-            )
-    stream.reset(move_mark)
-    up_to = stream.accept_phrase("up", "to")
-    count = parse_amount(stream)
-
-    token = _expect_counter_kind(stream)
-    if token.kind == PT and not is_pt_counter(token.text):
-        raise stream.error(f"unsupported counter kind {token.text!r}")
-    counter = token.text
-    stream.expect_word("counter", "counters")
-    stream.expect_word("on")
-    # "…put a -1/-1 counter on **that creature**." (Unstable Mutation;
-    # Takklemaggot prints the same sentence with a -0/-1 pair.) The bound-object
-    # phrase, read here exactly as :func:`_parse_remove_counter` reads its own
-    # "remove a sleep counter from that creature": "that <noun>" restates an
-    # object the line already bound — its trigger head — so it must not become a
-    # choice, and teaching the shared noun parser the phrase would hand it to
-    # every line that prints those words. The lowering is what checks a binder
-    # actually exists.
-    # "…put a +1/+1 counter on **the first** creature." (Infinite Authority.)
-    # The same kind of back-reference with a pair to pick from, read through the
-    # one shared ordinal production so this clause and the "destroy the other
-    # creature" one in the same sentence cannot disagree about which is which.
-    subject: ast.Recipient | None = parse_pair_ordinal_subject(stream)
-    bound = stream.mark()
-    if subject is not None:
-        pass
-    elif stream.accept_word("that"):
-        bound_noun = stream.peek_word()
-        if bound_noun is not None and bound_noun in CARD_TYPES:
-            stream.advance()
-            subject = ast.TargetSpec(
-                "that", ast.ObjectFilter(card_types=(bound_noun,))
-            )
-        else:
-            stream.reset(bound)
-            subject = parse_recipient(stream)
-    else:
-        subject = parse_recipient(stream)
-    if subject is None:
-        raise stream.error("expected a permanent to put counters on")
-    # "…, then double the number of +1/+1 counters on that creature."
-    # (Invigorating Surge.) A rider on this placement rather than a second
-    # sentence: "that creature" is the one just chosen, so parsed apart the
-    # doubling would be looking for a target nobody picked. The counter kind is
-    # spelled out and must match what was placed — "then double the number of
-    # -1/-1 counters" is a different card and has to keep refusing.
-    then_double = False
-    double_mark = stream.mark()
-    if stream.accept_punct(",") and stream.accept_phrase("then", "double", "the", "number", "of"):
-        doubled = _expect_counter_kind(stream)
-        if (
-            doubled.text == counter
-            and stream.accept_word("counter", "counters")
-            and stream.accept_phrase("on", "that", "creature")
-        ):
-            then_double = True
-    if not then_double:
-        stream.reset(double_mark)
-    placement = ast.PutCounter(subject, counter, count, up_to, then_double=then_double)
-
-    # "…for each creature that died this turn" multiplies the placement; it is
-    # not a rider on it. Modelled as an iteration wrapping the placement so a
-    # counter put down once and a counter put down per death are *different*
-    # ASTs — the legacy registry told them apart only by giving the per-death
-    # rule a lower order number than the plain one.
-    iterated = _parse_for_each(stream)
-    if iterated is None:
-        return placement
-    return ast.ForEach(iterated, placement)
-
-
 def _parse_double(stream: TokenStream) -> ast.DoublePower:
     """``Double the power of <subject> until end of turn.`` (Unleash Fury.)
 
@@ -540,74 +408,6 @@ def _parse_switch_pt(stream: TokenStream) -> ast.SwitchPT:
     stream.expect_word("and")
     stream.expect_word("toughness")
     return ast.SwitchPT(subject, _parse_duration(stream))
-
-
-def _parse_remove_counter(stream: TokenStream) -> ast.RemoveCounter | None:
-    """``Remove [a|N] <kind> counter(s) from <subject>`` as an *effect*.
-
-    The mirror of :func:`_parse_counter_removal_cost`, which reads the same
-    words left of an ability's colon. Both are needed and neither subsumes the
-    other: Armageddon Clock pays {4} and removes a counter as the effect, while
-    Scavenging Ghoul removes one *to* activate.
-
-    Returns None — cursor untouched — when what follows "remove" is not a
-    counter at all. "Remove target creature defending player controls from
-    combat" and "remove all damage marked on it" open the same way and are
-    entirely different effects, so they have to keep failing on their own
-    missing production instead of on a counter kind they never mentioned.
-    """
-    mark = stream.mark()
-    stream.expect_word("remove")
-    if stream.accept_word("a", "an"):
-        count: ast.Amount = ast.Fixed(1)
-    else:
-        try:
-            count = parse_amount(stream)
-        except GrammarError:
-            stream.reset(mark)
-            return None
-    try:
-        counter = _expect_counter_kind(stream, " to remove").text
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("counter", "counters"):
-        stream.reset(mark)
-        return None
-    stream.expect_word("from")
-    # "…remove a sleep counter from **that creature**." (Venarian Gold.) The
-    # bound-object phrase, read locally exactly as the destroy production reads
-    # its own "destroy that creature": "that <noun>" names an object something
-    # earlier in the line already bound — here the trigger head — so it must
-    # not become a choice, and teaching the shared noun parser the phrase
-    # would hand it to every line that prints those words. The lowering is
-    # what checks a binder actually exists.
-    bound = stream.mark()
-    if stream.accept_word("that"):
-        noun = stream.peek_word()
-        if noun is not None and noun in CARD_TYPES:
-            stream.advance()
-            return ast.RemoveCounter(
-                ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,))),
-                counter,
-                count,
-            )
-        stream.reset(bound)
-    subject = parse_recipient(stream)
-    if subject is None:
-        raise stream.error("expected what to remove a counter from")
-    return ast.RemoveCounter(subject, counter, count)
-
-
-# Vocabularies a printed text change can swap, one literal phrase per mode
-# (CR 612.1). Closed on purpose: `mark_text_modified` substitutes exactly these
-# two, and a card naming a third — a creature type, a card name — is a text
-# change the engine does not perform. Listing the phrases keeps that card
-# failing here instead of reaching the handler as a mode it will ignore.
-_TEXT_CHANGE_MODES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("land_type", ("basic", "land", "type")),
-    ("color_word", ("color", "word")),
-)
 
 
 def _parse_change_base_pt(stream: TokenStream) -> ast.ChangeBasePT | None:
@@ -711,6 +511,17 @@ def _parse_change_base_pt(stream: TokenStream) -> ast.ChangeBasePT | None:
     )
 
 
+# Vocabularies a printed text change can swap, one literal phrase per mode
+# (CR 612.1). Closed on purpose: `mark_text_modified` substitutes exactly these
+# two, and a card naming a third — a creature type, a card name — is a text
+# change the engine does not perform. Listing the phrases keeps that card
+# failing here instead of reaching the handler as a mode it will ignore.
+_TEXT_CHANGE_MODES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("land_type", ("basic", "land", "type")),
+    ("color_word", ("color", "word")),
+)
+
+
 def _parse_change_text(stream: TokenStream) -> ast.ChangeText:
     """``Change the text of <subject> by replacing all instances of one <what>
     with another.`` (Magical Hack, Sleight of Mind.)
@@ -783,7 +594,72 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     gained = _parse_gain_type(stream, subject)
     if gained is not None:
         return gained
+    # "…**becomes snow**." (Arcum's Weathervane.) Read after the type form,
+    # whose "becomes an artifact" opens with an article this branch does not
+    # accept, so the two cannot claim each other's sentence.
+    supertype = _parse_becomes_supertype(stream, subject)
+    if supertype is not None:
+        return supertype
     raise stream.error("expected a colour or a creature body after 'becomes'")
+
+
+def _parse_becomes_supertype(
+    stream: TokenStream, subject: ast.Recipient
+) -> "ast.ChangeSupertype | None":
+    """``… becomes snow.`` (Arcum's Weathervane.)
+
+    A bare supertype word, with no "in addition to its other types" tail:
+    CR 205.4a puts supertypes in front of the card types, so adding one
+    displaces nothing and the printed sentence has nothing more to say. The word
+    is checked against the vocabulary catalog rather than a literal — a set
+    printing a new supertype needs `scripts/fetch_vocabulary.py` and nothing
+    here.
+    """
+    word = stream.peek_word()
+    if word is None or word not in TYPE_LINE_SUPERTYPES:
+        return None
+    stream.advance()
+    return ast.ChangeSupertype(subject, word, True, _parse_duration(stream))
+
+
+def _parse_no_longer_supertype(
+    stream: TokenStream, subject: ast.Recipient
+) -> "ast.ChangeSupertype | None":
+    """``<subject> is no longer snow.`` (Arcum's Weathervane's other ability.)
+
+    The mirror of :func:`_parse_becomes_supertype`, and non-consuming on
+    refusal: "is" opens sentences this production has no business claiming, so
+    anything it cannot finish keeps the refusal it already had.
+
+    A **quantified** subject is declined here, in the parse rather than in the
+    lowering. "All lands are no longer snow" (Melting) is a static ability of a
+    permanent rather than a one-shot effect, and its home is
+    `engine/land_types.py`'s derivation table beside the other board-wide land
+    statics — exactly as "All Mountains are Plains" sits beside
+    `change_land_type`. `derived.py` is consulted only where the grammar refuses
+    the line *in full*, so a production that parsed the sentence and left the
+    lowering to raise would take the table's line away and give it back to
+    nobody: parsed-but-unlowered is still parsed.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("is", "are"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("no", "longer"):
+        stream.reset(mark)
+        return None
+    word = stream.peek_word()
+    if word is None or word not in TYPE_LINE_SUPERTYPES:
+        stream.reset(mark)
+        return None
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("target", "that", "it", "this")
+    ):
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.ChangeSupertype(subject, word, False, _parse_duration(stream))
 
 
 def _parse_gain_type(

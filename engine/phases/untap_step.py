@@ -11,7 +11,6 @@ aggregates and enforces them, so new restriction cards never touch it.
 
 from ..auras import aura_restriction_active
 from ..handlers._common import permanent_effective_colors
-from ..layer_bridge import printed_supertypes
 from ..handlers.tapping import UNTAP_LOCK_WHILE_TAPPED_KEY
 from ..control import LINKED_CONTROL_CONDITIONS
 from ..turn_state import record_turn_start_states
@@ -342,13 +341,10 @@ class UntapStepMixin:
                 if blocked_colors and permanent_effective_colors(permanent) & blocked_colors:
                     continue
                 # Arena of the Ancients: creatures of a blocked supertype stay
-                # tapped. Read off the effective type line — the same read
+                # tapped. Computed through layer 4 — the same read
                 # `permanent_matches_filter` makes for a "legendary" phrase —
                 # so a CR 613 text/type change is applied before the word is.
-                if blocked_supertypes and (
-                    blocked_supertypes
-                    & printed_supertypes(permanent.effective_card.type_line)
-                ):
+                if blocked_supertypes & permanent.effective_supertypes:
                     continue
                 if aura_restriction_active(
                     permanent, "doesnt_untap", game=self, seat=player_index

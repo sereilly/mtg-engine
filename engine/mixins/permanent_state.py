@@ -40,12 +40,14 @@ from ..land_animation import (
     land_animation_from_payload,
 )
 from ..land_types import (
+    STATIC_SUPERTYPE_REMOVAL_KIND,
     add_derived_land_type,
     clear_derived_land_types,
     static_land_type_change_applies,
     static_source_timestamp,
+    static_supertype_removal_applies,
 )
-from ..layer_bridge import QUALIFIED_BUFFS, printed_supertypes
+from ..layer_bridge import DERIVED_LOST_SUPERTYPES, QUALIFIED_BUFFS
 from ..lord_buffs import (
     GRANTED_ACTIVATED_ABILITIES,
     LORD_BUFF_KIND,
@@ -136,9 +138,9 @@ def _count_dynamic_pt(
     land_type = payload.get("land_type")
     card_type = payload.get("card_type")
     # "the number of **snow** lands you control" (Drift of the Dead). A
-    # supertype (CR 205.4), which no layer computes — the effective type line
-    # is the whole answer, and `printed_supertypes` is the reader every other
-    # supertype question in the engine goes through.
+    # supertype (CR 205.4), computed through layer 4 like every other
+    # characteristic — so a land Arcum's Weathervane thawed stops counting and
+    # one it froze starts, which is the whole point of the Weathervane.
     supertype = payload.get("supertype")
     # "the number of **other** Rats on the battlefield" (Pestilence Rats): the
     # source itself is excluded by identity (CR 109.5), never by name — a
@@ -149,13 +151,8 @@ def _count_dynamic_pt(
     total = 0
     for battlefield in battlefields:
         for perm in battlefield:
-            if supertype is not None:
-                from ..layer_bridge import printed_supertypes
-
-                if supertype not in printed_supertypes(
-                    perm.effective_card.type_line
-                ):
-                    continue
+            if supertype is not None and not perm.has_supertype(supertype):
+                continue
             if exclude_self and perm is permanent:
                 continue
             if what == "land":
@@ -773,10 +770,29 @@ class PermanentStateMixin:
         timestamp.
         """
         changes: list[tuple[dict, Permanent]] = []
+        # "All lands are no longer snow." (Melting.) CR 205.4a's half of the
+        # type line, collected in the same pass because it is the same
+        # question — which board-wide statics are out — asked about a different
+        # word. Its contributions go on their own channel (`layer_bridge
+        # .DERIVED_LOST_SUPERTYPES`), because a supertype removal is not a
+        # land-type replacement and folding the two would give every Conversion
+        # a supertype field it must not set.
+        removals: list[dict] = []
         for perm in all_permanents:
             for instr in compile_card_oracle(perm.effective_card).instructions:
                 if instr.kind == "static_land_type_change":
                     changes.append((instr.payload, perm))
+                elif instr.kind == STATIC_SUPERTYPE_REMOVAL_KIND:
+                    removals.append(instr.payload)
+        for perm in all_permanents:
+            perm.metadata.pop(DERIVED_LOST_SUPERTYPES, None)
+            words = sorted({
+                str(payload.get("supertype") or "")
+                for payload in removals
+                if static_supertype_removal_applies(payload, perm)
+            } - {""})
+            if words:
+                perm.metadata[DERIVED_LOST_SUPERTYPES] = words
         for perm in all_permanents:
             clear_derived_land_types(perm)
             if perm.card.primary_type != "land":
@@ -1450,7 +1466,7 @@ class PermanentStateMixin:
         # ``effective_card``, so a copy answers with the line it copied
         # (CR 707.2) and a text change is folded in.
         if filt.supertypes:
-            held = printed_supertypes(target_perm.effective_card.type_line)
+            held = target_perm.effective_supertypes
             if not all(word in held for word in filt.supertypes):
                 return False
         # "…with a +1/+1 counter on it" (Pridemalkin): the counter record, not

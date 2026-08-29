@@ -75,6 +75,13 @@ GAINED_TYPES = "gained_types"
 #: list for the same reason. One entry per effect, so the removal ends by
 #: dropping the contribution rather than by remembering what was there.
 LOST_TYPES = "lost_types"
+#: Supertypes a board-wide **static** takes away ("All lands are no longer
+#: snow", Melting), rebuilt from the board by
+#: ``mixins/permanent_state._refresh_static_land_types`` on every recompute. A
+#: plain list of words rather than a record, because a static's contribution
+#: carries no duration to expire and no source to end it: it lasts exactly as
+#: long as the rebuild keeps putting it back.
+DERIVED_LOST_SUPERTYPES = "derived_lost_supertypes"
 
 _QUALIFIER_HOLDS = {
     "attacking": lambda perm: bool(perm.attacking),
@@ -181,6 +188,14 @@ def seed_characteristics(perm: Permanent) -> Characteristics:
     return Characteristics(
         card_types=set(card_types),
         subtypes=set(subtypes),
+        # CR 205.4a's half of the line, seeded here for the reason every other
+        # field is: a supertype an effect adds or removes (Arcum's Weathervane,
+        # Melting) is a layer-4 change like any other, and a channel that starts
+        # empty could only ever *add*. ``Characteristics.supertypes`` and
+        # ``add_types``' keyword had been here since the layer system was
+        # written with nothing seeding them and nothing reading them back — a
+        # channel built at both ends and connected at neither.
+        supertypes=set(printed_supertypes(card.type_line)),
         colors=set(card.colors),
         abilities=_printed_abilities(card),
         power=card.base_power,
@@ -606,6 +621,7 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             only,
             card_types=list(gained.get("card_types") or ()),
             subtypes=list(gained.get("subtypes") or ()),
+            supertypes=list(gained.get("supertypes") or ()),
             timestamp=0,
             label=f"gained:{gained.get('source', 'effect')}",
         ))
@@ -621,8 +637,22 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             only,
             card_types=list(lost.get("card_types") or ()),
             subtypes=list(lost.get("subtypes") or ()),
+            supertypes=list(lost.get("supertypes") or ()),
             timestamp=0,
             label=f"lost:{lost.get('source', 'effect')}",
+        ))
+    # The *derived* half of the same channel: a board-wide static's contribution
+    # ("All lands are no longer snow", Melting), cleared and rebuilt from the
+    # board on every continuous-effects refresh. Split from the recorded channel
+    # above for the reason ``land_types.py`` splits its two — a rebuilt
+    # contribution recorded alongside a stamped one accumulates an entry per
+    # pass, forever.
+    for word in meta.get(DERIVED_LOST_SUPERTYPES) or ():
+        effects.append(remove_types(
+            only,
+            supertypes=[word],
+            timestamp=_DERIVED_TIMESTAMP,
+            label=f"static:no longer {word}",
         ))
 
     animation = meta.get("animate_until_end_of_turn")
@@ -834,6 +864,20 @@ def computed_types(perm: Permanent) -> tuple[set[str], set[str]]:
     return state[oid].card_types, state[oid].subtypes
 
 
+def computed_supertypes(perm: Permanent) -> set[str]:
+    """The supertypes *perm* currently has, after layer 4 (CR 205.4a).
+
+    The computed answer to a question nine call sites used to put to the printed
+    line through :func:`printed_supertypes`. That was right while no card in the
+    pool could change one and wrong the moment Ice Age's Arcum's Weathervane
+    arrived — the ``has_type`` story again, one layer up.
+    """
+    oid = id(perm)
+    state: State = {oid: seed_characteristics(perm)}
+    apply_layers(collect_type_effects(perm, oid), state)
+    return state[oid].supertypes
+
+
 def computed_colors(perm: Permanent) -> set[str]:
     """The colours *perm* currently is, after layer 5."""
     oid = id(perm)
@@ -860,5 +904,5 @@ def computed_pt(perm: Permanent) -> tuple[int, int]:
 
 __all__ = [
     "collect_control_effects", "collect_pt_effects", "computed_controller",
-    "computed_pt", "seed_characteristics",
+    "computed_pt", "computed_supertypes", "seed_characteristics",
 ]

@@ -470,6 +470,32 @@ class Permanent:
 
         return "creature" in computed_types(self)[0]
 
+    def has_supertype(self, supertype: str) -> bool:
+        """Whether this permanent currently has a supertype (CR 205.4a).
+
+        Computed through CR 613 layer 4, so a supertype an effect added or took
+        away counts — "Target nonsnow basic land becomes snow" / "Target snow
+        land is no longer snow" (Arcum's Weathervane), "All lands are no longer
+        snow" (Melting).
+
+        Every reader of "is this snow / legendary / basic?" that holds a
+        ``Permanent`` must come here rather than to
+        ``layer_bridge.printed_supertypes``, for the reason ``has_type`` exists
+        one layer down: the printed line is the seed, not the answer.
+        ``printed_supertypes`` stays for the callers that hold a *card* — a
+        thing in a hand or a graveyard, where CR 613 does not apply at all.
+        """
+        from .layer_bridge import computed_supertypes
+
+        return supertype.lower() in computed_supertypes(self)
+
+    @property
+    def effective_supertypes(self) -> frozenset[str]:
+        """Every supertype this permanent currently has, after layer 4."""
+        from .layer_bridge import computed_supertypes
+
+        return frozenset(computed_supertypes(self))
+
     @property
     def basic_land_types(self) -> tuple[str, ...]:
         """The basic land types this permanent currently has, after layer 4.

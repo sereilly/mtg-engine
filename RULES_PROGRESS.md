@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**335 / 612 tracked rules covered (54%)** — 1631 tests, 0 unannotated.
+**335 / 612 tracked rules covered (54%)** — 1634 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -382,7 +382,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(1 tests, subrules b)*
 - [x] **205.2** Card Types *(6 tests, subrules ab)*
 - [x] **205.3** Subtypes *(3 tests, subrules bi)*
-- [x] **205.4** Supertypes *(7 tests, subrules abcd)*
+- [x] **205.4** Supertypes *(10 tests, subrules abcd)*
 
 ### 207. Text Box
 
@@ -772,13 +772,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(73 tests, subrules bcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(74 tests, subrules bcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(13 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(69 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [ ] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each...
-- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(16 tests, subrules be)*
+- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(17 tests, subrules be)*
 - [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(8 tests, subrules abc)*
 - [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(6 tests)*
 - [ ] **613.10** Some continuous effects affect players rather than objects. For example, an effect might give a p...

@@ -73,6 +73,7 @@ from .lowering import (
     _lower_produces_mana_instead,
     _lower_spend_mana_as_though,
     _lower_become_color,
+    _lower_change_supertype,
     _lower_gain_type,
     _lower_cant_be,
     _lower_attack_as_though,
@@ -469,6 +470,8 @@ def lower_statement(
         return _lower_sacrifice_expansion_permanents(statement)
     if isinstance(statement, ast.GainType):
         return _lower_gain_type(statement)
+    if isinstance(statement, ast.ChangeSupertype):
+        return _lower_change_supertype(statement)
     if isinstance(statement, ast.ShuffleGraveyardIntoLibrary):
         return _lower_shuffle_graveyard_into_library(statement)
     if isinstance(statement, ast.ShuffleHandIntoLibrary):

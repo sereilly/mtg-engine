@@ -1205,3 +1205,53 @@ def gain_type(game: Game, instruction: OracleInstruction, context: OracleExecuti
         + " ".join(record["card_types"])
     )
     return True, "resolved"
+
+
+@effect_handler("change_supertype")
+def change_supertype(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Arcum's Weathervane: "{2}, {T}: Target nonsnow basic land becomes snow."
+    and "{2}, {T}: Target snow land is no longer snow."
+
+    CR 205.4a's half of the type line, changed in CR 613 layer 4 — the same two
+    channels :func:`gain_type` writes, with the supertype in the record instead
+    of a card type. Nothing on the permanent's own card is touched, so the land
+    stops being snow by the record going away rather than by anything being
+    restored.
+
+    The polarity is payload, so one handler answers both printed sentences. It
+    reaches the *computed* readers — ``Permanent.has_supertype`` and the eight
+    call sites that ask it — which is what makes a thawed Snow-Covered Forest
+    stop satisfying snow forestwalk and stop counting for Drift of the Dead.
+    """
+    from ..layer_bridge import LOST_TYPES
+
+    payload = instruction.payload
+    filters = (payload.get("targets") or {}).get("filter") or {}
+
+    def _eligible(perm: Permanent) -> bool:
+        return permanent_matches_filter(perm, filters)
+
+    target_perm = resolve_target_permanent(
+        game, context, predicate=_eligible, fallback_players=(context.target, context.caster)
+    )
+    if target_perm is None:
+        game.log.append(f"{context.card.name}: no valid target")
+        return True, "resolved"
+
+    word = str(payload.get("supertype", "")).lower()
+    gained = bool(payload.get("gained", True))
+    record = {
+        "supertypes": [word],
+        "duration": str(payload.get("duration", "permanent")),
+        "source": context.card.name if context.card else "effect",
+        "seat": game.players.index(context.caster) if context.caster in game.players else 0,
+    }
+    target_perm.metadata.setdefault(
+        GAINED_TYPES if gained else LOST_TYPES, []
+    ).append(record)
+    game._refresh_dynamic_creatures()
+    game.log.append(
+        f"{context.card.name}: {target_perm.card.name} "
+        + (f"becomes {word}" if gained else f"is no longer {word}")
+    )
+    return True, "resolved"

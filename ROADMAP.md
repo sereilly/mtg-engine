@@ -692,13 +692,13 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, twenty-six rounds in. 184 → 265 of 373 supported
-(71%), hollow lines 10 cards.** The set is still under `measured`, which is the
+**Where it stands: Phase 3, twenty-seven rounds in. 184 → 267 of 373 supported
+(72%), hollow lines 10 cards.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
 
-**The remaining 108 are a long tail, and the shape is Legends' rather than
+**The remaining 106 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
@@ -724,6 +724,14 @@ direction is over-restriction — a card refused for a sentence the engine does 
 fact implement — which is the failure this journal had not yet seen, and it was
 hidden by a second refusal three sentences earlier on the only shipped card
 printing it.
+
+Round 27's is a third kind: not a defect at all yet. Nine call sites read a
+supertype off the printed type line, which was **correct** while no card in the
+pool could change one — every reader agreed with every other, and with reality.
+It is the `become_tapped` shape without the bug: a question with nine askers,
+found on the day the first card makes them disagree rather than after. A set
+ingest is where that day arrives, and it is worth looking for the question with
+many askers before looking for the answer that is wrong.
 
 **Phase 1 (ingest and measure).** 383 printings, 373 unique cards, **346 new to
 the pool** — the largest set ingested and the first since M21 that is mostly new
@@ -1464,6 +1472,61 @@ second refusal behind it. Grizzled Wolverine is the card that reaches the clause
 with everything before it working. Normalised in `_conjuncts`, which is the one
 place both callers now pass through.
 
+**Round 27 — a supertype is a computed characteristic. 265 → 267.**
+
+Arcum's Weathervane ("{2}, {T}: Target nonsnow basic land becomes snow." and
+"{2}, {T}: Target snow land is no longer snow.") and Melting ("All lands are no
+longer snow."). CR 613.1d puts supertypes in layer 4 alongside card types and
+subtypes, and CR 205.4b says gaining or losing one keeps the rest.
+
+**The channel existed and was connected at neither end.**
+`Characteristics.supertypes` was a field, `_SET_CHARACTERISTICS` listed it, and
+`add_types` took a `supertypes=` keyword — all written when the layer system
+was. Nothing seeded the set, `remove_types` had no supertype half, and no
+`computed_supertypes` read it back. Meanwhile **nine call sites in seven
+modules** asked what supertypes a permanent had by parsing its printed type
+line through `layer_bridge.printed_supertypes`: the subject-filter matcher's
+"a snow land", snow landwalk (CR 702.14c), Drift of the Dead's count, the
+legend and world rules (CR 704.5j/k), Arena of the Ancients' untap block, Blood
+Moon's "nonbasic", and the trigger-subject matcher.
+
+That was *right* while nothing in the pool could change a supertype, which is
+what makes it the `has_type` story one layer up rather than a bug anyone could
+have found: every reader agreed with every other, and with reality. Arcum's
+Weathervane is the day it stops being right, and eight of the nine now go
+through `Permanent.has_supertype` / `effective_supertypes`. The ninth stays on
+the printed line and is the one that should: `permanent_matches_filter`'s
+card-level arm answers about a thing in a hand or a graveyard, where CR 613
+does not apply at all.
+
+The two cards are the two *flavours* a layer-4 channel has in this engine, which
+is why they belong in one round. Arcum's Weathervane is **recorded** — a
+`GAINED_TYPES` / `LOST_TYPES` entry per resolution, ended by dropping the
+contribution. Melting is **derived** — a board-wide static, cleared and rebuilt
+from the board on every continuous-effects refresh, on a channel of its own
+because a rebuilt contribution recorded beside a stamped one accumulates an
+entry per pass, forever. `land_types.py`'s docstring has said that since
+Conversion; this is the second family to need both halves.
+
+Melting is a derivation-table entry (`static_supertype_removal`) and not a
+production, for the reason "All Mountains are Plains" is one. The production for
+the targeted spelling therefore **declines a quantified subject in the parse**,
+not in the lowering: `derived.py` is consulted only where the grammar refuses
+the line *in full*, so a production that parsed "All lands are no longer snow"
+and left the lowering to raise would take the table's line away and give it back
+to nobody. Parsed-but-unlowered is still parsed — which is a thing worth knowing
+before adding any production whose sentence a derivation table also reads.
+
+**The size guard fired mid-round**, on `effects/characteristics.py` at 1,015
+lines. `counters` split off, reusing the name `lowering/counters.py` has carried
+since it left the same family one package over — the mirror re-forming rather
+than forking, which is what the layering notes keep asking for, and the CR's own
+line: a counter (CR 122) is a marker on an object, where what a `+1/+1` counter
+does to power is a layer-7 consequence. The one fragment the two families shared
+went down into `phrases.py`, which is where the layering rule sends a production
+two families need — `phrases` rising without new work of its own for the second
+time, exactly as its note predicts.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,
@@ -1522,12 +1585,21 @@ What is close, at the cull:
 | Module | Lines |
 | --- | ---: |
 | `lowering/_common.py` | 995 |
-| `phrases.py` | 965 |
-| `lowering/zones.py` | 992 |
-| `lower.py` | 971 |
-| `lowering/damage.py` | 745 |
+| `phrases.py` | 992 |
+| `lower.py` | 990 |
+| `lowering/characteristics.py` | 954 |
+| `lowering/categories.py` | 894 |
 
-Nothing is at the cap. Both damage modules were on it and split in round 21 —
+**Three modules are within ten lines of the cap**, which is the tightest this
+table has been. `phrases.py` moved 965 → 992 in round 27 without a production of
+its own: the fragment two families shared came down into it when `counters`
+split off the parse side, which is where the layering rule sends one and the
+second time this has happened. The next template landing in any of the three
+splits it, and `lowering/_common.py` and `lower.py` are the two with no obvious
+family line drawn through them yet — worth thinking about before the guard picks
+the moment.
+
+Both damage modules were on the cap and split in round 21 —
 `effects/damage.py` 996 → 573 and `lowering/damage.py` 997 → 745 — which is
 what a two-card round costs when it lands in the two files every damage
 template lands in. `phrases.py` is the one that moved *up* without new work of
@@ -1545,3 +1617,9 @@ Two of those splits were invented **twice, independently**, by parallel branches
 that each hit the cap on the same module and cut it in the same place. Two
 agents reaching the same boundary with no knowledge of each other is the
 strongest evidence a split is structural rather than a matter of taste.
+
+Ice Age's first split is the other kind of evidence: `effects/characteristics.py`
+crossed the cap in round 27 and cut along a line the **lowering side had already
+drawn one set earlier**, under the same name and for the same reason. A boundary
+found independently by two packages, a set apart, is as structural as one found
+by two agents at once.

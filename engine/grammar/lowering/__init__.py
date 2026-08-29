@@ -102,6 +102,7 @@ from .characteristics import (
     _lower_change_base_pt,
     _lower_set_base_pt,
     _lower_become_color,
+    _lower_change_supertype,
     _lower_gain_type,
     _lower_change_text,
 )
@@ -330,6 +331,7 @@ __all__ = [
     "_lower_remove_counter",
     "_lower_for_each",
     "_lower_become_color",
+    "_lower_change_supertype",
     "_lower_gain_type",
     "_lower_change_text",
     "_DESTROY_ALL_KINDS",
