@@ -692,6 +692,30 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
+**Where it stands: Phase 3, nine rounds in. 184 → 235 of 373 supported (63%),
+hollow lines 10 cards.** The set is still under `measured`, which is the state
+the role is designed for: nothing is broken, every gate is green, and no player
+can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow lines
+at zero.
+
+**The remaining 138 are a long tail, and the shape is Legends' rather than
+M21's.** 107 of them refuse **exactly one line**, and those lines sit across
+**40+ distinct refusal sites with one card each**. The clusters are spent: the
+last multi-card ones were the three CDAs (round 9), the four self-bouncers
+(round 8) and the Scarab cycle (round 2). Rank what is left by cheapest-per-card
+rather than by biggest mechanism — the playbook's own advice for exactly this
+point — and expect 1–3 cards a round.
+
+**What the nine rounds actually bought is not only cards.** Six of them turned
+up a live defect in shipped code, every one of them silent and every one in the
+same direction (a card doing *more* than it prints, or a gate reporting a card
+as done): the keyword rewrite reaching one of two front ends, a widened land
+gate hiding an unread static, an Aura's conditional bonus applied
+unconditionally, a filter draft dropping a restriction it had no field for, the
+Aura keyword vocabulary drifting from the registry both ways, and a substring
+scan granting plain forestwalk from "snow forestwalk". None had a failing test
+and none would have been found by reading the census.
+
 **Phase 1 (ingest and measure).** 383 printings, 373 unique cards, **346 new to
 the pool** — the largest set ingested and the first since M21 that is mostly new
 cards. Census at ingest: **184/373 supported (49.3%)**, 58.9% of lines parsed
