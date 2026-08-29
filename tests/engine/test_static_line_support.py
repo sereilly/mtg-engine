@@ -208,8 +208,15 @@ def test_the_acknowledgement_list_has_no_dead_entries():
         # admits: a recognized prefix followed by a rider nothing implements.
         "This creature can't block creatures with flying.",
         "This creature can't attack unless you control a Wall.",
-        "As long as you control a Wall, this creature gets +1/+1.",
-        "This creature gets +1/+1 as long as you control a Zombie.",
+        # "As long as you control a **Wall**…" and "…a **Zombie**" used to stand
+        # here, and both are implemented now: `static_bonuses` reads "you control
+        # <noun phrase>" through the grammar's own noun parser, so the condition
+        # has a reader and the bonus tracks the board (round ICE 6). What is
+        # still unimplemented is a **counted** version of the same clause, which
+        # that branch refuses deliberately rather than answering as presence —
+        # so the guard keeps its teeth in the shape it was written for.
+        "As long as you control two or more Walls, this creature gets +1/+1.",
+        "This creature gets +1/+1 as long as you control the most Zombies.",
         # The gate admitted every line starting "other " — a prefix, not a
         # template — so a lord whose effect the engine does not implement
         # reported supported and did nothing. All three of these are the shape

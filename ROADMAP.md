@@ -866,6 +866,40 @@ The second half is smaller and the same shape: the Aura keyword grant read
 first strike"). The line matched, so an Aura giving two abilities shipped
 giving one, with nothing to say so.
 
+**Round 6 — snow, which the rules engine already knew how to read. 222 → 226.**
+
+Phase 2 called snow one of the set's two big rocks and it was not one: "snow
+land" already parsed to `supertypes: ["snow"]`, `permanent_matches_filter`
+already tested it, and a Snow-Covered Forest already matched while a Forest did
+not. **Measuring the machinery before scheduling the round is what found that**
+— the census had ranked 33 cards behind a subsystem that existed.
+
+What was actually missing was three narrow things, and two of them were bugs
+rather than gaps:
+
+* **An expired refusal.** "…as long as you control a snow land" was declined by
+  the grammar with the reason "derived by engine/static_bonuses.py", and that
+  table read five hand-written conditions and not this one — so the clause was
+  read by *nobody*, with both halves individually correct and no test able to
+  notice. The table now reads "you control <noun phrase>" through the grammar's
+  own noun parser, so the phrase has one meaning here and at every recompute; a
+  *counted* version still refuses rather than being answered as presence.
+
+* **CR 702.14a's "any combination", taken literally.** "Snow forestwalk" is a
+  supertype *and* a subtype and the defending player must control one land
+  answering both, so a landwalk requirement is a tuple of qualities rather than
+  one. Keeping only the last word would have made Rime Dryad unblockable
+  against any Forest.
+
+* **And that is exactly what was happening**, through a seam nowhere near the
+  keyword. `layer_bridge._TEXT_KEYWORDS` is a substring scan whose own comment
+  says a bare word is safe "for the reason it is not for hexproof: there is no
+  narrower keyword whose name contains this one". "Snow forestwalk" contains
+  "forestwalk", and the containing phrase is the narrower ability — so layer 6
+  seeded plain forestwalk and the block check found a plain Forest sufficient.
+  A comment stating an assumption is worth reading as a to-do list: this set is
+  where that one came due.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

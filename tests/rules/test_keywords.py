@@ -1734,3 +1734,57 @@ def test_702_36a_fear_is_in_the_implemented_keyword_registry():
     from engine.grammar.vocabulary import IMPLEMENTED_KEYWORDS
 
     assert "fear" in IMPLEMENTED_KEYWORDS
+
+
+# ---------------------------------------------------------------------------
+# CR 702.14a's "any combination" — a supertype *and* a subtype (Ice Age)
+# ---------------------------------------------------------------------------
+
+
+def _snow_land(subtype: str) -> CardDefinition:
+    type_line = f"Basic Snow Land — {subtype.title()}"
+    return CardDefinition(
+        name=f"Snow-Covered {subtype.title()}", mana_cost="", cmc=0.0,
+        type_line=type_line, oracle_text="", colors=(), color_identity=(),
+        keywords=(), produced_mana=(), raw={"name": "x", "type_line": type_line},
+    )
+
+
+@pytest.mark.cr("702.14a", "702.14c")
+def test_702_14a_snow_forestwalk_needs_a_land_that_is_both():
+    """"[Type]walk … can also be the card type land plus **any combination** of
+    land types, card types, and/or supertypes."
+
+    Rime Dryad has snow forestwalk, so an ordinary Forest does not turn the
+    evasion on and a Snow-Covered Forest does. A reader keeping only the last
+    word would make it unblockable against any Forest — a strictly better
+    creature than the one printed — and one keeping only the first would let any
+    snow land do.
+    """
+    walker = Permanent(card=_mk_creature("Walker", 2, 2, keywords=("Snow forestwalk",)))
+    blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
+    plain_forest = Permanent(card=_mk_land("Forest", "Forest"))
+    game, _p1, p2 = _game([walker], [blocker, plain_forest])
+    _to_declare_blockers(game, [0])
+    assert game.declare_blockers(1, {0: 0})[0], "a plain Forest is not a snow Forest"
+
+    snowy = Permanent(card=_snow_land("forest"))
+    game2, _q1, q2 = _game(
+        [Permanent(card=_mk_creature("Walker", 2, 2, keywords=("Snow forestwalk",)))],
+        [Permanent(card=_mk_creature("Blocker", 2, 2)), snowy],
+    )
+    _to_declare_blockers(game2, [0])
+    ok, _ = game2.declare_blockers(1, {0: 0})
+    assert not ok, "a Snow-Covered Forest turns snow forestwalk on"
+
+
+@pytest.mark.cr("702.14a")
+def test_702_14a_a_snow_walk_is_not_satisfied_by_the_wrong_subtype():
+    """The other half of the conjunction: a snow *Swamp* does not answer snow
+    forestwalk."""
+    walker = Permanent(card=_mk_creature("Walker", 2, 2, keywords=("Snow forestwalk",)))
+    blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
+    game, _p1, _p2 = _game([walker], [blocker, Permanent(card=_snow_land("swamp"))])
+    _to_declare_blockers(game, [0])
+
+    assert game.declare_blockers(1, {0: 0})[0]

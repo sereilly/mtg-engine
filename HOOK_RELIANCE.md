@@ -30,7 +30,7 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 | DRK | 119 | 119 (100.0%) | 1 (0.8%) | 167 | 1 (0.6%) | 1 | 0.8 |
 | 4ED | 368 | 368 (100.0%) | 30 (8.2%) | 520 | 29 (5.6%) | 32 | 8.7 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| ICE *(measured)* | 373 | 221 (59.2%) | 1 (0.5%) | 362 | 0 (0.0%) | 1 | 0.5 |
+| ICE *(measured)* | 373 | 225 (60.3%) | 1 (0.4%) | 366 | 0 (0.0%) | 1 | 0.4 |
 | **ALL (shipped, deduped)** | **1162** | **1162 (100.0%)** | **74 (6.4%)** | **1715** | **70 (4.1%)** | **80** | **6.9** |
 
 *(measured)* — ICE are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.

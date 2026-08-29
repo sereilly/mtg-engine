@@ -14,6 +14,7 @@ rules logic changing.
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
@@ -213,6 +214,42 @@ _TEXT_KEYWORDS = (
 )
 
 
+#: "<qualifier> <type>walk" as it is printed inside a keyword line. The
+#: qualifier is captured and handed to `landwalk_requirement`, which decides
+#: whether it is a real one — so this pattern is deliberately permissive.
+_QUALIFIED_WALK = r"(\w+) %s\b"
+
+
+def _text_keywords_in(value: str) -> set[str]:
+    """The keywords printed in one keyword or static line.
+
+    A substring scan, and the one place its hazard is answered rather than
+    assumed. ``_TEXT_KEYWORDS``' own comment says a bare word is safe "for the
+    reason it is not for hexproof: there is no narrower keyword whose name
+    contains this one" — Ice Age is where that stopped being true. "Snow
+    forestwalk" (Rime Dryad, Legions of Lim-Dul) *contains* "forestwalk", and
+    the containing phrase is the **narrower** ability: seeded as plain
+    forestwalk, Rime Dryad was unblockable against any Forest at all, which is a
+    strictly better creature than the one printed.
+
+    So a walk word is dropped when the printed text qualifies it, and the
+    qualified ability takes its place. Which qualifiers count is asked of
+    ``landwalk_requirement`` — the reader that *enforces* the ability — rather
+    than of a list here, so a supertype the vocabulary gains later is covered
+    the day it is fetched, and a word that is not a real qualifier leaves the
+    bare ability alone.
+    """
+    found = {word for word in _TEXT_KEYWORDS if word in value}
+    for word in list(found):
+        if not word.endswith("walk"):
+            continue
+        for match in re.finditer(_QUALIFIED_WALK % word, value):
+            if landwalk_requirement(f"{match.group(1)} {word}") is not None:
+                found.discard(word)
+                found.add(f"{match.group(1)} {word}")
+    return found
+
+
 def _printed_abilities(card) -> set[str]:
     return set(_printed_abilities_cached(
         card.name, card.type_line, card.oracle_text, card.keywords
@@ -244,7 +281,7 @@ def _printed_abilities_cached(
         # other creatures, not to the lord itself.
         if value.startswith("other "):
             continue
-        abilities.update(word for word in _TEXT_KEYWORDS if word in value)
+        abilities.update(_text_keywords_in(value))
         # A printed "bands with other [quality]" line (CR 702.22b) — the Wolves
         # of the Hunt token Master of the Hunt makes carries one. It cannot ride
         # the word scan above: the ability's name *is* the printed quality, so

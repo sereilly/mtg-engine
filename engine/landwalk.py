@@ -9,6 +9,13 @@ card types, and/or supertypes". So the pool prints two shapes:
 ``legendary landwalk`` (Livonya Silone), ``nonbasic landwalk``
     the quality is a **supertype** (optionally negated) sitting in front of the
     family word ``landwalk``.
+``snow forestwalk``, ``snow swampwalk`` (Ice Age)
+    "any combination" taken literally: a supertype **and** a subtype, and the
+    defending player must control a land answering both. This is why a
+    requirement is a *tuple* of qualities rather than one — a reader that kept
+    only the last word would let Rime Dryad through against any Forest, which
+    is a strictly better creature than the one printed, and one that kept only
+    the first would make it unblockable against any snow land at all.
 
 Both are one question — "does the defending player control a land like this?"
 (CR 702.14c) — so both are one requirement here rather than two enforcement
@@ -37,8 +44,8 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 LANDWALK = "landwalk"
 
 
-class LandwalkRequirement(NamedTuple):
-    """What land the defending player must control for this landwalk to apply.
+class LandQuality(NamedTuple):
+    """One of the qualities a landwalk names.
 
     ``kind`` is ``"subtype"`` (``islandwalk`` → an Island) or ``"supertype"``
     (``legendary landwalk`` → a legendary land). ``negated`` is CR 702.14c's
@@ -48,6 +55,17 @@ class LandwalkRequirement(NamedTuple):
     kind: str
     quality: str
     negated: bool = False
+
+
+class LandwalkRequirement(NamedTuple):
+    """What land the defending player must control for this landwalk to apply.
+
+    Every quality must hold of the **same** land (CR 702.14c): "snow
+    forestwalk" asks for one land that is both, not for a snow land and,
+    separately, a Forest.
+    """
+
+    qualities: tuple[LandQuality, ...]
 
 
 @lru_cache(maxsize=None)
@@ -64,19 +82,30 @@ def landwalk_requirement(ability: str) -> LandwalkRequirement | None:
     ability = (ability or "").strip().lower().rstrip(".")
     if not ability:
         return None
-    if ability.endswith("walk") and " " not in ability:
-        subtype = ability[: -len("walk")]
-        if subtype in LAND_TYPES:
-            return LandwalkRequirement("subtype", subtype)
+    words = ability.split()
+    if not words[-1].endswith("walk"):
         return None
-    head, _, tail = ability.partition(" ")
+    qualities: list[LandQuality] = []
+    # Every word but the last is a supertype, optionally negated ("nonbasic
+    # landwalk", "snow forestwalk"). An unknown one refuses the whole ability
+    # rather than being skipped: a quality dropped from an evasion restriction
+    # widens it, which is the one direction this must never go.
+    for head in words[:-1]:
+        negated = head.startswith("non")
+        quality = head[3:] if negated else head
+        if quality not in TYPE_LINE_SUPERTYPES:
+            return None
+        qualities.append(LandQuality("supertype", quality, negated))
+    tail = words[-1]
     if tail != LANDWALK:
+        subtype = tail[: -len("walk")]
+        if subtype not in LAND_TYPES:
+            return None
+        qualities.append(LandQuality("subtype", subtype))
+    if not qualities:
+        # The bare family word, which names no land and so restricts no block.
         return None
-    negated = head.startswith("non")
-    quality = head[3:] if negated else head
-    if quality in TYPE_LINE_SUPERTYPES:
-        return LandwalkRequirement("supertype", quality, negated)
-    return None
+    return LandwalkRequirement(tuple(qualities))
 
 
 def is_landwalk(ability: str) -> bool:
@@ -97,16 +126,23 @@ def land_satisfies(permanent: "Permanent", requirement: LandwalkRequirement) -> 
 
     if not permanent.has_type("land"):
         return False
-    if requirement.kind == "subtype":
-        return permanent.has_type(requirement.quality)
-    held = requirement.quality in printed_supertypes(
-        permanent.effective_card.type_line
-    )
-    return not held if requirement.negated else held
+    supertypes = None
+    for quality in requirement.qualities:
+        if quality.kind == "subtype":
+            if not permanent.has_type(quality.quality):
+                return False
+            continue
+        if supertypes is None:
+            supertypes = printed_supertypes(permanent.effective_card.type_line)
+        held = quality.quality in supertypes
+        if held == quality.negated:
+            return False
+    return True
 
 
 __all__ = [
     "LANDWALK",
+    "LandQuality",
     "LandwalkRequirement",
     "is_landwalk",
     "land_satisfies",

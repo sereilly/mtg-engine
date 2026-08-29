@@ -80,10 +80,46 @@ def test_613_1g_an_unrecognized_condition_is_unsupported_not_silently_dropped():
     """A condition this table cannot evaluate must fail loud. The gate used to
     admit the leading order by prefix, so an unimplemented condition in that
     position became a static line and the creature quietly kept its printed
-    P/T."""
+    P/T.
+
+    The probe used to be "as long as you control a Wall", which the table reads
+    now — "you control <noun phrase>" goes through the grammar's noun parser, so
+    the phrase has one meaning here and at every recompute. A **counted**
+    version of the same clause is what it still declines, and declining it is
+    the point: answered as presence, "two or more Walls" would hold on one."""
     program = compile_card_oracle(_shade(
-        "As long as you control a Wall, this creature gets +1/+1."))
+        "As long as you control two or more Walls, this creature gets +1/+1."))
     assert not program.supported
+
+
+@pytest.mark.cr("613.1g")
+def test_613_1g_a_controlled_noun_condition_is_read_and_re_asked():
+    """"…as long as you control a Wall" — the general form of the hand-written
+    basic-land rows, and the one that was refused by a decline that had expired:
+    the grammar declined it "to engine/static_bonuses.py" and this table read
+    only five conditions, so nobody read it at all and no test could notice,
+    because both halves were individually correct.
+
+    Asked on every recompute (CR 613.1g), so losing the Wall loses the bonus
+    with nothing to undo."""
+    catalog = {card.name: card for card in load_catalog()}
+    probe = Permanent(card=_shade(
+        "As long as you control a Wall, this creature gets +1/+1."))
+    player = PlayerState(name="P1", battlefield=[probe])
+    game = Game(players=[player, PlayerState(name="P2")])
+
+    assert compile_card_oracle(probe.card).supported
+    game._refresh_dynamic_creatures()
+    assert (probe.effective_power, probe.effective_toughness) == (1, 1)
+
+    wall = Permanent(card=catalog["Wall of Stone"])
+    player.battlefield.append(wall)
+    game._refresh_dynamic_creatures()
+    assert (probe.effective_power, probe.effective_toughness) == (2, 2)
+
+    game.remove_from_battlefield(wall)
+    game._refresh_dynamic_creatures()
+    assert (probe.effective_power, probe.effective_toughness) == (1, 1)
 
 
 @pytest.mark.cr("613.1g")

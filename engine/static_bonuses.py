@@ -188,7 +188,63 @@ def _parse_condition_text(text: str) -> dict[str, object] | None:
                 "power": {"op": "ge", "value": int(match.group("power"))},
             },
         }
-    return None
+    return _controls_noun_condition(text)
+
+
+#: "as long as **you control a snow land**" (Woolly Mammoths), "…**a Plains**"
+#: (Dire Wolves). The general form of the two hand-written ``you control …``
+#: rows above, and the one the specific rows are special cases of.
+#:
+#: This was refused rather than read, and the refusal had **expired**: the
+#: grammar declines a conditional static about your own board with the reason
+#: "derived by engine/static_bonuses.py", which was true of the five conditions
+#: this table already knew and of nothing else. So "as long as you control a
+#: snow land" was read by nobody at all — the grammar pointing at a table that
+#: pointed nowhere, with no test able to notice because both halves are
+#: individually correct. (SET_PLAYBOOK Phase 3: "a refusal can expire without
+#: anything failing".)
+_CONTROLS_NOUN_CONDITION = re.compile(r"^you control (?P<phrase>.+)$")
+
+
+def _controls_noun_condition(text: str) -> dict[str, object] | None:
+    """"you control <noun phrase>" as a ``controls`` payload, or None.
+
+    The phrase is read by **the grammar's noun parser**, not by a regex here:
+    ``subject_matches`` is what will answer this condition at every recompute,
+    and a second reader of "a snow land" would be free to disagree with it about
+    what a snow land is. A phrase the parser cannot read, or one carrying a key
+    the matcher cannot test, refuses — a dropped narrowing is a static that
+    holds on a board the card does not name.
+    """
+    match = _CONTROLS_NOUN_CONDITION.match(text)
+    if match is None:
+        return None
+    from .grammar.errors import GrammarError
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+    from .grammar.lexer import tokenize
+    from .subject_filters import untestable_filter_keys
+
+    # The article is the quantifier, and it is what the printed clause means:
+    # "you control **a** snow land" is a presence test, which is the default the
+    # consumer applies when no count rides the payload. Anything else — "two or
+    # more", "no" — is a threshold this branch does not read and must not
+    # silently answer as presence, so only the articles are stripped.
+    phrase = match.group("phrase")
+    article, _, rest = phrase.partition(" ")
+    if article not in ("a", "an") or not rest:
+        return None
+    stream = TokenStream(tokenize(rest).tokens)
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    payload = described.to_payload()
+    if not payload or untestable_filter_keys(payload):
+        return None
+    return {"kind": "controls", "who": "you", "filter": payload}
 
 
 def _parse_effect_text(text: str) -> dict[str, object] | None:

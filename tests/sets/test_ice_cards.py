@@ -428,3 +428,55 @@ def test_imposing_visage_grants_menace(set_pool):
 
     assert compile_card_oracle(visage.card).supported
     assert bear.has_keyword("menace")
+
+
+# --- Round 6: snow as a supertype the rules already knew how to read ---
+
+
+def test_rime_dryad_is_blockable_without_a_snow_forest(set_pool):
+    """Snow forestwalk, run in real combat rather than asserted off the
+    compiled program: CR 702.14c asks the *defending player's* board."""
+    pool = set_pool("ICE")
+    dryad = Permanent(card=pool["Rime Dryad"])
+    blocker = Permanent(card=pool["Balduvian Bears"])
+    forest = Permanent(card=pool["Forest"])
+    p1 = PlayerState(name="P1", battlefield=[dryad], life=20)
+    p2 = PlayerState(name="P2", battlefield=[blocker, forest], life=20)
+    game = Game(players=[p1, p2])
+
+    _combat(game, [0])
+    assert game.declare_blockers(1, {0: 0})[0]
+
+
+def test_rime_dryad_is_unblockable_against_a_snow_covered_forest(set_pool):
+    pool = set_pool("ICE")
+    dryad = Permanent(card=pool["Rime Dryad"])
+    blocker = Permanent(card=pool["Balduvian Bears"])
+    snow = Permanent(card=pool["Snow-Covered Forest"])
+    p1 = PlayerState(name="P1", battlefield=[dryad], life=20)
+    p2 = PlayerState(name="P2", battlefield=[blocker, snow], life=20)
+    game = Game(players=[p1, p2])
+
+    _combat(game, [0])
+    ok, _ = game.declare_blockers(1, {0: 0})
+    assert not ok
+
+
+def test_woolly_mammoths_tramples_only_while_you_control_a_snow_land(set_pool):
+    """"…has trample as long as you control a snow land" — the general
+    "you control <noun phrase>" condition, asked on every recompute."""
+    pool = set_pool("ICE")
+    mammoths = Permanent(card=pool["Woolly Mammoths"])
+    p1 = PlayerState(name="P1", battlefield=[mammoths], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game._settle()
+    assert not mammoths.has_keyword("trample")
+
+    snow = Permanent(card=pool["Snow-Covered Plains"])
+    p1.battlefield.append(snow)
+    game._settle()
+    assert mammoths.has_keyword("trample")
+
+    game.remove_from_battlefield(snow)
+    game._settle()
+    assert not mammoths.has_keyword("trample")
