@@ -920,13 +920,30 @@ def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: 
     card = context.card
     amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     cost = int(instruction.payload.get("cost", 0))
+    seat = game.players.index(caster)
+    if instruction.payload.get("payer") == "event_subject_player":
+        # "…deals 2 damage to **that player** unless they pay {2}" (Soul
+        # Barrier, Seizures). The seat the fire site froze (CR 603.10) — the
+        # trigger has no target, so `context.caster` is the ability's controller
+        # and offering *them* the cost would charge and damage the wrong player.
+        #
+        # No record means the words named nobody, and nothing happens: the same
+        # rule the "deals damage to that player" branch above follows, and the
+        # safe one — a prompt aimed at a guessed seat is a card doing something
+        # it never says.
+        recorded = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(recorded, int) or not (0 <= recorded < len(game.players)):
+            game.log.append(f"{card.name}: no recorded player, nothing offered")
+            return True, "resolved"
+        seat = recorded
+    payer = game.players[seat]
     game.arm_pending_choice(
-        "optional_pay", game.players.index(caster),
+        "optional_pay", seat,
         card_name=card.name, cost=generic_cost(cost), life=0, damage=amount,
         _source_permanent=context.source_permanent,
     )
     game.log.append(
-        f"{caster.name} may pay {{{cost}}} or {card.name} deals {amount} damage to them"
+        f"{payer.name} may pay {{{cost}}} or {card.name} deals {amount} damage to them"
     )
     return True, "resolved"
 

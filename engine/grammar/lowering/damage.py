@@ -374,14 +374,26 @@ def _lower_damage_unless_pay(
     trigger produces a card that compiles cleanly and does nothing.
     """
     damage = node.damage
-    if not _is_you(node.payer):
-        raise LoweringError(
-            "both pay-or-else flows offer the cost to the ability's controller", node=node
-        )
-    if not (len(damage.recipients) == 1 and _is_you(damage.recipients[0])):
-        raise LoweringError(
-            "both pay-or-else flows damage the ability's controller", node=node
-        )
+    # "…deals 2 damage to **that player** unless **they** pay {2}" (Soul
+    # Barrier, Seizures): payer and recipient are one seat, the one the firing
+    # event named and froze into the trigger's context (CR 603.10). Both words
+    # are required to agree — a clause damaging one player while offering the
+    # cost to another is a card neither flow implements.
+    on_event_player = (
+        isinstance(node.payer, ast.PlayerRef)
+        and node.payer.kind == "that_player"
+        and _damaged_player_is(damage.recipients, "that_player")
+    )
+    if not on_event_player:
+        if not _is_you(node.payer):
+            raise LoweringError(
+                "both pay-or-else flows offer the cost to the ability's controller",
+                node=node,
+            )
+        if not (len(damage.recipients) == 1 and _is_you(damage.recipients[0])):
+            raise LoweringError(
+                "both pay-or-else flows damage the ability's controller", node=node
+            )
     if damage.riders != ast.DamageRiders():
         raise LoweringError("no pay-or-else flow carries damage riders", node=node)
     amount = _amount_payload(damage.amount)
@@ -414,9 +426,13 @@ def _lower_damage_unless_pay(
         raise LoweringError(
             "the optional-pay prompt reads one generic cost, not coloured mana", node=node
         )
-    return (
-        OracleInstruction("self_damage_unless_pay", "", {"amount": amount, "cost": generic}),
-    )
+    payload: dict[str, object] = {"amount": amount, "cost": generic}
+    if on_event_player:
+        # Which seat is offered the cost, as payload rather than a second kind:
+        # same prompt, same damage, same decline — only the player differs, and
+        # the handler reads the seat off the trigger's frozen context.
+        payload["payer"] = "event_subject_player"
+    return (OracleInstruction("self_damage_unless_pay", "", payload),)
 
 
 def _lower_chosen_cast_damage(

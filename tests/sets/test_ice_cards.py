@@ -908,3 +908,33 @@ def test_errantry_lets_its_creature_attack_only_alone(set_pool):
     ok, message = game.declare_attackers(0, [0, 1])
     assert not ok and "alone" in message
     assert game.declare_attackers(0, [0])[0], "alone is legal"
+
+
+# --- Round 16: a pay-or-else prompt aimed at the event's player ---
+
+
+def test_soul_barrier_offers_the_pay_to_the_caster_not_its_controller(set_pool):
+    """"Whenever an opponent casts a creature spell, this enchantment deals 2
+    damage to **that player** unless **they** pay {2}."
+
+    Both pay-or-else flows offered the cost to the ability's *controller*, so
+    this card and Seizures were unsupported outright. The seat is the one the
+    fire site froze into the trigger's context (CR 603.10) — the trigger has no
+    target, so `context.caster` is the enchantment's controller and prompting
+    them would charge and damage the wrong player.
+    """
+    pool = set_pool("ICE")
+    barrier = Permanent(card=pool["Soul Barrier"])
+    p1 = PlayerState(name="P1", battlefield=[barrier], life=20)
+    p2 = PlayerState(name="P2", hand=[pool["Balduvian Bears"]], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(1, "Balduvian Bears")
+    game._settle()
+
+    offers = [choice for choice in game.pending_choices if choice.kind == "optional_pay"]
+    assert len(offers) == 1
+    assert offers[0].player_index == 1, "the spell's caster is offered the cost"
+    assert offers[0].data["cost"] == {"generic": 2}
+    assert offers[0].data["damage"] == 2

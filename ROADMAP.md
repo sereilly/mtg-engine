@@ -1120,6 +1120,26 @@ the declared set. It is read from the Aura table *and* from a
 `combat_restrictions` row, so the printed-on-a-creature spelling cannot be
 enforced without the granted one.
 
+**Round 16 — a pay-or-else prompt aimed at the event's player. 245 → 247.**
+
+"…deals 2 damage to **that player** unless **they** pay {2}" (Soul Barrier,
+Seizures). Both pay-or-else flows offered the cost to the ability's
+*controller*, so a card aiming it at somebody else was unsupported outright —
+and the seat it wants was already frozen into the trigger's context by the fire
+site (CR 603.10) under the key "deals 1 damage to that player" reads. Payer and
+recipient are required to agree: a clause damaging one player while offering
+the cost to another is a card neither flow implements. Which seat is payload,
+not a second kind — same prompt, same damage, same decline.
+
+**A note for whoever touches `lowering/damage.py` next: it is at 997 of its
+1,000 lines, and the obvious split is illegal.** The guard forbids one family
+reaching sideways into another, and `_lower_damage` dispatches to every counted
+variant — so pulling those out makes `damage` import `damage_counts`, which
+`test_families_import_only_their_package_shared_module` refuses (correctly:
+that is one family in two files). Only three functions are unreachable from
+`_lower_damage` and they total ~100 lines and share no subject. The real
+boundary, when someone needs it, is inside `_lower_damage` itself.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,
