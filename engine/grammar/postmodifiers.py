@@ -255,6 +255,16 @@ def _parse_postmodifiers(
         if stream.accept_phrase("that", "'s", "attacking", "you"):
             d.attacking_you = True
             continue
+        # "…for each green creature they control **that's attacking**"
+        # (Flooded Woodlands, Reclamation). The relative-clause spelling of the
+        # bare adjective "attacking", so it sets the same field: two spellings of
+        # one state, and a second field would be a second thing every matcher
+        # has to remember to test. Read *after* the "attacking you" branch
+        # above, whose prefix this is — tried first it would take those words and
+        # strand the "you".
+        if stream.accept_phrase("that", "'s", "attacking"):
+            d.attacking = True
+            continue
         if stream.at_word("blocking") and stream.peek_word(1) != "or":
             probe = stream.mark()
             stream.advance()

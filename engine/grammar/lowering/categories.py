@@ -467,6 +467,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # than on the creature, so the count is payload and the check lives
     # where the declaration is assembled.
     "cant_attack_unless_others_attack": "combat_restrictions",
+    # CR 508.1g printed on a permanent that names a class of creatures
+    # rather than itself (Flooded Woodlands, Reclamation).
+    "creatures_cant_attack_unless_sacrifice": "combat_restrictions",
     "cant_block_unless_others_block": "combat_restrictions",
     # "That creature can't attack during its controller's next turn." (Wall of
     # Dust's block trigger) — a one-shot stamp on the blocked creature, read

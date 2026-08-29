@@ -692,13 +692,13 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, twenty-three rounds in. 184 → 258 of 373 supported
-(69%), hollow lines 10 cards.** The set is still under `measured`, which is the
+**Where it stands: Phase 3, twenty-four rounds in. 184 → 260 of 373 supported
+(70%), hollow lines 10 cards.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
 
-**The remaining 115 are a long tail, and the shape is Legends' rather than
+**The remaining 113 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
@@ -1314,6 +1314,48 @@ permanent, and the AI's prune did the same with a slot from the wire — the
 positional-indexing ratchet named both. They read the collected objects and
 `game.permanent_at` now, which is the seam's whole purpose: an index becomes a
 permanent once.
+
+**Round 24 — an attack cost printed on a permanent, scaled by the attack.
+258 → 260.**
+
+Flooded Woodlands and Reclamation: one sentence with the colour word changed,
+and the largest multi-card refusal site left in the set. "Green creatures can't
+attack unless their controller sacrifices a land of their choice **for each
+green creature they control that's attacking**" is CR 508.1g printed on a
+permanent that names a *class* rather than itself, with the payer being that
+class's controller. The "for each" tail is what makes it a **per-attacker**
+cost, which is the shape `_attack_costs_of` already returns — so the cost joins
+the ones a creature prints about itself and the declaration sums them with no
+second adder to keep in step. The tail is read and held to the subject by
+equality rather than skipped: a tail consumed and dropped would be a card that
+charges once for a whole team.
+
+Two small general readers came out of it. "that's attacking" is the relative
+clause spelling of the bare adjective, so it sets the same field — two
+spellings of one state, not a second field every matcher has to remember. And
+"of their choice" is *lifted* rather than carried: it says the paying player
+picks, which is what the charger already does, so a payload key would be one
+nothing reads — while somebody **else** picking is outside the allowed set and
+refuses.
+
+**The defect is the same shape as the round before it, one rule over.** The
+sacrifice half of CR 508.1g was gated per creature and charged per declaration:
+`can_attack` can say "there is a land for this one" and cannot say "and another
+for the next", so two green creatures with one Forest were each gated as
+payable, declared, and then charged **once**. The card did less than it prints
+on exactly the board it was printed to stop. The mana half of the same rule has
+been planned over the whole declaration since it was written — this is now its
+twin, and Leviathan's "sacrifice two Islands" had the same hole for as long as
+it has been implemented (two of them owed four Islands and paid two); nothing
+in the pool ever had two out at once.
+
+The plan is a **matching**, not a greedy pass, for `plan_payment`'s reason one
+rule over: costs overlap — "a land" beside "two Islands" — and spending the
+Island on the looser one under-reports a board that could pay, which is exactly
+what CR 508.1g's "able to" forbids. Which permanent answers a cost is still
+`default_sacrifice_pick`'s policy, now split into an ordering
+(`sacrifice_preference_key`) the planner sorts by; the matching only decides
+which cost each one answers.
 
 ## Where the sets landed
 

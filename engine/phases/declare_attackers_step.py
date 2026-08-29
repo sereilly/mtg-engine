@@ -177,6 +177,14 @@ class DeclareAttackersStepMixin:
                 f"cannot pay {mana_cost_label(declaration_mana)} to declare "
                 "these attackers"
             )
+        # The sacrifice half of the same rule, planned for the same reason:
+        # several attackers' costs draw on one board, and `can_attack` answers
+        # for one creature at a time.
+        sacrifice_plan = self._declaration_sacrifice_plan(
+            controller_index, declared_attackers
+        )
+        if sacrifice_plan is None:
+            return False, "cannot pay the sacrifice cost to declare these attackers"
 
         self.combat_attackers = dict(per_attacker_defender)
         self.combat_attacked_planeswalkers = dict(per_attacker_walker)
@@ -195,12 +203,9 @@ class DeclareAttackersStepMixin:
         self._prune_combat_state()
 
         declared: list[Permanent] = []
-        attack_costs: list[tuple[Permanent, dict]] = []
         for idx in unique_indices:
             attacker = controller.battlefield[idx]
             declared.append(attacker)
-            for cost in self._attack_costs_of(attacker):
-                attack_costs.append((attacker, cost))
             # CR 508.1f, and the one place the question is asked: vigilance
             # (CR 702.20b) and an effect that prints the same exemption the long
             # way round (Johan) are both `attacking_causes_tap`'s business.
@@ -237,8 +242,7 @@ class DeclareAttackersStepMixin:
         # `remove_from_battlefield`'s renumbering. `can_attack` has already
         # refused a declaration whose cost cannot be paid, off the same reader,
         # so nothing here can be half-charged.
-        for attacker, cost in attack_costs:
-            self._pay_attack_cost(controller_index, attacker, cost)
+        self._pay_declaration_sacrifices(controller_index, sacrifice_plan)
         # The mana half of the same rule, spending the plan made above - never a
         # second `plan_payment`, which would read a board the attackers have
         # since been tapped on.
@@ -321,36 +325,89 @@ class DeclareAttackersStepMixin:
         if events:
             self._enqueue_triggered_batch(events)
 
-    def _pay_attack_cost(
-        self, controller_index: int, attacker: Permanent, cost: dict
-    ) -> None:
-        """Charge one "can't attack unless you sacrifice …" cost (CR 508.1g).
+    def _declaration_sacrifice_plan(
+        self, controller_index: int, attackers: list[Permanent]
+    ) -> "list[Permanent] | None":
+        """Which permanents pay the whole declaration's CR 508.1g sacrifices,
+        or None when the board cannot pay them all.
 
-        The picks are the stated AI policy every other forced sacrifice uses
-        (``default_sacrifice_pick``) rather than a rule of this file's own; an
-        interactive chooser can replace it without changing what is owed. The
-        attacker itself is never eaten — it is the creature the cost is being
-        paid *for* — which also keeps a card whose cost names its own type
-        (nothing in the pool yet) from cannibalising the attack.
+        The sacrifice twin of :meth:`_declaration_mana_plan`, and it exists for
+        that method's reason exactly: the costs of *every* declared attacker are
+        one payment, and `can_attack` is a per-creature predicate that can say
+        "there is a land for this one" and cannot say "and another for the next".
+        Two green creatures under Flooded Woodlands with one Forest were each
+        gated as payable, declared, and then charged once — a card doing less
+        than it prints, on a board it should have kept home. Leviathan has had
+        the same hole for as long as it has been implemented; nothing in the
+        pool ever had two of them out at once.
+
+        A **matching**, not a greedy pass, for `plan_payment`'s reason one rule
+        over: costs can overlap ("a land" beside "two Islands"), and a greedy
+        assignment that spends the Island on "a land" under-reports a board that
+        could pay. CR 508.1g asks what the player is able to do.
+
+        Candidates are ordered by ``sacrifice_preference_key`` so the policy
+        every other forced sacrifice follows decides *which* permanent answers a
+        cost whenever more than one could; the matching only decides which cost
+        each one answers.
         """
+        units: list[tuple[dict, Permanent]] = []
+        for attacker in attackers:
+            for cost in self._attack_costs_of(attacker):
+                described = dict(cost.get("filter") or {})
+                units.extend(
+                    [(described, attacker)] * max(0, int(cost.get("count", 1)))
+                )
+        if not units:
+            return []
+        candidates = sorted(
+            self.controlled_by(controller_index),
+            key=self.sacrifice_preference_key,
+        )
+        # Kuhn's algorithm. The attacker a cost is paid *for* is never eaten by
+        # it — it is the creature the cost buys the attack for — which is the
+        # exclusion the per-cost charge made, kept here as part of what a unit
+        # may match.
+        paid_by: dict[int, int] = {}
+
+        def _assign(unit: int, seen: set[int]) -> bool:
+            described, attacker = units[unit]
+            for slot, candidate in enumerate(candidates):
+                if slot in seen or candidate is attacker:
+                    continue
+                if not subject_matches(self, candidate, described):
+                    continue
+                seen.add(slot)
+                if slot not in paid_by or _assign(paid_by[slot], seen):
+                    paid_by[slot] = unit
+                    return True
+            return False
+
+        for unit in range(len(units)):
+            if not _assign(unit, set()):
+                return None
+        return [candidates[slot] for slot in sorted(paid_by)]
+
+    def _pay_declaration_sacrifices(
+        self, controller_index: int, plan: list[Permanent]
+    ) -> None:
+        """Sacrifice what :meth:`_declaration_sacrifice_plan` chose (CR 508.1g).
+
+        The plan is spent rather than re-derived, for the reason the mana half
+        is: a second pass would read a board the first sacrifices have already
+        changed. By identity through ``sacrifice_permanent``, the one transition
+        every sacrifice passes through, so nothing here has to know that each one
+        renumbers the battlefield behind it.
+        """
+        if not plan:
+            return
         player = self.players[controller_index]
-        described = dict(cost.get("filter") or {})
-        owed = int(cost.get("count", 1))
-        for _ in range(owed):
-            # Through `permanent_at`, never a raw subscript: the candidate list
-            # is recomputed after each sacrifice precisely because the previous
-            # one renumbered the battlefield behind it.
-            candidates = [
-                perm
-                for i in self._sacrifice_candidate_indices(player, described, attacker)
-                if (perm := self.permanent_at(player, i)) is not None
-            ]
-            if not candidates:
-                return
-            self.sacrifice_permanent(self.default_sacrifice_pick(candidates))
+        for permanent in plan:
+            if self.is_on_battlefield(permanent):
+                self.sacrifice_permanent(permanent)
         self.log.append(
-            f"{player.name} paid {attacker.card.name}'s attack cost "
-            f"({owed} sacrificed)"
+            f"{player.name} paid the declaration's attack costs "
+            f"({len(plan)} sacrificed)"
         )
 
     def _attack_mana_costs_of(self, attacker: Permanent) -> list[dict[str, int]]:
@@ -448,12 +505,38 @@ class DeclareAttackersStepMixin:
         One reader for the gate in ``can_attack`` and the charge in
         ``declare_attackers``: a cost checked by one rule and paid by another is
         how a declaration gets accepted and then left unpaid.
+
+        Two sources, and the difference is only where the sentence is printed.
+        The creature's own clause names itself ("This creature can't attack
+        unless you sacrifice two Islands", Leviathan). A **board** clause names
+        a class ("Green creatures can't attack unless their controller
+        sacrifices a land of their choice for each green creature they control
+        that's attacking", Flooded Woodlands) — and its "for each" is what makes
+        it belong here rather than over the declaration: one land per attacking
+        member *is* a per-attacker cost, so the sum the declaration charges is
+        the sum the card asks for, with no second adder to keep in step.
         """
-        return [
+        costs = [
             instruction.payload
             for instruction in compile_card_oracle(attacker.effective_card).instructions
             if instruction.kind == "cant_attack_unless_sacrifice"
         ]
+        attacker_seat = self.controller_index_of(attacker)
+        for source_seat, source_perm in self.permanents_with_controller():
+            for instr in compile_card_oracle(source_perm.effective_card).instructions:
+                if instr.kind != "creatures_cant_attack_unless_sacrifice":
+                    continue
+                # CR 109.5 for the printed noun phrase: "you control" inside it
+                # would mean the seat controlling the *enchantment*, which is
+                # what scopes a one-sided printing. The cost is owed by the
+                # attacker's controller either way — "their controller" — and
+                # that is the seat `_pay_attack_cost` charges.
+                if subject_matches(
+                    self, attacker, dict(instr.payload.get("subject") or {}),
+                    observer=source_seat, source=source_perm,
+                ):
+                    costs.append(instr.payload)
+        return costs
 
     def can_attack(
         self,

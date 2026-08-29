@@ -666,3 +666,85 @@ def test_508_1d_the_requirement_still_binds_below_the_cap():
 
     ok, _ = game.declare_attackers(0, [0])
     assert not ok
+
+
+# ---------------------------------------------------------------------------
+# The declaration's sacrifice costs are one payment (CR 508.1g)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("508.1g")
+def test_508_1g_two_attackers_sacrifice_costs_are_summed_over_the_declaration(set_pool):
+    """"This creature can't attack unless you sacrifice two Islands."
+    (Leviathan.) Two of them owe **four** Islands, not two.
+
+    `can_attack` is a per-creature predicate: it can say "there are two Islands
+    for this one" and cannot say "and two more for the next". So a declaration
+    the board could not pay was accepted and then charged for one creature —
+    the mana half of this same rule has been planned over the whole declaration
+    since it was written, and the sacrifice half was not.
+
+    The planner is a *matching* rather than a greedy pass, for `plan_payment`'s
+    reason: costs can overlap, and spending the wrong permanent on the looser
+    one under-reports a board that could pay.
+    """
+    lea = set_pool("LEA")
+    drk = set_pool("DRK")
+
+    def _declare(islands: int) -> tuple[bool, int]:
+        leviathans = [Permanent(card=drk["Leviathan"]) for _ in range(2)]
+        for perm in leviathans:
+            _nosick(perm)
+        pool = [Permanent(card=lea["Island"]) for _ in range(islands)]
+        game = Game(players=[
+            PlayerState(name="P1", battlefield=[*leviathans, *pool]),
+            PlayerState(name="P2"),
+        ])
+        game.enforce_mana_costs = False
+        game.active_player_index = 0
+        game.current_turn_phase = "combat"
+        game.current_step = "declare_attackers"
+        ok, _message = game.declare_attackers(0, [0, 1])
+        left = sum(
+            1 for perm in game.players[0].battlefield if perm.has_type("island")
+        )
+        return ok, left
+
+    assert _declare(3) == (False, 3), "three Islands cannot pay four, and pay none"
+    assert _declare(4) == (True, 0), "four Islands pay four"
+
+
+@pytest.mark.cr("508.1g")
+def test_508_1g_the_sacrifice_plan_prefers_the_permanent_each_cost_can_only_use(set_pool):
+    """Overlapping costs are a matching, and a greedy pass gets this wrong.
+
+    Flooded Woodlands wants **a land** for the attacking green creature;
+    Leviathan wants **two Islands** for itself. With two Islands and one Forest
+    on the board the declaration is payable — but only if the Forest answers
+    "a land". A reader that spent an Island there would refuse a board that can
+    pay, which is the direction CR 508.1g's "able to" forbids.
+    """
+    lea = set_pool("LEA")
+    ice = set_pool("ICE")
+    leviathan = _nosick(Permanent(card=set_pool("DRK")["Leviathan"]))
+    bear = _nosick(Permanent(card=ice["Balduvian Bears"]))  # green
+    islands = [Permanent(card=lea["Island"]) for _ in range(2)]
+    forest = Permanent(card=lea["Forest"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[leviathan, bear, *islands, forest]),
+        PlayerState(
+            name="P2", battlefield=[Permanent(card=ice["Flooded Woodlands"])]
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+
+    ok, message = game.declare_attackers(0, [0, 1])
+
+    assert ok, message
+    assert not [
+        perm for perm in game.players[0].battlefield
+        if perm.card.primary_type == "land"
+    ], "all three lands paid: two Islands for the Leviathan, the Forest for the Bear"

@@ -1356,3 +1356,106 @@ def test_orcish_conscripts_needs_company_to_block(set_pool):
     assert not _may_block(0)
     assert not _may_block(1)
     assert _may_block(2)
+
+
+# --- Round 24: an attack cost printed on a permanent, scaled by the attack ---
+
+
+def _woodlands_board(set_pool, attackers: int, lands: int, land: str = "Forest"):
+    """Seat 0 attacking under seat 1's Flooded Woodlands, with *lands* to pay."""
+    pool = set_pool("ICE")
+    bears = [Permanent(card=pool["Balduvian Bears"]) for _ in range(attackers)]
+    for bear in bears:
+        _nosick(bear)
+    holdings = [Permanent(card=pool[land]) for _ in range(lands)]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[*bears, *holdings], life=20),
+        PlayerState(
+            name="P2", battlefield=[Permanent(card=pool["Flooded Woodlands"])], life=20
+        ),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    return game
+
+
+def test_flooded_woodlands_charges_one_land_per_attacking_green_creature(set_pool):
+    """"Green creatures can't attack unless their controller sacrifices a land
+    of their choice **for each green creature they control that's attacking**."
+
+    CR 508.1g printed on a permanent that names a *class* rather than itself,
+    with the payer being that class's controller. The "for each" tail is what
+    makes it a per-attacker cost, which is the shape `_attack_costs_of` already
+    returns — so the declaration sums it with no second adder to keep in step.
+    """
+    game = _woodlands_board(set_pool, attackers=2, lands=2)
+
+    ok, message = game.declare_attackers(0, [0, 1])
+
+    assert ok, message
+    assert not [
+        perm for perm in game.players[0].battlefield
+        if perm.card.primary_type == "land"
+    ], "two attackers, two lands"
+
+
+def test_flooded_woodlands_keeps_the_whole_team_home_when_one_land_is_short(set_pool):
+    """The cost is one payment over the declaration, and `can_attack` is a
+    per-creature predicate: it can say "there is a land for this one" and not
+    "and another for the next". Both Bears were gated as payable, declared, and
+    then charged **once** — the card doing less than it prints on exactly the
+    board it was printed to stop. The declaration is planned now, as the mana
+    half of the same rule already was.
+    """
+    game = _woodlands_board(set_pool, attackers=2, lands=1)
+
+    ok, message = game.declare_attackers(0, [0, 1])
+
+    assert not ok
+    assert "sacrifice" in message
+    assert len(game.players[0].battlefield) == 3, "nothing was half-charged"
+
+    # One attacker is still legal, and pays.
+    assert game.declare_attackers(0, [0])[0]
+    assert not [
+        perm for perm in game.players[0].battlefield
+        if perm.card.primary_type == "land"
+    ]
+
+
+def test_reclamation_is_flooded_woodlands_with_the_colour_changed(set_pool):
+    """One sentence, two cards. The restricted class and the sacrifice are both
+    payload, so the pair differs by a colour symbol — and a green creature walks
+    past Reclamation untouched."""
+    pool = set_pool("ICE")
+    payloads = {
+        name: compile_card_oracle(pool[name]).instructions[0].payload
+        for name in ("Flooded Woodlands", "Reclamation")
+    }
+
+    assert payloads["Flooded Woodlands"] == {
+        "subject": {"type_filter": "creature", "color_filter": "G"},
+        "filter": {"type_filter": "land"},
+        "count": 1,
+    }
+    assert payloads["Reclamation"] == {
+        "subject": {"type_filter": "creature", "color_filter": "B"},
+        "filter": {"type_filter": "land"},
+        "count": 1,
+    }
+
+    green = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[green], life=20),
+        PlayerState(
+            name="P2", battlefield=[Permanent(card=pool["Reclamation"])], life=20
+        ),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+
+    assert game.declare_attackers(0, [0])[0], "a green creature owes Reclamation nothing"

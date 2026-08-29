@@ -8,6 +8,7 @@ at all.
 """
 
 from .. import ast
+from ..nouns import parse_object_filter
 from ..references import parse_recipient
 from ..stream import TokenStream
 from ..phrases import _accept_number, _parse_duration, parse_counted_subject
@@ -92,6 +93,37 @@ def _parse_cant_attack_or_block(
                     subject, "cant_attack_unless_others_attack", (("count", count),)
                 )
             stream.reset(others_mark)
+        # "Green creatures can't attack unless **their controller** sacrifices a
+        # land of their choice **for each green creature they control that's
+        # attacking**." (Flooded Woodlands, Reclamation — one sentence with the
+        # colour word changed.) CR 508.1g again, and three things differ from
+        # Leviathan's cost one branch down: the sentence is printed on a
+        # permanent that names a *class* of creatures rather than itself, the
+        # payer is that class's controller rather than "you", and the cost is
+        # charged once per attacking member.
+        #
+        # The "for each" tail is **read and kept**, not skipped: it says what the
+        # cost scales with, and lowering holds it to the subject the sentence
+        # opened with. A tail consumed and dropped would be a card that charges
+        # once for a whole team.
+        per_mark = stream.mark()
+        if stream.accept_phrase("unless", "their", "controller", "sacrifices"):
+            counted = parse_counted_subject(stream)
+            if counted is not None:
+                count, described = counted
+                if not stream.accept_phrase("for", "each"):
+                    raise stream.error("expected 'for each' after the attack cost")
+                per = parse_object_filter(stream)
+                return ast.CombatRestriction(
+                    subject,
+                    "creatures_cant_attack_unless_sacrifice",
+                    (
+                        ("sacrifice_filter", described),
+                        ("sacrifice_count", count),
+                        ("per", per),
+                    ),
+                )
+            stream.reset(per_mark)
         unless_mark = stream.mark()
         if stream.accept_phrase("unless", "you", "sacrifice"):
             counted = parse_counted_subject(stream)

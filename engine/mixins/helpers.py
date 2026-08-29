@@ -1312,13 +1312,23 @@ class GameHelpersMixin:
         ``permanent_id`` breaks the tie, so the pick is stable across a run and
         the AI simulation stays seed-reproducible.
         """
-        return min(
-            candidates,
-            key=lambda perm: (
-                "you lose the game" in perm.effective_card.oracle_text.lower(),
-                perm.effective_power,
-                perm.permanent_id,
-            ),
+        return min(candidates, key=GameHelpersMixin.sacrifice_preference_key)
+
+    @staticmethod
+    def sacrifice_preference_key(permanent: Permanent):
+        """The order a seat gives permanents up in — lowest first.
+
+        Split out of :meth:`default_sacrifice_pick` because a caller that has to
+        pay **several** costs at once cannot pick them one at a time: CR 508.1g's
+        sacrifices are one payment, and which permanent answers which cost is a
+        matching (`_declaration_sacrifice_plan`). That planner needs the policy
+        as an *order* rather than as a winner, and a second ordering written
+        beside this one is exactly the drift the method above exists to stop.
+        """
+        return (
+            "you lose the game" in permanent.effective_card.oracle_text.lower(),
+            permanent.effective_power,
+            permanent.permanent_id,
         )
 
     def sacrifice_permanent(self, permanent: Permanent) -> Permanent | None:
