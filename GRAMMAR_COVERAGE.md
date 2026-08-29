@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 64.9% | 59.6% | 39.1% | 185 |
+| ICE *(measured)* | 373 | 601 | 65.1% | 59.7% | 39.3% | 186 |
 | **All (shipped)** | **2415** | **3404** | **85.8%** | **84.7%** | **52.4%** | **1544** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -52,7 +52,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | 8 | 3 | no lowering for RawEffect |  |
 | 8 | 3 | expected 'the number of' in a where-clause |  |
 | 7 | 3 | expected 'card' |  |
-| 6 | 2 | expected 'equal to' quantity for damage |  |
+| 5 | 1 | expected 'equal to' quantity for damage |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 5 | expected a quantity |  |
 | 4 | 1 | the only payer this clause can enumerate is an opponent |  |
@@ -3036,6 +3036,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 - **Word of Binding**
   - `Tap X target creatures.`
   - `Tap X target creatures.`
+- **Word of Blasting**
+  - `Destroy target Wall. It can't be regenerated. Word of Blasting deals damage equal to that Wall's mana value to the Wall's controller.`
 - **Worms of the Earth**
   - `At the beginning of each upkeep, any player may sacrifice two lands of their choice or have this enchantment deal 5 damage to that player. If a player does either, destroy this enchantment.`
 - **Wormwood Treefolk**

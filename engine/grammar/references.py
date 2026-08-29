@@ -25,7 +25,7 @@ from .nouns import (
     parse_object_filter,
 )
 from .stream import TokenStream
-from .vocabulary import CARD_TYPES, NUMBER_WORDS
+from .vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS
 
 
 def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
@@ -112,10 +112,15 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     if stream.accept_phrase("an", "opponent"):
         return ast.PlayerRef("target_opponent")
 
-    # "that land's controller" / "this creature's controller" — a possessive
-    # noun phrase resolving to a player. The lexer split "land's" into
-    # "land" + "'s".
-    if stream.at_word("that", "this"):
+    # "that land's controller" / "this creature's controller" / "**the**
+    # Wall's controller" (Word of Blasting) — a possessive noun phrase resolving
+    # to a player. The lexer split "land's" into "land" + "'s".
+    #
+    # The definite article is the same referent as "that": a sentence that has
+    # already named the object refers back to it either way, and English picks
+    # between them by how far back it was. Reading only "that" left Word of
+    # Blasting refusing a phrase it prints twice in one line.
+    if stream.at_word("that", "this", "the"):
         probe = stream.mark()
         stream.advance()
         noun = stream.peek_word()
@@ -127,6 +132,7 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         if noun is not None and (
             _singular(noun) in CARD_TYPES
             or _singular(noun) in _GENERIC_NOUNS
+            or _singular(noun) in ALL_SUBTYPES
             or _singular(noun) == "ability"
         ):
             stream.advance()

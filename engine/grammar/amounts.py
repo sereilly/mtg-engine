@@ -11,7 +11,7 @@ from __future__ import annotations
 from . import ast
 from .lexer import NUMBER, PT, SELF, WORD
 from .stream import TokenStream
-from .vocabulary import NUMBER_WORDS
+from .vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS, singular as _singular
 
 
 def parse_amount(stream: TokenStream, *, back_reference: str | None = None) -> ast.Amount:
@@ -285,8 +285,31 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     if stream.accept_phrase("that", "creature", "'s", "mana", "value"):
         return ast.ThatMuch("returned_mana_value")
 
+    # "equal to **that Wall's** mana value" (Word of Blasting) — the same
+    # back-reference as "its mana value" above, written with the noun the
+    # sentence in front of it used instead of a pronoun. One key, because it is
+    # one question about one recorded object: the *producer* gate is what makes
+    # the words legal, so a sentence with no destroy or bounce in front of it
+    # still refuses by name. The noun is required to be one, and is not carried:
+    # there is exactly one record to read.
+    noun_mark = stream.mark()
+    if stream.accept_word("that", "the"):
+        noun = stream.peek_word()
+        if noun is not None and _singular(noun) in _POSSESSIVE_NOUNS:
+            stream.advance()
+            if stream.accept_phrase("'s", "mana", "value"):
+                return ast.ThatMuch("its_mana_value")
+    stream.reset(noun_mark)
+
     stream.reset(mark)
     return None
+
+
+#: Nouns a "that <noun>'s mana value" phrase may name. Card types and subtypes
+#: both, for the reason ``references.parse_player_ref`` admits both in the same
+#: position: "that Wall" names an object exactly as "that creature" does, and
+#: which word the card prints is the card's business.
+_POSSESSIVE_NOUNS = CARD_TYPES | ALL_SUBTYPES
 
 
 def parse_pt_pair(text: str) -> tuple[ast.Amount, bool, ast.Amount, bool]:

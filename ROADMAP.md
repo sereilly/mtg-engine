@@ -1184,6 +1184,18 @@ placed the same way and for the same reason: an action naming a subject of its
 own is a different sentence, and carrying "you" over it would aim it at the
 wrong player.
 
+**Round 20 — a possessive back-reference written with its noun. 251 → 252.**
+
+Word of Blasting: "Destroy target Wall. It can't be regenerated. This spell
+deals damage equal to **that Wall's** mana value to **the Wall's** controller."
+One card, three readers, and every one of them was narrowed by a *word* rather
+than by a meaning — the amount read only the pronoun "its"; the recipient read
+only "that/this <card type>'s controller", and a Wall is a subtype; and the
+damage handler had no branch for the scratchpad channel **at all**, so the
+lowering was already emitting `amount_from` and nothing read it. That last one
+is the one worth having found: the card would have compiled supported and dealt
+0.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

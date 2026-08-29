@@ -60,8 +60,18 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # event's, frozen into the trigger's context by the fire site. An absent
     # record deals nothing rather than falling back to an amount the card never
     # printed — the same rule target_loses_life follows.
+    # "…deals damage equal to **that Wall's mana value**" (Word of Blasting).
+    # The number an earlier step of this same resolution recorded — the destroy
+    # reads it off the permanent before destroying it (CR 608.2h), because by
+    # now the Wall is a card in a graveyard. The scratchpad channel every other
+    # "equal to <back-reference>" already uses, and the same rule the trigger
+    # channel below follows: an absent record deals nothing rather than an
+    # amount the card never printed.
+    from_results = instruction.payload.get("amount_from")
     from_trigger = instruction.payload.get("amount_from_trigger")
-    if from_trigger is not None:
+    if from_results is not None:
+        damage = max(0, int((context.results or {}).get(from_results, 0) or 0))
+    elif from_trigger is not None:
         damage = max(0, int((context.trigger_context or {}).get(from_trigger, 0)))
     elif (named_counter := instruction.payload.get("amount_from_named_counters")) is not None:
         # "…deals damage equal to the number of doom counters on it…"

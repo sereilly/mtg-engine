@@ -1064,3 +1064,33 @@ def test_thoughtleech_offers_the_life_when_an_opponents_island_taps(set_pool):
     game.auto_resolve_pending_optional_pays()
     game._settle()
     assert p1.life == 21
+
+
+# --- Round 20: a possessive back-reference written with its noun ---
+
+
+def test_word_of_blasting_burns_for_the_walls_mana_value(set_pool):
+    """"Destroy target Wall. It can't be regenerated. This spell deals damage
+    equal to **that Wall's** mana value to **the Wall's** controller."
+
+    Three readers had to widen for one card, and each was narrowed by a word
+    rather than by a meaning: the amount read only "its mana value" (a pronoun),
+    the recipient read only "that/this <card type>'s controller" (a Wall is a
+    *subtype*), and the damage handler had no branch for the scratchpad channel
+    at all — so the lowering was already emitting `amount_from` and nothing read
+    it, which would have dealt 0 on a card reporting supported.
+    """
+    pool = set_pool("ICE")
+    wall = Permanent(card=pool["Glacial Wall"])  # mana value 3
+    p1 = PlayerState(name="P1", hand=[pool["Word of Blasting"]], life=20)
+    p2 = PlayerState(name="P2", battlefield=[wall], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(
+        0, "Word of Blasting", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+
+    assert wall not in p2.battlefield
+    assert p2.life == 17
