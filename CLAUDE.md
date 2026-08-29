@@ -242,17 +242,30 @@ ast/_core.py   the vocabulary nodes are built from
 ast/           damage characteristics board cards stack combat game
 ast/statements.py  the roof: Effect / Statement / AbilityNode unions
 phrases.py     word tables + fragment productions   |  lowering/_common.py
+                                                    |  lowering/_amounts.py
 effects/       damage characteristics board cards   |  lowering/  (those seven,
-               stack combat game                    |  + zones library mana counters)
+               stack combat game prevention         |  + zones library mana
+                                                    |    counters prevention …)
 statements.py  one whole sentence                   |  lowering/categories.py
 parser.py      one printed line (parse_line)        |  lower.py (dispatch)
 ```
 
-The lowering side carries three families the parse side does not — `zones`,
-`library`, `mana` — because their lowering halves outgrew the 1,000-line cap
-while their parse halves stayed small (`test_grammar_layering.py` documents
-the precedent). If an `effects/` module ever splits, reuse these names so the
-mirror re-forms instead of forking.
+The lowering side carries families the parse side does not — `zones`, `library`,
+`mana`, `redirection` among them — because their lowering halves outgrew the
+1,000-line cap while their parse halves stayed small
+(`test_grammar_layering.py` documents every one with its reason). If an
+`effects/` module splits, reuse those names so the mirror re-forms instead of
+forking: `effects/prevention.py` did, when the damage productions crossed the
+cap. It carries the redirects too, which the lowering side keeps separate — one
+printed sentence returns either node, so two parse modules would be one
+importing the other.
+
+**A module a family imports is a floor, not a family** — the family rule is
+"families do not import each other", so a leaf several lowerings read sits
+beside `_common` however small it is. `lowering/_amounts.py` is the newest
+(CR 107.2/107.3: a quantity counted off a board or out of the scratchpad,
+against the sentence that spends it), for exactly `ast/_primitives.py`'s reason
+one package over.
 
 Prowess gets a node in `ast/characteristics.py`, parses in
 `effects/characteristics.py` and lowers in `lowering/characteristics.py`.

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import permanent_matches_filter, resolve_target_permanent
+from ._common import (block_pair_permanents, permanent_matches_filter,
+                      resolve_target_permanent)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -94,4 +95,33 @@ def deny_regeneration_to_self(game: Game, instruction: OracleInstruction, contex
         return False, "ability not implemented"
     source_permanent.metadata["cant_be_regenerated_this_turn"] = True
     game.log.append(f"{source_permanent.card.name} can't be regenerated this turn")
+    return True, "resolved"
+
+
+@effect_handler("deny_regeneration_to_block_pair")
+def deny_regeneration_to_block_pair(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever this creature blocks or becomes blocked by a creature, **that
+    creature** can't be regenerated this turn." (Lim-Dûl's Cohort.)
+
+    The third subject the rider can have, beside the chosen target and the
+    ability's own source: the other half of the blocking pair, which nothing on
+    the board records and only the trigger knows.
+
+    ``block_pair_permanents`` is that reader, and reaching for the stack item's
+    target instead is the bug it exists to stop — on the *blocks* half the
+    target is the blocking creature itself, so the Cohort would deny
+    regeneration to **itself** and the trigger would still look resolved.
+
+    A list rather than one creature, because the blocks half fires once for a
+    blocker that blocks several attackers (CR 509.3d) and the sentence is about
+    each of them. The same flag both destruction paths already consult
+    (CR 701.19c), cleared with the turn by ``_EOT_METADATA_KEYS``.
+    """
+    victims = block_pair_permanents(game, context)
+    if not victims:
+        game.log.append(f"{context.card.name}: the creature it named is gone")
+        return True, "resolved"
+    for victim in victims:
+        victim.metadata["cant_be_regenerated_this_turn"] = True
+        game.log.append(f"{victim.card.name} can't be regenerated this turn")
     return True, "resolved"

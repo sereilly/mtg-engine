@@ -23,7 +23,7 @@ from __future__ import annotations
 import dataclasses
 
 from . import ast
-from .effects.damage import _parse_bound_targeting_prevention
+from .effects.prevention import _parse_bound_targeting_prevention
 from .errors import GrammarError
 from .nouns import parse_object_filter
 from .effects.characteristics import _parse_keywords

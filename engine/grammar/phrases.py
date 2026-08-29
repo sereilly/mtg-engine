@@ -16,6 +16,7 @@ use them: a table is a thing a new card is added to, a branch is a thing that
 has to be found first.
 """
 
+import dataclasses
 from dataclasses import replace
 
 from ..pt import pt_counter_deltas
@@ -919,3 +920,46 @@ def parse_counted_subject(
         stream.reset(mark)
         return None
     return count or 1, described
+
+# ---------------------------------------------------------------------------
+# "…of an opponent's choice"
+# ---------------------------------------------------------------------------
+#
+# Down here rather than in `effects/` because two families read it: the damage
+# clause that hands one of its recipients to the other seat (Rocket Launcher's
+# second half) and the redirect that names the creature the damage moves to
+# (Nova Pentacle). A fragment several families want is what this module is for
+# — the rule the layering guard states, and the reason `_parse_zone` and
+# `_parse_mana_payment` live here too.
+
+
+def _parse_opponents_choice(
+    stream: TokenStream, recipient: "ast.Recipient | None" = None
+) -> "tuple[ast.PlayerRef | None, ast.Recipient | None]":
+    """"…of an opponent's choice" — the rider that hands the pick to the other
+    seat, and the recipient with the rider lifted off it.
+
+    Two spellings reach here, and they are the same three words. The rider may
+    still be sitting in the stream (nothing else claimed it), or the noun parser
+    may already have consumed it as part of the noun phrase — which is what it
+    does when the phrase continues, as "target creature of an opponent's choice
+    **they control**" (Preacher) does. One reader either way: two productions
+    racing on one phrase is how Nova Pentacle's chooser came to be dropped the
+    day the noun parser learned the longer form.
+
+    The flag is *lifted*, not copied: it is not a property of any candidate, and
+    every lowering downstream refuses a filter still carrying it rather than
+    letting the wrong seat choose.
+    """
+    if stream.accept_phrase("of", "an", "opponent", "'s", "choice"):
+        return ast.PlayerRef("target_opponent"), recipient
+    filt = getattr(recipient, "filter", None)
+    if filt is not None and getattr(filt, "chosen_by_opponent", False):
+        return (
+            ast.PlayerRef("target_opponent"),
+            dataclasses.replace(
+                recipient,
+                filter=dataclasses.replace(filt, chosen_by_opponent=False),
+            ),
+        )
+    return None, recipient

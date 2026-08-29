@@ -1094,3 +1094,74 @@ def test_word_of_blasting_burns_for_the_walls_mana_value(set_pool):
 
     assert wall not in p2.battlefield
     assert p2.life == 17
+
+
+# --- Round 21: a regeneration rider on a subject nothing targets ---
+
+
+def test_incinerate_kills_through_a_regeneration_shield(set_pool):
+    """"Incinerate deals 3 damage to any target. **A creature dealt damage this
+    way** can't be regenerated this turn."
+
+    CR 701.19c printed as a sentence about the *effect* rather than about a
+    pronoun — the damage twin of War Barge's "A creature destroyed this way
+    can't be regenerated", and it exists for the same reason: by the time the
+    rider is read there is no "it" left to point at, so the noun restates what
+    the damage already named. The rider parser required the sentence to open
+    with "it" or "if", so Incinerate refused its only line.
+    """
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])  # 2/2
+    bears.regeneration_shield = 1
+    p1 = PlayerState(name="P1", hand=[pool["Incinerate"]], life=20)
+    p2 = PlayerState(name="P2", battlefield=[bears], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(
+        0, "Incinerate", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+
+    assert bears.metadata["cant_be_regenerated_this_turn"]
+    assert bears not in p2.battlefield, "the shield cannot answer this damage"
+    assert bears.regeneration_shield == 1, "and it was not spent"
+
+
+def test_lim_duls_cohort_denies_regeneration_to_what_it_blocks(set_pool):
+    """"Whenever this creature blocks or becomes blocked by a creature, **that
+    creature** can't be regenerated this turn."
+
+    The third subject the rider can have, beside a chosen target (Hurr Jackal)
+    and the ability's own source (Clergy of the Holy Nimbus): the other half of
+    the blocking pair, which nothing on the board records and only the trigger
+    knows. `_lower_cant_be` saw no event at all and refused every subject that
+    was neither, so the card compiled with its only line lowering to nothing.
+
+    Run in real combat rather than asserted on the payload, because the thing
+    that could go wrong is *which* creature is marked: on the blocks half the
+    stack item's target is the blocking creature itself, so a handler reading
+    the target would deny regeneration to the Cohort and still look resolved.
+    """
+    pool = set_pool("ICE")
+    attacker = Permanent(card=pool["Balduvian Bears"])  # 2/2
+    attacker.regeneration_shield = 1
+    cohort = Permanent(card=pool["Lim-Dûl's Cohort"])  # 2/2
+    p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
+    p2 = PlayerState(name="P2", battlefield=[cohort], life=20)
+    game = Game(players=[p1, p2])
+
+    _combat(game, [0])
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert ok, msg
+    game._settle()
+
+    assert attacker.metadata.get("cant_be_regenerated_this_turn")
+    assert not cohort.metadata.get("cant_be_regenerated_this_turn"), (
+        "the rider names the creature it blocked, not itself"
+    )
+
+    game.advance_combat_phase()  # combat_damage
+    game._settle()
+
+    assert attacker not in p1.battlefield, "2 damage is lethal and unregenerable"

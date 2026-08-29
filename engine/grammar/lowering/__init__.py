@@ -65,13 +65,15 @@ from ._common import (
     _stamp_x_from_count,
     count_spec,
 )
-from .damage import (
-    _sweep_kind,
+from ._amounts import (
     _SWAMPS_THEY_CONTROL,
     _BOARD_COUNT_DAMAGE,
     _damaged_player_is,
     _lower_counted_damage,
     _lower_board_count_damage,
+)
+from .damage import (
+    _sweep_kind,
     _lower_damage_unless_pay,
     _lower_damage,
     _lower_damage_dealt_riders,

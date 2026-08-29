@@ -31,6 +31,9 @@ from .damage import (
     _parse_damage_unless_pay,
     _parse_have_source_deal_damage,
     _parse_damage_rider_sentence,
+    _parse_damage_dealt_riders,
+)
+from .prevention import (
     _parse_prevent,
     _parse_prevent_all,
     _parse_source_of_choice_effect,
@@ -38,7 +41,6 @@ from .damage import (
     _parse_optional_damage_redirect,
     _parse_damage_cant_be_prevented,
     _parse_bound_targeting_prevention,
-    _parse_damage_dealt_riders,
 )
 from .characteristics import (
     _parse_double,

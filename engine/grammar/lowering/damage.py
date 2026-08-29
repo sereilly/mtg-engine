@@ -1,9 +1,11 @@
 """Lowering damage.
 
-Plain damage, the counted and board-count variants whose arithmetic a dedicated
-handler performs in full, the "unless they pay" shape, and damage conjunctions.
-The CR 615 prevention shields left for `prevention` when this module reached the
-thousand-line guard; they shared no helper with anything here.
+Plain damage, the "unless they pay" shape, the halved amount and damage
+conjunctions. The CR 615 prevention shields left for `prevention` when this
+module reached the thousand-line guard; they shared no helper with anything
+here. The **computed** amounts left for `_amounts` the next time it did — a
+quantity counted off a board or out of the scratchpad against the sentence that
+spends it, and a floor rather than a family because this module reads it.
 
 `deal_damage` is the one instruction that records a value other steps can read
 (`_PRODUCES` in `categories.py`), which is why "deal damage, then gain that much
@@ -16,14 +18,17 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
-from ...oracle_types import (
-    DISCARDED_BY_SEAT, X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
+from ...oracle_types import X_FROM_COUNT
+from ._amounts import (
+    _damaged_player_is,
+    _lower_board_count_damage,
+    _lower_chosen_cast_damage,
+    _lower_counted_damage,
 )
 from ._common import (
-    _lower_described_set_damage, _REST_OF_TURN,
+    _lower_described_set_damage,
     _describe_several_targets,
     _names_several_targets,
-    count_spec,
     _amount_payload,
     _describe_targets,
     _filter_payload,
@@ -35,8 +40,6 @@ from ._common import (
     _targets_payload,
 )
 from ._events import (
-    CHOSEN_CAST_DAMAGE,
-    CHOSEN_PLAYER,
     _chosen_cast_amount,
     _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
@@ -83,280 +86,6 @@ def _sweep_kind(recipients: tuple[ast.Recipient, ...]) -> str | None:
     if filt.attacking and not filt.with_keywords and not filt.without_keywords:
         return "deal_damage_each_attacking_creature"
     return None
-
-
-# Counted damage whose arithmetic a dedicated handler performs in full. Keyed
-# by the exact noun phrase counted, because that phrase *is* the handler's
-# contract: `_on__upkeep_each__deal_damage_equal_to_swamps` counts the Swamps
-# controlled by the player whose upkeep is resolving and reads an empty payload,
-# so a filter that differs in any way — a different land type, a different
-# controller — has no handler and must refuse rather than count the wrong thing.
-_SWAMPS_THEY_CONTROL = ast.ObjectFilter(subtypes=("swamp",), controller="that_player")
-
-# Named board counts (ast.BoardCount) mapped to the instruction that computes
-# them. `deal_damage` appears here for `untapped_lands_at_turn_start` because
-# that is genuinely how the engine encodes Power Surge today: the upkeep
-# handlers read `amount == "x"` as "untapped lands the player controlled at the
-# start of this turn" (engine/phases/upkeep_effects.py). The coupling is
-# implicit in the handler, so it is written down here rather than left to be
-# rediscovered — and it is the reason an unnamed X may never lower to this kind.
-_BOARD_COUNT_DAMAGE: dict[str, tuple[str, dict[str, object]]] = {
-    # The direction is payload on the legacy side, so the grammar carries it
-    # too — the differential compares payloads, and a bare {} here would report
-    # a disagreement rather than a match. The *threshold* is no longer written
-    # here: it comes off ``BoardCount.base``, because Black Vise's 4 and The
-    # Rack's 3 are one arithmetic with one number changed.
-    "cards_in_hand_over_base": (
-        "upkeep_chosen_player_hand_overflow_damage",
-        {"direction": "overflow"},
-    ),
-    # The mirror, and the branch the handler has computed since Black Vise
-    # landed while nothing in the grammar could reach it (The Rack got there
-    # through a card hook instead).
-    "base_over_cards_in_hand": (
-        "upkeep_chosen_player_hand_overflow_damage",
-        {"direction": "deficit"},
-    ),
-    "untapped_lands_at_turn_start": ("deal_damage", {"amount": "x"}),
-}
-
-# Board counts whose handler needs the constant the phrase captured. Named
-# rather than inferred from ``base is not None``: a count that grew an optional
-# constant would otherwise start silently forwarding it to a handler that reads
-# no such key.
-_BOARD_COUNTS_WITH_BASE = frozenset(
-    {"cards_in_hand_over_base", "base_over_cards_in_hand"}
-)
-
-
-# Recipients that are a *list of seats* rather than one. "…equal to the number
-# of Islands **that player** controls" (Typhoon) is counted once per seat, so
-# the phrase is only lowerable onto a handler branch that loops — these two —
-# and refuses anywhere else rather than counting the caster's Islands and
-# dealing one number to everybody.
-_LOOPED_PLAYER_RECIPIENTS = frozenset({"each_player", "each_opponent"})
-
-
-def _per_recipient_count(node: ast.DealDamage) -> dict | None:
-    """The count spec for "…equal to the number of <filter> **that player**
-    controls", or None when the clause does not narrow to the recipient.
-
-    The controller narrowing is stripped before :func:`count_spec` sees it, for
-    the reason that function refuses it: nothing downstream tests a controller
-    key, so the count has to be *scoped* to a player instead of *filtered* by
-    one. Scoping it is exactly what the per-recipient loop does.
-    """
-    assert isinstance(node.amount, ast.CountOf)
-    filt = node.amount.filter
-    if filt.controller != "that_player":
-        return None
-    if filt.zone_owner is not None:
-        # The phrase would then name two different players — the zone's owner
-        # and "that player" — and only one of them can be the recipient.
-        raise LoweringError(
-            "a per-recipient count cannot also name a zone owner", node=node
-        )
-    spec = count_spec(dataclasses.replace(filt, controller=None), node)
-    # `owner` is how the *single*-X evaluator picks a seat, and this spec is
-    # never read through that path — the loop hands it each recipient directly.
-    # Dropped rather than left saying "you", which is the one seat the phrase
-    # certainly does not mean.
-    spec.pop("owner", None)
-    return spec
-
-
-def _damaged_player_is(recipients: tuple[ast.Recipient, ...], kind: str) -> bool:
-    """Whether the damage lands on exactly one player reference of *kind*."""
-    return (
-        len(recipients) == 1
-        and isinstance(recipients[0], ast.PlayerRef)
-        and recipients[0].kind == kind
-    )
-
-
-def _lower_counted_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
-    """"…deals damage to that player equal to the number of Swamps they control."
-    (Karma.)
-
-    Both halves are checked, not just the count: the handler damages the player
-    whose upkeep is resolving, so lowering a clause that damages someone else
-    onto it would hit the wrong seat while the card still reported as supported.
-    """
-    assert isinstance(node.amount, ast.CountOf)
-    if (
-        node.amount.filter == _SWAMPS_THEY_CONTROL
-        and _damaged_player_is(node.recipients, "that_player")
-        and node.riders == ast.DamageRiders()
-    ):
-        return (OracleInstruction("deal_damage_equal_to_swamps", "", {}),)
-    # "…deals damage to any target equal to the number of Dogs you control."
-    # (Rin and Seri, Inseparable.) The general form, through the one counting
-    # evaluator every other computed amount already uses — Karma's fused kind
-    # above stays because its *recipient* is the upkeep's player rather than a
-    # chosen target, which is not something this shape can express.
-    if node.riders != ast.DamageRiders():
-        raise LoweringError("a counted damage carries no riders yet", node=node)
-    if len(node.recipients) != 1:
-        raise LoweringError("a counted damage reaches one recipient", node=node)
-    recipient = node.recipients[0]
-    # "…deals damage to each opponent equal to the number of Islands **that
-    # player** controls" (Typhoon). One number per seat, so it travels on its
-    # own key and only onto the two recipients whose handler branch loops.
-    if isinstance(recipient, ast.PlayerRef):
-        per_recipient = _per_recipient_count(node)
-        if per_recipient is not None:
-            if recipient.kind not in _LOOPED_PLAYER_RECIPIENTS:
-                raise LoweringError(
-                    "no handler counts this damage per recipient", node=node
-                )
-            return (
-                OracleInstruction(
-                    "deal_damage", "",
-                    {
-                        "recipient": recipient.kind,
-                        X_FROM_COUNT_PER_RECIPIENT: per_recipient,
-                    },
-                ),
-            )
-    # "any target" (CR 115.4) is a quantifier of its own, not a narrower
-    # "target": it admits a player, a planeswalker or a creature, which is
-    # exactly what `deal_damage`'s resolver already picks between.
-    if not (
-        _is_target(recipient)
-        or (isinstance(recipient, ast.TargetSpec)
-            and recipient.quantifier == "any_target")
-        or (isinstance(recipient, ast.PlayerRef)
-            and recipient.kind in ("target_player", "target_opponent"))
-        # "Target player reveals their hand. … deals damage to **that player**
-        # equal to the number of white cards in **their** hand." (Inquisition.)
-        # Admitted only when the count is taken in *that same player's* zone,
-        # and that is a property of the handler rather than a courtesy: it
-        # resolves exactly one seat off the resolution context, and uses it both
-        # as the damage's recipient and as the counted zone's owner. A clause
-        # naming two different seats — "damage to that player equal to the
-        # number of Swamps **you** control" — has no handler at all, and
-        # admitting it would count one player's board and damage the other's
-        # face on a card reporting itself supported.
-        or (_damaged_player_is(node.recipients, "that_player")
-            and node.amount.filter.zone_owner is not None
-            and node.amount.filter.zone_owner.kind != "you")
-    ):
-        raise LoweringError("no handler aims this counted damage", node=node)
-    payload: dict[str, object] = {
-        "amount": "x", X_FROM_COUNT: count_spec(node.amount.filter, node),
-    }
-    if isinstance(recipient, ast.PlayerRef):
-        # The seat comes off the resolution context either way — but *that a
-        # seat is what this clause names* is recorded, for the reason
-        # `_lower_damage` records it: a sequence whose earlier sentence acted on
-        # a permanent leaves that permanent's index in the context, and a clause
-        # about a player with no key would be dealt to the permanent instead.
-        payload["recipient"] = "target_player"
-    _describe_targets(payload, recipient)
-    return (OracleInstruction("deal_damage", "", payload),)
-
-
-#: Named counts whose number is **one per seat** and comes out of this
-#: resolution's own scratchpad rather than off the board, mapped to the key the
-#: earlier step recorded it under. They lower onto the same looping recipients
-#: `_per_recipient_count` does and refuse everywhere else, for that function's
-#: reason: one number per seat cannot be folded into the single X.
-_PER_SEAT_RECORD_COUNTS: dict[str, str] = {
-    "base_over_discarded_this_way": DISCARDED_BY_SEAT,
-}
-
-#: The producer each of those counts needs to have run first. "This way" names
-#: what a step of *this same effect* did, so with no such step the phrase names
-#: nothing (idiom 7) — and here it would name nothing while still computing a
-#: number, the printed base, which is the quiet way to be wrong.
-_PER_SEAT_RECORD_PRODUCERS: dict[str, str] = {
-    "base_over_discarded_this_way": "discarded_count",
-}
-
-
-def _lower_per_seat_record_damage(
-    node: ast.DealDamage, record: str, produced: frozenset[str]
-) -> tuple[OracleInstruction, ...]:
-    """Mind Bomb: "…deals damage to each player equal to 3 minus the number of
-    cards they discarded this way."
-
-    Every refusal is a way the sentence could otherwise mean more than it says:
-
-    * the recipients must be the looping ones. "They" is the seat being
-      damaged, so there is one number per seat and nowhere to put it on a
-      clause naming a single recipient.
-    * the base must be printed. Without it the arithmetic has no left-hand side
-      and the damage would be however many cards the player discarded, which is
-      the card upside down.
-    * a step of this same effect must actually record the count. "This way" is
-      a back-reference, and one with no producer names nothing — here it would
-      silently compute the base and deal 3 to everybody.
-    """
-    recipient = node.recipients[0] if len(node.recipients) == 1 else None
-    if not (
-        isinstance(recipient, ast.PlayerRef)
-        and recipient.kind in _LOOPED_PLAYER_RECIPIENTS
-    ):
-        raise LoweringError("no handler counts this damage per recipient", node=node)
-    if node.riders != ast.DamageRiders():
-        raise LoweringError("a counted damage carries no riders yet", node=node)
-    if node.amount.base is None:
-        raise LoweringError(
-            f"the {node.amount.name!r} count needs the constant it subtracts "
-            "against",
-            node=node,
-        )
-    producer = _PER_SEAT_RECORD_PRODUCERS[node.amount.name]
-    if producer not in produced:
-        raise LoweringError(
-            f"nothing in this effect records the {node.amount.name!r} count",
-            node=node,
-        )
-    return (
-        OracleInstruction(
-            "deal_damage", "",
-            {
-                "recipient": recipient.kind,
-                X_FROM_COUNT_PER_RECIPIENT: {
-                    "resolution_record": record,
-                    "base": node.amount.base,
-                },
-            },
-        ),
-    )
-
-
-def _lower_board_count_damage(
-    node: ast.DealDamage, produced: frozenset[str] = frozenset()
-) -> tuple[OracleInstruction, ...]:
-    """Damage sized by a named board count (Black Vise, Power Surge)."""
-    assert isinstance(node.amount, ast.BoardCount)
-    record = _PER_SEAT_RECORD_COUNTS.get(node.amount.name)
-    if record is not None:
-        return _lower_per_seat_record_damage(node, record, produced)
-    found = _BOARD_COUNT_DAMAGE.get(node.amount.name)
-    if found is None:
-        raise LoweringError(
-            f"nothing computes the {node.amount.name!r} count", node=node
-        )
-    # Both handlers damage the player whose upkeep is resolving — they take the
-    # seat from the upkeep context, not from the instruction — so a clause
-    # aimed anywhere else has no handler.
-    if not _damaged_player_is(node.recipients, "that_player"):
-        raise LoweringError("this counted damage only reaches 'that player'", node=node)
-    if node.riders != ast.DamageRiders():
-        raise LoweringError("no counted-damage handler carries damage riders", node=node)
-    kind, payload = found
-    payload = dict(payload)
-    if node.amount.name in _BOARD_COUNTS_WITH_BASE:
-        if node.amount.base is None:
-            raise LoweringError(
-                f"the {node.amount.name!r} count needs the constant it "
-                "subtracts against",
-                node=node,
-            )
-        payload["base"] = node.amount.base
-    return (OracleInstruction(kind, "", payload),)
 
 
 def _lower_damage_unless_pay(
@@ -435,41 +164,6 @@ def _lower_damage_unless_pay(
     return (OracleInstruction("self_damage_unless_pay", "", payload),)
 
 
-def _lower_chosen_cast_damage(
-    node: ast.DealDamage,
-    chosen: "tuple[ast.DamageDealtByChosenCast, str | None]",
-    produced: frozenset[str],
-) -> tuple[OracleInstruction, ...]:
-    """Backdraft's second sentence — **two instructions**, because it contains
-    a decision: "one of those" is a pick the resolution makes, and it must
-    happen before the damage that reads it. A step rather than a branch inside
-    the handler, so the pick is visible to ``_PRODUCES``, answerable through the
-    prompt queue, and suspends the resolution as every other mid-resolution
-    choice does. Gated on the earlier sentence having chosen a player.
-    """
-    definition, rounding = chosen
-    if CHOSEN_PLAYER not in produced:
-        raise LoweringError("'one of those spells' with no player chosen", node=node)
-    if not _damaged_player_is(node.recipients, "that_player"):
-        raise LoweringError("this damage reaches the chosen player", node=node)
-    if node.riders != ast.DamageRiders():
-        raise LoweringError("a chosen-cast damage carries no riders", node=node)
-    spec: dict[str, object] = {"back_reference": CHOSEN_CAST_DAMAGE}
-    if rounding is not None:
-        spec["half"] = rounding
-    return (
-        OracleInstruction(
-            "choose_cast_this_turn", "",
-            {"card_type": definition.card_type, "by_result": CHOSEN_PLAYER,
-             "result_key": CHOSEN_CAST_DAMAGE},
-        ),
-        OracleInstruction(
-            "deal_damage", "",
-            {"amount": "x", X_FROM_COUNT: spec, "recipient": CHOSEN_PLAYER},
-        ),
-    )
-
-
 def _lower_halved_damage(
     node: ast.DealDamage,
     event: str | None,
@@ -516,7 +210,61 @@ def _lower_halved_damage(
     return (dataclasses.replace(whole[0], payload=payload),)
 
 
+#: Instruction kinds that *read* the two CR 701.19c / CR 614 riders a damage
+#: clause can print ("it can't be regenerated this turn", "if it would die this
+#: turn, exile it instead"). One kind, because one handler stamps them —
+#: ``handlers/damage.deal_damage``, on the single creature it resolved.
+_RIDER_READING_KINDS = frozenset({"deal_damage"})
+
+
 def _lower_damage(
+    node: ast.DealDamage,
+    event: str | None = None,
+    produced: frozenset[str] = frozenset(),
+) -> tuple[OracleInstruction, ...]:
+    """:func:`_lower_damage_shape`, with the printed riders proved to survive.
+
+    Every branch below that is not the plain single-recipient one builds its
+    **own** payload dict — a sweep, a narrowed creature sweep, a bound set, a
+    fused two-target bite — and each of them silently dropped ``no_regen`` and
+    ``exile_if_dies`` on the floor. Nothing raised: the sentence parsed, the
+    riders were folded onto the node by the sentence loop, the branch never
+    looked at them, and the card compiled *supported* dealing damage that any
+    regeneration still answers. Only ``_lower_split_recipients`` had noticed,
+    and it guarded itself alone.
+
+    So the check is a **post-condition on the result** rather than a line in
+    each branch: a branch added later gets it for free, which is the whole
+    difference between this and the four copies it replaces. The argument is
+    `_lower_halved_damage`'s, one field over — it already requires its own
+    single ``deal_damage`` for exactly this reason, and the rounding it protects
+    is no more droppable than the riders are.
+    """
+    lowered = _lower_damage_shape(node, event, produced)
+    riders = (
+        ("no_regen", node.riders.no_regen),
+        ("exile_if_dies", node.riders.exile_if_dies),
+    )
+    for key, printed in riders:
+        if not printed:
+            continue
+        # Both halves are checked. The *kind* has to be one that reads the key
+        # — a payload it never looks at is the same drop wearing a key — and the
+        # key has to actually be there, which is what catches a branch that
+        # reaches `deal_damage` by a route that rebuilt the payload.
+        if (
+            len(lowered) != 1
+            or lowered[0].kind not in _RIDER_READING_KINDS
+            or not lowered[0].payload.get(key)
+        ):
+            raise LoweringError(
+                f"no damage handler carries the printed {key!r} rider here",
+                node=node,
+            )
+    return lowered
+
+
+def _lower_damage_shape(
     node: ast.DealDamage,
     event: str | None = None,
     produced: frozenset[str] = frozenset(),

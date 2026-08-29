@@ -22,6 +22,7 @@ from ._common import (
 from ._events import (
     _TAPPED_PERMANENTS,
     _UNTAPPED_PERMANENTS,
+    binds_block_pair,
 )
 
 
@@ -183,7 +184,29 @@ def _lower_combat_restriction(
     return (OracleInstruction(node.kind, "", dict(node.payload)),)
 
 
-def _lower_cant_be(node: ast.CantBe) -> tuple[OracleInstruction, ...]:
+def _is_block_pair_reference(subject: ast.Recipient) -> bool:
+    """Whether *subject* is the bare "that creature" a block trigger bound.
+
+    Bare is the whole of it: the handler acts on the creature the fire site
+    recorded and tests nothing, so a narrowing printed here would be carried
+    into a payload nobody reads. Compared for equality against the exact filter
+    for the reason :func:`_lower_cant_be` gives — a field added to the AST later
+    cannot slip past an equality check the way it can past a field-by-field
+    probe.
+    """
+    return (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "that"
+        and not subject.targeted
+        and subject.filter == ast.ObjectFilter(card_types=("creature",))
+    )
+
+
+def _lower_cant_be(
+    node: ast.CantBe,
+    event: str | None = None,
+    event_subject: object | None = None,
+) -> tuple[OracleInstruction, ...]:
     """"Target creature can't be regenerated/blocked this turn."
 
     Both handlers act on one creature chosen as the ability is activated and
@@ -193,6 +216,11 @@ def _lower_cant_be(node: ast.CantBe) -> tuple[OracleInstruction, ...]:
     the subject's filter is compared for *equality* against the exact shape each
     handler implements rather than probed field by field: a filter field added
     to the AST later cannot slip through an equality check.
+
+    *event* is the trigger kind the restriction is an effect of, for the reason
+    ``_lower_combat_restriction`` above takes one: a subject printed as a bare
+    back-reference means the creature *that* trigger bound, and under any other
+    trigger it means nothing at all.
     """
     if node.duration.kind not in _REST_OF_TURN:
         raise LoweringError(
@@ -214,6 +242,24 @@ def _lower_cant_be(node: ast.CantBe) -> tuple[OracleInstruction, ...]:
     # there is no picker, no legality check and no filter to honour.
     if _is_source(node.subject) and node.action == "regenerated":
         return (OracleInstruction("deny_regeneration_to_self", "", {}),)
+    # "Whenever this creature blocks or becomes blocked by a creature, **that
+    # creature** can't be regenerated this turn." (Lim-Dûl's Cohort.) The third
+    # subject the same action can have, and the only one that is neither chosen
+    # nor the source: the other half of the blocking pair, which is a fact only
+    # the trigger knows.
+    #
+    # `binds_block_pair` rather than the kind alone, for the reason it exists —
+    # a bare "becomes blocked" firing has several blockers and no way to say
+    # which one "that creature" is (CR 509.3c/509.3d), so the sentence would
+    # deny regeneration to whichever the fire site happened to list first.
+    if node.action == "regenerated" and _is_block_pair_reference(node.subject):
+        if not binds_block_pair(event, event_subject):
+            raise LoweringError(
+                "only a blocks-or-blocked trigger that names one creature "
+                "records which creature 'that creature' was",
+                node=node,
+            )
+        return (OracleInstruction("deny_regeneration_to_block_pair", "", {}),)
     if not _is_target(node.subject):
         raise LoweringError("no handler for restricting a non-targeted subject", node=node)
     assert isinstance(node.subject, ast.TargetSpec)

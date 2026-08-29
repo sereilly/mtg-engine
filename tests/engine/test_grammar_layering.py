@@ -128,7 +128,16 @@ LOWER_LAYERS = ["lowering", "statics", "lower"]
 # `library` joined on the parse side when The Dark pushed `effects/cards.py`
 # past the size guard: search, look-at and the library's top split off, reusing
 # `lowering/library.py`'s name so the two halves mirror rather than fork.
-EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "control_changes"]
+# `prevention` joined on the parse side when `effects/damage.py` reached the
+# size guard: the shields, the redirects and Whippoorwill's lock split off,
+# reusing `lowering/prevention.py`'s name so the two halves mirror rather than
+# fork. It carries the **redirects** as well, which the lowering side keeps in a
+# family of its own — `_parse_source_of_choice_effect` reads one printed
+# sentence and returns either node (CR 615.8's "a source of your choice" names
+# the damage; the clause after the comma decides what happens to it), so two
+# parse modules would be one importing the other, which is precisely the
+# coupling this list exists to forbid.
+EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "control_changes", "prevention"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -178,7 +187,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # battlefield->owner's hand read three different kinds of index. Asymmetric
 # like `zones` itself and for the same reason: the parse side is one
 # production.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "counters", "keywords", "tapping", "prevention", "redirection", "fighting", "where_x", "control_flow", "attachments"]
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "counters", "keywords", "tapping", "redirection", "fighting", "where_x", "control_flow", "attachments"]
 # The AST side has no `library`: what a search or a look-at *is* — the pile, the
 # filter, the fate of what was found — is a handful of nodes that sit perfectly
 # well beside the other card nodes, and the split that made `library` a family
@@ -195,9 +204,13 @@ LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "counters", 
 # `ast/library.py` or `ast/control_changes.py` would buy back the symmetry and
 # cost the thing symmetry is for: one home per node, findable from the family
 # name. Same asymmetry, opposite direction, as `zones`/`exile` above.
+# `prevention` is the third, and the same reason a third time: `PreventDamage`,
+# `RedirectDamage` and `DamageCantBePreventedOrRedirected` are three nodes that
+# sit perfectly well beside the damage ones they describe, and the guard that
+# made `prevention` a family fired on the *productions*.
 AST_FAMILIES = [
     family for family in EFFECT_FAMILIES
-    if family not in ("library", "control_changes")
+    if family not in ("library", "control_changes", "prevention")
 ]
 
 
@@ -263,7 +276,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_events", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_events", "_amounts", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -477,6 +490,13 @@ FAMILY_SHARED = {
     # the cost nodes. All three are floors, not families: `_core` re-exports
     # what they define, so no family imports them directly.
     "_primitives", "_references", "costs",
+    # `_amounts` split out of `lowering/damage.py` the next time that module
+    # reached the size guard, along CR 107.2/107.3's line: a quantity that is
+    # **counted** — off a board, out of the resolution's own scratchpad, or off
+    # a cast the player picked — against the sentence that spends it. A floor
+    # rather than a family for `_primitives`' reason exactly: `damage.py` reads
+    # it, and inside a package a module a family imports cannot itself be one.
+    "_amounts",
 }
 
 

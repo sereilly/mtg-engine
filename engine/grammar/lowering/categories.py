@@ -325,6 +325,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # would always be switched on and off alongside it.
     "deny_regeneration_to_target": "regeneration",
     "deny_regeneration_to_self": "regeneration",
+    # …and the block-pair subject (Lim-Dûl's Cohort). Same category for the same
+    # reason: what differs is which creature the sentence names, not what the
+    # rider does to it.
+    "deny_regeneration_to_block_pair": "regeneration",
     # Looking at a hand reads a hidden zone; the legacy rule and the handler
     # both live in the engine's zones modules.
     "exile_target_graveyard": "zones",

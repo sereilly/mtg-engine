@@ -692,28 +692,29 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, nine rounds in. 184 → 235 of 373 supported (63%),
-hollow lines 10 cards.** The set is still under `measured`, which is the state
-the role is designed for: nothing is broken, every gate is green, and no player
-can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow lines
-at zero.
+**Where it stands: Phase 3, twenty-one rounds in. 184 → 254 of 373 supported
+(68%), hollow lines 10 cards.** The set is still under `measured`, which is the
+state the role is designed for: nothing is broken, every gate is green, and no
+player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
+lines at zero.
 
-**The remaining 138 are a long tail, and the shape is Legends' rather than
-M21's.** 107 of them refuse **exactly one line**, and those lines sit across
+**The remaining 119 are a long tail, and the shape is Legends' rather than
+M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
 (round 8) and the Scarab cycle (round 2). Rank what is left by cheapest-per-card
 rather than by biggest mechanism — the playbook's own advice for exactly this
 point — and expect 1–3 cards a round.
 
-**What the nine rounds actually bought is not only cards.** Six of them turned
-up a live defect in shipped code, every one of them silent and every one in the
-same direction (a card doing *more* than it prints, or a gate reporting a card
-as done): the keyword rewrite reaching one of two front ends, a widened land
-gate hiding an unread static, an Aura's conditional bonus applied
-unconditionally, a filter draft dropping a restriction it had no field for, the
-Aura keyword vocabulary drifting from the registry both ways, and a substring
-scan granting plain forestwalk from "snow forestwalk". None had a failing test
+**What the rounds actually bought is not only cards.** Most of them turned up a
+live defect in shipped code, every one of them silent and every one in the same
+direction (a card doing *more* than it prints, or a gate reporting a card as
+done): the keyword rewrite reaching one of two front ends, a widened land gate
+hiding an unread static, an Aura's conditional bonus applied unconditionally, a
+filter draft dropping a restriction it had no field for, the Aura keyword
+vocabulary drifting from the registry both ways, a substring scan granting plain
+forestwalk from "snow forestwalk", a lowering emitting an amount key nothing
+read, and four damage branches dropping a printed rider. None had a failing test
 and none would have been found by reading the census.
 
 **Phase 1 (ingest and measure).** 383 printings, 373 unique cards, **346 new to
@@ -1196,6 +1197,44 @@ lowering was already emitting `amount_from` and nothing read it. That last one
 is the one worth having found: the card would have compiled supported and dealt
 0.
 
+**Round 21 — a regeneration rider on a subject nothing targets. 252 → 254.**
+
+Two cards printing CR 701.19c's "can't be regenerated" about something no
+sentence chose. Incinerate says it about **the effect** — "A creature dealt
+damage this way" — where the rider parser required the sentence to open with
+"it" or "if"; it is the damage twin of War Barge's "A creature destroyed this
+way", and it exists for the same reason, that by the time the rider is read
+there is no pronoun left to point at. Lim-Dûl's Cohort says it about the other
+half of a blocking pair, the third subject the rider can have beside a chosen
+target (Hurr Jackal) and the ability's own source (Clergy of the Holy Nimbus);
+`_lower_cant_be` was never handed the trigger's event, so every subject that
+was neither refused.
+
+**The defect was one field over from the card that found it.** Every branch of
+the damage lowering that is *not* the plain single-recipient one builds its own
+payload dict — a board sweep, a narrowed creature sweep, a bound set, a fused
+two-target bite — and each of them dropped `no_regen` and `exile_if_dies` on
+the floor. Nothing raised: the sentence parsed, the sentence loop folded the
+riders onto the node, the branch never looked at them, and the card compiled
+*supported* dealing damage that any regeneration still answers. Only
+`_lower_split_recipients` had noticed, and it guarded itself alone. The fix is
+a **post-condition on the lowered result** rather than a line in each branch —
+the rider has to arrive on an instruction of a kind that reads it — so the next
+branch is covered by construction. Adding Incinerate's noun form is what made
+it reachable from a printed sweep, which is the second time in this set that
+widening a reader exposed a drop the narrower reader was hiding.
+
+**Two splits, both at the 1,000-line guard, both along a line already drawn.**
+`effects/prevention.py` took the shields, the redirects and Whippoorwill's lock
+out of `effects/damage.py`, reusing `lowering/prevention.py`'s name — and it
+carries the *redirects* as well, which the lowering side keeps apart, because
+`_parse_source_of_choice_effect` reads one printed sentence and returns either
+node. `lowering/_amounts.py` took the counted quantities out of
+`lowering/damage.py` and is a **floor, not a family**: `damage.py` reads it, and
+the family rule is that families do not import each other. That is
+`ast/_primitives.py`'s argument exactly, and it is the answer whenever a leaf
+turns out to be what a family needs.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,
@@ -1253,13 +1292,18 @@ What is close, at the cull:
 
 | Module | Lines |
 | --- | ---: |
-| `effects/damage.py` | 996 |
-| `lowering/_common.py` | 994 |
+| `lowering/_common.py` | 995 |
+| `phrases.py` | 965 |
 | `lowering/zones.py` | 992 |
-| `lowering/damage.py` | 981 |
 | `lower.py` | 971 |
+| `lowering/damage.py` | 745 |
 
-Nothing is at the cap. The Dark took **six** splits in one set, which is more
+Nothing is at the cap. Both damage modules were on it and split in round 21 —
+`effects/damage.py` 996 → 573 and `lowering/damage.py` 997 → 745 — which is
+what a two-card round costs when it lands in the two files every damage
+template lands in. `phrases.py` is the one that moved *up* without new work of
+its own: a fragment two families needed came down into it, which is where the
+layering rule sends one. The Dark took **six** splits in one set, which is more
 than the previous four sets combined, and every one fell along a line the CR or
 the call graph had already drawn: `ast/_core.py` into `_primitives` +
 `_references` (`ObjectFilter` alone was 428 lines) and again into `costs`;

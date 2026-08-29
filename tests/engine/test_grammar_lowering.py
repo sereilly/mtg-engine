@@ -4528,3 +4528,71 @@ def test_r34_the_other_role_is_reachable_by_its_own_printed_words():
     )
     payload = compile_line(line).instructions[0].payload
     assert payload["x_from_count"]["object_characteristic"]["role"] == "blocker"
+
+
+# ---------------------------------------------------------------------------
+# The damage riders have to reach a handler that reads them
+# ---------------------------------------------------------------------------
+
+
+_SWEEP_WITH_RIDER = (
+    "This spell deals 2 damage to each creature. If it's a creature, it can't "
+    "be regenerated this turn."
+)
+
+
+def test_a_damage_rider_that_reaches_no_handler_refuses():
+    """"…it can't be regenerated this turn" / "…if it would die this turn,
+    exile it instead" (CR 701.19c, CR 614) are folded onto the damage node by
+    the sentence loop, and only ``deal_damage`` reads them.
+
+    Every other branch of the damage lowering builds its **own** payload dict —
+    a board sweep, a narrowed creature sweep, a bound set, a fused two-target
+    bite — and each of them dropped both keys on the floor. Nothing raised: the
+    sentence parsed, the branch never looked at the riders, and the card
+    compiled *supported* dealing damage that any regeneration still answers.
+    Only the multi-recipient split had noticed, and it guarded itself alone.
+
+    So the check is a post-condition on the lowered result rather than a line
+    in each branch, and this is the half that matters: a branch added later is
+    covered without anyone remembering it.
+    """
+    from engine.grammar import ast
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_statement
+    from engine.grammar.parser import parse_line
+
+    statement = parse_line(_SWEEP_WITH_RIDER, card_name="Probe").statement
+    assert statement.riders.no_regen, "the rider is on the node the branch ignored"
+
+    with pytest.raises(LoweringError, match="no_regen"):
+        lower_statement(statement)
+
+
+def test_the_single_target_damage_rider_still_carries():
+    """The other direction of the same guard: where a handler *does* read the
+    keys, they arrive. Without this the post-condition above could be satisfied
+    by refusing every rider."""
+    (lowered,) = compile_line(
+        "This spell deals 3 damage to any target. It can't be regenerated.",
+        card_name="Probe",
+    ).instructions
+
+    assert lowered.kind == "deal_damage"
+    assert lowered.payload["no_regen"] is True
+
+
+def test_the_noun_form_of_the_damage_rider_is_the_same_rider():
+    """"**A creature dealt damage this way** can't be regenerated this turn"
+    (Incinerate) is CR 701.19c written about the effect rather than about a
+    pronoun — the damage twin of "A creature destroyed this way can't be
+    regenerated" — so it sets the one key both spellings set rather than
+    minting a second channel for the same sentence."""
+    (lowered,) = compile_line(
+        "This spell deals 3 damage to any target. A creature dealt damage this "
+        "way can't be regenerated this turn.",
+        card_name="Probe",
+    ).instructions
+
+    assert lowered.kind == "deal_damage"
+    assert lowered.payload["no_regen"] is True

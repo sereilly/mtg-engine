@@ -667,7 +667,13 @@ def lower_statement(
     if isinstance(statement, ast.AttackAsThough):
         return _lower_attack_as_though(statement)
     if isinstance(statement, ast.CantBe):
-        return _lower_cant_be(statement)
+        # The **unfiltered** event, for the reason `_lower_destroy` above takes
+        # one: "that creature can't be regenerated this turn" (Lim-Dûl's
+        # Cohort) asks whether the trigger bound exactly one creature, which is
+        # a fact about the trigger and so true of the clause wherever in the
+        # sentence it sits — and the kind it produces reaches its handler
+        # through the ordinary dict dispatch, nested or not.
+        return _lower_cant_be(statement, event, event_subject)
 
     if isinstance(statement, ast.AssignsNoCombatDamage):
         return _lower_assigns_no_combat_damage(statement)
