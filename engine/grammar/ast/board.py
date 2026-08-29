@@ -117,10 +117,16 @@ class GainControl:
     one (Aladdin) revert under completely different circumstances, and a
     production that let the clause be absent would also let it be *deleted*
     with no change to what was lowered.
+
+    *tap_when_lost* is the trailing sentence "When you lose control of the
+    creature, tap it." (Ray of Command, Magus of the Unseen) — CR 603.7's
+    delayed trigger, folded onto the change it watches rather than parsed as a
+    step of its own, because on its own the sentence names no object at all.
     """
 
     subject: Recipient
     duration: str
+    tap_when_lost: bool = False
 
 
 @dataclass(frozen=True)

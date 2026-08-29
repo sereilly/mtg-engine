@@ -1459,3 +1459,101 @@ def test_reclamation_is_flooded_woodlands_with_the_colour_changed(set_pool):
     game.advance_combat_phase()
 
     assert game.declare_attackers(0, [0])[0], "a green creature owes Reclamation nothing"
+
+
+# --- Round 25: a borrowed permanent, and what the sentences after it name ---
+
+
+def _borrow(set_pool, spell: str, victim: str, tapped: bool = True):
+    """Cast *spell* on seat 1's *victim*, and return the game and the permanent."""
+    pool = set_pool("ICE")
+    borrowed = Permanent(card=pool[victim])
+    borrowed.tapped = tapped
+    hand = [pool[spell]] if spell == "Ray of Command" else []
+    battlefield = [] if spell == "Ray of Command" else [
+        _nosick(Permanent(card=pool[spell]))
+    ]
+    game = Game(players=[
+        PlayerState(name="P1", hand=hand, battlefield=battlefield, life=20),
+        PlayerState(name="P2", battlefield=[borrowed], life=20),
+    ])
+    game.enforce_mana_costs = False
+    if spell == "Ray of Command":
+        game.cast_from_hand(
+            0, spell, target_player_index=1, target_permanent_index=0
+        )
+    else:
+        game.activate_permanent_ability(
+            0, spell, 0, target_player_index=1, target_permanent_index=0
+        )
+    game._settle()
+    return game, borrowed
+
+
+def test_ray_of_command_untaps_steals_and_hastes_in_one_resolution(set_pool):
+    """"Untap target creature an opponent controls and gain control of **it**
+    until end of turn. That creature gains haste until end of turn."
+
+    The pronoun and the repeated noun are one referent (idiom 20): "gain
+    control of **it**" was refused where Disharmony's "gain control of **that
+    creature**" was admitted, because a bare "it" parses as the ability's own
+    source and that default was read as a narrowing.
+    """
+    game, borrowed = _borrow(set_pool, "Ray of Command", "Balduvian Bears")
+
+    assert not borrowed.tapped
+    assert game.controller_index_of(borrowed) == 0
+    assert borrowed.has_keyword("haste"), (
+        "the sentence after the steal is about the creature the steal moved"
+    )
+
+
+def test_the_haste_grant_after_a_bound_steal_finds_the_creature(set_pool):
+    """The defect: two branches of one handler left different things behind.
+
+    `gain_control_until_eot` rescopes the resolution's target seat when it
+    takes a *chosen* target — the sentences after it are about a creature that
+    is now on another battlefield — and its **bound** branch did not. So under
+    the pronoun spelling the announced id was still scoped to the seat the
+    creature had left: it resolved to nothing, and the grant that followed
+    logged "no valid creature target" while the card compiled clean.
+    """
+    game, borrowed = _borrow(set_pool, "Ray of Command", "Balduvian Bears")
+
+    assert "no valid creature target" not in " ".join(game.log)
+    assert borrowed.has_keyword("haste")
+
+
+def test_ray_of_command_returns_the_creature_tapped(set_pool):
+    """"When you lose control of the creature, tap it." CR 603.7's delayed
+    trigger, and the cleanup that ends an until-end-of-turn control change is
+    the one place control is lost — so that is where it fires."""
+    game, borrowed = _borrow(set_pool, "Ray of Command", "Balduvian Bears")
+    assert not borrowed.tapped
+
+    game.resolve_cleanup_step(0)
+
+    assert game.controller_index_of(borrowed) == 1, "the loan ended"
+    assert borrowed.tapped, "and the creature came back tapped"
+    assert not borrowed.has_keyword("haste")
+
+
+def test_magus_of_the_unseen_is_ray_of_command_over_a_noun(set_pool):
+    """One template, two cards: the printed type is payload on both the untap
+    and the grant, and the trailing trigger names it a third time."""
+    pool = set_pool("ICE")
+    steps = {}
+    for name in ("Ray of Command", "Magus of the Unseen"):
+        program = compile_card_oracle(pool[name])
+        sequence = next(
+            i for i in program.instructions if i.kind == "sequence"
+        )
+        steps[name] = sequence.payload["steps"]
+
+    for name, noun in (("Ray of Command", "creature"), ("Magus of the Unseen", "artifact")):
+        untap, control, haste = steps[name]
+        assert untap.payload["type_filter"] == noun
+        assert control.payload == {
+            "permanents_from": "untapped_permanents", "tap_when_lost": True,
+        }
+        assert haste.payload["keywords"] == ("haste",)

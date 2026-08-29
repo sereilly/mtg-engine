@@ -29,6 +29,7 @@ from .phrases import _accept_number
 from .statements import _parse_condition, parse_statement
 from .rebinding import rebind_pronoun_to_condition_target
 from .stream import TokenStream
+from .vocabulary import CARD_TYPES
 
 
 # Sentinel: the rider was folded into the previous step, nothing to append.
@@ -715,6 +716,82 @@ def _attach_destroyed_this_way(stream: TokenStream, steps: list[ast.Statement]) 
         return False
     steps[-1] = dataclasses.replace(last, damage_if_destroyed=amount.value)
     return True
+
+
+def _attach_tap_when_control_lost(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """Fold "When you lose control of the creature, tap it." into the
+    :class:`~engine.grammar.ast.GainControl` before it (Ray of Command; Magus of
+    the Unseen prints "…of the artifact").
+
+    CR 603.7: a delayed triggered ability created by the resolution, watching
+    the very control change the sentence in front of it made. A rider rather
+    than a step for the reason every rider here is one — on its own it names no
+    object: "the creature" is the one the previous sentence took, and parsed
+    alone the pronoun would dangle.
+
+    The repeated noun is **consumed against the card types**, not skipped. A
+    sentence naming something the control change never touched would otherwise
+    be read as this one and arm a trigger on the wrong object; the closed set is
+    what makes that fail loudly instead.
+    """
+    # The **control change**, wherever in the effect it sits — not `steps[-1]`.
+    # Both cards print a sentence between the two ("That creature gains haste
+    # until end of turn"), and the first sentence is itself a conjunction, so
+    # the change is nested one level down. A rider that read only the last
+    # top-level step refused both cards that print it.
+    if not any(_finds_gain_control(step) for step in steps):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase("when", "you", "lose", "control", "of", "the"):
+        stream.reset(mark)
+        return False
+    noun = stream.peek_word()
+    if noun is None or noun not in CARD_TYPES:
+        stream.reset(mark)
+        return False
+    stream.advance()
+    stream.accept_punct(",")
+    if not stream.accept_phrase("tap", "it"):
+        stream.reset(mark)
+        return False
+    for index, step in enumerate(steps):
+        rewritten = _marks_control_change_watched(step)
+        if rewritten is not step:
+            steps[index] = rewritten
+    return True
+
+
+def _finds_gain_control(node) -> bool:
+    """Whether *node* contains a :class:`~engine.grammar.ast.GainControl`."""
+    return _marks_control_change_watched(node) is not node
+
+
+def _marks_control_change_watched(node):
+    """*node* with every ``GainControl`` in it marked ``tap_when_lost``.
+
+    A structural walk rather than a per-shape probe, for the reason
+    ``rebinding._walk_specs`` is one: the change can be a step, a conjunct or a
+    branch, and a list of the shapes it has been seen in goes stale the way
+    every fire-site list in this engine has.
+    """
+    if isinstance(node, ast.GainControl):
+        return dataclasses.replace(node, tap_when_lost=True)
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        changes = {
+            field.name: rewritten
+            for field in dataclasses.fields(node)
+            for rewritten in (_marks_control_change_watched(getattr(node, field.name)),)
+            if rewritten is not getattr(node, field.name)
+        }
+        return dataclasses.replace(node, **changes) if changes else node
+    if isinstance(node, (tuple, list)):
+        walked = [_marks_control_change_watched(item) for item in node]
+        if all(a is b for a, b in zip(walked, node)):
+            return node
+        return type(node)(walked)
+    return node
 
 
 def _attach_exchanged_this_way(stream: TokenStream, steps: list[ast.Statement]) -> bool:

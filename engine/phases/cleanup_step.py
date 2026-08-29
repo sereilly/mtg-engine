@@ -15,6 +15,7 @@ from ..models import Permanent
 from ..keywords import (clear_granted_ability_lines,
                         clear_granted_keywords)
 from ..control import end_until_eot_control_changes
+from ..handlers.control_changes import TAP_WHEN_CONTROL_LOST
 from ..layer_bridge import GAINED_TYPES
 from ..mixins._constants import _EOT_METADATA_KEYS
 from ..damage_redirects import clear_redirects
@@ -166,6 +167,14 @@ class CleanupStepMixin:
                 # again (engine/control.py).
                 if end_until_eot_control_changes(permanent):
                     control_reverted = True
+                    # "When you lose control of the creature, tap it." (Ray of
+                    # Command, Magus of the Unseen.) CR 603.7's delayed trigger,
+                    # and this is the moment it watches: the contribution has
+                    # just been dropped, so control is lost exactly here. The
+                    # marker is cleared with it — the ability triggers once, for
+                    # the change that armed it.
+                    if permanent.metadata.pop(TAP_WHEN_CONTROL_LOST, False):
+                        self.become_tapped(permanent)
         # A control change that ended is a change to who controls what, so the
         # battlefield projection and every derived characteristic are rebuilt —
         # the same pair `change_control`'s callers run when one begins.

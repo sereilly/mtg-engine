@@ -692,13 +692,13 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, twenty-four rounds in. 184 → 260 of 373 supported
+**Where it stands: Phase 3, twenty-five rounds in. 184 → 262 of 373 supported
 (70%), hollow lines 10 cards.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
 
-**The remaining 113 are a long tail, and the shape is Legends' rather than
+**The remaining 111 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
@@ -1356,6 +1356,48 @@ what CR 508.1g's "able to" forbids. Which permanent answers a cost is still
 `default_sacrifice_pick`'s policy, now split into an ordering
 (`sacrifice_preference_key`) the planner sorts by; the matching only decides
 which cost each one answers.
+
+**Round 25 — a borrowed permanent, and what the sentences after it name.
+260 → 262.**
+
+Ray of Command and Magus of the Unseen print one paragraph with the noun
+changed: "Untap target <noun> an opponent controls and gain control of it until
+end of turn. It gains haste until end of turn. When you lose control of the
+<noun>, tap it." Three sentences, and every one of them is about the object the
+first sentence chose.
+
+Two of the three were nearly there. "Gain control of **it**" was refused where
+Disharmony's "gain control of **that creature**" was admitted, because a bare
+"it" parses as the ability's own source — `rebinding.py` says so, and that is
+what the word means on a line naming nothing else — and the lowering read that
+default as a *narrowing the card printed*. It is not one: the filter is checked
+on the repeated noun and not on the pronoun now, which is how
+`_lower_remove_from_combat` has read the identical pronoun all along, on the
+very card that prints both spellings.
+
+The third sentence is new: CR 603.7's delayed trigger, folded onto the control
+change it watches rather than parsed as a step, because alone it names no
+object at all. It fires where control is actually lost — the cleanup that drops
+an until-end-of-turn contribution, which is the one place that happens — so the
+creature goes home tapped without a second reader of what "lose control" means.
+The rider walks the effect to find the change rather than reading the last step,
+because both cards print a sentence in between.
+
+**The defect: two branches of one handler left different things behind.**
+`gain_control_until_eot` rescopes the resolution's target seat when it takes a
+*chosen* target — the comment beside it says why, that the sentences after it
+are about a creature now on another battlefield — and its **bound** branch did
+not. So under the pronoun spelling the announced id stayed scoped to the seat
+the creature had left: it resolved to nothing, and the haste grant logged "no
+valid creature target" while the card compiled clean and stole the creature
+perfectly well. What differs between those two branches is how the object was
+named, which is nothing the sentences after them can see.
+
+Beside it, the targeted branch wrote `controlled_permanent` into the resolution
+scratchpad and **nothing has ever read it** — round 20's `amount_from` finding
+in the other direction, a record with no reader rather than a reader with no
+record. Deleted rather than declared, because the sentences that follow reach
+the creature through the rescope.
 
 ## Where the sets landed
 

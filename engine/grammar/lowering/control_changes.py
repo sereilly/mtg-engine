@@ -127,12 +127,29 @@ def _lower_gain_control(
     if not isinstance(subject, ast.TargetSpec):
         raise LoweringError("the linked-control handler needs a named target", node=node)
     if node.duration == "until_end_of_turn":
-        if subject.quantifier == "that":
+        if subject.quantifier in ("that", "it"):
             # "Gain control of **that creature** until end of turn."
-            # (Disharmony.) The bound object, not a second choice — and bound
-            # by id when the earlier step resolved, so a restated narrowing
-            # would have nothing to narrow.
-            if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+            # (Disharmony.) "Untap target creature an opponent controls and gain
+            # control of **it** until end of turn." (Ray of Command, Magus of
+            # the Unseen.) The bound object, not a second choice — and bound by
+            # id when the earlier step resolved, so a restated narrowing would
+            # have nothing to narrow.
+            #
+            # The pronoun and the repeated noun are one referent (idiom 20), the
+            # same pair `lowering/stack.py` and `lowering/prevention.py` already
+            # read together. Only "that" was admitted here, so a card printing
+            # the shorter spelling of the identical sentence refused.
+            #
+            # The **filter** is only checked on the repeated noun. A bare "it"
+            # is parsed as the ability's own source (`rebinding.py`: that is
+            # what the word means on a line naming nothing else), so its
+            # `is_source` is the parser's default rather than a narrowing the
+            # card printed — reading it as one is what refused this sentence.
+            # `_lower_remove_from_combat` reads the identical pronoun the same
+            # way, one production over, on the very card that prints both.
+            if subject.quantifier == "that" and _restrictions_beyond(
+                subject.filter, frozenset({"card_types"})
+            ):
                 raise LoweringError(
                     "a bound object carries no narrowing the record could honour",
                     node=node,
@@ -143,12 +160,15 @@ def _lower_gain_control(
                     "producer in this effect",
                     node=node,
                 )
-            return (
-                OracleInstruction(
-                    "gain_control_until_eot", "",
-                    {"permanents_from": _UNTAPPED_PERMANENTS},
-                ),
-            )
+            payload: dict[str, object] = {"permanents_from": _UNTAPPED_PERMANENTS}
+            # "When you lose control of the creature, tap it." (Ray of Command,
+            # Magus of the Unseen.) CR 603.7's delayed trigger, carried as a key
+            # on the change it watches: the cleanup that ends an
+            # until-end-of-turn control change is the one place control is lost,
+            # so that is where the tap happens (engine/phases/cleanup_step.py).
+            if node.tap_when_lost:
+                payload["tap_when_lost"] = True
+            return (OracleInstruction("gain_control_until_eot", "", payload),)
         if subject.quantifier != "target":
             raise LoweringError(
                 "the linked-control handler needs a named target", node=node

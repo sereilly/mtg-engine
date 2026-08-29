@@ -24,6 +24,18 @@ if TYPE_CHECKING:
     from ..oracle import OracleInstruction
 
 
+#: "When you lose control of the creature, tap it." (Ray of Command, Magus of
+#: the Unseen.) CR 603.7's delayed trigger, stamped on the permanent the control
+#: change took and read where that change ends — the cleanup step, which is the
+#: one place an until-end-of-turn control contribution is dropped. State at one
+#: fire site rather than an object on the stack, the arrangement
+#: `destroy_at_end_of_combat` already uses for a delayed action with one place
+#: to happen. **Consumed** where it is read rather than swept: the trigger fires
+#: once, for the change that armed it, and a permanent that left the battlefield
+#: before then took the marker with it (CR 400.7).
+TAP_WHEN_CONTROL_LOST = "tap_when_control_lost"
+
+
 @effect_handler("gain_control_until_eot")
 def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Gain control of target creature until end of turn." (Traitorous Greed.)
@@ -49,16 +61,36 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     bound_key = instruction.payload.get("permanents_from")
     if bound_key:
         seat = game.players.index(context.caster)
+        took = False
         for permanent_id in context.results.get(bound_key) or ():
             bound = game.permanent_by_id(permanent_id)
             if bound is None:
                 continue
             change_control(bound, seat, source=context.card, until_eot=True)
+            if instruction.payload.get("tap_when_lost"):
+                bound.metadata[TAP_WHEN_CONTROL_LOST] = True
+            took = True
             game.log.append(
                 f"{context.caster.name} gains control of {bound.card.name} "
                 "until end of turn"
             )
         game._sync_control()
+        if took:
+            # **The same rescope the targeted branch below makes, and for the
+            # same reason.** The sentences after this one are about the creature
+            # this one just moved — "That creature gains haste until end of
+            # turn" (Ray of Command), "It gains haste" (Magus of the Unseen) —
+            # and they resolve the announced id against `context.target`'s
+            # board. Only the branch below did it, so under the bound spelling
+            # the id was still scoped to the seat the creature had *left*: it
+            # resolved to nothing, and the grant that followed logged "no valid
+            # creature target" while the card compiled clean.
+            #
+            # Two branches of one handler that leave different things behind for
+            # the next step is the shape this is: what differs between them is
+            # how the object was named, which is nothing the sentences after
+            # them can see.
+            context.target = context.caster
         return True, "resolved"
 
     filters = (instruction.payload.get("targets") or {}).get("filter") or {}
@@ -73,7 +105,6 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     seat = game.players.index(context.caster)
     change_control(target, seat, source=context.card, until_eot=True)
     game._sync_control()
-    context.results["controlled_permanent"] = target.permanent_id
     # The sentences after this one are *about the same creature* ("Untap that
     # creature. It gains haste…"), and it is now on a different battlefield.
     # `context.target` is the seat the remaining steps resolve their target id
