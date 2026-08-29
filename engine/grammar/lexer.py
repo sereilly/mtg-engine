@@ -93,6 +93,14 @@ def _self_reference_spans(normalized: str, card_name: str | None) -> list[tuple[
     (CR 201.4c: "Ugin, the Spirit Dragon" says "Ugin"), so that form is
     matched too — full name first, so the short form never splits a longer
     self-reference in half.
+
+    **A name that is also a creature type is left alone in a type position.**
+    Aurochs prints "for each other attacking Aurochs", where the word is the
+    creature type and not the card: collapsed to SELF the phrase counts other
+    attacking copies of *this permanent excluding itself*, which is always
+    none, so the pump resolves for +0/+0 on a card reporting itself supported.
+    ``oracle._collapse_self_references`` applies the same rule on the
+    static-line path, in the one spelling that path cannot share.
     """
     if not card_name:
         return []
@@ -138,10 +146,35 @@ def _self_reference_spans(normalized: str, card_name: str | None) -> list[tuple[
                 not _is_word_char(start - 1)
                 and _ends_a_word(end)
                 and not any(s <= start < e for s, e in spans)
+                and not _in_type_position(normalized, start, needle)
             ):
                 spans.append((start, end))
             start = normalized.find(needle, start + 1)
     return spans
+
+
+#: Words after which a name that is *also* a creature type reads as the type.
+#: The same set ``oracle._TYPE_POSITION_WORDS`` holds; kept here rather than
+#: imported because this reader works on raw character offsets and that one on
+#: a normalized line, and `engine.oracle` imports this package.
+_TYPE_POSITION_WORDS = frozenset({
+    "a", "an", "another", "any", "attacking", "blocking", "each", "every",
+    "other", "target", "untapped", "tapped", "all", "no",
+})
+
+
+def _in_type_position(normalized: str, start: int, needle: str) -> bool:
+    """Whether the match at *start* is the card's name used as a creature type.
+
+    Only ever true for a card whose own name is one — four in the pool — so it
+    costs a set lookup on every other card and nothing else.
+    """
+    from .vocabulary import CREATURE_TYPES
+
+    if needle not in CREATURE_TYPES:
+        return False
+    before = normalized[:start].rstrip()
+    return bool(before) and before.rsplit(" ", 1)[-1] in _TYPE_POSITION_WORDS
 
 
 def tokenize(line: str, *, card_name: str | None = None) -> LexResult:

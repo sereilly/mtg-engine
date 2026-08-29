@@ -2139,9 +2139,49 @@ def _self_name_forms(card_name: str | None) -> tuple[str, ...]:
     return tuple(forms)
 
 
+#: Words that put the name after them in a **type** position rather than a
+#: self-reference position: "each other attacking **Aurochs**" is a creature
+#: type, not the card talking about itself.
+#:
+#: Only reachable for a card whose own name *is* a creature type — four in the
+#: pool, and only Aurochs uses it as a type. But the failure is the silent kind:
+#: collapsed, the count reads "each other attacking **this creature**", a set of
+#: one thing that excludes itself and is therefore always empty, so the pump
+#: resolves for +0/+0 on a card reporting itself supported.
+_TYPE_POSITION_WORDS = frozenset({
+    "a", "an", "another", "any", "attacking", "blocking", "each", "every",
+    "other", "target", "untapped", "tapped", "all", "no",
+})
+
+
+def _preceding_word(text: str, index: int) -> str:
+    """The word immediately before *index*, lowercased, or "" at the start."""
+    before = text[:index].rstrip()
+    return before.rsplit(" ", 1)[-1].lower() if before else ""
+
+
 def _collapse_self_references(normalized: str, card_name: str | None, replacement: str) -> str:
-    """*normalized* with whole-word self-references replaced by *replacement*."""
+    """*normalized* with whole-word self-references replaced by *replacement*.
+
+    A name that is also a **creature type** is left alone where the sentence
+    uses it as one — see :data:`_TYPE_POSITION_WORDS`. Everywhere else it is the
+    card naming itself (CR 201.4), the possessive "Lhurgoyf's power" included,
+    which is the form the pool's other such cards print.
+    """
+    from .grammar.vocabulary import CREATURE_TYPES
+
     for form in _self_name_forms(card_name):
+        if form.lower() in CREATURE_TYPES:
+            normalized = re.sub(
+                rf"\b{re.escape(form)}\b",
+                lambda match, text=normalized: (
+                    match.group(0)
+                    if _preceding_word(text, match.start()) in _TYPE_POSITION_WORDS
+                    else replacement
+                ),
+                normalized,
+            )
+            continue
         normalized = re.sub(rf"\b{re.escape(form)}\b", replacement, normalized)
     return normalized
 

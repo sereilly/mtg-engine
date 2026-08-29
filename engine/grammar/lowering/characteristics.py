@@ -155,10 +155,36 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         # rather than falling through: a duration would make it a one-shot pump
         # whose handler has no repetition, and a subject other than the source
         # would point the bonus at a permanent the refresh is not refreshing.
-        if node.duration.kind is not None or not _is_source(node.subject):
+        if not _is_source(node.subject):
             raise LoweringError(
                 'a "for each" pump is only a continuous bonus on its own source',
                 node=node,
+            )
+        if node.duration.kind is not None:
+            # "…**it gets +1/+0 until end of turn** for each other attacking
+            # Aurochs." A duration makes it a one-shot pump rather than a
+            # continuous contribution, and `pump_self` already boosts the source
+            # until end of turn with a computed size — the where-clause branch
+            # below hands it the very same `x_from_count` spec. What differs is
+            # only how the multiplication is *spelled*: "+X/+0, where X is the
+            # number of …" and "+1/+0 for each …" are one amount, and
+            # `resolve_amount`'s `times_x` is where the printed repetition size
+            # already lives.
+            duration = _TARGET_PUMP_DURATIONS.get(node.duration.kind)
+            if duration is None:
+                raise LoweringError(
+                    "no pump handler ends at this duration", node=node
+                )
+            return (
+                OracleInstruction("pump_self", "", {
+                    "power": _per_each_amount(node.power, node.power_negative, node),
+                    "toughness": _per_each_amount(
+                        node.toughness, node.toughness_negative, node
+                    ),
+                    "power_negative": node.power_negative,
+                    "toughness_negative": node.toughness_negative,
+                    "x_from_count": count_spec(node.per_each, node),
+                }),
             )
         return (
             OracleInstruction("dynamic_pt_bonus", "", {

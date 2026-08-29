@@ -9,7 +9,8 @@ never uses the stack.
 """
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import object_only_filter, untestable_filter_keys
+from ...subject_filters import (card_only_filter, object_only_filter,
+                                untestable_filter_keys)
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -136,25 +137,48 @@ def _lower_add_mana(
             # The count is taken at resolution through the one evaluator every
             # computed amount shares, so "creature with power 4 or greater you
             # control" means the same set here as it does anywhere else.
-            if node.per_each.controller != "you":
+            # "…for each creature card **in your graveyard**" (Songs of the
+            # Damned). A zone other than the battlefield, which the evaluator
+            # already counts — it reads the zone off the spec — so the only
+            # thing missing was carrying the one the phrase named instead of
+            # writing "battlefield" here. A card in a zone has no computed
+            # characteristics at all (CR 613.1), so the *matcher* differs, and
+            # `card_only_filter` is what says which narrowings survive there.
+            zone = node.per_each.zone or "battlefield"
+            owner = node.per_each.controller if zone == "battlefield" else (
+                node.per_each.zone_owner.kind if node.per_each.zone_owner else None
+            )
+            if owner != "you":
                 raise LoweringError(
                     "the mana multiplier counts the producer's own board", node=node
                 )
-            described = _filter_payload(node.per_each)
-            # "You control" is performed by the count's `owner`, which scans one
-            # seat's battlefield — so it is carried rather than tested, the
-            # arrangement `carried_separately` exists to name. Everything else
-            # has to be answerable about a permanent alone, because that is what
-            # the evaluator's matcher is.
-            carried = object_only_filter(
-                described, carried_separately=frozenset({"controller"})
-            )
+            if zone == "battlefield":
+                # "You control" is performed by the count's `owner`, which scans
+                # one seat's battlefield — so it is carried rather than tested,
+                # the arrangement `carried_separately` exists to name. Everything
+                # else has to be answerable about a permanent alone, because that
+                # is what the evaluator's matcher is.
+                carried = object_only_filter(
+                    _filter_payload(node.per_each),
+                    carried_separately=frozenset({"controller"}),
+                )
+            else:
+                # `_filter_payload` refuses a non-battlefield filter by design —
+                # every handler it feeds searches the battlefield. This one does
+                # not: the zone travels on the spec and the evaluator reads it,
+                # so the filter is taken raw and held to what a *card* can
+                # answer.
+                carried = card_only_filter({
+                    key: value
+                    for key, value in node.per_each.to_payload().items()
+                    if key not in ("zone", "zone_owner", "is_card")
+                })
             if carried is None:
                 raise LoweringError(
                     "the mana multiplier cannot count this restriction", node=node
                 )
             payload["per_each"] = {
-                "zone": "battlefield", "owner": "you", "filter": carried,
+                "zone": zone, "owner": "you", "filter": carried,
             }
         return (OracleInstruction("add_mana_from_text", "", payload),)
     # The any-colour branch keeps its clause text for a *text-keyed* handler

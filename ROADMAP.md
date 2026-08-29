@@ -1035,6 +1035,35 @@ it, which is the ordering rule this grammar keeps re-learning: a production
 whose opening is another's prefix goes second, and guards its own tail so a
 near-miss rewinds instead of raising.
 
+**Round 12 — a counted amount, and a name that is also a creature type. 239 → 241.**
+
+Two unrelated cards and one silent bug apiece.
+
+Songs of the Damned: "Add {B} for each creature card **in your graveyard**".
+The mana multiplier wrote `"zone": "battlefield"` into every spec it built,
+while the evaluator behind it has read the zone off the spec all along — so the
+only thing missing was carrying the zone the phrase named. A card in a zone has
+no computed characteristics (CR 613.1), so the narrowing goes through
+`card_only_filter` rather than the permanent matcher.
+
+Aurochs is the better find. Its name **is** a creature type, and it prints "for
+each other attacking Aurochs". Both self-reference readers — the lexer's SELF
+collapsing and `oracle._collapse_self_references` on the static-line path — read
+the word as the card naming itself, giving "each other attacking **this
+creature**": a set of one permanent that excludes itself, therefore always
+empty, therefore a pump that always resolves for +0/+0 on a card reporting
+itself supported. Both readers now leave the name alone in a *type position* (a
+determiner or an adjective in front of it) and collapse it everywhere else,
+which keeps Lhurgoyf's, Nightmare's and Shapeshifter's possessive
+self-references working — the three other cards in the pool whose names are
+creature types.
+
+Also this round: a "for each" pump *with a duration* on the ability's own
+source (Aurochs' trigger) lowers to the same `pump_self` the where-clause form
+already uses. "+X/+0, where X is the number of …" and "+1/+0 for each …" are one
+amount with two spellings, and `resolve_amount`'s `times_x` is where the
+printed repetition size already lived.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

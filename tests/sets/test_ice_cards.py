@@ -725,3 +725,64 @@ def test_icequake_damages_the_controller_only_for_a_snow_land(set_pool):
     _game, p1, p2, plain = _cast_land_destroyer(set_pool, "Icequake", "Swamp")
     assert plain not in p2.battlefield
     assert p2.life == 20
+
+
+# --- Round 12: a counted amount, and a name that is also a creature type ---
+
+
+def test_songs_of_the_damned_counts_a_graveyard(set_pool):
+    """"Add {B} for each creature card **in your graveyard**."
+
+    The mana multiplier was hardwired to the battlefield. The evaluator behind
+    it already reads a zone off its spec; what was missing was carrying the one
+    the phrase named — and a card in a zone has no computed characteristics
+    (CR 613.1), so the narrowing is held to what a *card* can answer.
+    """
+    pool = set_pool("ICE")
+    p1 = PlayerState(
+        name="P1", hand=[pool["Songs of the Damned"]],
+        graveyard=[pool["Balduvian Bears"], pool["Moor Fiend"], pool["Icequake"]],
+        life=20,
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(0, "Songs of the Damned")
+    game._settle()
+
+    # Two creature cards; Icequake is a sorcery and does not count.
+    assert p1.mana_pool["B"] == 2
+
+
+def test_aurochs_counts_the_creature_type_not_itself(set_pool):
+    """"Whenever this creature attacks, it gets +1/+0 until end of turn for each
+    other attacking **Aurochs**."
+
+    The word is the creature type, and the card is named after it. Both
+    self-reference readers — the lexer's SELF collapsing and the static-line
+    path's — turned it into "each other attacking **this creature**": a set of
+    one permanent that excludes itself, so always empty, so a pump that always
+    resolves for +0/+0 while the card reports supported.
+    """
+    pool = set_pool("ICE")
+    program = compile_card_oracle(pool["Aurochs"])
+    assert program.supported
+
+    trigger = program.triggered_abilities[0]
+    assert trigger.condition.kind == "creature_attacks"
+    counted = trigger.instruction.payload["x_from_count"]["filter"]
+    assert counted["subtype_filter"] == "aurochs"
+    assert counted["exclude_self"] is True
+
+
+def test_a_name_that_is_a_creature_type_still_collapses_in_self_position(set_pool):
+    """The other half, and the half that must not break: Lhurgoyf's name is a
+    creature type too, and "Lhurgoyf's power is equal to…" is the card naming
+    itself (CR 201.4). Only a *type position* is left alone."""
+    from engine.oracle import _restriction_line
+
+    assert _restriction_line(
+        "Lhurgoyf's power is equal to the number of creature cards in all "
+        "graveyards.", "Lhurgoyf",
+    ).startswith("this creature's power")
+    assert compile_card_oracle(set_pool("ICE")["Lhurgoyf"]).supported
