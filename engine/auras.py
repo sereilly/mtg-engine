@@ -1174,6 +1174,19 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
         "must_be_blocked_by_all_able",
     ),
     (
+        # "Enchanted creature gets +3/+0 and **can only attack alone**."
+        # (Errantry.) CR 506.5's "attacking alone", read as a restriction on the
+        # *declaration*: the creature may attack only in a declaration where it
+        # is the sole attacker. The P/T half is `aura_static_pt_grant`'s, which
+        # is why the prefix is optional here — the same split `_KEYWORD_GRANT`
+        # makes.
+        re.compile(
+            rf"^{_ATTACHED} {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? "
+            r"can only attack alone$"
+        ),
+        "can_only_attack_alone",
+    ),
+    (
         re.compile(
             rf"^{_ATTACHED} {_NOUN} doesn't untap during its controller's untap step$"
         ),

@@ -135,6 +135,15 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     ),
     (re.compile(r"^this creature can't attack$"), "cant_attack"),
     (
+        # "This creature can only attack alone." CR 506.5, as a restriction on
+        # the *declaration* rather than on the creature: it may attack only
+        # where it is the sole attacker. Printed on a creature here and on an
+        # Aura in `engine/auras.py`'s restriction table, both read by the same
+        # check in the declare-attackers step.
+        re.compile(r"^this creature can only attack alone$"),
+        "can_only_attack_alone",
+    ),
+    (
         # "Except for creatures named Akron Legionnaire and artifact creatures,
         # creatures you control can't attack." A restriction printed on one
         # permanent that reaches every creature its controller has, so it is

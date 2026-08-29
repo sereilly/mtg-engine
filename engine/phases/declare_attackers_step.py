@@ -151,6 +151,20 @@ class DeclareAttackersStepMixin:
             ):
                 return False, f"{attacker.card.name} cannot attack"
 
+        # "…**can only attack alone**." (Errantry.) CR 506.5 read as a
+        # restriction on the declaration: the creature may attack only where it
+        # is the sole attacker. It cannot live in `can_attack`, which is a
+        # per-creature predicate with no way to say "and nobody else" — the same
+        # reason the attack cap above is checked over the set.
+        #
+        # Asked of the collected `Permanent` objects rather than by re-reading
+        # the battlefield by index: an index is unstable and this loop has the
+        # objects already.
+        if len(declared_attackers) > 1:
+            for lone in declared_attackers:
+                if self._can_only_attack_alone(lone):
+                    return False, f"{lone.card.name} can only attack alone"
+
         # CR 702.22c: validate any declared attacking bands before committing.
         validated_bands, band_error = self._validate_attacking_bands(
             bands, unique_indices, controller
@@ -744,6 +758,19 @@ class DeclareAttackersStepMixin:
             return True
         program = compile_card_oracle(attacker.effective_card)
         return any(i.kind == "must_attack_each_combat" for i in program.instructions)
+
+    def _can_only_attack_alone(self, attacker: Permanent) -> bool:
+        """CR 506.5 — whether *attacker* may attack only as the sole attacker.
+
+        Printed on the creature (a `combat_restrictions` row) or granted by an
+        Aura (Errantry), and read through the same two seams every other combat
+        restriction here goes through, so neither spelling is enforced without
+        the other.
+        """
+        if aura_restriction_active(attacker, "can_only_attack_alone"):
+            return True
+        program = compile_card_oracle(attacker.effective_card)
+        return any(i.kind == "can_only_attack_alone" for i in program.instructions)
 
     def _fire_attack_triggers(self, controller_index: int) -> None:
         """Put "whenever one or more creatures you control attack" triggers on the stack.

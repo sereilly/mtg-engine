@@ -854,3 +854,57 @@ def test_portent_offers_the_shuffle_and_elemental_augury_does_not(set_pool):
 
     assert _reorder("Portent").payload["may_shuffle"] is True
     assert _reorder("Elemental Augury").payload["may_shuffle"] is False
+
+
+# --- Round 15: two Aura effect lines with a P/T half in front ---
+
+
+def test_spectral_shield_grants_toughness_and_target_immunity(set_pool):
+    """"Enchanted creature gets +0/+2 **and** can't be the target of spells."
+
+    Two effects on one line, owned by two readers: the P/T grant is
+    `aura_static_pt_grant`'s and the immunity is `target_immunity`'s. The
+    immunity reader could not see past the P/T half, so the whole line went
+    unclaimed — the same split `_KEYWORD_GRANT` already makes with its optional
+    "gets ±N/±N and" prefix, and made in the one place both the support gate and
+    the runtime reader go through.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    shield = Permanent(card=pool["Spectral Shield"])
+    p1 = PlayerState(name="P1", battlefield=[bear, shield], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    attach_aura(shield, bear)
+    game._settle()
+
+    assert (bear.effective_power, bear.effective_toughness) == (2, 4)
+    assert not game._can_be_targeted(bear, 1)
+
+
+def test_errantry_lets_its_creature_attack_only_alone(set_pool):
+    """"Enchanted creature gets +3/+0 and **can only attack alone**." CR 506.5,
+    read as a restriction on the *declaration* — a per-creature predicate has no
+    way to say "and nobody else", which is why the attack cap beside it is
+    checked over the declared set too."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    lone = Permanent(card=pool["Balduvian Bears"])
+    friend = Permanent(card=pool["Balduvian Barbarians"])
+    errantry = Permanent(card=pool["Errantry"])
+    p1 = PlayerState(name="P1", battlefield=[lone, friend, errantry], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    attach_aura(errantry, lone)
+    game._settle()
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+
+    assert (lone.effective_power, lone.effective_toughness) == (5, 2)
+    ok, message = game.declare_attackers(0, [0, 1])
+    assert not ok and "alone" in message
+    assert game.declare_attackers(0, [0])[0], "alone is legal"

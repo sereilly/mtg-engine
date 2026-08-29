@@ -1102,6 +1102,24 @@ asserted Natural Selection's line was **unparseable**, which was true while it
 was a hook and is exactly the wrong probe for a production. Its point — "look
 at" must consume its object — is kept with a line that has no object at all.
 
+**Round 15 — two Aura lines with a P/T half in front. 243 → 245.**
+
+Spectral Shield ("gets +0/+2 **and** can't be the target of spells") and
+Errantry ("gets +3/+0 and **can only attack alone**"). Both are two effects on
+one printed line owned by two different readers, and in both cases the second
+reader could not see past the first: `auras._KEYWORD_GRANT` has carried an
+optional "gets ±N/±N and" prefix for exactly this shape, and the immunity and
+restriction tables had not. The prefix is stripped in the one place the support
+gate and the runtime reader share, because a prefix stripped in only one of
+them is a card that compiles supported and protects nobody.
+
+"Can only attack alone" is CR 506.5 as a restriction on the **declaration**
+rather than on the creature — a per-creature predicate has no way to say "and
+nobody else", which is the same reason the attack cap beside it is checked over
+the declared set. It is read from the Aura table *and* from a
+`combat_restrictions` row, so the printed-on-a-creature spelling cannot be
+enforced without the granted one.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

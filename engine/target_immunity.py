@@ -162,6 +162,10 @@ def _subject_of(who: str) -> str:
     return ATTACHED_SUBJECT if who.startswith("enchanted") else SELF_SUBJECT
 
 
+#: "<subject> gets +0/+2 and <restriction>" — the P/T half another reader owns.
+_PT_PREFIX = re.compile(r"^(.+?) gets [+-]\d+/[+-]\d+ and ")
+
+
 def _clauses(line: str) -> list[str]:
     """One printed line split into the restrictions it conjoins.
 
@@ -174,6 +178,16 @@ def _clauses(line: str) -> list[str]:
     text = line.strip().rstrip(".").lower()
     if not text:
         return []
+    # "Enchanted creature **gets +0/+2 and** can't be the target of spells"
+    # (Spectral Shield). The P/T half belongs to `auras.aura_static_pt_grant`
+    # and is read there; dropped here, what is left is the restriction this file
+    # implements, printed exactly as every other card prints it.
+    #
+    # The same split `auras._KEYWORD_GRANT` makes with its optional "gets
+    # ±N/±N and" prefix, and in the one place both the support gate and the
+    # runtime reader go through — a prefix stripped in only one of them is a
+    # card that compiles supported and protects nobody.
+    text = _PT_PREFIX.sub(lambda m: m.group(1) + " ", text)
     head, sep, tail = text.partition(" and can't ")
     if not sep:
         return [text]
