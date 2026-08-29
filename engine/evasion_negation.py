@@ -35,6 +35,8 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
+from .landwalk import LANDWALK
+
 #: The evasion abilities this file can switch off. Landwalk only, and
 #: deliberately: the enforcement site above is the landwalk check, so a word
 #: admitted here that it does not read would be a line the gate accepts and
@@ -49,19 +51,51 @@ _TEMPLATE = re.compile(
     rf"as though they didn't have (?P<repeat>{'|'.join(_NEGATABLE)})$"
 )
 
+#: The same sentence naming the **family** rather than one member: "Creatures
+#: with landwalk abilities can be blocked as though they didn't have those
+#: abilities." (Staff of the Ages.) CR 702.14a makes landwalk a family of
+#: "[type]walk" abilities, so a card naming it names every one — which is what
+#: ``vocabulary.KEYWORD_FAMILIES`` already derives from the registry. The two
+#: halves must agree here too: the second says "those abilities", the
+#: back-reference to the family the first named, and any other word would be a
+#: sentence this has never seen.
+_FAMILY_TEMPLATE = re.compile(
+    r"^creatures with landwalk abilities can be blocked as though they "
+    r"didn't have those abilities$"
+)
 
-def evasion_negation_for(line: str) -> str | None:
-    """The evasion keyword one printed *line* switches off for blocking, or None.
 
-    The printed sentence names the keyword twice and both halves must agree: a
-    card reading "creatures with islandwalk can be blocked as though they
+def evasion_negation_for(line: str) -> frozenset[str] | None:
+    """The evasion keywords one printed *line* switches off for blocking, or None.
+
+    A **set**, because one sentence may name the whole family: Staff of the Ages
+    says "landwalk abilities … those abilities", and CR 702.14a makes that every
+    "[type]walk" there is. Answering with one of them would leave the rest
+    silently enforced on a card reporting itself supported.
+
+    The single-keyword form names its keyword twice and both halves must agree:
+    a card reading "creatures with islandwalk can be blocked as though they
     didn't have swampwalk" is not a card this file has ever seen, and matching
-    it on the first half alone would silently negate the wrong ability.
+    it on the first half alone would negate the wrong ability.
     """
-    match = _TEMPLATE.match(_normalize(line))
+    text = _normalize(line)
+    if _FAMILY_TEMPLATE.match(text) is not None:
+        # The **family word** rather than a list of its members, because the
+        # members are open: CR 702.14a builds a landwalk's name out of a printed
+        # quality, so "snow forestwalk" is one and no list of words can hold
+        # every one there will be. The enforcement site asks
+        # ``landwalk_requirement`` whether an ability is a landwalk at all,
+        # which is the same reader that decides the restriction exists — so the
+        # negation covers exactly what the restriction covers.
+        #
+        # Enumerating the five basics here is what the first version did, and it
+        # left Rime Dryad's snow forestwalk enforced against a Staff of the Ages
+        # that says it is not.
+        return frozenset({LANDWALK})
+    match = _TEMPLATE.match(text)
     if match is None or match.group("keyword") != match.group("repeat"):
         return None
-    return match.group("keyword")
+    return frozenset({match.group("keyword")})
 
 
 def _normalize(line: str) -> str:
@@ -81,11 +115,12 @@ def negated_evasion_abilities(oracle_text: str) -> frozenset[str]:
     """
     if "as though" not in oracle_text.lower():
         return frozenset()
-    return frozenset(
-        keyword
-        for line in oracle_text.splitlines()
-        if (keyword := evasion_negation_for(line)) is not None
-    )
+    negated: set[str] = set()
+    for line in oracle_text.splitlines():
+        keywords = evasion_negation_for(line)
+        if keywords is not None:
+            negated.update(keywords)
+    return frozenset(negated)
 
 
 __all__ = [

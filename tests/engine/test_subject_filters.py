@@ -74,6 +74,12 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     # CR 205.4a. Read off the type line, which for a supertype is the whole of
     # what there is — nothing in layers 4-6 computes one.
     ("supertypes", {"supertypes": ["legendary"]}, "Grizzly Bears"),
+    # "target **nonsnow** land" (Hallowed Ground). The negative of the row
+    # above, off the same type line. The rejected permanent has to *carry* the
+    # excluded supertype and still answer this table's creature control, so it
+    # is a legendary creature — "nonlegendary" is the same sentence one
+    # supertype over from the one Ice Age prints.
+    ("exclude_supertypes", {"exclude_supertypes": ["legendary"]}, "Adun Oakenshield"),
     # CR 508.1a: attacking is a state of the permanent itself, stamped at
     # declaration — a bear standing outside combat is not attacking, and a
     # matcher that ignored the key would untap it anyway (Disharmony).

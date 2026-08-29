@@ -89,7 +89,8 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # a relation no payload key carries.
     "was_dealt_damage_this_turn",
     "nontoken", "named", "their_choice", "mana_value", "power", "toughness",
-    "colored", "with_plus1_counter", "supertypes", "not_enchanted",
+    "colored", "with_plus1_counter", "supertypes", "excluded_supertypes",
+    "not_enchanted",
     "enchanted_only",
     "attached_to_filter",
     # "target permanent you both **own** and control" (Obelisk of Undoing) /

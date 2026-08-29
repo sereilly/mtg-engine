@@ -938,3 +938,72 @@ def test_soul_barrier_offers_the_pay_to_the_caster_not_its_controller(set_pool):
     assert offers[0].player_index == 1, "the spell's caster is offered the cost"
     assert offers[0].data["cost"] == {"generic": 2}
     assert offers[0].data["damage"] == 2
+
+
+# --- Round 17: a keyword family named whole, and a negated supertype ---
+
+
+def test_staff_of_the_ages_switches_off_every_landwalk(set_pool):
+    """"Creatures with **landwalk abilities** can be blocked as though they
+    didn't have **those abilities**."
+
+    The evasion-negation table read one keyword per sentence. CR 702.14a makes
+    landwalk a *family* whose members are **open** — the ability's name is built
+    from a printed quality, so "snow forestwalk" is one — which is why the
+    negation carries the family word rather than a list of members. Enumerating
+    the five basics was the first attempt, and it left Rime Dryad's snow
+    forestwalk enforced against a Staff that says it is not.
+    """
+    from engine.evasion_negation import evasion_negation_for
+    from engine.landwalk import LANDWALK
+
+    assert evasion_negation_for(
+        "creatures with landwalk abilities can be blocked as though they "
+        "didn't have those abilities"
+    ) == frozenset({LANDWALK})
+    assert compile_card_oracle(set_pool("ICE")["Staff of the Ages"]).supported
+
+
+def test_staff_of_the_ages_lets_a_forestwalker_be_blocked(set_pool):
+    """Run in real combat: with a Forest out, forestwalk normally forbids the
+    block, and the Staff lifts the restriction (CR 509.1b) without removing the
+    keyword."""
+    pool = set_pool("ICE")
+
+    def _blocks(with_staff: bool) -> bool:
+        walker = Permanent(card=pool["Rime Dryad"])  # snow forestwalk
+        blocker = Permanent(card=pool["Balduvian Bears"])
+        snow = Permanent(card=pool["Snow-Covered Forest"])
+        theirs = [blocker, snow]
+        if with_staff:
+            theirs.append(Permanent(card=pool["Staff of the Ages"]))
+        p1 = PlayerState(name="P1", battlefield=[walker], life=20)
+        p2 = PlayerState(name="P2", battlefield=theirs, life=20)
+        game = Game(players=[p1, p2])
+        _combat(game, [0])
+        return game.declare_blockers(1, {0: 0})[0]
+
+    assert not _blocks(with_staff=False)
+    assert _blocks(with_staff=True)
+
+
+def test_hallowed_ground_returns_only_a_nonsnow_land(set_pool):
+    """"Return target **nonsnow** land you control to its owner's hand." A
+    negated supertype (CR 205.4), which no layer computes — the matcher reads
+    it off the effective type line, exactly as it reads the positive key."""
+    pool = set_pool("ICE")
+    program = compile_card_oracle(pool["Hallowed Ground"])
+    assert program.supported
+
+    ability = program.activated_abilities[0]
+    described = ability.instruction.payload["filter"]
+    assert described["exclude_supertypes"] == ["snow"]
+
+    from engine.subject_filters import subject_matches
+
+    plain = Permanent(card=pool["Forest"])
+    snowy = Permanent(card=pool["Snow-Covered Forest"])
+    p1 = PlayerState(name="P1", battlefield=[plain, snowy], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    assert subject_matches(game, plain, described, observer=0)
+    assert not subject_matches(game, snowy, described, observer=0)

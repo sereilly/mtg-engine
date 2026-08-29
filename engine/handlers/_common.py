@@ -473,9 +473,12 @@ def _card_matches_filter(card, filt: dict) -> bool:
     # "Discard a **legendary** card" (Niambi, Esteemed Speaker). Off the printed
     # line, which for a card in a zone is the whole of what there is (CR 613.1).
     wanted_supertypes = filt.get("supertypes") or ()
-    if wanted_supertypes:
+    excluded_supertypes = filt.get("exclude_supertypes") or ()
+    if wanted_supertypes or excluded_supertypes:
         held = printed_supertypes(card.type_line)
         if not all(word in held for word in wanted_supertypes):
+            return False
+        if any(word in held for word in excluded_supertypes):
             return False
     # "creature cards **with mana value 3 or less**" (Idol of Endurance). Mana
     # value is one of the few characteristics a card has *everywhere* — CR 202.3
@@ -881,9 +884,16 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # a text change (layer 3). ``perm.card`` would be the printed face and would
     # miss both.
     wanted_supertypes = payload.get("supertypes") or ()
-    if wanted_supertypes:
+    excluded_supertypes = payload.get("exclude_supertypes") or ()
+    if wanted_supertypes or excluded_supertypes:
         held = printed_supertypes(perm.effective_card.type_line)
         if not all(word in held for word in wanted_supertypes):
+            return False
+        # "target **nonsnow** land" (Hallowed Ground). The negative of the key
+        # above, off the same line and for the same reason: no layer computes a
+        # supertype, so what the permanent *effectively* says is the whole
+        # answer.
+        if any(word in held for word in excluded_supertypes):
             return False
     # "nontoken permanent" (Lich). CR 111.1: not a card type, so it is its own
     # key rather than an ``exclude_types`` entry.

@@ -1140,6 +1140,26 @@ that is one family in two files). Only three functions are unreachable from
 `_lower_damage` and they total ~100 lines and share no subject. The real
 boundary, when someone needs it, is inside `_lower_damage` itself.
 
+**Round 17 — a keyword family named whole, and a negated supertype. 247 → 249.**
+
+Staff of the Ages says "Creatures with **landwalk abilities** can be blocked as
+though they didn't have **those abilities**" — the family rather than one
+member, and the evasion-negation table read exactly one keyword per sentence.
+
+**The members are open, and that is the whole finding.** The first fix
+enumerated the five basic landwalks out of `KEYWORD_FAMILIES`, which is the
+right instinct and the wrong set: CR 702.14a builds a landwalk's name out of a
+printed *quality*, so "snow forestwalk" is a landwalk and no list of words can
+hold every one there will be. The negation carries the family **word**, and the
+enforcement site asks `landwalk_requirement` — the same reader that decides the
+restriction exists in the first place, so the negation covers exactly what the
+restriction covers. Rime Dryad blocked through a Staff that said it could not
+until that changed.
+
+Hallowed Ground's "target **nonsnow** land" is the smaller half: a negated
+supertype (CR 205.4), the mirror of the `supertypes` key and answered off the
+same effective type line, since no layer computes one.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

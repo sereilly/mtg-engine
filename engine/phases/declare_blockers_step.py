@@ -15,7 +15,7 @@ import re
 from ..auras import attached_combat_restrictions, aura_restriction_active
 from ..combat_restrictions import participation_cap
 from ..evasion_negation import negated_evasion_abilities
-from ..landwalk import land_satisfies, landwalk_requirement
+from ..landwalk import LANDWALK, land_satisfies, landwalk_requirement
 from ..layer_bridge import computed_abilities
 from ..subject_filters import subject_matches
 from ..models import Permanent
@@ -660,7 +660,12 @@ class DeclareBlockersStepMixin:
             # creates, nothing more. `_has_keyword` still answers True
             # everywhere else, which is why the skip lives here rather than as a
             # layer-6 removal.
-            if ability in negated:
+            # A named ability ("islandwalk") or the whole family, which is what
+            # "creatures with **landwalk abilities**" negates (Staff of the
+            # Ages). The family marker covers a *qualified* landwalk too — "snow
+            # forestwalk" is a landwalk, and `requirement` is not None precisely
+            # because it is one.
+            if ability in negated or LANDWALK in negated:
                 continue
             for perm in self.controlled_by(defender_index):
                 if land_satisfies(perm, requirement):

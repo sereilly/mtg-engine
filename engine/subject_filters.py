@@ -54,6 +54,10 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     "tapped_only", "untapped_only",
     "mana_value", "power", "toughness", "with_plus1_counter",
     "nontoken", "named", "supertypes",
+    # "target **nonsnow** land" (Hallowed Ground). The negative of
+    # ``supertypes``, answered off the same effective type line — testable for
+    # exactly the reason the positive is.
+    "exclude_supertypes",
     # "permanents **of the chosen color**" (Psychic Allergy). A colour the
     # source recorded as it entered (CR 614.1c) — so it needs the ability's
     # source, like ``exclude_self``, and is resolved into the ordinary colour
@@ -161,7 +165,8 @@ def untestable_filter_keys(
 #: that a card *can*: it is printed on the face, in the same words, and nothing
 #: could have changed it.
 CARD_ONLY_FILTER_KEYS = frozenset(
-    {"type_filter", "subtype_filter", "named", "supertypes", "mana_value",
+    {"type_filter", "subtype_filter", "named", "supertypes",
+     "exclude_supertypes", "mana_value",
      # "…discards all **nonland** cards" (Amnesia). The negative of
      # ``type_filter`` and answered the same way — off the printed type line,
      # which for a card in a zone is the whole of what there is (CR 613.1) — so

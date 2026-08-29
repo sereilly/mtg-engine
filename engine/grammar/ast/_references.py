@@ -71,7 +71,12 @@ class ObjectFilter:
     colors: tuple[str, ...] = ()              # mana symbols: "W", "U", ...
     excluded_colors: tuple[str, ...] = ()     # "nonblack"
     excluded_types: tuple[str, ...] = ()      # "nonartifact"
-    excluded_subtypes: tuple[str, ...] = ()   # "non-Wall"
+    excluded_subtypes: tuple[str, ...] = ()
+    #: "**nonsnow** land" (Hallowed Ground). A negated supertype (CR 205.4). No
+    #: layer computes a supertype, so the matcher reads it off the effective
+    #: type line — the negative of the ``supertypes`` key above and answered by
+    #: the same reader.
+    excluded_supertypes: tuple[str, ...] = ()   # "non-Wall"
     with_keywords: tuple[str, ...] = ()       # "with flying"
     without_keywords: tuple[str, ...] = ()    # "without flying"
     controller: str | None = None             # "you" | "opponent" | "that_player"
@@ -503,6 +508,8 @@ class ObjectFilter:
         # thing being fixed.
         if self.supertypes and set(self.supertypes) <= TYPE_LINE_SUPERTYPES:
             payload["supertypes"] = list(self.supertypes)
+        if self.excluded_supertypes:
+            payload["exclude_supertypes"] = list(self.excluded_supertypes)
         return payload
 
 

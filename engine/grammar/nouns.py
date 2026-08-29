@@ -40,6 +40,7 @@ from .vocabulary import (
     KEYWORD_INDEX,
     SUBTYPE_INDEX,
     SUPERTYPES,
+    TYPE_LINE_SUPERTYPES,
     match_longest,
 )
 
@@ -155,6 +156,7 @@ class _FilterDraft:
     excluded_colors: list[str] = field(default_factory=list)
     excluded_types: list[str] = field(default_factory=list)
     excluded_subtypes: list[str] = field(default_factory=list)
+    excluded_supertypes: list[str] = field(default_factory=list)
     with_keywords: list[str] = field(default_factory=list)
     without_keywords: list[str] = field(default_factory=list)
     controller: str | None = None
@@ -305,6 +307,17 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 continue
             if body in ALL_SUBTYPES:
                 d.excluded_subtypes.append(body)
+                stream.advance()
+                continue
+            # "**nonsnow** land" (Hallowed Ground), "**nonbasic** land". A
+            # negated *supertype* (CR 205.4), which no layer computes — the
+            # matcher reads it off the effective type line, exactly as it reads
+            # the positive `supertypes` key. Its own field for the reason the
+            # excluded type and subtype above have theirs: three different
+            # readers answer them, and folding a supertype into either would ask
+            # `has_type` a question the type system does not answer.
+            if body in TYPE_LINE_SUPERTYPES:
+                d.excluded_supertypes.append(body)
                 stream.advance()
                 continue
             # "nontoken" (Lich, Gadrak, Chrome Replicator). CR 111.1: a token is
@@ -618,6 +631,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         excluded_colors=tuple(d.excluded_colors),
         excluded_types=tuple(d.excluded_types),
         excluded_subtypes=tuple(d.excluded_subtypes),
+        excluded_supertypes=tuple(d.excluded_supertypes),
         with_keywords=tuple(d.with_keywords),
         without_keywords=tuple(d.without_keywords),
         not_ability_targeted_by_same_name=d.not_ability_targeted_by_same_name,
