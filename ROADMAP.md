@@ -1160,6 +1160,18 @@ Hallowed Ground's "target **nonsnow** land" is the smaller half: a negated
 supertype (CR 205.4), the mirror of the `supertypes` key and answered off the
 same effective type line, since no layer computes one.
 
+**Round 18 — "enters with X <kind> counters", with the kind as data. 249 → 250.**
+
+`enter_effects.py`'s own comment already told this story about the *printed*
+count: "the two constants above were literal sentences, so Clockwork Beast's
+seven worked and Triskelion's three did not, for no reason anyone had decided."
+The **X** form was still one of those literals, naming +1/+1 — so Rock Hydra
+worked and Balduvian Hydra, printing the identical template one counter kind
+over, was unsupported. It is a pattern now, with the kind read off the line
+exactly as its printed-count sibling reads it, and the literal is retired. What
+still separates the two is the count, which is the announced X (CR 601.2b) and
+not a printed number — read from a different place at a different time.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

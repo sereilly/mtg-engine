@@ -13,7 +13,7 @@ from ..enter_effects import (
     COPY_ARTIFACT_ON_ENTER,
     COPY_CREATURE_ON_ENTER,
     ENTERS_TAPPED,
-    ENTERS_WITH_X_PLUS_1_1_COUNTERS,
+    enters_with_x_pt_counters,
     choose_number_on_enter,
     pay_any_life_on_enter,
     enters_with_pt_counters,
@@ -592,16 +592,33 @@ class PermanentStateMixin:
                 permanent.toughness_bonus += count
                 permanent.metadata["plus_0_1_counters"] = count
 
-        # enters with X +1/+1 counters (Rock Hydra) — recorded as counters, not
-        # a bare bonus, so the 704.5q sweep, the card face and any "with a
-        # +1/+1 counter on it" restriction all see them.
-        if any(ENTERS_WITH_X_PLUS_1_1_COUNTERS == line for line in program.static_lines) or ENTERS_WITH_X_PLUS_1_1_COUNTERS in text:
+        # "…enters with **X** <kind> counters on it" (Rock Hydra's +1/+1,
+        # Balduvian Hydra's +1/+0). The count is the announced X rather than a
+        # printed number, which is what separates it from the loop above; the
+        # counter kind is read off the line there and here alike, so the two
+        # Hydras are one rule. It was a literal sentence naming +1/+1, and
+        # Balduvian Hydra printing the identical template one kind over was
+        # unsupported for it.
+        for raw_line in entry_lines:
+            kind = enters_with_x_pt_counters(
+                raw_line, permanent.effective_card.name
+            )
+            if kind is None:
+                continue
             x_value = permanent.metadata.get("cast_x_value")
-            if isinstance(x_value, int) and x_value > 0:
+            if not isinstance(x_value, int) or x_value <= 0:
+                continue
+            if kind == "+1/+1":
                 # Through the seam: entering with counters is a counter
                 # placement like any other, so a Conclave Mentor raises it
                 # (CR 614.1c's replacement applies as the permanent enters).
                 self.place_plus1_counters(permanent, x_value)
+            elif kind == "+1/+0":
+                permanent.power_bonus += x_value
+                permanent.metadata["plus_1_0_counters"] = x_value
+            else:
+                permanent.toughness_bonus += x_value
+                permanent.metadata["plus_0_1_counters"] = x_value
 
         # copy-as-enter creature
         if any(COPY_CREATURE_ON_ENTER == line for line in program.static_lines) or COPY_CREATURE_ON_ENTER in text:

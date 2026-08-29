@@ -60,10 +60,8 @@ CHOOSE_COLOR_ON_ENTER = "as this enchantment enters, choose a color"
 # chooser can see rather than one derived from the battlefield.
 CHOOSE_CARD_NAME_ON_ENTER = "as this enchantment enters, choose a card name"
 
-# "This creature enters with seven +1/+0 counters on it." (Clockwork Beast) and
-# "… with X +1/+1 counters on it." (Rock Hydra).
+# "This creature enters with seven +1/+0 counters on it." (Clockwork Beast.)
 ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS = "enters with seven +1/+0 counters on it"
-ENTERS_WITH_X_PLUS_1_1_COUNTERS = "enters with x +1/+1 counters on it"
 
 #: "This creature enters with **three +1/+1** counters on it." (Triskelion,
 #: Tetravus) / "…**four +1/+0**…" (Clockwork Avian) / "…**seven +1/+0**…"
@@ -79,6 +77,29 @@ ENTERS_WITH_PT_COUNTERS = re.compile(
     r"^this [a-z]+ enters with (?P<count>[a-z]+) "
     r"(?P<counter>\+1/\+1|\+1/\+0|\+0/\+1) counters on it$"
 )
+
+
+#: The **X** form of the sentence above: "…enters with X +1/+1 counters on it"
+#: (Rock Hydra) / "…X +1/+0 counters…" (Balduvian Hydra). Its own pattern
+#: because the count is not printed at all — it is the value announced when the
+#: spell was cast, read from a different place at a different time — but the
+#: *counter kind* is data here exactly as it is above. It was a literal
+#: sentence naming +1/+1, which is why Rock Hydra worked and Balduvian Hydra,
+#: printing the identical template one counter kind over, did not.
+ENTERS_WITH_X_PT_COUNTERS = re.compile(
+    r"^this [a-z]+ enters with x "
+    r"(?P<counter>\+1/\+1|\+1/\+0|\+0/\+1) counters on it$"
+)
+
+
+def enters_with_x_pt_counters(line: str, card_name: str | None = None) -> str | None:
+    """The counter kind an "enters with X … counters" line places, or None.
+
+    Read by the entry state and by the support gate, like its printed-count
+    sibling, so what is placed and what is claimed cannot drift.
+    """
+    match = ENTERS_WITH_X_PT_COUNTERS.match(_self_normalized(line, card_name))
+    return match.group("counter") if match is not None else None
 
 
 def enters_with_pt_counters(line: str, card_name: str | None = None) -> tuple[int, str] | None:
@@ -478,7 +499,6 @@ _ENTRY_LINES: tuple[tuple[str, str], ...] = (
     (CHOOSE_COLOR_AND_OPPONENT_ON_ENTER, ""),
     (CHOOSE_COLOR_ON_ENTER, ""),
     (CHOOSE_CARD_NAME_ON_ENTER, ""),
-    (ENTERS_WITH_X_PLUS_1_1_COUNTERS, ""),
     (COPY_CREATURE_ON_ENTER, ""),
     # CR 707.9b — the mixin builds the copied type line with "Enchantment"
     # added when the copied artifact is not already one, which is exactly what
@@ -565,6 +585,8 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "enters with named counters"
     if enters_with_pt_counters(normalized) is not None:
         return "enters with P/T counters"
+    if enters_with_x_pt_counters(normalized) is not None:
+        return "enters with X P/T counters"
     if choose_number_on_enter(normalized) is not None:
         return "chooses a number as it enters"
     if sacrifice_any_number_on_enter(normalized) is not None:
@@ -594,7 +616,8 @@ __all__ = [
     "ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS",
     "enters_with_pt_counters",
     "enters_with_named_counter",
-    "ENTERS_WITH_X_PLUS_1_1_COUNTERS",
+    "ENTERS_WITH_X_PT_COUNTERS",
+    "enters_with_x_pt_counters",
     "EXILE_CARDS_ON_ENTER",
     "exile_cards_on_enter",
     "entry_exile_requirement",

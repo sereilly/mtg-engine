@@ -64,7 +64,7 @@ IMPLEMENTED_ELSEWHERE: dict[str, str] = {
     "this creature enters with seven +1/+0 counters":
         "enter_effects.ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS",
     "this creature enters with x +1/+1 counters":
-        "enter_effects.ENTERS_WITH_X_PLUS_1_1_COUNTERS",
+        "enter_effects.enters_with_x_pt_counters",
     "you may have this creature enter as a copy":
         "enter_effects.COPY_CREATURE_ON_ENTER (Clone, Vesuvan Doppelganger)",
     "as long as this creature is untapped, noncreature artifacts":

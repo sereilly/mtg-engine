@@ -1007,3 +1007,28 @@ def test_hallowed_ground_returns_only_a_nonsnow_land(set_pool):
     game = Game(players=[p1, PlayerState(name="P2", life=20)])
     assert subject_matches(game, plain, described, observer=0)
     assert not subject_matches(game, snowy, described, observer=0)
+
+
+# --- Round 18: "enters with X <kind> counters", with the kind as data ---
+
+
+def test_balduvian_hydra_enters_with_x_plus_one_zero_counters(set_pool):
+    """"This creature enters with X **+1/+0** counters on it."
+
+    The printed-count form reads its counter kind off the line; the X form was
+    a literal sentence naming +1/+1, so Rock Hydra worked and this card —
+    printing the identical template one counter kind over — did not. The count
+    is still what separates them: it is the announced X (CR 601.2b), not a
+    printed number.
+    """
+    pool = set_pool("ICE")
+    p1 = PlayerState(name="P1", hand=[pool["Balduvian Hydra"]], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(0, "Balduvian Hydra", x_value=3)
+    game._settle()
+
+    hydra = p1.battlefield[0]
+    assert (hydra.effective_power, hydra.effective_toughness) == (3, 1)
+    assert hydra.metadata["plus_1_0_counters"] == 3
