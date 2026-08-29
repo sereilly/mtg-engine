@@ -837,6 +837,35 @@ living outside the convention — defaulted onto the instance mid-parse rather
 than declared — which is two conventions for "a field of the draft" and one too
 many. They are declared now.
 
+**Round 5 — the Aura keyword-grant vocabulary was a second copy. 220 → 222.**
+
+Two cards (Wings of Aesthir, Imposing Visage) and one architectural finding
+worth more than either.
+
+`auras._GRANTABLE_KEYWORDS` was a hand-written tuple beside
+`vocabulary.IMPLEMENTED_KEYWORDS`, and it had **drifted in both directions** —
+which is what a second copy of one fact always does, and both directions are
+wrong in a way nothing catches. It listed `shadow`, which this engine does not
+implement anywhere, so an Aura granting it would have been *admitted*, entered
+play and given its host an evasion ability that does nothing. And it omitted
+menace, lifelink, deathtouch, indestructible, flash, hexproof, prowess and
+rampage, so an Aura granting any of those was reported unsupported for a
+mechanic the engine has. It is derived now, through the same three exclusions
+`lord_buffs.grantable_keywords` makes and asserted equal to it.
+
+**Fear joined the registry** as a consequence. It was in the Aura copy and not
+in the registry, so deriving one from the other would have unshipped the card
+Fear — and the reason it was missing is the shroud story again: CR 702.36b's
+"can't be blocked except by artifact creatures and/or black creatures" has been
+enforced in the declare-blockers step, with three CR-cited tests behind it,
+since before the registry existed. Only the word was absent, and outside the
+registry the grammar refuses every printed grant of it.
+
+The second half is smaller and the same shape: the Aura keyword grant read
+**one** keyword where a card may print several ("gets +1/+0 and has flying and
+first strike"). The line matched, so an Aura giving two abilities shipped
+giving one, with nothing to say so.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

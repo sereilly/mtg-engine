@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 63.1% | 55.7% | 36.3% | 170 |
+| ICE *(measured)* | 373 | 601 | 63.1% | 56.2% | 36.3% | 170 |
 | **All (shipped)** | **2415** | **3404** | **85.7%** | **84.6%** | **52.3%** | **1541** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -62,8 +62,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | 4 | 2 | expected a destination zone after 'return' |  |
 | 4 | 4 | the self-return does not honour 'card_types' |  |
 | 4 | 3 | expected 'controller' |  |
-| 3 | 3 | static abilities need the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 2 | 2 | a destroy sweep over a source relation stays with its card hook until the probe review takes it |  |
+| 2 | 1 | conditional_static_holds evaluates no such condition on a continuous buff |  |
 
 ## Cards executing through the grammar
 

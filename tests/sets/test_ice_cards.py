@@ -384,3 +384,47 @@ def test_snow_fortress_only_reaches_creatures_attacking_its_controller(set_pool)
         for t in offered if t["kind"] == "permanent"
     }
     assert named == {"Balduvian Bears"}, named
+
+
+# --- Round 5: Aura keyword grants, from the engine's one keyword registry ---
+
+
+def test_wings_of_aesthir_grants_both_keywords_and_the_bonus(set_pool):
+    """"Enchanted creature gets +1/+0 and has flying **and first strike**."
+
+    Two keywords on one line. The grant used to read one, so a card printing
+    two would have shipped giving half of what it prints — and matched, so
+    nothing would have said so.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    wings = Permanent(card=pool["Wings of Aesthir"])
+    p1 = PlayerState(name="P1", battlefield=[bear, wings], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    attach_aura(wings, bear)
+    game._settle()
+
+    assert (bear.effective_power, bear.effective_toughness) == (3, 2)
+    assert bear.has_keyword("flying")
+    assert bear.has_keyword("first strike")
+
+
+def test_imposing_visage_grants_menace(set_pool):
+    """A keyword the engine has implemented all along and the Aura reader did
+    not list. `auras` kept a hand-written copy of the keyword registry; it is
+    derived now, so what an Aura may grant and what the engine implements are
+    one fact."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    visage = Permanent(card=pool["Imposing Visage"])
+    p1 = PlayerState(name="P1", battlefield=[bear, visage], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    attach_aura(visage, bear)
+    game._settle()
+
+    assert compile_card_oracle(visage.card).supported
+    assert bear.has_keyword("menace")

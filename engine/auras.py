@@ -1005,17 +1005,44 @@ def _line_text(raw_line: str) -> str:
 # Landwalk is included. It reaches the same layer-6 channel as every other
 # keyword, so the combat check that consumes it must read *computed* abilities
 # rather than the raw `has_<walk>` flag the imperative path used to stamp.
-_GRANTABLE_KEYWORDS = (
-    "flying", "fear", "first strike", "double strike", "trample", "vigilance",
-    "haste", "reach", "banding", "defender", "shadow", "shroud",
-    "swampwalk", "forestwalk", "islandwalk", "mountainwalk", "plainswalk",
-    "desertwalk",
-)
+# **Derived from the engine's one keyword registry, not spelled beside it.**
+# This was a hand-written tuple and it had drifted in both directions, which is
+# the standing failure mode of a second copy: it listed "shadow", which nothing
+# in this engine implements, so an Aura granting it would have been admitted
+# with the evasion silently absent; and it omitted menace, lifelink,
+# deathtouch, indestructible, flash, hexproof, prowess and rampage, so an Aura
+# granting any of those was refused for a mechanic the engine has.
+#
+# The exclusions are the same three `lord_buffs.grantable_keywords` makes, and
+# for the same reason: protection, landwalk and "bands with other" are family
+# words whose printed form carries a quality ("protection from red"), which the
+# comma/"and" splitting below would cut in half. Landwalk's *members*
+# ("swampwalk", …) are ordinary entries and stay.
+# Lazily, for the reason `_LazyPattern` above exists: the registry lives in
+# `engine.grammar.vocabulary` and the grammar package imports this module back,
+# so reading it at import time is a cycle.
+def _grantable_keywords() -> tuple[str, ...]:
+    from .lord_buffs import grantable_keywords
 
-_KEYWORD_GRANT = re.compile(
+    # Longest first: the alternation is matched against a printed run, and
+    # "first strike" must be tried before "first" could ever be.
+    return tuple(sorted(grantable_keywords(), key=len, reverse=True))
+
+
+def _keyword_alternation() -> str:
+    return "|".join(_grantable_keywords())
+
+# "Enchanted creature gets +1/+0 and has flying **and first strike**" (Wings of
+# Aesthir). The grant is a *list*: CR 702 keywords are independent abilities and
+# a card printing two grants two, so reading only the first would ship an Aura
+# giving half of what it prints — silently, since the line still matches. The
+# splitting is `_keyword_list` below, which refuses a run it cannot read whole
+# rather than keeping the part it understood.
+_KEYWORD_GRANT = _LazyPattern(lambda: re.compile(
     rf"^{_ATTACHED} {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? has "
-    rf"(?P<keyword>{'|'.join(_GRANTABLE_KEYWORDS)})$"
-)
+    rf"(?P<keyword>(?:{_keyword_alternation()})"
+    rf"(?:(?:, and |, | and )(?:{_keyword_alternation()}))*)$"
+))
 
 
 _COMPOUND_INDESTRUCTIBLE = re.compile(
@@ -1032,11 +1059,11 @@ _COMPOUND_INDESTRUCTIBLE = re.compile(
 # means, and it is also the only reading with a consumer: the grant is derived
 # on the *host* every recompute (`layer_bridge.collect_ability_effects`), which
 # is where the state is known.
-_CONDITIONAL_KEYWORD_GRANT = re.compile(
+_CONDITIONAL_KEYWORD_GRANT = _LazyPattern(lambda: re.compile(
     rf"^{_ATTACHED} {_NOUN} has "
-    rf"(?P<keyword>{'|'.join(_GRANTABLE_KEYWORDS)}) "
+    rf"(?P<keyword>{_keyword_alternation()}) "
     r"as long as it's (?P<state>untapped|tapped)$"
-)
+))
 
 
 def aura_conditional_keyword_grants(oracle_text: str) -> tuple[tuple[str, str], ...]:
@@ -1093,6 +1120,17 @@ def aura_granted_ability_lines(oracle_text: str) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def _keyword_list(run: str) -> list[str]:
+    """The keywords a printed run names — "flying and first strike", "flying,
+    first strike, and trample".
+
+    Only words the alternation admitted can be here, because the pattern that
+    captured this run was built from that alternation; the split is therefore
+    a split and not a second vocabulary.
+    """
+    return [part.strip() for part in re.split(r",| and ", run) if part.strip()]
+
+
 def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
     """Keyword abilities an Aura grants to the permanent it enchants.
 
@@ -1108,7 +1146,7 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
         line = _line_text(raw_line)
         match = _KEYWORD_GRANT.match(line) or _TYPE_ADDITION_GRANT.match(line)
         if match is not None:
-            grants.append(match.group("keyword"))
+            grants.extend(_keyword_list(match.group("keyword")))
         elif _COMPOUND_INDESTRUCTIBLE.match(line):
             # Consecrate Land prints one line carrying two effects. Its trailing
             # clause is claimed separately as a restriction, so matching only

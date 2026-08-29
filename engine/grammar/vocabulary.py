@@ -96,6 +96,14 @@ IMPLEMENTED_KEYWORDS: frozenset[str] = frozenset({
     # refuses every grant of it, so a card printing "has shroud" was
     # unsupported for a mechanic the engine enforces.
     "shroud",
+    # CR 702.36: fear. The same shape as shroud two entries up — the behaviour
+    # has been in the declare-blockers step since before the registry existed
+    # (CR 702.36b's "can't be blocked except by artifact creatures and/or black
+    # creatures", both halves read through the layers), with three CR-cited
+    # tests behind it, and only the *word* was missing. Outside this set the
+    # grammar refuses every grant of it, so "gains fear until end of turn" was
+    # unsupported for a mechanic the engine enforces.
+    "fear",
     # CR 702.22b's specialized banding. A **family** word like "protection" and
     # "landwalk" beside it: what a card prints is the word plus a quality
     # ("bands with other legendary creatures"), and the quality is payload read

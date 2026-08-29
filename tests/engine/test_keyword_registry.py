@@ -179,3 +179,27 @@ def test_granting_an_ability_for_a_duration_nothing_sweeps_is_refused():
     )
     with pytest.raises(ValueError):
         grant_ability_line(Permanent(card=card), "Flying", duration="until_i_say_so")
+
+
+def test_the_aura_grant_vocabulary_is_the_keyword_registry():
+    """``engine/auras.py`` used to keep its own tuple of grantable keywords, and
+    it had drifted in both directions — which is what a second copy of one fact
+    always does, and both directions are wrong in a way nothing catches.
+
+    It listed ``shadow``, which this engine does not implement anywhere: an Aura
+    granting it would have been *admitted*, entered play, and given its host an
+    evasion ability that does nothing. And it omitted menace, lifelink,
+    deathtouch, indestructible, flash, hexproof, prowess and rampage, so an Aura
+    granting any of those was reported unsupported for a mechanic the engine
+    has.
+
+    The exclusions are the family words whose printed form carries a quality —
+    "protection from red", "swampwalk" under "landwalk", "bands with other
+    legendary creatures" — which the comma/"and" splitting would cut in half.
+    They are the same three ``lord_buffs.grantable_keywords`` excludes, and this
+    asserts the two agree rather than re-listing them.
+    """
+    from engine.auras import _grantable_keywords
+    from engine.lord_buffs import grantable_keywords
+
+    assert set(_grantable_keywords()) == set(grantable_keywords())

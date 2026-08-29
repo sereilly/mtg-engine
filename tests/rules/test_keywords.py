@@ -1717,3 +1717,20 @@ def test_702_22c_a_removed_band_can_no_longer_be_declared():
 
     ok, _ = game.declare_attackers(0, [1, 2], bands=[[1, 2]])
     assert not ok
+
+
+@pytest.mark.cr("702.36a")
+def test_702_36a_fear_is_in_the_implemented_keyword_registry():
+    """The behaviour above has been enforced since before the registry existed,
+    and the *word* was missing from it — so the grammar refused every printed
+    grant of fear ("gains fear until end of turn") for a mechanic these three
+    tests demonstrate working.
+
+    The registry is the gate every keyword line is read through, so a keyword
+    the engine implements and the registry omits costs cards their support for
+    no reason. Asserted here, beside the behaviour, rather than in the registry
+    file: what makes the entry legitimate is that these tests pass.
+    """
+    from engine.grammar.vocabulary import IMPLEMENTED_KEYWORDS
+
+    assert "fear" in IMPLEMENTED_KEYWORDS
