@@ -1032,3 +1032,35 @@ def test_balduvian_hydra_enters_with_x_plus_one_zero_counters(set_pool):
     hydra = p1.battlefield[0]
     assert (hydra.effective_power, hydra.effective_toughness) == (3, 1)
     assert hydra.metadata["plus_1_0_counters"] == 3
+
+
+# --- Round 19: an offer whose action shares the printed subject ---
+
+
+def test_thoughtleech_offers_the_life_when_an_opponents_island_taps(set_pool):
+    """"Whenever an Island an opponent controls becomes tapped, **you may gain
+    1 life**."
+
+    The offer prints its subject once, in front of "may", and the action behind
+    it is a bare verb — the same shared-subject shape a conjunction already
+    handles ("Target player draws a card **and loses 1 life**"), one clause
+    earlier. Without it "you may gain 1 life" refused while "you may draw a
+    card" parsed, because "draw" is a bare imperative and "gain" is not.
+    """
+    pool = set_pool("ICE")
+    leech = Permanent(card=pool["Thoughtleech"])
+    island = Permanent(card=pool["Island"])
+    p1 = PlayerState(name="P1", battlefield=[leech], life=20)
+    p2 = PlayerState(name="P2", battlefield=[island], life=20)
+    game = Game(players=[p1, p2])
+
+    game.become_tapped(island)
+    game._settle()
+
+    offers = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert len(offers) == 1 and offers[0].player_index == 0
+    assert offers[0].data["cost"] == {}, "the offer costs nothing; it is a may"
+
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+    assert p1.life == 21

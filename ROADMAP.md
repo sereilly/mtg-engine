@@ -1172,6 +1172,18 @@ exactly as its printed-count sibling reads it, and the literal is retired. What
 still separates the two is the count, which is the announced X (CR 601.2b) and
 not a printed number — read from a different place at a different time.
 
+**Round 19 — an offer whose action shares the printed subject. 250 → 251.**
+
+"You may **gain 1 life**" (Thoughtleech) refused while "you may draw a card"
+parsed, and the difference is grammatical rather than semantic: "draw" is a bare
+imperative the statement parser reads on its own and "gain" is not. The offer
+prints its subject once, in front of "may", so the action behind it is a clause
+sharing that subject — which is the shape a conjunction already handles one
+clause later ("Target player draws a card **and loses 1 life**"). The retry is
+placed the same way and for the same reason: an action naming a subject of its
+own is a different sentence, and carrying "you" over it would aim it at the
+wrong player.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

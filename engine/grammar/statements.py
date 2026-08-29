@@ -808,7 +808,23 @@ def _parse_optional_action(stream: TokenStream) -> ast.Statement:
     the strength of one card.
     """
     first_at = stream.pos
-    first = parse_statement(stream, top_level=False)
+    try:
+        first = parse_statement(stream, top_level=False)
+    except GrammarError:
+        # "You may **gain 1 life**." (Thoughtleech.) The offer printed its
+        # subject once, in front of "may", and the action behind it is a bare
+        # verb — the same shared-subject shape a conjunction already handles
+        # ("Target player draws a card **and loses 1 life**"), one clause
+        # earlier. Retried rather than read this way first, for that rule's own
+        # reason: an action that names a subject of its own is a different
+        # sentence, and carrying "you" over it would aim it at the wrong player.
+        stream.reset(first_at)
+        first = parse_subject_verb(
+            stream,
+            carried_subject=ast.PlayerRef("you"),
+            parse_optional_action=_parse_optional_action,
+        )
+        first_at = first_at
     if not stream.at_word("or"):
         return first
     options = [first]

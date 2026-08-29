@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 64.7% | 59.4% | 38.9% | 184 |
+| ICE *(measured)* | 373 | 601 | 64.9% | 59.6% | 39.1% | 185 |
 | **All (shipped)** | **2415** | **3404** | **85.8%** | **84.7%** | **52.4%** | **1544** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -40,7 +40,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 301 | 153 | expected a subject |  |
-| 132 | 59 | unrecognized effect verb |  |
+| 131 | 58 | unrecognized effect verb |  |
 | 87 | 53 | unconsumed text |  |
 | 40 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
@@ -2697,6 +2697,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Target spell or permanent becomes blue. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes blue. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes blue. (Mana symbols on that permanent remain unchanged.)`
+- **Thoughtleech**
+  - `Whenever an Island an opponent controls becomes tapped, you may gain 1 life.`
 - **Thrashing Brontodon**
   - `{1}, Sacrifice this creature: Destroy target artifact or enchantment.`
 - **Thrill of Possibility**
