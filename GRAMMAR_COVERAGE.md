@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 68.4% | 63.2% | 42.8% | 202 |
+| ICE *(measured)* | 373 | 601 | 68.6% | 63.4% | 42.9% | 203 |
 | **All (shipped)** | **2415** | **3404** | **85.8%** | **84.7%** | **52.4%** | **1544** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -39,7 +39,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 296 | 148 | expected a subject |  |
+| 294 | 146 | expected a subject |  |
 | 128 | 55 | unrecognized effect verb |  |
 | 82 | 48 | unconsumed text |  |
 | 40 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -2477,6 +2477,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Whenever a player casts a black spell, you gain 1 life.`
 - **Soldevi Golem**
   - `At the beginning of your upkeep, you may untap target tapped creature an opponent controls. If you do, untap this creature.`
+- **Soldevi Machinist**
+  - `{T}: Add {C}{C}. Spend this mana only to activate abilities of artifacts.`
 - **Soldevi Simulacrum**
   - `{1}: This creature gets +1/+0 until end of turn.`
 - **Solemn Simulacrum**

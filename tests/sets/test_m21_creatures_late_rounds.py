@@ -476,26 +476,35 @@ def test_a_creature_spell_cannot_touch_it(set_pool):
 
 def test_an_activated_ability_is_not_a_spell(set_pool):
     """"Only to **cast**" — an activated ability is not cast at all (CR 602.2),
-    so no bucket admits one. The payer is handed None for the spell and None
-    admits nothing, which is that rule rather than a missing argument."""
-    from engine.restricted_mana import restriction_admits
+    so no bucket admits one. The payment says what it is *for* now, and an
+    "activate" purpose is admitted by no cast-only row — which is that rule
+    rather than a missing argument."""
+    from engine.restricted_mana import (ACTIVATE, CAST, PaymentPurpose,
+                                        restriction_admits,
+                                        spendable_restricted_mana)
 
     game, p1 = _arcanist_board(set_pool)
     game.activate_permanent_ability(0, "Vodalian Arcanist", permanent_index=0)
 
-    from engine.mixins.stack.casting import _spendable_restricted_mana
-
-    assert _spendable_restricted_mana(p1, None) == {}
-    assert not restriction_admits("instant_or_sorcery", set_pool("M21")["Alpine Watchdog"])
+    assert spendable_restricted_mana(p1, None) == {}
+    watchdog = set_pool("M21")["Alpine Watchdog"]
+    assert spendable_restricted_mana(
+        p1, PaymentPurpose(ACTIVATE, source=watchdog)
+    ) == {}
+    assert not restriction_admits(
+        "instant_or_sorcery", PaymentPurpose(CAST, card=watchdog)
+    )
 
 
 def test_a_restriction_key_with_no_predicate_admits_nothing(set_pool):
     """The safe direction. A key the engine cannot test is mana whose
     restriction it cannot enforce, and treating it as unrestricted would spend
     it on anything."""
-    from engine.restricted_mana import restriction_admits
+    from engine.restricted_mana import CAST, PaymentPurpose, restriction_admits
 
-    assert not restriction_admits("dragon", set_pool("M21")["Alpine Watchdog"])
+    assert not restriction_admits(
+        "dragon", PaymentPurpose(CAST, card=set_pool("M21")["Alpine Watchdog"])
+    )
 
 
 def test_the_old_field_name_is_a_view_over_the_collection(set_pool):

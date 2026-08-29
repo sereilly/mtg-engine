@@ -77,17 +77,27 @@ def upkeep_trigger_seat_matches(game, permanent, cond: str, player_index: int) -
 
 
 class UpkeepStepMixin(UpkeepEffectsMixin):
-    def can_pay_upkeep_mana(self, player, mana: dict[str, int]) -> bool:
+    def can_pay_upkeep_mana(self, player, mana: dict[str, int], *, purpose=None) -> bool:
         """Whether *player* can cover an upkeep cost: colored pips from floating
         mana, the generic part from what's left plus untapped mana-producing
-        lands (the player gets the chance to tap during upkeep)."""
+        lands (the player gets the chance to tap during upkeep).
+
+        *purpose* is what the cost is for, so "spend this mana only to pay
+        cumulative upkeep costs" (Adarkar Unicorn, Snowfall) can be counted:
+        that mana lives in its own bucket beside the pool, and a payment that
+        does not ask cannot see it. Without a purpose only the ordinary pool is
+        offered, which is what every caller written before this got.
+        """
+        from ..restricted_mana import spendable_restricted_mana
+
+        available = self._upkeep_pool(player, purpose)
         colored = {sym: n for sym, n in mana.items() if sym != "generic" and n > 0}
-        if any(player.mana_pool.get(sym, 0) < n for sym, n in colored.items()):
+        if any(available.get(sym, 0) < n for sym, n in colored.items()):
             return False
         generic = int(mana.get("generic", 0) or 0)
         if generic <= 0:
             return True
-        floating_left = sum(player.mana_pool.values()) - sum(colored.values())
+        floating_left = sum(available.values()) - sum(colored.values())
         untapped_land_mana = sum(
             1
             for perm in self.controlled_by(player)
@@ -95,14 +105,48 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         )
         return floating_left + untapped_land_mana >= generic
 
-    def _spend_upkeep_mana(self, player, mana: dict[str, int]) -> None:
+    def _upkeep_pool(self, player, purpose) -> dict[str, int]:
+        """The mana an upkeep payment may draw on: the pool, plus any restricted
+        bucket *purpose* admits (CR 106.6).
+
+        One reader for both halves of the pair below, so what is *offered* and
+        what is *spent* cannot disagree about which buckets are in play — the
+        split that let Energy Flux's generic-only cost be paid by every artifact
+        on the board.
+        """
+        from ..restricted_mana import spendable_restricted_mana
+
+        merged = dict(player.mana_pool)
+        for symbol, amount in spendable_restricted_mana(player, purpose).items():
+            merged[symbol] = merged.get(symbol, 0) + amount
+        return merged
+
+    def _spend_upkeep_mana(self, player, mana: dict[str, int], *, purpose=None) -> None:
         """Spend an upkeep cost validated by ``can_pay_upkeep_mana``: colored
         pips from the pool, then the generic part from floating mana and by
-        tapping untapped mana-producing lands."""
+        tapping untapped mana-producing lands.
+
+        Restricted mana is spent **first** where the purpose admits it, for the
+        reason the casting path spends it first: its units are lost at the next
+        step boundary either way, so anything else throws them away.
+        """
+        from ..restricted_mana import debit_restricted_mana, spendable_restricted_mana
+
+        restricted = spendable_restricted_mana(player, purpose)
         for sym, count in mana.items():
-            if sym != "generic" and count > 0:
-                player.mana_pool[sym] = player.mana_pool.get(sym, 0) - count
+            if sym == "generic" or count <= 0:
+                continue
+            from_restricted = min(count, restricted.get(sym, 0))
+            if from_restricted:
+                debit_restricted_mana(player, purpose, sym, from_restricted)
+                restricted[sym] = restricted.get(sym, 0) - from_restricted
+            player.mana_pool[sym] = player.mana_pool.get(sym, 0) - (count - from_restricted)
         remaining = int(mana.get("generic", 0) or 0)
+        for sym in list(restricted):
+            while remaining > 0 and restricted.get(sym, 0) > 0:
+                debit_restricted_mana(player, purpose, sym, 1)
+                restricted[sym] -= 1
+                remaining -= 1
         for sym in list(player.mana_pool):
             while remaining > 0 and player.mana_pool.get(sym, 0) > 0:
                 player.mana_pool[sym] -= 1

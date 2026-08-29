@@ -34,6 +34,7 @@ from ...handlers._common import graveyard_card_matches, permanent_matches_filter
 from ...models import CardDefinition, Permanent, PlayerState
 from ...oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
 from ...oracle_types import x_spend_color_from_text
+from ...restricted_mana import CAST, PaymentPurpose
 from ...target_restrictions import forbidden_target
 from ...targeting import bounce_subject_filter, graveyard_target_spec
 from ...subject_filters import filter_head_noun, subject_matches
@@ -632,7 +633,7 @@ class SpellCastingMixin:
                 cost_reduction,
             )
             if not self._pay_mana_cost(
-                caster, cost, spell=card
+                caster, cost, purpose=PaymentPurpose(CAST, card=card)
             ):
                 details = f"insufficient mana for {card.name}"
                 if x_color is not None:
@@ -1511,7 +1512,7 @@ class SpellCastingMixin:
                 required[token] += 1
         return required
     def _pay_mana_cost(
-        self, player: PlayerState, required: dict[str, int], *, spell=None
+        self, player: PlayerState, required: dict[str, int], *, purpose=None
     ) -> bool:
         """Pay *required* from *player*'s pool, or leave the pool untouched.
 
@@ -1523,13 +1524,16 @@ class SpellCastingMixin:
         the spell that could not otherwise be cast.
 
         An activated ability is not a spell, so no grant applies to one: the
-        clause says "that **spell's** mana cost", and *spell* being None is
-        that rule rather than a missing argument.
+        clause says "that **spell's** mana cost", and *purpose* not naming a
+        cast is that rule rather than a missing argument.
         """
-        if self._pay_mana_cost_directly(player, required, spell=spell):
+        from ...restricted_mana import CAST
+
+        if self._pay_mana_cost_directly(player, required, purpose=purpose):
             return True
-        if spell is None:
+        if purpose is None or purpose.kind != CAST:
             return False
+        spell = purpose.card
         grant = next(
             (g for g in player.spend_mana_as_though_grants if int(g.get("spells", 0)) > 0),
             None,
@@ -1554,19 +1558,22 @@ class SpellCastingMixin:
         return True
 
     def _pay_mana_cost_directly(
-        self, player: PlayerState, required: dict[str, int], *, spell=None
+        self, player: PlayerState, required: dict[str, int], *, purpose=None
     ) -> bool:
         # "Spend this mana only to…" (CR 106.6): a restricted bucket joins the
-        # pool only for a spell its own restriction admits, and whatever the
+        # pool only for a payment its own restriction admits, and whatever the
         # payment consumes is attributed to the restricted bucket first (its
         # units are otherwise lost, so spending them first is the only rational
         # attribution).
         #
-        # *spell* is the card being cast, or None for an activation — an
-        # activated ability is not a spell at all, so no "only to cast" mana may
-        # pay for one, and None admitting nothing is that rule rather than a
-        # missing argument.
-        restricted = _spendable_restricted_mana(player, spell)
+        # *purpose* is what the payment is for — a cast, an activation, an
+        # upkeep cost. It used to be the card being cast, which made every
+        # restriction a claim about a *spell* and left the other two payment
+        # paths unable to spend restricted mana at all.
+        from ...restricted_mana import (debit_restricted_mana,
+                                        spendable_restricted_mana)
+
+        restricted = spendable_restricted_mana(player, purpose)
         if restricted and any(restricted.values()):
             snapshot = dict(player.mana_pool)
             player.mana_pool = {
@@ -1580,7 +1587,7 @@ class SpellCastingMixin:
                 spent = snapshot.get(sym, 0) + restricted.get(sym, 0) - player.mana_pool.get(sym, 0)
                 from_restricted = min(spent, restricted.get(sym, 0))
                 if from_restricted:
-                    _debit_restricted_mana(player, spell, sym, from_restricted)
+                    debit_restricted_mana(player, purpose, sym, from_restricted)
                 snapshot[sym] = snapshot.get(sym, 0) - (spent - from_restricted)
             player.mana_pool = snapshot
             return True
@@ -1730,46 +1737,3 @@ class SpellCastingMixin:
 
         player.mana_pool = temp
         return True
-
-
-def _spendable_restricted_mana(player, spell) -> dict[str, int]:
-    """Every restricted bucket *spell* may be paid from, merged by symbol.
-
-    Merged rather than tried one at a time because a payment is one operation:
-    two buckets that both admit the spell are, to CR 601.2g, simply mana in the
-    pool. Which of them a spent unit came out of is settled afterwards by
-    :func:`_debit_restricted_mana`, in the same order this merge walked.
-    """
-    from ...restricted_mana import restriction_admits
-
-    merged: dict[str, int] = {}
-    if spell is None:
-        return merged
-    for key, bucket in (player.restricted_mana or {}).items():
-        if not any(bucket.values()) or not restriction_admits(key, spell):
-            continue
-        for symbol, amount in bucket.items():
-            merged[symbol] = merged.get(symbol, 0) + amount
-    return merged
-
-
-def _debit_restricted_mana(player, spell, symbol: str, amount: int) -> None:
-    """Take *amount* of *symbol* out of the buckets that paid for *spell*.
-
-    In the merge's own order, so the attribution matches what was offered. The
-    order between two admitting buckets is arbitrary and does not matter: both
-    are spendable on this spell and both empty at the same step boundary, so no
-    observable differs.
-    """
-    from ...restricted_mana import restriction_admits
-
-    remaining = amount
-    for key, bucket in (player.restricted_mana or {}).items():
-        if remaining <= 0:
-            break
-        if not restriction_admits(key, spell):
-            continue
-        taken = min(remaining, bucket.get(symbol, 0))
-        if taken:
-            bucket[symbol] = bucket.get(symbol, 0) - taken
-            remaining -= taken

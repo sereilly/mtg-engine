@@ -466,28 +466,38 @@ def test_106_6b_restricted_mana_is_held_apart_from_the_general_pool():
     It is not simply added to the pool: the pool cannot say what its mana may
     pay for, and the restriction must outlive the ability that made it.
     """
-    from engine.restricted_mana import mana_restriction_for, restriction_admits
+    from engine.restricted_mana import (CAST, PaymentPurpose,
+                                        mana_restriction_for, restriction_admits)
 
     restriction = mana_restriction_for("Spend this mana only to cast creature spells.")
 
     assert restriction is not None
     assert restriction.key == "creature"
-    assert restriction_admits("creature", _mk_card("Bear", "{G}", "Creature — Bear", "")) is True
+    bear = _mk_card("Bear", "{G}", "Creature — Bear", "")
+    assert restriction_admits("creature", PaymentPurpose(CAST, card=bear)) is True
 
 
 @pytest.mark.cr("106.6")
 def test_106_6b_the_restriction_admits_only_what_it_names():
-    """The restriction is a predicate over the spell being cast, so mana marked
-    for creature spells cannot pay for an instant, and vice versa."""
-    from engine.restricted_mana import restriction_admits
+    """The restriction is a predicate over the **payment**, so mana marked for
+    creature spells cannot pay for an instant, and vice versa.
+
+    And a payment that is not a cast at all is admitted by neither: an
+    activated ability is not a spell (CR 602.1), so "only to cast creature
+    spells" cannot pay to activate one however creature-ish its source.
+    """
+    from engine.restricted_mana import (ACTIVATE, CAST, PaymentPurpose,
+                                        restriction_admits)
 
     bear = _mk_card("Bear", "{G}", "Creature — Bear", "")
     bolt = _mk_card("Bolt", "{R}", "Instant", "")
 
-    assert restriction_admits("creature", bear) is True
-    assert restriction_admits("creature", bolt) is False
-    assert restriction_admits("instant_or_sorcery", bolt) is True
-    assert restriction_admits("instant_or_sorcery", bear) is False
+    assert restriction_admits("creature", PaymentPurpose(CAST, card=bear)) is True
+    assert restriction_admits("creature", PaymentPurpose(CAST, card=bolt)) is False
+    assert restriction_admits("instant_or_sorcery", PaymentPurpose(CAST, card=bolt)) is True
+    assert restriction_admits("instant_or_sorcery", PaymentPurpose(CAST, card=bear)) is False
+    assert restriction_admits("creature", PaymentPurpose(ACTIVATE, source=bear)) is False
+    assert restriction_admits("creature", None) is False
 
 
 @pytest.mark.cr("106.6")
@@ -568,3 +578,47 @@ def test_609_4_an_as_though_permission_does_not_create_mana():
         player, {"W": 1, "U": 1, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
     )
     assert player.mana_pool["R"] == 1
+
+
+@pytest.mark.cr("106.6")
+def test_106_6_a_restriction_narrows_a_payment_not_only_a_cast():
+    """CR 106.6 restricts "how that mana can be spent" — not which spell it may
+    be spent on. Every clause the pool printed until Ice Age happened to name a
+    cast, so the predicate took the card being cast and only the casting path
+    ever asked. Two Ice Age cards name a payment that is not a cast at all.
+
+    Asked of the table rather than of a card, because the property is about the
+    purposes and a card can only demonstrate the one it prints.
+    """
+    from engine.restricted_mana import (ACTIVATE, CAST, CUMULATIVE_UPKEEP,
+                                        PaymentPurpose, mana_restriction_for,
+                                        restriction_admits)
+
+    upkeep = mana_restriction_for("Spend this mana only to pay cumulative upkeep costs.")
+    ability = mana_restriction_for("Spend this mana only to activate abilities of artifacts.")
+    assert upkeep is not None and ability is not None
+
+    artifact = _mk_card("Cog", "{1}", "Artifact", "")
+    bear = _mk_card("Bear", "{G}", "Creature — Bear", "")
+
+    assert restriction_admits(upkeep.key, PaymentPurpose(CUMULATIVE_UPKEEP)) is True
+    assert restriction_admits(upkeep.key, PaymentPurpose(CAST, card=bear)) is False
+    assert restriction_admits(
+        upkeep.key, PaymentPurpose(ACTIVATE, source=artifact)
+    ) is False
+
+    assert restriction_admits(
+        ability.key, PaymentPurpose(ACTIVATE, source=artifact)
+    ) is True
+    assert restriction_admits(
+        ability.key, PaymentPurpose(ACTIVATE, source=bear)
+    ) is False
+    # "…only to **activate** abilities of artifacts" is not "…to cast artifact
+    # spells": the two Ice Age clauses and Mishra’s Workshop’s are three
+    # different narrowings that a cast-only predicate could not have told apart.
+    assert restriction_admits(
+        ability.key, PaymentPurpose(CAST, card=artifact)
+    ) is False
+    assert restriction_admits(
+        "artifact", PaymentPurpose(ACTIVATE, source=artifact)
+    ) is False

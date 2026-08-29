@@ -1990,3 +1990,153 @@ def test_putting_a_card_back_is_not_a_discard(set_pool):
     assert p1.graveyard == [] or all(
         c.name == "Brainstorm" for c in p1.graveyard
     ), "only the spell itself went to the graveyard"
+
+
+# --- Round 29: restricted mana is about a payment, not about a cast ---
+
+
+def _mana_board(set_pool, *names, hand=()):
+    """Cards on the battlefield with real mana costs enforced."""
+    from engine.card_loader import load_catalog
+
+    pool = set_pool("ICE")
+    shipped = {card.name: card for card in load_catalog()}
+
+    def card(name):
+        return pool.get(name) or shipped[name]
+
+    perms = [Permanent(card=card(n)) for n in names]
+    p1 = PlayerState(
+        name="P1", battlefield=perms, hand=[card(n) for n in hand],
+        library=[card("Plains")] * 5, life=20,
+    )
+    p2 = PlayerState(
+        name="P2", battlefield=[Permanent(card=card("Plains"))],
+        library=[card("Plains")] * 5, life=20,
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = True
+    game.active_player_index = 0
+    game.current_turn_phase = "precombat_main"
+    game.current_step = "precombat_main"
+    game._sync_control()
+    for perm in perms:
+        _nosick(perm)
+    return game, p1, perms
+
+
+def test_soldevi_machinist_mana_activates_an_artifacts_ability(set_pool):
+    """"{T}: Add {C}{C}. Spend this mana only to activate abilities of
+    artifacts."
+
+    The mana lands in its own bucket (CR 106.6) and the activation path can now
+    see it — it could not before, because a restriction was a claim about the
+    spell being cast and only the casting path ever asked.
+    """
+    game, p1, (machinist, icy) = _mana_board(
+        set_pool, "Soldevi Machinist", "Icy Manipulator"
+    )
+
+    game.activate_permanent_ability(0, "Soldevi Machinist")
+    game._settle()
+    assert p1.restricted_mana["artifact_ability"]["C"] == 2
+    assert not any(p1.mana_pool.values()), "restricted mana is held apart"
+
+    result = game.activate_permanent_ability(
+        0, "Icy Manipulator", target_player_index=1, target_permanent_index=0
+    )
+
+    assert result.supported, result.details
+    assert p1.restricted_mana["artifact_ability"]["C"] == 1, "one paid the {1}"
+
+
+def test_soldevi_machinist_mana_cannot_cast_an_artifact_spell(set_pool):
+    """"…only to **activate abilities of** artifacts" is not "…to cast artifact
+    spells" (Mishra's Workshop). Three clauses, three narrowings, and a
+    cast-only predicate could not have told the second from the third."""
+    game, p1, _ = _mana_board(
+        set_pool, "Soldevi Machinist", hand=["Meekstone"]
+    )
+    game.activate_permanent_ability(0, "Soldevi Machinist")
+    game._settle()
+
+    result = game.cast_from_hand(0, "Meekstone")
+
+    assert not result.supported
+    assert p1.restricted_mana["artifact_ability"]["C"] == 2, "nothing was spent"
+
+
+def test_cumulative_upkeep_can_be_paid_from_its_own_bucket(set_pool):
+    """"Spend this mana only to pay cumulative upkeep costs." (Adarkar Unicorn,
+    Snowfall.)
+
+    The upkeep payment is a third path, with its own pair of functions, and it
+    could not see a restricted bucket at all — so this mana existed and could
+    pay for nothing in the game.
+    """
+    game, p1, (wall,) = _mana_board(set_pool, "Illusionary Wall")
+    p1.restricted_mana.setdefault("cumulative_upkeep", {})["U"] = 3
+    game.turn = 2
+
+    game.resolve_upkeep(0)
+
+    assert any(perm is wall for perm in game.all_permanents()), (
+        "the upkeep was paid from the restricted bucket"
+    )
+
+    # And the pair itself, because by the time the step is over the bucket has
+    # emptied with the pool (CR 500.4) and the count no longer reads back. The
+    # purpose is what makes the bucket visible at all: without one the same
+    # board cannot pay.
+    from engine.restricted_mana import CUMULATIVE_UPKEEP, PaymentPurpose
+
+    p1.restricted_mana["cumulative_upkeep"]["U"] = 3
+    cost = {"U": 1, "generic": 0}
+    purpose = PaymentPurpose(CUMULATIVE_UPKEEP, source=wall)
+    assert game.can_pay_upkeep_mana(p1, cost, purpose=purpose) is True
+    assert game.can_pay_upkeep_mana(p1, cost) is False, (
+        "a payment that does not say what it is for is offered no restricted mana"
+    )
+    game._spend_upkeep_mana(p1, cost, purpose=purpose)
+    assert p1.restricted_mana["cumulative_upkeep"]["U"] == 2
+    assert not any(p1.mana_pool.values()), "and nothing came out of the pool"
+
+
+def test_an_unpaid_cumulative_upkeep_still_sacrifices(set_pool):
+    """Paired with the test above, so what it reads is the bucket being spent
+    and not the upkeep having quietly stopped asking."""
+    game, p1, (wall,) = _mana_board(set_pool, "Illusionary Wall")
+    game.turn = 2
+
+    game.resolve_upkeep(0)
+
+    assert not any(perm is wall for perm in game.all_permanents())
+
+
+def test_adarkar_unicorn_refuses_a_choice_between_multi_symbol_runs(set_pool):
+    """"{T}: Add {U} or {C}{U}." The payload can express a choice only between
+    single symbols, so merging this one produced a bag reading "either one {C}
+    or two {U}" — neither of the two things the card prints.
+
+    The line refuses instead, which leaves the card unsupported rather than
+    supported and making mana it does not have. Its *restriction* clause is
+    implemented; this is the only thing still holding it back.
+    """
+    from engine.grammar import compile_line
+    from engine.restricted_mana import mana_restriction_for
+
+    unicorn = set_pool("ICE")["Adarkar Unicorn"]
+    assert not compile_card_oracle(unicorn).supported
+
+    refused = compile_line("{T}: Add {U} or {C}{U}.")
+    assert not refused.parsed
+    assert "more than one symbol" in (refused.parse_error or "")
+
+    # The single-symbol alternation every dual land prints is untouched.
+    dual = compile_line("{T}: Add {B} or {R}.")
+    assert dual.lowered
+    assert dual.instructions[0].payload["pips_choice"] == (("B", 1), ("R", 1))
+
+    assert mana_restriction_for(
+        "Spend this mana only to pay cumulative upkeep costs."
+    ) is not None

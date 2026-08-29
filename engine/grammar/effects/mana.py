@@ -119,12 +119,22 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
 
     pips: dict[str, int] = {}
     choice = False
+    # How many symbols each alternative of a printed "or" holds. Counted rather
+    # than merged away, because the payload can express a choice only between
+    # **single** symbols: `pips_choice` is ``(symbol, count)`` pairs, one per
+    # alternative, which says "one of these colours" and cannot say "{U}, or
+    # {C} and {U} together". Every dual land in the pool is the first shape;
+    # Adarkar Unicorn ("Add {U} or {C}{U}") is the first card that is not, and
+    # merging it produced a bag reading "either one {C} or two {U}" — neither of
+    # the two things the card prints. It refuses below instead.
+    run_lengths = [0]
     while stream.at_kind(MANA):
         token = stream.next()
         symbol = token.text.strip("{}")
         if symbol.isdigit() or symbol in ("T", "Q", "X"):
             raise stream.error(f"unsupported mana symbol {token.text!r}")
         pips[symbol] = pips.get(symbol, 0) + 1
+        run_lengths[-1] += 1
         # "{B} or {R}" — a dual land's choice, not two mana. The word is
         # *recorded* on the node, because a parse that merely consumed it would
         # read "Add {B} or {R}" and "Add {B}{R}" as the same clause.
@@ -135,6 +145,11 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
                 stream.reset(mark)
                 break
             choice = True
+            run_lengths.append(0)
+    if choice and any(length > 1 for length in run_lengths):
+        raise stream.error(
+            "a mana choice between runs of more than one symbol is not expressible"
+        )
     if pips:
         removed = _parse_removed_counter_multiplier(stream)
         on_source = (

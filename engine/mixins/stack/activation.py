@@ -13,6 +13,7 @@ import random
 
 from ...activation_permissions import (activation_permission_denial,
                                         card_widens_activation)
+from ...restricted_mana import ACTIVATE, PaymentPurpose
 from ...activation_restrictions import (
     activation_denial,
     activations_allowed_each_turn,
@@ -145,7 +146,12 @@ class AbilityActivationMixin:
 
         if self.enforce_mana_costs:
             required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 1}
-            if not self._pay_mana_cost(controller, required):
+            # An emblem is not an artifact, so "only to activate abilities of
+            # artifacts" mana cannot pay for one — a purpose with no source is
+            # that answer rather than a missing argument.
+            if not self._pay_mana_cost(
+                controller, required, purpose=PaymentPurpose(ACTIVATE)
+            ):
                 return SimulationResult(label, False, "unsupported", "insufficient mana to activate emblem")
 
         apply_prevention_shield(self, target_player, target_perm_idx, 1)
@@ -355,7 +361,8 @@ class AbilityActivationMixin:
             # The granted ability still costs {B} to activate.
             if permanent.metadata.get("granted_regen_ability"):
                 if self.enforce_mana_costs and not self._pay_mana_cost(
-                    controller, self._parse_mana_cost("{B}", x_value=0)
+                    controller, self._parse_mana_cost("{B}", x_value=0),
+                    purpose=PaymentPurpose(ACTIVATE, source=permanent),
                 ):
                     details = f"insufficient mana to activate {permanent.card.name}"
                     self.log.append(details)
@@ -893,7 +900,10 @@ class AbilityActivationMixin:
                     f"{{{before_total - reduced_generic - coloured}}} less to activate"
                 )
         if self.enforce_mana_costs and any(required_cost.values()):
-            if not self._pay_mana_cost(controller, required_cost):
+            if not self._pay_mana_cost(
+                controller, required_cost,
+                purpose=PaymentPurpose(ACTIVATE, source=permanent),
+            ):
                 details = f"insufficient mana to activate {permanent.card.name}"
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
@@ -1350,7 +1360,13 @@ class AbilityActivationMixin:
 
         # CR 601.2h: an unpayable cost makes the ability unactivatable, checked
         # before anything is spent — the same order every other activation keeps.
-        if self.enforce_mana_costs and not self._pay_mana_cost(controller, ability.cost.mana):
+        # The source is the *card* in hand, not a permanent: an ability
+        # activated from a hand has no permanent, and its card is what a
+        # restriction narrowing by type would be asking about.
+        if self.enforce_mana_costs and not self._pay_mana_cost(
+            controller, ability.cost.mana,
+            purpose=PaymentPurpose(ACTIVATE, source=card),
+        ):
             details = f"{controller.name} cannot pay for {card.name}'s ability"
             self.log.append(details)
             return SimulationResult(card.name, False, "unsupported", details)

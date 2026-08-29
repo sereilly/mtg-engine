@@ -692,13 +692,35 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, twenty-eight rounds in. 184 → 269 of 373 supported
-(72%), hollow lines 10 cards.** The set is still under `measured`, which is the
+**Where it stands: Phase 3, twenty-nine rounds in. 184 → 270 of 373 supported
+(72%), hollow lines 10 cards — and see the measurement warning below, which
+says the 270 is roughly 30 cards too generous.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
 
-**The remaining 104 are a long tail, and the shape is Legends' rather than
+**The supported count is overstated, and by how much is now known.**
+`scripts/parse_coverage.py` — the instrument that fails when a *supported* card
+carries text nothing implements — reads `manifest_set_paths()`, the **shipped**
+pool. A measured set is outside it. Run over ICE it reports **45 unclaimed
+sentences across 30 supported cards**: Snowfall is counted done on the strength
+of its cumulative upkeep alone, with a whole printed paragraph ("Whenever an
+Island is tapped for mana…") compiling to nothing at all. The support gate lets
+that through because an artifact or enchantment is admitted when *any* ability
+of it is implemented — which is round 1's second finding ("a widened gate hid a
+static line") for a card type the round-1 fix did not reach.
+
+Only 10 of those 30 show in `--hollow-lines`, because a line that produces no
+*ability part* leaves nothing for that probe to find hollow. So the honest
+reading of "270 supported" is "270 compile, ~240 of them with every printed line
+accounted for". Two rounds are scheduled: widen the instrument to read supported
+cards wherever they live (reporting a measured set, not gating on it — the
+arrangement `GRAMMAR_COVERAGE.md` and `HOOK_RELIANCE.md` already use), then
+tighten the gate and take the number down to the true one. Measured before
+changing anything: **no shipped card is affected**, which is what makes the
+second round safe to do at all.
+
+**The remaining 103 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
@@ -1573,6 +1595,46 @@ change could break for *shipped* cards: `app.js` parses, the three new functions
 load, the board renders, console clean. The prompt's own behaviour is covered by
 the engine tests, and the in-game pass waits for promotion, which is what
 SET_PLAYBOOK Phase 5 says it should.
+
+**Round 29 — restricted mana is about a payment, not about a cast. 269 → 270.**
+
+Soldevi Machinist ("{T}: Add {C}{C}. Spend this mana only to activate abilities
+of artifacts."). Adarkar Unicorn prints the round's other clause — "Spend this
+mana only to pay cumulative upkeep costs" — and is deliberately still
+unsupported; see below.
+
+CR 106.6 restricts "how that mana can be spent". Every clause the pool printed
+until Ice Age happened to name a *cast*, so `engine/restricted_mana.py`'s
+predicate took the card being cast and the only payment path that consulted a
+restricted bucket was `mixins/stack/casting.py`. The engine has **three**
+payment paths — casting (CR 601.2g), activating (CR 602.2b) and an upkeep cost
+(CR 702.24a) — and two of them had never heard of restricted mana. That is the
+`become_tapped` shape again, and it was invisible for the reason those always
+are: every existing restriction genuinely was cast-only, so every reader agreed.
+
+The predicate takes a `PaymentPurpose` now, and all three paths pass one. Three
+things fell out of that which a boolean would not have given: the cast-only rows
+say `purpose.kind == CAST` explicitly rather than by omission; "…only to
+**activate abilities of** artifacts" and Mishra's Workshop's "…to **cast**
+artifact spells" are two different narrowings the old predicate could not have
+told apart (each correctly refuses the other's payment, and there is a test that
+says so); and the merge/debit pair moved out of `casting.py` into
+`restricted_mana.py`, because with three callers a second copy would be a second
+opinion about what a bucket may pay for.
+
+**Adarkar Unicorn is left unsupported on purpose, and that is the finding.**
+"{T}: Add {U} or {C}{U}" — with its restriction clause now implemented, the card
+compiled clean and made the *wrong mana*. `pips_choice` is a tuple of
+`(symbol, count)` pairs, one per alternative, which says "one of these colours"
+and cannot say "{U}, or {C} and {U} together"; the parser merged the two runs
+into one bag and the payload came out reading "either one {C} or two {U}" —
+neither of the two things the card prints. Every one of the fifteen cards in the
+pool that prints an "or" between mana symbols is a dual land whose alternatives
+are one symbol each, so the shape has been right for every card that exists and
+is wrong for the first card that does not fit. The parse refuses the alternation
+now, naming it. Reshaping the payload is its own round, and it is blocked on a
+*presentation* question rather than an engine one: an alternative is named to the
+engine by its colour, which cannot distinguish "{U}" from "{C}{U}".
 
 ## Where the sets landed
 

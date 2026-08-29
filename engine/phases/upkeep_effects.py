@@ -163,15 +163,22 @@ class UpkeepEffectsMixin:
         # know that generic mana can come from floating mana *or* from tapping a
         # land during upkeep, which is the difference between a {1} that is free
         # and a {1} that costs a land.
+        # "Spend this mana only to pay cumulative upkeep costs." (Adarkar
+        # Unicorn, Snowfall.) The purpose is what lets that bucket be seen at
+        # all: restricted mana lives beside the pool, and a payment that does
+        # not say what it is for is offered none of it.
+        from ..restricted_mana import CUMULATIVE_UPKEEP, PaymentPurpose
+
+        purpose = PaymentPurpose(CUMULATIVE_UPKEEP, source=permanent)
         human_choices = ctx.human_choices
         if human_choices is not None and permanent.card.name in human_choices:
             paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
-                controller, cost
+                controller, cost, purpose=purpose
             )
         else:
-            paid = self.can_pay_upkeep_mana(controller, cost)
+            paid = self.can_pay_upkeep_mana(controller, cost, purpose=purpose)
         if paid:
-            self._spend_upkeep_mana(controller, cost)
+            self._spend_upkeep_mana(controller, cost, purpose=purpose)
             self.log.append(
                 f"{controller.name} paid cumulative upkeep for {permanent.card.name}"
             )

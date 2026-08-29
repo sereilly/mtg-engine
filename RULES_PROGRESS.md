@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**336 / 612 tracked rules covered (54%)** — 1638 tests, 0 unannotated.
+**336 / 612 tracked rules covered (54%)** — 1639 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -159,7 +159,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **106.3** Mana is produced by the effects of mana abilities (see rule 605). It may also be produced by the ... *(2 tests)*
 - [x] **106.4** When an effect instructs a player to add mana, that mana goes into a player’s mana pool. From the... *(4 tests)*
 - [ ] **106.5** If an ability would produce one or more mana of an undefined type, it produces no mana instead.
-- [x] **106.6** Some spells or abilities that produce mana restrict how that mana can be spent, have an additiona... *(4 tests)*
+- [x] **106.6** Some spells or abilities that produce mana restrict how that mana can be spent, have an additiona... *(5 tests)*
 - [ ] **106.7** Some abilities produce mana based on the type of mana another permanent or permanents “could prod...
 - [ ] **106.8** If an effect would add mana represented by a hybrid mana symbol to a player’s mana pool, that pla...
 - [ ] **106.9** If an effect would add mana represented by a Phyrexian mana symbol to a player’s mana pool, one m...

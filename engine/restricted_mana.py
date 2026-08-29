@@ -1,4 +1,4 @@
-"""Mana that may be spent only on certain spells (CR 106.6).
+"""Mana that may be spent only on certain things (CR 106.6).
 
 "Spend this mana only to cast creature spells." (Metamorphosis.) "Spend this
 mana only to cast an instant or sorcery spell." (Vodalian Arcanist.) One
@@ -9,10 +9,21 @@ these as a field named ``creature_only_mana`` and a ``creature_spell: bool``
 threaded to the payer, so the second wording had nowhere to go but a second
 field, a second bool and a second branch in the payment.
 
-Each entry is a printed phrase, the key it produces, and a predicate over the
-**card being cast**. The predicate is what the payment asks; the phrase is what
-the parser claims and what the support gate reads, so the words admitted and the
-rule enforced cannot drift.
+**The restriction is on a payment, not on a cast.** Every clause the pool
+printed until Ice Age narrowed *which spell* the mana could pay for, so the
+predicate took the card being cast and the only payment site that asked was
+``mixins/stack/casting.py``. Two Ice Age cards narrow a different payment —
+"only to pay cumulative upkeep costs" (Adarkar Unicorn, Snowfall) and "only to
+activate abilities of artifacts" (Soldevi Machinist) — and neither is a cast at
+all. The predicate takes a :class:`PaymentPurpose` now, and all three payment
+paths (casting, activating, an upkeep cost) ask it. That is the widening
+``become_tapped`` and ``remove_from_battlefield`` needed: one question, asked
+wherever it arises, rather than at the one site the pool happened to exercise.
+
+Each entry is a printed phrase, the key it produces, and a predicate over that
+purpose. The predicate is what the payment asks; the phrase is what the parser
+claims and what the support gate reads, so the words admitted and the rule
+enforced cannot drift.
 """
 
 from __future__ import annotations
@@ -21,27 +32,81 @@ import re
 from dataclasses import dataclass
 from typing import Callable
 
+#: The purposes a payment can have, one per payment path in the engine. Named
+#: constants rather than bare strings, so a typo in a predicate is a name error
+#: instead of a restriction that silently admits nothing.
+CAST = "cast"
+ACTIVATE = "activate"
+CUMULATIVE_UPKEEP = "cumulative_upkeep"
+
+
+@dataclass(frozen=True)
+class PaymentPurpose:
+    """What a mana payment is *for* — which is what these clauses narrow.
+
+    ``card`` is the spell being cast; ``source`` is the permanent whose ability
+    is being activated, or whose upkeep is being paid. Both are optional,
+    because a purpose names only what its own kind needs.
+
+    A payment with **no** purpose admits no restricted mana. That is the
+    failing-safe direction and what every caller written before this existed
+    already got: unrestricted mana is unaffected either way, and restricted mana
+    nobody can classify must not be spendable.
+    """
+
+    kind: str
+    card: object = None
+    source: object = None
+
 
 @dataclass(frozen=True)
 class ManaRestriction:
     """One "spend this mana only to…" clause."""
 
     key: str
-    #: Whether *card* is a spell this mana may pay for.
-    admits: Callable[[object], bool]
+    #: Whether *purpose* is something this mana may pay for.
+    admits: Callable[["PaymentPurpose"], bool]
 
 
-def _is_creature(card) -> bool:
-    return "creature" in (getattr(card, "type_line", "") or "").lower()
+def _type_line(obj) -> str:
+    return (getattr(obj, "type_line", "") or "").lower()
 
 
-def _is_instant_or_sorcery(card) -> bool:
-    lowered = (getattr(card, "type_line", "") or "").lower()
-    return "instant" in lowered or "sorcery" in lowered
+def _casting_a_creature(purpose: "PaymentPurpose") -> bool:
+    return purpose.kind == CAST and "creature" in _type_line(purpose.card)
 
 
-def _is_artifact(card) -> bool:
-    return "artifact" in (getattr(card, "type_line", "") or "").lower()
+def _casting_an_instant_or_sorcery(purpose: "PaymentPurpose") -> bool:
+    lowered = _type_line(purpose.card)
+    return purpose.kind == CAST and ("instant" in lowered or "sorcery" in lowered)
+
+
+def _casting_an_artifact(purpose: "PaymentPurpose") -> bool:
+    return purpose.kind == CAST and "artifact" in _type_line(purpose.card)
+
+
+def _paying_cumulative_upkeep(purpose: "PaymentPurpose") -> bool:
+    """"Spend this mana only to pay cumulative upkeep costs." (Adarkar Unicorn,
+    Snowfall.)
+
+    Any permanent's, not only the producer's: the printed phrase says
+    "cumulative upkeep costs" with no possessive.
+    """
+    return purpose.kind == CUMULATIVE_UPKEEP
+
+
+def _activating_an_artifact_ability(purpose: "PaymentPurpose") -> bool:
+    """"Spend this mana only to activate abilities of artifacts." (Soldevi
+    Machinist.)
+
+    Read off the permanent whose ability it is, through what that permanent
+    *effectively* is: an artifact animated into a creature is still an artifact
+    (CR 205.1b), and a permanent a type change made one counts for the same
+    reason.
+    """
+    source = purpose.source
+    effective = getattr(source, "effective_card", None) or source
+    return purpose.kind == ACTIVATE and "artifact" in _type_line(effective)
 
 
 # The printed line, anchored at both ends. Anchored because a sentence saying
@@ -51,11 +116,11 @@ def _is_artifact(card) -> bool:
 _PATTERNS: tuple[tuple[re.Pattern[str], ManaRestriction], ...] = (
     (
         re.compile(r"^spend this mana only to cast creature spells\.?$"),
-        ManaRestriction("creature", _is_creature),
+        ManaRestriction("creature", _casting_a_creature),
     ),
     (
         re.compile(r"^spend this mana only to cast an instant or sorcery spell\.?$"),
-        ManaRestriction("instant_or_sorcery", _is_instant_or_sorcery),
+        ManaRestriction("instant_or_sorcery", _casting_an_instant_or_sorcery),
     ),
     (
         # Mishra's Workshop. Its {C}{C}{C} parsed here long before this row
@@ -65,7 +130,21 @@ _PATTERNS: tuple[tuple[re.Pattern[str], ManaRestriction], ...] = (
         # artifact-restricted three mana became one unrestricted mana, which is
         # the direction the anchoring note above is about.
         re.compile(r"^spend this mana only to cast artifact spells\.?$"),
-        ManaRestriction("artifact", _is_artifact),
+        ManaRestriction("artifact", _casting_an_artifact),
+    ),
+    (
+        # Adarkar Unicorn, Snowfall. The first clause in the pool that names a
+        # payment which is not a cast — and the reason the predicate takes a
+        # purpose rather than a card.
+        re.compile(r"^spend this mana only to pay cumulative upkeep costs\.?$"),
+        ManaRestriction("cumulative_upkeep", _paying_cumulative_upkeep),
+    ),
+    (
+        # Soldevi Machinist. The other non-cast payment, and the one that needs
+        # to know *whose* ability: "abilities of artifacts" is a narrowing on the
+        # ability's source, which only the activation path holds.
+        re.compile(r"^spend this mana only to activate abilities of artifacts\.?$"),
+        ManaRestriction("artifact_ability", _activating_an_artifact_ability),
     ),
 )
 
@@ -82,22 +161,76 @@ def mana_restriction_for(sentence: str) -> ManaRestriction | None:
     return None
 
 
-def restriction_admits(key: str, card) -> bool:
-    """Whether mana held under *key* may pay for *card*.
+def restriction_admits(key: str, purpose: "PaymentPurpose | None") -> bool:
+    """Whether mana held under *key* may pay for *purpose*.
 
     An unknown key admits **nothing**. That is the safe direction: a key with no
     predicate behind it is mana whose restriction the engine cannot test, and
-    treating it as unrestricted would spend it on anything.
+    treating it as unrestricted would spend it on anything. A payment with no
+    purpose admits nothing for the same reason.
     """
+    if purpose is None:
+        return False
     for _pattern, restriction in _PATTERNS:
         if restriction.key == key:
-            return bool(restriction.admits(card))
+            return bool(restriction.admits(purpose))
     return False
 
 
+def spendable_restricted_mana(player, purpose: "PaymentPurpose | None") -> dict[str, int]:
+    """Every restricted bucket *purpose* may be paid from, merged by symbol.
+
+    Merged rather than tried one at a time because a payment is one operation:
+    two buckets that both admit it are, to CR 601.2g, simply mana in the pool.
+    Which of them a spent unit came out of is settled afterwards by
+    :func:`debit_restricted_mana`, in the same order this merge walked.
+
+    Lives here rather than beside one payment path, because there are three of
+    those now and a second copy of the merge would be a second opinion about
+    what a bucket may pay for.
+    """
+    merged: dict[str, int] = {}
+    if purpose is None:
+        return merged
+    for key, bucket in (getattr(player, "restricted_mana", None) or {}).items():
+        if not any(bucket.values()) or not restriction_admits(key, purpose):
+            continue
+        for symbol, amount in bucket.items():
+            merged[symbol] = merged.get(symbol, 0) + amount
+    return merged
+
+
+def debit_restricted_mana(
+    player, purpose: "PaymentPurpose | None", symbol: str, amount: int
+) -> None:
+    """Take *amount* of *symbol* out of the buckets that paid for *purpose*.
+
+    In the merge's own order, so the attribution matches what was offered. The
+    order between two admitting buckets is arbitrary and does not matter: both
+    are spendable on this payment and both empty at the same step boundary, so
+    no observable differs.
+    """
+    remaining = amount
+    for key, bucket in (getattr(player, "restricted_mana", None) or {}).items():
+        if remaining <= 0:
+            break
+        if not restriction_admits(key, purpose):
+            continue
+        taken = min(remaining, bucket.get(symbol, 0))
+        if taken:
+            bucket[symbol] = bucket.get(symbol, 0) - taken
+            remaining -= taken
+
+
 __all__ = [
+    "ACTIVATE",
+    "CAST",
+    "CUMULATIVE_UPKEEP",
     "ManaRestriction",
+    "PaymentPurpose",
     "RESTRICTION_KEYS",
+    "debit_restricted_mana",
     "mana_restriction_for",
     "restriction_admits",
+    "spendable_restricted_mana",
 ]
