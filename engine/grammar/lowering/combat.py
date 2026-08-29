@@ -14,6 +14,7 @@ from ...subject_filters import (OBJECT_ONLY_FILTER_KEYS,
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    _describe_targets,
     _filter_payload,
     _is_source,
     _REST_OF_TURN,
@@ -264,7 +265,24 @@ def _lower_combat_restriction(
                 "static ability",
                 node=node,
             )
-        if not isinstance(node.subject, ast.TargetSpec) or node.subject.quantifier != "all":
+        if not isinstance(node.subject, ast.TargetSpec):
+            raise LoweringError(
+                "the blanket can't-block reads a plural subject", node=node
+            )
+        # "**Target creature** can't block this turn." (Panic.) The same printed
+        # sentence about one chosen creature rather than a described set, and a
+        # different effect for it: the blanket arms a board-wide filter the
+        # blocker gate tests, where this marks the one permanent the spell
+        # chose. Two kinds, because the dispatch really is different — folding
+        # them would make a targeted restriction reach every creature the noun
+        # phrase describes, which on "target creature" is all of them.
+        if node.subject.quantifier == "target":
+            targeted: dict[str, object] = {}
+            _describe_targets(targeted, node.subject)
+            return (
+                OracleInstruction("target_cant_block_until_eot", "", targeted),
+            )
+        if node.subject.quantifier != "all":
             raise LoweringError(
                 "the blanket can't-block reads a plural subject", node=node
             )

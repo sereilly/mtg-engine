@@ -14,7 +14,8 @@ from ._common import (
 from .registry import effect_handler
 from ..keywords import grant_keyword
 from ..combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
-from ..combat_permissions import ATTACK_AS_THOUGH_NO_DEFENDER
+from ..combat_permissions import (ATTACK_AS_THOUGH_NO_DEFENDER,
+                                  CANT_BLOCK_UNTIL_EOT)
 from ..pt import add_pt_modifier
 from ..rampage import rampage_bonus
 
@@ -585,6 +586,30 @@ def grant_unblockable_to_target(game: Game, instruction: OracleInstruction, cont
         return True, "resolved"
     target_creature.metadata["cant_be_blocked_until_eot"] = True
     game.log.append(f"{target_creature.card.name} can't be blocked this turn")
+    return True, "resolved"
+
+
+@effect_handler("target_cant_block_until_eot")
+def target_cant_block_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target creature can't block this turn." (Panic.)
+
+    The mirror of ``grant_unblockable_to_target`` above — that one stops a
+    creature *being* blocked, this one stops it blocking — and the same shape:
+    a mark on the one permanent the spell chose, swept with the turn by
+    ``_EOT_METADATA_KEYS``, read by the blocker gate.
+
+    Not the blanket ``cant_block_until_eot`` beside it: that arms a board-wide
+    filter, and a targeted restriction routed through it would reach every
+    creature its noun phrase describes.
+    """
+    target_creature = resolve_target_permanent(
+        game, context, predicate=lambda p: p.is_creature
+    )
+    if target_creature is None:
+        game.log.append(f"{context.card.name}: no creature to stop blocking")
+        return True, "resolved"
+    target_creature.metadata[CANT_BLOCK_UNTIL_EOT] = True
+    game.log.append(f"{target_creature.card.name} can't block this turn")
     return True, "resolved"
 
 

@@ -12,6 +12,95 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **76**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**44 unclaimed sentence(s) across 29 supported card(s).**
+
+- **Amulet of Quoz**
+  - `{t}, sacrifice this artifact: target opponent may ante the top card of their library. if they don't, you flip a coin. if you win the flip, that player loses the game. if you lose the flip, you lose the game. activate only during your upkeep`
+- **Battle Cry**
+  - `whenever a creature blocks this turn, it gets +0/+1 until end of turn`
+- **Blizzard**
+  - `cast this spell only if you control a snow land`
+  - `creatures with flying don't untap during their controllers' untap steps`
+- **Breath of Dreams**
+  - `green creatures have "cumulative upkeep {1}."`
+- **Call to Arms**
+  - `white creatures get +1/+1 as long as the chosen color is the most common color among nontoken permanents the chosen player controls but isn't tied for most common`
+  - `when the chosen color isn't the most common color among nontoken permanents the chosen player controls or is tied for most common, sacrifice this enchantment`
+- **Cold Snap**
+  - `at the beginning of each player's upkeep, this enchantment deals damage to that player equal to the number of snow lands they control`
+- **Drought**
+  - `spells cost an additional "sacrifice a swamp" to cast for each black mana symbol in their mana costs`
+  - `activated abilities cost an additional "sacrifice a swamp" to activate for each black mana symbol in their activation costs`
+- **Earthlink**
+  - `whenever a creature dies, that creature's controller sacrifices a land of their choice`
+- **Energy Storm**
+  - `prevent all damage that would be dealt by instant and sorcery spells`
+  - `creatures with flying don't untap during their controllers' untap steps`
+- **Fire Covenant**
+  - `as an additional cost to cast this spell, pay x life`
+- **Freyalise's Charm**
+  - `whenever an opponent casts a black spell, you may pay {g}{g}`
+  - `if you do, you draw a card`
+- **Iceberg**
+  - `this enchantment enters with x ice counters on it`
+- **Icy Prison**
+  - `at the beginning of your upkeep, sacrifice this enchantment unless any player pays {3}`
+  - `when this enchantment leaves the battlefield, return the exiled card to the battlefield under its owner's control`
+- **Illusionary Terrain**
+  - `as this enchantment enters, choose two basic land types`
+  - `basic lands of the first chosen type are the second chosen type`
+- **Infernal Darkness**
+  - `if a land is tapped for mana, it produces {b} instead of any other type`
+- **Infinite Hourglass**
+  - `all creatures get +1/+0 for each time counter on this artifact`
+- **Jester's Mask**
+  - `{1}, {t}, sacrifice this artifact: target opponent puts the cards from their hand on top of their library. search that player's library for that many cards. that player puts those cards into their hand, then shuffles`
+- **Justice**
+  - `whenever a red creature or spell deals damage, this enchantment deals that much damage to that creature's or spell's controller`
+- **Leshrac's Sigil**
+  - `whenever an opponent casts a green spell, you may pay {b}{b}`
+  - `if you do, look at that player's hand and choose a card from it`
+  - `the player discards that card`
+- **Mystic Remora**
+  - `whenever an opponent casts a noncreature spell, you may draw a card unless that player pays {4}`
+- **Naked Singularity**
+  - `if tapped for mana, plains produce {r}, islands produce {g}, swamps produce {w}, mountains produce {u}, and forests produce {b} instead of any other type`
+- **Oath of Lim-Dûl**
+  - `whenever you lose life, for each 1 life you lost, sacrifice a permanent other than this enchantment unless you discard a card`
+- **Reality Twist**
+  - `if tapped for mana, plains produce {r}, swamps produce {g}, mountains produce {w}, and forests produce {b} instead of any other type`
+- **Ritual of Subdual**
+  - `if a land is tapped for mana, it produces colorless mana instead of any other type`
+- **Runed Arch**
+  - `{x}, {t}, sacrifice this artifact: x target creatures with power 2 or less can't be blocked this turn`
+- **Snowfall**
+  - `whenever an island is tapped for mana, its controller may add an additional {u}`
+  - `if that island is snow, its controller may add an additional {u}{u} instead`
+  - `spend this mana only to pay cumulative upkeep costs`
+- **Time Bomb**
+  - `{1}, {t}, sacrifice this artifact: this artifact deals damage equal to the number of time counters on it to each creature and each player`
+- **Touch of Vitae**
+  - `until end of turn, target creature gains haste and "{0}: untap this creature`
+  - `activate only once."`
+- **Zur's Weirding**
+  - `if a player would draw a card, they reveal it instead`
+  - `then any other player may pay 2 life`
+  - `if a player does, put that card into its owner's graveyard`
+  - `otherwise, that player draws a card`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |

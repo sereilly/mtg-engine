@@ -64,9 +64,10 @@ cards/<CODE>_cards.json` — the spelled-out filename the convention forbids —
 the only way through. Reading a card file is not shipping it; `load_catalog` is
 the seam that decides what a player can deck. `--all` still means the shipped
 pool alone, in the paths *and* in the label. A measured set is reported by
-`GRAMMAR_COVERAGE.md` / `HOOK_RELIANCE.md` and deliberately left out of their
-floors and ceilings — a ratchet over a set nobody has implemented fires on its
-composition rather than on anything anyone did. It moves up to `sets` when it is
+`GRAMMAR_COVERAGE.md` / `HOOK_RELIANCE.md` / `PARSE_COVERAGE.md` and
+deliberately left out of their floors, ceilings and gate — a ratchet over a set
+nobody has implemented fires on its composition rather than on anything anyone
+did. It moves up to `sets` when it is
 fully supported. Guarded by `tests/engine/test_manifest_roles.py`. The
 end-to-end process — ingest → measure → rounds → promotion → retrospective —
 is `SET_PLAYBOOK.md`.
@@ -197,7 +198,12 @@ every supported card's oracle text is claimed by a known consumer (the parser,
 compiler tables, the text-keyed channels in its `CHANNELS`/`HANDLER_CLAIMS`
 registries, card hooks) — the guard test
 (`tests/engine/test_parse_coverage.py`) fails when a supported card carries
-text nothing parses. Deliberate shortcuts live in its `ACKNOWLEDGED` dict
+text nothing parses. **It reads shipped *and* measured sets and gates on the
+shipped half**: a supported card in a measured set is exactly what this catches
+(the compiler calls it done and no other instrument can see the line it
+dropped — `--hollow-lines` finds only lines that produced an *ability part*),
+but failing on one would make every ingest red on arrival. Its findings get
+their own section in the report. Deliberate shortcuts live in its `ACKNOWLEDGED` dict
 (with reasons); a deletion probe additionally flags words a matching rule
 ignored (the dropped-rider bug class), ratcheted through
 `scripts/parse_coverage_probe_baseline.json` — review new findings, then

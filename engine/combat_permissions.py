@@ -1,4 +1,4 @@
-"""CR 609.4 combat *permissions* recorded on a permanent.
+"""Combat marks recorded on a permanent, and read by the combat steps.
 
 An "as though" effect applies only to the stated effect, so a permission is a
 flag the combat step reads rather than a characteristic the layers change: a
@@ -17,3 +17,13 @@ from __future__ import annotations
 
 #: "…can attack this turn as though it didn't have defender." (Wall of Wonder.)
 ATTACK_AS_THOUGH_NO_DEFENDER = "attack_as_though_no_defender_until_eot"
+
+#: "Target creature can't block this turn." (Panic.) A *restriction* rather than
+#: a permission, and here anyway: it is the same kind of channel — one mark on
+#: one permanent, written by a handler, read by a combat step, swept with the
+#: turn — and the argument above about spelling a channel twice does not care
+#: which direction the mark points. This module is a leaf that imports nothing,
+#: which is what lets the cleanup sweep name the key without closing a cycle;
+#: ``engine/combat_restrictions.py``, where the *derivation* of the printed
+#: clause lives, cannot be imported that early.
+CANT_BLOCK_UNTIL_EOT = "cant_block_until_eot"

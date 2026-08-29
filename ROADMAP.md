@@ -692,33 +692,32 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, twenty-nine rounds in. 184 → 270 of 373 supported
-(72%), hollow lines 10 cards — and see the measurement warning below, which
-says the 270 is roughly 30 cards too generous.** The set is still under `measured`, which is the
+**Where it stands: Phase 3, thirty rounds in. 184 → 270 of 373 supported (72%),
+hollow lines 10 cards, and 44 unclaimed sentences across 29 of those 270 — the
+third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
 
-**The supported count is overstated, and by how much is now known.**
+**The supported count is overstated, and the instrument that says so now runs here.**
 `scripts/parse_coverage.py` — the instrument that fails when a *supported* card
-carries text nothing implements — reads `manifest_set_paths()`, the **shipped**
-pool. A measured set is outside it. Run over ICE it reports **45 unclaimed
-sentences across 30 supported cards**: Snowfall is counted done on the strength
-of its cumulative upkeep alone, with a whole printed paragraph ("Whenever an
-Island is tapped for mana…") compiling to nothing at all. The support gate lets
-that through because an artifact or enchantment is admitted when *any* ability
-of it is implemented — which is round 1's second finding ("a widened gate hid a
-static line") for a card type the round-1 fix did not reach.
+carries text nothing implements — read `manifest_set_paths()`, the **shipped**
+pool, so a measured set was outside it. Round 30 widened it: it reads shipped
+and measured, gates on the shipped half, and gives the rest their own section in
+`PARSE_COVERAGE.md`. The backlog it publishes is **44 unclaimed sentences across
+29 supported cards** — Snowfall counted done on the strength of its cumulative
+upkeep alone with a whole printed paragraph compiling to nothing, Fire Covenant's
+"pay X life" additional cost doing nothing, Iceberg entering with no counters.
 
-Only 10 of those 30 show in `--hollow-lines`, because a line that produces no
+Only 10 of those show in `--hollow-lines`, because a line that produces no
 *ability part* leaves nothing for that probe to find hollow. So the honest
-reading of "270 supported" is "270 compile, ~240 of them with every printed line
-accounted for". Two rounds are scheduled: widen the instrument to read supported
-cards wherever they live (reporting a measured set, not gating on it — the
-arrangement `GRAMMAR_COVERAGE.md` and `HOOK_RELIANCE.md` already use), then
-tighten the gate and take the number down to the true one. Measured before
-changing anything: **no shipped card is affected**, which is what makes the
-second round safe to do at all.
+reading of "270 supported" is "270 compile, 241 of them with every printed line
+accounted for". **One round is still scheduled**: the support gate admits an
+artifact or enchantment when *any* ability of it is implemented — round 1's
+second finding ("a widened gate hid a static line") for a card type the round-1
+fix did not reach — and tightening it takes the number down to the true one.
+Measured before changing anything: **no shipped card is affected**, which is what
+makes that round safe to do at all.
 
 **The remaining 103 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
@@ -1635,6 +1634,49 @@ is wrong for the first card that does not fit. The parse refuses the alternation
 now, naming it. Reshaping the payload is its own round, and it is blocked on a
 *presentation* question rather than an engine one: an alternative is named to the
 engine by its colour, which cannot distinguish "{U}" from "{C}{U}".
+
+**Round 30 — the instrument stopped at the shipped pool. 270 → 270, and one card
+started doing what it says.**
+
+`parse_coverage.py` is the only thing in the repo that fails when a card
+compiles *supported* while carrying a printed line nothing implements. It read
+`manifest_set_paths()`, which defaults to the shipped sets — not a decision, the
+default that call carries. So the check that exists precisely for "the compiler
+called this done and it isn't" had never been pointed at the set where that is
+most likely to be true.
+
+It reads `include_measured=True` now. The gate is still the shipped pool, for
+the reason `GRAMMAR_COVERAGE.md`'s floors and `HOOK_RELIANCE.md`'s ceilings
+exclude the same sets: a set is ingested so its gaps can be *counted* before
+anyone has closed them, and gating on them would make every ingest red on
+arrival. The measured findings get their own section in the report and a line on
+`--check`'s output, and `collect_findings` / `collect_measured_findings` are two
+functions so "what fails the build" and "what is owed" cannot be confused for
+each other.
+
+**Panic is the card it found first, and the shape is worth keeping.** Its three
+lines are a cast restriction, "Target creature can't block this turn", and a
+delayed draw. The first and third compiled; the second produced **no instruction
+at all**, and the card has been counted among the supported since ingest while
+doing nothing it is played for. The sentence was not unparsed — the production
+exists and the *lowering* refused a targeted subject, because the only card that
+had ever printed it named a described set ("Creatures without flying can't block
+this turn", Destructive Tampering). Two kinds now, and deliberately two: the
+blanket arms a board-wide filter the blocker gate tests, where the targeted one
+marks the single permanent the spell chose. Folding them would make Panic reach
+every creature its noun phrase describes, which on "target creature" is all of
+them.
+
+The mark's key is named once, in `engine/combat_permissions.py`, and read by the
+handler, the cleanup sweep and the blocker gate. That module is about CR 609.4
+*permissions* and this is a restriction; it lives there anyway because it is the
+same kind of channel — one mark on one permanent, swept with the turn — and
+because it is the leaf that imports nothing, which is what lets the sweep name
+the key without closing a cycle through `combat_restrictions.py`.
+
+**The count did not move, and that is the point.** Panic was already inside the
+270. What this round bought is one card that now does what it prints, and an
+instrument that can see the other 29.
 
 ## Where the sets landed
 

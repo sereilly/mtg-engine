@@ -140,3 +140,38 @@ def test_grammar_refuses_the_rider_shape_instead_of_swallowing_it():
     assert not result.usable
     assert not result.lowered
     assert "controller" in (result.lowering_error or ""), result.lowering_error
+
+
+def test_the_gate_is_the_shipped_pool_and_measured_sets_are_reported():
+    """The instrument reads every supported card; only the shipped half gates.
+
+    It used to read `manifest_set_paths()` — the shipped pool — so a *supported*
+    card in a measured set was outside the one check that fails when a card
+    compiles with a printed line nothing implements. Ice Age's Snowfall was
+    counted done on the strength of its cumulative upkeep alone, with a whole
+    paragraph compiling to nothing at all, and no instrument in the repo could
+    see it: `--hollow-lines` finds only lines that produced an *ability part*.
+
+    Gating on a measured set instead would make every ingest red on arrival,
+    which is why `GRAMMAR_COVERAGE.md`'s floors and `HOOK_RELIANCE.md`'s
+    ceilings exclude the same sets. So both halves are asserted: the measured
+    cards are analysed and collected, and none of them reaches the gate.
+    """
+    pc = _load_parse_coverage()
+    coverages = pc.analyze_pool(run_probe=False)
+
+    measured = [c for c in coverages if not c.shipped]
+    assert measured, (
+        "no measured card was analysed — CARD_PATHS lost include_measured=True, "
+        "and this guard is back to watching only what it always watched"
+    )
+
+    unclaimed, _stale_ack, _new_probe, _stale_probe = pc.collect_findings(coverages)
+    gated = {name for name, _ in unclaimed}
+    measured_names = {c.name for c in measured}
+    assert not (gated & measured_names), (
+        f"measured cards reached the gate: {sorted(gated & measured_names)}"
+    )
+
+    backlog = pc.collect_measured_findings(coverages)
+    assert all(name in measured_names for name, _ in backlog)

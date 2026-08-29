@@ -2140,3 +2140,94 @@ def test_adarkar_unicorn_refuses_a_choice_between_multi_symbol_runs(set_pool):
     assert mana_restriction_for(
         "Spend this mana only to pay cumulative upkeep costs."
     ) is not None
+
+
+# --- Round 30: a card counted supported that did nothing it said ---
+
+
+def test_panic_stops_the_creature_it_targets_from_blocking(set_pool):
+    """"Target creature can't block this turn."
+
+    Panic was already counted **supported**: its cast restriction and its
+    delayed draw compiled, and the sentence that is the whole point of the card
+    produced no instruction at all. Nothing in the repo could see that, which is
+    what this round's instrument change fixes; this is the card it found first.
+    """
+    pool = set_pool("ICE")
+    attacker = Permanent(card=pool["Balduvian Bears"])
+    blocker = Permanent(card=pool["Hoar Shade"])
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[attacker], hand=[pool["Panic"]], life=20),
+            PlayerState(name="P2", battlefield=[blocker], life=20),
+        ]
+    )
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    game._sync_control()
+    _nosick(attacker)
+    _nosick(blocker)
+
+    ok, message = game.declare_attackers(0, [0])
+    assert ok, message
+
+    result = game.cast_from_hand(
+        0, "Panic", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+    assert result.supported, result.details
+
+    game.current_step = "declare_blockers"
+    blocked, message = game.declare_blockers(1, {0: 0})
+
+    assert not blocked, "the creature Panic named cannot block"
+
+
+def test_panics_restriction_lasts_exactly_the_turn(set_pool):
+    """"…this turn." Swept by the cleanup step with the rest of the turn's
+    marks, so the creature blocks again next combat. Paired with the test above,
+    because a restriction that never ends passes that one too."""
+    pool = set_pool("ICE")
+    blocker = Permanent(card=pool["Hoar Shade"])
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[], hand=[pool["Panic"]], life=20),
+            PlayerState(name="P2", battlefield=[blocker], life=20),
+        ]
+    )
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    game._sync_control()
+    _nosick(blocker)
+
+    game.cast_from_hand(0, "Panic", target_player_index=1, target_permanent_index=0)
+    game._settle()
+    assert blocker.metadata.get("cant_block_until_eot")
+
+    game.resolve_cleanup_step(0)
+
+    assert not blocker.metadata.get("cant_block_until_eot")
+
+
+def test_the_targeted_restriction_is_not_the_blanket_one(set_pool):
+    """"Target creature can't block this turn" (Panic) and "Creatures without
+    flying can't block this turn" (Destructive Tampering) are one printed
+    sentence over two subjects, and two effects: one marks the permanent the
+    spell chose, the other arms a board-wide filter.
+
+    Folding them would make Panic reach every creature its noun phrase
+    describes — which, on "target creature", is all of them.
+    """
+    from engine.grammar import compile_line
+
+    targeted = compile_line("Target creature can't block this turn.")
+    blanket = compile_line("Creatures without flying can't block this turn.")
+
+    assert targeted.instructions[0].kind == "target_cant_block_until_eot"
+    assert "targets" in targeted.instructions[0].payload
+    assert blanket.instructions[0].kind == "cant_block_until_eot"
+    assert "filter" in blanket.instructions[0].payload

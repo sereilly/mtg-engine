@@ -481,6 +481,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The one-shot, turn-scoped blanket ("Creatures without flying can't block
     # this turn", Destructive Tampering's second mode).
     "cant_block_until_eot": "combat_restrictions",
+    "target_cant_block_until_eot": "combat_restrictions",
     # "Creatures can't attack this turn." (Festival.) The same category as its
     # blocking twin above, so GRAMMAR_CATEGORIES is unchanged.
     "cant_attack_until_eot": "combat_restrictions",

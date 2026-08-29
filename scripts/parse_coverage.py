@@ -6,8 +6,9 @@ compiles "supported" while some of its text was never parsed by anything (the
 failure mode behind the Hasran Ogress / Army of Allah / Metamorphosis bugs:
 a broad rule matched part of a clause and the rest was silently dropped).
 
-This script closes that gap offline. For every supported card in the pool it
-verifies that each sentence of oracle text is claimed by a known consumer:
+This script closes that gap offline. For every supported card in the pool —
+shipped **and** measured — it verifies that each sentence of oracle text is
+claimed by a known consumer:
 
 - the parser (whole-clause or per-sentence match),
 - the compiler's keyword / trigger / static-line tables,
@@ -21,6 +22,12 @@ Sentences nothing claims are "unclaimed": either a silent parser gap (fix it)
 or a deliberate simplification (add it to ACKNOWLEDGED with a reason). The
 guard test (tests/engine/test_parse_coverage.py) fails on unacknowledged
 unclaimed text and on stale acknowledgments, so the list can only shrink.
+
+The gate is the **shipped** pool. A measured set's supported cards are analysed
+and reported in their own section but never gated on: a set is ingested so its
+gaps can be counted before anyone has closed them, and failing on them would
+make every ingest red on arrival. That is the same split `GRAMMAR_COVERAGE.md`
+and `HOOK_RELIANCE.md` make with their floors and ceilings.
 
 A finer second pass runs a **deletion probe** on parse-rule matches: delete
 one word at a time and re-parse — if the identical instruction comes back,
@@ -91,9 +98,25 @@ from engine.oracle import (  # noqa: E402
     expand_ability_lines,
     normalize_creature_line,
 )
+#: The shipped pool, and the measured sets beside it. Both are analysed; only
+#: the shipped half gates. A measured set is ingested so its numbers can be read
+#: *before* the work of supporting it is done, and a **supported** card in one is
+#: exactly what this script is for — the compiler will call it done, and nothing
+#: else in the repo can see a printed line it dropped. Excluding measured sets
+#: was not a decision, it was the default `manifest_set_paths()` carries; Ice
+#: Age's Snowfall is what it cost, counted supported on its cumulative upkeep
+#: alone with a whole paragraph compiling to nothing.
 CARD_PATHS = [
-    *manifest_set_paths(),
+    *manifest_set_paths(include_measured=True),
 ]
+
+#: The shipped half, by card name. What `--check` and the guard test fail on,
+#: unchanged: a ratchet over a set nobody has implemented would fire on its
+#: composition rather than on anything anyone did, which is the arrangement
+#: `GRAMMAR_COVERAGE.md` and `HOOK_RELIANCE.md` already make.
+SHIPPED_NAMES = {
+    card.name for path in manifest_set_paths() for card in load_cards(path)
+}
 OUTPUT_PATH = REPO_ROOT / "PARSE_COVERAGE.md"
 
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!])\s+")
@@ -539,6 +562,9 @@ _PROBE_STOPWORDS = frozenset(
 class CardCoverage:
     name: str
     supported: bool
+    #: Whether a player can actually deck this card. False for a card that is
+    #: only in a `measured` set — reported here, never gated on.
+    shipped: bool = True
     claims: list[tuple[str, str]] = field(default_factory=list)      # (sentence, channel)
     unclaimed: list[str] = field(default_factory=list)               # sentences
     acknowledged: list[tuple[str, str]] = field(default_factory=list)  # (sentence, reason)
@@ -979,11 +1005,23 @@ def load_pool() -> list:
 
 def analyze_pool(run_probe: bool = True) -> list[CardCoverage]:
     hooked = _hooked_names()
-    return [analyze_card(card, hooked, run_probe=run_probe) for card in load_pool()]
+    coverages = []
+    for card in load_pool():
+        coverage = analyze_card(card, hooked, run_probe=run_probe)
+        coverage.shipped = card.name in SHIPPED_NAMES
+        coverages.append(coverage)
+    return coverages
 
 
 def collect_findings(coverages: list[CardCoverage]):
-    """The guard-test view: unacknowledged problems + stale acknowledgments."""
+    """The guard-test view: unacknowledged problems + stale acknowledgments.
+
+    **Shipped cards only.** A measured set is ingested precisely so its gaps can
+    be *counted* before anyone has closed them, so failing on them would make
+    every ingest red on arrival. They are reported instead, by
+    :func:`collect_measured_findings` and the section it feeds.
+    """
+    coverages = [c for c in coverages if c.shipped]
     unclaimed = [(c.name, s) for c in coverages for s in c.unclaimed]
 
     seen_acknowledged = {(c.name, s) for c in coverages for s, _ in c.acknowledged}
@@ -1005,11 +1043,30 @@ def collect_findings(coverages: list[CardCoverage]):
     return unclaimed, stale_acknowledged, new_probe, stale_probe
 
 
+def collect_measured_findings(coverages: list[CardCoverage]):
+    """The same question asked of the measured sets, as a *backlog* rather than
+    a gate: ``(name, sentence)`` for every supported-but-unclaimed sentence.
+
+    This is the debt behind a measured set's supported count. A card here
+    compiles, is counted in the set's progress number, and carries a printed
+    line no code implements — and `--hollow-lines` cannot see most of them,
+    because a line that yields no *ability part* leaves nothing to be hollow.
+    """
+    return [
+        (c.name, sentence)
+        for c in coverages
+        if not c.shipped
+        for sentence in c.unclaimed
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
 
 def render_markdown(coverages: list[CardCoverage]) -> str:
+    measured = [c for c in coverages if c.supported and not c.shipped and c.unclaimed]
+    coverages = [c for c in coverages if c.shipped]
     supported = [c for c in coverages if c.supported]
     fully = [c for c in supported if not c.unclaimed and not c.acknowledged]
     with_ack = [c for c in supported if c.acknowledged]
@@ -1038,6 +1095,30 @@ def render_markdown(coverages: list[CardCoverage]) -> str:
         f"- With deletion-probe findings (ignored words): **{len(probe_cards)}**",
         "",
     ]
+
+    if measured:
+        sentences = sum(len(c.unclaimed) for c in measured)
+        lines += [
+            "## Measured sets — reported, not gated",
+            "",
+            "Cards in a `measured` set (see `cards/manifest.json`) that the",
+            "compiler calls **supported** while carrying a printed line nothing",
+            "implements. They are the debt behind that set's progress number, and",
+            "`--hollow-lines` sees only the ones that produced an *ability part* —",
+            "a line yielding nothing at all leaves that probe nothing to find.",
+            "",
+            "Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and",
+            "`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a",
+            "set nobody has implemented fires on its composition rather than on",
+            "anything anyone did, and every ingest would arrive red.",
+            "",
+            f"**{sentences} unclaimed sentence(s) across {len(measured)} supported card(s).**",
+            "",
+        ]
+        for c in measured:
+            lines.append(f"- **{c.name}**")
+            lines += [f"  - `{s}`" for s in c.unclaimed]
+        lines.append("")
 
     if with_unclaimed:
         lines += ["## Unclaimed text — fix the parser or acknowledge the simplification", ""]
@@ -1091,6 +1172,7 @@ def main() -> int:
     args = parser.parse_args()
 
     coverages = analyze_pool()
+    measured = collect_measured_findings(coverages)
 
     if args.accept_probe:
         findings = {(c.name, s): words for c in coverages for s, words in c.probe_findings}
@@ -1124,10 +1206,23 @@ def main() -> int:
             print("STALE probe-baseline entries (no longer occur — rerun --accept-probe):")
             for key in stale_probe:
                 print(f"  {key}")
+        if measured:
+            cards = len({name for name, _ in measured})
+            print(
+                f"(measured sets carry {len(measured)} unclaimed sentence(s) on "
+                f"{cards} supported card(s) — reported in PARSE_COVERAGE.md, "
+                "not gated here)"
+            )
         return 0 if ok else 1
 
     OUTPUT_PATH.write_text(render_markdown(coverages), encoding="utf-8")
     print(f"wrote {OUTPUT_PATH}")
+    if measured:
+        cards = len({name for name, _ in measured})
+        print(
+            f"measured sets: {len(measured)} unclaimed sentence(s) on {cards} "
+            "supported card(s) — reported, not gated"
+        )
     if unclaimed:
         print(f"WARNING: {len(unclaimed)} unclaimed sentence(s) — run with --check for details")
     return 0

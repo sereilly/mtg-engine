@@ -13,6 +13,7 @@ import random
 import re
 
 from ..auras import attached_combat_restrictions, aura_restriction_active
+from ..combat_permissions import CANT_BLOCK_UNTIL_EOT
 from ..combat_restrictions import declaration_company_required, participation_cap
 from ..evasion_negation import negated_evasion_abilities
 from ..landwalk import LANDWALK, land_satisfies, landwalk_requirement
@@ -504,6 +505,12 @@ class DeclareBlockersStepMixin:
             return False
         # And the Aura-imposed half (Faith's Fetters).
         if aura_restriction_active(blocker, "cant_block"):
+            return False
+        # And the granted half (Panic): a restriction a spell put on this one
+        # creature for the turn, swept by the cleanup step. Read beside the two
+        # above because all three answer the same question about the blocker,
+        # and a reader that knew only two of them would let the third through.
+        if blocker.metadata.get(CANT_BLOCK_UNTIL_EOT):
             return False
 
         attacker_program = compile_card_oracle(attacker.effective_card)
