@@ -353,6 +353,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "discard_all_matching_cards": "zones",
     "look_at_target_hand": "zones",
     "look_at_target_library_top": "zones",
+    # "…, then put them back in any order" (Natural Selection, Portent). The
+    # look above with the rearrangement switched on — same prompt, same zone,
+    # so the same family.
+    "reorder_target_library_top": "zones",
     # A library search moves a card between hidden zones — same module, same
     # category as the other zone-change handlers.
     "search_library": "zones",

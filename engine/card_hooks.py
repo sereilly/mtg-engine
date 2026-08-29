@@ -424,15 +424,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
                 amount=1, cost=1,
             ),
     },
-    'Natural Selection': {
-        "look at the top three cards of target player's library, then put them "
-        'back in any order. you may have that player shuffle':
-            # The optional shuffle rides the payload. The handler used to derive
-            # it by substring-matching this same sentence at resolution — a
-            # handler reading oracle text, which the mixins are forbidden from
-            # doing for the reason a second reader always drifts from the first.
-            _line('reorder_target_library_top', 'spell_pattern', may_shuffle=True),
-    },
     'Nether Shadow': {
         "at the beginning of your upkeep, if this card is in your graveyard with "
         "three or more creature cards above it, you may put this card onto the "

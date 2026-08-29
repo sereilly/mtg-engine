@@ -16,9 +16,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 82.0% | 80.7% | 44.3% | 157 |
-| LEB | 292 | 389 | 82.0% | 80.7% | 44.5% | 158 |
-| 2ED | 292 | 389 | 82.0% | 80.7% | 44.5% | 158 |
+| LEA | 290 | 388 | 82.2% | 80.9% | 44.6% | 158 |
+| LEB | 292 | 389 | 82.3% | 81.0% | 44.7% | 159 |
+| 2ED | 292 | 389 | 82.3% | 81.0% | 44.7% | 159 |
 | ARN | 78 | 108 | 75.9% | 71.3% | 49.1% | 44 |
 | ATQ | 85 | 120 | 89.2% | 89.2% | 61.7% | 67 |
 | 3ED | 296 | 389 | 84.1% | 82.3% | 46.8% | 164 |
@@ -26,8 +26,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 63.7% | 58.1% | 38.1% | 180 |
-| **All (shipped)** | **2415** | **3404** | **85.7%** | **84.6%** | **52.3%** | **1541** |
+| ICE *(measured)* | 373 | 601 | 64.1% | 58.4% | 38.4% | 181 |
+| **All (shipped)** | **2415** | **3404** | **85.8%** | **84.7%** | **52.4%** | **1544** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -41,7 +41,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | ---: | ---: | --- | --- |
 | 302 | 154 | expected a subject |  |
 | 133 | 60 | unrecognized effect verb |  |
-| 94 | 57 | unconsumed text |  |
+| 89 | 55 | unconsumed text |  |
 | 40 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 11 | 8 | expected 'a' |  |
@@ -67,7 +67,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 
 ## Cards executing through the grammar
 
-1541 cards, 1780 lines.
+1544 cards, 1783 lines.
 
 - **Abomination**
   - `Whenever this creature blocks or becomes blocked by a green or white creature, destroy that creature at end of combat.`
@@ -825,6 +825,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 - **Electric Eel**
   - `When this creature enters, it deals 1 damage to you.`
   - `{R}{R}: This creature gets +2/+0 until end of turn and deals 1 damage to you.`
+- **Elemental Augury**
+  - `{3}: Look at the top three cards of target player's library, then put them back in any order.`
 - **Elephant Graveyard**
   - `{T}: Add {C}.`
   - `{T}: Regenerate target Elephant.`
@@ -1793,6 +1795,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Whenever you draw your second card each turn, this creature gains flying until end of turn.`
 - **Nacre Talisman**
   - `Whenever a player casts a white spell, you may pay {3}. If you do, untap target permanent.`
+- **Natural Selection**
+  - `Look at the top three cards of target player's library, then put them back in any order. You may have that player shuffle.`
+  - `Look at the top three cards of target player's library, then put them back in any order. You may have that player shuffle.`
+  - `Look at the top three cards of target player's library, then put them back in any order. You may have that player shuffle.`
 - **Nature's Lore**
   - `Search your library for a Forest card, put that card onto the battlefield, then shuffle.`
 - **Nebuchadnezzar**
@@ -1964,6 +1970,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 - **Portcullis Vine**
   - `{2}, {T}, Sacrifice a creature with defender: Draw a card.`
 - **Portent**
+  - `Look at the top three cards of target player's library, then put them back in any order. You may have that player shuffle.`
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Power Sink**
   - `Counter target spell unless its controller pays {X}. If that player doesn't, they tap all lands with mana abilities they control and lose all unspent mana.`

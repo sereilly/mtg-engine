@@ -131,6 +131,28 @@ def _parse_look_other_library_tail(
     ):
         return ast.LookAtLibraryTop(count, owner, may_shuffle=True)
     stream.reset(mark)
+    # "…, **then put them back in any order**." (Natural Selection, Portent.)
+    # The looker rearranges the cards they saw, which is the other handler —
+    # and the optional shuffle after it is printed shorter here than Visions
+    # prints it, so both spellings are read rather than one being normalized
+    # into the other.
+    #
+    # This was a name-keyed hook on Natural Selection, and Portent prints the
+    # identical sentence: `card_hooks`' entry bar is that no second card shares
+    # the shape, and a second card did.
+    if stream.accept_punct(",") and stream.accept_phrase(
+        "then", "put", "them", "back", "in", "any", "order"
+    ):
+        shuffle_mark = stream.mark()
+        if stream.accept_punct(".") and stream.accept_phrase(
+            "you", "may", "have", "that", "player", "shuffle"
+        ):
+            return ast.LookAtLibraryTop(
+                count, owner, may_shuffle=True, may_reorder=True
+            )
+        stream.reset(shuffle_mark)
+        return ast.LookAtLibraryTop(count, owner, may_reorder=True)
+    stream.reset(mark)
     return ast.LookAtLibraryTop(count, owner)
 
 

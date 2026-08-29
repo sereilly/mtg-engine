@@ -1081,6 +1081,27 @@ cannot disagree about what the card names. `no_lands_anywhere` stays: "no lands
 **on the battlefield**" is a genuinely different set from "you control no
 lands", and Mana Vortex is not sacrificed while an opponent still has one.
 
+**Round 14 — a hook that had a second card. 242 → 243, and hook reliance falls.**
+
+"Look at the top three cards of target player's library, then put them back in
+any order" was a name-keyed entry on Natural Selection. `card_hooks`' entry bar
+is that **no second card, real or plausibly printable, shares the shape** — and
+Ice Age prints it twice. Portent compiled *supported* on the strength of its
+cantrip line while its main effect was a bare whitelist marker; Elemental
+Augury has no second line and was unsupported outright.
+
+It is a production now, and the hook is retired: ALL hook reliance 6.4% → 6.3%,
+79 entries, and the grammar's shipped parse rate rose 85.7% → 85.8% off a real
+production rather than off membership. `may_reorder` picks between two existing
+handlers rather than becoming a flag on one — Visions looks at five cards and
+never rearranges them, and folding the two together would hand its controller a
+rearrangement the card does not give.
+
+The guard this broke is worth recording: `test_look_at_requires_the_object_it_looks_at`
+asserted Natural Selection's line was **unparseable**, which was true while it
+was a hook and is exactly the wrong probe for a production. Its point — "look
+at" must consume its object — is kept with a line that has no object at all.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

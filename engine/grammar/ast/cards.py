@@ -139,6 +139,13 @@ class LookAtLibraryTop:
     count: "Amount"
     player: PlayerRef
     may_shuffle: bool = False
+    #: "…, **then put them back in any order**" (Natural Selection, Portent).
+    #: The looker rearranges what they saw, which is a different effect from
+    #: merely learning it — and a *different handler*, so it is a field rather
+    #: than an assumption: Visions looks and never reorders, and reading the two
+    #: as one would hand Visions' controller a rearrangement the card does not
+    #: give them.
+    may_reorder: bool = False
 
 
 @dataclass(frozen=True)

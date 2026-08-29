@@ -999,16 +999,38 @@ def test_looking_at_a_non_targeted_hand_is_refused():
 
 def test_look_at_requires_the_object_it_looks_at():
     """"Look at" heads a family of information effects distinguished only by
-    their object — a hand, the top cards of a library, a face-down creature.
-    Natural Selection looks at a *library*; if the production skipped the noun
-    it would claim that card and reveal the wrong zone."""
-    result = compile_line(
+    their object — a hand, the top cards of a library, a face-down creature. A
+    production that skipped the noun would claim every one of them and read the
+    wrong zone.
+
+    The probe used to be Natural Selection's own line, which was a name-keyed
+    hook then and is a production now (Portent prints the identical sentence).
+    A parseable line makes a poor test of what happens to an unparseable one, so
+    the probe is a "look at" with no object at all — which is what the assertion
+    was always about."""
+    result = compile_line("Look at the top three cards.", card_name="Test")
+
+    assert not result.parsed
+
+
+def test_looking_at_another_library_reorders_only_when_the_card_says_so():
+    """"…then put them back in any order" is a different handler from the bare
+    look, not a flag on it: Visions looks at five cards and never rearranges
+    them, and reading the two as one sentence would hand its controller a
+    rearrangement the card does not give."""
+    looked = compile_line(
+        "Look at the top five cards of target player's library. You may then "
+        "have that player shuffle that library.",
+        card_name="Visions",
+    )
+    reordered = compile_line(
         "Look at the top three cards of target player's library, then put them "
         "back in any order.",
         card_name="Natural Selection",
     )
 
-    assert not result.parsed
+    assert [i.kind for i in looked.instructions] == ["look_at_target_library_top"]
+    assert [i.kind for i in reordered.instructions] == ["reorder_target_library_top"]
 
 
 # ---------------------------------------------------------------------------

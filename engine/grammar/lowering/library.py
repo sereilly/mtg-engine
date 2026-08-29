@@ -237,7 +237,14 @@ def _lower_look_at_library_top(
         "may_shuffle": node.may_shuffle,
     }
     payload.update(_targets_only(node.player))
-    return (OracleInstruction("look_at_target_library_top", "", payload),)
+    # "…then put them back in any order" is the *other* handler, not a flag on
+    # this one: `may_reorder` is enforced where the prompt is answered, so a
+    # card that only looks can never be handed a rearrangement.
+    kind = (
+        "reorder_target_library_top" if node.may_reorder
+        else "look_at_target_library_top"
+    )
+    return (OracleInstruction(kind, "", payload),)
 
 
 # Restrictions the search flow can honour. `card_type` is compared against the

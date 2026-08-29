@@ -817,3 +817,40 @@ def test_gorilla_pack_is_sacrificed_without_a_forest(set_pool):
     p2 = PlayerState(name="P2", battlefield=[lost], life=20)
     Game(players=[p2, PlayerState(name="P3", life=20)]).check_state_based_actions()
     assert lost not in p2.battlefield
+
+
+# --- Round 14: a hook that had a second card ---
+
+
+def test_portent_and_elemental_augury_reorder_a_library(set_pool):
+    """"Look at the top three cards of target player's library, then put them
+    back in any order."
+
+    The sentence Natural Selection prints, verbatim — and `card_hooks`' entry
+    bar is that no second card, real or plausibly printable, shares the shape.
+    Two did. Portent compiled *supported* on the strength of its cantrip line
+    while its main effect was a bare whitelist marker; Elemental Augury has no
+    second line and was unsupported outright.
+    """
+    pool = set_pool("ICE")
+    for name in ("Portent", "Elemental Augury"):
+        program = compile_card_oracle(pool[name])
+        assert program.supported, name
+        assert "reorder_target_library_top" in {
+            instruction.kind for instruction in program.instructions
+        }, name
+
+
+def test_portent_offers_the_shuffle_and_elemental_augury_does_not(set_pool):
+    """The optional shuffle is a printed sentence, so it rides the payload —
+    Portent prints it and Elemental Augury does not."""
+    pool = set_pool("ICE")
+
+    def _reorder(name):
+        return next(
+            instruction for instruction in compile_card_oracle(pool[name]).instructions
+            if instruction.kind == "reorder_target_library_top"
+        )
+
+    assert _reorder("Portent").payload["may_shuffle"] is True
+    assert _reorder("Elemental Augury").payload["may_shuffle"] is False
