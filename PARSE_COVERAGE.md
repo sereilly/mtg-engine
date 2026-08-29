@@ -111,9 +111,9 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 980 |
+| parse rule | 981 |
 | activation cost | 398 |
-| trigger table | 338 |
+| trigger table | 339 |
 | static-line table | 234 |
 | keyword table | 222 |
 | card_hooks bespoke (name-keyed) | 119 |
