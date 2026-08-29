@@ -1064,6 +1064,23 @@ already uses. "+X/+0, where X is the number of …" and "+1/+0 for each …" are
 amount with two spellings, and `resolve_amount`'s `times_x` is where the
 printed repetition size already lived.
 
+**Round 13 — "when you control no <noun>", with the noun as payload. 241 → 242.**
+
+One card and two retired condition kinds. Gorilla Pack prints the sentence Sea
+Serpent prints, about Forests instead of Islands — and the engine read it
+through a `no_islands` kind with the land type welded into the *name*, plus a
+`no_lands` kind beside it saying the same thing about a wider set. Two kinds,
+one rule, and every third type unreadable: idiom 19's exact shape.
+
+Both are gone. `controls_no_matching` carries the printed noun and is answered
+by `subject_matches` — the same reader the *positive* twin
+(`controls_matching_permanent`, Goblins of the Flarg) already used, so the two
+halves of one question have one answer. The state-based sweep and the upkeep
+registry entry both read it, so the immediate firing and the upkeep firing
+cannot disagree about what the card names. `no_lands_anywhere` stays: "no lands
+**on the battlefield**" is a genuinely different set from "you control no
+lands", and Mana Vortex is not sacrificed while an opponent still has one.
+
 ## Where the sets landed
 
 The numbers a Phase 1 census is estimated against. Rounds are ROADMAP rounds,

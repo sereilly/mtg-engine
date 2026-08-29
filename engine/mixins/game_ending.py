@@ -170,24 +170,34 @@ class GameEndingMixin:
             # (Serendib Djinn, Island Fish Jasconius already covered by no_islands).
             # Modeled alongside SBAs so it fires immediately when the last
             # matching land leaves, not only at the next upkeep (CR 603.8).
+            from ..subject_filters import subject_matches
+
             for seat, player in enumerate(self.players):
                 for perm in list(self.controlled_by(player)):
-                    needs_island = next(matching_triggers(
-                        perm.effective_card,
-                        condition_kinds={"no_islands"},
-                        instruction_kinds={"sacrifice_self"},
-                    ), None) is not None
-                    needs_any_land = next(matching_triggers(
-                        perm.effective_card,
-                        condition_kinds={"no_lands"},
-                        instruction_kinds={"sacrifice_self"},
-                    ), None) is not None
-                    controls_island = any(
-                        p.card.primary_type == "land" and p.has_type("island")
-                        for p in self.controlled_by(seat)
-                    )
-                    controls_any_land = any(
-                        p.card.primary_type == "land" for p in self.controlled_by(seat)
+                    # "When you control **no <noun>**, sacrifice this creature."
+                    # The noun is payload, tested by ``subject_matches`` — the
+                    # same reader the positive twin below uses — so Sea Serpent's
+                    # Islands, Serendib Djinn's lands and Gorilla Pack's Forests
+                    # are one rule. It used to be two condition kinds with the
+                    # type welded into each name, which is why a card printing
+                    # the identical sentence about any third type could not be
+                    # read at all.
+                    empty_of = [
+                        trig.condition.payload.get("controlled_filter") or {}
+                        for trig in matching_triggers(
+                            perm.effective_card,
+                            condition_kinds={"controls_no_matching"},
+                            instruction_kinds={"sacrifice_self"},
+                        )
+                    ]
+                    needs_none = any(
+                        not any(
+                            subject_matches(
+                                self, other, described, observer=seat, source=perm
+                            )
+                            for other in self.controlled_by(seat)
+                        )
+                        for described in empty_of
                     )
                     # "When there are **no lands on the battlefield**,
                     # sacrifice this enchantment." (Mana Vortex.) The same
@@ -203,10 +213,8 @@ class GameEndingMixin:
                     lands_anywhere = any(
                         p.has_type("land") for p in self.all_permanents()
                     )
-                    if (
-                        (needs_island and not controls_island)
-                        or (needs_any_land and not controls_any_land)
-                        or (needs_any_land_anywhere and not lands_anywhere)
+                    if needs_none or (
+                        needs_any_land_anywhere and not lands_anywhere
                     ):
                         # Through the one sacrifice transition (CR 701.21a), not
                         # a graveyard append beside a battlefield rebuild: the
@@ -217,12 +225,11 @@ class GameEndingMixin:
                         # Island Fish Jasconius have been leaving that way since
                         # the seam was built.
                         self.sacrifice_permanent(perm)
-                        if needs_any_land_anywhere and not lands_anywhere:
-                            reason = "no lands on the battlefield"
-                        elif needs_any_land and not controls_any_land:
-                            reason = "controls no lands"
-                        else:
-                            reason = "controls no Islands"
+                        reason = (
+                            "no lands on the battlefield"
+                            if needs_any_land_anywhere and not lands_anywhere
+                            else "controls none of what its state trigger names"
+                        )
                         self.log.append(f"{perm.card.name} sacrificed ({reason})")
                         changed = True
 
@@ -234,8 +241,6 @@ class GameEndingMixin:
             # attack alongside it. The noun phrase is payload, tested by
             # ``subject_matches``, so a card naming any other tribe needs
             # nothing here.
-            from ..subject_filters import subject_matches
-
             for seat, player in enumerate(self.players):
                 for perm in list(self.controlled_by(player)):
                     for trig in matching_triggers(

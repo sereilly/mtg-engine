@@ -200,7 +200,10 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "no_islands": "when you control no islands",
     "no_lands_anywhere": "when there are no lands on the battlefield",
     "self_cast": "when you cast this spell",
-    "no_lands": "when you control no lands",
+    # `no_lands` is gone: "when you control no lands" is
+    # `controls_no_matching` with a land filter, which is the same sentence
+    # with the noun read rather than welded into the kind.
+    "controls_no_matching": "when you control no lands",
     "controls_matching_permanent": "when you control a dwarf",
     # at
     "upkeep_self": "at the beginning of your upkeep",

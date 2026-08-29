@@ -942,14 +942,29 @@ class UpkeepEffectsMixin:
     # `optional_choices` dict. Removed rather than left dark, on the reachability
     # guard's insistence: an entry no card can reach is one nothing checks.
 
-    @upkeep_effect("no_islands", "sacrifice_self")
-    def _on__no_islands__sacrifice_self(self, ctx: UpkeepContext) -> None:
+    @upkeep_effect("controls_no_matching", "sacrifice_self")
+    def _on__controls_no_matching__sacrifice_self(self, ctx: UpkeepContext) -> None:
+        """"When you control no <noun>, sacrifice this creature." (Sea Serpent,
+        Island Fish Jasconius, Gorilla Pack.)
+
+        The noun is payload, asked through ``subject_matches`` — the same
+        reader the state-based sweep in ``mixins/game_ending.py`` uses, so the
+        upkeep answer and the immediate one cannot disagree about what the card
+        names. This entry used to be keyed on a ``no_islands`` condition with
+        one land type welded into the kind.
+        """
+        from ..subject_filters import subject_matches
+
         controller = ctx.controller
         permanent = ctx.permanent
-        has_island = any(
-            perm.card.primary_type == "land" and perm.has_type("island")
+        seat = self.players.index(controller)
+        described = ctx.trig.condition.payload.get("controlled_filter") or {}
+        if not any(
+            subject_matches(self, perm, described, observer=seat, source=permanent)
             for perm in self.controlled_by(controller)
-        )
-        if not has_island:
+        ):
             self.sacrifice_permanent(permanent)
-            self.log.append(f"{controller.name} sacrificed {permanent.card.name} for lacking an Island")
+            self.log.append(
+                f"{controller.name} sacrificed {permanent.card.name}: "
+                "controls none of what its state trigger names"
+            )

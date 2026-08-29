@@ -730,14 +730,25 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("self_cast",                   r"when you cast this spell"),
     ("discarded_by_opponent_effect",
      r"when a spell or ability an opponent controls causes you to discard this card"),
-    ("no_islands",                  r"when you control no islands"),
+    # "When you control **no Islands** / **no Forests**, sacrifice this
+    # creature." (Sea Serpent, Island Fish Jasconius; Gorilla Pack in Ice Age.)
+    # The negative twin of `controls_matching_permanent` below, with the noun
+    # delimited and read by the noun parser. It was a ``no_islands`` kind with
+    # the land type welded into the name — the shape idiom 19 exists to
+    # prevent — so Gorilla Pack, printing the identical sentence about Forests,
+    # was a card the engine could not read.
+    #
+    # Ordered before the positive row for the reason that one documents in
+    # reverse: "no <noun>" is not an "an? " phrase and the two cannot collide,
+    # and the specific-before-generic rule holds anyway.
+    ("controls_no_matching",
+     r"when you control no (?P<controlled_subjects>[^,]+)"),
     # "When there are **no lands on the battlefield**, sacrifice this
     # enchantment." (Mana Vortex.) The same state trigger (CR 603.8) asked
     # about every battlefield rather than the source controller's — a
     # different set, so a different kind: a Mana Vortex whose controller has
     # no land is not sacrificed while an opponent still has one.
     ("no_lands_anywhere",           r"when there are no lands on the battlefield"),
-    ("no_lands",                    r"when you control no lands"),
     # "When you control a Dwarf, sacrifice this creature." (Goblins of the
     # Flarg.) A state trigger (CR 603.8) like the two above, and the *positive*
     # one: those fire while a described set is empty, this while it is not.

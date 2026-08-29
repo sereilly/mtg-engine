@@ -879,10 +879,23 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # of them sees leaves the other refusing the effect behind it.
         if stream.accept_phrase("you", "cast", "this", "spell"):
             return ast.TriggerEvent("self_cast", "when")
-        if stream.accept_phrase("you", "control", "no", "islands"):
-            return ast.TriggerEvent("no_islands", "when")
-        if stream.accept_phrase("you", "control", "no", "lands"):
-            return ast.TriggerEvent("no_lands", "when")
+        # "When you control **no Islands** / **no Forests**, sacrifice this
+        # creature." (Sea Serpent, Island Fish Jasconius; Gorilla Pack in Ice
+        # Age.) The negative twin of `controls_matching_permanent` below, and
+        # the noun is payload for the same reason it is there: this was a
+        # ``no_islands`` kind with the land type welded into the name, so a card
+        # printing any other type was a card the engine could not read.
+        mark_none = stream.mark()
+        if stream.accept_phrase("you", "control", "no"):
+            # Plural, because "no" counts: the card prints "no **Islands**",
+            # never "no an Island", so the counted-position quantifier is the
+            # one to admit.
+            described = parse_subject_filter_at(stream, plural=True)
+            if described is not None:
+                return ast.TriggerEvent(
+                    "controls_no_matching", "when", subject=described
+                )
+        stream.reset(mark_none)
         # "When you control **a Dwarf**" (Goblins of the Flarg). The positive
         # state trigger (CR 603.8), read on this front end too because a
         # condition only one of them sees is a card whose halves watch

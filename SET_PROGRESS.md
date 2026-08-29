@@ -22,7 +22,7 @@ Do not edit by hand — re-run the script instead.
 | 8 | The Dark | DRK | 1994-08-01 | 119 | 119 | Complete (119/119 supported) |
 | 9 | Fallen Empires | FEM | 1994-11-01 | 102 | 102 | Not Implemented |
 | 10 | Fourth Edition | 4ED | 1995-04-01 | 368 | 0 | Complete (368/368 supported) |
-| 11 | Ice Age | ICE | 1995-06-03 | 373 | 346 | Measured (241/373 supported, not shipped) |
+| 11 | Ice Age | ICE | 1995-06-03 | 373 | 346 | Measured (242/373 supported, not shipped) |
 | 12 | Homelands | HML | 1995-10-01 | 115 | 115 | Not Implemented |
 | 13 | Alliances | ALL | 1996-06-10 | 144 | 144 | Not Implemented |
 | 14 | Mirage | MIR | 1996-10-08 | 335 | 313 | Not Implemented |

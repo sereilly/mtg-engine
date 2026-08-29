@@ -786,3 +786,34 @@ def test_a_name_that_is_a_creature_type_still_collapses_in_self_position(set_poo
         "graveyards.", "Lhurgoyf",
     ).startswith("this creature's power")
     assert compile_card_oracle(set_pool("ICE")["Lhurgoyf"]).supported
+
+
+# --- Round 13: "when you control no <noun>" — the noun is payload ---
+
+
+def test_gorilla_pack_is_sacrificed_without_a_forest(set_pool):
+    """"When you control no Forests, sacrifice this creature."
+
+    The identical sentence Sea Serpent prints about Islands, which the engine
+    read through a `no_islands` condition kind with the land type welded into
+    the name — so this card, and every other type, was unreadable. The noun is
+    payload now, tested by the same `subject_matches` the positive twin uses.
+    """
+    pool = set_pool("ICE")
+    program = compile_card_oracle(pool["Gorilla Pack"])
+    assert program.supported
+    trigger = program.triggered_abilities[0]
+    assert trigger.condition.kind == "controls_no_matching"
+    assert trigger.condition.payload["controlled_filter"] == {"subtype_filter": "forest"}
+
+    kept = Permanent(card=pool["Gorilla Pack"])
+    p1 = PlayerState(
+        name="P1", battlefield=[kept, Permanent(card=pool["Forest"])], life=20
+    )
+    Game(players=[p1, PlayerState(name="P2", life=20)]).check_state_based_actions()
+    assert kept in p1.battlefield
+
+    lost = Permanent(card=pool["Gorilla Pack"])
+    p2 = PlayerState(name="P2", battlefield=[lost], life=20)
+    Game(players=[p2, PlayerState(name="P3", life=20)]).check_state_based_actions()
+    assert lost not in p2.battlefield
