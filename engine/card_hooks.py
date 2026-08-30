@@ -108,12 +108,6 @@ def _line(kind: str, effect_kind: str, **payload: object) -> CardLine:
 
 
 CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
-    "Abu Ja'far": {
-        'when this creature dies, destroy all creatures blocking or blocked by '
-        "it. they can't be regenerated":
-            _line('destroy_creatures_in_combat_with_source', 'spell_pattern',
-                bypass_regeneration=True),
-    },
     "Aladdin's Lamp": {
         "{x}, {t}: the next time you would draw a card this turn, instead look at "
         "the top x cards of your library, put all but one of them on the bottom of "

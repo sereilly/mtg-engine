@@ -111,17 +111,40 @@ def _lower_destroy(
             if node.no_regen:
                 described["bypass_regeneration"] = True
             return (OracleInstruction("destroy_all_matching", "", described),)
-        # "Destroy all creatures blocking or blocked by it." (Abu Ja'far.)
-        # The noun phrase parses now (Sentinel's target reads the same
-        # relation), but this sweep must not fall through to the generic
-        # creature sweep below — that path keys on card types alone, so the
-        # relation would be dropped and the trigger would wipe the board.
-        # Refused rather than lowered onto the hook's
-        # `destroy_creatures_in_combat_with_source`: taking the line over is
-        # an accept-probe review away (the deletion probe flags the implicit
-        # "all" exactly as it did for every other destroy sweep), and until
-        # that review the refusal hands the line back to
-        # `card_hooks.CARD_LINE_INSTRUCTIONS`, which implements it in full.
+        # "Destroy all creatures blocking or blocked by it." (Abu Ja'far,
+        # printed on a dies trigger; Kjeldoran Frostbeast prints the same
+        # sentence on an end-of-combat one.) The relation is the whole
+        # sentence, so it must not fall through to the generic creature sweep
+        # below — that path keys on card types alone, so the relation would be
+        # dropped and the trigger would wipe the board.
+        #
+        # A production rather than Abu Ja'far's card hook: two cards in the
+        # pool print the sentence, and the *only* difference between them is
+        # which trigger carries it, which is exactly the "a second card shares
+        # the shape" bar `card_hooks` refuses at. The handler was already
+        # generic — it reads the combat relationship off the trigger's capture
+        # or off the live combat maps — so what the hook was buying was one
+        # card's spelling of a template.
+        if filt.in_combat_with_source:
+            if filt.card_types != ("creature",) or _restrictions_beyond(
+                filt, frozenset({"card_types", "in_combat_with_source"})
+            ):
+                # The handler destroys the whole combat relationship and reads
+                # nothing else, so a narrowing beside the relation is one it
+                # would silently ignore — and ignoring a narrowing on a *sweep*
+                # destroys creatures the card does not name.
+                raise LoweringError(
+                    "the combat-relation sweep destroys the whole relationship "
+                    "and narrows no further", node=node,
+                )
+            relation_payload: dict[str, object] = {}
+            if node.no_regen:
+                relation_payload["bypass_regeneration"] = True
+            return (
+                OracleInstruction(
+                    "destroy_creatures_in_combat_with_source", "", relation_payload
+                ),
+            )
         # "Destroy all creatures that were blocked by that creature this
         # turn." (Glyph of Doom.) A relation to the object the delayed ability
         # was bound to, which `permanent_matches_filter` cannot answer — it is
@@ -184,7 +207,7 @@ def _lower_destroy(
             return (
                 OracleInstruction("destroy_all_matching", "", blocked_payload),
             )
-        if filt.in_combat_with_source or filt.dealt_damage_to_source_this_turn:
+        if filt.dealt_damage_to_source_this_turn:
             raise LoweringError(
                 "a destroy sweep over a source relation stays with its card "
                 "hook until the probe review takes it", node=node,

@@ -324,6 +324,11 @@ TRIGGERED_LABELS: dict[str, str] = {
     "exile_created_token": "triggered_exile",
     "destroy_self": "triggered_destruction",
     "destroy_all_matching": "triggered_destruction",
+    # Abu Ja'far and Kjeldoran Frostbeast. Declared rather than
+    # defaulted so the shipped card keeps the bucket its card hook
+    # reported before the grammar took the template over — the reason
+    # this table exists.
+    "destroy_creatures_in_combat_with_source": "spell_pattern",
     "deal_damage_each_matching": "triggered_damage",
     "deal_damage_to_those_damaged_this_game": "triggered_damage",
     "add_corpse_counters_for_each_creature_died": "triggered_counter",

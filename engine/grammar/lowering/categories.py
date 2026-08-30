@@ -194,6 +194,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "destroy_all_lands": "destruction",
     "destroy_all_lands_of_type": "destruction",
     "destroy_all_matching": "destruction",
+    # "Destroy all creatures blocking or blocked by this creature."
+    # (Abu Ja'far on a dies trigger, Kjeldoran Frostbeast on an
+    # end-of-combat one.) A sweep whose scope is a combat relation the
+    # matcher cannot answer, so it is its own kind rather than a
+    # narrowing of `destroy_all_matching` — but the same family.
+    "destroy_creatures_in_combat_with_source": "destruction",
     "destroy_each_unless_life_paid": "destruction",
     "destroy_attached_permanent": "destruction",
     # "…destroy **that creature**" inside a delayed ability (War Barge):

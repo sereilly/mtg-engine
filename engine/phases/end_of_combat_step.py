@@ -102,6 +102,22 @@ class EndOfCombatStepMixin:
                         if blocker is not None:
                             blocker_ids.append(blocker.permanent_id)
                 trigger_context = {"blocker_ids": tuple(blocker_ids)}
+            elif (
+                trig.instruction is not None
+                and trig.instruction.kind == "destroy_creatures_in_combat_with_source"
+            ):
+                # "At end of combat, destroy all creatures blocking or blocked
+                # by this creature." (Kjeldoran Frostbeast.) The same capture
+                # the dies transition makes for Abu Ja'far's printing of the
+                # sentence, made a step earlier for the same reason: this batch
+                # goes on the stack here and resolves in the priority window at
+                # the *end* of `end_combat`, by which time
+                # `_reset_combat_state` has emptied the maps the relation reads.
+                # Captured as Permanent objects — CR 603.10's last-known
+                # information, and what the handler already expects.
+                trigger_context = {
+                    "combat_opponents": self.creatures_in_combat_with(permanent)
+                }
             events.append(
                 make_trigger_event(
                     controller_index, permanent, trig,

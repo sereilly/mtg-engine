@@ -1409,3 +1409,95 @@ def test_a_condition_on_a_kind_nothing_asks_about_refuses_the_line(set_pool):
         "this creature can't block as long as you control a snow land"
     ) is None
     assert combat_restriction_for("this creature can't block") is not None
+
+
+# --- W1G2: combat relations and end of combat ---
+def _w1g2_combat(
+    game: Game, attackers: list[int], blocks: dict[int, list[int]] | None = None
+) -> None:
+    """Put seat 0's attackers and seat 1's blockers in, without a turn."""
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, msg = game.declare_attackers(0, attackers, 1)
+    assert ok, msg
+    game._set_phase_and_step("combat", "declare_blockers")
+    ok, msg = game.declare_blockers(1, blocks or {})
+    assert ok, msg
+
+
+def test_kjeldoran_frostbeast_compiles_to_the_combat_relation_sweep(set_pool):
+    """"At end of combat, destroy all creatures blocking or blocked by this
+    creature." A production, not a card hook: Abu Ja'far prints the same
+    sentence under a dies trigger and both compile to one instruction."""
+    program = compile_card_oracle(set_pool("ICE")["Kjeldoran Frostbeast"])
+
+    assert program.supported
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "end_of_combat"
+    assert trigger.instruction.kind == "destroy_creatures_in_combat_with_source"
+    # Abu Ja'far prints "They can't be regenerated"; the Frostbeast does not.
+    assert "bypass_regeneration" not in trigger.instruction.payload
+
+
+def test_kjeldoran_frostbeast_destroys_its_blocker_at_end_of_combat(set_pool):
+    """The blocker survives combat damage (a 2/4 beast against a 3/3) and is
+    destroyed anyway when the end of combat step comes."""
+    pool = set_pool("ICE")
+    beast = _nosick(Permanent(card=pool["Kjeldoran Frostbeast"]))
+    blocker = _nosick(Permanent(card=pool["Tor Giant"]))
+    bystander = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[beast], life=20)
+    p2 = PlayerState(name="P2", battlefield=[blocker, bystander], life=20)
+    game = Game(players=[p1, p2])
+
+    _w1g2_combat(game, [0], {0: [0]})
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(0)
+    game._settle()
+    assert any(p is blocker for p in p2.battlefield), "3 damage does not kill a 3/3"
+
+    game.end_combat(step_already_started=False)
+    game._settle()
+
+    assert not any(p is blocker for p in p2.battlefield)
+    assert any(c.name == "Tor Giant" for c in p2.graveyard)
+    assert any(p is bystander for p in p2.battlefield), "an uninvolved creature lives"
+
+
+def test_kjeldoran_frostbeast_destroys_the_creature_it_blocked(set_pool):
+    """The other half of "blocking or blocked by" — the beast as the blocker."""
+    pool = set_pool("ICE")
+    beast = _nosick(Permanent(card=pool["Kjeldoran Frostbeast"]))
+    attacker = _nosick(Permanent(card=pool["Tor Giant"]))
+    p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
+    p2 = PlayerState(name="P2", battlefield=[beast], life=20)
+    game = Game(players=[p1, p2])
+
+    _w1g2_combat(game, [0], {0: [0]})
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(0)
+    game._settle()
+
+    game.end_combat(step_already_started=False)
+    game._settle()
+
+    assert not any(p is attacker for p in p1.battlefield)
+    assert any(p is beast for p in p2.battlefield), "the beast itself survives"
+
+
+def test_kjeldoran_frostbeast_out_of_combat_destroys_nothing(set_pool):
+    """No relation, no victims — the sweep must not widen to the board."""
+    pool = set_pool("ICE")
+    beast = _nosick(Permanent(card=pool["Kjeldoran Frostbeast"]))
+    bystander = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[beast], life=20)
+    p2 = PlayerState(name="P2", battlefield=[bystander], life=20)
+    game = Game(players=[p1, p2])
+    game.active_player_index = 0
+
+    game.end_combat(step_already_started=False)
+    game._settle()
+
+    assert any(p is beast for p in p1.battlefield)
+    assert any(p is bystander for p in p2.battlefield)
+# --- end W1G2 ---
