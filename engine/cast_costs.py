@@ -74,15 +74,17 @@ class AdditionalCost:
 
 # Canonical lowercase phrases, matched against a whole normalized line. Both
 # shapes the pool prints; a third goes here beside them.
-ADDITIONAL_COSTS: tuple[AdditionalCost, ...] = (
-    AdditionalCost(
-        "as an additional cost to cast this spell, sacrifice a creature",
-        sacrifice_filter={"type_filter": "creature"},
-    ),
-    AdditionalCost(
-        "as an additional cost to cast this spell, discard a card",
-        discard_cards=1,
-    ),
+#: "As an additional cost to cast this spell, <clauses>." (CR 601.2b.)
+#:
+#: This was a table of two whole *phrases*, each of which wrote the preamble out
+#: again — so the only thing that varied was the clause after the comma, and a
+#: clause nobody had listed was a line the table did not read. Fumarole's "pay 3
+#: life" is one, and the way it showed up is worth keeping: the card had no
+#: other blocker, so the moment its second line parsed it compiled *supported*
+#: and cast for free. A preamble plus a clause vocabulary is the same shape
+#: ``_SELF_PERMISSION_COSTS`` one function down already had.
+_ADDITIONAL_COST_PREAMBLE = re.compile(
+    r"^as an additional cost to cast this spell, (?P<costs>.+)$"
 )
 
 
@@ -94,14 +96,57 @@ _SELF_PERMISSION_COSTS = re.compile(
     r"(?P<costs>.+?) in addition to paying its other costs$"
 )
 
-#: The cost clauses that sentence may list, each mapped to the field it fills.
+#: The cost clauses either sentence may list, each mapped to the field it fills.
 #: A clause outside this set makes the whole line unread — the card then reports
-#: unsupported rather than castable at a discount, which is the direction a cost
-#: must never drift in.
-_SELF_PERMISSION_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"^(\d+) life$"), "pay_life"),
-    (re.compile(r"^discarding (?:a|one) card$"), "discard_one"),
+#: unsupported, or keeps the line in the parse-coverage backlog, rather than
+#: being castable at a discount, which is the direction a cost must never drift
+#: in.
+#:
+#: **One table for both sentences**, which print the same costs in two
+#: grammatical forms: "as an additional cost …, **pay 3 life**" and "…by
+#: **paying 3 life** in addition to paying its other costs". Two tables would be
+#: two answers to "what can this engine charge", and the one that grew slower
+#: would decide which cards were free.
+#:
+#: "pay X life" (Fire Covenant) is deliberately absent. X is announced as the
+#: spell is cast (CR 601.2b) and this engine resolves it *after* the additional
+#: costs are charged, so a clause here would charge zero. It stays in the
+#: parse-coverage backlog, which is where an unimplemented cost belongs.
+_COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"^(?:pay )?(\d+) life$"), "pay_life"),
+    (re.compile(r"^(?:discard|discarding) (?:a|one) card$"), "discard_one"),
+    (re.compile(r"^(?:sacrifice|sacrificing) a creature$"), "sacrifice_creature"),
 )
+
+
+def _read_cost_clauses(costs: str) -> dict | None:
+    """The fields the clauses of one cost sentence fill, or None.
+
+    **Every** clause must be read or the whole sentence is refused: one this
+    table cannot charge would otherwise be dropped, and a dropped cost is a
+    spell cast for less than it prints. That is the same all-or-nothing rule
+    ``upkeep_costs.upkeep_cost_from_phrase`` states for CR 702.24a's cost, and
+    it is here for the same reason.
+    """
+    fields: dict = {"pay_life": 0, "discard_cards": 0, "sacrifice_filter": None}
+    for clause in re.split(r",\s*|\s+and\s+", costs):
+        clause = clause.strip()
+        if not clause:
+            continue
+        for pattern, field in _COST_CLAUSES:
+            found = pattern.match(clause)
+            if found is None:
+                continue
+            if field == "pay_life":
+                fields["pay_life"] += int(found.group(1))
+            elif field == "discard_one":
+                fields["discard_cards"] += 1
+            else:
+                fields["sacrifice_filter"] = {"type_filter": "creature"}
+            break
+        else:
+            return None
+    return fields
 
 
 def _self_permission_cost(line: str) -> AdditionalCost | None:
@@ -114,26 +159,25 @@ def _self_permission_cost(line: str) -> AdditionalCost | None:
     match = _SELF_PERMISSION_COSTS.match(line.strip().lower().rstrip("."))
     if match is None:
         return None
-    fields: dict[str, int] = {"pay_life": 0, "discard_cards": 0}
-    for clause in re.split(r",\s*|\s+and\s+", match.group("costs")):
-        clause = clause.strip()
-        if not clause:
-            continue
-        for pattern, field in _SELF_PERMISSION_CLAUSES:
-            found = pattern.match(clause)
-            if found is None:
-                continue
-            if field == "pay_life":
-                fields["pay_life"] += int(found.group(1))
-            else:
-                fields["discard_cards"] += 1
-            break
-        else:
-            return None
-    return AdditionalCost(
-        match.group(0), pay_life=fields["pay_life"],
-        discard_cards=fields["discard_cards"], from_zone=match.group("zone"),
-    )
+    fields = _read_cost_clauses(match.group("costs"))
+    if fields is None:
+        return None
+    return AdditionalCost(match.group(0), from_zone=match.group("zone"), **fields)
+
+
+def _printed_additional_cost(line: str) -> AdditionalCost | None:
+    """The costs "As an additional cost to cast this spell, …" charges, or None.
+
+    Unmarked by zone, which is what the sentence means: the cost applies
+    wherever the spell is cast from (see ``AdditionalCost.from_zone``).
+    """
+    match = _ADDITIONAL_COST_PREAMBLE.match(line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    fields = _read_cost_clauses(match.group("costs"))
+    if fields is None:
+        return None
+    return AdditionalCost(match.group(0), **fields)
 
 
 def additional_cost_for_line(line: str) -> AdditionalCost | None:
@@ -143,11 +187,7 @@ def additional_cost_for_line(line: str) -> AdditionalCost | None:
     substring, because a substring match is how the whitelist this replaced came
     to claim things it did not implement.
     """
-    text = line.strip().lower().rstrip(".")
-    for cost in ADDITIONAL_COSTS:
-        if text == cost.phrase:
-            return cost
-    return _self_permission_cost(line)
+    return _printed_additional_cost(line) or _self_permission_cost(line)
 
 
 def additional_costs(card: CardDefinition) -> tuple[AdditionalCost, ...]:
@@ -171,7 +211,6 @@ def cast_cost_claims_line(line: str) -> bool:
 
 
 __all__ = [
-    "ADDITIONAL_COSTS",
     "AdditionalCost",
     "additional_cost_for_line",
     "additional_costs",

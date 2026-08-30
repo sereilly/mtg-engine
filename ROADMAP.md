@@ -692,9 +692,9 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, thirty-three rounds in. 184 → 275 of 373 supported
-(73.7%), hollow lines 10 cards, and 44 unclaimed sentences across 29 of those
-275 — the third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
+**Where it stands: Phase 3, thirty-four rounds in. 184 → 277 of 373 supported
+(74.3%), hollow lines 10 cards, and 44 unclaimed sentences across 29 of those
+277 — the third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
@@ -711,7 +711,7 @@ upkeep alone with a whole printed paragraph compiling to nothing, Fire Covenant'
 
 Only 10 of those show in `--hollow-lines`, because a line that produces no
 *ability part* leaves nothing for that probe to find hollow. So the honest
-reading of "275 supported" is "275 compile, 246 of them with every printed line
+reading of "277 supported" is "277 compile, 248 of them with every printed line
 accounted for". **One round is still scheduled**: the support gate admits an
 artifact or enchantment when *any* ability of it is implemented — round 1's
 second finding ("a widened gate hid a static line") for a card type the round-1
@@ -723,7 +723,7 @@ one of them legitimately implemented through a reader the claim chain does not
 consult. The round is larger than this note made it sound; read round 32's
 entry before starting it.
 
-**The remaining 98 are a long tail, and the shape is Legends' rather than
+**The remaining 96 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
@@ -1851,6 +1851,52 @@ six files (creatures 42 tests, enchantments 33, instants 14, artifacts 7,
 sorceries 6, lands 4), each keeping its share of every round section together
 with that section's own helpers. No test was lost — the count went 103 → 106,
 which is exactly this round's three.
+
+**Round 34 — one verb over two noun phrases, and how many of them may be
+targeted. 275 → 277.**
+
+`_parse_further_subjects` reads "destroy **all** X, **all** Y, and **all** Z"
+(Remove Enchantments) — one verb over a union of noun phrases, which no single
+`ObjectFilter` says because its keys are AND'd. It took the quantifiers `all`
+and `each` only, and its own comment says why: "and" is the commonest word on a
+Magic card and most of its uses join two *effects*, so a quantifier is the one
+signal available before the verb arrives.
+
+**"target" is a third such signal, and the safest of them.** The word starts a
+noun phrase and nothing else, and the shape that looks dangerous — "…**and
+target player** draws a card" — was never a candidate, because a targeted
+*player* parses to `ast.PlayerRef` and the union already required a
+`TargetSpec`. Snow Hound ("Return **this creature and target** green or blue
+creature you control to their owner's hand") and Giant Trap Door Spider ("Exile
+**this creature and target** creature without flying that's attacking you") both
+had each half working alone; what was missing was only the union. `exile` did
+not read one at all and now does.
+
+**Fumarole is the card that says where the limit is.** "Destroy target creature
+and target land" parses under the widened union, and the *picker* cannot follow:
+a spell is asked for one target — `targeting.derive_cast_spec` answers with one
+`kind` — so admitting it compiles a card that is supported and uncastable, its
+second target chosen by nobody. The union refuses more than one targeted phrase,
+naming that. A multi-target cast picker is its own round.
+
+**And Fumarole found a second thing on the way through.** For the few minutes it
+*was* supported, `parse_coverage` went 44 → 45 unclaimed sentences and named the
+reason: "as an additional cost to cast this spell, **pay 3 life**" is a cost
+nothing charged, so the card was cast for free. `cast_costs.ADDITIONAL_COSTS`
+was a table of two whole *phrases*, each writing the preamble out again — so the
+only part that varied was the clause after the comma, and a clause nobody had
+listed made the line unread. It is a preamble plus a clause vocabulary now, the
+shape `_SELF_PERMISSION_COSTS` one function down already had, and **one** table
+serves both sentences: "…, pay 3 life" and "…by paying 3 life in addition to
+paying its other costs" list the same cost in two grammatical forms, and two
+tables would be two answers to what this engine can charge.
+
+That fix is currently latent, which is worth saying plainly: Fumarole is refused
+for its targets, so no card in the pool exercises the life cost today. "Pay **X**
+life" (Fire Covenant) stays deliberately unread — X is announced as the spell is
+cast (CR 601.2b) and this engine resolves it *after* additional costs are
+charged, so a clause for it would charge zero. It stays in the parse-coverage
+backlog, which is where an unimplemented cost belongs.
 
 ## Where the sets landed
 

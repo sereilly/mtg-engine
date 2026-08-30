@@ -47,6 +47,7 @@ from .effects import (
     _parse_destroy, _parse_discard,
     _parse_doesnt_untap_next_step, _parse_double, _parse_draw, _parse_enchant,
     _parse_end_the_turn, _parse_exchange_control, _parse_exile_graveyard,
+    _parse_further_subjects,
     _parse_exile_top_of_library, _parse_extra_turn, _parse_fight, _parse_flip_coin,
     _parse_gain_control, _parse_gains, _parse_game_is_a_draw, _parse_gets,
     _parse_exchange_life_totals,
@@ -458,11 +459,26 @@ def parse_subject_verb(
         subject = parse_recipient(stream)
         if subject is None:
             raise stream.error("expected something to exile")
+        # "Exile this creature **and target creature** without flying that's
+        # attacking you." (Giant Trap Door Spider.) One verb over two noun
+        # phrases, the same union `destroy` and `return` already read — and the
+        # same reason it is a shape rather than a filter: an `ObjectFilter`
+        # AND's its keys, so the source and a chosen creature folded into one
+        # would name neither.
+        further = _parse_further_subjects(stream, subject)
         # Read before the duration: the two never co-occur on a printed card,
         # and a duration parser that ran first would answer "no duration" and
         # leave the counter phrase to die as unconsumed text.
         counters = _parse_entering_counters(stream)
-        return ast.Exile(subject, _parse_duration(stream), counters=counters)
+        duration = _parse_duration(stream)
+        if further:
+            return ast.Conjunction(
+                tuple(
+                    ast.Exile(each, duration, counters=counters)
+                    for each in (subject, *further)
+                )
+            )
+        return ast.Exile(subject, duration, counters=counters)
     if stream.at_word("add"):
         return _parse_add_mana(stream)
     if stream.at_word("look"):

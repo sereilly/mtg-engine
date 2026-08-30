@@ -288,3 +288,67 @@ def test_a_creature_with_protection_can_still_pay_a_sacrifice_cost():
 
     assert [p.card.name for p in p1.battlefield] == ["Grizzly Bears"]
     assert p1.mana_pool["B"] == 2, "the White Knight's mana value"
+
+
+# ---------------------------------------------------------------------------
+# The preamble is not the cost — one vocabulary for both sentences that list one
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("601.2b")
+def test_601_2b_a_life_cost_is_read_beside_the_two_that_were_written_out():
+    """The table used to be whole *phrases*, each writing "as an additional
+    cost to cast this spell," out again — so the only part that varied was the
+    clause after the comma, and a clause nobody had listed made the line unread.
+
+    Fumarole's "pay 3 life" was one, and the way it surfaced is the point: the
+    card had no other blocker, so the moment its second line parsed it would
+    have compiled supported and cast for free.
+    """
+    from engine.cast_costs import additional_cost_for_line
+
+    cost = additional_cost_for_line(
+        "As an additional cost to cast this spell, pay 3 life."
+    )
+
+    assert cost is not None
+    assert cost.pay_life == 3
+    assert cost.from_zone is None, "an unmarked cost applies from every zone"
+
+
+@pytest.mark.cr("601.2b")
+def test_601_2b_both_sentences_that_list_costs_read_one_vocabulary():
+    """"as an additional cost …, **pay 3 life**" and "…by **paying 3 life** in
+    addition to paying its other costs" list the same cost in two grammatical
+    forms. Two clause tables would be two answers to what this engine can
+    charge, and the one that grew slower would decide which cards were free."""
+    from engine.cast_costs import additional_cost_for_line
+
+    printed = additional_cost_for_line(
+        "As an additional cost to cast this spell, pay 3 life."
+    )
+    permission = additional_cost_for_line(
+        "You may cast this card from your graveyard by paying 3 life and "
+        "discarding a card in addition to paying its other costs."
+    )
+
+    assert printed.pay_life == permission.pay_life == 3
+    assert permission.discard_cards == 1
+    assert permission.from_zone == "graveyard"
+
+
+@pytest.mark.cr("601.2b")
+def test_601_2b_a_clause_the_engine_cannot_charge_leaves_the_line_unread():
+    """Every clause must be read or the whole sentence is refused. "Pay X life"
+    (Fire Covenant) is the live one: X is announced as the spell is cast and
+    this engine resolves it *after* the additional costs are charged, so a
+    clause for it would charge zero — which is a spell cast for free wearing a
+    cost's clothes."""
+    from engine.cast_costs import additional_cost_for_line
+
+    assert additional_cost_for_line(
+        "As an additional cost to cast this spell, pay X life."
+    ) is None
+    assert additional_cost_for_line(
+        "As an additional cost to cast this spell, exile a creature."
+    ) is None

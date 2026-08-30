@@ -124,7 +124,7 @@ def _parse_return(
         subject = parse_recipient(stream)
     if subject is None:
         raise stream.error("expected something to return")
-    further = _parse_further_subjects(stream)
+    further = _parse_further_subjects(stream, subject)
     if destination_first is not None:
         destination = destination_first
     else:
@@ -226,7 +226,9 @@ def _parse_return(
     return _one(subject)
 
 
-def _parse_further_subjects(stream: TokenStream) -> list[ast.Recipient]:
+def _parse_further_subjects(
+    stream: TokenStream, first: "ast.Recipient | None" = None
+) -> list[ast.Recipient]:
     """The rest of ``<noun phrase>, <noun phrase>, and <noun phrase>``.
 
     "Return to your hand all enchantments you both own and control, all Auras
@@ -259,21 +261,49 @@ def _parse_further_subjects(stream: TokenStream) -> list[ast.Recipient]:
             if separated and not stream.at_word("to")
             else None
         )
-        # Every phrase in the union must be a *sweep*, which is the shape this
-        # production exists for and the shape it can be sure of. "and" is the
-        # commonest word on a Magic card and most of its uses join two effects,
-        # not two objects: "destroy this artifact **and** it deals damage to
-        # you" (Voodoo Doll) has a perfectly good noun phrase after the "and",
-        # and reading it as a second thing to destroy destroyed the artifact
-        # and dropped the damage. A quantifier is the one signal available
-        # before the verb arrives, so the union takes only "all …, all …, and
-        # all …" and hands every other "and" back to the statement parser.
+        # Every phrase in the union must name an *object*, which is the shape
+        # this production exists for and the shape it can be sure of. "and" is
+        # the commonest word on a Magic card and most of its uses join two
+        # effects, not two objects: "destroy this artifact **and** it deals
+        # damage to you" (Voodoo Doll) has a perfectly good noun phrase after
+        # the "and", and reading it as a second thing to destroy destroyed the
+        # artifact and dropped the damage. A quantifier is the one signal
+        # available before the verb arrives, so the union takes only the
+        # quantifiers that cannot begin a clause and hands every other "and"
+        # back to the statement parser.
+        #
+        # **"target" is one of them**, and it is the safest of the three:
+        # "Destroy target creature **and target land**" (Fumarole), "Exile this
+        # creature **and target creature** without flying that's attacking you"
+        # (Giant Trap Door Spider). The word starts a noun phrase and nothing
+        # else, and the shape that looks dangerous — "…**and target player**
+        # draws a card" — is excluded by the line above rather than by luck: a
+        # targeted *player* parses to ``ast.PlayerRef``, so it was never a
+        # candidate for this union at all.
         if (
             not isinstance(nxt, ast.TargetSpec)
-            or nxt.quantifier not in ("all", "each")
+            or nxt.quantifier not in ("all", "each", "target")
         ):
             stream.reset(mark)
             return extra
+        # **At most one targeted phrase in the union**, counting *first*. The
+        # cast picker asks a spell for one target (``targeting.derive_cast_spec``
+        # answers with one ``kind``), so a sentence naming two — "Destroy target
+        # creature and target land" (Fumarole) — would compile supported and
+        # then be uncastable, its second target picked by nobody. Refusing here
+        # keeps the card visibly unsupported, which is the direction this
+        # grammar fails in by construction.
+        #
+        # The two cards this round buys are unaffected because their first
+        # phrase is the source: "Exile **this creature** and target creature …"
+        # names one target, not two.
+        if nxt.quantifier == "target" and any(
+            isinstance(prior, ast.TargetSpec) and prior.quantifier == "target"
+            for prior in ((first,) if first is not None else ()) + tuple(extra)
+        ):
+            raise stream.error(
+                "no spell picks two targets from one verb"
+            )
         extra.append(nxt)
 
 
@@ -316,7 +346,7 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     # creatures your opponents control" (Remove Enchantments). One verb, three
     # noun phrases; see `_parse_further_subjects` for why the union is a shape
     # and not a filter.
-    further = _parse_further_subjects(stream)
+    further = _parse_further_subjects(stream, subject)
 
     # "…at end of combat" (CR 603.7). Only this one delay: a destruction
     # deferred to the next end step is a different handler, so leaving those

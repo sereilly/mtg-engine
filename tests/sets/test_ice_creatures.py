@@ -981,3 +981,89 @@ def test_orcish_librarian_is_deterministic_for_a_seed(set_pool):
     first = _run()
     random.seed(11)
     assert _run() == first
+
+
+# --- Round 34: one verb over two noun phrases, and how many of them may be targeted ---
+
+
+def test_snow_hound_returns_itself_and_the_creature_it_names(set_pool):
+    """"{1}, {T}: Return this creature and target green or blue creature you
+    control to their owner's hand."
+
+    One verb over two noun phrases. Both halves already worked apart — the
+    self-bounce and the targeted bounce are separate productions — and what was
+    missing was the union: `_parse_further_subjects` took only "all" and "each",
+    because a quantifier is the one signal available before the verb arrives.
+    """
+    hound = Permanent(card=set_pool("ICE")["Snow Hound"])
+    other = Permanent(card=set_pool("ICE")["Balduvian Bears"])
+    _nosick(hound)
+    p1 = PlayerState(
+        name="P1", battlefield=[hound, other], life=20, mana_pool={"C": 1}
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    result = game.activate_permanent_ability(
+        0, "Snow Hound", target_permanent_index=1, target_player_index=0
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert result.supported
+    assert p1.battlefield == []
+    assert sorted(c.name for c in p1.hand) == ["Balduvian Bears", "Snow Hound"]
+
+
+def test_giant_trap_door_spider_exiles_itself_and_the_attacker(set_pool):
+    """"{1}{R}{G}, {T}: Exile this creature and target creature without flying
+    that's attacking you." The same union, one verb over, and each half goes to
+    its own owner's exile."""
+    spider = Permanent(card=set_pool("ICE")["Giant Trap Door Spider"])
+    _nosick(spider)
+    attacker = Permanent(card=set_pool("ICE")["Balduvian Bears"])
+    attacker.attacking = True
+    attacker.defending_player_index = 0
+    p1 = PlayerState(
+        name="P1", battlefield=[spider], life=20,
+        mana_pool={"R": 1, "G": 1, "C": 1},
+    )
+    p2 = PlayerState(name="P2", battlefield=[attacker], life=20)
+    game = Game(players=[p1, p2])
+    game.combat_attackers = {0: 0}
+
+    result = game.activate_permanent_ability(
+        0, "Giant Trap Door Spider", target_permanent_index=0, target_player_index=1
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert result.supported
+    assert [c.name for c in p1.exile] == ["Giant Trap Door Spider"]
+    assert [c.name for c in p2.exile] == ["Balduvian Bears"]
+
+
+def test_a_union_of_two_targeted_phrases_is_refused(set_pool):
+    """"Destroy target creature and target land." (Fumarole.)
+
+    The union reads it, and the *picker* cannot: a spell is asked for one
+    target (``targeting.derive_cast_spec`` answers with one kind), so admitting
+    this would compile a card that is supported and uncastable, its second
+    target chosen by nobody. It refuses naming that, and the two cards above are
+    unaffected because their first phrase is the source rather than a target.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Fumarole"])
+
+    assert not program.supported
+
+
+def test_and_still_joins_two_effects_rather_than_two_objects(set_pool):
+    """"and" is the commonest word on a Magic card. A targeted *player* after
+    it parses to ``ast.PlayerRef``, which was never a candidate for this union
+    — so "…and target player draws a card" is still two statements."""
+    from engine.grammar import compile_line
+
+    joined = compile_line("Destroy target creature and target player draws a card.")
+
+    assert [i.kind for i in joined.instructions] == [
+        "destroy_target_permanent", "draw_target_cards",
+    ]

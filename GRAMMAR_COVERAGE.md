@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 68.9% | 64.2% | 43.8% | 206 |
+| ICE *(measured)* | 373 | 601 | 69.2% | 64.6% | 44.1% | 208 |
 | **All (shipped)** | **2415** | **3404** | **85.8%** | **84.7%** | **52.4%** | **1544** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -41,7 +41,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | ---: | ---: | --- | --- |
 | 294 | 146 | expected a subject |  |
 | 128 | 55 | unrecognized effect verb |  |
-| 82 | 48 | unconsumed text |  |
+| 80 | 46 | unconsumed text |  |
 | 40 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 10 | 7 | expected 'a' |  |
@@ -59,8 +59,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
-| 4 | 2 | expected a destination zone after 'return' |  |
 | 4 | 3 | expected 'controller' |  |
+| 3 | 1 | expected a destination zone after 'return' |  |
 | 2 | 2 | a destroy sweep over a source relation stays with its card hook until the probe review takes it |  |
 | 2 | 1 | conditional_static_holds evaluates no such condition on a continuous buff |  |
 | 2 | 2 | the source-class shield is armed on its controller, not on a chosen recipient |  |
@@ -1080,6 +1080,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `When you control no Islands, sacrifice this creature.`
 - **Giant Slug**
   - `{5}: At the beginning of your next upkeep, choose a basic land type. This creature gains landwalk of the chosen type until the end of that turn. (It can't be blocked as long as defending player controls a land of that type.)`
+- **Giant Trap Door Spider**
+  - `{1}{R}{G}, {T}: Exile this creature and target creature without flying that's attacking you.`
 - **Glacial Chasm**
   - `When this land enters, sacrifice a land.`
 - **Glacial Crevasses**
@@ -2476,6 +2478,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{1}: This creature gets +1/+0 until end of turn.`
   - `{1}: This creature gets +0/+1 until end of turn.`
   - `{3}: This creature deals 1 damage to target creature without flying that's attacking you.`
+- **Snow Hound**
+  - `{1}, {T}: Return this creature and target green or blue creature you control to their owner's hand.`
 - **Sol Ring**
   - `{T}: Add {C}{C}.`
   - `{T}: Add {C}{C}.`
