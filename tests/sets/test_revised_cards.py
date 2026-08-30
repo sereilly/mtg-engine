@@ -286,7 +286,7 @@ def test_energy_flux_grants_the_upkeep_cost_to_every_artifact(catalog):
 
     triggers = game.get_upkeep_pay_triggers(0)
     assert [t["card_name"] for t in triggers] == ["Sol Ring"]
-    assert triggers[0]["mana"]["generic"] == 2
+    assert triggers[0]["cost"]["mana"]["generic"] == 2
 
 
 @pytest.mark.cr("611.3")

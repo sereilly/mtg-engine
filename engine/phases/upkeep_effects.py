@@ -110,13 +110,13 @@ class UpkeepEffectsMixin:
         self.log.append(f"{permanent.card.name} gains a wind counter ({counters} total)")
         cost = scaled_cost(ctx.trig.instruction, counters)
         if human_choices is not None and permanent.card.name in human_choices:
-            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
+            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_cost(
                 controller, cost
             )
         else:
-            paid = self.can_pay_upkeep_mana(controller, cost)
+            paid = self.can_pay_upkeep_cost(controller, cost)
         if paid:
-            self._spend_upkeep_mana(controller, cost)
+            self.pay_upkeep_cost(controller, cost, reason=permanent.card.name)
             self.log.append(
                 f"{controller.name} paid {counters} green for {permanent.card.name}"
             )
@@ -144,8 +144,9 @@ class UpkeepEffectsMixin:
         rather than being left to look one up.
 
         Partial payment is not allowed (702.24a's last sentence), which is what
-        ``can_pay_upkeep_mana`` already answers: it is asked about the whole
-        escalated cost, and a player who cannot cover all of it pays none.
+        ``can_pay_upkeep_cost`` already answers: it is asked about the whole
+        escalated cost — mana, life and sacrifice together — and a player who
+        cannot cover all of it pays none of it.
         """
         from ..cumulative_upkeep import AGE_COUNTER, scaled_cost
         from ..named_counters import add_counters
@@ -158,11 +159,12 @@ class UpkeepEffectsMixin:
             f"{permanent.card.name} gains an {counter} counter ({total} total)"
         )
         cost = scaled_cost(ctx.trig.instruction, total)
-        # `can_pay_upkeep_mana` / `_spend_upkeep_mana`, the pair every other
-        # upkeep cost in this file uses — never a hand-rolled pool read. They
-        # know that generic mana can come from floating mana *or* from tapping a
-        # land during upkeep, which is the difference between a {1} that is free
-        # and a {1} that costs a land.
+        # `can_pay_upkeep_cost` / `pay_upkeep_cost`, the pair every cost in this
+        # file that is more than mana goes through — never a hand-rolled pool
+        # read. Their mana half knows that generic mana can come from floating
+        # mana *or* from tapping a land during upkeep, which is the difference
+        # between a {1} that is free and a {1} that costs a land; the other two
+        # halves are Glacial Chasm's life and Polar Kraken's land.
         # "Spend this mana only to pay cumulative upkeep costs." (Adarkar
         # Unicorn, Snowfall.) The purpose is what lets that bucket be seen at
         # all: restricted mana lives beside the pool, and a payment that does
@@ -172,15 +174,18 @@ class UpkeepEffectsMixin:
         purpose = PaymentPurpose(CUMULATIVE_UPKEEP, source=permanent)
         human_choices = ctx.human_choices
         if human_choices is not None and permanent.card.name in human_choices:
-            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
+            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_cost(
                 controller, cost, purpose=purpose
             )
         else:
-            paid = self.can_pay_upkeep_mana(controller, cost, purpose=purpose)
+            paid = self.can_pay_upkeep_cost(controller, cost, purpose=purpose)
         if paid:
-            self._spend_upkeep_mana(controller, cost, purpose=purpose)
+            self.pay_upkeep_cost(
+                controller, cost, reason=permanent.card.name, purpose=purpose
+            )
             self.log.append(
-                f"{controller.name} paid cumulative upkeep for {permanent.card.name}"
+                f"{controller.name} paid cumulative upkeep "
+                f"({cost.describe()}) for {permanent.card.name}"
             )
         else:
             self.sacrifice_permanent(permanent)

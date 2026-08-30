@@ -10,6 +10,8 @@ up when the answer arrives.
 
 from __future__ import annotations
 
+from engine.upkeep_costs import cost_from_payload
+
 from .session_store import Session
 
 from .prompts import auto_resolve_ai_prompts
@@ -246,13 +248,17 @@ def _build_upkeep_pay_info(session: Session, viewer_seat: int | None) -> dict | 
     if viewer_seat != session.current_turn:
         return None
     pending = _upkeep_pay_pending(session)
-    # Per-card affordability (pool + untapped mana lands) so the UI can disable
-    # the pay button instead of offering a payment that would be rejected.
+    # Per-card affordability so the UI can disable the pay button instead of
+    # offering a payment that would be rejected. The whole cost, not its mana
+    # half: CR 702.24a admits life and a sacrifice beside the mana, and a
+    # button greyed out on one part is the same lie either way round.
     can_pay: dict[str, bool] = {}
     if 0 <= session.current_turn < len(session.game.players):
         payer = session.game.players[session.current_turn]
         can_pay = {
-            c["card_name"]: session.game.can_pay_upkeep_mana(payer, c.get("mana") or {})
+            c["card_name"]: session.game.can_pay_upkeep_cost(
+                payer, cost_from_payload(c.get("cost") or {})
+            )
             for c in session.upkeep_pay_choices
         }
     return {

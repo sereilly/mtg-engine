@@ -7,7 +7,9 @@ an AI turn forward.
 
 from __future__ import annotations
 
+from engine.upkeep_costs import cost_from_payload
 from fastapi import HTTPException
+
 from .action_registry import HUMAN_ONLY, action_handler
 from .combat_prompts import _ai_declare_attackers, _banding_assignment_pending
 from .game_flow import _advance_ai_turn, _advance_phase, _ai_step
@@ -241,8 +243,12 @@ def _action_pay_upkeep(session, req, seat_type):
 
     choice = pending[req.card_name]
     controller = session.game.players[req.seat]
-    if not session.game.can_pay_upkeep_mana(controller, choice.get("mana") or {}):
-        raise HTTPException(status_code=400, detail=f"not enough mana to pay upkeep for {req.card_name}")
+    # The whole cost, not its mana half: an upkeep may print life or a
+    # sacrifice beside the mana (CR 702.24a), and a gate that reads one part
+    # lets a player pay a cost they cannot afford.
+    cost = cost_from_payload(choice.get("cost") or {})
+    if not session.game.can_pay_upkeep_cost(controller, cost):
+        raise HTTPException(status_code=400, detail=f"cannot pay upkeep cost for {req.card_name}")
 
     session.upkeep_resolved_choices[req.card_name] = True
 

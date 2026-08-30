@@ -1456,7 +1456,8 @@ def test_cyclone_upkeep_prompt_quotes_escalated_cost(arn_by_name):
 
     choices = game.get_upkeep_pay_triggers(0)
     entry = next(c for c in choices if c["card_name"] == "Cyclone")
-    assert entry["mana"] == {"G": 3}  # this upkeep's counter is included
+    assert entry["cost"] == {"mana": {"G": 3}}  # this upkeep's counter is included
+    assert entry["cost_label"] == "{G}{G}{G}"
 
 
 def test_eye_for_an_eye_mirrors_damage_to_source_controller(arn_by_name, all_cards):

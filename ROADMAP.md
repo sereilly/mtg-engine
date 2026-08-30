@@ -692,9 +692,9 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, thirty rounds in. 184 → 270 of 373 supported (72%),
-hollow lines 10 cards, and 44 unclaimed sentences across 29 of those 270 — the
-third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
+**Where it stands: Phase 3, thirty-one rounds in. 184 → 271 of 373 supported
+(72.7%), hollow lines 10 cards, and 44 unclaimed sentences across 29 of those
+271 — the third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
@@ -711,7 +711,7 @@ upkeep alone with a whole printed paragraph compiling to nothing, Fire Covenant'
 
 Only 10 of those show in `--hollow-lines`, because a line that produces no
 *ability part* leaves nothing for that probe to find hollow. So the honest
-reading of "270 supported" is "270 compile, 241 of them with every printed line
+reading of "271 supported" is "271 compile, 242 of them with every printed line
 accounted for". **One round is still scheduled**: the support gate admits an
 artifact or enchantment when *any* ability of it is implemented — round 1's
 second finding ("a widened gate hid a static line") for a card type the round-1
@@ -719,7 +719,7 @@ fix did not reach — and tightening it takes the number down to the true one.
 Measured before changing anything: **no shipped card is affected**, which is what
 makes that round safe to do at all.
 
-**The remaining 103 are a long tail, and the shape is Legends' rather than
+**The remaining 102 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
@@ -1677,6 +1677,62 @@ the key without closing a cycle through `combat_restrictions.py`.
 **The count did not move, and that is the point.** Panic was already inside the
 270. What this round bought is one card that now does what it prints, and an
 instrument that can see the other 29.
+
+**Round 31 — a cumulative upkeep cost is a cost, and the reader has to consume
+all of it. 270 → 271, and a second card started doing what it prints.**
+
+CR 702.24a admits *any* cost after the keyword. `engine/cumulative_upkeep.py`
+read mana, said so in its own docstring, and refused the three Ice Age cards
+that print something else. That refusal was the honest half. The other half was
+not: the cost phrase went straight to `mana_cost_from_symbols`, which **scans**
+for symbols and ignores everything else by design — so "Pay {B} and 1 life"
+matched, came back `{B}`, and **Infernal Darkness had been supported since
+ingest charging half its upkeep**. A refusal you can see and a rider you cannot
+are the same bug wearing different clothes, and only the second one ships.
+
+`engine/upkeep_costs.py` is what a cost is now: mana, life and a sacrifice, any
+of them zero. Three decisions in it are worth keeping.
+
+*It is a leaf, not part of the keyword's module.* Every pay-or-consequence
+upkeep prompt holds one — Erosion's "unless you pay {U}", Cyclone's longhand of
+CR 702.24a, Nafs Asp's payment before the draw step — and Nafs Asp importing a
+module named for a keyword it does not have is the wrong shape. The field names
+are `cast_costs.AdditionalCost`'s deliberately: CR 601.2b's additional cost, CR
+602.2b's activation cost and this one are the same act, and the sacrifice's noun
+phrase is read by the compiler's own `_chargeable_sacrifice_filter`, so this
+cost and an activation cost printing the same phrase cannot admit different
+permanents.
+
+*The phrase reader consumes the whole phrase or refuses it* — the grammar's hard
+invariant carried into a derivation table, and the direct fix for the bug above.
+"Pay {B}, discard a card" and "Pay X life" are both None, and either costs its
+card support rather than costing the card its cost.
+
+*Every part of the cost escalates.* "For each age counter on it" is about the
+[cost], not about its mana — Glacial Chasm's third upkeep is 6 life and Polar
+Kraken's is three lands. One `scaled_cost` still does that arithmetic for the
+prompt and the handler both, which is what stopped Cyclone charging double when
+the two shared a reader.
+
+`can_pay_upkeep_cost` / `pay_upkeep_cost` wrap the mana pair rather than
+replacing it: the mana question is unchanged and has one answer, and what is new
+is that it is no longer the only one. Partial payment is not allowed, so the
+question is asked about all three parts at once — a player holding the {B} and
+not the life pays neither. The sacrifice goes through `arm_forced_sacrifice`,
+which is what makes *which* land the payer's choice; the affordability test is
+what stops that prompt being armed for a payment they could not have made.
+
+The prompt carries the cost where it carried a mana dict, because "{B} and 1
+life" is not a run of symbols and the number in it is this upkeep's rather than
+the printed one. Three keys — the payload the affordability pass reads back, and
+**two** renderings, because "Pay sacrifice a land" is not a sentence and only the
+cost knows which of its parts it has. Four collectors build those dicts and two
+read them back, so the keys are written in one place.
+
+**What it bought:** Polar Kraken (271), Infernal Darkness charging what it
+prints, and Glacial Chasm's refusal moving off the keyword and onto the two
+lines that are genuinely unread ("Creatures you control can't attack", "Prevent
+all damage that would be dealt to you").
 
 ## Where the sets landed
 

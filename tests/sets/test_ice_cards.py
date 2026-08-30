@@ -12,6 +12,7 @@ do what the card says.
 from __future__ import annotations
 
 from engine import Game
+from engine.cumulative_upkeep import cumulative_upkeep_cost
 from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
@@ -94,16 +95,21 @@ def test_soldevi_simulacrum_escalates_across_two_upkeeps(set_pool):
     assert sim in p1.battlefield
 
 
-def test_polar_kraken_refuses_a_cost_the_engine_cannot_charge(set_pool):
-    """"Cumulative upkeep—Sacrifice a land." CR 702.24a admits any cost and
-    this engine charges mana, so the card stays unsupported **naming the
-    clause** rather than shipping with a free upkeep."""
-    kraken = set_pool("ICE")["Polar Kraken"]
-    program = compile_card_oracle(kraken)
+def test_musician_still_refuses_a_cost_the_engine_cannot_charge(set_pool):
+    """The keyword compiles, but "That enchantment gains ..." does not, so the
+    card stays unsupported naming the clause it cannot read.
+
+    Kept from round 1 as the shape rather than the card: what the gate must not
+    do is admit a permanent on the strength of a keyword it *can* read while
+    dropping a line it cannot."""
+    musician = set_pool("ICE")["Musician"]
+    program = compile_card_oracle(musician)
 
     assert not program.supported
-    assert "cumulative upkeep" in (program.reason or "").lower()
-    assert _cu_trigger(kraken) is None
+    # The refusal names the granted-ability line, not the keyword: the cost
+    # reader admits "{1}" and the gate still says no.
+    assert "music counter" in (program.reason or "")
+    assert cumulative_upkeep_cost("cumulative upkeep {1}") is not None
 
 
 def test_halls_of_mist_still_reports_its_unread_static_line(set_pool):
@@ -2231,3 +2237,163 @@ def test_the_targeted_restriction_is_not_the_blanket_one(set_pool):
     assert "targets" in targeted.instructions[0].payload
     assert blanket.instructions[0].kind == "cant_block_until_eot"
     assert "filter" in blanket.instructions[0].payload
+
+
+# --- Round 31: a cumulative upkeep cost is a cost, not a mana cost ---
+
+
+def _ice_lands(set_pool, name, count):
+    return [Permanent(card=set_pool("ICE")[name]) for _ in range(count)]
+
+
+def test_polar_kraken_pays_its_upkeep_by_sacrificing_a_land(set_pool):
+    """"Cumulative upkeep—Sacrifice a land." The cost is a sacrifice, so the
+    payment is one of the controller's own lands (CR 701.21a) and the Kraken
+    stays on the battlefield."""
+    kraken = Permanent(card=set_pool("ICE")["Polar Kraken"])
+    forests = _ice_lands(set_pool, "Forest", 3)
+    p1 = PlayerState(name="P1", battlefield=[kraken, *forests], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game.resolve_upkeep(0)
+
+    assert compile_card_oracle(kraken.card).supported
+    assert counters_on(kraken, "age") == 1
+    assert kraken in p1.battlefield
+    assert len([p for p in p1.battlefield if p.card.primary_type == "land"]) == 2
+
+
+def test_polar_kraken_sacrifices_one_land_per_age_counter(set_pool):
+    """CR 702.24a's "for each age counter on it" is about the whole cost, so
+    the second upkeep asks for two lands, not one."""
+    kraken = Permanent(card=set_pool("ICE")["Polar Kraken"])
+    forests = _ice_lands(set_pool, "Forest", 4)
+    p1 = PlayerState(name="P1", battlefield=[kraken, *forests], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game.resolve_upkeep(0)
+    assert len([p for p in p1.battlefield if p.card.primary_type == "land"]) == 3
+
+    game.resolve_upkeep(0)
+    assert counters_on(kraken, "age") == 2
+    assert len([p for p in p1.battlefield if p.card.primary_type == "land"]) == 1
+    assert kraken in p1.battlefield
+
+
+def test_polar_kraken_is_sacrificed_when_the_lands_run_out(set_pool):
+    """Two lands, and a second upkeep that asks for two: one is left over and
+    partial payment is not allowed, so the land stays and the Kraken goes."""
+    kraken = Permanent(card=set_pool("ICE")["Polar Kraken"])
+    forests = _ice_lands(set_pool, "Forest", 2)
+    p1 = PlayerState(name="P1", battlefield=[kraken, *forests], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game.resolve_upkeep(0)
+    game.resolve_upkeep(0)
+
+    assert kraken not in p1.battlefield
+    assert len([p for p in p1.battlefield if p.card.primary_type == "land"]) == 1
+
+
+def test_infernal_darkness_charges_the_life_beside_the_mana(set_pool):
+    """"Cumulative upkeep—Pay {B} and 1 life."
+
+    The card was *supported* while charging only the {B}: the cost went to a
+    symbol scanner, which found "{B}" and ignored "and 1 life". Both halves are
+    the cost, and both escalate.
+    """
+    darkness = Permanent(card=set_pool("ICE")["Infernal Darkness"])
+    p1 = PlayerState(
+        name="P1", battlefield=[darkness], mana_pool={"B": 3}, life=20
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game.resolve_upkeep(0)
+
+    assert darkness in p1.battlefield
+    assert p1.life == 19
+
+
+def test_infernal_darkness_life_escalates_with_the_age_counters(set_pool):
+    darkness = Permanent(card=set_pool("ICE")["Infernal Darkness"])
+    p1 = PlayerState(
+        name="P1", battlefield=[darkness], mana_pool={"B": 3}, life=20
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game.resolve_upkeep(0)
+    p1.mana_pool["B"] = 3
+    game.resolve_upkeep(0)
+
+    assert counters_on(darkness, "age") == 2
+    assert p1.life == 17, "1 life then 2"
+
+
+def test_infernal_darkness_unaffordable_life_pays_nothing_at_all(set_pool):
+    """A player with the mana and not the life pays neither: CR 702.24a's last
+    sentence, asked about the whole cost rather than one half of it."""
+    darkness = Permanent(card=set_pool("ICE")["Infernal Darkness"])
+    p1 = PlayerState(
+        name="P1", battlefield=[darkness], mana_pool={"B": 3}, life=1
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game.resolve_upkeep(0)  # 1 life, affordable
+    assert darkness in p1.battlefield
+    assert p1.life == 0
+
+    p1.life = 1
+    p1.mana_pool["B"] = 3
+    game.resolve_upkeep(0)  # 2 life, not affordable
+
+    assert darkness not in p1.battlefield
+    assert p1.life == 1, "nothing is paid when the whole cost cannot be"
+
+
+def test_glacial_chasm_reads_its_upkeep_and_still_refuses_the_rest(set_pool):
+    """"Cumulative upkeep—Pay 2 life" is now a cost this engine charges, so the
+    land's refusal moves on to the two lines that are still unread. It stays
+    unsupported — the point is *which* clause the reason names."""
+    chasm = set_pool("ICE")["Glacial Chasm"]
+    program = compile_card_oracle(chasm)
+
+    assert not program.supported
+    assert "cumulative upkeep" not in (program.reason or "").lower()
+    assert cumulative_upkeep_cost(
+        "cumulative upkeep—pay 2 life"
+    ).life == 2
+
+
+def test_the_upkeep_prompt_quotes_a_cost_that_is_not_mana(set_pool):
+    """The prompt is a label the server writes, because "{B} and 1 life" is
+    not a run of symbols and the number in it is this upkeep's, not the
+    printed one."""
+    darkness = Permanent(card=set_pool("ICE")["Infernal Darkness"])
+    p1 = PlayerState(name="P1", battlefield=[darkness], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    entry = next(
+        c for c in game.get_upkeep_pay_triggers(0)
+        if c["card_name"] == "Infernal Darkness"
+    )
+
+    assert entry["cost_label"] == "{B} and 1 life"
+    assert entry["cost_pay_label"] == "Pay {B} and 1 life"
+    assert entry["cost"] == {"mana": {"B": 1}, "life": 1}
+
+
+def test_polar_krakens_button_does_not_say_pay_sacrifice(set_pool):
+    """A sacrifice is a thing the payer does, not a thing they hand over, so
+    the imperative on the button is the cost's own — "Pay sacrifice a land" is
+    not a sentence."""
+    kraken = Permanent(card=set_pool("ICE")["Polar Kraken"])
+    p1 = PlayerState(name="P1", battlefield=[kraken], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    entry = next(
+        c for c in game.get_upkeep_pay_triggers(0)
+        if c["card_name"] == "Polar Kraken"
+    )
+
+    assert entry["cost_label"] == "sacrifice a land"
+    assert entry["cost_pay_label"] == "Sacrifice a land"

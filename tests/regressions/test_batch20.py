@@ -261,7 +261,8 @@ class TestNafsAsp:
         ]
         assert len(choices) == 1
         assert choices[0]["kind"] == "draw_step_life_loss_unless_pay"
-        assert choices[0]["mana"] == {"generic": 1}
+        assert choices[0]["cost"] == {"mana": {"generic": 1}}
+        assert choices[0]["cost_label"] == "{1}"
         assert choices[0]["life_loss"] == 1
 
     def test_the_game_pauses_at_upkeep_before_the_draw(self):

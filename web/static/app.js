@@ -3439,22 +3439,6 @@ function applyUntapPrompt(untapInfo) {
   customOkBtn.disabled = true;
 }
 
-function manaObjectToSymbolString(mana) {
-  if (!mana || typeof mana !== "object") return "?";
-  const parts = [];
-  // Generic mana renders as a single numeric symbol ({4}), not four {generic}
-  // tokens — the symbol map only has numeric icons, so {generic} would fall back
-  // to literal text in the prompt.
-  const generic = Number(mana.generic || 0);
-  if (generic > 0) parts.push(`{${generic}}`);
-  for (const [sym, count] of Object.entries(mana)) {
-    if (sym === "generic") continue;
-    const n = Number(count) || 0;
-    for (let i = 0; i < n; i += 1) parts.push(`{${sym}}`);
-  }
-  return parts.join("") || "{0}";
-}
-
 function applyUpkeepPayPrompt(upkeepInfo) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -3468,7 +3452,11 @@ function applyUpkeepPayPrompt(upkeepInfo) {
   const pending = upkeepInfo.pending || [];
   const current = pending[0];
   const cardName = current?.card_name || "Unknown";
-  const manaStr = manaObjectToSymbolString(current?.mana);
+  // The server writes the cost out (`UpkeepCost.describe`), because an upkeep
+  // cost is not always mana: "{B} and 1 life" (Infernal Darkness) and
+  // "sacrifice a land" (Polar Kraken) are costs a symbol run cannot spell, and
+  // the escalation means the number here is this upkeep's, not the printed one.
+  const costLabel = current?.cost_label || "{0}";
 
   // The consequence of declining depends on the trigger: most cards are
   // sacrificed, but some (Force of Nature) deal damage to you instead.
@@ -3496,20 +3484,28 @@ function applyUpkeepPayPrompt(upkeepInfo) {
   okBtn.classList.add("hidden");
   customRow.classList.add("hidden");
   title.textContent = "Upkeep Payment Required";
+  // "Tap lands to generate mana" is advice about a mana cost, so it is offered
+  // only for one: an upkeep may be paid in life or in a sacrifice (CR 702.24a),
+  // and no amount of tapping helps with either.
+  const wantsMana = Object.values(current?.cost?.mana || {}).some((n) => Number(n) > 0);
+  const howToPay = wantsMana ? " Tap lands to generate mana, then pay or decline." : "";
   body.textContent = kind === "draw_step_life_loss_unless_pay"
-    ? `${cardName} damaged you — pay before your draw step or lose ${current?.life_loss || 1} life. Tap lands to generate mana, then pay or decline.`
-    : `${cardName} requires a payment at the beginning of your upkeep. Tap lands to generate mana, then pay or decline.`;
+    ? `${cardName} damaged you — pay before your draw step or lose ${current?.life_loss || 1} life.${howToPay}`
+    : `${cardName} requires a payment at the beginning of your upkeep.${howToPay}`;
 
   // Server-computed affordability (pool + untapped mana lands): a payment the
   // engine would reject is greyed out instead of offered.
   const canPay = upkeepInfo.can_pay?.[cardName] !== false;
-  const payBtn = `<button type="button" class="prompt-choice-btn" id="upkeepPayBtn"${canPay ? "" : " disabled"}>Pay ${renderSymbolsInline(manaStr)}</button>`;
+  // The imperative is the server's too: "Pay {U}" and "Sacrifice a land" are
+  // the same cost, and only the cost knows which of its parts it has.
+  const payLabel = current?.cost_pay_label || `Pay ${costLabel}`;
+  const payBtn = `<button type="button" class="prompt-choice-btn" id="upkeepPayBtn"${canPay ? "" : " disabled"}>${renderSymbolsInline(payLabel)}</button>`;
   const sacBtn = `<button type="button" class="prompt-choice-btn" id="upkeepSacBtn">${declineLabel}</button>`;
   const remaining = pending.length;
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(cardName)}</div>`,
-    `<div>Cost: ${renderSymbolsInline(manaStr)}</div>`,
-    canPay ? "" : `<div class="prompt-warning">Not enough mana to pay.</div>`,
+    `<div>Cost: ${renderSymbolsInline(costLabel)}</div>`,
+    canPay ? "" : `<div class="prompt-warning">You can't pay this cost.</div>`,
     `<div>Remaining decisions: ${remaining}</div>`,
     `<div class="prompt-choice-row">${payBtn}${sacBtn}</div>`,
   ].join("");

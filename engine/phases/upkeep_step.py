@@ -26,6 +26,7 @@ from ..oracle import OracleInstruction, compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities, matching_triggers
 from ..mixins._constants import _UPKEEP_PAY_KINDS
 from ..cumulative_upkeep import upcoming_cost
+from ..upkeep_costs import UpkeepCost, cost_from_payload, cost_prompt_fields
 from ..effect_labels import triggered_label
 from ..handlers import EFFECT_HANDLERS
 from .upkeep_effects import UPKEEP_EFFECTS, UpkeepContext, UpkeepEffectsMixin
@@ -159,6 +160,57 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     self.become_tapped(perm)
                     remaining -= 1
 
+    def can_pay_upkeep_cost(self, player, cost, *, purpose=None) -> bool:
+        """Whether *player* can pay a whole upkeep cost — CR 702.24a's [cost],
+        which is mana, life and a sacrifice in whatever combination the card
+        printed (``upkeep_costs.UpkeepCost``).
+
+        Asked about all of it at once, because partial payment is never allowed
+        (CR 702.24a's last sentence, and CR 601.2h's rule for every other cost):
+        a player who cannot cover the life half pays none of the mana half
+        either. That is also why this wraps :meth:`can_pay_upkeep_mana` rather
+        than replacing it — the mana question is unchanged and has one answer;
+        what is new is that it is no longer the only question.
+        """
+        from ..handlers.life_and_game import can_pay_life
+
+        if not self.can_pay_upkeep_mana(player, cost.mana, purpose=purpose):
+            return False
+        # CR 119.4: life may be paid only down to 0.
+        if cost.life and not can_pay_life(player, cost.life):
+            return False
+        if cost.sacrifices:
+            # The charger's own candidate reader, so what is *offered* and what
+            # can actually be given up cannot disagree — the split that let
+            # Energy Flux's generic cost be paid for free one method up.
+            candidates = self._sacrifice_candidate_indices(player, cost.sacrifice)
+            if len(candidates) < cost.sacrifices:
+                return False
+        return True
+
+    def pay_upkeep_cost(self, player, cost, *, reason: str, purpose=None) -> None:
+        """Pay an upkeep cost already validated by :meth:`can_pay_upkeep_cost`.
+
+        The sacrifice goes through ``arm_forced_sacrifice``, which is what makes
+        *which* permanent the payer's choice (CR 701.21a) and prompts a human
+        seat for it; the affordability test above is what stops that prompt from
+        being armed for a payment the player could not have made.
+        """
+        self._spend_upkeep_mana(player, cost.mana, purpose=purpose)
+        if cost.life:
+            player.life -= cost.life
+            self.log.append(f"{player.name} paid {cost.life} life for {reason}")
+        if cost.sacrifices:
+            # `seat_index`, not `players.index`: the latter is an equality
+            # search over a mutable dataclass, so two seats holding equal state
+            # would resolve to the same one.
+            self.arm_forced_sacrifice(
+                self.seat_index(player),
+                cost.sacrifices,
+                filter=cost.sacrifice,
+                reason=reason,
+            )
+
     def get_upkeep_pay_triggers(self, player_index: int) -> list[dict]:
         """Return pay-or-consequence upkeep triggers that the player must decide on.
 
@@ -181,10 +233,10 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             # arithmetic — this used to be a branch naming one card's
             # instruction kind, which is a second copy of it and the way a
             # player gets quoted one number and charged another.
-            mana = upcoming_cost(permanent, trig.instruction)
+            cost = upcoming_cost(permanent, trig.instruction)
             choices.append({
                 "card_name": permanent.card.name,
-                "mana": mana,
+                **cost_prompt_fields(cost),
                 "kind": trig.instruction.kind,
                 # "unless you pay" alternative consequence, used to label the
                 # decline button (e.g. Force of Nature deals 8 damage; it is
@@ -208,7 +260,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             if trig is not None:
                 choices.append({
                     "card_name": permanent.card.name,
-                    "mana": trig.instruction.payload.get("mana", {}),
+                    **cost_prompt_fields(cost_from_payload(trig.instruction.payload)),
                     "kind": trig.instruction.kind,
                     "damage": 0,
                 })
@@ -235,7 +287,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     mana[sym.upper()] = mana.get(sym.upper(), 0) + 1
             choices.append({
                 "card_name": permanent.card.name,
-                "mana": mana,
+                **cost_prompt_fields(UpkeepCost(mana=mana)),
                 "kind": "upkeep_pay_to_gain_life",
                 "damage": 0,
             })

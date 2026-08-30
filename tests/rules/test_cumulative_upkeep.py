@@ -15,9 +15,11 @@ from __future__ import annotations
 import pytest
 
 from engine import Game
+from engine.cumulative_upkeep import cumulative_upkeep_cost
 from engine.models import CardDefinition, Permanent, PlayerState
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
+from engine.upkeep_costs import UpkeepCost
 
 
 def _mk(name: str, cost: str, *, extra_text: str = "", type_line: str = "Enchantment") -> CardDefinition:
@@ -36,6 +38,26 @@ def _mk(name: str, cost: str, *, extra_text: str = "", type_line: str = "Enchant
     if extra_text:
         text = f"{text}\n{extra_text}"
     return _card(name, type_line, text, keywords=("Cumulative upkeep",))
+
+
+def _mk_cost(name: str, cost: str, *, type_line: str = "Enchantment") -> CardDefinition:
+    """:func:`_mk` for a cost printed after CR 702.24's em dash.
+
+    A separate spelling rather than a flag on the one above, because the em
+    dash is part of the printed line for a non-mana cost and part of what the
+    reader has to get past — a fixture that joined the two with a space would
+    test a line no card carries.
+    """
+    reminder = (
+        " (At the beginning of your upkeep, put an age counter on this permanent, "
+        "then sacrifice it unless you pay its upkeep cost for each age counter on it.)"
+    )
+    return _card(
+        name,
+        type_line,
+        f"Cumulative upkeep—{cost}.{reminder}",
+        keywords=("Cumulative upkeep",),
+    )
 
 
 def _card(
@@ -100,6 +122,10 @@ def _game(
 
 def _tapped_lands(player: PlayerState) -> int:
     return sum(1 for perm in player.battlefield if perm.card.primary_type == "land" and perm.tapped)
+
+
+def _lands(player: PlayerState) -> int:
+    return sum(1 for perm in player.battlefield if perm.card.primary_type == "land")
 
 
 @pytest.mark.cr("702.24a")
@@ -192,12 +218,14 @@ def test_702_24a_the_prompt_quotes_the_cost_this_upkeep_will_ask_for():
     game, p1 = _game(perm, lands=4)
 
     first = next(c for c in game.get_upkeep_pay_triggers(0) if c["card_name"] == "Ager")
-    assert first["mana"] == {"generic": 1}
+    assert first["cost"] == {"mana": {"generic": 1}}
+    assert first["cost_label"] == "{1}"
 
     game.resolve_upkeep(0)
     assert perm in p1.battlefield
     second = next(c for c in game.get_upkeep_pay_triggers(0) if c["card_name"] == "Ager")
-    assert second["mana"] == {"generic": 2}
+    assert second["cost"] == {"mana": {"generic": 2}}
+    assert second["cost_label"] == "{2}"
 
 
 @pytest.mark.cr("702.24a")
@@ -241,16 +269,11 @@ def test_702_24b_two_instances_each_trigger_and_each_counts_every_counter():
 
 @pytest.mark.cr("702.24a")
 def test_702_24a_a_cost_the_engine_cannot_charge_refuses_the_card():
-    """CR 702.24a admits any cost, and this engine can only charge mana. A
-    "Pay 2 life" upkeep must leave the card **unsupported** — admitting it would
+    """CR 702.24a admits *any* cost, and this engine charges three kinds. One
+    it cannot express must leave the card **unsupported** — admitting it would
     ship a permanent whose upkeep is silently free, which is a strictly better
     card than the one printed."""
-    card = _card(
-        "Blood Ager",
-        "Enchantment",
-        "Cumulative upkeep—Pay 2 life.",
-        keywords=("Cumulative upkeep",),
-    )
+    card = _mk_cost("Discarding Ager", "Discard a card")
     program = compile_card_oracle(card)
 
     assert not program.supported
@@ -258,6 +281,122 @@ def test_702_24a_a_cost_the_engine_cannot_charge_refuses_the_card():
         trig for trig in program.triggered_abilities
         if trig.instruction and trig.instruction.kind == "cumulative_upkeep"
     ]
+
+
+@pytest.mark.cr("702.24a")
+def test_702_24a_a_life_cost_is_charged_and_escalates():
+    """"Cumulative upkeep—Pay 2 life" (Glacial Chasm). CR 702.24a's [cost] is a
+    cost, and "for each age counter on it" scales all of it."""
+    perm = Permanent(card=_mk_cost("Blood Ager", "Pay 2 life"))
+    game, p1 = _game(perm)
+
+    game.resolve_upkeep(0)
+    assert perm in p1.battlefield
+    assert p1.life == 18
+
+    game.resolve_upkeep(0)
+    assert perm in p1.battlefield
+    assert p1.life == 14, "2 life, then 4"
+
+
+@pytest.mark.cr("119.4")
+def test_119_4_a_life_cost_beyond_the_life_total_is_not_paid():
+    """"the player may do so only if their life total is greater than or equal
+    to the amount of the payment" — and CR 702.24a's consequence follows,
+    rather than a permanent surviving on a payment nobody could make."""
+    perm = Permanent(card=_mk_cost("Blood Ager", "Pay 2 life"))
+    game, p1 = _game(perm)
+    p1.life = 1
+
+    game.resolve_upkeep(0)
+
+    assert perm not in p1.battlefield
+    assert p1.life == 1
+
+
+@pytest.mark.cr("702.24a")
+def test_702_24a_a_mixed_cost_is_charged_in_full_or_not_at_all():
+    """"Cumulative upkeep—Pay {B} and 1 life" (Infernal Darkness).
+
+    The mana half used to be the whole reading: the phrase went to a symbol
+    scanner, which found "{B}" and ignored the rest. Both halves are the cost,
+    so a player who cannot cover one pays neither.
+    """
+    perm = Permanent(card=_mk_cost("Dark Ager", "Pay {B} and 1 life"))
+    game, p1 = _game(perm, pool={"B": 1})
+
+    game.resolve_upkeep(0)
+    assert perm in p1.battlefield
+    assert p1.life == 19
+
+    p1.mana_pool["B"] = 2  # mana enough for a second upkeep, but no life for it
+    p1.life = 1
+    game.resolve_upkeep(0)
+
+    assert perm not in p1.battlefield
+    assert p1.life == 1
+
+
+@pytest.mark.cr("702.24a")
+def test_702_24a_a_sacrifice_cost_is_charged_from_the_payers_battlefield():
+    """"Cumulative upkeep—Sacrifice a land" (Polar Kraken). The noun phrase is
+    what may pay, read by the same reader an activation cost printing the same
+    phrase uses."""
+    perm = Permanent(card=_mk_cost("Hungry Ager", "Sacrifice a land"))
+    game, p1 = _game(perm, lands=2)
+
+    game.resolve_upkeep(0)
+
+    assert perm in p1.battlefield
+    assert _lands(p1) == 1
+
+
+@pytest.mark.cr("702.24a")
+def test_702_24a_a_sacrifice_cost_scales_with_the_age_counters():
+    perm = Permanent(card=_mk_cost("Hungry Ager", "Sacrifice a land"))
+    game, p1 = _game(perm, lands=3)
+
+    game.resolve_upkeep(0)
+    game.resolve_upkeep(0)
+
+    assert counters_on(perm, "age") == 2
+    assert perm in p1.battlefield
+    assert _lands(p1) == 0
+
+
+@pytest.mark.cr("701.21a")
+def test_701_21a_an_interactive_payer_chooses_which_permanent_the_cost_takes():
+    """A sacrifice is its *controller* moving one of their own permanents to the
+    graveyard, so which one is their choice — the payment goes through the
+    forced-sacrifice prompt rather than eating the first match, and nothing has
+    left the battlefield until that prompt is answered."""
+    perm = Permanent(card=_mk_cost("Hungry Ager", "Sacrifice a land"))
+    game, p1 = _game(perm, lands=2)
+    game.interactive_seats = {0}
+
+    game.resolve_upkeep(0)
+
+    queued = game.pending_choice_of("sacrifice", 0)
+    assert queued is not None
+    assert queued.data["count"] == 1
+    assert queued.data["filter"] == {"type_filter": "land"}
+    assert _lands(p1) == 2, "the choice is owed, so nothing has gone yet"
+
+
+@pytest.mark.cr("702.24a")
+def test_702_24a_a_cost_phrase_is_read_whole_or_refused():
+    """The reader is the grammar's hard invariant carried into a derivation
+    table: a phrase it can only partly express refuses, because the part it
+    kept would be charged and the part it dropped would not.
+
+    "Pay {B} and 1 life" is the case that was live — it read as ``{B}``.
+    """
+    assert cumulative_upkeep_cost("cumulative upkeep—pay {b} and 1 life") == UpkeepCost(
+        mana={"B": 1}, life=1
+    )
+    assert cumulative_upkeep_cost("cumulative upkeep—pay {b} and x life") is None
+    assert cumulative_upkeep_cost("cumulative upkeep—pay {b}, discard a card") is None
+    assert cumulative_upkeep_cost("cumulative upkeep—sacrifice a thing") is None
 
 
 @pytest.mark.cr("702.24a")

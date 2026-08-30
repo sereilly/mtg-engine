@@ -21,7 +21,9 @@ from ..card_hooks import DRAW_STEP_MODIFIERS
 from ..draw_step_modifiers import draw_step_bonus_for, draw_step_skip_for
 from ..game_types import OracleExecutionContext
 from ..handlers.control_flow import evaluate_condition
+from ..mana_payment import generic_cost
 from ..pt import BASE_PT_REVERT_KEY, clear_base_pt
+from ..upkeep_costs import UpkeepCost, cost_prompt_fields
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
 #: The two draw-step conditions and the only difference between them, the same
@@ -60,7 +62,7 @@ class DrawStepMixin:
             seen.add(name)
             choices.append({
                 "card_name": name,
-                "mana": {"generic": int(obligation["cost"])},
+                **cost_prompt_fields(UpkeepCost(mana=generic_cost(int(obligation["cost"])))),
                 "kind": "draw_step_life_loss_unless_pay",
                 "damage": 0,
                 "life_loss": int(obligation["amount"]),

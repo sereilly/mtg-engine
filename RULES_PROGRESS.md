@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**336 / 612 tracked rules covered (54%)** — 1639 tests, 0 unannotated.
+**336 / 612 tracked rules covered (54%)** — 1646 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -310,7 +310,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **119.1** Each player begins the game with a starting life total of 20. Some variant games have different s...
 - [ ] **119.2** Damage dealt to a player normally causes that player to lose that much life. See rule 120.3.
 - [ ] **119.3** If an effect causes a player to gain life or lose life, that player’s life total is adjusted acco...
-- [x] **119.4** If a cost or effect allows a player to pay an amount of life greater than 0, the player may do so... *(5 tests, subrules b)*
+- [x] **119.4** If a cost or effect allows a player to pay an amount of life greater than 0, the player may do so... *(6 tests, subrules b)*
 - [x] **119.5** If an effect sets a player’s life total to a specific number, the player gains or loses the neces... *(4 tests)*
 - [ ] **119.6** If a player has 0 or less life, that player loses the game as a state-based action. See rule 704.
 - [ ] **119.7** If an effect says that a player can’t gain life, that player can’t make an exchange such that the...
@@ -859,7 +859,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.18** Play *(4 tests, subrules a)*
 - [x] **701.19** Regenerate *(23 tests, subrules abc)*
 - [x] **701.20** Reveal *(2 tests, subrules a)*
-- [x] **701.21** Sacrifice *(7 tests, subrules a)*
+- [x] **701.21** Sacrifice *(8 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(2 tests, subrules a)*
 - [x] **701.24** Shuffle *(2 tests, subrules a)*
@@ -888,7 +888,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
 - [x] **702.22** Banding *(35 tests, subrules abcdefghjk)*
 - [x] **702.23** Rampage *(6 tests, subrules abc)*
-- [x] **702.24** Cumulative Upkeep *(11 tests, subrules ab)*
+- [x] **702.24** Cumulative Upkeep *(16 tests, subrules ab)*
 - [x] **702.25** Flanking *(3 tests, subrules a)*
 - [x] **702.26** Phasing *(5 tests, subrules ad)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*

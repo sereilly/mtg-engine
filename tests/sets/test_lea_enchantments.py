@@ -374,7 +374,7 @@ def test_stasis_upkeep_engine_get_triggers(all_cards):
 
     assert len(triggers) == 1
     assert triggers[0]["card_name"] == "Stasis"
-    assert "U" in triggers[0]["mana"] or triggers[0]["mana"]  # has a mana cost
+    assert triggers[0]["cost"]["mana"]  # has a mana cost
     assert triggers[0]["kind"] == "upkeep_pay_or_sacrifice_enchantment"
 
 

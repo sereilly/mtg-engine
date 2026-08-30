@@ -10,14 +10,23 @@ there the upkeep step's ordinary ``upkeep_self`` dispatch fires it and one
 registered handler resolves it. Nothing downstream of the compiler knows the
 word.
 
+**[cost] is a cost, not a mana cost.** What one is lives in
+``engine/upkeep_costs.py`` — mana, life and a sacrifice, in whatever
+combination the card printed, read by a phrase reader that consumes the whole
+phrase or refuses it. That module says why the strictness matters; the short
+version is that Infernal Darkness's "Pay {B} and 1 life" used to come back
+``{B}``.
+
 **The cost escalates, and the escalation is payload rather than a kind.**
 ``per_counter`` on the instruction says which counter multiplies the printed
 cost, and :func:`scaled_cost` is the one place that arithmetic happens — asked
 by the prompt that quotes the cost and by the handler that charges it, so what a
-player is shown and what they are charged cannot disagree. Cyclone (Arabian
-Nights) prints CR 702.24a's sentence longhand with "wind" in place of "age" and
-is on that same payload key for that reason: the counter word is a parameter of
-one sentence, not two mechanics.
+player is shown and what they are charged cannot disagree. **Every part
+scales**: CR 702.24a's "for each age counter on it" is about the whole cost, so
+Glacial Chasm's third upkeep asks for 6 life and Polar Kraken's asks for three
+lands. Cyclone (Arabian Nights) prints CR 702.24a's sentence longhand with
+"wind" in place of "age" and is on that same payload key for that reason: the
+counter word is a parameter of one sentence, not two mechanics.
 
 The two callers sit on **opposite sides of the counter being placed**, which is
 why the count is a parameter rather than something the reader looks up:
@@ -26,12 +35,6 @@ before the trigger resolves) by adding the counter this resolution will place,
 while the handler already holds the new total. One reader for both would have to
 guess which caller it had and would be wrong for the other — which is not
 hypothetical: Cyclone charged double the moment the two shared one function.
-
-**Round 1 reads mana costs only.** CR 702.24a admits any cost — Ice Age prints
-"Cumulative upkeep—Pay 2 life", "—Pay {B} and 1 life" and "—Sacrifice a land" —
-and a cost this cannot express refuses the whole keyword line rather than
-admitting the card with its upkeep silently free. Three ICE cards are refused
-that way today, each naming its cost in the refusal.
 
 CR 702.24b — several instances each trigger separately, and each counts *all*
 the age counters — is why :func:`cumulative_upkeep_costs` returns every instance
@@ -43,10 +46,10 @@ from __future__ import annotations
 
 import re
 
-from .mana_payment import mana_cost_from_symbols
 from .named_counters import counters_on
 from .oracle_types import (OracleInstruction, ParsedTriggeredAbility,
                            TriggerCondition)
+from .upkeep_costs import UpkeepCost, cost_from_payload, upkeep_cost_from_phrase
 
 #: The instruction one instance of cumulative upkeep lowers to.
 CUMULATIVE_UPKEEP_KIND = "cumulative_upkeep"
@@ -64,15 +67,15 @@ CUMULATIVE_UPKEEP_LABEL = "upkeep_effect"
 #: "cumulative upkeep {1}{u}" as it survives ``normalize_creature_line`` —
 #: lowercased, with the reminder text already stripped. CR 702.24's non-mana
 #: form puts an em dash before the cost ("cumulative upkeep—pay 2 life"), which
-#: this deliberately also captures: it must reach :func:`cumulative_upkeep_cost`
-#: and be *refused* there by name, not fail to match and be read as some other
-#: keyword.
+#: this deliberately also captures: it must reach ``upkeep_cost_from_phrase``
+#: and be read — or refused — *there* by name, not fail to match and be read as
+#: some other keyword.
 _CUMULATIVE_UPKEEP_PART = re.compile(r"^cumulative upkeep[\s—-]+(?P<cost>.+)$")
 
 
-def cumulative_upkeep_cost(part: str) -> dict[str, int] | None:
-    """The mana cost of one normalized keyword-line part, or None if the part
-    isn't a cumulative upkeep this engine can charge.
+def cumulative_upkeep_cost(part: str) -> UpkeepCost | None:
+    """The cost of one normalized keyword-line part, or None if the part isn't a
+    cumulative upkeep this engine can charge.
 
     This is also the gate's admission test, exactly as ``rampage_amount`` is:
     the reader that *implements* the keyword is the one that admits it, so a
@@ -82,10 +85,10 @@ def cumulative_upkeep_cost(part: str) -> dict[str, int] | None:
     match = _CUMULATIVE_UPKEEP_PART.match(part.strip())
     if match is None:
         return None
-    return mana_cost_from_symbols(match.group("cost"))
+    return upkeep_cost_from_phrase(match.group("cost"))
 
 
-def cumulative_upkeep_costs(keyword_line: str) -> tuple[dict[str, int], ...]:
+def cumulative_upkeep_costs(keyword_line: str) -> tuple[UpkeepCost, ...]:
     """Every instance of cumulative upkeep on one comma-joined keyword line.
 
     CR 702.24b: each instance triggers separately, so each gets its own ability.
@@ -117,7 +120,7 @@ def cumulative_upkeep_triggers(keyword_line: str) -> tuple[ParsedTriggeredAbilit
             instruction=OracleInstruction(
                 CUMULATIVE_UPKEEP_KIND,
                 "",
-                {"mana": dict(cost), "per_counter": AGE_COUNTER},
+                cost.payload() | {"per_counter": AGE_COUNTER},
             ),
             supported=True,
             effect_kind=CUMULATIVE_UPKEEP_LABEL,
@@ -126,7 +129,7 @@ def cumulative_upkeep_triggers(keyword_line: str) -> tuple[ParsedTriggeredAbilit
     )
 
 
-def scaled_cost(instruction, counters: int) -> dict[str, int]:
+def scaled_cost(instruction, counters: int) -> UpkeepCost:
     """*instruction*'s printed upkeep cost charged *counters* times over.
 
     The printed cost unchanged for an ordinary pay-or-else upkeep, which
@@ -136,13 +139,22 @@ def scaled_cost(instruction, counters: int) -> dict[str, int]:
     *counters* is the caller's to supply because the two callers stand on either
     side of this resolution's counter being placed — see the module docstring.
     """
-    printed = dict(instruction.payload.get("mana") or {})
+    printed = cost_from_payload(instruction.payload)
     if not instruction.payload.get("per_counter"):
         return printed
-    return {symbol: amount * counters for symbol, amount in printed.items() if amount}
+    return UpkeepCost(
+        mana={
+            symbol: amount * counters
+            for symbol, amount in printed.mana.items()
+            if amount
+        },
+        life=printed.life * counters,
+        sacrifice=printed.sacrifice,
+        sacrifices=printed.sacrifices * counters,
+    )
 
 
-def upcoming_cost(permanent, instruction) -> dict[str, int]:
+def upcoming_cost(permanent, instruction) -> UpkeepCost:
     """What *instruction* will ask for when it next resolves — the prompt's
     question, asked *before* the counter for this upkeep is placed.
 
