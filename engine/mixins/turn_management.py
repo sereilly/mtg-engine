@@ -269,6 +269,17 @@ class TurnManagementMixin:
             player.creatures_died_under_your_control_this_turn = 0
             player.spells_cast_this_turn = []
             player.attacked_this_turn = False
+        # A static ability whose condition is *whose turn it is* changes truth
+        # value here and nowhere else (CR 613.3: a continuous effect applies
+        # whenever its criteria are met). "During your turn, creatures you
+        # control get +2/+0" (Vibrating Sphere) and "During your turn, Radha has
+        # first strike" both reach the board through `_recalculate_lord_buffs`'s
+        # cleared-and-rebuilt channels, which are a *snapshot* — every other
+        # recompute is driven by a board change, and a turn passing is not one.
+        # Without this line Radha kept first strike on the opponent's turn, with
+        # nothing failing and the card reporting supported.
+        self._recalculate_lord_buffs()
+        self._refresh_dynamic_creatures()
 
     def start_turn(self, player_index: int) -> None:
         self.begin_turn_bookkeeping(player_index)

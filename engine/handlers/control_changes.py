@@ -5,8 +5,16 @@ The steal family: a control change is a *contribution* recorded through
 and each handler here differs only in what ends it — cleanup for the
 until-end-of-turn form, the ON_LEAVE hook for Aladdin's, the monitored
 ``LINKED_CONTROL_CONDITIONS`` sweep (CR 611.2b, ``mixins/game_ending.py``)
-for the linked Legends steals. Split out of ``board_misc.py`` when this
+for every "for as long as …" steal. Split out of ``board_misc.py`` when this
 family pushed it past the 1,000-line signal.
+
+Aladdin used to have a handler of its own, ``steal_target_permanent_linked_to_self``,
+which looked for an *artifact* in its own code — so the identical printed
+sentence about a land (Orcish Squatters) or a creature (Merieke Ri Berit) had
+nowhere to go. The type is payload now and Aladdin resolves through
+``steal_target_linked_to_source`` like every other one; the ON_LEAVE hook stays,
+because the sweep and the hook end the same contribution and ending it twice is
+a no-op.
 """
 
 from __future__ import annotations
@@ -119,43 +127,6 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
-@effect_handler("steal_target_permanent_linked_to_self")
-def steal_target_permanent_linked_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Aladdin: "Gain control of target artifact for as long as you control
-    this creature." The control change is a CR 613 layer-2 contribution keyed
-    on Aladdin itself (not on an Aura), so ON_LEAVE_BATTLEFIELD["Aladdin"] ends
-    it with end_control_changes_from when Aladdin leaves the battlefield."""
-    caster = context.caster
-    card = context.card
-    source_permanent = context.source_permanent
-    if source_permanent is None:
-        return False, "ability not implemented"
-    # Guardian Beast: "other players can't gain control of" the artifacts it
-    # protects.
-    target_perm = resolve_target_permanent(
-        game,
-        context,
-        predicate=lambda p: p.has_type("artifact") and not game._untapped_artifact_protector_active(p),
-    )
-    if target_perm is None:
-        game.log.append(f"{card.name}: no valid artifact target")
-        return True, "resolved"
-    from ..control import LINKED_CONTROL_CONDITIONS
-
-    # "…for as long as **you control** this creature" is a condition, not just
-    # a leave-the-battlefield event: Control Magic on Aladdin ends the steal
-    # with Aladdin still on the battlefield (CR 611.2b). The state-based sweep
-    # reads this record; the ON_LEAVE hook still ends the change at the moment
-    # of leaving, and the sweep finds nothing left to do.
-    if not game.take_control(
-        target_perm, caster, source=source_permanent,
-        extra_meta={LINKED_CONTROL_CONDITIONS: ("you_control_source",)},
-    ):
-        return True, "resolved"
-    game.log.append(f"{card.name} gains control of {target_perm.card.name}")
-    return True, "resolved"
-
-
 @effect_handler("steal_creature_while_tapped_and_weaker")
 def steal_creature_while_tapped_and_weaker(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Old Man of the Sea: "Gain control of target creature with power less
@@ -254,7 +225,16 @@ def steal_target_linked_to_source(game: Game, instruction: OracleInstruction, co
         filters = (instruction.payload.get("targets") or {}).get("filter") or {}
         target_perm = resolve_target_permanent(
             game, context,
-            predicate=lambda p: permanent_matches_filter(p, filters),
+            predicate=lambda p: (
+                permanent_matches_filter(p, filters)
+                # Guardian Beast: "other players can't gain control of" the
+                # noncreature artifacts it protects. Carried across from the
+                # artifact-only steal this kind absorbed — the rule is about
+                # gaining control, not about which noun the thief prints, and
+                # dropping it with the kind would have been a restriction lost
+                # in the thief's favour.
+                and not game._untapped_artifact_protector_active(p)
+            ),
             fallback_on_invalid_choice=False,
         )
     if target_perm is None:

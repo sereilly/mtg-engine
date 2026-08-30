@@ -89,7 +89,40 @@ def _lower_exchange_control(node: ast.ExchangeControl) -> tuple[OracleInstructio
 
 
 
-_LINKED_STEAL_FILTER = ast.ObjectFilter(card_types=("artifact",))
+#: The seat words ``engine/targeting.py`` turns into a *picker* flag, so a
+#: control change may carry one without :func:`object_only_filter` refusing it.
+#:
+#: Each of these is a question about a seat, which is exactly what the pure
+#: matcher the steal handlers re-ask at resolution cannot answer — and exactly
+#: what ``legality._enumerate_targets`` answers before the target is ever
+#: named (``own_only``, ``opponent_only``, ``defending_player_only``). Listing
+#: the three rather than waving `controller` through is the claim that the
+#: picker really does carry them out: a fourth spelling refuses here instead of
+#: being dropped into a steal that offers every permanent on the board.
+_PICKER_ENFORCED_CONTROLLERS = frozenset({"you", "opponent", "defending_player"})
+
+
+def _linked_steal_filter(node: ast.GainControl, subject: ast.TargetSpec) -> dict:
+    """The payload a linked steal's printed noun phrase becomes, or a refusal.
+
+    One reader for the four linked durations, because the question they ask of
+    their subject is identical: can something test this phrase before the
+    control change is recorded? What differs is only which fact the sweep
+    re-checks afterwards, and that has been ``link_conditions`` data since
+    Scarwood Bandits.
+    """
+    described = _filter_payload(subject.filter)
+    controller = described.get("controller")
+    if controller is not None and controller not in _PICKER_ENFORCED_CONTROLLERS:
+        raise LoweringError(
+            "the control change cannot test this restriction", node=node
+        )
+    if object_only_filter(described, carried_separately=frozenset({"controller"})) is None:
+        raise LoweringError(
+            "the control change cannot test this restriction", node=node
+        )
+    _describe_targets(described, subject)
+    return described
 
 
 def _lower_gain_control(
@@ -105,23 +138,26 @@ def _lower_gain_control(
       previous step of this same effect chose, read out of the resolution
       scratchpad; a producer must have run, the same discipline
       ``_lower_doesnt_untap_next_step`` applies.
-    * "…for as long as you control this creature" — Aladdin's linked steal
-      when targeted, The Wretched's blocker sweep when the subject is "all
+    * "…for as long as you control this creature" — the linked steal when
+      targeted (Aladdin's artifact, Orcish Squatters' land, Merieke Ri Berit's
+      creature), The Wretched's blocker sweep when the subject is "all
       creatures blocking this creature".
     * "…and this creature remains tapped" (Willow Satyr, Rubinia Soulsinger) —
       the two-condition linked duration; the conditions ride the payload and
       the state-based sweep re-checks them (CR 611.2b,
       ``engine/control.LINKED_CONTROL_CONDITIONS``).
 
-    ``steal_target_permanent_linked_to_self`` takes no payload at all: it looks
-    for an artifact in its own source code and ends the control change from
-    ``ON_LEAVE_BATTLEFIELD``. So Aladdin's filter is compared for **equality**
-    against the one shape that handler implements rather than probed field by
-    field — a restriction the AST grows later then refuses here instead of
-    being silently ignored by a lowering written before it existed. No
-    ``targets`` description is emitted for it: ``engine/targeting.py`` already
-    answers "artifact" for the kind, and the payload has to stay byte-identical
-    to what the rule it replaces produced.
+    The last of those four used to be its own instruction kind, with the
+    artifact **hard-coded in the handler** and the filter compared here for
+    equality against the one shape it implemented — so "gain control of target
+    *land*" (Orcish Squatters) and "target *creature*" (Merieke Ri Berit) were
+    the same printed sentence refused for naming a different noun. The type is
+    payload now, and the shape is the monitored steal beside it with the one
+    ``you_control_source`` condition: what differs between these branches is
+    which fact the sweep re-checks, and that has been data since Scarwood
+    Bandits. Two kinds for one sentence would be the worse answer even where
+    both worked — nothing would say which of them a given printing goes
+    through.
     """
     subject = node.subject
     if not isinstance(subject, ast.TargetSpec):
@@ -247,12 +283,7 @@ def _lower_gain_control(
             raise LoweringError(
                 "the linked-control handler needs a named target", node=node
             )
-        described = _filter_payload(subject.filter)
-        if object_only_filter(described) is None:
-            raise LoweringError(
-                "the control change cannot test this restriction", node=node
-            )
-        _describe_targets(described, subject)
+        described = _linked_steal_filter(node, subject)
         described["link_conditions"] = ["source_on_battlefield"]
         return (OracleInstruction("steal_target_linked_to_source", "", described),)
     if node.duration == "while_you_control_source_tapped":
@@ -263,12 +294,7 @@ def _lower_gain_control(
             raise LoweringError(
                 "the linked-control handler needs a named target", node=node
             )
-        described = _filter_payload(subject.filter)
-        if object_only_filter(described) is None:
-            raise LoweringError(
-                "the control change cannot test this restriction", node=node
-            )
-        _describe_targets(described, subject)
+        described = _linked_steal_filter(node, subject)
         described["link_conditions"] = [
             "you_control_source", "source_remains_tapped",
         ]
@@ -295,8 +321,6 @@ def _lower_gain_control(
         )
     if subject.quantifier != "target":
         raise LoweringError("the linked-control handler needs a named target", node=node)
-    if subject.filter != _LINKED_STEAL_FILTER:
-        raise LoweringError(
-            "the only linked-control handler gains control of an artifact", node=node
-        )
-    return (OracleInstruction("steal_target_permanent_linked_to_self", "", {}),)
+    described = _linked_steal_filter(node, subject)
+    described["link_conditions"] = ["you_control_source"]
+    return (OracleInstruction("steal_target_linked_to_source", "", described),)

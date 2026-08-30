@@ -550,6 +550,27 @@ class ItIsColor:
     negated: bool = False
 
 
+@dataclass(frozen=True)
+class TurnIsYours:
+    """"**During your turn**, creatures you control get +2/+0." / "**During
+    turns other than yours**, creatures you control get -0/-2." (Vibrating
+    Sphere.)
+
+    Whose turn it is, as a *condition* on a static ability rather than as a
+    duration. The distinction is the same one :func:`parser._parse_static_condition_line`
+    draws for "as long as": a duration is granted by something that resolves and
+    then persists, while this bonus exists exactly while the turn does — it
+    appears at the untap step and is gone at the next one, with nothing to undo.
+
+    ``negated`` is "turns other than yours", which is the same question asked
+    the other way round; a second node would be two readers of one fact, free to
+    disagree about a game with three seats (it is *not* "an opponent's turn":
+    with the source's controller inactive, every other seat's turn qualifies).
+    """
+
+    negated: bool = False
+
+
 Condition = Union[
     EveryOf, CoinFlipResult, Controls, DestroyedThisWay, DestroyedTargetWas,
     DiscardedCardWas,
@@ -560,4 +581,5 @@ Condition = Union[
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
     DealtDamageThisTurn, SubjectCharacteristicIs, BlockersOfBoundCreature,
     SourceExiledWithCounter, SourceCounterCount, OnBattlefield,
+    TurnIsYours,
 ]

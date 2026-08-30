@@ -340,7 +340,13 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
     # the game rather than about the permanent — and the seat asked is the
     # ability's controller (CR 109.5), not the permanent's owner.
     if kind == "your_turn":
-        return game.active_player_index == seat
+        # "**During turns other than yours**, creatures you control get -0/-2."
+        # (Vibrating Sphere.) The same question negated, which is why it is a
+        # flag on this branch rather than a second kind: "other than yours" is
+        # not "an opponent's turn", and two branches would eventually answer the
+        # three-seat board differently.
+        mine = game.active_player_index == seat
+        return not mine if condition.get("negated") else mine
     if kind == "drawn_cards_this_turn":
         player = game.players[seat]
         return len(player.cards_drawn_this_turn) >= int(condition.get("count", 0))

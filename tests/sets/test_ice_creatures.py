@@ -1409,3 +1409,117 @@ def test_a_condition_on_a_kind_nothing_asks_about_refuses_the_line(set_pool):
         "this creature can't block as long as you control a snow land"
     ) is None
     assert combat_restriction_for("this creature can't block") is not None
+
+
+# --- W1G5: statics, continuous effects, control changes ---
+def _w1g5_squatters_game(set_pool, catalog_by_name):
+    """Orcish Squatters attacking, with a land of its **own** controller's on
+    the board beside the defender's two.
+
+    That third land is the point: "target land **defending player controls**"
+    must never offer it, and the seat is a fact about the combat rather than
+    about the seat choosing.
+    """
+    squatters = Permanent(card=set_pool("ICE")["Orcish Squatters"])
+    p1 = PlayerState(name="P1", battlefield=[
+        squatters, Permanent(card=catalog_by_name["Mountain"]),
+    ])
+    p2 = PlayerState(name="P2", battlefield=[
+        Permanent(card=catalog_by_name["Forest"]),
+        Permanent(card=catalog_by_name["Island"]),
+    ])
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {0}
+    return game, p1, p2, squatters
+
+
+def _w1g5_attack_unblocked(game):
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game._settle()
+    game.advance_combat_phase()   # declare blockers
+    ok, msg = game.declare_blockers(1, {})
+    assert ok, msg
+    game._settle()
+    game.advance_combat_phase()   # blocks lock: the trigger fires here
+    return game.pending_choices_of("trigger_target")
+
+
+def _w1g5_finish_combat(game):
+    game._settle()
+    for _ in range(len(list(game._phase_steps("combat"))) + 1):
+        if game.current_turn_phase != "combat":
+            break
+        before = (game.current_turn_phase, game.current_step)
+        game.advance_combat_phase()
+        game._settle()
+        if (game.current_turn_phase, game.current_step) == before:
+            break
+
+
+def test_orcish_squatters_offers_only_the_defending_players_lands(
+    set_pool, catalog_by_name
+):
+    """The printed noun phrase is "target land defending player controls", and
+    the picker is what enforces the seat — ``subject_matches`` deliberately
+    refuses that key, because the seat belongs to the combat and not to the
+    permanent."""
+    game, _, p2, _ = _w1g5_squatters_game(set_pool, catalog_by_name)
+
+    pending = list(_w1g5_attack_unblocked(game))
+
+    assert len(pending) == 1, game.log
+    offered = pending[0].data["targets"]
+    assert {t["name"] for t in offered} == {"Forest", "Island"}, game.log
+    assert {t["permanent_id"] for t in offered} == {
+        p.permanent_id for p in p2.battlefield
+    }
+
+
+def test_orcish_squatters_steals_the_land_and_then_deals_no_combat_damage(
+    set_pool, catalog_by_name
+):
+    """The whole sentence: the land changes hands, and "if you do, this creature
+    assigns no combat damage this turn" is read by the damage step — so the
+    defender's life is what this asserts, not a flag."""
+    game, p1, p2, _ = _w1g5_squatters_game(set_pool, catalog_by_name)
+
+    pending = list(_w1g5_attack_unblocked(game))
+    chosen = next(t for t in pending[0].data["targets"] if t["name"] == "Forest")
+    assert game.confirm_trigger_target(0, chosen["permanent_id"])
+    game._settle()
+    assert game.confirm_optional_pay(0, "Orcish Squatters", accept=True)
+    _w1g5_finish_combat(game)
+
+    assert "Forest" in [p.card.name for p in p1.battlefield], game.log
+    assert [p.card.name for p in p2.battlefield] == ["Island"], game.log
+    assert p2.life == 20, game.log
+
+
+def test_orcish_squatters_gives_the_land_back_when_it_leaves(
+    set_pool, catalog_by_name
+):
+    """"…for as long as you control this creature" (CR 611.2b). The contribution
+    is keyed on the Squatters and the state-based sweep re-checks the condition,
+    so the land reverts to the seat it entered under — never to whoever happened
+    to hold it last."""
+    game, p1, p2, squatters = _w1g5_squatters_game(set_pool, catalog_by_name)
+
+    pending = list(_w1g5_attack_unblocked(game))
+    chosen = next(t for t in pending[0].data["targets"] if t["name"] == "Forest")
+    assert game.confirm_trigger_target(0, chosen["permanent_id"])
+    game._settle()
+    assert game.confirm_optional_pay(0, "Orcish Squatters", accept=True)
+    stolen = game.permanent_by_id(chosen["permanent_id"])
+    assert game.controller_index_of(stolen) == 0, game.log
+
+    game.remove_from_battlefield(squatters)
+    game.check_state_based_actions()
+
+    assert game.controller_index_of(stolen) == 1, game.log
+    assert {p.card.name for p in p2.battlefield} == {"Forest", "Island"}, game.log
+# --- end W1G5 ---

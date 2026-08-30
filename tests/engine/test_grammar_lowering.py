@@ -3554,14 +3554,18 @@ def test_text_change_describes_no_target():
 
 
 def test_linked_control_matches_the_rule_it_replaces():
-    """Aladdin. ``steal_target_permanent_linked_to_self`` takes no payload --
-    it finds the artifact itself and ends the control change from
-    ``ON_LEAVE_BATTLEFIELD``."""
+    """Aladdin. The printed **type** is payload: this is the monitored steal
+    beside it (``steal_target_linked_to_source``) carrying the one
+    ``you_control_source`` condition, which is what lets Orcish Squatters' land
+    and Merieke Ri Berit's creature be the same sentence rather than three."""
     assert _instructions(
         "{1}{R}{R}, {T}: Gain control of target artifact for as long as you "
         "control this creature.",
         "Aladdin",
-    ) == [("steal_target_permanent_linked_to_self", {})]
+    ) == [(
+        "steal_target_linked_to_source",
+        {"type_filter": "artifact", "link_conditions": ["you_control_source"]},
+    )]
 
 
 @pytest.mark.parametrize(
@@ -3569,8 +3573,6 @@ def test_linked_control_matches_the_rule_it_replaces():
     [
         ("Gain control of target artifact.",
          "an untimed steal is a permanent control change, not this one"),
-        ("Gain control of target creature for as long as you control this creature.",
-         "the handler looks for an artifact in its own source"),
     ],
 )
 def test_control_changes_without_the_linked_duration_refuse(line, why):

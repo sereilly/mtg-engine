@@ -1198,3 +1198,39 @@ def test_611_1_a_continuous_effect_can_affect_the_rules_of_the_game():
     second = game.cast_from_hand(0, "Forest 2")
     assert second.supported is False
     assert second.details == "already played a land this turn"
+
+
+# --- W1G5: statics, continuous effects, control changes ---
+@pytest.mark.cr("611.3a")
+def test_611_3a_a_whose_turn_static_switches_at_the_turn_boundary():
+    """"During your turn, this creature has first strike." (Radha, Heart of
+    Keld.) 611.3a: a continuous effect from a static ability is not locked in.
+
+    The engine writes a conditional grant into a channel that
+    ``_recalculate_lord_buffs`` clears and rebuilds, and every *other* recompute
+    is driven by a board change. A turn passing is not one — so the keyword
+    stayed granted on the opponent's turn, with the card reporting supported and
+    nothing failing.
+    """
+    radha = _mk_card(
+        "Radha, Heart of Keld",
+        "Legendary Creature — Elf Warrior",
+        "During your turn, this creature has first strike.",
+        power=3,
+        toughness=3,
+    )
+    perm = Permanent(card=radha)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[perm]),
+        PlayerState(name="P2"),
+    ])
+
+    game.begin_turn_bookkeeping(0)
+    assert perm.has_keyword("first strike")
+
+    game.begin_turn_bookkeeping(1)
+    assert not perm.has_keyword("first strike")
+
+    game.begin_turn_bookkeeping(0)
+    assert perm.has_keyword("first strike")
+# --- end W1G5 ---

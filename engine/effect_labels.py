@@ -114,7 +114,6 @@ ACTIVATED_LABELS: dict[str, str] = {
     # generalises.
     "sequence": "activated_sequence",
     "set_base_pt_target_until_eot": "activated_pump",
-    "steal_target_permanent_linked_to_self": "activated_steal",
     "tap_target_permanent": "activated_tapping",
     # The equip keyword (CR 702.6a), compiled as the activated ability it is
     # defined to be. Its own bucket: the support report and the AI read the
@@ -300,9 +299,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     "remove_target_keyword_until_eot": "activated_pump",
     # Sentinel, beside `set_base_pt_target_until_eot`.
     "set_source_base_toughness_from_target_power": "activated_pump",
-    # Rubinia Soulsinger and Willow Satyr, beside
-    # `steal_target_permanent_linked_to_self` — the same ability with the link
-    # read off the source.
+    # Every linked-duration steal: Aladdin's artifact, Merieke Ri Berit's and
+    # Willow Satyr's creature, Orcish Squatters' land. One kind, because what
+    # differs between them is which fact the sweep re-checks and that is
+    # payload.
     "steal_target_linked_to_source": "activated_steal",
 }
 

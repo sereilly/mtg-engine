@@ -286,8 +286,6 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # wherever the object's text uses it, and one of the two modes does not
     # touch colour at all.
     "mark_text_modified": "text_change",
-    # A control change whose duration is linked to its source (CR 611.3).
-    "steal_target_permanent_linked_to_self": "control",
     "gain_control_until_eot": "control",
     # The monitored linked durations (CR 611.2b): "for as long as you control
     # this creature and this creature remains tapped" (Willow Satyr, Rubinia

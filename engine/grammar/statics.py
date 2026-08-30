@@ -169,6 +169,15 @@ def _lower_anthem_condition(condition: ast.Condition, node: ast.StaticAbilityNod
     the buff apply on a different board than the card prints, silently.
     """
     payload = _lower_condition(condition)
+    if payload.get("kind") == "your_turn":
+        # "During your turn, creatures you control get +2/+0." (Vibrating
+        # Sphere.) A whose-turn-is-it condition carries no filter and no seat
+        # word, so none of the gates below apply to it — and
+        # ``conditional_static_holds`` answers it directly. It is admitted here
+        # rather than falling through them because every one of those gates is
+        # about a ``controls`` payload's parts, and asking them of a payload
+        # that has none would refuse a clause the evaluator implements in full.
+        return payload
     if payload.get("kind") != "controls":
         raise LoweringError(
             "conditional_static_holds evaluates no such condition on a "
