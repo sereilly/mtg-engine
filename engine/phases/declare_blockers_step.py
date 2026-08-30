@@ -864,6 +864,21 @@ class DeclareBlockersStepMixin:
                 seat = self.controller_index_of(attacker)
                 if seat is not None:
                     controllers[attacker.permanent_id] = seat
+                # The same pair written from the attacker's end. "…destroy all
+                # creatures that **blocked or were blocked by** it this turn"
+                # (Venomous Breath) reads a *two-way* relation off a creature
+                # the spell named a whole combat earlier, and by end of combat
+                # that creature is very often dead — which is the ordinary way
+                # this card is played. Only the survivors can be destroyed, so
+                # both halves have to be answerable from a *survivor's* own
+                # record: one half already is (a blocker names the attackers it
+                # blocked), and this is the other. Written in the same loop as
+                # its mirror, so the two cannot disagree about a pair.
+                mirror = attacker.metadata.setdefault(
+                    "blocked_by_blocker_ids_this_turn", []
+                )
+                if blocker.permanent_id not in mirror:
+                    mirror.append(blocker.permanent_id)
 
     def _fire_creature_blocks_triggers(self, controller_index: int, assignments: dict[int, list[int]]) -> None:
         """Put each blocker's own "whenever this creature blocks" triggers on

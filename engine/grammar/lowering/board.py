@@ -157,18 +157,25 @@ def _lower_destroy(
         # creature on the battlefield. That is the same shape as the colour
         # dropped from `Destroy all black creatures`, and the reason this
         # branch is a branch rather than a payload key.
-        if filt.blocked_by_bound_object:
+        #
+        # "Destroy all creatures that **blocked or were blocked by** it this
+        # turn." (Venomous Breath.) The two-way reading of the same record,
+        # carried on its own key so the handler cannot mistake it for the
+        # one-way one — and behind the same event gate, for the same reason.
+        for relation in ("blocked_by_bound_object", "in_combat_with_bound_object"):
+            if not getattr(filt, relation):
+                continue
             if event not in _BOUND_OBJECT_DELAYED_EVENTS:
                 raise LoweringError(
                     "\"that creature\" names the object a delayed ability was "
                     "bound to, and this event binds none", node=node,
                 )
             blocked_payload = _filter_payload(
-                filt, carried_separately=frozenset({"blocked_by_bound_object"})
+                filt, carried_separately=frozenset({relation})
             )
             if untestable_filter_keys(blocked_payload):
                 raise LoweringError("no sweep handler for this narrowing", node=node)
-            blocked_payload["blocked_by_bound_object"] = True
+            blocked_payload[relation] = True
             if node.no_regen:
                 blocked_payload["bypass_regeneration"] = True
             return (
