@@ -2397,3 +2397,167 @@ def test_polar_krakens_button_does_not_say_pay_sacrifice(set_pool):
 
     assert entry["cost_label"] == "sacrifice a land"
     assert entry["cost_pay_label"] == "Sacrifice a land"
+
+
+# --- Round 32: a shield that narrows nothing, and one around the enchanted creature ---
+
+
+def test_pentagram_of_the_ages_prevents_the_whole_next_hit_from_its_chosen_source(set_pool):
+    """"{4}, {T}: The next time a source of your choice would deal damage to you
+    this turn, prevent that damage." (CR 615.8.)
+
+    The pool had four narrowings of this sentence before it had the sentence:
+    a colour (Circle of Protection), a card type (CoP: Artifacts), a fraction
+    (Dark Sphere) and a rider (Reverse Damage). The unnarrowed form refused as
+    "no handler for this source-scoped shield".
+    """
+    from tests.helpers import _damage_dealt
+
+    pentagram = Permanent(card=set_pool("ICE")["Pentagram of the Ages"])
+    ogre = Permanent(card=set_pool("ICE")["Balduvian Bears"])
+    p1 = PlayerState(name="P1", battlefield=[pentagram], life=20)
+    p2 = PlayerState(name="P2", battlefield=[ogre], life=20)
+    game = Game(players=[p1, p2])
+
+    result = game.activate_permanent_ability(
+        0, "Pentagram of the Ages", target_permanent_index=0, target_player_index=1
+    )
+
+    assert result.supported
+    assert pentagram.tapped
+    assert _damage_dealt(game, p1, 7, source=ogre) == 0, "the whole instance"
+    assert p1.life == 20
+
+
+def test_pentagram_of_the_ages_gains_no_life_for_the_damage_it_prevents(set_pool):
+    """Reverse Damage prints the life gain; this card stops at the prevention.
+    Sharing one shield kind between them would have paid for both."""
+    from tests.helpers import _damage_dealt
+
+    pentagram = Permanent(card=set_pool("ICE")["Pentagram of the Ages"])
+    ogre = Permanent(card=set_pool("ICE")["Balduvian Bears"])
+    p1 = PlayerState(name="P1", battlefield=[pentagram], life=20)
+    p2 = PlayerState(name="P2", battlefield=[ogre], life=20)
+    game = Game(players=[p1, p2])
+
+    game.activate_permanent_ability(
+        0, "Pentagram of the Ages", target_permanent_index=0, target_player_index=1
+    )
+    _damage_dealt(game, p1, 6, source=ogre)
+
+    assert p1.life == 20
+
+
+def test_pentagram_of_the_ages_shield_waits_for_the_source_it_chose(set_pool):
+    from tests.helpers import _damage_dealt
+
+    pentagram = Permanent(card=set_pool("ICE")["Pentagram of the Ages"])
+    ogre = Permanent(card=set_pool("ICE")["Balduvian Bears"])
+    other = Permanent(card=set_pool("ICE")["Tor Giant"])
+    p1 = PlayerState(name="P1", battlefield=[pentagram], life=20)
+    p2 = PlayerState(name="P2", battlefield=[ogre, other], life=20)
+    game = Game(players=[p1, p2])
+
+    game.activate_permanent_ability(
+        0, "Pentagram of the Ages", target_permanent_index=0, target_player_index=1
+    )
+
+    assert _damage_dealt(game, p1, 3, source=other) == 3
+    assert _damage_dealt(game, p1, 3, source=ogre) == 0
+
+
+def _fylgja_on_a_bear(set_pool, counters: int = 4):
+    from engine.auras import attach_aura
+    from engine.named_counters import add_counters
+
+    bear = Permanent(card=set_pool("ICE")["Balduvian Bears"])
+    fylgja = Permanent(card=set_pool("ICE")["Fylgja"])
+    p1 = PlayerState(name="P1", battlefield=[bear, fylgja], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    attach_aura(fylgja, bear)
+    add_counters(fylgja, "healing", counters)
+    return game, p1, fylgja, bear
+
+
+def test_fylgja_shields_the_creature_it_enchants(set_pool):
+    """"Remove a healing counter from this Aura: Prevent the next 1 damage that
+    would be dealt to enchanted creature this turn."
+
+    A CR 615.1 shield around the Aura's *host*, which is a fourth recipient
+    beside "you", "this permanent" and a chosen target — and the one the pool
+    had never printed.
+    """
+    from engine.named_counters import counters_on
+
+    game, _p1, fylgja, bear = _fylgja_on_a_bear(set_pool)
+
+    result = game.activate_permanent_ability(0, "Fylgja", ability_index=0)
+
+    assert result.supported
+    assert counters_on(fylgja, "healing") == 3, "the counter is the cost"
+    assert bear.damage_prevention_pool == 1
+
+    assert game._mark_damage_on_permanent(bear, 3) == 2
+    assert bear.damage_marked == 2
+
+
+def test_fylgja_does_not_shield_itself(set_pool):
+    """The recipient is the Aura's *host*, not the Aura. Rock Hydra's
+    "…dealt to this creature" is the neighbouring branch and shields the
+    permanent the ability is on, so reusing it here would put the shield on
+    an enchantment nothing ever deals damage to."""
+    game, _p1, fylgja, bear = _fylgja_on_a_bear(set_pool)
+
+    game.activate_permanent_ability(0, "Fylgja", ability_index=0)
+
+    assert fylgja.damage_prevention_pool == 0
+    assert bear.damage_prevention_pool == 1
+
+
+def test_fylgja_spends_one_counter_per_point_and_runs_out(set_pool):
+    """Four counters, four points — and the fifth activation has nothing to
+    pay with, so the ability is not activated at all."""
+    from engine.named_counters import counters_on
+
+    game, _p1, fylgja, bear = _fylgja_on_a_bear(set_pool, counters=1)
+
+    assert game.activate_permanent_ability(0, "Fylgja", ability_index=0).supported
+    assert counters_on(fylgja, "healing") == 0
+    assert bear.damage_prevention_pool == 1
+
+    game.activate_permanent_ability(0, "Fylgja", ability_index=0)
+
+    assert bear.damage_prevention_pool == 1, "no counter, no second shield"
+
+
+def test_fylgjas_counter_cost_is_what_the_claim_used_to_refuse(set_pool):
+    """The Aura gate asked for the *shape* of an activation line — a run of mana
+    symbols, then a colon — standing in for the parser that reads one. CR 602.1
+    admits any cost, and Fylgja's is a counter removal, so a card the compiler
+    parses in full was reported unsupported for the shape of its cost.
+
+    The claim asks `_parse_activated_ability` now, which is the reader it was
+    describing.
+    """
+    from engine.auras import aura_activated_ability_claim
+
+    line = (
+        "remove a healing counter from this aura: prevent the next 1 damage "
+        "that would be dealt to enchanted creature this turn"
+    )
+    assert aura_activated_ability_claim(line, "Fylgja") is not None
+    assert compile_card_oracle(set_pool("ICE")["Fylgja"]).supported
+
+
+def test_a_mana_cost_alone_no_longer_claims_a_line_the_compiler_refuses(set_pool):
+    """The stand-in was wrong in both directions. Chromatic Armor's "{X}: Put a
+    sleight counter on this Aura and choose a color…" matched the shape and the
+    compiler cannot read it — a claim there is how an Aura reports supported
+    carrying an ability that does nothing."""
+    from engine.auras import aura_activated_ability_claim
+
+    line = (
+        "{x}: put a sleight counter on this aura and choose a color. x is the "
+        "number of sleight counters on this aura"
+    )
+    assert aura_activated_ability_claim(line, "Chromatic Armor") is None

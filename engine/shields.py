@@ -65,6 +65,18 @@ PREVENT_ALL_BUT = "prevent_all_but"
 #: "…prevent that damage. You gain life equal to the damage prevented this way"
 #: (CR 615.5's additional effect).
 PREVENT_AND_GAIN_LIFE = "prevent_and_gain_life"
+#: "The next time a source of your choice would deal damage to you this turn,
+#: prevent that damage." (Pentagram of the Ages.) CR 615.8's **plain** case:
+#: the whole next instance from one chosen source, with no property recorded, no
+#: share let through and nothing after the prevention.
+#:
+#: Every one of its siblings is this sentence plus something — a colour
+#: (``PREVENT_FROM_COLOR``), a fraction (``PREVENT_HALF``), a rider
+#: (``PREVENT_AND_GAIN_LIFE``) — because the pool printed all three narrowings
+#: before it printed the rule. A kind of its own rather than a rider-less
+#: ``PREVENT_AND_GAIN_LIFE``, because ``kind`` names the interceptor that
+#: consumes the shield and gaining life is what that interceptor does.
+PREVENT_WHOLE = "prevent_whole"
 #: "The next time a <colour> source of your choice would deal damage to you this
 #: turn, prevent that damage" (CR 615.9's rechecked property).
 PREVENT_FROM_COLOR = "prevent_from_color"
@@ -445,6 +457,17 @@ def make_life_gain_source(source, source_name: str | None = None) -> Shield:
 
 def make_life_gain_charge(source_name: str | None = None) -> Shield:
     return Shield(kind=PREVENT_AND_GAIN_LIFE, uses=1, source_name=source_name)
+
+
+def make_whole_source(source, source_name: str | None = None) -> Shield:
+    """Pentagram of the Ages' shield against the source its controller chose."""
+    return Shield(kind=PREVENT_WHOLE, uses=1, source=source, source_name=source_name)
+
+
+def make_whole_charge(source_name: str | None = None) -> Shield:
+    """The same shield with no source recorded — the AI/headless activation,
+    exactly as Reverse Damage, Dark Sphere and Forcefield each keep one."""
+    return Shield(kind=PREVENT_WHOLE, uses=1, source_name=source_name)
 
 
 def make_half_source(source, rounding: str, source_name: str | None = None) -> Shield:

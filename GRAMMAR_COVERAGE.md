@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 68.6% | 63.6% | 43.1% | 203 |
+| ICE *(measured)* | 373 | 601 | 68.6% | 63.9% | 43.4% | 204 |
 | **All (shipped)** | **2415** | **3404** | **85.8%** | **84.7%** | **52.4%** | **1544** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -1015,6 +1015,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 - **Furious Rise**
   - `At the beginning of your end step, if you control a creature with power 4 or greater, exile the top card of your library. You may play that card until you exile another card with this enchantment.`
 - **Fylgja**
+  - `Remove a healing counter from this Aura: Prevent the next 1 damage that would be dealt to enchanted creature this turn.`
   - `{2}{W}: Put a healing counter on this Aura.`
 - **Fyndhorn Bow**
   - `{3}, {T}: Target creature gains first strike until end of turn.`
@@ -1951,6 +1952,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 - **Pendelhaven**
   - `{T}: Add {G}.`
   - `{T}: Target 1/1 creature gets +1/+2 until end of turn.`
+- **Pentagram of the Ages**
+  - `{4}, {T}: The next time a source of your choice would deal damage to you this turn, prevent that damage.`
 - **Pestilence**
   - `{B}: This enchantment deals 1 damage to each creature and each player.`
   - `{B}: This enchantment deals 1 damage to each creature and each player.`

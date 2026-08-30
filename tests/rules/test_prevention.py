@@ -43,6 +43,8 @@ from engine.shields import (
     Shield,
     add_shield,
     drop_spent,
+    make_whole_charge,
+    make_whole_source,
     shields_on,
 )
 from tests.helpers import _damage_dealt
@@ -195,6 +197,50 @@ def test_615_8_a_different_source_does_not_consume_the_shield():
     assert _damage_dealt(game, p1, 3, source=goblin) == 3
     assert p1.reverse_damage_sources == [ogre]
     assert p1.life == 20
+
+
+@pytest.mark.cr("615.8")
+def test_615_8_an_unnarrowed_chosen_source_shield_prevents_the_whole_instance():
+    """Pentagram of the Ages prints CR 615.8's sentence with nothing added: no
+    colour, no fraction and nothing after the prevention.
+
+    Every other shape of it in this pool is this one plus something, which is
+    why the plain form was the last to arrive and refused as "no handler" while
+    its four narrowings all worked.
+    """
+    game, p1, p2 = _game()
+    ogre = Permanent(card=_mk_creature("Ogre"))
+    p2.battlefield.append(ogre)
+    add_shield(p1, make_whole_source(ogre, "Pentagram of the Ages"))
+
+    assert _damage_dealt(game, p1, 8, source=ogre) == 0
+    assert p1.life == 20, "the whole instance, and nothing gained for it"
+    assert not shields_on(p1)
+
+
+@pytest.mark.cr("615.8")
+def test_615_8_an_unnarrowed_shield_waits_for_its_own_source():
+    game, p1, p2 = _game()
+    ogre = Permanent(card=_mk_creature("Ogre"))
+    goblin = Permanent(card=_mk_creature("Goblin"))
+    p2.battlefield.extend([ogre, goblin])
+    add_shield(p1, make_whole_source(ogre, "Pentagram of the Ages"))
+
+    assert _damage_dealt(game, p1, 3, source=goblin) == 3
+    assert len(shields_on(p1)) == 1
+
+
+@pytest.mark.cr("615.8")
+def test_615_8_an_unnarrowed_shield_with_no_source_recorded_takes_the_next_hit():
+    """The AI/headless activation records no choice, exactly as Reverse Damage's
+    and Dark Sphere's do — the next damage event from anything is prevented."""
+    game, p1, p2 = _game()
+    goblin = Permanent(card=_mk_creature("Goblin"))
+    p2.battlefield.append(goblin)
+    add_shield(p1, make_whole_charge("Pentagram of the Ages"))
+
+    assert _damage_dealt(game, p1, 5, source=goblin) == 0
+    assert not shields_on(p1)
 
 
 # ---------------------------------------------------------------------------

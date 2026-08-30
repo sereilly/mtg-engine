@@ -272,20 +272,6 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
         re.compile(r"^whenever you're dealt damage, put that many vitality counters on this aura$"),
         "Vitality counter accumulation — damage hooks",
     ),
-    # --- activated abilities granted by the Aura itself ----------------------
-    (
-        # "{R}{R}{R}: Regenerate enchanted creature." (The Brute.) **Every**
-        # symbol of the cost, not one: the pattern used to be `\{[^}]*\}: `,
-        # which reads a one-symbol cost and refuses the moment a card prints
-        # two — so an Aura whose activated ability the compiler parses and the
-        # activation path charges perfectly well was reported unsupported for
-        # the width of its mana cost. The cost is not what decides whether the
-        # ability is implemented; the claim asks for the *shape* of an
-        # activation line and lets `_parse_noncreature_abilities` and the
-        # grammar answer for the effect.
-        re.compile(r"^\{[^}]*\}(?:\s*\{[^}]*\})*(?:, [^:]+)?: .+$"),
-        "the Aura's own activated ability — _parse_noncreature_abilities",
-    ),
 )
 
 
@@ -496,7 +482,43 @@ def aura_effect_claim(normalized_line: str, card_name: str = "") -> str | None:
     conditional = aura_conditional_static_claim(normalized_line)
     if conditional is not None:
         return conditional
+    activated = aura_activated_ability_claim(normalized_line, card_name)
+    if activated is not None:
+        return activated
     return aura_continuous_claim(normalized_line)
+
+
+def aura_activated_ability_claim(normalized_line: str, card_name: str = "") -> str | None:
+    """Name the code behind an activated ability the Aura or Equipment prints,
+    or None.
+
+    **The compiler's own reader, asked rather than described.** This was a
+    regex for the *shape* of an activation line — a run of mana symbols, an
+    optional comma-separated tail, a colon — standing in for
+    ``_parse_activated_ability``, and a stand-in disagrees with what it stands
+    for in both directions. It did:
+
+    * CR 602.1 admits **any** cost, and this one had to start with a mana
+      symbol. Fylgja's "Remove a healing counter from this Aura: Prevent the
+      next 1 damage that would be dealt to enchanted creature this turn" parses
+      in full — the cost charges the counter, the effect lowers to a shield —
+      and the card was reported unsupported for the shape of its cost.
+    * The other way round, a line matching the shape whose effect the compiler
+      *cannot* read was claimed anyway. Chromatic Armor's "{X}: Put a sleight
+      counter on this Aura and choose a color…" is one, and a claim there is
+      how an Aura reports supported carrying an ability that does nothing.
+
+    So the question is asked of the reader that answers it, and both cards move
+    the way they should. The ability must be supported **and** carry an
+    instruction, which is the same pair every other gate in the engine treats as
+    "there is something behind this line".
+    """
+    from .oracle import _parse_activated_ability
+
+    ability = _parse_activated_ability(normalized_line, card_name)
+    if ability is None or not ability.supported or ability.instruction is None:
+        return None
+    return "the Aura's own activated ability — _parse_activated_ability"
 
 
 def aura_anthem_claim(normalized_line: str) -> str | None:

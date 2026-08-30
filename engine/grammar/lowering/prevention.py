@@ -23,6 +23,7 @@ from ._common import (
     _describe_targets,
     _filter_payload,
     _restrictions_beyond,
+    _is_enchanted,
     _is_source,
     _is_you,
 )
@@ -98,6 +99,29 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
         # colourless Circle of Protection.
         colours = node.from_filter.colors
         card_types = node.from_filter.card_types
+        # "…a source of your choice…", with no property recorded at all
+        # (Pentagram of the Ages). CR 615.8's plain sentence, and the one every
+        # other branch here is a narrowing of — the pool printed the colour, the
+        # card type, the fraction and the life-gain rider before it printed the
+        # rule, so the unnarrowed form arrived last and refused as "no handler".
+        # Read before the axis check below, which reads an empty filter as *no*
+        # axis rather than as the whole class of sources.
+        if node.from_filter == ast.ObjectFilter():
+            if not _is_you(recipient):
+                raise LoweringError(
+                    "a chosen-source shield only protects its controller", node=node
+                )
+            if not isinstance(node.amount, ast.Fixed) or node.amount.value != 1:
+                # "Prevent the next N damage … from a source of your choice" is
+                # a point pool, not a whole instance; this handler spends the
+                # shield on the event whatever its size, so a counted amount
+                # would prevent more than the card prints.
+                raise LoweringError(
+                    "an unnarrowed chosen-source shield prevents the whole "
+                    "instance, not a counted amount",
+                    node=node,
+                )
+            return (OracleInstruction("grant_whole_prevention_shield", "", {}),)
         # Exactly one *axis* — a shield records one property and CR 615.9
         # rechecks that property — but the colour axis may name several values
         # ("a black **or red** source of your choice", Greater Realm of
@@ -138,6 +162,27 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
         "to_self": bool(_is_you(recipient)),
         "to_source": bool(_is_source(recipient)),
     }
+    # "…dealt to **enchanted creature** this turn." (Fylgja.) A fourth
+    # recipient, in the same shape as the three booleans above rather than as a
+    # kind of its own, because CR 615.1's shield goes around one object either
+    # way and only the lookup differs: `to_source` is the permanent the ability
+    # is on, this is the permanent that one is attached to.
+    #
+    # An Aura's *static* grants are derived by engine/auras.py; this is an
+    # activated ability the Aura prints, so it resolves here like any other and
+    # the host is found from the source at resolution.
+    if _is_enchanted(recipient):
+        leftover = _restrictions_beyond(
+            recipient.filter, frozenset({"card_types", "is_enchanted"})
+        )
+        if leftover:
+            raise LoweringError(
+                "a shield on the enchanted permanent cannot narrow by: "
+                + ", ".join(leftover),
+                node=node,
+            )
+        payload["to_attached"] = True
+        return (OracleInstruction("grant_prevention_shield", "", payload),)
     if payload["to_self"] or payload["to_source"]:
         return (OracleInstruction("grant_prevention_shield", "", payload),)
     # A chosen recipient. The handler's last branch calls

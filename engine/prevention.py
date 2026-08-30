@@ -75,6 +75,7 @@ from .shields import (
     PREVENT_FROM_SUBJECT,
     PREVENT_FROM_TARGETING_SOURCE,
     PREVENT_NEXT_N,
+    PREVENT_WHOLE,
     Shield,
     drop_spent,
     shields_on,
@@ -117,7 +118,14 @@ SOURCE_HALF = 150
 GENERIC_HALF = 160  # the same shield with no source recorded
 GENERIC_CAP = 200  # Forcefield with no chosen attacker
 SOURCE_SHIELD = 300  # Reverse Damage against a chosen source
+# "…prevent that damage", with nothing after it (Pentagram of the Ages). The
+# same absorption as Reverse Damage's shield against the same chosen source, so
+# it sits beside it — behind, because Reverse Damage's rider gains its
+# controller life and a shield that also pays is the one a player spends first.
+# CR 616.1e permits any order; this is the default a non-interactive seat takes.
+SOURCE_WHOLE = 310
 GENERIC_SHIELD = 400  # Reverse Damage with no chosen source
+GENERIC_WHOLE = 410  # the same rider-less shield with no source recorded
 COLOR_SHIELD = 500  # Circle of Protection
 POOL = 600  # "Prevent the next N damage" (CR 615.7)
 # A permanent's own static prevention, which is never used up by the event —
@@ -682,6 +690,32 @@ def _reverse_damage_generic(game, event: dict) -> PreventionOutcome | None:
     """Reverse Damage cast without recording a chosen source (AI / headless):
     the next damage event from any source is prevented and gained as life."""
     return _spend(game, event, PREVENT_AND_GAIN_LIFE, chosen=False, rider=_gain_prevented_life)
+
+
+def _log_whole_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:
+    game.log.append(
+        f"{used[0].source_name or 'A shield'} prevented {prevented} damage to "
+        f"{event['recipient'].name}"
+    )
+
+
+@prevention_effect(SOURCE_WHOLE, applies=_arms(PREVENT_WHOLE, chosen=True, player_only=True))
+def _whole_prevention_chosen_source(game, event: dict) -> PreventionOutcome | None:
+    """Pentagram of the Ages: "The next time a source of your choice would deal
+    damage to you this turn, prevent that damage."
+
+    CR 615.8's plain sentence, and the whole instance regardless of its size —
+    the same absorption ``_reverse_damage_chosen_source`` performs, without the
+    life gain that one's card prints after it.
+    """
+    return _spend(game, event, PREVENT_WHOLE, chosen=True, rider=_log_whole_prevention)
+
+
+@prevention_effect(GENERIC_WHOLE, applies=_arms(PREVENT_WHOLE, chosen=False, player_only=True))
+def _whole_prevention_generic(game, event: dict) -> PreventionOutcome | None:
+    """The same shield activated without recording a chosen source (AI /
+    headless): the next damage event from any source is prevented."""
+    return _spend(game, event, PREVENT_WHOLE, chosen=False, rider=_log_whole_prevention)
 
 
 def _log_color_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:

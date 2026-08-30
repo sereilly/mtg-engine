@@ -240,6 +240,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # whole-instance shield that absorbs a share of the event. Same category, so
     # GRAMMAR_CATEGORIES is unchanged.
     "grant_half_prevention_shield": "prevention",
+    "grant_whole_prevention_shield": "prevention",
     "prevent_all_combat_damage": "prevention",
     # The same blanket, narrowed to a printed noun phrase (Pack Leader). Same
     # category: what differs is who it covers, not what kind of effect it is.

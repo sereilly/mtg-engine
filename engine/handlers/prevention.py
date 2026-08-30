@@ -15,8 +15,10 @@ from ..shields import (
     make_life_gain_source,
     make_numeric_pool,
     make_subject_shield,
+    make_whole_charge,
+    make_whole_source,
 )
-from ._common import resolve_amount, resolve_target_permanent
+from ._common import attached_host, resolve_amount, resolve_target_permanent
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -124,6 +126,20 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         game.log.append(f"{caster.name} gains prevention shield for {amount} damage")
         return True, "resolved"
 
+    # Fylgja: "Remove a healing counter from this Aura: Prevent the next 1
+    # damage that would be dealt to enchanted creature this turn." The shield
+    # protects the permanent the ability's source is attached to — read through
+    # `attached_host`, the one accessor for that relation, so an Aura that has
+    # come unattached shields nothing rather than shielding itself.
+    if instruction.payload.get("to_attached"):
+        host = attached_host(game, context.source_permanent)
+        if host is not None:
+            _grant_pool(host, amount, source_name)
+            game.log.append(
+                f"{host.card.name} gains prevention shield for {amount} damage"
+            )
+        return True, "resolved"
+
     # Rock Hydra: "{R}: Prevent the next 1 damage that would be dealt to this
     # creature this turn." The shield protects the ability's own source
     # permanent, never the (defaulted) target.
@@ -171,6 +187,38 @@ def grant_reverse_damage_shield(game: Game, instruction: OracleInstruction, cont
     else:
         add_shield(caster, make_life_gain_charge(granted_by))
         game.log.append(f"{caster.name} armed a Reverse Damage shield")
+    return True, "resolved"
+
+
+@effect_handler("grant_whole_prevention_shield")
+def grant_whole_prevention_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Pentagram of the Ages: "The next time a source of your choice would deal
+    damage to you this turn, prevent that damage."
+
+    The same choice the two shields below and above it make — a permanent on any
+    battlefield, or a spell on the stack matched by the ``CardDefinition`` it
+    will deal its damage with — because it is the same printed phrase (CR
+    615.8). What differs is only what happens after the prevention, which here
+    is nothing: Reverse Damage's sentence continues and this one stops.
+    """
+    caster = context.caster
+    granted_by = context.card.name if context.card else None
+    if context.stack_target is not None:
+        chosen = context.stack_target.card
+    else:
+        chosen = resolve_target_permanent(
+            game, context, predicate=lambda p: True, fallback_players=()
+        )
+    if chosen is not None:
+        add_shield(caster, make_whole_source(chosen, granted_by))
+        source_card = getattr(chosen, "card", chosen)
+        game.log.append(
+            f"{caster.name} will prevent the next damage from "
+            f"{getattr(source_card, 'name', 'a source')}"
+        )
+    else:
+        add_shield(caster, make_whole_charge(granted_by))
+        game.log.append(f"{caster.name} will prevent the next damage dealt to them")
     return True, "resolved"
 
 

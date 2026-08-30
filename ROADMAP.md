@@ -692,9 +692,9 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, thirty-one rounds in. 184 → 271 of 373 supported
-(72.7%), hollow lines 10 cards, and 44 unclaimed sentences across 29 of those
-271 — the third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
+**Where it stands: Phase 3, thirty-two rounds in. 184 → 273 of 373 supported
+(73.2%), hollow lines 10 cards, and 44 unclaimed sentences across 29 of those
+273 — the third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
@@ -711,15 +711,19 @@ upkeep alone with a whole printed paragraph compiling to nothing, Fire Covenant'
 
 Only 10 of those show in `--hollow-lines`, because a line that produces no
 *ability part* leaves nothing for that probe to find hollow. So the honest
-reading of "271 supported" is "271 compile, 242 of them with every printed line
+reading of "273 supported" is "273 compile, 244 of them with every printed line
 accounted for". **One round is still scheduled**: the support gate admits an
 artifact or enchantment when *any* ability of it is implemented — round 1's
 second finding ("a widened gate hid a static line") for a card type the round-1
 fix did not reach — and tightening it takes the number down to the true one.
-Measured before changing anything: **no shipped card is affected**, which is what
-makes that round safe to do at all.
+This paragraph used to add "measured before changing anything: no shipped card
+is affected". **That measurement was of the wrong check** — see round 32, which
+re-measured the one the round is really about and found 15 shipped cards, every
+one of them legitimately implemented through a reader the claim chain does not
+consult. The round is larger than this note made it sound; read round 32's
+entry before starting it.
 
-**The remaining 102 are a long tail, and the shape is Legends' rather than
+**The remaining 100 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
@@ -1733,6 +1737,86 @@ read them back, so the keys are written in one place.
 prints, and Glacial Chasm's refusal moving off the keyword and onto the two
 lines that are genuinely unread ("Creatures you control can't attack", "Prevent
 all damage that would be dealt to you").
+
+**Round 32 — the pool taught the engine the exceptions before the rule.
+271 → 273.**
+
+Two CR 615 shields, and the same shape of gap under both: `engine/prevention.py`
+had every *narrowed* form of a sentence and not the sentence.
+
+**Pentagram of the Ages** — "{4}, {T}: The next time a source of your choice
+would deal damage to you this turn, prevent that damage." That is CR 615.8
+verbatim, and the pool had four cards printing it plus something: a colour
+(Circle of Protection), a card type (CoP: Artifacts), a fraction (Dark Sphere)
+and a rider (Reverse Damage). Each narrowing got a shield kind; the plain form
+refused as "no handler for this source-scoped shield", because the lowering read
+an *empty* source filter as no axis rather than as the whole class of sources.
+`PREVENT_WHOLE` is its own kind rather than a rider-less `PREVENT_AND_GAIN_LIFE`
+for the reason `shields.py` gives: `kind` names the interceptor that consumes
+the shield, and gaining life is what that interceptor does.
+
+**Fylgja** — "Remove a healing counter from this Aura: Prevent the next 1 damage
+that would be dealt to enchanted creature this turn." A CR 615.1 shield around
+the Aura's *host*: a fourth recipient beside "you", "this permanent" and a
+chosen target, in the same shape as the three booleans `grant_prevention_shield`
+already reads, because only the lookup differs. The host is found through
+`attached_host`, the one accessor for that relation.
+
+**Its refusal was the finding, and it was not about prevention at all.**
+`engine/auras.py` gates an Aura's lines, and its claim for "this line is an
+activated ability" was a **regex for the shape of one** — a run of mana symbols,
+an optional comma-separated tail, a colon — standing in for
+`_parse_activated_ability`. A stand-in disagrees with what it stands for in both
+directions, and this one did, once each:
+
+- CR 602.1 admits **any** cost, and the shape demanded a leading mana symbol.
+  Fylgja's cost is a counter removal. The compiler parsed the whole ability —
+  cost charged, effect lowered — and the card was reported unsupported for the
+  shape of its cost. Round 26's direction: over-restriction, hidden behind a
+  second refusal.
+- The other way, a line matching the shape whose effect the compiler *cannot*
+  read was claimed anyway. Chromatic Armor's "{X}: Put a sleight counter on this
+  Aura and choose a color…" is one, and a claim there is how an Aura reports
+  supported carrying an ability that does nothing.
+
+The claim asks the parser now. **Measured before changing it**: over the whole
+shipped-plus-measured pool those two ICE cards are the *only* disagreements in
+either direction, so no shipped card moved.
+
+**One number moved that is not progress.** `PARSE_COVERAGE.md`'s channel table
+shows card_hooks 117 → 116 and parse rule 982 → 983. That is Reverse Damage's
+first sentence, which the grammar can now lower on its own; the card still
+compiles through its hook, because its printed *line* is both sentences and the
+grammar refuses that. A sentence changed which reader claims it, not what
+happens. Read a channel move as a measurement change before crediting it —
+the same rule 4ED's promotion diff taught.
+
+**Two findings measured this round and deliberately not acted on**, both bigger
+than they look:
+
+*The scheduled artifact/enchantment gate round is not the one recorded above.*
+The note under Phase 3 says tightening it affects no shipped card. That was
+measured against the *ability* form of the check. The land gate's other half —
+`_unread_land_text`, the unread **static** line — is the one the round is really
+about, and pointed at non-attachment artifacts and enchantments it names **15
+shipped cards** (Blood Moon, Kormus Bell, Kismet, Lich, Time Vault, Living
+Plane…). Every one is legitimately implemented, through a reader the claim chain
+does not consult: `land_types`, `land_animation`, `enter_tapped_statics`, card
+hooks. So the round is "extend the claim chain to the readers a non-land
+permanent uses", which is most of what `scripts/parse_coverage.py`'s registry
+already knows — two readers of one question, and the instrument has the complete
+one. Bigger than one round; do not start it on the strength of the old note.
+
+*The self-reference noun in an entry phrase is baked into the phrase.*
+`enter_effects.py`'s `_SELF_SUBJECTS` is a hand-written list of five nouns, and
+three constants beside it write one into the sentence
+(`CHOOSE_COLOR_ON_ENTER = "as this enchantment enters, choose a color"`), while
+`ENTERS_WITH_PT_COUNTERS` already uses `this [a-z]+`. So "As this **Aura**
+enters, choose a color" is refused, on both sides — the claim reader *and*
+`permanent_state.py`'s substring probe, which is why it is a gap rather than a
+silent bug. Prismatic Ward and Chromatic Armor print it. Fixing it gains no card
+on its own (both need a static Aura prevention as well), so it is scheduled
+rather than done.
 
 ## Where the sets landed
 
