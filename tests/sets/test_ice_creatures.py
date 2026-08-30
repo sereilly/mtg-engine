@@ -1409,3 +1409,91 @@ def test_a_condition_on_a_kind_nothing_asks_about_refuses_the_line(set_pool):
         "this creature can't block as long as you control a snow land"
     ) is None
     assert combat_restriction_for("this creature can't block") is not None
+
+
+# --- W1G4: library, hand and graveyard ---
+def _ghoul_game(set_pool, above):
+    """Ashen Ghoul in a graveyard with *above* cards stacked on top of it."""
+    pool = set_pool("ICE")
+    graveyard = [pool["Ashen Ghoul"]] + [pool[name] for name in above]
+    p1 = PlayerState(name="P1", graveyard=graveyard, life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "beginning"
+    game.current_step = "upkeep"
+    return pool, p1, game
+
+
+def test_ashen_ghoul_returns_itself_with_three_creature_cards_above_it(set_pool):
+    """"{B}: Return this card from your graveyard to the battlefield. Activate
+    only during your upkeep and only if three or more creature cards are above
+    this card."
+
+    CR 404.1 makes the graveyard an ordered pile with each arriving card on
+    top, so "above" is the cards that got there later.
+    """
+    pool, p1, game = _ghoul_game(
+        set_pool, ["Balduvian Bears", "Brown Ouphe", "Tor Giant"]
+    )
+
+    result = game.activate_from_graveyard(0, "Ashen Ghoul")
+    assert result.supported, result.details
+    game._settle()
+
+    assert [perm.card.name for perm in p1.battlefield] == ["Ashen Ghoul"]
+    assert not any(card.name == "Ashen Ghoul" for card in p1.graveyard)
+
+
+def test_ashen_ghoul_is_refused_with_only_two_creature_cards_above_it(set_pool):
+    """A printed restriction is only done when something refuses the
+    activation: two is not three, and nothing is spent finding out."""
+    pool, p1, game = _ghoul_game(set_pool, ["Balduvian Bears", "Brown Ouphe"])
+
+    result = game.activate_from_graveyard(0, "Ashen Ghoul")
+
+    assert not result.supported
+    assert p1.battlefield == []
+    assert p1.graveyard[0].name == "Ashen Ghoul"
+
+
+def test_ashen_ghoul_counts_only_the_cards_above_it(set_pool):
+    """Three creature cards in the graveyard is not three creature cards
+    *above* this one — the pile's order is the whole restriction."""
+    pool = set_pool("ICE")
+    p1 = PlayerState(
+        name="P1",
+        graveyard=[
+            pool["Balduvian Bears"],
+            pool["Brown Ouphe"],
+            pool["Tor Giant"],
+            pool["Ashen Ghoul"],
+        ],
+        life=20,
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "beginning"
+    game.current_step = "upkeep"
+
+    result = game.activate_from_graveyard(0, "Ashen Ghoul")
+
+    assert not result.supported
+    assert p1.battlefield == []
+
+
+def test_ashen_ghoul_is_refused_outside_your_upkeep(set_pool):
+    """The other conjunct of the same sentence. A clause conjoining two
+    restrictions is two restrictions, and both have to hold."""
+    pool, p1, game = _ghoul_game(
+        set_pool, ["Balduvian Bears", "Brown Ouphe", "Tor Giant"]
+    )
+    game.current_turn_phase = "precombat_main"
+    game.current_step = None
+
+    result = game.activate_from_graveyard(0, "Ashen Ghoul")
+
+    assert not result.supported
+    assert p1.battlefield == []
+# --- end W1G4 ---

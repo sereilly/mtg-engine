@@ -1408,6 +1408,150 @@ class AbilityActivationMixin:
         self.log.append(f"{card.name} ability added to stack")
         return SimulationResult(card.name, True, ability.effect_kind, "queued")
 
+    def activate_from_graveyard(
+        self,
+        controller_index: int,
+        card_name: str,
+        ability_index: int = 0,
+        graveyard_index: int | None = None,
+        cost_permanent_id: int | None = None,
+    ) -> SimulationResult:
+        """Activate an ability of a card **in a graveyard** (Ashen Ghoul,
+        Whiteout).
+
+        CR 113.6m: an ability whose effect moves the card it is on out of a
+        zone functions **only** from that zone. So the gate is not a list of
+        cards and not a cost shape -- it is the compiled instruction's own
+        ``functions_from`` key, the same derived fact ``engine/events.py`` reads
+        to decide which graveyard triggers may fire. An ability without it is
+        refused here, because opening the graveyard generally would let a
+        creature card in the pile tap for its own {T} ability.
+
+        A parallel entry point rather than a branch in
+        ``activate_permanent_ability``, for ``activate_from_hand``'s reason:
+        almost everything that function does -- the controller check, summoning
+        sickness, the "loses all abilities" read, the tap -- is about a
+        permanent, and a card in a graveyard is not one.
+
+        **Two cost shapes, and any third is refused rather than waived.** Mana
+        (Ashen Ghoul's {B}) and one sacrificed permanent named by a printed noun
+        phrase (Whiteout's "Sacrifice a snow land"). A cost this cannot charge
+        makes the ability unactivatable (CR 602.5c) -- the alternative is an
+        ability activated for free, which is the silent direction.
+        """
+        controller = self.players[controller_index]
+        matches = [
+            index for index, card in enumerate(controller.graveyard)
+            if card.name == card_name
+        ]
+        if graveyard_index is not None and graveyard_index in matches:
+            matches = [graveyard_index]
+        if not matches:
+            details = f"{card_name} is not in {controller.name}'s graveyard"
+            self.log.append(details)
+            return SimulationResult(card_name, False, "unsupported", details)
+        index = matches[0]
+        card = controller.graveyard[index]
+
+        program = compile_card_oracle(card)
+        if not 0 <= ability_index < len(program.activated_abilities):
+            details = f"{card.name} has no ability {ability_index}"
+            self.log.append(details)
+            return SimulationResult(card.name, False, "unsupported", details)
+        ability = program.activated_abilities[ability_index]
+        if not ability.supported or ability.instruction is None:
+            details = f"{card.name}: ability not implemented"
+            self.log.append(details)
+            return SimulationResult(card.name, False, "unsupported", details)
+        if ability.instruction.payload.get("functions_from") != "graveyard":
+            details = (
+                f"{card.name}'s ability does not function from a graveyard "
+                "(CR 113.6)"
+            )
+            self.log.append(details)
+            return SimulationResult(card.name, False, "unsupported", details)
+
+        # Every printed "Activate only ..." clause on this line (CR 602.5), read
+        # from the one table the support gate reads. The *card* is the source:
+        # there is no permanent, and "three or more creature cards are above
+        # this card" is a question about the card's place in the pile.
+        denial = activation_denial(
+            self, controller_index, card, ability.source_line or ""
+        )
+        if denial is not None:
+            details = f"{card.name}: {denial}"
+            self.log.append(details)
+            return SimulationResult(card.name, False, "unsupported", details)
+
+        cost = ability.cost
+        unchargeable = _graveyard_cost_refusal(cost)
+        if unchargeable is not None:
+            details = f"{card.name}: {unchargeable}"
+            self.log.append(details)
+            return SimulationResult(card.name, False, "unsupported", details)
+
+        # CR 601.2h/602.5c: the whole cost is checked before any of it is spent,
+        # so an ability with an unpayable half does not pay the other half.
+        sacrifice_victim = None
+        if cost.sacrifice_filter is not None:
+            candidates = [
+                perm
+                for perm in self.controlled_by(controller_index)
+                if subject_matches(
+                    self, perm, cost.sacrifice_filter, observer=controller_index,
+                )
+            ]
+            if not candidates:
+                details = (
+                    f"{card.name}: no {filter_head_noun(cost.sacrifice_filter)} "
+                    "available to sacrifice"
+                )
+                self.log.append(details)
+                return SimulationResult(card.name, False, "unsupported", details)
+            named = (
+                self.permanent_by_id(cost_permanent_id)
+                if cost_permanent_id is not None else None
+            )
+            sacrifice_victim = (
+                named if any(perm is named for perm in candidates)
+                else self.default_sacrifice_pick(candidates)
+            )
+
+        if self.enforce_mana_costs and not self._pay_mana_cost(
+            controller, cost.mana, purpose=PaymentPurpose(ACTIVATE, source=card),
+        ):
+            details = f"{controller.name} cannot pay for {card.name}'s ability"
+            self.log.append(details)
+            return SimulationResult(card.name, False, "unsupported", details)
+        if sacrifice_victim is not None:
+            self.sacrifice_permanent(sacrifice_victim)
+            self.log.append(
+                f"{controller.name} sacrificed {sacrifice_victim.card.name} "
+                f"to activate {card.name}"
+            )
+
+        # The card leaves the graveyard only when the *effect* moves it
+        # (CR 608.2), not as the cost is paid -- so it stays in the pile while
+        # the ability is on the stack, which is what lets a second Ashen Ghoul
+        # count it as a card above.
+        self._stack_push(
+            targets_already_chosen=True,
+            item=StackItem(
+                card=card,
+                caster_index=controller_index,
+                target_player_index=None,
+                target_permanent_index=None,
+                x_value=None,
+                ability_instruction=ability.instruction,
+                ability_effect_kind=ability.effect_kind,
+                # No source permanent: the object is a card in a graveyard.
+                source_permanent=None,
+                ability_text=ability.source_line,
+            )
+        )
+        self.log.append(f"{card.name} ability added to stack from the graveyard")
+        return SimulationResult(card.name, True, ability.effect_kind, "queued")
+
     def tap_permanent(
         self,
         controller_index: int,
@@ -1424,3 +1568,39 @@ class AbilityActivationMixin:
         self._turn_face_up(permanent)
         self.log.append(f"{controller.name} tapped {permanent_name}")
         return True
+
+
+def _graveyard_cost_refusal(cost) -> str | None:
+    """Why this activation cost cannot be charged from a graveyard, or None.
+
+    Written as a *deny list over every field* rather than an allow list of the
+    two shapes charged, because ``ActivatedAbilityCost`` grows: a field added
+    later and not listed here would be a cost silently waived, which is the
+    failure `engine/activation_restrictions.py` exists to prevent wearing
+    another hat. Anything this names refuses the activation entirely.
+    """
+    if cost.requires_tap:
+        # The tap symbol names the source permanent, and a card in a graveyard
+        # is not one (CR 107.5).
+        return "a tap symbol cannot be paid by a card in a graveyard"
+    for field, label in (
+        ("discard_last_drawn", "a discard cost"),
+        ("exile_self", "an exile-this cost"),
+        ("sacrifice_self", "a sacrifice-this cost"),
+        ("exile_filter", "a chosen exile cost"),
+        ("discard_cards", "a discard cost"),
+        ("discard_at_random", "a random discard cost"),
+        ("discard_whole_hand", "a discard-your-hand cost"),
+        ("discard_self", "a discard-this cost"),
+        ("put_counter", "a counter cost"),
+        ("remove_counter", "a counter-removal cost"),
+        ("tap_count", "a tap-other-permanents cost"),
+        ("pay_life", "a life cost"),
+        ("loyalty", "a loyalty cost"),
+        ("loyalty_x_sign", "a loyalty cost"),
+    ):
+        if getattr(cost, field, None):
+            return f"{label} is not charged from a graveyard"
+    if cost.sacrifice_filter is not None and cost.sacrifice_count != 1:
+        return "only a one-permanent sacrifice cost is charged from a graveyard"
+    return None

@@ -312,10 +312,26 @@ def _lower_return_to_zone(
             raise LoweringError(
                 "a card returns itself from its owner's graveyard", node=node
             )
-        if node.to.name != "battlefield" or node.to.owner is not None:
+        # Two destinations, one instruction: the battlefield (Silversmote Ghoul)
+        # and the card's own controller's hand (Whiteout). Where it lands is
+        # payload rather than a second kind, because everything else about the
+        # sentence — the object is the ability's own source, the zone it comes
+        # out of is the one the ability functions from (CR 113.6m) — is the
+        # same fact in both.
+        to_hand = (
+            node.to.name == "hand"
+            and node.to.owner is not None
+            and node.to.owner.kind == "you"
+        )
+        if not to_hand and (node.to.name != "battlefield" or node.to.owner is not None):
             raise LoweringError(
                 f"no handler returns a card from the graveyard to the {node.to.name}",
                 node=node,
+            )
+        if to_hand and node.entering_tapped:
+            # "tapped" describes a permanent, and a card in a hand is not one.
+            raise LoweringError(
+                "a card returned to a hand cannot enter tapped", node=node
             )
         # Every ObjectFilter field beyond the three the phrase "this card from
         # your graveyard" sets. Written against the dataclass, so a restriction
@@ -327,12 +343,14 @@ def _lower_return_to_zone(
             raise LoweringError(
                 f"the self-return handler does not honour {leftovers[0]!r}", node=node
             )
-        return (
-            OracleInstruction(
-                "return_self_from_graveyard", "",
-                {"tapped": node.entering_tapped, "functions_from": "graveyard"},
-            ),
-        )
+        payload: dict[str, object] = {
+            "tapped": node.entering_tapped, "functions_from": "graveyard",
+        }
+        if to_hand:
+            # Emitted only for the newer reading, so the battlefield spelling's
+            # payload stays byte-identical and no behaviour signature moves.
+            payload["to"] = "hand"
+        return (OracleInstruction("return_self_from_graveyard", "", payload),)
     # "Return this card to the battlefield under your control attached to that
     # creature." / "…as a non-Aura enchantment. It loses "enchant creature" and
     # gains "…"." (Takklemaggot.)

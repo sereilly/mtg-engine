@@ -121,6 +121,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_self_ability_text": "pump",
     # The negative twin ("It loses indestructible until end of turn", Soul Sear).
     "remove_target_keyword_until_eot": "pump",
+    # The board-wide negative twin ("All creatures lose flying until end of
+    # turn", Whiteout), beside `grant_team_keyword_until_eot`.
+    "remove_team_keyword_until_eot": "pump",
     # The durationless half of the same effect, on the ability's own source
     # (Elder Land Wurm). Same family: what changes is how long the removal
     # lasts, not what kind of effect it is.

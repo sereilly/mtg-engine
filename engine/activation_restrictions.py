@@ -689,6 +689,77 @@ def _at_least_that_many_counters(
     return counters_on(source, match.group("counter")) >= needed
 
 
+def _readable_cards_above(match) -> bool:
+    """Whether the noun phrase in "…N or more <phrase> cards are above this
+    card" is one this file can count.
+
+    The same pairing every `.+` row here makes: the pattern matches more
+    sentences than the predicate implements, so a phrase the card matcher
+    cannot test leaves the clause unmatched and the card unsupported, rather
+    than admitted with a restriction that answers "no" to every board.
+    """
+    from .grammar.vocabulary import NUMBER_WORDS
+
+    if NUMBER_WORDS.get(match.group("count")) is None:
+        return False
+    return _cards_above_filter(match.group("kind")) is not None
+
+
+@lru_cache(maxsize=None)
+def _cards_above_filter(phrase: str) -> "dict | None":
+    """"creature" / "creature card" as the search-filter payload that tests one
+    card in a graveyard.
+
+    Read by `search_filters.search_matches`, which is the engine's one answer to
+    "may this card be found", and the only reader that works on a card in a
+    hidden or open zone at all: CR 613.1 gives a card outside the battlefield no
+    computed characteristics, so the printed type line is the whole of what
+    there is to ask. A phrase it cannot test returns None and the clause goes
+    unmatched.
+    """
+    word = " ".join((phrase or "").strip().lower().split())
+    # One card type and nothing else, spelled the way `search_matches` takes it.
+    # Widening this means widening what that predicate can answer, and the two
+    # are one change.
+    if word in ("creature", "artifact", "enchantment", "instant", "sorcery", "land"):
+        return {"card_type": word}
+    return None
+
+
+def _enough_cards_above_in_graveyard(
+    game: "Game", controller_index: int, source, match
+) -> bool:
+    """"Activate only if three or more creature cards are above this card."
+    (Ashen Ghoul.)
+
+    CR 404.1 makes a graveyard an ordered pile and puts each arriving card *on
+    top* of it, so "above this card" names the cards that got there later. The
+    engine appends, so those are the entries at a higher index -- and the index
+    is found by **identity**, because two copies of one card in a graveyard are
+    literally the same immutable ``CardDefinition`` and a name or value match
+    finds whichever copy is first.
+
+    *source* is the card itself rather than a permanent: this clause only ever
+    appears on an ability that functions from a graveyard (CR 113.6m), where
+    there is no permanent to be the source. A permanent reaching here answers
+    False, which is the honest reading -- a card on the battlefield has nothing
+    above it in any graveyard.
+    """
+    from .grammar.vocabulary import NUMBER_WORDS
+    from .search_filters import search_matches
+
+    needed = NUMBER_WORDS.get(match.group("count"))
+    described = _cards_above_filter(match.group("kind"))
+    if source is None or needed is None or described is None:
+        return False
+    graveyard = game.players[controller_index].graveyard
+    for index, held in enumerate(graveyard):
+        if held is source:
+            above = graveyard[index + 1:]
+            return sum(1 for card in above if search_matches(card, described)) >= needed
+    return False
+
+
 #: Matched whole, and no pattern is a prefix of another -- held by
 #: `tests/rules/test_activation_restrictions.py`.
 ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
@@ -874,6 +945,21 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         _at_least_that_many_counters,
         "not enough counters on it yet",
         reads_payload=True,
+    ),
+    # "Activate only if three or more creature cards are above this card."
+    # (Ashen Ghoul.) The one clause in the pool that asks about a graveyard's
+    # *order*, and the only kind of clause that can: an ability functioning
+    # from a graveyard (CR 113.6m) is printed on a card that is itself in the
+    # pile. Number and noun are payload, like every other row here.
+    ActivationRestriction(
+        re.compile(
+            r"^activate only if (?P<count>[a-z]+) or more (?P<kind>.+?) cards "
+            r"are above this card$"
+        ),
+        _enough_cards_above_in_graveyard,
+        "not enough cards are above it in the graveyard",
+        reads_payload=True,
+        payload_readable=_readable_cards_above,
     ),
 )
 

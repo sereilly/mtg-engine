@@ -1242,6 +1242,17 @@ def return_self_from_graveyard(game: Game, instruction: OracleInstruction, conte
         # nothing, rather than conjuring a second copy of the card.
         game.log.append(f"{card.name} was no longer in the graveyard")
         return True, "resolved"
+    # "…to your **hand**." (Whiteout.) The destination is payload rather than a
+    # second handler, because everything above it — the object is the ability's
+    # own source, found by identity in the graveyard the ability functions from
+    # — is the same work either way. Absent means the battlefield, which is what
+    # every payload written before the hand spelling existed says.
+    if instruction.payload.get("to") == "hand":
+        # Through the write seam, so CR 903.9b rides it like every other
+        # put-into-a-hand.
+        if game.put_card_into_hand(caster, card):
+            game.log.append(f"{card.name} returned from the graveyard to hand")
+        return True, "resolved"
     tapped = bool(instruction.payload.get("tapped"))
     game._put_permanent_onto_battlefield(
         game.players.index(caster), Permanent(card=card, tapped=tapped), None
