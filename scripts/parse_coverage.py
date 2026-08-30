@@ -1175,7 +1175,18 @@ def main() -> int:
     measured = collect_measured_findings(coverages)
 
     if args.accept_probe:
-        findings = {(c.name, s): words for c in coverages for s, words in c.probe_findings}
+        # **The shipped half, the same one `collect_findings` gates on.** This
+        # snapshotted every coverage, which since the round that pointed the
+        # analysis at measured sets too meant writing measured findings into a
+        # baseline the check then compares against shipped cards only — so
+        # accepting a single reviewed finding wrote 90 entries the very next
+        # `--check` reported as stale. The ratchet has one denominator or it
+        # oscillates.
+        findings = {
+            (c.name, s): words
+            for c in coverages if c.shipped
+            for s, words in c.probe_findings
+        }
         save_probe_baseline(findings)
         print(f"accepted {len(findings)} probe finding(s) into {PROBE_BASELINE_PATH.name}")
 

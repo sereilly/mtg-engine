@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **1160**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **76**
+- With deletion-probe findings (ignored words): **77**
 
 ## Measured sets — reported, not gated
 
@@ -158,6 +158,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Marsh Gas | `all creatures get -2/-0 until end of turn` | all |
 | Martyr's Cry | `exile all white creatures. for each creature exiled this way, its cont` | all |
 | Mishra's Factory | `target assembly-worker creature gets +1/+1 until end of turn` | creature |
+| Mishra's War Machine | `this creature deals 3 damage to you unless you discard a card. if it d` | creature |
 | Nevinyrral's Disk | `destroy all artifacts, creatures, and enchantments` | all |
 | Orc General | `other orc creatures get +1/+1 until end of turn` | creatures |
 | Pestilent Haze | `all creatures get -2/-2 until end of turn` | all |
@@ -198,12 +199,12 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 984 |
+| parse rule | 985 |
 | activation cost | 398 |
 | trigger table | 339 |
 | static-line table | 234 |
 | keyword table | 222 |
-| card_hooks bespoke (name-keyed) | 113 |
+| card_hooks bespoke (name-keyed) | 111 |
 | aura enchant noun (oracle_instructions attach) | 87 |
 | activation_restrictions.py | 37 |
 | aura static (oracle_instructions/permanent_state) | 37 |

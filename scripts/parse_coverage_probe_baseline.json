@@ -300,6 +300,13 @@
   ]
  },
  {
+  "card": "Mishra's War Machine",
+  "clause": "this creature deals 3 damage to you unless you discard a card. if it deals damage to you this way, tap it",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Nevinyrral's Disk",
   "clause": "destroy all artifacts, creatures, and enchantments",
   "ignored": [

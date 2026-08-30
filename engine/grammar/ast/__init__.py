@@ -128,6 +128,7 @@ from .damage import (
     PreventDamage,
     RedirectDamage,
     DamageCantBePreventedOrRedirected,
+    UpkeepDamageUnlessCost,
 )
 from .characteristics import (
     Pump,
@@ -373,6 +374,7 @@ __all__ = [
     "DamageThoseDamagedThisGame",
     "DealDamage",
     "DamageUnlessPay",
+    "UpkeepDamageUnlessCost",
     "Fight",
     "PreventDamage",
     "RedirectDamage",

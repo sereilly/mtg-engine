@@ -41,6 +41,7 @@ from .damage import (
     DealDamage,
     PreventDamage,
     RedirectDamage,
+    UpkeepDamageUnlessCost,
 )
 from .characteristics import (
     BecomeColor,
@@ -189,7 +190,7 @@ Effect = Union[
     ExileGraveyardUntilLeaves, CastFromExiledWith, ForceChosenCreatureToAttack,
     PhaseOut,
     AddManaForTappedLand, ProducesManaInstead, SpendManaAsThough, PreventDamage,
-    RedirectDamage, DamageCantBePreventedOrRedirected,
+    RedirectDamage, DamageCantBePreventedOrRedirected, UpkeepDamageUnlessCost,
     SearchLibrary, SearchAndExile, TransmuteBySacrifice, OwnershipExchangeUnlessPaid,
     RandomRevealOwnershipExchange,
     ExileTopOfLibrary, PutExiledWithSource, ExileGraveyard, ExileCostSacrifices,

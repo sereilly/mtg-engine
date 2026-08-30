@@ -309,6 +309,11 @@ ACTIVATED_LABELS: dict[str, str] = {
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
 # position (the clause after a trigger condition).
 TRIGGERED_LABELS: dict[str, str] = {
+    # Mishra's War Machine / Minion of Leshrac. The bucket the card hook
+    # carried before the grammar read the template, kept across the retirement
+    # so the support report does not silently re-bucket a shipped card — which
+    # is the reason this table exists.
+    "upkeep_damage_unless_cost": "upkeep_effect",
     # --- The Dark ---
     # Each names what the ability is *for*, which is the question the support
     # report and `SimulationResult` ask. The `may` wrappers among this set's new

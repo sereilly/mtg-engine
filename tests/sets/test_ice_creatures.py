@@ -1179,3 +1179,61 @@ def test_norritt_marks_the_creature_it_names(set_pool):
 
     assert giant.metadata.get("must_attack_until_eot") is True
     assert bears.metadata.get("must_attack_until_eot") is None
+
+
+# --- Round 37: the "unless" cost of an upkeep toll is payload, not a kind ---
+
+
+def test_minion_of_leshrac_gives_up_a_creature_instead_of_taking_the_damage(set_pool):
+    """"At the beginning of your upkeep, this creature deals 5 damage to you
+    unless you sacrifice a creature other than this creature. If this creature
+    deals damage to you this way, tap it."
+
+    Mishra's War Machine prints the same sentence with 3 for 5 and a discard for
+    the sacrifice, and it was a card hook keyed on its whole printed line — so
+    the second card printing the template reached nothing at all.
+    """
+    minion = Permanent(card=set_pool("ICE")["Minion of Leshrac"])
+    bear = Permanent(card=set_pool("ICE")["Balduvian Bears"])
+    p1 = PlayerState(name="P1", battlefield=[minion, bear], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game.resolve_upkeep(0)
+
+    assert p1.life == 20
+    assert [p.card.name for p in p1.battlefield] == ["Minion of Leshrac"]
+    assert not minion.tapped
+
+
+def test_minion_of_leshrac_will_not_pay_with_itself(set_pool):
+    """"…a creature **other than this creature**." Alone on the battlefield it
+    has nothing to give up, so it takes the damage — the exclusion is compared
+    by identity, and dropping it would let the card pay by sacrificing the one
+    permanent the sentence rules out."""
+    minion = Permanent(card=set_pool("ICE")["Minion of Leshrac"])
+    p1 = PlayerState(name="P1", battlefield=[minion], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game.resolve_upkeep(0)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert p1.life == 15
+    assert minion.tapped, "the tap rides the damage branch"
+    assert minion in p1.battlefield
+
+
+def test_the_toll_reads_its_number_and_its_cost_off_the_card(set_pool):
+    """One template, two cards, and everything that differs is payload."""
+    from engine.card_hooks import CARD_LINE_INSTRUCTIONS
+
+    minion = next(
+        t.instruction
+        for t in compile_card_oracle(set_pool("ICE")["Minion of Leshrac"]).triggered_abilities
+        if t.instruction
+    )
+    assert minion.kind == "upkeep_damage_unless_cost"
+    assert minion.payload["amount"] == 5
+    assert minion.payload["sacrifice"] == {"type_filter": "creature"}
+    assert minion.payload["exclude_self"] is True
+    assert "Mishra's War Machine" not in CARD_LINE_INSTRUCTIONS

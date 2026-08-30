@@ -692,9 +692,9 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, thirty-six rounds in. 184 → 278 of 373 supported
-(74.5%), hollow lines 10 cards, and 43 unclaimed sentences across 28 of those
-278 — the third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
+**Where it stands: Phase 3, thirty-seven rounds in. 184 → 279 of 373 supported
+(74.8%), hollow lines 10 cards, and 43 unclaimed sentences across 28 of those
+279 — the third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
@@ -711,7 +711,7 @@ upkeep alone with a whole printed paragraph compiling to nothing, Fire Covenant'
 
 Only 10 of those show in `--hollow-lines`, because a line that produces no
 *ability part* leaves nothing for that probe to find hollow. So the honest
-reading of "278 supported" is "278 compile, 250 of them with every printed line
+reading of "279 supported" is "279 compile, 251 of them with every printed line
 accounted for". **One round is still scheduled**: the support gate admits an
 artifact or enchantment when *any* ability of it is implemented — round 1's
 second finding ("a widened gate hid a static line") for a card type the round-1
@@ -723,7 +723,7 @@ one of them legitimately implemented through a reader the claim chain does not
 consult. The round is larger than this note made it sound; read round 32's
 entry before starting it.
 
-**The remaining 95 are a long tail, and the shape is Legends' rather than
+**The remaining 94 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
@@ -2006,6 +2006,64 @@ table appears elsewhere in the chain and none inherits from another, so at most
 one branch could ever have matched. The chain keeps every branch that *decides*
 something. `lower.py` is 909 lines, and the next node costs one line rather than
 three.
+
+**Round 37 — the "unless" cost of an upkeep toll is payload, not a kind.
+278 → 279.**
+
+The same search that found round 36, run again: for every unsupported card,
+which hooked *line* does it nearly print? Two answers came back, and this is the
+first.
+
+Mishra's War Machine — "At the beginning of your upkeep, this creature deals 3
+damage to you unless you **discard a card**. If it deals damage to you this way,
+tap it" — was a card hook with its number and its cost baked into the key.
+Minion of Leshrac prints the same sentence with 5 for 3 and "**sacrifice a
+creature other than this creature**" for the discard, and reached nothing.
+
+Both are payload now, on one paragraph production: two sentences and one effect,
+because the tap rides the *damage* branch and the second sentence has no subject
+of its own. The sacrifice's noun phrase goes through the same reducer every
+other charged sacrifice reads, so what the offer asks for and what the charger
+collects cannot disagree — and "other than this creature" is compared by
+identity, which is what keeps the card from paying with the one permanent its
+sentence rules out. **Hooked cards 72 → 71, entries 78 → 77, and the projection
+to the full release line 1,753 → 1,730.**
+
+**Three guards fired on the way, and each was pointing at something real.**
+
+*A family reached sideways.* `lowering/damage.py` needed the sacrifice-filter
+reducer that lived in `lowering/board.py`, and families do not import each
+other. It is `lowering/_sacrifices.py` now — a floor, for `_amounts`' reason
+exactly: a module two families import cannot itself be one. Moving it into
+`_common` was the first attempt and pushed *that* past the size guard, which is
+the same rule arriving from the other side.
+
+*A paragraph reached upward.* The production wanted `phrases`'
+`_accept_self_reference`, and `paragraphs` sits below `phrases`. The reader it
+should have asked is `readers.accept_source_reference` — the layer whose whole
+description is "small printed readers `nouns` shares upward, a comparison, **a
+self-reference**" — and it covers "it" as well, which the sentence's rider needs.
+
+*The deletion probe found a new ignored word*, `creature` in "this creature
+deals 3 damage". Reviewed and accepted: `accept_source_reference` consumes "this
+&lt;the card's own type&gt;", the noun names nothing a payload would carry, and Mana
+Vault and Basalt Monolith have had that reading for rounds.
+
+**And accepting it exposed a ratchet that oscillates.** `--accept-probe`
+snapshotted findings from *every* coverage, while `collect_findings` gates on
+the shipped half — so since round 30 pointed the analysis at measured sets too,
+accepting one reviewed finding wrote 90 entries the very next `--check`
+reported as stale. It snapshots the shipped half now. A ratchet has one
+denominator or it is not a ratchet, which is the same rule `HOOK_RELIANCE.md`'s
+measure names say out loud.
+
+**The other answer that search returned is the next round**: Withering Wisps
+prints Pestilence's end-step line *byte-identically* — "At the beginning of the
+end step, if no creatures are on the battlefield, sacrifice this enchantment" —
+and Pestilence is a hook. Generalising it retires a third entry but gains no
+card on its own: Withering Wisps also needs "Activate no more times each turn
+than the number of snow Swamps you control", an activation limit counted off the
+board rather than printed as a number.
 
 ## Where the sets landed
 

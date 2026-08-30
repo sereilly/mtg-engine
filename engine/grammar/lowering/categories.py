@@ -239,6 +239,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "…prevent half that damage, rounded down" (Dark Sphere) — a CR 615.8
     # whole-instance shield that absorbs a share of the event. Same category, so
     # GRAMMAR_CATEGORIES is unchanged.
+    "upkeep_damage_unless_cost": "damage",
     "grant_half_prevention_shield": "prevention",
     "grant_whole_prevention_shield": "prevention",
     "prevent_all_combat_damage": "prevention",

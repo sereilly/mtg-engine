@@ -243,3 +243,29 @@ class PreventDamage:
     # cannot be hurt is not the card that also cannot hurt anything, and the
     # half that goes missing is silent either way.
     to_and_by: bool = False
+
+
+@dataclass(frozen=True)
+class UpkeepDamageUnlessCost:
+    """``<source> deals N damage to you unless you <cost>. If it deals damage to
+    you this way, tap it.`` (Mishra's War Machine, Minion of Leshrac.)
+
+    Two sentences and one effect, because the tap happens only on the *damage*
+    branch — the second sentence has no subject of its own to compose over.
+
+    **The cost is payload, not a kind.** Mishra's War Machine discards a card
+    and Minion of Leshrac sacrifices a creature other than itself; the sentence
+    is otherwise identical and so is what the upkeep step does with it. It used
+    to be one card hook keyed on Mishra's whole printed line, which is why the
+    second card printing the template reached nothing.
+    """
+
+    amount: Amount
+    #: How many cards the alternative discards. Zero when the cost is a
+    #: sacrifice — the two are alternatives, never both, and a card printing
+    #: both would be refused rather than charged half.
+    discard: int = 0
+    #: What the alternative sacrifices, as the printed noun phrase.
+    sacrifice: "ObjectFilter | None" = None
+    #: "If it deals damage to you this way, **tap it**."
+    taps_source: bool = False

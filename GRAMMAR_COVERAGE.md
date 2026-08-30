@@ -20,14 +20,14 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | LEB | 292 | 389 | 82.5% | 81.2% | 45.0% | 160 |
 | 2ED | 292 | 389 | 82.5% | 81.2% | 45.0% | 160 |
 | ARN | 78 | 108 | 75.9% | 71.3% | 49.1% | 44 |
-| ATQ | 85 | 120 | 89.2% | 89.2% | 61.7% | 67 |
-| 3ED | 296 | 389 | 84.3% | 82.5% | 47.0% | 165 |
+| ATQ | 85 | 120 | 90.0% | 90.0% | 62.5% | 68 |
+| 3ED | 296 | 389 | 84.6% | 82.8% | 47.3% | 166 |
 | LEG | 310 | 431 | 89.1% | 87.9% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
-| 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
+| 4ED | 368 | 520 | 88.8% | 88.5% | 52.3% | 239 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 69.4% | 64.9% | 44.4% | 209 |
-| **All (shipped)** | **2415** | **3404** | **85.9%** | **84.8%** | **52.5%** | **1548** |
+| ICE *(measured)* | 373 | 601 | 69.6% | 65.1% | 44.6% | 209 |
+| **All (shipped)** | **2415** | **3404** | **86.0%** | **84.9%** | **52.6%** | **1551** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -41,7 +41,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | ---: | ---: | --- | --- |
 | 294 | 146 | expected a subject |  |
 | 128 | 55 | unrecognized effect verb |  |
-| 80 | 46 | unconsumed text |  |
+| 76 | 44 | unconsumed text |  |
 | 40 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
 | 10 | 4 | expected a keyword ability |  |
@@ -67,7 +67,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 
 ## Cards executing through the grammar
 
-1548 cards, 1787 lines.
+1551 cards, 1790 lines.
 
 - **Abomination**
   - `Whenever this creature blocks or becomes blocked by a green or white creature, destroy that creature at end of combat.`
@@ -1776,6 +1776,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Target player discards X cards at random.`
   - `Target player discards X cards at random.`
 - **Minion of Leshrac**
+  - `At the beginning of your upkeep, this creature deals 5 damage to you unless you sacrifice a creature other than this creature. If this creature deals damage to you this way, tap it.`
   - `{T}: Destroy target creature or land.`
 - **Minion of Tevesh Szat**
   - `At the beginning of your upkeep, this creature deals 2 damage to you unless you pay {B}{B}.`
@@ -1793,6 +1794,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{T}: Add {C}.`
   - `{1}: This land becomes a 2/2 Assembly-Worker artifact creature until end of turn. It's still a land.`
   - `{T}: Target Assembly-Worker creature gets +1/+1 until end of turn.`
+- **Mishra's War Machine**
+  - `At the beginning of your upkeep, this creature deals 3 damage to you unless you discard a card. If it deals damage to you this way, tap it.`
+  - `At the beginning of your upkeep, this creature deals 3 damage to you unless you discard a card. If it deals damage to you this way, tap it.`
+  - `At the beginning of your upkeep, this creature deals 3 damage to you unless you discard a card. If it deals damage to you this way, tap it.`
 - **Mishra's Workshop**
   - `{T}: Add {C}{C}{C}. Spend this mana only to cast artifact spells.`
 - **Mold Demon**

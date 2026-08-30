@@ -25,6 +25,7 @@ from ._amounts import (
     _lower_chosen_cast_damage,
     _lower_counted_damage,
 )
+from ._sacrifices import _SACRIFICE_CARRIED, _forced_sacrifice_filter
 from ._common import (
     _lower_described_set_damage,
     _describe_several_targets,
@@ -743,3 +744,42 @@ def _lower_damage_dealt_riders(
     if node.riders.exile_if_dies:
         payload["exile_if_dies"] = True
     return (OracleInstruction("grant_damage_riders_until_eot", "", payload),)
+
+
+def _lower_upkeep_damage_unless_cost(
+    node: ast.UpkeepDamageUnlessCost,
+) -> tuple[OracleInstruction, ...]:
+    """Mishra's War Machine / Minion of Leshrac's two sentences, with the number
+    and the cost as payload.
+
+    Fused rather than composed, for the reason the damage family's "unless"
+    docstring already gives about this shape: two upkeep handlers implement it
+    whole, and the tap rides the *damage* branch — a `May` whose otherwise-arm
+    carries a rider is the fusion with extra steps.
+
+    The sacrifice filter goes through the forced-sacrifice reducer, the same one
+    every other charged sacrifice in the engine reads, so a noun phrase the
+    prompt cannot test refuses the line rather than being charged as "any
+    permanent".
+    """
+    amount = _amount_payload(node.amount)
+    if not isinstance(amount, int) or amount <= 0:
+        raise LoweringError("the upkeep damage takes a fixed amount", node=node)
+    payload: dict[str, object] = {"amount": amount}
+    if node.taps_source:
+        payload["taps_source"] = True
+    if node.discard:
+        payload["discard"] = node.discard
+        return (OracleInstruction("upkeep_damage_unless_cost", "", payload),)
+    assert node.sacrifice is not None
+    described = _forced_sacrifice_filter(node.sacrifice)
+    if described is None:
+        raise LoweringError(
+            "the upkeep alternative cannot charge this sacrifice", node=node
+        )
+    payload["sacrifice"] = described
+    # Carried beside the filter rather than inside it: the charger compares by
+    # identity against the ability's source, which no filter key can express.
+    if node.sacrifice.other_than_source:
+        payload["exclude_self"] = True
+    return (OracleInstruction("upkeep_damage_unless_cost", "", payload),)

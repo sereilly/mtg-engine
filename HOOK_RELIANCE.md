@@ -12,9 +12,9 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**72 of 1162 supported cards (6.2%)** carry at least one name-keyed entry, across **78 entries** in 6 registries. The pool is 1162 cards, 100.0% supported.
+**71 of 1162 supported cards (6.1%)** carry at least one name-keyed entry, across **77 entries** in 6 registries. The pool is 1162 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **1,753 hand-written entries** covering **1,618 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **1,730 hand-written entries** covering **1,596 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
@@ -24,14 +24,14 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 | LEB | 292 | 292 (100.0%) | 42 (14.4%) | 389 | 40 (10.3%) | 46 | 15.8 |
 | 2ED | 292 | 292 (100.0%) | 42 (14.4%) | 389 | 40 (10.3%) | 46 | 15.8 |
 | ARN | 78 | 78 (100.0%) | 23 (29.5%) | 107 | 21 (19.6%) | 25 | 32.1 |
-| ATQ | 85 | 85 (100.0%) | 4 (4.7%) | 120 | 4 (3.3%) | 4 | 4.7 |
-| 3ED | 296 | 296 (100.0%) | 38 (12.8%) | 389 | 37 (9.5%) | 41 | 13.9 |
+| ATQ | 85 | 85 (100.0%) | 3 (3.5%) | 120 | 3 (2.5%) | 3 | 3.5 |
+| 3ED | 296 | 296 (100.0%) | 37 (12.5%) | 389 | 36 (9.3%) | 40 | 13.5 |
 | LEG | 310 | 310 (100.0%) | 2 (0.6%) | 430 | 2 (0.5%) | 2 | 0.6 |
 | DRK | 119 | 119 (100.0%) | 1 (0.8%) | 167 | 1 (0.6%) | 1 | 0.8 |
-| 4ED | 368 | 368 (100.0%) | 30 (8.2%) | 520 | 29 (5.6%) | 32 | 8.7 |
+| 4ED | 368 | 368 (100.0%) | 29 (7.9%) | 520 | 28 (5.4%) | 31 | 8.4 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| ICE *(measured)* | 373 | 277 (74.3%) | 1 (0.4%) | 443 | 0 (0.0%) | 1 | 0.4 |
-| **ALL (shipped, deduped)** | **1162** | **1162 (100.0%)** | **72 (6.2%)** | **1715** | **68 (4.0%)** | **78** | **6.7** |
+| ICE *(measured)* | 373 | 278 (74.5%) | 1 (0.4%) | 446 | 0 (0.0%) | 1 | 0.4 |
+| **ALL (shipped, deduped)** | **1162** | **1162 (100.0%)** | **71 (6.1%)** | **1715** | **67 (3.9%)** | **77** | **6.6** |
 
 *(measured)* — ICE are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
@@ -41,7 +41,7 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 67 | 68 |
+| `CARD_LINE_INSTRUCTIONS` | 66 | 67 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ON_SELF_RESOLVED` | 1 | 1 |
@@ -95,7 +95,6 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 - **Mana Short** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Metamorphosis** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Mijae Djinn** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Mishra's War Machine** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Nafs Asp** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Nether Shadow** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Old Man of the Sea** (`CARD_LINE_INSTRUCTIONS`, `ON_LEAVE_BATTLEFIELD`) — 1 line

@@ -21,6 +21,7 @@ from .errors import GrammarError
 from .lexer import SELF, WORD
 from .paragraphs import (
     _parse_coin_flip_damage_loop,
+    _parse_upkeep_damage_unless_cost,
     _parse_force_chosen_creature_to_attack,
     _parse_exchange_greatest_mana_value, _parse_exile_graveyard_until_leaves,
     _parse_exile_until_leaves_or_untaps, _parse_name_and_strip,
@@ -254,6 +255,14 @@ def parse_subject_verb(
     flip_loop = _parse_coin_flip_damage_loop(stream)
     if flip_loop is not None:
         return flip_loop
+    # "<source> deals N damage to you unless you <cost>. If it deals damage to
+    # you this way, tap it." (Mishra's War Machine, Minion of Leshrac.) Two
+    # sentences and one effect, so it is tried before the ordinary damage
+    # production, which would read the first and strand the rider. Refuses
+    # without consuming.
+    upkeep_toll = _parse_upkeep_damage_unless_cost(stream)
+    if upkeep_toll is not None:
+        return upkeep_toll
     # Tempest Efreet's whole ability, which opens "Target opponent may pay …"
     # — a subject the noun parser reads and then a "may" no production of its
     # own would finish. Refuses without consuming.

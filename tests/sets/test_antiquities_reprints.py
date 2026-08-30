@@ -54,7 +54,7 @@ def test_mishras_war_machine_damage_is_not_unconditional():
     dropped both riders: it dealt 3 every upkeep with no choice and no tap."""
     program = compile_card_oracle(_mwm())
     trigger = program.triggered_abilities[0]
-    assert trigger.instruction.kind == "upkeep_damage_unless_discard"
+    assert trigger.instruction.kind == "upkeep_damage_unless_cost"
     assert trigger.instruction.payload["amount"] == 3
     assert trigger.instruction.payload["taps_source"] is True
 
@@ -362,3 +362,35 @@ def test_black_vise_still_damages_the_excess(catalog, hand, expected_damage):
     game.resolve_upkeep(1)
 
     assert p2.life == 20 - expected_damage
+
+
+def test_mishras_war_machine_still_discards_rather_than_taking_the_damage(set_pool):
+    """The card that used to be the hook, driven through a real upkeep after the
+    template became a production. With a card in hand it pays; with an empty one
+    it takes the damage and taps."""
+    from engine import Game, PlayerState
+    from engine.models import Permanent
+
+    pool = set_pool("ATQ")
+    machine = Permanent(card=pool["Mishra's War Machine"])
+    p1 = PlayerState(
+        name="P1", battlefield=[machine], hand=[pool["Ornithopter"]], life=20
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game.resolve_upkeep(0)
+
+    assert p1.life == 20
+    assert p1.hand == []
+    assert not machine.tapped
+
+    empty = Permanent(card=pool["Mishra's War Machine"])
+    p2 = PlayerState(name="P2", battlefield=[empty], life=20)
+    game = Game(players=[p2, PlayerState(name="P3", life=20)])
+
+    game.resolve_upkeep(0)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert p2.life == 17
+    assert empty.tapped

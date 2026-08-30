@@ -27,6 +27,7 @@ from .amounts import expect_pt, parse_amount
 from .errors import GrammarError
 from .lexer import (MANA, SELF)
 from .nouns import parse_object_filter
+from .readers import accept_source_reference
 from .references import parse_player_ref, parse_recipient
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES, COLOR_WORDS, CREATURE_TYPES
@@ -745,3 +746,76 @@ def _parse_force_chosen_creature_to_attack(stream: TokenStream) -> "ast.Statemen
     ):
         return None
     return ast.ForceChosenCreatureToAttack()
+
+
+def _parse_upkeep_damage_unless_cost(stream: TokenStream) -> "ast.Statement | None":
+    """``<source> deals N damage to you unless you <cost>. If it deals damage to
+    you this way, tap it.`` (Mishra's War Machine, Minion of Leshrac.)
+
+    Two sentences and one effect: the tap is on the *damage* branch, so the
+    second sentence has nothing to read apart from the first.
+
+    **This was Mishra's War Machine's card hook**, keyed on its whole printed
+    line with its number and its cost baked in — so Minion of Leshrac, which
+    prints the same sentence with 5 for 3 and a sacrifice for the discard,
+    reached nothing. Both are payload here, which is the whole difference
+    between a hook and a production.
+
+    The trailing sentence is optional because it is a rider: a card printing
+    the offer without the tap is this same effect, and demanding it would refuse
+    one for text it does not have.
+    """
+    mark = stream.mark()
+    # Every printed spelling of the source, through the reader `nouns` shares
+    # upward for exactly this: a card naming itself is one SELF token, "this
+    # creature" is two words, and the trigger's effect clause arrives in the
+    # second form.
+    if not accept_source_reference(stream):
+        return None
+    if not stream.accept_word("deals"):
+        stream.reset(mark)
+        return None
+    try:
+        amount = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("damage", "to", "you", "unless", "you"):
+        stream.reset(mark)
+        return None
+    discard, sacrifice = 0, None
+    if stream.accept_phrase("discard", "a", "card"):
+        discard = 1
+    elif stream.accept_word("sacrifice"):
+        # The same noun phrase the board family's "unless you sacrifice" reads,
+        # so what the offer asks for and what the charger collects cannot come
+        # to disagree about the words. "…**other than this creature**" (Minion
+        # of Leshrac) is part of that phrase and comes back on the filter as
+        # ``other_than_source`` — read rather than re-parsed, because a second
+        # reading is how the exclusion gets dropped and the card pays by
+        # sacrificing the one permanent the sentence rules out.
+        stream.accept_word("a", "an")
+        try:
+            sacrifice = parse_object_filter(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+    else:
+        stream.reset(mark)
+        return None
+    taps_source = False
+    rider = stream.mark()
+    if stream.accept_punct(".") and stream.accept_word("if"):
+        if not accept_source_reference(stream):
+            stream.reset(rider)
+        elif stream.accept_phrase(
+            "deals", "damage", "to", "you", "this", "way"
+        ) and stream.accept_punct(",") and stream.accept_phrase("tap", "it"):
+            taps_source = True
+        else:
+            stream.reset(rider)
+    else:
+        stream.reset(rider)
+    return ast.UpkeepDamageUnlessCost(
+        amount, discard=discard, sacrifice=sacrifice, taps_source=taps_source,
+    )

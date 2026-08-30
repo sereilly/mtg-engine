@@ -409,12 +409,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "this creature from combat and tap it":
             _line("coin_flip_remove_attacker_and_tap", "triggered_coin_flip"),
     },
-    "Mishra's War Machine": {
-        'at the beginning of your upkeep, this creature deals 3 damage to you '
-        'unless you discard a card. if it deals damage to you this way, tap it':
-            _line('upkeep_damage_unless_discard', 'upkeep_effect', amount=3,
-                taps_source=True),
-    },
     'Nafs Asp': {
         "whenever this creature deals damage to a player, that player loses 1 life "
         "at the beginning of their next draw step unless they pay {1} before that "

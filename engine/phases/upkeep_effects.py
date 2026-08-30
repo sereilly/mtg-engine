@@ -263,27 +263,34 @@ class UpkeepEffectsMixin:
             permanent, self.players.index(controller), player_index, amount, trig.source_line
         )
 
-    @upkeep_effect("upkeep_self", "upkeep_damage_unless_discard")
-    def _on__upkeep_self__upkeep_damage_unless_discard(self, ctx: UpkeepContext) -> None:
-        """Mishra's War Machine: "deals N damage to you unless you discard a
-        card. If it deals damage to you this way, tap it."
+    @upkeep_effect("upkeep_self", "upkeep_damage_unless_cost")
+    def _on__upkeep_self__upkeep_damage_unless_cost(self, ctx: UpkeepContext) -> None:
+        """"<source> deals N damage to you unless you <cost>. If it deals damage
+        to you this way, tap it." (Mishra's War Machine, Minion of Leshrac.)
 
         Two riders the previous parse dropped, and they interact: the tap only
         happens on the *damage* branch, so it cannot be a separate instruction.
 
-        With an empty hand there is no choice — discarding is impossible, so the
-        damage is taken and the source taps. With cards in hand the controller
-        chooses; headless and AI play discard, which is deterministic and keeps
-        the machine untapped, and an interactive prompt can replace it without
-        changing what the rules do here.
+        **The cost is payload.** Mishra's War Machine discards a card and Minion
+        of Leshrac sacrifices a creature other than itself; everything else
+        about the sentence, and everything this does with it, is the same. It
+        used to be one card hook keyed on Mishra's whole printed line, number
+        and cost baked in, so the second card printing the template got nothing.
+
+        With no way to pay there is no choice — the damage is taken and the
+        source taps. Otherwise the controller pays; headless and AI play pay,
+        which is deterministic and keeps the permanent untapped, and an
+        interactive prompt can replace it without changing what the rules do
+        here.
         """
         controller = ctx.controller
         permanent = ctx.permanent
         trig = ctx.trig
-        amount = int(trig.instruction.payload.get("amount", 0))
-        taps_source = bool(trig.instruction.payload.get("taps_source"))
+        payload = trig.instruction.payload
+        amount = int(payload.get("amount", 0))
+        taps_source = bool(payload.get("taps_source"))
 
-        if controller.hand:
+        if payload.get("discard") and controller.hand:
             discarded = controller.hand.pop(0)
             # Through the one discard seam, not a bare graveyard append: this
             # skipped Library of Leng's CR 701.9c replacement *and* the card's
@@ -294,6 +301,21 @@ class UpkeepEffectsMixin:
                 f"{controller.name} discarded {discarded.name} to {permanent.card.name}"
             )
             return
+
+        described = payload.get("sacrifice")
+        if described is not None:
+            # The charger's own candidate reader, and the exclusion compared by
+            # identity: "a creature **other than this creature**" rules out
+            # exactly one permanent, and `in`/`==` on a Permanent would match a
+            # look-alike instead.
+            seat = self.seat_index(controller)
+            exclude = permanent if payload.get("exclude_self") else None
+            if self._sacrifice_candidate_indices(controller, described, exclude):
+                self.arm_forced_sacrifice(
+                    seat, 1, filter=described, exclude=exclude,
+                    reason=permanent.card.name,
+                )
+                return
 
         ctx.enqueue_damage(
             permanent,

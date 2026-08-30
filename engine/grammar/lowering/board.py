@@ -16,6 +16,7 @@ from ...subject_filters import (
 )
 from .. import ast
 from ..errors import LoweringError
+from ._sacrifices import _SACRIFICE_CARRIED, _forced_sacrifice_filter
 from ._common import (
     _describe_several_targets,
     _describe_targets,
@@ -517,26 +518,8 @@ _SACRIFICE_PAYERS: frozenset[str] = frozenset(
 #   sacrificing player picks, which is what CR 701.21a already says and what the
 #   prompt already does. It is read and dropped *here*, at the one lowering whose
 #   rule puts the choice there; anywhere else the word refuses.
-_SACRIFICE_CARRIED = frozenset({"exclude_self", "their_choice"})
 
 
-def _forced_sacrifice_filter(filt: ast.ObjectFilter) -> dict | None:
-    """The filter payload the forced-sacrifice prompt should list, or None when
-    the noun phrase says something the prompt cannot test.
-
-    Two shapes are refused before the key check, because both would reduce to an
-    *empty* payload — a prompt listing every permanent on the board:
-
-    - a self-referential or enchanted subject ("sacrifice **this** creature",
-      Sea Serpent), which is a different instruction entirely and is read below;
-    - a phrase naming neither a card type nor a subtype, which would let the
-      prompt eat anything on the board. A *subtype* alone is a real set and
-      names it exactly — "two Swamps" (Mold Demon) is the whole cost, and it
-      says nothing about card types because on that card it does not need to.
-    """
-    if filt.is_source or filt.is_enchanted or not (filt.card_types or filt.subtypes):
-        return None
-    return object_only_filter(filt.to_payload(), carried_separately=_SACRIFICE_CARRIED)
 
 
 def _lower_destroy_each_unless_paid(

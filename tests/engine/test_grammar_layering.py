@@ -289,7 +289,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_events", "_amounts", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_events", "_amounts", "_sacrifices", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -510,6 +510,15 @@ FAMILY_SHARED = {
     # rather than a family for `_primitives`' reason exactly: `damage.py` reads
     # it, and inside a package a module a family imports cannot itself be one.
     "_amounts",
+    # `_sacrifices` split out of `lowering/board.py` when a *second* family
+    # started charging a printed sacrifice cost: Minion of Leshrac's "unless
+    # you sacrifice a creature other than this creature" is the damage family's
+    # sentence and Mold Demon's "unless you sacrifice two Islands" is the
+    # board's, and both reduce the noun phrase with the same reader. A floor
+    # for `_amounts`' reason exactly — a module two families import cannot
+    # itself be one, and the alternative was `board` and `damage` importing
+    # each other.
+    "_sacrifices",
 }
 
 
