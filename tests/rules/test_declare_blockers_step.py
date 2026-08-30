@@ -833,3 +833,60 @@ def test_r33_a_creature_blocked_by_another_blocker_is_not_in_this_ones_record():
     assert other.metadata["blocked_attacker_ids_this_turn"] == [
         second.permanent_id
     ]
+
+
+# ---------------------------------------------------------------------------
+# 509.1b — an evasion ability may be conditional, and the condition is a board
+# ---------------------------------------------------------------------------
+
+def _r41_conditional_board(restriction_text: str, defender_extra=()):
+    """A 1/1 with *restriction_text* attacking a 2/2, with *defender_extra* on
+    the defending side."""
+    attacker = Permanent(card=_mk_creature("Evader", 1, 1, oracle_text=restriction_text))
+    blocker = Permanent(card=_mk_creature("Bruiser", 3, 3))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", battlefield=[blocker, *defender_extra]),
+    ])
+    return game, attacker, blocker
+
+
+def _r41_snow_forest():
+    return Permanent(card=CardDefinition(
+        name="Snow-Covered Forest", mana_cost="", cmc=0.0,
+        type_line="Basic Snow Land - Forest", oracle_text="({T}: Add {G}.)",
+        colors=(), color_identity=(), keywords=(), produced_mana=("G",),
+        raw={"name": "Snow-Covered Forest", "type_line": "Basic Snow Land - Forest"},
+    ))
+
+
+@pytest.mark.cr("509.1b")
+def test_509_1b_an_evasion_restriction_may_be_conditional():
+    """"…can't be blocked by creatures with power 2 or greater **as long as
+    defending player controls a snow land**." (Arctic Foxes.)
+
+    509.1b calls an evasion ability a restriction on the declaration; nothing
+    in it says a restriction is unconditional. The qualifier is stripped once
+    in `engine/combat_restrictions.py` and asked at the one enforcement site,
+    so a clause read at the gate cannot go unapplied.
+    """
+    game, attacker, blocker = _r41_conditional_board(
+        "This creature can't be blocked by creatures with power 2 or greater "
+        "as long as defending player controls a snow land.",
+        [_r41_snow_forest()],
+    )
+    _to_declare_blockers(game, [0])
+
+    assert not game.declare_blockers(1, {0: 0})[0]
+
+
+@pytest.mark.cr("509.1b")
+def test_509_1b_the_same_restriction_lifts_when_the_condition_fails():
+    """The half that makes it a condition rather than a decoration."""
+    game, attacker, blocker = _r41_conditional_board(
+        "This creature can't be blocked by creatures with power 2 or greater "
+        "as long as defending player controls a snow land."
+    )
+    _to_declare_blockers(game, [0])
+
+    assert game.declare_blockers(1, {0: 0})[0]

@@ -320,6 +320,88 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 
+#: "…**as long as defending player controls a snow land**." (Arctic Foxes.)
+#: A qualifier on whatever restriction precedes it, so it is stripped once here
+#: rather than written into every row — the same arrangement
+#: `untap_restrictions._WHILE_UNTAPPED` makes for "as long as this artifact is
+#: untapped". The seat and the noun phrase are both payload: a card printed
+#: "as long as you control an Island" is this clause, not another one.
+_AS_LONG_AS = re.compile(
+    r"^(?P<rest>.+?) as long as (?P<who>defending player|you) "
+    r"(?:controls?) an? (?P<board>.+)$"
+)
+
+#: The kinds whose enforcement site **asks** about a condition. A qualifier
+#: attached to any other kind would be a restriction applied unconditionally —
+#: silently, and in the direction of doing more than the card says — so the line
+#: refuses instead and its card is reported unsupported naming the clause. This
+#: is the same claim `activation_restrictions.payload_readable` makes: a row may
+#: match more sentences than it implements, and the ones it does not implement
+#: must refuse rather than drop a clause.
+CONDITIONAL_RESTRICTION_KINDS: frozenset[str] = frozenset({"cant_be_blocked_by"})
+
+
+def _controlled_noun(phrase: str) -> dict | None:
+    """The board noun phrase an "as long as … controls …" clause names.
+
+    Read by **the grammar's noun parser**, not by `_blocker_noun` beside it.
+    That reader is a hand-written mini-parser for the members of a blocker
+    union, and it knows five shapes; "a snow land" is not one of them, and
+    teaching it a sixth would be one more entry in the second vocabulary this
+    file already keeps. The clause here is an ordinary board question — the
+    same one `activation_restrictions._controlled_board_phrase` and
+    `untap_restrictions._blocked_subject` ask — so it gets the same answer.
+
+    (`_blocker_noun` is still a second reader of printed nouns, and is the
+    obvious next thing to retire in this file. It is not retired here because
+    its callers are unions, which the noun parser reads one member at a time.)
+    """
+    from .grammar.errors import GrammarError
+    from .grammar.lexer import tokenize
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+    from .subject_filters import untestable_filter_keys
+
+    stream = TokenStream(tokenize(phrase.strip()).tokens)
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    payload = described.to_payload()
+    if not payload or untestable_filter_keys(payload):
+        return None
+    return payload
+
+
+def restriction_condition_holds(
+    game, condition: dict | None, *, observer: int | None, defender: int | None
+) -> bool:
+    """Whether a restriction's "as long as" clause holds right now.
+
+    ``None`` — no clause — is True: an unqualified restriction always applies.
+
+    The seat is read from the printed words: "defending player" is the seat
+    being attacked, "you" is the seat whose ability this is (CR 109.5). A seat
+    the caller cannot name answers False, which keeps the restriction *on*:
+    for a clause the card prints as a condition for the restriction applying,
+    the safe direction is the one that does not silently widen what may block.
+    """
+    if not condition:
+        return True
+    from .subject_filters import subject_matches
+
+    seat = defender if condition.get("who") == "defending_player" else observer
+    if seat is None or not (0 <= seat < len(game.players)):
+        return False
+    described = condition.get("subject") or {}
+    return any(
+        subject_matches(game, perm, described, observer=observer)
+        for perm in game.controlled_by(seat)
+    )
+
+
 def combat_restriction_for(
     normalized_line: str, card_name: str | None = None
 ) -> CombatRestriction | None:
@@ -335,10 +417,25 @@ def combat_restriction_for(
     and a token wearing the name are both excepted. A caller with no name to
     give gets a refusal for that phrase, never a filter that matches nothing.
     """
+    # The trailing qualifier first, so every row below sees the sentence it is
+    # written against. A clause read here and then attached to a kind nobody
+    # asks about would be worse than one nobody reads, so the attachment is
+    # gated on `CONDITIONAL_RESTRICTION_KINDS`.
+    condition: dict | None = None
+    qualifier = _AS_LONG_AS.match(normalized_line)
+    if qualifier is not None:
+        board = _controlled_noun(qualifier.group("board"))
+        if board is None:
+            return None
+        condition = {"who": qualifier.group("who").replace(" ", "_"), "subject": board}
+        normalized_line = qualifier.group("rest").strip()
+
     for pattern, kind in _PATTERNS:
         match = pattern.match(normalized_line)
         if match is None:
             continue
+        if condition is not None and kind not in CONDITIONAL_RESTRICTION_KINDS:
+            return None
         # Numeric captures reach handlers as ints: a payload whose type depends
         # on which regex matched is how a comparison silently becomes a string
         # compare. A printed number **word** is read here too — the regex only
@@ -453,6 +550,8 @@ def combat_restriction_for(
                 "exclude_subtypes": [excluded_subtype],
                 "controller": "you",
             }
+        if condition is not None:
+            payload["condition"] = condition
         return CombatRestriction(kind, payload)
     return None
 

@@ -692,9 +692,9 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, forty rounds in. 184 → 282 of 373 supported
-(75.6%), hollow lines 10 cards, and 42 unclaimed sentences across 29 of those
-282 — the third number is new, and the warning below says what it means.** The
+**Where it stands: Phase 3, forty-one rounds in. 184 → 283 of 373 supported
+(75.9%), hollow lines 10 cards, and 42 unclaimed sentences across 29 of those
+283 — the third number is new, and the warning below says what it means.** The
 count is now the *compiler's*: round 39 removed a gate that widened it, so the
 census and the refusal list inside `support_report.py` agree for the first time. The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
@@ -2256,6 +2256,49 @@ supertypes through layer 4 all along. The assertion is inverted now, with the
 playbook's rule written into it: when a round builds machinery near an old
 decline, re-probe the decline. The widening guard beside it points at phrases
 that really are outside the engine.
+
+**Round 41 — a combat restriction can be conditional, and the condition is
+payload. 282 → 283.**
+
+Arctic Foxes: "This creature can't be blocked by creatures with power 2 or
+greater **as long as defending player controls a snow land**." Every word of it
+but the last clause was already read — the blocker union has handled "creatures
+with power N or greater" since Amrou Kithkin — and the row's capture ends in
+`.+`, so the qualifier went *into* the union, which could not read it, and the
+whole line refused. That refusal was correct: admitting the match and leaving
+the tail unread is an evasion ability nothing enforces.
+
+The qualifier is stripped once, before any row is tried, exactly as
+`untap_restrictions._WHILE_UNTAPPED` strips "as long as this artifact is
+untapped". Both the seat and the noun phrase are payload, so "as long as you
+control an Island" is this clause rather than another one.
+
+**A clause read at the gate and ignored at the enforcement is worse than one
+nobody reads**, so the attachment is gated. `CONDITIONAL_RESTRICTION_KINDS`
+holds the kinds whose enforcement site actually asks — one today — and a
+qualifier on any other kind refuses the line instead of riding a payload nobody
+consults. That is `activation_restrictions.payload_readable`'s claim in another
+file: a row may match more sentences than it implements, and the ones it does
+not implement must refuse.
+
+**The condition's noun phrase goes through the grammar's noun parser**, not
+through `_blocker_noun` beside it. That reader is a hand-written mini-parser for
+the members of a blocker union and knows five shapes; "a snow land" is not one,
+and teaching it a sixth would be one more entry in the second vocabulary this
+file keeps. The board question here is the one
+`activation_restrictions._controlled_board_phrase` and round 40's
+`untap_restrictions._blocked_subject` already ask, so it gets the same answer.
+**`_blocker_noun` is still a second reader of printed nouns and is the obvious
+next thing to retire in that file** — not here, because its callers are unions
+and the noun parser reads one member at a time.
+
+**Hipparion is the other half of this sentence and is a round of its own.**
+"This creature can't block creatures with power 3 or greater **unless you pay
+{1}**" is CR 509.1b's cost-to-block, and the engine has the attack-side mirror
+of it already (round 24: `cant_attack_unless_pay`, with a per-declaration mana
+plan made before anything is tapped, because a per-creature predicate cannot say
+"and again for the next one"). The block side needs that plan built again over
+`declare_blockers`, which is why it is not folded in here.
 
 ## Where the sets landed
 

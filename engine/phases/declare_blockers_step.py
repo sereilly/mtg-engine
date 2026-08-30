@@ -577,7 +577,10 @@ class DeclareBlockersStepMixin:
         # on the attacker. A third channel beside the two below rather than a
         # branch of its own, because the class of blocker is the same filter
         # payload in all three — the difference is only where the record lives.
-        from ..combat_restrictions import granted_blocker_filters
+        from ..combat_restrictions import (
+            granted_blocker_filters,
+            restriction_condition_holds,
+        )
 
         for described in granted_blocker_filters(attacker):
             if subject_matches(self, blocker, described):
@@ -602,6 +605,21 @@ class DeclareBlockersStepMixin:
                     return False
                 continue
             if restriction.kind != "cant_be_blocked_by":
+                continue
+            # "…**as long as defending player controls a snow land**."
+            # (Arctic Foxes.) A qualifier on the restriction, stripped once in
+            # `combat_restrictions` rather than written into every row — and
+            # asked here, because a condition read at the gate and ignored at
+            # the enforcement would be an evasion ability that applies on every
+            # board. The seat "defending player" names is the blocker's
+            # controller; "you" is the attacker's, CR 109.5's observer for the
+            # ability this text is.
+            if not restriction_condition_holds(
+                self,
+                restriction.payload.get("condition"),
+                observer=self.controller_index_of(attacker),
+                defender=self.controller_index_of(blocker),
+            ):
                 continue
             # The printed noun phrase, already read into subject filters by
             # `combat_restrictions._blocker_union` — the same vocabulary the

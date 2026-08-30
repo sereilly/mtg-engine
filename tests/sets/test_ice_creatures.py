@@ -1326,3 +1326,86 @@ def test_a_landwalk_grant_is_gated_by_the_landwalk_reader_not_by_a_word_list(set
         assert "keyword implemented" in str(error)
     else:  # pragma: no cover - the assertion is the refusal
         raise AssertionError("an unimplemented keyword must still refuse")
+
+
+# --- Round 41: a combat restriction can be conditional, and it is payload ---
+def _r41_foxes(set_pool, defender_lands):
+    """Arctic Foxes attacking into a 3/3, with *defender_lands* on the far
+    side."""
+    foxes = _nosick(Permanent(card=set_pool("ICE")["Arctic Foxes"]))
+    blocker = _nosick(Permanent(card=set_pool("ICE")["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[foxes], life=20)
+    p2 = PlayerState(name="P2", battlefield=[blocker, *defender_lands], life=20)
+    game = Game(players=[p1, p2])
+    game.active_player_index = 0
+    return game, foxes, blocker
+
+
+def test_arctic_foxes_compiles_supported(set_pool):
+    """"This creature can't be blocked by creatures with power 2 or greater
+    **as long as defending player controls a snow land**."
+
+    The restriction was already readable; the trailing qualifier was not, and
+    the row's capture ends in `.+` — so the whole clause went into the blocker
+    union, which could not read it, and the line refused. The qualifier is
+    stripped once now, the way `untap_restrictions` strips "as long as this
+    artifact is untapped".
+    """
+    from engine.combat_restrictions import combat_restriction_for
+
+    program = compile_card_oracle(set_pool("ICE")["Arctic Foxes"])
+    assert program.supported, program.reason
+
+    restriction = combat_restriction_for(
+        "this creature can't be blocked by creatures with power 2 or greater "
+        "as long as defending player controls a snow land"
+    )
+    assert restriction.kind == "cant_be_blocked_by"
+    assert restriction.payload["condition"] == {
+        "who": "defending_player",
+        "subject": {"type_filter": "land", "supertypes": ["snow"]},
+    }
+
+
+def test_arctic_foxes_evasion_is_off_without_the_snow_land(set_pool):
+    """The condition is the whole point of the card: with no snow land on the
+    far side the 2/2 blocks normally."""
+    game, foxes, blocker = _r41_foxes(set_pool, [])
+    game.declare_attackers(0, [0])
+
+    assert game._can_block_attacker(blocker, foxes)
+
+
+def test_arctic_foxes_evasion_is_on_with_a_snow_land(set_pool):
+    """And with one it is not blockable by anything that big. `subject_matches`
+    answers the noun phrase, so it is a *snow* land the defender needs — not
+    any land, and not one of the attacker's."""
+    snow = Permanent(card=set_pool("ICE")["Snow-Covered Forest"])
+    game, foxes, blocker = _r41_foxes(set_pool, [snow])
+    game.declare_attackers(0, [0])
+
+    assert not game._can_block_attacker(blocker, foxes)
+
+
+def test_arctic_foxes_reads_the_defenders_board_not_its_own(set_pool):
+    """"Defending player controls" is the seat being attacked. A snow land on
+    the *attacker's* side leaves the restriction off."""
+    snow = Permanent(card=set_pool("ICE")["Snow-Covered Forest"])
+    game, foxes, blocker = _r41_foxes(set_pool, [])
+    game.players[0].battlefield.append(snow)
+    game.declare_attackers(0, [0])
+
+    assert game._can_block_attacker(blocker, foxes)
+
+
+def test_a_condition_on_a_kind_nothing_asks_about_refuses_the_line(set_pool):
+    """The qualifier is attached only to kinds whose enforcement site asks.
+    Anywhere else it would be a restriction applied unconditionally — silently,
+    and in the direction of doing more than the card says — so the line refuses
+    and its card is unsupported naming the clause."""
+    from engine.combat_restrictions import combat_restriction_for
+
+    assert combat_restriction_for(
+        "this creature can't block as long as you control a snow land"
+    ) is None
+    assert combat_restriction_for("this creature can't block") is not None
