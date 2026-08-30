@@ -766,10 +766,25 @@ def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:
     ``_parse_doesnt_untap_next_step`` is.
     """
     mark = stream.mark()
-    if stream.accept_word("destroy"):
+    # "**Its controller** sacrifices it at the beginning of the next end step."
+    # (Celestial Sword.) The same sentence with its actor written out: a
+    # sacrifice is performed by the permanent's controller and by nobody else
+    # (CR 701.21a), so naming them narrows nothing and the verb below reads the
+    # rest unchanged. Consumed here rather than admitted as "another player
+    # sacrificing", which is what the general sacrifice lowering refused it as.
+    named_controller = stream.accept_phrase("its", "controller")
+    if stream.accept_word("destroy") and not named_controller:
         action = "destroy"
-    elif stream.accept_word("return"):
+    elif not named_controller and stream.accept_word("return"):
         action = "bounce"
+    elif stream.accept_word("sacrifice", "sacrifices"):
+        # "Sacrifice **it** at the beginning of the next end step." (Krovikan
+        # Elementalist.) It was reaching the general delayed-trigger production
+        # instead, which reads the pronoun as the *source* — so the card
+        # sacrificed the Elementalist rather than the creature it had just
+        # given flying to. One sentence, one production, and the referent
+        # decided where the target is known.
+        action = "sacrifice"
     else:
         stream.reset(mark)
         return None

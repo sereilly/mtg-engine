@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**337 / 612 tracked rules covered (55%)** — 1655 tests, 0 unannotated.
+**337 / 612 tracked rules covered (55%)** — 1659 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -685,7 +685,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(4 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(1 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(2 tests, subrules c)*
-- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(14 tests, subrules bcde)*
+- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(16 tests, subrules bcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(3 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
 - [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(3 tests)*
@@ -859,7 +859,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.18** Play *(4 tests, subrules a)*
 - [x] **701.19** Regenerate *(23 tests, subrules abc)*
 - [x] **701.20** Reveal *(2 tests, subrules a)*
-- [x] **701.21** Sacrifice *(8 tests, subrules a)*
+- [x] **701.21** Sacrifice *(10 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(2 tests, subrules a)*
 - [x] **701.24** Shuffle *(2 tests, subrules a)*

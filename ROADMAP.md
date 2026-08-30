@@ -692,9 +692,9 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, thirty-four rounds in. 184 → 277 of 373 supported
-(74.3%), hollow lines 10 cards, and 44 unclaimed sentences across 29 of those
-277 — the third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
+**Where it stands: Phase 3, thirty-five rounds in. 184 → 278 of 373 supported
+(74.5%), hollow lines 10 cards, and 44 unclaimed sentences across 29 of those
+278 — the third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
@@ -711,7 +711,7 @@ upkeep alone with a whole printed paragraph compiling to nothing, Fire Covenant'
 
 Only 10 of those show in `--hollow-lines`, because a line that produces no
 *ability part* leaves nothing for that probe to find hollow. So the honest
-reading of "277 supported" is "277 compile, 248 of them with every printed line
+reading of "278 supported" is "278 compile, 249 of them with every printed line
 accounted for". **One round is still scheduled**: the support gate admits an
 artifact or enchantment when *any* ability of it is implemented — round 1's
 second finding ("a widened gate hid a static line") for a card type the round-1
@@ -723,7 +723,7 @@ one of them legitimately implemented through a reader the claim chain does not
 consult. The round is larger than this note made it sound; read round 32's
 entry before starting it.
 
-**The remaining 96 are a long tail, and the shape is Legends' rather than
+**The remaining 95 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
@@ -1897,6 +1897,54 @@ life" (Fire Covenant) stays deliberately unread — X is announced as the spell 
 cast (CR 601.2b) and this engine resolves it *after* additional costs are
 charged, so a clause for it would charge zero. It stays in the parse-coverage
 backlog, which is where an unimplemented cost belongs.
+
+**Round 35 — the pronoun names what the sentence in front of it chose.
+277 → 278, and one supported card stopped killing the wrong permanent.**
+
+`_parse_delayed_self_action` reads "Destroy **this artifact** at the beginning
+of the next end step" (Rocket Launcher) and "Destroy **it** …" (Glyph of
+Destruction), and its comment already says the hard part: the printed pronoun
+does not say whether the spell chose a target or the ability is its own subject,
+so the referent is decided at resolution with the source as the fallback. That
+is right, and it read two verbs — `destroy` and `return`.
+
+**"Sacrifice" was not one of them**, so "Sacrifice it at the beginning of the
+next end step" fell through to the general delayed-trigger production, which
+reads "it" as the source. Krovikan Elementalist — "{U}{U}: Target creature you
+control gains flying until end of turn. Sacrifice it at the beginning of the
+next end step" — was **supported** and armed the sacrifice on *itself*: the
+Elementalist died at end of turn and the creature it had just given flying to
+walked away. One sentence, two productions, and only one of them asked what the
+pronoun named.
+
+Celestial Sword prints the same delayed sacrifice with the actor written out —
+"**Its controller** sacrifices it at the beginning of the next end step" — and
+was refused as "no handler for another player sacrificing", which is the one
+reading the sentence cannot have: a sacrifice is its controller moving their own
+permanent and nobody else can perform it (CR 701.21a), so naming them narrows
+nothing. Both spellings are the same production now.
+
+The end step already swept `sacrifice_at_next_end_step` beside
+`destroy_at_next_end_step`, and its comment already said why the two are kept
+apart — a sacrifice is not a destruction, so no replacement effect applies to
+it. Only the arming handler had no way to write the first key.
+
+**Measured before and after over the whole pool**: exactly two cards' compiled
+programs changed, Celestial Sword and Krovikan Elementalist. Dragon Whelp's
+"sacrifice this creature at the beginning of the next end step" and every other
+printing of the sentence are byte-identical, which is what says the explicit
+spelling kept the reading it had.
+
+**Norritt is the next round and the measurement is worth recording.** It prints
+Nettling Imp's ability *verbatim* apart from the activation restriction —
+"Activate only before attackers are declared" against "Activate only during an
+opponent's turn, before attackers are declared" — and Nettling Imp is a
+**name-keyed card hook whose key is the whole line, restriction included**. So
+the second card printing the effect gets nothing, which is exactly what
+`HOOK_RELIANCE.md` measures. Retiring it needs a paragraph production for the
+three-sentence template (none of whose sentences parses today) plus the shorter
+restriction; Arcum's Whistle prints the same opening sentence and would move
+with it.
 
 ## Where the sets landed
 

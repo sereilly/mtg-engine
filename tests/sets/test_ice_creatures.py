@@ -1067,3 +1067,42 @@ def test_and_still_joins_two_effects_rather_than_two_objects(set_pool):
     assert [i.kind for i in joined.instructions] == [
         "destroy_target_permanent", "draw_target_cards",
     ]
+
+
+# --- Round 35: the pronoun names what the sentence in front of it chose ---
+
+
+def test_krovikan_elementalist_sacrifices_the_creature_it_gave_flying(set_pool):
+    """"{U}{U}: Target creature you control gains flying until end of turn.
+    Sacrifice it at the beginning of the next end step."
+
+    "It" is the creature the first sentence targeted. The card was **supported**
+    and armed the sacrifice on *itself*: the sentence reached the general
+    delayed-trigger production, which reads the pronoun as the ability's source.
+    So the Elementalist died at end of turn and the creature it had just given
+    flying to walked away — a card doing something other than what it prints,
+    with nothing failing.
+    """
+    elementalist = Permanent(card=set_pool("ICE")["Krovikan Elementalist"])
+    bear = Permanent(card=set_pool("ICE")["Balduvian Bears"])
+    _nosick(elementalist)
+    p1 = PlayerState(
+        name="P1", battlefield=[elementalist, bear], life=20, mana_pool={"U": 2}
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game.activate_permanent_ability(
+        0, "Krovikan Elementalist", ability_index=1,
+        target_permanent_index=1, target_player_index=0,
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert bear.has_keyword("flying")
+    assert bear.metadata.get("sacrifice_at_next_end_step") is True
+    assert elementalist.metadata.get("sacrifice_at_next_end_step") is None
+
+    game.resolve_end_step(0)
+
+    assert [p.card.name for p in p1.battlefield] == ["Krovikan Elementalist"]
+    assert [c.name for c in p1.graveyard] == ["Balduvian Bears"]

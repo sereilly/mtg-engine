@@ -512,8 +512,16 @@ def arm_self_action_at_next_end_step(game: Game, instruction: OracleInstruction,
     # from a payload flag — so writing a second queue beside it would have been
     # two mechanisms for one rule, and the *older* one is the one every other
     # delayed removal in the engine (Dragon Whelp, Berserk) already uses.
+    # "**Sacrifice** it at the beginning of the next end step." (Krovikan
+    # Elementalist, Celestial Sword.) Its own flag rather than the destruction
+    # one, because the end step's sweep already reads both and its comment says
+    # why keeping them apart is a rules feature: a sacrifice is not a
+    # destruction (CR 701.21a), so no replacement effect applies to it.
     action = str(instruction.payload.get("self_action", "destroy"))
-    key = "bounce_at_next_end_step" if action == "bounce" else "destroy_at_next_end_step"
+    key = {
+        "bounce": "bounce_at_next_end_step",
+        "sacrifice": "sacrifice_at_next_end_step",
+    }.get(action, "destroy_at_next_end_step")
     source.metadata[key] = True
     return True, "resolved"
 

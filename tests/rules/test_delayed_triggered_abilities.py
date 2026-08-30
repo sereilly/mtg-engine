@@ -389,3 +389,102 @@ def test_a_next_turns_upkeep_delay_survives_the_turn_it_was_created_in():
     game.resolve_cleanup_step(0)
 
     assert game.delayed_triggers, "the ability waits for the step it names"
+
+
+# ---------------------------------------------------------------------------
+# Which object the ability names (CR 603.7, CR 701.21a)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("603.7")
+def test_603_7_the_pronoun_names_what_the_sentence_in_front_of_it_chose():
+    """"Target creature you control gains flying until end of turn. **Sacrifice
+    it** at the beginning of the next end step." (Krovikan Elementalist.)
+
+    "It" is the creature the first sentence targeted. The sentence reached the
+    general delayed-trigger production instead, which reads the pronoun as the
+    ability's *source* — so the card armed the sacrifice on itself and left the
+    creature it had just given flying to alone. Glyph of Destruction prints the
+    same pronoun in the same position with "destroy" and has always bound the
+    target; one sentence, one production.
+    """
+    from engine.grammar import compile_line
+
+    sacrificed = compile_line(
+        "Sacrifice it at the beginning of the next end step."
+    ).instructions
+    destroyed = compile_line(
+        "Destroy it at the beginning of the next end step."
+    ).instructions
+
+    assert [i.kind for i in sacrificed] == ["arm_self_action_at_next_end_step"]
+    assert sacrificed[0].payload["subject"] == "bound"
+    assert destroyed[0].payload["subject"] == "bound", "the sibling it joins"
+
+
+@pytest.mark.cr("603.7")
+def test_603_7_the_source_spelling_still_names_the_source():
+    """"Sacrifice **this creature** at the beginning of the next end step." The
+    referent is not decided by the production — the printed word is — so the
+    explicit spelling keeps the reading every card printing it had."""
+    from engine.grammar import compile_line
+
+    armed = compile_line(
+        "Sacrifice this creature at the beginning of the next end step."
+    ).instructions
+
+    assert "subject" not in armed[0].payload, "absent means the source"
+
+
+@pytest.mark.cr("701.21a")
+def test_701_21a_naming_the_controller_of_a_sacrifice_narrows_nothing():
+    """"**Its controller** sacrifices it at the beginning of the next end step."
+    (Celestial Sword.)
+
+    A sacrifice is its controller moving their own permanent to the graveyard
+    and nobody else can perform it, so writing the actor out says what the rule
+    already says. It was refused as "another player sacrificing", which is the
+    one reading the sentence cannot have.
+    """
+    from engine.grammar import compile_line
+
+    spelled_out = compile_line(
+        "Its controller sacrifices it at the beginning of the next end step."
+    ).instructions
+    bare = compile_line(
+        "Sacrifice it at the beginning of the next end step."
+    ).instructions
+
+    assert [i.kind for i in spelled_out] == [i.kind for i in bare]
+    assert spelled_out[0].payload == bare[0].payload
+
+
+@pytest.mark.cr("701.21a")
+def test_701_21a_the_delayed_sacrifice_is_recorded_as_one_not_as_a_destruction():
+    """The end step sweeps both flags and keeps them apart deliberately: a
+    sacrifice is not a destruction (no replacement effect applies to it), so
+    the armed action writes its own key rather than borrowing the neighbour's.
+    """
+    from engine.handlers import EFFECT_HANDLERS
+    from engine.game_types import OracleExecutionContext
+
+    game = Game(players=[PlayerState(name="P1", life=20), PlayerState(name="P2", life=20)])
+    bear = Permanent(card=_creature("Bear"))
+    game.players[0].battlefield.append(bear)
+    context = OracleExecutionContext(
+        caster=game.players[0], target=game.players[0], card=_SOURCE,
+        source_permanent=bear,
+    )
+
+    EFFECT_HANDLERS["arm_self_action_at_next_end_step"](
+        game, OracleInstruction("arm_self_action_at_next_end_step", "",
+                                {"self_action": "sacrifice"}), context,
+    )
+
+    assert bear.metadata.get("sacrifice_at_next_end_step") is True
+    assert "destroy_at_next_end_step" not in bear.metadata
+
+    game.resolve_end_step(0)
+
+    assert bear not in game.players[0].battlefield
+    assert [c.name for c in game.players[0].graveyard] == ["Bear"]

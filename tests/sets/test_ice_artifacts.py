@@ -186,3 +186,40 @@ def test_pentagram_of_the_ages_shield_waits_for_the_source_it_chose(set_pool):
 
     assert _damage_dealt(game, p1, 3, source=other) == 3
     assert _damage_dealt(game, p1, 3, source=ogre) == 0
+
+
+# --- Round 35: the pronoun names what the sentence in front of it chose ---
+
+
+def test_celestial_sword_sacrifices_the_creature_it_pumped(set_pool):
+    """"{3}, {T}: Target creature you control gets +3/+3 until end of turn. Its
+    controller sacrifices it at the beginning of the next end step."
+
+    Krovikan Elementalist prints the same delayed sacrifice with the actor left
+    implicit; this one writes it out. A sacrifice is its controller moving their
+    own permanent and nobody else can perform it (CR 701.21a), so naming them
+    narrows nothing — and it was refused as "another player sacrificing", the
+    one reading the sentence cannot have.
+    """
+    sword = Permanent(card=set_pool("ICE")["Celestial Sword"])
+    bear = Permanent(card=set_pool("ICE")["Balduvian Bears"])
+    _nosick(sword)
+    p1 = PlayerState(
+        name="P1", battlefield=[sword, bear], life=20, mana_pool={"C": 3}
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    result = game.activate_permanent_ability(
+        0, "Celestial Sword", target_permanent_index=1, target_player_index=0
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert result.supported
+    assert sword.tapped
+    assert (bear.effective_power, bear.effective_toughness) == (5, 5)
+
+    game.resolve_end_step(0)
+
+    assert [p.card.name for p in p1.battlefield] == ["Celestial Sword"]
+    assert [c.name for c in p1.graveyard] == ["Balduvian Bears"]
