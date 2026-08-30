@@ -259,3 +259,73 @@ def test_a_derived_static_rule_that_is_real_behaviour_still_supports_its_card(se
     pool = {c.name: c for c in load_cards(manifest_set_paths())}
     for name in ("Winter Orb", "Howling Mine", "Gloom", "Meekstone"):
         assert compile_card_oracle(pool[name]).supported, name
+
+
+# --- W1G2: combat relations and end of combat ---
+def test_runed_arch_compiles_its_ability_to_an_instruction(set_pool):
+    """The card was reported *supported* on its "enters tapped" line alone
+    while its whole activated ability compiled to nothing — a hollow line.
+
+    The bound is payload now. It used to be a literal in the handler's source
+    and again in legality.py's enumerator, under a kind that admitted exactly
+    one target and exactly one narrowing, so "X target creatures with power 2
+    or less" refused and the ability vanished."""
+    program = compile_card_oracle(set_pool("ICE")["Runed Arch"])
+
+    assert program.supported
+    (ability,) = program.activated_abilities
+    assert ability.instruction is not None, "the printed ability must do something"
+    assert ability.instruction.kind == "grant_unblockable_to_target"
+    assert ability.instruction.payload["power"] == {"op": "le", "value": 2}
+    assert ability.instruction.payload["targets"]["count"] == "x"
+
+
+def test_runed_arch_makes_x_creatures_unblockable(set_pool):
+    """X = 2, two creatures chosen, and both stop being blockable."""
+    pool = set_pool("ICE")
+    arch = _nosick(Permanent(card=pool["Runed Arch"]))
+    first = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    second = _nosick(Permanent(card=pool["Brown Ouphe"]))
+    p1 = PlayerState(name="P1", battlefield=[arch, first, second], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    result = game.activate_permanent_ability(
+        0, "Runed Arch", x_value=2,
+        target_permanent_ids=[first.permanent_id, second.permanent_id],
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert first.metadata.get("cant_be_blocked_until_eot")
+    assert second.metadata.get("cant_be_blocked_until_eot")
+
+
+def test_runed_arch_offers_only_creatures_within_its_power_bound(set_pool):
+    """The bound reaches the picker through the target description.
+
+    Before it was payload, the description was omitted outright and a
+    hardcoded branch in legality.py answered for the one card that printed it.
+    """
+    from engine.targeting import derive_activation_spec
+
+    pool = set_pool("ICE")
+    arch = _nosick(Permanent(card=pool["Runed Arch"]))
+    small = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    big = _nosick(Permanent(card=pool["Tor Giant"]))
+    p1 = PlayerState(name="P1", battlefield=[arch, small, big], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    (ability,) = compile_card_oracle(arch.card).activated_abilities
+    spec = derive_activation_spec(ability)
+    offered = game._enumerate_targets(
+        0, arch.card, spec, for_cast=False,
+        ability_instruction=ability.instruction,
+        source_permanent=arch, ability_source=arch,
+    )
+    named = {
+        game.players[t["seat"]].battlefield[t["index"]].card.name
+        for t in offered if t["kind"] == "permanent"
+    }
+
+    assert named == {"Balduvian Bears"}, named
+# --- end W1G2 ---

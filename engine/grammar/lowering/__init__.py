@@ -236,7 +236,6 @@ from .stack import (
     _lower_modal_head,
 )
 from .combat import (
-    _UNBLOCKABLE_POWER_LIMIT,
     _lower_combat_restriction,
     _lower_cant_be,
     _lower_attack_as_though,
@@ -434,7 +433,6 @@ __all__ = [
     "_lower_counter_spell",
     "_lower_create_delayed_trigger",
     "_lower_modal_head",
-    "_UNBLOCKABLE_POWER_LIMIT",
     "_lower_combat_restriction",
     "_lower_cant_be",
     "_lower_attack_as_though",

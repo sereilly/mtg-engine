@@ -411,7 +411,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "add_named_counter_to_target": {"kind": "creature"},
     "grant_flying_and_delayed_destruction": {"kind": "creature"},
     "grant_unblockable_to_target": {"kind": "creature"},
-    "grant_unblockable_to_low_power_target": {"kind": "creature"},
     "steal_creature_while_tapped_and_weaker": {"kind": "creature"},
     "deny_regeneration_to_target": {"kind": "creature"},
     "pump_target_creature_until_eot": {"kind": "creature"},

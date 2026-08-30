@@ -470,7 +470,6 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # payload the blockers step tests — the arrangement the static printings in
     # engine/combat_restrictions.py already use.
     "grant_cant_be_blocked_by_until_eot": "evasion",
-    "grant_unblockable_to_low_power_target": "evasion",
     "grant_unblockable_to_self": "evasion",
     # Restrictions on declaring attackers/blockers (CR 506, 509).
     "cant_attack_unless_defender_controls": "combat_restrictions",

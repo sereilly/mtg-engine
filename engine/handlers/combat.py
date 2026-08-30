@@ -9,6 +9,7 @@ from ._common import (
     resolve_own_combatant,
     resolve_role_permanent,
     resolve_target_permanent,
+    resolve_target_permanents,
     roles_still_legal,
 )
 from .registry import effect_handler
@@ -602,21 +603,72 @@ def grant_unblockable_to_self(game: Game, instruction: OracleInstruction, contex
 
 @effect_handler("grant_unblockable_to_target")
 def grant_unblockable_to_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """"Target creature can't be blocked this turn." (Teleport.)
+    """"Target creature can't be blocked this turn." (Teleport) / "…with
+    **power 2 or less**…" (Dwarven Warriors) / "**X target creatures** with
+    power 2 or less…" (Runed Arch) / "…**you control**…" (Goblin Sappers).
 
-    The unrestricted printing: any creature is a legal target, so the only
-    thing to honour is the choice itself. The sibling below is the one whose
-    printed line narrows the target by power.
+    One handler for all four, because the only difference between them is the
+    noun phrase, and a noun phrase is something ``subject_matches`` answers.
+    Dwarven Warriors used to have a handler of its own with "power 2 or less"
+    written into its source — and again into ``legality.py``'s enumerator — so
+    every other printing of the template refused.
+
+    The filter is re-tested **here** and not only by the picker: CR 608.2b's
+    check at resolution is what stops a creature that has been pumped past the
+    bound since activation from being made unblockable, and a target the picker
+    offered is not a target the effect still applies to.
     """
-    target_creature = resolve_target_permanent(
-        game, context, predicate=lambda p: p.is_creature
+    from ..subject_filters import subject_matches
+
+    described = {
+        key: value for key, value in instruction.payload.items()
+        if key != "targets"
+    }
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
     )
-    if target_creature is None:
+
+    def _legal(perm: Permanent) -> bool:
+        return perm.is_creature and subject_matches(
+            game, perm, described,
+            observer=observer, source=context.source_permanent,
+        )
+
+    # "X target creatures" resolves a *list*, and strictly: a per-slot fallback
+    # would silently make one creature unblockable twice where the player chose
+    # two (`resolve_target_permanents`).
+    if _names_a_list(instruction):
+        chosen = resolve_target_permanents(game, context, predicate=_legal)
+    else:
+        one = resolve_target_permanent(game, context, predicate=_legal)
+        chosen = [one] if one is not None else []
+    if not chosen:
         game.log.append(f"{context.card.name}: no creature to make unblockable")
         return True, "resolved"
-    target_creature.metadata["cant_be_blocked_until_eot"] = True
-    game.log.append(f"{target_creature.card.name} can't be blocked this turn")
+    for target_creature in chosen:
+        target_creature.metadata["cant_be_blocked_until_eot"] = True
+        game.log.append(f"{target_creature.card.name} can't be blocked this turn")
     return True, "resolved"
+
+
+def _names_a_list(instruction: OracleInstruction) -> bool:
+    """Whether the instruction's target description names more than one slot.
+
+    Read off the description the lowering wrote rather than off the choices the
+    resolution happens to carry: a two-target ability whose player named one
+    creature is still a two-target ability, and deciding by what arrived would
+    make the strict multi-slot resolution silently fall back to the forgiving
+    single-slot one.
+    """
+    targets = instruction.payload.get("targets")
+    if not isinstance(targets, dict):
+        return False
+    count = targets.get("count")
+    return (
+        count == "x"
+        or (isinstance(count, int) and count > 1)
+        or bool(targets.get("unbounded"))
+    )
 
 
 @effect_handler("target_cant_block_until_eot")
@@ -676,22 +728,6 @@ def grant_cant_be_blocked_by_until_eot(game: Game, instruction: OracleInstructio
         f"{target_creature.card.name} can't be blocked by matching creatures "
         f"this turn ({context.card.name})"
     )
-    return True, "resolved"
-
-
-@effect_handler("grant_unblockable_to_low_power_target")
-def grant_unblockable_to_low_power_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    # Honor the specifically chosen creature (the player picked one in the UI);
-    # fall back to the first eligible creature only for AI/headless casts with no
-    # explicit target. Either way the "power 2 or less" restriction is enforced.
-    target_creature = resolve_target_permanent(
-        game, context, predicate=lambda p: p.is_creature and p.effective_power <= 2
-    )
-    if target_creature is not None:
-        target_creature.metadata["cant_be_blocked_until_eot"] = True
-        game.log.append(f"{target_creature.card.name} can't be blocked this turn")
-    else:
-        game.log.append("No valid low-power creature for unblockable effect")
     return True, "resolved"
 
 
