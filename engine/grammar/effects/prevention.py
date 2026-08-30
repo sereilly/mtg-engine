@@ -148,6 +148,35 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
     )
 
 
+def _finish_named_source_shield(
+    stream: TokenStream, source_filter: "ast.ObjectFilter", mark
+) -> "ast.PreventDamage | None":
+    """The tail of "The next time <named source> would deal damage to
+    <recipient> <duration>, prevent that damage." (Mercenaries.)
+
+    Split out because the sibling branch reads seven more words before reaching
+    the same clause; keeping the tail in one function is what stops the two from
+    drifting into two readings of one sentence.
+
+    Only "prevent that damage" — the halving and the redirect the chosen-source
+    branch also reads have no printing with a *named* source, and refusing here
+    names that rather than lowering one of them onto a shield that answers to
+    the wrong object.
+    """
+    recipient = parse_recipient(stream)
+    if recipient is None:
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    stream.accept_punct(",")
+    if not stream.accept_phrase("prevent", "that", "damage"):
+        stream.reset(mark)
+        return None
+    return ast.PreventDamage(
+        ast.Fixed(1), to=recipient, from_filter=source_filter, duration=duration
+    )
+
+
 def _parse_source_of_choice_effect(
     stream: TokenStream,
 ) -> "ast.PreventDamage | ast.RedirectDamage | None":
@@ -172,11 +201,24 @@ def _parse_source_of_choice_effect(
     if not stream.accept_phrase("the", "next", "time"):
         stream.reset(mark)
         return None
-    if not (stream.accept_word("a") or stream.accept_word("an")):
-        stream.reset(mark)
-        return None
     colours: list[str] = []
     card_type = None
+    if not (stream.accept_word("a") or stream.accept_word("an")):
+        # "The next time **this creature** would deal damage to you this turn,
+        # prevent that damage." (Mercenaries.) The same CR 615.8 sentence with
+        # the source *named* instead of chosen — a branch of this production
+        # rather than one of its own, because everything from "would deal
+        # damage to" onward is the identical clause and two productions racing
+        # on "the next time" would differ only in how the second rewinds.
+        named = parse_recipient(stream)
+        if (
+            not isinstance(named, ast.TargetSpec)
+            or not named.filter.is_source
+            or not stream.accept_phrase("would", "deal", "damage", "to")
+        ):
+            stream.reset(mark)
+            return None
+        return _finish_named_source_shield(stream, named.filter, mark)
     token = stream.peek()
     word = str(token.text).lower() if token is not None else ""
     if word in COLOR_WORDS:

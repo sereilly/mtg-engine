@@ -1497,4 +1497,74 @@ def test_kjeldoran_royal_guard_does_not_move_noncombat_damage(set_pool):
 
     assert p2.life == 17
     assert guard.damage_marked == 0
+
+
+def test_mercenaries_shields_the_player_who_paid_for_it(set_pool):
+    """"{3}: The next time this creature would deal damage to you this turn,
+    prevent that damage. Any player may activate this ability."
+
+    "You" is the *activator* (CR 109.5) — the seat that paid — not the
+    creature's controller, which is the whole reason the second sentence is
+    printed. CR 615.8's whole-instance shield, so the whole attack is absorbed
+    however big it is.
+    """
+    pool = set_pool("ICE")
+    mercs = _nosick(Permanent(card=pool["Mercenaries"]))
+    p1 = PlayerState(name="P1", battlefield=[mercs], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    # Seat 1 does not control it; the printed permission is what lets them
+    # reach it at all.
+    result = game.activate_permanent_ability(
+        1, "Mercenaries", permanent_index=0, source_controller_index=0
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    _w1g1_combat(game, [0])
+    game.advance_combat_phase()
+
+    assert p2.life == 20, "the shield the defender paid for absorbed the attack"
+
+
+def test_mercenaries_shields_nobody_else(set_pool):
+    """The shield hangs off the seat that activated it, so a third player — or
+    the creature's own controller, who never paid — is untouched."""
+    pool = set_pool("ICE")
+    mercs = _nosick(Permanent(card=pool["Mercenaries"]))
+    p1 = PlayerState(name="P1", battlefield=[mercs], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    assert game.activate_permanent_ability(
+        1, "Mercenaries", permanent_index=0, source_controller_index=0
+    ).supported
+    game._settle()
+    game._deal_damage_to_player(p1, 3, source=mercs)
+
+    assert p1.life == 17
+
+
+def test_mercenaries_only_stops_its_own_damage(set_pool):
+    """CR 615.8's shield records the source it waits for, so another creature's
+    damage goes through — the printed "this creature" is honoured rather than
+    being read as a Circle against every creature."""
+    pool = set_pool("ICE")
+    mercs = _nosick(Permanent(card=pool["Mercenaries"]))
+    other = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[mercs, other], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    assert game.activate_permanent_ability(
+        1, "Mercenaries", permanent_index=0, source_controller_index=0
+    ).supported
+    game._settle()
+    game._deal_damage_to_player(p2, 2, source=other)
+
+    assert p2.life == 18
 # --- end W1G1 ---

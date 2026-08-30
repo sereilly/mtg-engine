@@ -99,6 +99,16 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
         # colourless Circle of Protection.
         colours = node.from_filter.colors
         card_types = node.from_filter.card_types
+        if node.from_filter.is_source:
+            # "The next time **this creature** would deal damage to you this
+            # turn, prevent that damage." (Mercenaries.) The source is the
+            # permanent the ability is on, so nothing is chosen and nothing is
+            # rechecked as a property — which is why it is a payload flag on the
+            # whole-instance shield rather than a Circle keyed on "creature".
+            # Read **before** the axis check below, which would see the printed
+            # noun as a card type and arm a shield against every creature on the
+            # board.
+            return _lower_named_source_shield(node)
         # "…a source of your choice…", with no property recorded at all
         # (Pentagram of the Ages). CR 615.8's plain sentence, and the one every
         # other branch here is a narrowing of — the pool printed the colour, the
@@ -201,6 +211,67 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
         raise LoweringError("no handler for this prevention recipient", node=node)
     _describe_targets(payload, recipient)
     return (OracleInstruction("grant_prevention_shield", "", payload),)
+
+
+def _lower_named_source_shield(
+    node: ast.PreventDamage,
+) -> tuple[OracleInstruction, ...]:
+    """Mercenaries: "{3}: The next time this creature would deal damage to you
+    this turn, prevent that damage."
+
+    ``grant_whole_prevention_shield`` with one payload key rather than a kind of
+    its own: CR 615.8's whole-instance shield is what it arms either way, and
+    the only difference is where the source comes from — a chosen object for
+    Pentagram of the Ages, and the ability's own permanent here.
+
+    "You" is the **activator**, not the permanent's controller, and on this card
+    that is the whole point: the ability is printed beside "Any player may
+    activate this ability", so the seat that pays is the seat that is shielded
+    (CR 109.5). The handler arms on ``context.caster``, which is that seat.
+
+    Four refusals, each a way the sentence could otherwise mean more:
+
+    * the recipient must be the ability's controller. There is no handler that
+      arms this shield on a chosen object, and a shield armed on the wrong
+      recipient absorbs damage the card never covered.
+    * exactly one instance. "Prevent the next N damage … " from a named source
+      is a point pool, and this handler spends the shield on the event whatever
+      its size.
+    * the source must carry no narrowing beyond naming itself. A restated
+      adjective has nothing left to narrow and would be dropped.
+    * the duration must be this turn, because that is what the sweep gives it.
+    """
+    if not _is_you(node.to):
+        raise LoweringError(
+            "a named-source shield only protects the seat that activated it",
+            node=node,
+        )
+    if not isinstance(node.amount, ast.Fixed) or node.amount.value != 1:
+        raise LoweringError(
+            "a named-source shield prevents the whole instance, not a counted "
+            "amount",
+            node=node,
+        )
+    if _restrictions_beyond(
+        node.from_filter, frozenset({"card_types", "is_source"})
+    ):
+        raise LoweringError(
+            "the ability's own source carries no narrowing the shield could "
+            "honour",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "the named-source shield lasts exactly this turn", node=node
+        )
+    if node.combat_only or node.dealt_by is not None or node.dealt_by_others:
+        raise LoweringError(
+            "no named-source shield is scoped to combat or to a second source",
+            node=node,
+        )
+    return (
+        OracleInstruction("grant_whole_prevention_shield", "", {"from_source": True}),
+    )
 
 
 def _lower_prevent_from_subject(

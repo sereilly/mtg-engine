@@ -200,9 +200,30 @@ def grant_whole_prevention_shield(game: Game, instruction: OracleInstruction, co
     will deal its damage with — because it is the same printed phrase (CR
     615.8). What differs is only what happens after the prevention, which here
     is nothing: Reverse Damage's sentence continues and this one stops.
+
+    ``from_source`` is the third way the sentence names its source: not chosen
+    at all, but printed — "The next time **this creature** would deal damage to
+    you this turn" (Mercenaries). One payload key rather than a kind of its own,
+    because the shield it arms is the same whole-instance shield; only where the
+    source comes from differs.
+
+    The shield goes on ``caster`` either way, and on this card that is not the
+    permanent's controller: Mercenaries prints "Any player may activate this
+    ability", so the seat that paid is the seat protected (CR 109.5).
     """
     caster = context.caster
     granted_by = context.card.name if context.card else None
+    if instruction.payload.get("from_source"):
+        source_perm = context.source_permanent
+        if source_perm is None:
+            game.log.append(f"{granted_by}: its own source is gone")
+            return True, "resolved"
+        add_shield(caster, make_whole_source(source_perm, granted_by))
+        game.log.append(
+            f"{caster.name} will prevent the next damage {source_perm.card.name} "
+            "would deal them"
+        )
+        return True, "resolved"
     if context.stack_target is not None:
         chosen = context.stack_target.card
     else:
