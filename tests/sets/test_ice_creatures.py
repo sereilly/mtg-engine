@@ -1500,4 +1500,58 @@ def test_kjeldoran_frostbeast_out_of_combat_destroys_nothing(set_pool):
 
     assert any(p is beast for p in p1.battlefield)
     assert any(p is bystander for p in p2.battlefield)
+
+
+def test_sibilant_spirit_offers_the_draw_to_the_player_being_attacked(set_pool):
+    """"Whenever this creature attacks, defending player may draw a card."
+
+    The offer is made to the seat the *combat* named, not to the ability's
+    controller — the whole point of the card, and the direction a wrong seat
+    would be wrong in.
+    """
+    pool = set_pool("ICE")
+    spirit = _nosick(Permanent(card=pool["Sibilant Spirit"]))
+    p1 = PlayerState(name="P1", battlefield=[spirit], life=20)
+    p2 = PlayerState(
+        name="P2", life=20,
+        library=[pool["Balduvian Bears"], pool["Tor Giant"]],
+    )
+    game = Game(players=[p1, p2])
+    p1.library = [pool["Brown Ouphe"]]
+
+    program = compile_card_oracle(spirit.card)
+    (trigger,) = program.triggered_abilities
+    assert trigger.instruction.kind == "may"
+    assert trigger.instruction.payload["actor"] == "defending_player"
+
+    _w1g2_combat(game, [0], {})
+    game._settle()
+
+    (offer,) = game.pending_optional_pays
+    assert offer["card_name"] == "Sibilant Spirit"
+    assert game.players[offer["player_index"]] is p2
+
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+
+    assert len(p2.hand) == 1, "the defender drew"
+    assert p1.hand == [], "the attacker's controller did not"
+
+
+def test_sibilant_spirit_refuses_the_phrase_under_an_event_with_no_defender(set_pool):
+    """"Defending player" is a fact about a combat. Under a trigger that
+    records none the offer would be made to nobody, which is an optional
+    effect that silently never happens — so the line refuses instead."""
+    from engine.grammar import compile_line
+
+    attacks = compile_line(
+        "Whenever this creature attacks, defending player may draw a card."
+    )
+    assert attacks.usable
+
+    upkeep = compile_line(
+        "At the beginning of your upkeep, defending player may draw a card."
+    )
+    assert not upkeep.lowered
+    assert "defending player" in (upkeep.lowering_error or ""), upkeep.lowering_error
 # --- end W1G2 ---

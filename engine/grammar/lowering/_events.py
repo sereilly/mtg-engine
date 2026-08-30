@@ -39,6 +39,15 @@ from ..errors import LoweringError
 _DAMAGED_PLAYER_EVENTS: frozenset[str] = frozenset({"damage_dealt"})
 
 
+# Trigger events that freeze **which seat is being attacked** into the trigger's
+# context (`trigger_defending_player_index`), so an effect after them may say
+# "defending player" and mean a seat rather than a guess. CR 506.2: who is
+# defending is a fact about a combat, not about the ability's controller or its
+# target — under any other event the phrase names nobody, and an offer made to
+# nobody is an effect that silently does not happen.
+_DEFENDING_PLAYER_EVENTS: frozenset[str] = frozenset({"creature_attacks"})
+
+
 # Trigger events after which "that player" names the controller of the object
 # the event was about, frozen into the trigger's context by the fire site.
 #

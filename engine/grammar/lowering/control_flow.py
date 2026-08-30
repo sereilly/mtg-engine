@@ -19,6 +19,7 @@ from __future__ import annotations
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ._events import _DEFENDING_PLAYER_EVENTS
 from .categories import _PRODUCES, primary_produced, produced_keys
 
 
@@ -88,13 +89,15 @@ def _may_cost_payload(node: ast.May) -> dict[str, object]:
 
 #: The player references an offer can be made to. Held to what
 #: ``handlers/control_flow._offered_seats`` can actually name: "you" is the
-#: ability's controller, the two "each" references are a set of seats, and
-#: "that player"/"they" is the seat the resolution already recorded. Every
-#: other reference — "its controller", "the chosen player", "defending player"
-#: — reaches that function's fallback, which reads the resolution's target and
-#: is a different seat entirely.
+#: ability's controller, the two "each" references are a set of seats,
+#: "that player"/"they" is the seat the resolution already recorded, and
+#: "defending player" is the seat the *combat* recorded — admitted only under an
+#: event that froze it (see ``_DEFENDING_PLAYER_EVENTS``), because a seat nobody
+#: recorded is an offer made to nobody. Every other reference — "its
+#: controller", "the chosen player" — reaches that function's fallback, which
+#: reads the resolution's target and is a different seat entirely.
 OFFERABLE_ACTORS: frozenset[str] = frozenset(
-    {"you", "each_player", "each_opponent", "that_player"}
+    {"you", "each_player", "each_opponent", "that_player", "defending_player"}
 )
 
 
@@ -155,12 +158,18 @@ def _lower_unless_player_pays(
     )
 
 
-#: The actors that name a *set* of seats, and so rebind what a back-reference to
-#: a player means inside the offer. Held to ``handlers/control_flow._EACH_ACTORS``
-#: by ``tests/engine/test_grammar_offers.py``: the lowering decides what "that
+#: The actors whose offered seat is **not** the one the resolution already
+#: holds, and so rebind what a back-reference to a player — and a bare
+#: imperative — means inside the offer. The two "each" references name a set of
+#: seats; "defending player" names one seat that is nonetheless somebody else's
+#: (CR 506.2), and "defending player may **draw a card**" is exactly the bare
+#: imperative that rule is about: without the rebind the ability's controller
+#: draws for the defender's answer. Held to
+#: ``handlers/control_flow._EACH_ACTORS`` by
+#: ``tests/engine/test_grammar_layering.py``: the lowering decides what "that
 #: player" compiles to and the handler decides which seat it resolves against,
 #: and the two answering differently is the offer burning the wrong player.
-_SEAT_SET_ACTORS = frozenset({"each_player", "each_opponent"})
+_SEAT_SET_ACTORS = frozenset({"each_player", "each_opponent", "defending_player"})
 
 
 def _lower_may(
@@ -232,6 +241,18 @@ def _lower_may(
         if node.reflexive else ()
     )
 
+    if (
+        node.actor.kind == "defending_player"
+        and event not in _DEFENDING_PLAYER_EVENTS
+    ):
+        # The seat is a fact about a combat and is frozen by the fire site;
+        # outside those events nothing recorded it, and `_offered_seats` would
+        # arm no prompt at all — an optional effect that silently never happens
+        # rather than one a player declined.
+        raise LoweringError(
+            "\"defending player\" names a seat this event did not record",
+            node=node,
+        )
     if node.actor.kind not in OFFERABLE_ACTORS:
         # Idiom 2, for the seat an offer is made to. ``_offered_seats`` knows
         # four references and reads every other one as ``context.target`` — so

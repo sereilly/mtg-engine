@@ -975,6 +975,18 @@ class DeclareAttackersStepMixin:
                         ability_effect_kind=trig.effect_kind,
                         source_permanent=permanent,
                         ability_text=trig.source_line,
+                        # "…**defending player** may draw a card" (Sibilant
+                        # Spirit). CR 506.2's seat, and it is *this attacker's*
+                        # — a multi-defender combat (CR 802) has one per
+                        # attacking creature, so it is read off the declaration
+                        # map rather than from a single scalar. Frozen now
+                        # (CR 603.10) because the trigger resolves after the
+                        # step, and the same key the delayed attack triggers
+                        # and the resolution-time picker already read.
+                        trigger_context={
+                            "trigger_defending_player_index":
+                                self.combat_attackers.get(idx),
+                        },
                     )
                 )
                 self.log.append(f"{permanent.card.name} triggered on attack (added to stack)")
