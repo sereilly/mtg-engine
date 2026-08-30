@@ -3567,6 +3567,31 @@ def _effect_handler_kinds() -> frozenset[str]:
 _EFFECT_HANDLER_KINDS: frozenset[str] | None = None
 
 
+def _carries_no_behaviour(instruction: OracleInstruction) -> bool:
+    """Whether this card-level instruction is evidence the permanent does
+    *nothing* on its own.
+
+    ``spell_pattern`` is the whitelist marker the gate above was written for: it
+    records that a substring matched and carries no behaviour at all.
+
+    A ``derived_static_rule`` normally is behaviour — Howling Mine's draw-step
+    modifier, Winter Orb's untap restriction, Gloom's cost tax — and thirty
+    shipped cards have nothing else. **One claim is the exception**, and it is
+    not a special case so much as the same rule read carefully: an
+    ``activation_restrictions`` claim says *when an ability may be activated*,
+    so it is a clause of that ability rather than something the permanent does.
+    When no ability of the card is readable, the restriction is a rule about
+    nothing. Amulet of Quoz was reported supported on exactly that evidence,
+    with its whole card in one unreadable ability.
+    """
+    if instruction.kind == "spell_pattern":
+        return True
+    return (
+        instruction.kind == "derived_static_rule"
+        and instruction.value == "activation_restrictions"
+    )
+
+
 # Unbounded cache: card definitions are immutable and the pool is finite, so
 # every distinct card compiles exactly once per process — even with thousands
 # of cards the programs are tiny compared to recompilation cost.
@@ -3940,7 +3965,7 @@ def _compile_card_oracle(
             primary_type in ("artifact", "enchantment")
             and not attachment
             and instructions
-            and all(instruction.kind == "spell_pattern" for instruction in instructions)
+            and all(_carries_no_behaviour(instruction) for instruction in instructions)
             and not modes
             and not any(
                 ability.supported and ability.instruction is not None

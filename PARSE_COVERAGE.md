@@ -25,10 +25,8 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**44 unclaimed sentence(s) across 29 supported card(s).**
+**43 unclaimed sentence(s) across 28 supported card(s).**
 
-- **Amulet of Quoz**
-  - `{t}, sacrifice this artifact: target opponent may ante the top card of their library. if they don't, you flip a coin. if you win the flip, that player loses the game. if you lose the flip, you lose the game. activate only during your upkeep`
 - **Battle Cry**
   - `whenever a creature blocks this turn, it gets +0/+1 until end of turn`
 - **Blizzard**
@@ -200,12 +198,12 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 983 |
+| parse rule | 984 |
 | activation cost | 398 |
 | trigger table | 339 |
 | static-line table | 234 |
 | keyword table | 222 |
-| card_hooks bespoke (name-keyed) | 116 |
+| card_hooks bespoke (name-keyed) | 113 |
 | aura enchant noun (oracle_instructions attach) | 87 |
 | activation_restrictions.py | 37 |
 | aura static (oracle_instructions/permanent_state) | 37 |

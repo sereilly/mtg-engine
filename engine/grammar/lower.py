@@ -166,6 +166,7 @@ from .lowering import (
     _lower_cast_from_exiled_with,
     _lower_cast_permission,
     _lower_exile_graveyard_until_leaves,
+    _lower_force_chosen_creature_to_attack,
     _lower_transmute_by_sacrifice,
     _lower_exile_until_leaves_or_untaps,
     _lower_ownership_exchange_unless_paid,
@@ -192,6 +193,104 @@ from .lowering import (
     _lower_exchange_greatest_mana_value,
     _lower_win_game,
 )
+
+
+#: The node types whose lowering is *only* a name — one AST class, one
+#: function, nothing to decide. These were 78 two-line branches of the chain
+#: below: 156 lines saying what a dict says in 78, growing by three every time
+#: a round adds a node. Dispatching them by type is what every other seam in
+#: this engine already does (`EFFECT_HANDLERS` is the one the architecture
+#: notes name), and it is what the module-size guard was pointing at — the
+#: families were absorbing the work; the chain grew anyway, by construction.
+#:
+#: The chain below keeps every branch that *decides* something: a node whose
+#: lowering depends on its own fields, on the firing event, or on which of
+#: several kinds it should become.
+#:
+#: Read before the chain, which is safe by construction rather than by
+#: inspection: no class in this table appears anywhere else in the chain and
+#: none of them inherits from another, so at most one branch could ever have
+#: matched a given node.
+_BY_NODE_TYPE: dict[type, object] = {
+    ast.DamageRidersUntilEndOfTurn: _lower_damage_dealt_riders,
+    ast.DamageThoseDamagedThisGame: _lower_damage_this_game_history,
+    ast.CoinFlipDamageLoop: _lower_coin_flip_damage_loop,
+    ast.Pump: _lower_pump,
+    ast.SetBasePT: _lower_set_base_pt,
+    ast.ChangeBasePT: _lower_change_base_pt,
+    ast.GainAbilityText: _lower_gain_ability_text,
+    ast.GainKeyword: _lower_gain_keyword,
+    ast.DoublePower: _lower_double_power,
+    ast.SwitchPT: _lower_switch_pt,
+    ast.Ante: _lower_ante,
+    ast.ExchangeLifeTotals: _lower_exchange_life_totals,
+    ast.SetLifeTotal: _lower_set_life_total,
+    ast.PayLife: _lower_pay_life,
+    ast.DelayedSelfAction: _lower_delayed_self_action,
+    ast.DoesntUntapWhileSourceTapped: _lower_doesnt_untap_while_source_tapped,
+    ast.TapOrUntap: _lower_tap_or_untap,
+    ast.Attach: _lower_attach,
+    ast.ChoosePermanent: _lower_choose_permanent,
+    ast.ExchangeControl: _lower_exchange_control,
+    ast.ExchangeGreatestManaValue: _lower_exchange_greatest_mana_value,
+    ast.Draw: _lower_draw,
+    ast.PutHandCardsOnLibrary: _lower_put_hand_cards_on_library,
+    ast.Mill: _lower_mill,
+    ast.Scry: _lower_scry,
+    ast.ProducesManaInstead: _lower_produces_mana_instead,
+    ast.SpendManaAsThough: _lower_spend_mana_as_though,
+    ast.CreateCopyToken: _lower_create_copy_token,
+    ast.CreateEmblem: _lower_create_emblem,
+    ast.SacrificeUnlessPay: _lower_sacrifice_unless_pay,
+    ast.DestroyEachUnlessPaid: _lower_destroy_each_unless_paid,
+    ast.BecomeCreature: _lower_become_creature,
+    ast.ChangeText: _lower_change_text,
+    ast.PreventDamage: _lower_prevent_damage,
+    ast.RedirectDamage: _lower_redirect_damage,
+    ast.DamageCantBePreventedOrRedirected: _lower_damage_cant_be_prevented,
+    ast.Regenerate: _lower_regenerate,
+    ast.CounterAbility: _lower_counter_ability,
+    ast.CounterSpell: _lower_counter_spell,
+    ast.ChangeTarget: _lower_change_target,
+    ast.PhaseOut: _lower_phase_out,
+    ast.PutOnLibraryTop: _lower_put_on_library_top,
+    ast.ChooseCardsInHand: _lower_choose_cards_in_hand,
+    ast.PutIteratedCardOnLibrary: _lower_put_iterated_card_on_library,
+    ast.PutOnLibraryBottom: _lower_put_on_library_bottom,
+    ast.RevealTopToHandOrBottom: _lower_reveal_top,
+    ast.SacrificeExpansionPermanents: _lower_sacrifice_expansion_permanents,
+    ast.GainType: _lower_gain_type,
+    ast.ChangeSupertype: _lower_change_supertype,
+    ast.ShuffleGraveyardIntoLibrary: _lower_shuffle_graveyard_into_library,
+    ast.ShuffleHandIntoLibrary: _lower_shuffle_hand_into_library,
+    ast.RevealHand: _lower_reveal_hand,
+    ast.RevealRandomFromHand: _lower_reveal_random_from_hand,
+    ast.RevealHandAndChoose: _lower_reveal_hand_and_choose,
+    ast.ExileCostSacrifices: _lower_exile_cost_sacrifices,
+    ast.ExileGraveyard: _lower_exile_graveyard,
+    ast.LookAtHand: _lower_look_at_hand,
+    ast.LookAtLibraryTop: _lower_look_at_library_top,
+    ast.SearchLibrary: _lower_search_library,
+    ast.ExileTopOfLibrary: _lower_exile_top_of_library,
+    ast.PutExiledWithSource: _lower_put_exiled_with_source,
+    ast.LookTopExileRandom: _lower_look_top_exile_random,
+    ast.SearchAndExile: _lower_search_and_exile,
+    ast.ForceChosenCreatureToAttack: _lower_force_chosen_creature_to_attack,
+    ast.ExileGraveyardUntilLeaves: _lower_exile_graveyard_until_leaves,
+    ast.TransmuteBySacrifice: _lower_transmute_by_sacrifice,
+    ast.OwnershipExchangeUnlessPaid: _lower_ownership_exchange_unless_paid,
+    ast.RandomRevealOwnershipExchange: _lower_random_reveal_ownership_exchange,
+    ast.ExileUntilLeavesOrUntaps: _lower_exile_until_leaves_or_untaps,
+    ast.CastFromExiledWith: _lower_cast_from_exiled_with,
+    ast.ExtraTurn: _lower_extra_turn,
+    ast.LoseGame: _lower_lose_game,
+    ast.WinGame: _lower_win_game,
+    ast.AttackAsThough: _lower_attack_as_though,
+    ast.AssignsNoCombatDamage: _lower_assigns_no_combat_damage,
+    ast.AttackingDoesntTap: _lower_attacking_doesnt_tap,
+    ast.ChooseTarget: _lower_choose_target,
+    ast.PutSourceIntoZone: _lower_put_source_into_zone,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -249,52 +348,29 @@ def lower_statement(
     # occurrence is not the ability's whole instruction, so a registry
     # keyed on it must see neither half.
     dispatch_subject = event_subject if whole_effect else None
+    # The name-only lowerings, by node type (see `_BY_NODE_TYPE`).
+    lowering = _BY_NODE_TYPE.get(type(statement))
+    if lowering is not None:
+        return lowering(statement)
+
     if isinstance(statement, ast.DealDamage):
         return _lower_damage(statement, event, produced)
-    if isinstance(statement, ast.DamageRidersUntilEndOfTurn):
-        return _lower_damage_dealt_riders(statement)
-    if isinstance(statement, ast.DamageThoseDamagedThisGame):
-        return _lower_damage_this_game_history(statement)
-    if isinstance(statement, ast.CoinFlipDamageLoop):
-        return _lower_coin_flip_damage_loop(statement)
     if isinstance(statement, ast.Fight):
         return _lower_fight(statement, whole_effect)
     if isinstance(statement, ast.DamageUnlessPay):
         return _lower_damage_unless_pay(statement, dispatch_event)
-    if isinstance(statement, ast.Pump):
-        return _lower_pump(statement)
-    if isinstance(statement, ast.SetBasePT):
-        return _lower_set_base_pt(statement)
-    if isinstance(statement, ast.ChangeBasePT):
-        return _lower_change_base_pt(statement)
-    if isinstance(statement, ast.GainAbilityText):
-        return _lower_gain_ability_text(statement)
-    if isinstance(statement, ast.GainKeyword):
-        return _lower_gain_keyword(statement)
     if isinstance(statement, ast.LoseKeyword):
         return _lower_lose_keyword(statement, dispatch_event)
     if isinstance(statement, ast.PutCounter):
         return _lower_put_counter(statement, dispatch_event, produced)
     if isinstance(statement, ast.PlayerGetsCounters):
         return _lower_player_gets_counters(statement, event)
-    if isinstance(statement, ast.DoublePower):
-        return _lower_double_power(statement)
-    if isinstance(statement, ast.SwitchPT):
-        return _lower_switch_pt(statement)
     if isinstance(statement, ast.RemoveCounter):
         return _lower_remove_counter(statement, dispatch_event)
-    if isinstance(statement, ast.Ante):
-        return _lower_ante(statement)
-    if isinstance(statement, ast.ExchangeLifeTotals):
-        return _lower_exchange_life_totals(statement)
-    if isinstance(statement, ast.SetLifeTotal):
-        return _lower_set_life_total(statement)
     if isinstance(statement, ast.GainLife):
         return _lower_gain_life(statement, produced, event)
     if isinstance(statement, ast.LoseLife):
         return _lower_lose_life(statement, event, produced)
-    if isinstance(statement, ast.PayLife):
-        return _lower_pay_life(statement)
     if isinstance(statement, ast.Destroy):
         # The **unfiltered** event, and this is the one of the three that is not
         # a dispatch question. `_lower_delayed_destroy` reads it to ask whether
@@ -309,47 +385,14 @@ def lower_statement(
         # `produced` is the whole gate: this sentence acts on what an earlier
         # step of the same effect recorded, so it refuses when nothing did.
         return _lower_doesnt_untap_next_step(statement, produced)
-    if isinstance(statement, ast.DelayedSelfAction):
-        return _lower_delayed_self_action(statement)
-    if isinstance(statement, ast.DoesntUntapWhileSourceTapped):
-        return _lower_doesnt_untap_while_source_tapped(statement)
     if isinstance(statement, (ast.Tap, ast.Untap)):
         return _lower_tap(statement)
-    if isinstance(statement, ast.TapOrUntap):
-        return _lower_tap_or_untap(statement)
-    if isinstance(statement, ast.Attach):
-        return _lower_attach(statement)
-    if isinstance(statement, ast.ChoosePermanent):
-        return _lower_choose_permanent(statement)
-    if isinstance(statement, ast.ExchangeControl):
-        return _lower_exchange_control(statement)
-
-    if isinstance(statement, ast.ExchangeGreatestManaValue):
-        return _lower_exchange_greatest_mana_value(statement)
-    if isinstance(statement, ast.Draw):
-        return _lower_draw(statement)
-    if isinstance(statement, ast.PutHandCardsOnLibrary):
-        return _lower_put_hand_cards_on_library(statement)
-    if isinstance(statement, ast.Mill):
-        return _lower_mill(statement)
-    if isinstance(statement, ast.Scry):
-        return _lower_scry(statement)
     if isinstance(statement, ast.AddMana):
         return _lower_add_mana(statement, produced)
     if isinstance(statement, ast.AddManaForTappedLand):
         return _lower_add_mana_for_tapped_land(statement, dispatch_event)
-    if isinstance(statement, ast.ProducesManaInstead):
-        return _lower_produces_mana_instead(statement)
-    if isinstance(statement, ast.SpendManaAsThough):
-        return _lower_spend_mana_as_though(statement)
-    if isinstance(statement, ast.CreateCopyToken):
-        return _lower_create_copy_token(statement)
-
     if isinstance(statement, ast.CreateToken):
         return _lower_create_token(statement, produced)
-
-    if isinstance(statement, ast.CreateEmblem):
-        return _lower_create_emblem(statement)
 
     if isinstance(statement, ast.Conjunction):
         if len(statement.effects) == 2 and all(
@@ -360,47 +403,15 @@ def lower_statement(
             statement.effects, produced, event, lower_statement=lower_statement
         )
 
-    if isinstance(statement, ast.SacrificeUnlessPay):
-        return _lower_sacrifice_unless_pay(statement)
     if isinstance(statement, ast.DestroyUnlessPay):
         return _lower_destroy_unless_pay(statement, dispatch_event)
-    if isinstance(statement, ast.DestroyEachUnlessPaid):
-        return _lower_destroy_each_unless_paid(statement)
-
-    if isinstance(statement, ast.BecomeCreature):
-        return _lower_become_creature(statement)
-
     if isinstance(statement, ast.BecomeColor):
         return _lower_become_color(statement, dispatch_event, dispatch_subject)
-
-    if isinstance(statement, ast.ChangeText):
-        return _lower_change_text(statement)
 
     if isinstance(statement, ast.GainControl):
         # `produced` carries the earlier steps' records: Disharmony's
         # "gain control of that creature" reads what its untap chose.
         return _lower_gain_control(statement, produced)
-
-    if isinstance(statement, ast.PreventDamage):
-        return _lower_prevent_damage(statement)
-
-    if isinstance(statement, ast.RedirectDamage):
-        return _lower_redirect_damage(statement)
-
-    if isinstance(statement, ast.DamageCantBePreventedOrRedirected):
-        return _lower_damage_cant_be_prevented(statement)
-
-    if isinstance(statement, ast.Regenerate):
-        return _lower_regenerate(statement)
-
-    if isinstance(statement, ast.CounterAbility):
-        return _lower_counter_ability(statement)
-
-    if isinstance(statement, ast.CounterSpell):
-        return _lower_counter_spell(statement)
-
-    if isinstance(statement, ast.ChangeTarget):
-        return _lower_change_target(statement)
 
     if isinstance(statement, ast.ModalNode):
         # Reached only when the head is a *step* of something larger — "Draw a
@@ -425,21 +436,6 @@ def lower_statement(
         # is admitted only where a step really recorded one.
         return _lower_return_to_zone(statement, event, produced)
 
-    if isinstance(statement, ast.PhaseOut):
-        return _lower_phase_out(statement)
-
-    if isinstance(statement, ast.PutOnLibraryTop):
-        return _lower_put_on_library_top(statement)
-
-    if isinstance(statement, ast.ChooseCardsInHand):
-        return _lower_choose_cards_in_hand(statement)
-
-    if isinstance(statement, ast.PutIteratedCardOnLibrary):
-        return _lower_put_iterated_card_on_library(statement)
-
-    if isinstance(statement, ast.PutOnLibraryBottom):
-        return _lower_put_on_library_bottom(statement)
-
     if isinstance(statement, ast.PutOntoBattlefield):
         # One node, two families, composed here because composing them is what
         # this dispatch is for. No printed "target" plus a graveyard named by a
@@ -458,9 +454,6 @@ def lower_statement(
         # CR 701.20b: revealing shows a card and moves nothing, so the whole
         # effect is the record it leaves for the sentences after it.
         return (OracleInstruction("reveal_top_of_library", "", {}),)
-    if isinstance(statement, ast.RevealTopToHandOrBottom):
-        return _lower_reveal_top(statement)
-
     if isinstance(statement, ast.Sacrifice):
         # ``event``, not ``dispatch_event``: what "that artifact" names is a
         # fact about the *trigger* — its condition already named the enchanted
@@ -470,68 +463,10 @@ def lower_statement(
         # ``_lower_destroy`` above takes, and for the same reason: Curse
         # Artifact's sacrifice lowers under a ``May``.
         return _lower_sacrifice(statement, event)
-    if isinstance(statement, ast.SacrificeExpansionPermanents):
-        return _lower_sacrifice_expansion_permanents(statement)
-    if isinstance(statement, ast.GainType):
-        return _lower_gain_type(statement)
-    if isinstance(statement, ast.ChangeSupertype):
-        return _lower_change_supertype(statement)
-    if isinstance(statement, ast.ShuffleGraveyardIntoLibrary):
-        return _lower_shuffle_graveyard_into_library(statement)
-    if isinstance(statement, ast.ShuffleHandIntoLibrary):
-        return _lower_shuffle_hand_into_library(statement)
-
-    if isinstance(statement, ast.RevealHand):
-        return _lower_reveal_hand(statement)
-    if isinstance(statement, ast.RevealRandomFromHand):
-        return _lower_reveal_random_from_hand(statement)
     if isinstance(statement, ast.DiscardRevealedUnlessPayLife):
         return _lower_discard_revealed_unless_pay_life(statement, produced)
-    if isinstance(statement, ast.RevealHandAndChoose):
-        return _lower_reveal_hand_and_choose(statement)
-    if isinstance(statement, ast.ExileCostSacrifices):
-        return _lower_exile_cost_sacrifices(statement)
-    if isinstance(statement, ast.ExileGraveyard):
-        return _lower_exile_graveyard(statement)
-    if isinstance(statement, ast.LookAtHand):
-        return _lower_look_at_hand(statement)
-    if isinstance(statement, ast.LookAtLibraryTop):
-        return _lower_look_at_library_top(statement)
-
-    if isinstance(statement, ast.SearchLibrary):
-        return _lower_search_library(statement)
-
-    if isinstance(statement, ast.ExileTopOfLibrary):
-        return _lower_exile_top_of_library(statement)
-    if isinstance(statement, ast.PutExiledWithSource):
-        return _lower_put_exiled_with_source(statement)
-
     if isinstance(statement, ast.LookTopPickToHand):
         return _lower_look_top_pick(statement, event)
-
-    if isinstance(statement, ast.LookTopExileRandom):
-        return _lower_look_top_exile_random(statement)
-
-    if isinstance(statement, ast.SearchAndExile):
-        return _lower_search_and_exile(statement)
-
-    if isinstance(statement, ast.ExileGraveyardUntilLeaves):
-        return _lower_exile_graveyard_until_leaves(statement)
-
-    if isinstance(statement, ast.TransmuteBySacrifice):
-        return _lower_transmute_by_sacrifice(statement)
-
-    if isinstance(statement, ast.OwnershipExchangeUnlessPaid):
-        return _lower_ownership_exchange_unless_paid(statement)
-
-    if isinstance(statement, ast.RandomRevealOwnershipExchange):
-        return _lower_random_reveal_ownership_exchange(statement)
-
-    if isinstance(statement, ast.ExileUntilLeavesOrUntaps):
-        return _lower_exile_until_leaves_or_untaps(statement)
-
-    if isinstance(statement, ast.CastFromExiledWith):
-        return _lower_cast_from_exiled_with(statement)
 
     if isinstance(statement, ast.CastPermission):
         return _lower_cast_permission(statement, produced)
@@ -620,17 +555,8 @@ def lower_statement(
             ),
         )
 
-    if isinstance(statement, ast.ExtraTurn):
-        return _lower_extra_turn(statement)
-
     if isinstance(statement, ast.EndTheTurn):
         return (OracleInstruction("end_the_turn", "", {}),)
-
-    if isinstance(statement, ast.LoseGame):
-        return _lower_lose_game(statement)
-
-    if isinstance(statement, ast.WinGame):
-        return _lower_win_game(statement)
 
     if isinstance(statement, ast.ChooseNumber):
         # The bounds are all there is to carry: what the number is *for* is a
@@ -675,8 +601,6 @@ def lower_statement(
     if isinstance(statement, ast.CombatRestriction):
         return _lower_combat_restriction(statement, dispatch_event)
 
-    if isinstance(statement, ast.AttackAsThough):
-        return _lower_attack_as_though(statement)
     if isinstance(statement, ast.CantBe):
         # The **unfiltered** event, for the reason `_lower_destroy` above takes
         # one: "that creature can't be regenerated this turn" (Lim-Dûl's
@@ -686,17 +610,8 @@ def lower_statement(
         # through the ordinary dict dispatch, nested or not.
         return _lower_cant_be(statement, event, event_subject)
 
-    if isinstance(statement, ast.AssignsNoCombatDamage):
-        return _lower_assigns_no_combat_damage(statement)
-
-    if isinstance(statement, ast.AttackingDoesntTap):
-        return _lower_attacking_doesnt_tap(statement)
-
     if isinstance(statement, ast.RemoveFromCombat):
         return _lower_remove_from_combat(statement, produced)
-
-    if isinstance(statement, ast.ChooseTarget):
-        return _lower_choose_target(statement)
 
     if isinstance(statement, ast.CreateDelayedTrigger):
         return _lower_create_delayed_trigger(statement, lower_statement(
@@ -763,9 +678,6 @@ def lower_statement(
     # lives in the `game` family, which is below this dispatcher.
     if isinstance(statement, ast.RepeatProcess):
         return _lower_repeat_process(statement, lower_statement)
-
-    if isinstance(statement, ast.PutSourceIntoZone):
-        return _lower_put_source_into_zone(statement)
 
     if isinstance(statement, ast.Exile):
         # `produced` is the gate on "exile **that token**": the phrase names

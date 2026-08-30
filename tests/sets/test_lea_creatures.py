@@ -1705,3 +1705,82 @@ def test_hypnotic_specter_leaves_its_own_controller_alone(all_cards):
     game._settle()
 
     assert len(p1.hand) == 1
+
+
+# --- Nettling Imp: the creature the player chose, and the whole noun phrase ---
+
+
+def _nettling_board(set_pool):
+    """Nettling Imp on one side, two of the active player's creatures on the
+    other, neither of them freshly arrived."""
+    imp = Permanent(card=set_pool("LEA")["Nettling Imp"])
+    bears = Permanent(card=set_pool("LEA")["Grizzly Bears"])
+    giant = Permanent(card=set_pool("LEA")["Hill Giant"])
+    for perm in (imp, bears, giant):
+        perm.metadata["summoning_sickness_turn"] = -1
+    p1 = PlayerState(name="P1", battlefield=[imp], life=20)
+    p2 = PlayerState(name="P2", battlefield=[bears, giant], life=20)
+    game = Game(players=[p1, p2])
+    game.active_player_index = 1
+    return game, imp, bears, giant
+
+
+def test_nettling_imp_marks_the_creature_that_was_chosen(set_pool):
+    """"**Choose target** non-Wall creature …" — and it did not. The handler
+    scanned the target player's battlefield and marked the first non-Wall
+    creature it found, so a player who picked the Hill Giant got the Grizzly
+    Bears marked instead. The card said "choose target" and the engine chose."""
+    game, _imp, bears, giant = _nettling_board(set_pool)
+
+    game.activate_permanent_ability(
+        0, "Nettling Imp", target_player_index=1, target_permanent_index=1
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert giant.metadata.get("must_attack_until_eot") is True
+    assert giant.metadata.get("destroy_if_did_not_attack_eot") is True
+    assert bears.metadata.get("must_attack_until_eot") is None
+
+
+def test_nettling_imp_cannot_name_a_creature_that_arrived_this_turn(set_pool):
+    """"…the active player has **controlled continuously since the beginning of
+    the turn**." The clause was consumed into nothing, which made this Siren's
+    Call with a target: any creature at all, including one cast a moment ago."""
+    from engine.handlers.combat import forced_attacker_is_legal
+
+    game, _imp, bears, giant = _nettling_board(set_pool)
+    giant.metadata["summoning_sickness_turn"] = game.turn
+
+    assert forced_attacker_is_legal(game, bears)
+    assert not forced_attacker_is_legal(game, giant)
+
+
+def test_nettling_imp_cannot_name_a_creature_of_the_inactive_player(set_pool):
+    """"…**the active player** has controlled …" — the card exists to make
+    somebody attack on their own turn."""
+    from engine.handlers.combat import forced_attacker_is_legal
+
+    game, imp, bears, _giant = _nettling_board(set_pool)
+
+    assert forced_attacker_is_legal(game, bears)
+    assert not forced_attacker_is_legal(game, imp), "its controller is not active"
+
+
+def test_nettling_imp_compiles_through_the_grammar_not_a_card_hook(set_pool):
+    """The template was a name-keyed hook whose key was the whole printed line,
+    activation restriction included — so Norritt, which prints the identical
+    ability with a shorter restriction, got nothing. `HOOK_RELIANCE.md` is the
+    arithmetic: a hook buys one card, a production buys every card printed the
+    same way."""
+    from engine.card_hooks import CARD_LINE_INSTRUCTIONS
+    from engine.grammar import compile_line
+
+    assert "Nettling Imp" not in CARD_LINE_INSTRUCTIONS
+    read = compile_line(
+        "Choose target non-Wall creature the active player has controlled "
+        "continuously since the beginning of the turn. That creature attacks "
+        "this turn if able. Destroy it at the beginning of the next end step "
+        "if it didn't attack this turn."
+    )
+    assert [i.kind for i in read.instructions] == ["mark_non_wall_target_to_attack"]

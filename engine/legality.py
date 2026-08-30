@@ -1270,7 +1270,14 @@ class LegalityMixin:
         if instruction.kind == "destroy_target_permanent":
             return self._destroy_target_legal(instruction.payload, perm)
         if instruction.kind == "mark_non_wall_target_to_attack":
-            return perm.is_creature and not perm.has_type("wall")
+            # The whole noun phrase, not its first two words: "the active
+            # player has controlled continuously since the beginning of the
+            # turn" narrows it further, and the picker offering a creature the
+            # handler will refuse is the two-readers failure this gate exists
+            # to prevent. One reader answers both.
+            from .handlers.combat import forced_attacker_is_legal
+
+            return forced_attacker_is_legal(self, perm)
         if instruction.kind == "grant_unblockable_to_low_power_target":
             # Dwarven Warriors: "Target creature with power 2 or less can't be
             # blocked this turn." Only creatures with effective power ≤ 2 are legal,

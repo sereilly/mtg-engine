@@ -272,11 +272,16 @@ def _during_end_of_combat(game: "Game", controller_index: int, source) -> bool:
     return game.current_step == "end_of_combat"
 
 
-def _opponents_turn_before_attackers(game: "Game", controller_index: int, source) -> bool:
-    """Nettling Imp -- the same window `cast_restrictions.py` reads for the same
-    printed phrase."""
-    if game.active_player_index == controller_index:
-        return False
+def _before_attackers_are_declared(game: "Game", controller_index: int, source) -> bool:
+    """Norritt -- the window on its own, with no seat attached.
+
+    Split out of the pair below rather than duplicated, because the two clauses
+    are one window and one extra condition: Nettling Imp prints "during an
+    opponent's turn, before attackers are declared" and Norritt prints only the
+    second half. Two predicates spelling the same window would be two answers to
+    when attackers stop being declarable, and the one that was updated later
+    would decide which card could be activated.
+    """
     if game.current_turn_phase in ("beginning", "precombat_main"):
         return True
     return (
@@ -284,6 +289,14 @@ def _opponents_turn_before_attackers(game: "Game", controller_index: int, source
         and game.current_step in ("beginning_of_combat", "declare_attackers")
         and not game.combat_attackers_locked
     )
+
+
+def _opponents_turn_before_attackers(game: "Game", controller_index: int, source) -> bool:
+    """Nettling Imp -- the same window `cast_restrictions.py` reads for the same
+    printed phrase, narrowed to an opponent's turn."""
+    if game.active_player_index == controller_index:
+        return False
+    return _before_attackers_are_declared(game, controller_index, source)
 
 
 def _exactly_seven_cards_in_hand(game: "Game", controller_index: int, source) -> bool:
@@ -610,6 +623,16 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         ),
         _opponents_turn_before_attackers,
         "only during an opponent's turn, before attackers are declared",
+    ),
+    # "Activate only before attackers are declared." (Norritt.) The same window
+    # without the seat, and the reason it is a row here rather than an optional
+    # tail on the one above: the two are different restrictions, not one clause
+    # written two ways -- Norritt may point its own creature at an attack on its
+    # controller's turn and Nettling Imp may not.
+    ActivationRestriction(
+        re.compile(r"^activate only before attackers are declared$"),
+        _before_attackers_are_declared,
+        "only before attackers are declared",
     ),
     ActivationRestriction(
         re.compile(r"^activate only if you have exactly seven cards in hand$"),

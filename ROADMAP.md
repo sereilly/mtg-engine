@@ -692,8 +692,8 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, thirty-five rounds in. 184 → 278 of 373 supported
-(74.5%), hollow lines 10 cards, and 44 unclaimed sentences across 29 of those
+**Where it stands: Phase 3, thirty-six rounds in. 184 → 278 of 373 supported
+(74.5%), hollow lines 10 cards, and 43 unclaimed sentences across 28 of those
 278 — the third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
@@ -711,7 +711,7 @@ upkeep alone with a whole printed paragraph compiling to nothing, Fire Covenant'
 
 Only 10 of those show in `--hollow-lines`, because a line that produces no
 *ability part* leaves nothing for that probe to find hollow. So the honest
-reading of "278 supported" is "278 compile, 249 of them with every printed line
+reading of "278 supported" is "278 compile, 250 of them with every printed line
 accounted for". **One round is still scheduled**: the support gate admits an
 artifact or enchantment when *any* ability of it is implemented — round 1's
 second finding ("a widened gate hid a static line") for a card type the round-1
@@ -1945,6 +1945,67 @@ the second card printing the effect gets nothing, which is exactly what
 three-sentence template (none of whose sentences parses today) plus the shorter
 restriction; Arcum's Whistle prints the same opening sentence and would move
 with it.
+
+**Round 36 — a hook that had a second card. 278 → 278, and the number that
+matters fell.**
+
+The round scheduled last time, and it paid three ways.
+
+**Nettling Imp was a name-keyed card hook whose key was its whole printed
+line**, activation restriction included. Norritt prints that ability *verbatim*
+apart from the last sentence — "Activate only before attackers are declared"
+against "Activate only during an opponent's turn, before attackers are
+declared" — and so reached nothing at all. That is the arithmetic
+`HOOK_RELIANCE.md` exists to state: a name-keyed entry buys one card where a
+production buys every card printed the same way.
+
+The template is a paragraph production now (`engine/grammar/paragraphs.py`),
+three sentences and one effect, because "that creature" and "it" both name what
+the first sentence chose. The shorter restriction is a row in
+`activation_restrictions.py` sharing one predicate with the longer one — the two
+clauses are one window and one extra condition, and two predicates spelling the
+same window would be two answers to when attackers stop being declarable.
+**Norritt is supported and the hook is gone**: hooked cards 73 → 72, entries 79
+→ 78, and the projection to the full release line 1,775 → 1,753 entries.
+
+**The handler was ignoring the target.** "**Choose target** non-Wall creature
+the active player has controlled continuously since the beginning of the turn"
+— and it scanned the target player's battlefield and marked the first non-Wall
+creature it found. A player who picked the Hill Giant got the Grizzly Bears
+marked instead: the card said "choose target" and the engine chose. Both other
+clauses were dropped too, which made this Siren's Call with a target — any
+creature at all, including one cast a moment ago. `forced_attacker_is_legal` is
+one reader for the whole noun phrase, asked by the handler that marks the
+creature and by the legality gate that fills the picker, so what a player is
+offered and what the engine accepts cannot differ.
+
+**Adding a restriction row can make a hollow card report supported**, and that
+surfaced on the way through. Arcum's Whistle's opening sentence started parsing,
+its ability still did not compile, and the artifact/enchantment gate passed it —
+because the new restriction leaves a `derived_static_rule` instruction behind
+and the gate took any instruction that was not a bare whitelist marker as
+evidence the permanent does something. It is not: a restriction says *when an
+ability may be activated*, so it is a clause of that ability, and when no
+ability of the card is readable it is a rule about nothing. **Amulet of Quoz was
+already supported on exactly that evidence**, with its whole card in one
+unreadable ability; it is correctly unsupported now, which is why the count is
+flat at 278 and the parse-coverage backlog fell 44 → 43. The narrowing is one
+claim wide, measured: thirty shipped cards have a `derived_static_rule` and
+nothing else — Winter Orb, Howling Mine, Gloom, Meekstone — and each of those
+*is* what the permanent does.
+
+**And the module-size guard fired, correctly, on a file whose growth is
+structural.** `grammar/lower.py` crossed 1,000 lines on this round's three-line
+dispatch entry. The families *had* absorbed the work — the new lowering went to
+`lowering/combat.py` — but the dispatch chain grows by three lines per node type
+by construction, which is not the failure the guard describes. 78 of its
+branches were pure `isinstance(statement, X) → _lower_x(statement)`: 156 lines
+saying what a dict says in 78. They are `_BY_NODE_TYPE` now, read before the
+chain, which is safe by construction rather than by inspection — no class in the
+table appears elsewhere in the chain and none inherits from another, so at most
+one branch could ever have matched. The chain keeps every branch that *decides*
+something. `lower.py` is 909 lines, and the next node costs one line rather than
+three.
 
 ## Where the sets landed
 

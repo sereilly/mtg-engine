@@ -237,6 +237,7 @@ from .combat import (
     CantBe,
     AttackAsThough,
     CombatRestriction,
+    ForceChosenCreatureToAttack,
     RemoveFromCombat,
 )
 from .game import (
@@ -453,6 +454,7 @@ __all__ = [
     "LookAtLibraryTop",
     "RevealTop",
     "ExileGraveyardUntilLeaves",
+    "ForceChosenCreatureToAttack",
     "CastFromExiledWith",
     "NameAndRandomReveal",
     "NameAndStrip",

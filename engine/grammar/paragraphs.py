@@ -694,3 +694,54 @@ def _parse_random_reveal_ownership_exchange(
         stream.reset(mark)
         return None
     return ast.RandomRevealOwnershipExchange(life)
+
+
+def _parse_force_chosen_creature_to_attack(stream: TokenStream) -> "ast.Statement | None":
+    """``Choose target non-Wall creature the active player has controlled
+    continuously since the beginning of the turn. That creature attacks this
+    turn if able. Destroy it at the beginning of the next end step if it didn't
+    attack this turn.`` (Nettling Imp, Norritt.)
+
+    Three sentences and one effect: "that creature" and "it" are both the
+    creature the first sentence chose, and the destruction is conditional on
+    what that creature did about the requirement the second one imposed.
+
+    **This was a card hook**, keyed by name on the whole printed line — the
+    activation restriction included. Norritt prints the identical ability with a
+    shorter restriction ("Activate only before attackers are declared" against
+    Nettling Imp's "Activate only during an opponent's turn, before attackers
+    are declared") and so got nothing at all, which is the arithmetic
+    `HOOK_RELIANCE.md` exists to measure: a name-keyed entry buys one card where
+    a production buys every card printed the same way. Arcum's Whistle prints
+    this same opening sentence with a payment rider and is one round further
+    out.
+
+    Every word of the noun phrase is read rather than skipped. "Non-Wall" and
+    "the active player has controlled continuously since the beginning of the
+    turn" are the two narrowings that make this creature choosable at all, and a
+    production that consumed them into nothing would be a card that can force
+    any creature to attack — including one that just arrived, which is the
+    difference between this and Siren's Call.
+    """
+    if not stream.accept_phrase("choose", "target", "non-wall", "creature"):
+        return None
+    for word in (
+        "the", "active", "player", "has", "controlled", "continuously",
+        "since", "the", "beginning", "of", "the", "turn",
+    ):
+        if not stream.accept_word(word):
+            return None
+    if not stream.accept_punct("."):
+        return None
+    if not stream.accept_phrase(
+        "that", "creature", "attacks", "this", "turn", "if", "able"
+    ):
+        return None
+    if not stream.accept_punct("."):
+        return None
+    if not stream.accept_phrase(
+        "destroy", "it", "at", "the", "beginning", "of", "the", "next", "end",
+        "step", "if", "it", "didn't", "attack", "this", "turn",
+    ):
+        return None
+    return ast.ForceChosenCreatureToAttack()

@@ -241,6 +241,7 @@ from .combat import (
     _lower_attack_as_though,
     _lower_assigns_no_combat_damage,
     _lower_attacking_doesnt_tap,
+    _lower_force_chosen_creature_to_attack,
     _lower_remove_from_combat,
 )
 from .game import (
@@ -411,6 +412,7 @@ __all__ = [
     "_lower_cast_from_exiled_with",
     "_lower_cast_permission",
     "_lower_exile_graveyard_until_leaves",
+    "_lower_force_chosen_creature_to_attack",
     "_lower_transmute_by_sacrifice",
     "_lower_exile_until_leaves_or_untaps",
     "_lower_ownership_exchange_unless_paid",

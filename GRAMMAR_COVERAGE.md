@@ -16,18 +16,18 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 82.2% | 80.9% | 44.6% | 158 |
-| LEB | 292 | 389 | 82.3% | 81.0% | 44.7% | 159 |
-| 2ED | 292 | 389 | 82.3% | 81.0% | 44.7% | 159 |
+| LEA | 290 | 388 | 82.5% | 81.2% | 44.8% | 159 |
+| LEB | 292 | 389 | 82.5% | 81.2% | 45.0% | 160 |
+| 2ED | 292 | 389 | 82.5% | 81.2% | 45.0% | 160 |
 | ARN | 78 | 108 | 75.9% | 71.3% | 49.1% | 44 |
 | ATQ | 85 | 120 | 89.2% | 89.2% | 61.7% | 67 |
-| 3ED | 296 | 389 | 84.1% | 82.3% | 46.8% | 164 |
+| 3ED | 296 | 389 | 84.3% | 82.5% | 47.0% | 165 |
 | LEG | 310 | 431 | 89.1% | 87.9% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 88.7% | 88.3% | 52.1% | 238 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 69.2% | 64.7% | 44.3% | 209 |
-| **All (shipped)** | **2415** | **3404** | **85.8%** | **84.7%** | **52.4%** | **1544** |
+| ICE *(measured)* | 373 | 601 | 69.4% | 64.9% | 44.4% | 209 |
+| **All (shipped)** | **2415** | **3404** | **85.9%** | **84.8%** | **52.5%** | **1548** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -44,7 +44,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | 80 | 46 | unconsumed text |  |
 | 40 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
 | 34 | 34 | unrecognized activation cost |  |
-| 10 | 7 | expected 'a' |  |
 | 10 | 4 | expected a keyword ability |  |
 | 9 | 3 | expected a colour or a creature body after 'becomes' |  |
 | 9 | 5 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -54,6 +53,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | 6 | 6 | expected 'unless defending player controls' |  |
 | 5 | 1 | expected 'equal to' quantity for damage |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
+| 5 | 5 | expected 'a' |  |
 | 5 | 5 | expected a quantity |  |
 | 4 | 1 | the only payer this clause can enumerate is an opponent |  |
 | 4 | 1 | expected 'that' |  |
@@ -67,7 +67,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 
 ## Cards executing through the grammar
 
-1544 cards, 1783 lines.
+1548 cards, 1787 lines.
 
 - **Abomination**
   - `Whenever this creature blocks or becomes blocked by a green or white creature, destroy that creature at end of combat.`
@@ -1843,6 +1843,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `Exile a creature card from your graveyard: Put X +0/+1 counters on this creature, where X is the exiled card's mana value.`
 - **Nether Void**
   - `Whenever a player casts a spell, counter it unless that player pays {3}.`
+- **Nettling Imp**
+  - `{T}: Choose target non-Wall creature the active player has controlled continuously since the beginning of the turn. That creature attacks this turn if able. Destroy it at the beginning of the next end step if it didn't attack this turn. Activate only during an opponent's turn, before attackers are declared.`
+  - `{T}: Choose target non-Wall creature the active player has controlled continuously since the beginning of the turn. That creature attacks this turn if able. Destroy it at the beginning of the next end step if it didn't attack this turn. Activate only during an opponent's turn, before attackers are declared.`
+  - `{T}: Choose target non-Wall creature the active player has controlled continuously since the beginning of the turn. That creature attacks this turn if able. Destroy it at the beginning of the next end step if it didn't attack this turn. Activate only during an opponent's turn, before attackers are declared.`
+  - `{T}: Choose target non-Wall creature the active player has controlled continuously since the beginning of the turn. That creature attacks this turn if able. Destroy it at the beginning of the next end step if it didn't attack this turn. Activate only during an opponent's turn, before attackers are declared.`
 - **Nevinyrral's Disk**
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
@@ -1862,6 +1867,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `When this enchantment leaves the battlefield, you lose the game.`
 - **Norritt**
   - `{T}: Untap target blue creature.`
+  - `{T}: Choose target non-Wall creature the active player has controlled continuously since the beginning of the turn. That creature attacks this turn if able. Destroy it at the beginning of the next end step if it didn't attack this turn. Activate only before attackers are declared.`
 - **North Star**
   - `{4}, {T}: For one spell this turn, you may spend mana as though it were mana of any type to pay that spell's mana cost. (Additional costs are still paid normally.)`
 - **Northern Paladin**

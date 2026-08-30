@@ -1106,3 +1106,76 @@ def test_krovikan_elementalist_sacrifices_the_creature_it_gave_flying(set_pool):
 
     assert [p.card.name for p in p1.battlefield] == ["Krovikan Elementalist"]
     assert [c.name for c in p1.graveyard] == ["Balduvian Bears"]
+
+
+# --- Round 36: a hook that had a second card, and the noun phrase it dropped ---
+
+
+def test_norritt_gets_the_ability_nettling_imp_had_hooked(set_pool):
+    """"{T}: Choose target non-Wall creature the active player has controlled
+    continuously since the beginning of the turn. That creature attacks this
+    turn if able. Destroy it at the beginning of the next end step if it didn't
+    attack this turn. Activate only before attackers are declared."
+
+    Nettling Imp prints that ability *verbatim* apart from the last sentence —
+    "Activate only during an opponent's turn, before attackers are declared" —
+    and was a card hook keyed on the whole line. So the identical effect on a
+    second card reached nothing at all, which is exactly the arithmetic
+    `HOOK_RELIANCE.md` measures.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Norritt"])
+
+    assert program.supported
+    assert [
+        a.instruction.kind for a in program.activated_abilities if a.instruction
+    ] == ["untap_target_permanent", "mark_non_wall_target_to_attack"]
+
+
+def test_norritt_may_point_a_creature_at_an_attack_on_its_own_turn(set_pool):
+    """The two cards' restrictions are different restrictions, not one clause
+    written two ways: Nettling Imp is limited to an opponent's turn and Norritt
+    is not, so Norritt can force the active player's creature to attack while
+    that active player is its own controller."""
+    from engine.activation_restrictions import ACTIVATION_RESTRICTIONS
+
+    def _rule(sentence):
+        return next(
+            r for r in ACTIVATION_RESTRICTIONS if r.pattern.match(sentence)
+        )
+
+    norritt = _rule("activate only before attackers are declared")
+    imp = _rule(
+        "activate only during an opponent's turn, before attackers are declared"
+    )
+
+    game = Game(
+        players=[PlayerState(name="P1", life=20), PlayerState(name="P2", life=20)]
+    )
+    game.active_player_index = 0
+    game.current_turn_phase = "precombat_main"
+
+    assert norritt.is_legal(game, 0, None) is True
+    assert imp.is_legal(game, 0, None) is False, "its own turn"
+
+
+def test_norritt_marks_the_creature_it_names(set_pool):
+    """The effect end to end on the card that could not reach it."""
+    norritt = Permanent(card=set_pool("ICE")["Norritt"])
+    bears = Permanent(card=set_pool("ICE")["Balduvian Bears"])
+    giant = Permanent(card=set_pool("ICE")["Tor Giant"])
+    for perm in (norritt, bears, giant):
+        perm.metadata["summoning_sickness_turn"] = -1
+    p1 = PlayerState(name="P1", battlefield=[norritt], life=20)
+    p2 = PlayerState(name="P2", battlefield=[bears, giant], life=20)
+    game = Game(players=[p1, p2])
+    game.active_player_index = 1
+
+    game.activate_permanent_ability(
+        0, "Norritt", ability_index=1,
+        target_player_index=1, target_permanent_index=1,
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert giant.metadata.get("must_attack_until_eot") is True
+    assert bears.metadata.get("must_attack_until_eot") is None

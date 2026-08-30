@@ -161,3 +161,24 @@ class AssignsNoCombatDamage:
 
     subject: Recipient
     duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
+class ForceChosenCreatureToAttack:
+    """``Choose target non-Wall creature the active player has controlled
+    continuously since the beginning of the turn. That creature attacks this
+    turn if able. Destroy it at the beginning of the next end step if it didn't
+    attack this turn.`` (Nettling Imp, Norritt, and Arcum's Whistle's opening.)
+
+    One node for three sentences, because the second and third have nothing to
+    read on their own: "that creature" and "it" are both the creature the first
+    sentence chose, and the destruction is conditional on what that creature did
+    with the requirement the second sentence imposed. Parsed apart, two of the
+    three dangle.
+
+    It carries no parameters. Every printing of this template names the same
+    creature — non-Wall, the active player's, controlled since the turn began —
+    and imposes the same requirement; what differs between the cards is the
+    activation restriction, which is a clause of the *ability* rather than of
+    this effect and is read where every other one is.
+    """

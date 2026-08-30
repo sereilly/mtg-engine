@@ -21,6 +21,7 @@ from .errors import GrammarError
 from .lexer import SELF, WORD
 from .paragraphs import (
     _parse_coin_flip_damage_loop,
+    _parse_force_chosen_creature_to_attack,
     _parse_exchange_greatest_mana_value, _parse_exile_graveyard_until_leaves,
     _parse_exile_until_leaves_or_untaps, _parse_name_and_strip,
     _parse_name_then_random_reveal, _parse_name_then_reveal_top,
@@ -516,6 +517,16 @@ def parse_subject_verb(
         return dataclasses.replace(token, recipient_players="each_opponent")
     stream.reset(mark_recipient)
     if stream.at_word("choose"):
+        # Nettling Imp / Norritt's three sentences, which are one effect. Tried
+        # first because the sentence *after* the one this opens has nothing to
+        # read on its own — "that creature" names what this one chose — so a
+        # production that took only the first sentence would strand the other
+        # two as unconsumed text.
+        mark_forced = stream.mark()
+        forced = _parse_force_chosen_creature_to_attack(stream)
+        if forced is not None:
+            return forced
+        stream.reset(mark_forced)
         # "Choose a number between 0 and 7." (Shapeshifter.) Tried first and
         # non-consuming on refusal, so every other "choose" sentence still
         # reaches the naming production behind it.

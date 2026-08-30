@@ -433,14 +433,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
                 min_creatures_above=3,
             ),
     },
-    'Nettling Imp': {
-        "{t}: choose target non-wall creature the active player has controlled "
-        "continuously since the beginning of the turn. that creature attacks this "
-        "turn if able. destroy it at the beginning of the next end step if it "
-        "didn't attack this turn. activate only during an opponent's turn, before "
-        "attackers are declared":
-            _line("mark_non_wall_target_to_attack", "activated_combat"),
-    },
     # Aladdin's linked steal is a production (one condition, "for as long as you
     # control this"); this one is not. Its duration is two conditions, one of
     # them a comparison against the source's own power that is re-checked

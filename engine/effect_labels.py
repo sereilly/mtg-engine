@@ -47,6 +47,12 @@ ACTIVATED_LABELS: dict[str, str] = {
     # support report were built on. Bone Flute is the tell — it is a shipped
     # card that had a settled bucket, and it only appears here because Orc
     # General's narrowed anthem generalised its kind out of a bespoke one.
+    # Nettling Imp / Norritt. The bucket the card hook carried before the
+    # grammar read the template, kept across the retirement so the support
+    # report does not silently re-bucket a shipped card (the reason this
+    # table exists at all): the grammar family is combat_restrictions, and
+    # the settled vocabulary is "combat".
+    "mark_non_wall_target_to_attack": "activated_combat",
     "buff_creatures_global": "activated_pump",
     "grant_cant_be_blocked_by_until_eot": "activated_evasion",
     "grant_half_prevention_shield": "activated_prevent",

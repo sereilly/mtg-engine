@@ -147,6 +147,7 @@ from .combat import (
     CantBe,
     AttackAsThough,
     CombatRestriction,
+    ForceChosenCreatureToAttack,
     RemoveFromCombat,
 )
 from .game import (
@@ -185,7 +186,7 @@ Effect = Union[
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
     RevealTop, RevealUntil, NameAndStrip, NameAndRandomReveal, NameThenRevealTop,
     ChooseCardsInHand, PutIteratedCardOnLibrary,
-    ExileGraveyardUntilLeaves, CastFromExiledWith,
+    ExileGraveyardUntilLeaves, CastFromExiledWith, ForceChosenCreatureToAttack,
     PhaseOut,
     AddManaForTappedLand, ProducesManaInstead, SpendManaAsThough, PreventDamage,
     RedirectDamage, DamageCantBePreventedOrRedirected,

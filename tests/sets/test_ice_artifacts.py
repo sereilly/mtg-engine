@@ -223,3 +223,39 @@ def test_celestial_sword_sacrifices_the_creature_it_pumped(set_pool):
 
     assert [p.card.name for p in p1.battlefield] == ["Celestial Sword"]
     assert [c.name for c in p1.graveyard] == ["Balduvian Bears"]
+
+
+# --- Round 36: an activation restriction is not evidence the permanent works ---
+
+
+def test_amulet_of_quoz_is_not_supported_on_the_strength_of_its_timing_clause(set_pool):
+    """"{T}, Sacrifice this artifact: Target opponent may ante the top card of
+    their library. … **Activate only during your upkeep.**"
+
+    The ability is the whole card and the compiler cannot read it. What kept the
+    artifact reported *supported* was the last sentence: "activate only during
+    your upkeep" is claimed by `activation_restrictions.py`, which leaves a
+    `derived_static_rule` instruction behind, and the gate took any instruction
+    that was not a bare whitelist marker as evidence the permanent does
+    something.
+
+    It is not. A restriction says *when an ability may be activated*, so it is a
+    clause of that ability — and when no ability of the card is readable it is a
+    rule about nothing.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Amulet of Quoz"])
+
+    assert not program.supported
+    assert "no ability of this permanent is implemented" in (program.reason or "")
+
+
+def test_a_derived_static_rule_that_is_real_behaviour_still_supports_its_card(set_pool):
+    """The narrowing is one claim wide, and deliberately: thirty shipped cards
+    have a `derived_static_rule` and nothing else — Winter Orb's untap
+    restriction, Howling Mine's draw-step modifier, Gloom's cost tax — and each
+    of those *is* what the permanent does."""
+    from engine.card_loader import load_cards, manifest_set_paths
+
+    pool = {c.name: c for c in load_cards(manifest_set_paths())}
+    for name in ("Winter Orb", "Howling Mine", "Gloom", "Meekstone"):
+        assert compile_card_oracle(pool[name]).supported, name

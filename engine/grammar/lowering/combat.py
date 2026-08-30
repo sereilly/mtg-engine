@@ -645,3 +645,20 @@ def _lower_assigns_no_combat_damage(
             "nothing else ends it", node=node,
         )
     return (OracleInstruction("assign_no_combat_damage_until_eot", "", {}),)
+
+
+def _lower_force_chosen_creature_to_attack(
+    node: ast.ForceChosenCreatureToAttack,
+) -> tuple[OracleInstruction, ...]:
+    """Nettling Imp / Norritt's three sentences, as the one instruction the
+    engine already had a handler, a target spec and a legality rule for.
+
+    Fused rather than composed into a ``sequence``, and this is the shape the
+    composition rule asks for rather than an exception to it: the second and
+    third sentences have no subject of their own to compose over — both name
+    the creature the first one chose — and the third is conditional on what
+    that creature did about the second. Three instructions would need a
+    scratchpad key to pass the chosen creature between them and a fourth to
+    remember the requirement, which is a fused instruction with extra steps.
+    """
+    return (OracleInstruction("mark_non_wall_target_to_attack", "", {}),)

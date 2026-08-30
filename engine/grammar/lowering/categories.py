@@ -505,6 +505,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "assign_no_combat_damage_until_eot": "combat_restrictions",
     "exempt_from_attack_tapping": "combat_restrictions",
     "remove_from_combat": "combat_restrictions",
+    "mark_non_wall_target_to_attack": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
     # CR 115.7a, changing a spell's target. Its own category rather than the
     # counterspells one beside it: a counter removes an object from the stack

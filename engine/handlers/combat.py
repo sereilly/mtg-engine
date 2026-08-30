@@ -512,23 +512,53 @@ def prevent_all_combat_damage_to_matching(game: Game, instruction: OracleInstruc
     return True, "resolved"
 
 
+def forced_attacker_is_legal(game: Game, permanent: Permanent) -> bool:
+    """Whether *permanent* is the creature this template may name: "target
+    non-Wall creature **the active player has controlled continuously since the
+    beginning of the turn**" (Nettling Imp, Norritt, Arcum's Whistle).
+
+    Every clause narrows, and each was being dropped. The seat is the active
+    player's, because the card exists to make somebody attack on *their* turn;
+    the continuity is what keeps a creature that arrived this turn out, which is
+    the difference between this and Siren's Call. Read off
+    ``summoning_sickness_turn`` — the same record ``Game.can_attack`` asks —
+    rather than a second one, because a permanent that entered this turn is
+    exactly a permanent its controller has not had since the turn began.
+
+    One reader, asked by the handler that marks the creature and by the legality
+    gate that offers the picker its candidates, so the list a player is shown
+    and the list the engine accepts cannot differ.
+    """
+    if not permanent.is_creature or permanent.has_type("wall"):
+        return False
+    if game.controller_index_of(permanent) != game.active_player_index:
+        return False
+    return permanent.metadata.get("summoning_sickness_turn") != game.turn
+
+
 @effect_handler("mark_non_wall_target_to_attack")
 def mark_non_wall_target_to_attack(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    target = context.target
-    target_creature = next(
-        (
-            perm
-            for perm in game.controlled_by(target)
-            if perm.is_creature and not perm.has_type("wall")
-        ),
-        None,
+    """"Choose target non-Wall creature the active player has controlled
+    continuously since the beginning of the turn. That creature attacks this
+    turn if able. Destroy it at the beginning of the next end step if it didn't
+    attack this turn."
+
+    **The chosen creature**, which this used to ignore: it scanned the target
+    player's battlefield and marked the first non-Wall creature it found, so a
+    player who picked the Hill Giant got the Grizzly Bears marked instead. The
+    card said "choose target" and the engine chose for them.
+    """
+    chosen = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: forced_attacker_is_legal(game, perm),
+        fallback_on_invalid_choice=False,
     )
-    if target_creature is not None:
-        target_creature.metadata["must_attack_until_eot"] = True
-        target_creature.metadata["destroy_if_did_not_attack_eot"] = True
-        game.log.append(f"{target_creature.card.name} marked to attack this turn")
-    else:
-        game.log.append("No non-Wall target for Nettling Imp effect")
+    if chosen is None:
+        game.log.append(f"{context.card.name}: no legal creature to force into combat")
+        return True, "resolved"
+    chosen.metadata["must_attack_until_eot"] = True
+    chosen.metadata["destroy_if_did_not_attack_eot"] = True
+    game.log.append(f"{chosen.card.name} marked to attack this turn")
     return True, "resolved"
 
 
