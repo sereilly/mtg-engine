@@ -1366,6 +1366,50 @@ def redirect_matching_damage_to_you_until_eot(
     return True, "resolved"
 
 
+@effect_handler("redirect_source_class_damage_until_eot")
+def redirect_source_class_damage_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Kjeldoran Royal Guard: "{T}: All combat damage that would be dealt to you
+    by unblocked creatures this turn is dealt to this creature instead."
+
+    The record hangs off the **caster**, which is the recipient it protects, so
+    the cleanup sweep that already clears a player's redirects ends it — no new
+    lifetime and no new field. What it answers to is the printed noun phrase
+    rather than one chosen object: ``sources`` is re-asked of each damage source
+    when the damage would be dealt (CR 614.9 fixes nothing when the ability
+    resolves), so a creature that is still unblocked in the combat damage step
+    is covered and one that got blocked is not.
+
+    The Guard itself is the new recipient, read off ``source_permanent`` rather
+    than described — and if it has left the battlefield by the time the damage
+    would be dealt, ``live_recipient`` makes the redirect do nothing, which is
+    CR 614.9 rather than a failure here.
+    """
+    caster = context.caster
+    guard = context.source_permanent
+    card_name = getattr(context.card, "name", None)
+    if guard is None:
+        game.log.append(f"{card_name}: nothing is there to take the damage")
+        return True, "resolved"
+    add_redirect(
+        caster,
+        DamageRedirect(
+            new_recipient=guard,
+            sources=dict(instruction.payload.get("sources") or {}),
+            combat_only=bool(instruction.payload.get("combat_only")),
+            uses=None,
+            source_name=card_name,
+        ),
+    )
+    game.log.append(
+        f"{card_name}: {'combat ' if instruction.payload.get('combat_only') else ''}"
+        f"damage matching sources would deal to {caster.name} this turn is dealt "
+        f"to {guard.card.name} instead"
+    )
+    return True, "resolved"
+
+
 @effect_handler("redirect_damage_from_target_spell_until_eot")
 def redirect_damage_from_target_spell_until_eot(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext

@@ -1409,3 +1409,92 @@ def test_a_condition_on_a_kind_nothing_asks_about_refuses_the_line(set_pool):
         "this creature can't block as long as you control a snow land"
     ) is None
     assert combat_restriction_for("this creature can't block") is not None
+
+
+# --- W1G1: prevention and damage shields ---
+def _w1g1_combat(game: Game, attackers: list[int], blockers: dict[int, int] | None = None):
+    """Seat 0 attacks with *attackers*; seat 1 blocks per *blockers*."""
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    assert game.declare_attackers(0, attackers)[0]
+    game.advance_combat_phase()  # declare_blockers
+    assert game.declare_blockers(1, blockers or {})[0]
+
+
+def test_kjeldoran_royal_guard_takes_the_unblocked_attackers_damage(set_pool):
+    """"{T}: All combat damage that would be dealt to you by unblocked creatures
+    this turn is dealt to this creature instead." (CR 614.9.)
+
+    Veteran Bodyguard's sentence with a duration on it, so the record is armed
+    once and read back when the damage would be dealt. The damage is *moved*,
+    not prevented: the Guard is the one that ends up marked.
+    """
+    pool = set_pool("ICE")
+    guard = _nosick(Permanent(card=pool["Kjeldoran Royal Guard"]))
+    attacker = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
+    p2 = PlayerState(name="P2", battlefield=[guard], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    result = game.activate_permanent_ability(1, "Kjeldoran Royal Guard", permanent_index=0)
+    assert result.supported, result.details
+    game._settle()
+
+    _w1g1_combat(game, [0])
+    game.advance_combat_phase()  # combat damage
+
+    assert p2.life == 20, "the damage moved onto the Guard, so no life was lost"
+    assert guard.damage_marked == 2
+
+
+def test_kjeldoran_royal_guard_leaves_a_blocked_attacker_where_it_was(set_pool):
+    """CR 509.1h: an attacker with a blocker declared for it is a *blocked*
+    creature, so the printed noun phrase does not name it. The class is re-asked
+    when the damage would be dealt rather than fixed when the ability resolved.
+    """
+    pool = set_pool("ICE")
+    guard = _nosick(Permanent(card=pool["Kjeldoran Royal Guard"]))
+    blocker = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    attacker = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
+    p2 = PlayerState(name="P2", battlefield=[guard, blocker], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    assert game.activate_permanent_ability(
+        1, "Kjeldoran Royal Guard", permanent_index=0
+    ).supported
+    game._settle()
+
+    _w1g1_combat(game, [0], {1: 0})
+    game.advance_combat_phase()
+
+    assert guard.damage_marked == 0, "a blocked attacker's damage never reaches the player"
+    assert blocker.damage_marked == 2
+
+
+def test_kjeldoran_royal_guard_does_not_move_noncombat_damage(set_pool):
+    """The printed word "combat" is honoured rather than dropped: without it the
+    record would catch an unblocked attacker's ping ability too, which is a
+    strictly larger card."""
+    pool = set_pool("ICE")
+    guard = _nosick(Permanent(card=pool["Kjeldoran Royal Guard"]))
+    attacker = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
+    p2 = PlayerState(name="P2", battlefield=[guard], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    assert game.activate_permanent_ability(
+        1, "Kjeldoran Royal Guard", permanent_index=0
+    ).supported
+    game._settle()
+    _w1g1_combat(game, [0])
+    game._deal_damage_to_player(p2, 3, source=attacker)
+
+    assert p2.life == 17
+    assert guard.damage_marked == 0
+# --- end W1G1 ---

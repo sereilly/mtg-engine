@@ -266,6 +266,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # for the same reason: what it moves is damage, and being optional and
     # being about a class are payload differences.
     "redirect_matching_damage_to_you_until_eot": "damage",
+    # "…by <printed noun phrase>" rather than by one chosen object
+    # (Kjeldoran Royal Guard): the class is re-asked of each source when
+    # the damage would be dealt, so it is a different record and a
+    # different handler, in the same family.
+    "redirect_source_class_damage_until_eot": "damage",
     "recolor_target_from_text": "recolor",
     # The same layer-5 colour change with a duration and several targets
     # (Dwarven Song and its four siblings). Same category: what differs is how

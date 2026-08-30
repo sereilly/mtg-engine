@@ -339,6 +339,8 @@ _COVERED_ELSEWHERE = {
     "could_attack_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "blocked_by_source": "test_blocked_by_source_names_only_what_the_source_blocks",
     "attacking_you": "test_attacking_you_is_two_questions_not_one",
+    "unblocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
+    "blocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
 }
 
 
@@ -732,3 +734,41 @@ def test_a_nested_host_phrase_is_gated_by_the_same_key_set():
     # level down is still a seat.
     assert object_only_filter(plain) == plain
     assert object_only_filter(seated) is None
+
+
+# --- W1G1: prevention and damage shields ---
+def test_the_blocked_pair_is_read_off_a_real_combat(pool):
+    """CR 509.1h's pair — "…by **unblocked** creatures" (Kjeldoran Royal Guard,
+    Veteran Bodyguard) and "**blocked** creature".
+
+    Demonstrated in a real combat rather than by a row in ``_REJECTIONS``,
+    because the reading that matters is the one a bare ``not perm.blocked``
+    gets wrong: a bear standing outside combat has ``blocked`` False and would
+    be admitted as "unblocked" by it, which on the Guard is every ping ability
+    on the board redirecting onto a 3/5. CR 509.1h makes both words states of
+    an *attacking* creature, so a creature outside combat answers neither.
+    """
+    unblocked = Permanent(card=pool["Grizzly Bears"])
+    blocked = Permanent(card=pool["Grizzly Bears"])
+    idle = Permanent(card=pool["Grizzly Bears"])
+    blocker = Permanent(card=pool["Grizzly Bears"])
+    p1 = PlayerState(name="P1", battlefield=[unblocked, blocked, idle])
+    p2 = PlayerState(name="P2", battlefield=[blocker])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0, 1])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 1})[0]
+
+    assert subject_matches(game, unblocked, {"unblocked_only": True})
+    assert not subject_matches(game, blocked, {"unblocked_only": True})
+    # The half a bare ``not blocked`` gets wrong.
+    assert not subject_matches(game, idle, {"unblocked_only": True})
+
+    assert subject_matches(game, blocked, {"blocked_only": True})
+    assert not subject_matches(game, unblocked, {"blocked_only": True})
+    assert not subject_matches(game, idle, {"blocked_only": True})
+# --- end W1G1 ---

@@ -110,6 +110,27 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
         raise LoweringError(
             "no handler resolves this redirect's new recipient", node=node
         )
+    # "…by **unblocked creatures** this turn" (Kjeldoran Royal Guard). A printed
+    # *class* of sources rather than one chosen object, which is why it is its
+    # own instruction: every branch below hands the handler an object to match
+    # by identity, and a class has none — it is re-asked of each source when the
+    # damage would be dealt (CR 614.9 does not fix the set when the ability
+    # resolves), so a creature that becomes unblocked afterwards is covered.
+    spec = node.dealt_by
+    if (
+        isinstance(spec, ast.TargetSpec)
+        and not spec.targeted
+        and spec.quantifier in ("all", "each")
+    ):
+        return _lower_source_class_redirect(node, spec)
+    if node.combat_only:
+        # The printed word is honoured by exactly one lowering. Every record
+        # below moves damage of any kind, so a "combat" that reached one would
+        # be dropped — and a redirect wider than the card prints is the silent
+        # direction.
+        raise LoweringError(
+            "only the source-class redirect is scoped to combat damage", node=node
+        )
     if node.from_chosen_source:
         if node.dealt_by is not None:
             raise LoweringError(
@@ -149,6 +170,63 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
             ),
         ) + instructions
     return instructions
+
+
+def _lower_source_class_redirect(
+    node: ast.RedirectDamage, spec: ast.TargetSpec
+) -> tuple[OracleInstruction, ...]:
+    """Kjeldoran Royal Guard: "{T}: All combat damage that would be dealt to you
+    by unblocked creatures this turn is dealt to this creature instead."
+
+    Veteran Bodyguard's sentence with a duration on it, which is the whole
+    reason it is a *record* rather than the static
+    ``engine/replacements.py`` derives off the printed line: that one is asked
+    of the board on every damage event and is true exactly while the creature is
+    untapped, and this one is armed once and lasts the turn whatever happens to
+    the Guard afterwards.
+
+    Four refusals, each a way the sentence could otherwise mean more than it
+    says:
+
+    * the damage must move onto the permanent whose ability this is. There is no
+      handler that arms a class-scoped record pointing at a chosen object, and
+      one that pointed nowhere would be a redirect that silently does nothing.
+    * the class must describe *something*. An empty filter is no narrowing at
+      all, so it would move every point of damage the player would be dealt.
+    * every key of the phrase must be one ``subject_matches`` can test, because
+      a narrowing the matcher cannot answer is dropped when the damage is dealt
+      — a record strictly wider than the card prints.
+    * a chosen source, a "next time" bound and an opponent's pick all have
+      readings on the recorded redirects above and none here.
+    """
+    if node.from_chosen_source or node.one_shot or node.chooser is not None:
+        raise LoweringError(
+            "a source-class redirect names no chosen source, no bound and no "
+            "other chooser",
+            node=node,
+        )
+    if not _is_source(node.new_recipient):
+        raise LoweringError(
+            "a source-class redirect moves the damage onto the permanent whose "
+            "ability it is",
+            node=node,
+        )
+    described = _filter_payload(spec.filter)
+    if not described:
+        raise LoweringError(
+            "a source-class redirect describes the sources it moves", node=node
+        )
+    untestable = untestable_filter_keys(described)
+    if untestable:
+        raise LoweringError(
+            "a redirect cannot test " + ", ".join(sorted(untestable)), node=node
+        )
+    return (
+        OracleInstruction(
+            "redirect_source_class_damage_until_eot", "",
+            {"sources": described, "combat_only": bool(node.combat_only)},
+        ),
+    )
 
 
 def _lower_spell_damage_redirect(

@@ -321,7 +321,17 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
     sentence is a redirect and nothing else, so from there it raises.
     """
     mark = stream.mark()
-    if not stream.accept_phrase("all", "damage", "that", "would", "be", "dealt"):
+    if not stream.accept_word("all"):
+        stream.reset(mark)
+        return None
+    # "All **combat** damage that would be dealt to you by unblocked creatures
+    # this turn is dealt to this creature instead." (Kjeldoran Royal Guard.)
+    # Read rather than skipped, for the reason the blanket shield above reads
+    # the same word: with it the redirect catches only the combat damage step,
+    # without it an unblocked attacker's ping ability moves too — a strictly
+    # larger effect, and one no lowering below would have been told about.
+    combat_only = bool(stream.accept_word("combat"))
+    if not stream.accept_phrase("damage", "that", "would", "be", "dealt"):
         stream.reset(mark)
         return None
     to: ast.Recipient | None = None
@@ -359,6 +369,7 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
         dealt_by=dealt_by,
         duration=duration,
         chooser=chooser,
+        combat_only=combat_only,
     )
 
 

@@ -180,6 +180,12 @@ class RedirectDamage:
     one_shot: bool = False
     chooser: PlayerRef | None = None
     optional: bool = False
+    #: "All **combat** damage that would be dealt to you by unblocked creatures
+    #: this turn is dealt to this creature instead." (Kjeldoran Royal Guard.)
+    #: The printed word is the whole difference between a redirect that catches
+    #: an unblocked attacker's ping ability and one that does not, so it is read
+    #: rather than skipped — exactly as :class:`PreventDamage` reads its own.
+    combat_only: bool = False
 
 
 @dataclass(frozen=True)
