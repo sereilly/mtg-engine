@@ -27,6 +27,7 @@ from .effects.prevention import _parse_bound_targeting_prevention
 from .errors import GrammarError
 from .nouns import parse_object_filter
 from .effects.characteristics import _parse_keywords
+from .vocabulary import LAND_TYPES, TYPE_LINE_SUPERTYPES
 from .phrases import (BASIC_LAND_WORDS, _parse_duration,
                       parse_bound_subject)
 from .references import parse_recipient, parse_target_spec
@@ -492,9 +493,21 @@ def _parse_choose_then_gain(stream: TokenStream) -> "ast.GainKeyword | None":
     if not stream.accept_word("choose"):
         stream.reset(mark)
         return None
+    # "a **basic** land type" (Giant Slug) and "a land type" (Illusionary
+    # Presence) are the same sentence over two domains, and the difference is
+    # exactly CR 205.3i's: five types the rules fix, against every land subtype
+    # printed. So the domain is read off the words rather than assumed — reading
+    # the wider phrase as the narrower one would offer five options where the
+    # card offers eighteen, and the vocabulary catalog is where the wider answer
+    # already lives.
     land_choice = bool(stream.accept_phrase("a", "basic", "land", "type"))
-    if land_choice:
-        options: tuple[str, ...] = BASIC_LAND_WORDS
+    any_land_choice = not land_choice and bool(
+        stream.accept_phrase("a", "land", "type")
+    )
+    if land_choice or any_land_choice:
+        options: tuple[str, ...] = (
+            BASIC_LAND_WORDS if land_choice else tuple(sorted(LAND_TYPES))
+        )
     else:
         try:
             options = _parse_keywords(stream)
@@ -517,14 +530,26 @@ def _parse_choose_then_gain(stream: TokenStream) -> "ast.GainKeyword | None":
     if not isinstance(subject, ast.TargetSpec) or not stream.accept_word("gains", "gain"):
         stream.reset(mark)
         return None
-    if land_choice:
+    if land_choice or any_land_choice:
+        # "**snow** landwalk of the chosen type" (Barbarian Guides). CR 702.14a
+        # lets a landwalk's type be "the card type land plus any combination of
+        # land types, card types, and/or supertypes", and `engine/landwalk.py`
+        # already reads a supertype sitting in front of the family word — so the
+        # printed qualifier is payload here rather than a second production.
+        qualifier = ""
+        prefix_mark = stream.mark()
+        word = stream.peek_word()
+        if word is not None and word in TYPE_LINE_SUPERTYPES:
+            stream.advance()
+            qualifier = f"{word} "
         if not stream.accept_phrase("landwalk", "of", "the", "chosen", "type"):
+            stream.reset(prefix_mark)
             stream.reset(mark)
             return None
         # CR 702.14a spells the family as "[type]walk", so the chosen type and
         # the granted ability are the same word carrying a suffix — payload,
         # never five productions.
-        keywords = tuple(f"{option}walk" for option in options)
+        keywords = tuple(f"{qualifier}{option}walk" for option in options)
     else:
         if not stream.accept_phrase("that", "ability"):
             stream.reset(mark)

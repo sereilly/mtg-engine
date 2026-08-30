@@ -37,3 +37,30 @@ def pytest_generate_tests(metafunc):
 def test_each_card_simulates_without_crash(card_name, catalog_by_name, all_cards):
     card = catalog_by_name[card_name]
     _build_test_case(card, all_cards)
+
+
+def test_classify_card_never_widens_the_compilers_answer():
+    """`classify_card` is a pass-through, and the whole pool is the assertion.
+
+    It used to widen: a card the compiler refused for "unsupported triggered
+    ability" was reported **supported** whenever any *other* trigger of it
+    compiled. That is the widened-gate shape — the question is "is every line of
+    this card read?" and the answer given was "does some line of it work?" — and
+    it was not confined to a census: `mixins/stack/casting.py`, `web/catalog.py`
+    and `engine/ai_policy.py` all ask this rather than the compiler, so such a
+    card was castable and playable with a printed trigger doing nothing.
+
+    Over the shipped **and** measured pool, because the one card it was hiding
+    was in the measured half — a guard over the shipped pool alone would have
+    passed on the day it was written and every day before it.
+    """
+    from engine.card_loader import load_cards, manifest_set_paths
+    from engine.oracle import compile_card_oracle
+
+    disagreements = [
+        card.name
+        for card in load_cards(manifest_set_paths(include_measured=True))
+        if classify_card(card).supported != compile_card_oracle(card).supported
+    ]
+
+    assert disagreements == []

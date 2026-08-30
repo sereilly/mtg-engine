@@ -1237,3 +1237,92 @@ def test_the_toll_reads_its_number_and_its_cost_off_the_card(set_pool):
     assert minion.payload["sacrifice"] == {"type_filter": "creature"}
     assert minion.payload["exclude_self"] is True
     assert "Mishra's War Machine" not in CARD_LINE_INSTRUCTIONS
+
+
+# --- Round 39: a landwalk's name is its printed quality, so no list holds it ---
+def _r39_presence(set_pool):
+    presence = Permanent(card=set_pool("ICE")["Illusionary Presence"])
+    p1 = PlayerState(name="P1", battlefield=[presence], mana_pool={"U": 9}, life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.active_player_index = 0
+    return game, p1, presence
+
+
+def test_illusionary_presence_compiles_supported(set_pool):
+    """"At the beginning of your upkeep, choose a land type. This creature gains
+    landwalk of the chosen type until end of turn."
+
+    Giant Slug's sentence over the wider domain: "a **basic** land type" is
+    CR 205.3i's five, "a land type" is every land subtype printed. Reading the
+    wider phrase as the narrower one would offer five options where the card
+    offers eighteen.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Illusionary Presence"])
+
+    assert program.supported, program.reason
+    choice = next(
+        trig.instruction
+        for trig in program.triggered_abilities
+        if trig.instruction is not None and trig.instruction.kind == "choose_one"
+    )
+    labels = [mode["label"] for mode in choice.payload["modes"]]
+    assert "forestwalk" in labels and "locuswalk" in labels
+    assert len(labels) > len({"plainswalk", "islandwalk", "swampwalk",
+                              "mountainwalk", "forestwalk"})
+
+
+def test_illusionary_presence_gains_the_chosen_landwalk_at_upkeep(set_pool):
+    """The grant used to be refused rather than offered: `_check_grantable`
+    asked `IMPLEMENTED_KEYWORDS`, which lists six "[type]walk" words, and
+    CR 702.14a builds the name out of the printed quality — so thirteen of the
+    eighteen options were a lowering error."""
+    game, _p1, presence = _r39_presence(set_pool)
+
+    game.resolve_upkeep(0)
+    game._settle()
+    game.resolve_stack()
+    game._settle()
+
+    granted = [
+        keyword for keyword in ("cavewalk", "forestwalk", "islandwalk")
+        if presence.has_keyword(keyword)
+    ]
+    assert granted, "the trigger granted the landwalk it chose"
+
+
+def test_a_landwalk_grant_is_gated_by_the_landwalk_reader_not_by_a_word_list(set_pool):
+    """The gate is `engine/landwalk.py` — the same reader `engine/oracle.py`
+    already asks about a printed keyword *line*. A grant asking a different
+    question is how one sentence works for five land types and refuses
+    thirteen."""
+    from engine.grammar import ast
+    from engine.grammar.lower import lower_ability
+    from engine.grammar.errors import LoweringError
+
+    def _grant(keyword: str):
+        return lower_ability(ast.SpellEffectLine(ast.GainKeyword(
+            ast.TargetSpec("this", ast.ObjectFilter(is_source=True)),
+            (keyword,),
+            ast.Duration("until_end_of_turn"),
+        )))
+
+    assert _grant("locuswalk")[0].payload["keywords"] == ("locuswalk",)
+    assert _grant("snow forestwalk")[0].payload["keywords"] == ("snow forestwalk",)
+
+    # The bare family word names no land and so restricts no block: granting it
+    # would put a word into layer 6 that does nothing.
+    try:
+        _grant("landwalk")
+    except LoweringError as error:
+        assert "land type" in str(error)
+    else:  # pragma: no cover - the assertion is the refusal
+        raise AssertionError("granting the bare family word must refuse")
+
+    # And a word that is neither is still refused, so the arm added here did
+    # not turn the gate into a pass-through.
+    try:
+        _grant("suspend")
+    except LoweringError as error:
+        assert "keyword implemented" in str(error)
+    else:  # pragma: no cover - the assertion is the refusal
+        raise AssertionError("an unimplemented keyword must still refuse")

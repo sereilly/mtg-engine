@@ -15,7 +15,7 @@ have, and it needed a new flag and a new branch for every keyword.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Iterable
 
 from .continuous import next_timestamp
 
@@ -202,6 +202,48 @@ def remove_keyword(
     _record(perm, keyword, grant=False, duration=duration, seat=seat)
 
 
+def expand_ability_removal(names: Iterable[str], present: Iterable[str]) -> set[str]:
+    """Which abilities a layer-6 removal of *names* actually takes away.
+
+    A removal may name a **family** rather than an ability, and a family name is
+    not something any permanent has — so removing it literally would take
+    nothing away and report success, which is the silent half of a removal. What
+    the name stands for is only knowable here, against the permanent's computed
+    ability set, because the removal was recorded before that set existed.
+
+    Two families print one today, and the second is why this moved out of
+    `engine/banding.py`:
+
+    * **banding** — CR 702.22b: "If an effect causes a permanent to lose
+      banding, the permanent loses all 'bands with other' abilities as well."
+      Tolaria prints both halves and Shelkin Brownie only the second, so neither
+      card is evidence for where the rule lives: it lives here, and any future
+      "loses banding" reaches it without knowing the rule exists.
+    * **landwalk** — CR 702.14a builds a landwalk's name out of a printed
+      quality, so the members are open and no list can hold them. The parser
+      used to expand "all landwalk abilities" into the five basics plus
+      desertwalk, which is what `IMPLEMENTED_KEYWORDS` happens to name, and
+      Hammerheim therefore left Rime Dryad's **snow** forestwalk in place: the
+      card did less than it prints, silently, with the suite green.
+      `engine/evasion_negation.py` had already learned this and answers with the
+      family word for the same reason.
+
+    Each family is a *predicate* over what the permanent has, never a list.
+    """
+    from .banding import BANDS_WITH_OTHER, band_quality
+    from .landwalk import LANDWALK, is_landwalk
+
+    families: tuple[tuple[frozenset[str], "Callable[[str], bool]"], ...] = (
+        (frozenset({"banding", BANDS_WITH_OTHER}), lambda a: band_quality(a) is not None),
+        (frozenset({LANDWALK}), is_landwalk),
+    )
+    removed = {name for name in names}
+    for named, belongs in families:
+        if removed & named:
+            removed |= {ability for ability in present if belongs(ability)}
+    return removed
+
+
 def clear_granted_keywords(
     perm: Permanent, duration: str, *, seat: int | None = None
 ) -> None:
@@ -376,5 +418,6 @@ __all__ = [
     "KEYWORD_GRANT_DURATIONS", "SEATED_GRANT_DURATIONS",
     "clear_granted_keywords", "derived_grants", "grant_ability_line",
     "keyword_ability_name",
+    "expand_ability_removal",
     "granted_ability_lines", "grant_keyword", "remove_keyword",
 ]

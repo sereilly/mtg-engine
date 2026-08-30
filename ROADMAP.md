@@ -692,12 +692,11 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, thirty-eight rounds in. 184 → 280 of 373 supported
+**Where it stands: Phase 3, thirty-nine rounds in. 184 → 280 of 373 supported
 (75.1%), hollow lines 9 cards, and 43 unclaimed sentences across 28 of those
-280 — the third number is new, and the warning below says what it means.**
-Round 38 found a fourth number that disagrees with the first: the census and the
-refusal list inside one script count with two different readers, and the census
-is the wider of the two. Round 39 is that. The set is still under `measured`, which is the
+280 — the third number is new, and the warning below says what it means.** The
+count is now the *compiler's*: round 39 removed a gate that widened it, so the
+census and the refusal list inside `support_report.py` agree for the first time. The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
@@ -2127,6 +2126,75 @@ castable, and drops its second upkeep trigger in silence. Measured over the
 whole shipped-plus-measured pool, it is the **only** card in either direction —
 so no shipped card is affected, and the number the census has been reporting for
 this set is one too high.
+
+**Round 39 — a landwalk's name is its printed quality, so no list can hold it.
+280 → 280, and the number underneath it rose.**
+
+The round round 38 scheduled, and it turned into one thesis with three askers.
+
+**First the gate that was widening the count.** `engine/classifier.py` took the
+compiler's verdict and overrode it: a card refused for "unsupported triggered
+ability" was reported **supported** as long as any *other* triggered ability of
+it compiled. The census in `scripts/support_report.py` asks `classify_card` and
+its `--refusals` list asks `compile_card_oracle`, which is how one script came
+to print two totals for one set — but the reach was not a report.
+`mixins/stack/casting.py`, `web/catalog.py` and `engine/ai_policy.py` all ask
+this question rather than the compiler's, so such a card was castable, browsable
+and playable with a printed trigger doing nothing at all.
+
+Measured over the shipped-plus-measured pool before removing it: **one** card,
+Illusionary Presence, in the measured half. So no shipped card moved, and the
+guard that replaces the override reads both halves — over the shipped pool alone
+it would have passed on the day it was written and every day before it.
+
+**Then the card it was hiding, which needed the same sentence twice.**
+"At the beginning of your upkeep, choose a land type. This creature gains
+landwalk of the chosen type until end of turn" is Giant Slug's production over
+a wider domain: CR 205.3i fixes the five **basic** land types, and "a land type"
+is every land subtype printed — eighteen today, out of the vocabulary catalog
+that already answers it. Reading the wider phrase as the narrower one would
+offer five options where the card offers eighteen, so the domain is read off the
+words.
+
+And the grant then refused thirteen of them. `_check_grantable` asks
+`IMPLEMENTED_KEYWORDS`, a frozenset — and **CR 702.14a builds a landwalk's name
+out of a printed quality**, so the names are open and no frozenset can hold
+them. The six `[type]walk` words in that registry are a sample, not a family.
+`engine/landwalk.py` is the reader that decides whether a quality is one the
+block check can test, and it is already the gate `engine/oracle.py` asks about a
+printed keyword *line*; the grant and the removal ask it now too. Granting the
+bare family word is refused for `BANDS_WITH_OTHER`'s reason exactly — it names
+no land, so it restricts no block.
+
+**The third asker had the bug.** "Target creature loses all landwalk abilities
+until end of turn" (Hammerheim) expanded the family **in the parser**, into the
+list `IMPLEMENTED_KEYWORDS` happens to name — so Rime Dryad kept its **snow**
+forestwalk while the log said it had lost it. Silent, green, and in the same
+direction as every other finding in this journal: the card doing less than it
+prints, which is the creature doing more than it should.
+
+`engine/evasion_negation.py` had already learned this exact lesson one sentence
+over ("Creatures with landwalk abilities can be blocked as though they didn't
+have those abilities") and answers with the **family word**, leaving the
+expansion to the site that knows what the permanent has. That is what the
+removal does now: `expand_ability_removal` moved from `engine/banding.py` to
+`engine/keywords.py`, beside the layer-6 write API, and holds one entry per
+family as a *predicate* rather than a list. Banding was the first family, which
+is why the function lived in banding's module; landwalk is the second, which is
+why it does not any more.
+
+**The count is flat and both halves of it moved.** Illusionary Presence is
+genuinely supported (+1) and the override that had been reporting it supported
+all along is gone (−1). Every number this journal has published for Ice Age
+since the ingest was one too high; 280 is the first that is the compiler's own.
+
+**Barbarian Guides is the next card in this template and declines with one piece
+named.** "Choose a land type. Target creature you control gains snow landwalk of
+the chosen type until end of turn. **Return that creature to its owner's hand at
+the beginning of the next end step.**" The first two sentences parse and lower
+now — the supertype qualifier is payload, exactly as `engine/landwalk.py` reads
+it — and the third does not: nothing in the grammar returns a *bound* subject to
+its owner's hand, at a delay or otherwise.
 
 ## Where the sets landed
 

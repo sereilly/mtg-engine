@@ -36,8 +36,9 @@ functions rather than one predicate everybody reuses wrongly:
 The family name — ``"bands with other"`` with no quality — is not an ability
 anything has. It is what a *removal* names ("loses all 'bands with other'
 abilities", Shelkin Brownie), and CR 702.22b makes removing plain banding name
-the same set. :func:`expand_ability_removal` is where both of those become the
-concrete abilities layer 6 takes away.
+the same set. :func:`engine.keywords.expand_ability_removal` is where both of
+those become the concrete abilities layer 6 takes away — beside the removal API
+rather than here, because banding is not the only family a removal can name.
 """
 
 from __future__ import annotations
@@ -124,26 +125,6 @@ def abilities_of(abilities: Iterable[str]) -> tuple[str, ...]:
     return tuple(sorted(a for a in abilities if band_quality(a) is not None))
 
 
-def expand_ability_removal(names: Iterable[str], present: Iterable[str]) -> set[str]:
-    """Which abilities a layer-6 removal of *names* actually takes away.
-
-    Two rules fold in here, and both are about a name that stands for a *set*:
-
-    * CR 702.22b — "If an effect causes a permanent to lose banding, the
-      permanent loses all 'bands with other' abilities as well." Tolaria prints
-      both halves and Shelkin Brownie prints only the second, so neither card is
-      evidence for where the rule lives: it lives here, once, and any future
-      "loses banding" reaches it without knowing the rule exists.
-    * The family name a removal spells ("all 'bands with other' abilities") is
-      not an ability anything has, so removing it literally would remove
-      nothing at all — the silent half of a removal that reports success.
-    """
-    removed = {name for name in names}
-    if removed & {"banding", BANDS_WITH_OTHER}:
-        removed |= {a for a in present if band_quality(a) is not None}
-    return removed
-
-
 # ---------------------------------------------------------------------------
 # The two combat questions
 # ---------------------------------------------------------------------------
@@ -220,6 +201,6 @@ def computed_abilities_of(perm: "Permanent") -> frozenset[str]:
 
 __all__ = [
     "BANDS_WITH_OTHER", "abilities_of", "band_quality", "band_quality_filter",
-    "bands_with_other_band", "bands_with_other_pair", "expand_ability_removal",
+    "bands_with_other_band", "bands_with_other_pair",
     "is_bands_with_other", "is_implemented",
 ]

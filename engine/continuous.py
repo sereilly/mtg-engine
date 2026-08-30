@@ -522,13 +522,14 @@ def remove_abilities(
 
     def modify(char: Characteristics) -> None:
         # A removal may name a *set* rather than an ability: "loses all 'bands
-        # with other' abilities" names the family, and CR 702.22b makes "loses
-        # banding" name it too. Both have to be resolved against what the
-        # permanent actually has, which is only knowable here — the removal was
-        # recorded before this permanent's ability set existed. Removing the
-        # family name literally would take nothing away and report success,
-        # which is the silent half of a removal (engine/banding.py).
-        from .banding import expand_ability_removal
+        # with other' abilities" and "loses all landwalk abilities" both name a
+        # family, and CR 702.22b makes "loses banding" name one too. All of them
+        # have to be resolved against what the permanent actually has, which is
+        # only knowable here — the removal was recorded before this permanent's
+        # ability set existed. Removing the family name literally would take
+        # nothing away and report success, which is the silent half of a
+        # removal (engine/keywords.py).
+        from .keywords import expand_ability_removal
 
         char.abilities.difference_update(
             expand_ability_removal(abilities, char.abilities)

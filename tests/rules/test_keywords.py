@@ -1788,3 +1788,41 @@ def test_702_14a_a_snow_walk_is_not_satisfied_by_the_wrong_subtype():
     _to_declare_blockers(game, [0])
 
     assert game.declare_blockers(1, {0: 0})[0]
+
+
+# CR 702.14a — the family a removal names, and why no list can hold its members
+@pytest.mark.cr("702.14a")
+def test_702_14a_losing_all_landwalk_abilities_reaches_a_quality_landwalk():
+    """"Target creature loses all landwalk abilities until end of turn."
+    (Hammerheim.)
+
+    CR 702.14a builds a landwalk's *name* out of a printed quality, so the
+    members of the family are open and a registry of words cannot list them.
+    The parser used to expand the phrase into the five basics plus desertwalk —
+    which is what ``IMPLEMENTED_KEYWORDS`` happens to name — and a creature with
+    **snow** forestwalk kept an ability the card says it lost, silently and in
+    its own favour. The family word travels to layer 6 now and is expanded
+    against what the permanent actually has.
+    """
+    from engine.keywords import expand_ability_removal
+
+    walker = Permanent(card=_mk_creature("Walker", 2, 2, keywords=("Snow forestwalk",)))
+    assert walker.has_keyword("snow forestwalk")
+
+    remove_keyword(walker, "landwalk", duration="end_of_turn")
+
+    assert not walker.has_keyword("snow forestwalk")
+    assert expand_ability_removal(["landwalk"], ["snow forestwalk", "flying"]) == {
+        "landwalk", "snow forestwalk",
+    }, "the family takes its members and leaves everything else"
+
+
+@pytest.mark.cr("702.14a")
+def test_702_14a_a_basic_landwalk_still_goes_with_the_family():
+    """The control on the change above: expanding the family must not have
+    stopped covering the members the old list did name."""
+    walker = Permanent(card=_mk_creature("Walker", 2, 2, keywords=("Forestwalk",)))
+
+    remove_keyword(walker, "landwalk", duration="end_of_turn")
+
+    assert not walker.has_keyword("forestwalk")

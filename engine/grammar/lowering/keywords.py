@@ -356,6 +356,26 @@ def _lower_gain_ability_text(node: ast.GainAbilityText) -> tuple[OracleInstructi
     return (OracleInstruction("grant_target_ability_text", "", payload),)
 
 
+LANDWALK = "landwalk"
+
+
+def _is_landwalk(keyword: str) -> bool:
+    """Whether *keyword* is a landwalk the engine enforces.
+
+    Asked beside :data:`IMPLEMENTED_KEYWORDS` rather than folded into it,
+    because CR 702.14a builds a landwalk's **name** out of a printed quality —
+    "islandwalk", "snow forestwalk", "nonbasic landwalk" — so the set of names
+    is open and no frozenset can hold it. `engine/landwalk.py` is the reader
+    that decides whether a quality is one the block check can test, and it is
+    already the gate `engine/oracle.py` asks about a printed keyword *line*.
+    A grant asking a different question is how "gains landwalk of the chosen
+    type" comes to work for five types and refuse the other thirteen.
+    """
+    from ...landwalk import is_landwalk
+
+    return is_landwalk(keyword)
+
+
 def _check_grantable(keyword: str, node) -> None:
     """Refuse a grant of a keyword the engine cannot actually give.
 
@@ -368,7 +388,7 @@ def _check_grantable(keyword: str, node) -> None:
     want it (CR 702.23a defines the ability, the number parameterises it).
     """
     name = keyword_ability_name(keyword)
-    if name not in IMPLEMENTED_KEYWORDS:
+    if name not in IMPLEMENTED_KEYWORDS and not _is_landwalk(keyword):
         raise LoweringError(
             f"granting {keyword!r} needs the keyword implemented", node=node
         )
@@ -382,6 +402,16 @@ def _check_grantable(keyword: str, node) -> None:
     if keyword == BANDS_WITH_OTHER:
         raise LoweringError(
             f"granting {keyword!r} needs the quality the band is with", node=node
+        )
+    # The same shape one family over. CR 702.14a's landwalk is the word plus a
+    # land type, so the bare family word names no land and restricts no block
+    # (`landwalk_requirement` answers None for it) — granting it would put a
+    # word into layer 6 that does nothing. A *removal* of it is a real thing and
+    # is what `expand_ability_removal` reads, which is why the refusal is here
+    # and not in the registry.
+    if keyword == LANDWALK:
+        raise LoweringError(
+            f"granting {keyword!r} needs the land type it walks", node=node
         )
     if name in NUMERIC_ARGUMENT_KEYWORDS and keyword == name:
         raise LoweringError(
@@ -406,7 +436,10 @@ def _lower_lose_keyword(
         # "all 'bands with other' abilities" and "bands with other legendary
         # creatures" are the same registry entry, and only the first is a word
         # any list could hold.
-        if keyword_ability_name(keyword) not in IMPLEMENTED_KEYWORDS:
+        if (
+            keyword_ability_name(keyword) not in IMPLEMENTED_KEYWORDS
+            and not _is_landwalk(keyword)
+        ):
             raise LoweringError(
                 f"removing {keyword!r} needs the keyword implemented", node=node
             )

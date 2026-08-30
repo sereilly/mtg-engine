@@ -128,22 +128,24 @@ NUMERIC_ARGUMENT_KEYWORDS: frozenset[str] = frozenset({"rampage"})
 #: The keyword **families** a card can name wholesale: "loses all landwalk
 #: abilities" (Hammerheim). CR 702.14a defines landwalk as a family of
 #: "[type]walk" abilities rather than one ability, so a card that names the
-#: family is naming every member of it, and what the parser must produce is the
-#: member list.
+#: family is naming every member of it — and the parser produces the **family
+#: word**, not a member list.
 #:
-#: **Derived from the registry, not spelled beside it.** Which landwalks exist
-#: is already :data:`IMPLEMENTED_KEYWORDS`; a second hand-written tuple here
-#: would be the standing bug of this project — one fact with two
-#: representations, so a landwalk added to the registry keeps being granted and
-#: silently stops being removable by the card that says "all of them".
+#: It used to produce the list, derived from :data:`IMPLEMENTED_KEYWORDS` so
+#: that no second hand-written tuple could drift from the registry. The
+#: derivation was honest and the premise was not: CR 702.14a builds a
+#: landwalk's name out of a printed quality, so "snow forestwalk" is a member
+#: no registry of *words* can contain, and Hammerheim left Rime Dryad's snow
+#: forestwalk in place while reporting that it had removed it. An open family
+#: is expanded where the permanent's abilities are known —
+#: :func:`engine.keywords.expand_ability_removal` — exactly as
+#: `engine/evasion_negation.py` answers the same sentence with the family word
+#: and asks the enforcement site.
+#:
+#: The value is a tuple because the parser above returns a keyword *list*; a
+#: family that named more than one word would list them here.
 KEYWORD_FAMILIES: dict[str, tuple[str, ...]] = {
-    "landwalk": tuple(
-        sorted(
-            keyword
-            for keyword in IMPLEMENTED_KEYWORDS
-            if keyword.endswith("walk") and keyword != "landwalk"
-        )
-    ),
+    "landwalk": ("landwalk",),
 }
 
 

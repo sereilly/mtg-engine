@@ -26,7 +26,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 89.0% | 88.7% | 52.5% | 239 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 69.9% | 65.4% | 44.9% | 210 |
+| ICE *(measured)* | 373 | 601 | 70.0% | 65.6% | 45.1% | 211 |
 | **All (shipped)** | **2415** | **3404** | **86.1%** | **85.0%** | **52.7%** | **1551** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -49,8 +49,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 | 9 | 5 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 8 | 3 | no lowering for RawEffect |  |
 | 8 | 3 | expected 'the number of' in a where-clause |  |
-| 7 | 3 | expected 'card' |  |
 | 6 | 6 | expected 'unless defending player controls' |  |
+| 5 | 1 | expected 'card' |  |
 | 5 | 1 | expected 'equal to' quantity for damage |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 5 | expected 'a' |  |
@@ -1334,6 +1334,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{G}: This creature deals 1 damage to each creature with flying and each player. Any player may activate this ability.`
 - **Igneous Cur**
   - `{1}{R}: This creature gets +2/+0 until end of turn.`
+- **Illusionary Presence**
+  - `At the beginning of your upkeep, choose a land type. This creature gains landwalk of the chosen type until end of turn. (It can't be blocked as long as defending player controls a land of that type.)`
 - **Illusions of Grandeur**
   - `When this enchantment enters, you gain 20 life.`
   - `When this enchantment leaves the battlefield, you lose 20 life.`
