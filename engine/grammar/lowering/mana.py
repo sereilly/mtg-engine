@@ -106,6 +106,27 @@ def _lower_add_mana(
                 {"color": node.from_sacrificed_cost, "bonus": 0, "spend_only": None},
             ),
         )
+    if node.runs_choice:
+        # "Add {U} or {C}{U}." (Adarkar Unicorn.) Its own key for the reason
+        # ``pips_choice`` is one: a reader that has not learned it adds nothing
+        # rather than every alternative, and "nothing" is the failing-safe
+        # direction for a mana ability.
+        payload = {"pips_alternatives": node.runs_choice}
+        if node.spend_only is not None:
+            payload["spend_only"] = node.spend_only
+        return (OracleInstruction("add_mana_from_text", "", payload),)
+    if node.combination:
+        # "Add three mana in any combination of {R} and/or {G}." (Orcish
+        # Lumberjack.) The count and the symbols are both payload; which unit is
+        # which colour is the seat's choice at resolution, so nothing about it
+        # is decided here.
+        payload = {
+            "combination": node.combination,
+            "combination_count": _amount_payload(node.combination_count),
+        }
+        if node.spend_only is not None:
+            payload["spend_only"] = node.spend_only
+        return (OracleInstruction("add_mana_from_text", "", payload),)
     if node.pips:
         # A printed "or" ships under its own key, never as bare ``pips``: a
         # reader that has not learned ``pips_choice`` then adds *nothing*

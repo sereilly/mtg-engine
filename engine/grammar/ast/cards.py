@@ -46,6 +46,14 @@ class Discard:
     # filter would say the same thing in a way a reader could mistake for a
     # narrowing that got lost.
     filter: "ObjectFilter | None" = None
+    # "Draw two cards, then discard one **of them**." (Krovikan Sorcerer.) The
+    # discard comes out of the cards the sentence in front of it drew, not out
+    # of the hand at large. Not a `filter`: what it names is identity — *these*
+    # cards — and an ObjectFilter describes characteristics, so a card already
+    # in hand that happened to match would pay a cost the printed words do not
+    # allow. Recorded here and refused by every lowering but the fused
+    # draw-then-discard, which is the only one holding the cards it points at.
+    of_drawn: bool = False
 
 
 @dataclass(frozen=True)

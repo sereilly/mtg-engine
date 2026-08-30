@@ -103,6 +103,37 @@ def _parse_removed_counter_multiplier(stream: TokenStream) -> str | None:
     return None
 
 
+def _parse_combination_symbols(stream: TokenStream) -> tuple[str, ...]:
+    """``{R} and/or {G}`` — the symbols an "in any combination of" clause lists.
+
+    The lexer splits "and/or" into the two words, so the separator is read as
+    either or both. Every listed symbol must be a colour or {C}: a generic or
+    variable symbol here would name a quantity rather than a kind of mana, and
+    the payload it produced would be a colour nothing can add.
+
+    At least two, because "in any combination of {R}" is not a combination — a
+    single-symbol list is "Add N {R}" with extra words, and admitting it here
+    would give the same clause two readings.
+    """
+    symbols: list[str] = []
+    while stream.at_kind(MANA):
+        token = stream.next()
+        symbol = token.text.strip("{}")
+        if symbol not in ("W", "U", "B", "R", "G", "C"):
+            raise stream.error(f"unsupported mana symbol {token.text!r}")
+        if symbol not in symbols:
+            symbols.append(symbol)
+        # "and/or", "and" or "or" — the separator between two alternatives, in
+        # whichever of the three spellings the card prints.
+        joined = stream.accept_word("and")
+        joined = stream.accept_word("or") or joined
+        if not joined:
+            break
+    if len(symbols) < 2:
+        raise stream.error("a mana combination lists at least two symbols")
+    return tuple(symbols)
+
+
 def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     """``Add {G}`` / ``Add {C}{C}{C}`` / ``Add one mana of any color``."""
     start = stream.mark()
@@ -119,22 +150,23 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
 
     pips: dict[str, int] = {}
     choice = False
-    # How many symbols each alternative of a printed "or" holds. Counted rather
-    # than merged away, because the payload can express a choice only between
-    # **single** symbols: `pips_choice` is ``(symbol, count)`` pairs, one per
-    # alternative, which says "one of these colours" and cannot say "{U}, or
-    # {C} and {U} together". Every dual land in the pool is the first shape;
-    # Adarkar Unicorn ("Add {U} or {C}{U}") is the first card that is not, and
-    # merging it produced a bag reading "either one {C} or two {U}" — neither of
-    # the two things the card prints. It refuses below instead.
-    run_lengths = [0]
+    # One dict per alternative of a printed "or", in printed order. Kept apart
+    # rather than merged away, because the older payload can express a choice
+    # only between **single** symbols: `pips_choice` is ``(symbol, count)``
+    # pairs, one per alternative, which says "one of these colours" and cannot
+    # say "{U}, or {C} and {U} together". Every dual land in the pool is the
+    # first shape; Adarkar Unicorn ("Add {U} or {C}{U}") is the first card that
+    # is not, and merging it produced a bag reading "either one {C} or two {U}"
+    # — neither of the two things the card prints. A run longer than one symbol
+    # therefore ships as `runs_choice`, its own key, and `pips` stays empty.
+    runs: list[dict[str, int]] = [{}]
     while stream.at_kind(MANA):
         token = stream.next()
         symbol = token.text.strip("{}")
         if symbol.isdigit() or symbol in ("T", "Q", "X"):
             raise stream.error(f"unsupported mana symbol {token.text!r}")
         pips[symbol] = pips.get(symbol, 0) + 1
-        run_lengths[-1] += 1
+        runs[-1][symbol] = runs[-1].get(symbol, 0) + 1
         # "{B} or {R}" — a dual land's choice, not two mana. The word is
         # *recorded* on the node, because a parse that merely consumed it would
         # read "Add {B} or {R}" and "Add {B}{R}" as the same clause.
@@ -145,10 +177,16 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
                 stream.reset(mark)
                 break
             choice = True
-            run_lengths.append(0)
-    if choice and any(length > 1 for length in run_lengths):
-        raise stream.error(
-            "a mana choice between runs of more than one symbol is not expressible"
+            runs.append({})
+    if choice and any(len(run) != 1 or sum(run.values()) != 1 for run in runs):
+        # At least one alternative is a written-out quantity rather than a bare
+        # colour, so the whole choice goes down the `runs_choice` branch: the
+        # alternatives are pip lists and the seat picks one of them entire.
+        return ast.AddMana(
+            (),
+            runs_choice=tuple(tuple(sorted(run.items())) for run in runs),
+            source_text=_clause(),
+            additional=additional,
         )
     if pips:
         removed = _parse_removed_counter_multiplier(stream)
@@ -234,6 +272,20 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
 
     # "Add one mana of any color" / "Add three mana of any one color".
     stream.expect_word("mana")
+    # "Add three mana **in any combination of {R} and/or {G}**" (Orcish
+    # Lumberjack); "Add X mana in any combination of {B} and/or {R}" (Burnt
+    # Offering). Read before the "of any color" branch below, which the words
+    # would otherwise refuse on "in" — a per-unit choice among *named* symbols,
+    # which is neither "any colour" (unrestricted, one choice for the whole
+    # clause) nor a choice between written-out quantities.
+    if stream.accept_phrase("in", "any", "combination", "of"):
+        symbols = _parse_combination_symbols(stream)
+        return ast.AddMana(
+            (),
+            combination=symbols,
+            combination_count=count,
+            source_text=_clause(),
+        )
     stream.expect_word("of")
     stream.accept_word("any")
     stream.accept_word("one")

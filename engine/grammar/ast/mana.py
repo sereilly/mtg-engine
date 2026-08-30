@@ -102,6 +102,23 @@ class AddMana:
     # shape a life gain and a counter placement already carry — so it is a
     # filter here rather than a number, and the count is taken at resolution.
     per_each: object | None = None
+    # "Add {U} **or** {C}{U}." (Adarkar Unicorn.) The printed alternatives when
+    # at least one of them is a *run* of more than one symbol, which ``pips`` +
+    # ``choice`` cannot say: that pair is ``(symbol, count)`` pairs, one per
+    # alternative, so it expresses "one of these colours" and not "{U}, or {C}
+    # and {U} together". Each alternative is its own pip list here, and ``pips``
+    # stays empty — the two spellings are read by different branches, so a
+    # reader that has learned only the older key adds nothing rather than
+    # everything.
+    runs_choice: tuple[tuple[tuple[str, int], ...], ...] = ()
+    # "Add three mana **in any combination of** {R} and/or {G}." (Orcish
+    # Lumberjack, Burnt Offering.) The symbols the player may choose among, with
+    # ``combination_count`` mana produced and each unit chosen independently —
+    # which is what separates it from ``any_color`` ("of any **one** color", one
+    # choice for the whole clause) and from ``runs_choice`` (a choice between
+    # two written-out quantities).
+    combination: tuple[str, ...] = ()
+    combination_count: "Amount | int" = 0
 
 
 @dataclass(frozen=True)

@@ -219,19 +219,9 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     if exiled is not None:
         return exiled
 
-    sacrificed_mark = stream.mark()
-    if stream.accept_word("sacrificed"):
-        noun = stream.peek_word()
-        if noun is not None:
-            stream.advance()
-            if stream.accept_word("'s"):
-                if stream.accept_phrase("mana", "value"):
-                    return ast.SacrificedForCost("mana_value")
-                characteristic = stream.peek_word()
-                if characteristic in ("power", "toughness"):
-                    stream.advance()
-                    return ast.SacrificedForCost(str(characteristic))
-    stream.reset(sacrificed_mark)
+    sacrificed = accept_sacrificed_for_cost(stream)
+    if sacrificed is not None:
+        return sacrificed
 
     if stream.accept_phrase("damage", "dealt"):
         # "…equal to the damage dealt **this way**" (Syphon Soul). "This way"
@@ -458,13 +448,48 @@ def accept_damage_dealt_by_chosen_cast(
     return ast.DamageDealtByChosenCast(singular(word))
 
 
+def accept_sacrificed_for_cost(stream: "TokenStream") -> "ast.SacrificedForCost | None":
+    """``the sacrificed <noun>'s <characteristic>`` — or None, cursor unmoved.
+
+    "equal to **the sacrificed creature's toughness**" (Life Chisel, Diamond
+    Valley); "where X is **the sacrificed creature's mana value**" (Burnt
+    Offering). A characteristic of the permanent the spell's or ability's own
+    *cost* ate, not of anything a step of the effect touched: CR 601.2h pays the
+    cost before the object is on the stack, so by resolution the creature is a
+    memory the payment path recorded (``sacrificed_for_cost``).
+
+    The noun and the characteristic are both read as printed, so "the sacrificed
+    **artifact's** mana value" is the same production. Which of them a handler
+    can actually answer is the lowering's question.
+
+    A named function rather than an inline branch for
+    :func:`accept_exiled_for_cost`'s reason: two front ends read the phrase — an
+    "equal to" amount and a where-clause — and two copies of a phrase that names
+    a payment channel is how the two come to name different ones. The leading
+    "the" is the caller's.
+    """
+    mark = stream.mark()
+    if stream.accept_word("sacrificed"):
+        noun = stream.peek_word()
+        if noun is not None:
+            stream.advance()
+            if stream.accept_word("'s"):
+                if stream.accept_phrase("mana", "value"):
+                    return ast.SacrificedForCost("mana_value")
+                characteristic = stream.peek_word()
+                if characteristic in ("power", "toughness"):
+                    stream.advance()
+                    return ast.SacrificedForCost(str(characteristic))
+    stream.reset(mark)
+    return None
+
+
 def accept_exiled_for_cost(stream: "TokenStream") -> "ast.ExiledForCost | None":
     """``the exiled card's <characteristic>`` — or None with the cursor unmoved.
 
-    The twin of the "sacrificed <noun>'s …" branch in :func:`parse_amount`, and
-    a named function rather than a second inline branch because two front ends
-    read it: an "equal to" amount and a where-clause. The leading "the" is the
-    caller's, exactly as it is for the sacrifice.
+    The twin of :func:`accept_sacrificed_for_cost` one zone over, and a named
+    function for the same reason: two front ends read it, an "equal to" amount
+    and a where-clause. The leading "the" is the caller's.
     """
     mark = stream.mark()
     if stream.accept_word("exiled"):

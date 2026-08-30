@@ -1107,6 +1107,12 @@ class AbilityActivationMixin:
                 # ``color`` key the any-colour shape uses; the handler holds it
                 # to the printed alternatives.
                 or instruction.payload.get("pips_choice")
+                # "Add three mana in any combination of {R} and/or {G}" (Orcish
+                # Lumberjack). The same channel again: the seat names one of the
+                # printed symbols and the handler makes every unit that symbol.
+                # Left off, the ability would always produce the first printed
+                # colour however the seat answered.
+                or instruction.payload.get("combination")
             )
         ):
             selected_color = self._normalize_mana_color(mana_color)

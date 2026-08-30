@@ -138,16 +138,31 @@ def draw_then_discard_self(game: Game, instruction: OracleInstruction, context: 
     card = context.card
     draw_count = int(instruction.payload.get("draw", 0))
     discard_count = int(instruction.payload.get("discard", 0))
+    held_before = len(caster.hand)
     drawn = game._draw_with_replacements(caster, draw_count)
     game.log.append(f"{card.name}: {caster.name} drew {drawn} card(s)")
 
-    actual_discard = min(discard_count, len(caster.hand))
+    # "…then discard one **of them**" (Krovikan Sorcerer). The candidates are
+    # the positions this resolution's draw landed in, measured rather than
+    # assumed from the count: a replacement can turn a draw into something else
+    # (CR 614), so the hand may have grown by fewer cards than were asked for —
+    # and a range computed off ``draw_count`` would then offer cards the seat
+    # was already holding.
+    only_indices = (
+        list(range(held_before, len(caster.hand)))
+        if instruction.payload.get("from_drawn") else None
+    )
+    actual_discard = min(
+        discard_count,
+        len(only_indices) if only_indices is not None else len(caster.hand),
+    )
     if actual_discard <= 0:
         return True, "resolved"
     game.arm_pending_choice(
         "discard", game.players.index(caster),
         count=actual_discard,
         allow_top_of_library=game._controls_top_of_library_discard(caster),
+        **({"only_indices": only_indices} if only_indices is not None else {}),
     )
     game.log.append(f"{caster.name} must choose {actual_discard} card(s) to discard")
     return True, "pending_discard"

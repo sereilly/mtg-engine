@@ -107,6 +107,12 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     # may say is lowering's question, not this one: parsing it here and refusing
     # it there is how an unreadable phrase becomes a card reported unsupported
     # rather than a discard that quietly takes anything.
+    # "Draw two cards, then discard one **of them**." (Krovikan Sorcerer.) The
+    # cards the previous step drew, named by a pronoun rather than described —
+    # so it is read before the noun-phrase branch below, which would refuse
+    # "them" and take the whole line with it.
+    if stream.accept_phrase("of", "them"):
+        return ast.Discard(player, count, up_to=up_to, of_drawn=True)
     narrowed = None
     mark = stream.mark()
     try:

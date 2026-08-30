@@ -45,6 +45,90 @@ def drain_target_lands_mana(game: Game, instruction: OracleInstruction, context:
 _COLOR_WORDS = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
 
 
+def _mana_bucket(caster, spend_only) -> dict:
+    """Where a produced mana lands: the pool, or a restricted bucket.
+
+    "Spend this mana only to pay cumulative upkeep costs." (Adarkar Unicorn.)
+    The restricted buckets are ``engine/restricted_mana.py``'s, merged into a
+    payment only by the purposes the clause admits, and emptied at the same step
+    boundary the pool is.
+
+    One function because four branches of ``add_mana_from_text`` now ask the
+    question. The ``pips_choice`` branch used to answer it by not asking — it
+    wrote straight into ``mana_pool`` while its lowering was already carrying
+    ``spend_only`` — so a printed "Add {B} or {R}. Spend this mana only to …"
+    would have made unrestricted mana. Nothing in the pool prints that pair
+    today, which is exactly why the miss was invisible.
+    """
+    if spend_only:
+        return caster.restricted_mana.setdefault(str(spend_only), {})
+    return caster.mana_pool
+
+
+def _restriction_suffix(spend_only) -> str:
+    """The log's note that the mana just made is restricted, or "" when not."""
+    return f" (spendable only on {spend_only})" if spend_only else ""
+
+
+def _pick_mana_alternative(alternatives, context) -> tuple:
+    """Which written-out quantity of a printed "or" the seat takes.
+
+    ``mana_alternative`` on the resolution's choices names an index when
+    something asked; with nothing asked the **largest** alternative is taken,
+    ties going to the one printed first.
+
+    That default is a real choice rather than a guess. The alternatives of an
+    "Add A or B" carry no cost between them and land in the same pool under the
+    same restriction, and this engine has no mana burn (CR 500.4 empties an
+    unspent pool with no penalty), so more mana of the same kind is never worse
+    than less — Adarkar Unicorn's {C}{U} strictly contains its {U}. Taking the
+    first printed instead, which is what the single-symbol branch above does,
+    would hand a non-interactive seat the smaller half of every such card.
+    """
+    chosen = (context.choices or {}).get("mana_alternative")
+    if isinstance(chosen, int) and 0 <= chosen < len(alternatives):
+        return tuple(alternatives[chosen])
+    best = max(
+        range(len(alternatives)),
+        key=lambda index: sum(int(count) for _symbol, count in alternatives[index]),
+    )
+    return tuple(alternatives[best])
+
+
+def _split_mana_combination(
+    symbols: tuple[str, ...], total: int, chosen: str | None, context
+) -> dict:
+    """How *total* mana divides among the symbols an "any combination" lists.
+
+    ``mana_combination`` on the resolution's choices is an explicit split, taken
+    when it names only listed symbols and adds up to exactly *total* — anything
+    else is a split that was not offered, and is discarded rather than
+    part-applied.
+
+    With nothing named, every unit takes the seat's chosen colour when that
+    colour is one the clause lists (the ``color`` channel a dual land's choice
+    already rides), and otherwise the first printed symbol. Both defaults are
+    choices the card allows: "any combination" includes every unit being the
+    same symbol. What they cannot do is *mix*, which is a narrowing of the
+    player's options rather than a widening of the card's — the safe direction,
+    and the reason this is a default and not a prompt.
+    """
+    if total <= 0:
+        return {}
+    named = (context.choices or {}).get("mana_combination")
+    if isinstance(named, dict):
+        split = {
+            symbol: int(amount)
+            for symbol, amount in named.items()
+            if symbol in symbols and int(amount) >= 0
+        }
+        if sum(split.values()) == total and len(split) == len(
+            [1 for amount in named.values() if int(amount) >= 0]
+        ):
+            return split
+    return {chosen if chosen in symbols else symbols[0]: total}
+
+
 @effect_handler("sacrifice_creature_for_mana")
 def sacrifice_creature_for_mana(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """The mana an additional cost's sacrifice buys (Sacrifice, Metamorphosis).
@@ -205,8 +289,64 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         if chosen not in alternatives:
             chosen = alternatives[0]
         count = next(int(c) for s, c in pips_choice if s == chosen)
-        caster.mana_pool[chosen] = caster.mana_pool.get(chosen, 0) + count
-        game.log.append(f"{card.name} produced {'{' + chosen + '}' * count}")
+        spend_only = instruction.payload.get("spend_only")
+        bucket = _mana_bucket(caster, spend_only)
+        bucket[chosen] = bucket.get(chosen, 0) + count
+        game.log.append(
+            f"{card.name} produced {'{' + chosen + '}' * count}"
+            f"{_restriction_suffix(spend_only)}"
+        )
+        return True, "resolved"
+
+    # "Add {U} or {C}{U}." (Adarkar Unicorn.) A choice between *written-out
+    # quantities* rather than between colours, which ``pips_choice`` above
+    # cannot say — it holds one ``(symbol, count)`` pair per alternative, so
+    # "{C} and {U} together" has nowhere to go. Each alternative here is its own
+    # pip list and the seat takes one entire.
+    alternatives_payload = instruction.payload.get("pips_alternatives")
+    if alternatives_payload:
+        picked = _pick_mana_alternative(alternatives_payload, context)
+        spend_only = instruction.payload.get("spend_only")
+        bucket = _mana_bucket(caster, spend_only)
+        added: list[str] = []
+        for symbol, count in picked:
+            bucket[symbol] = bucket.get(symbol, 0) + int(count)
+            added.append(f"{{{symbol}}}" * int(count))
+        game.log.append(
+            f"{card.name} produced {''.join(added)}{_restriction_suffix(spend_only)}"
+        )
+        return True, "resolved"
+
+    # "Add three mana in any combination of {R} and/or {G}." (Orcish Lumberjack,
+    # Burnt Offering.) A fixed *number* of mana, each unit's symbol chosen from
+    # the printed list — so the count and the list are payload and the split is
+    # the seat's.
+    combination = instruction.payload.get("combination")
+    if combination:
+        total = resolve_amount(
+            instruction.payload.get("combination_count", 0), context.x_value
+        )
+        split = _split_mana_combination(
+            tuple(combination),
+            total,
+            game._normalize_mana_color(
+                instruction.payload.get("color")
+                or (context.choices or {}).get("new_color")
+            ),
+            context,
+        )
+        spend_only = instruction.payload.get("spend_only")
+        bucket = _mana_bucket(caster, spend_only)
+        added = []
+        for symbol in combination:
+            produced = int(split.get(symbol, 0))
+            if produced:
+                bucket[symbol] = bucket.get(symbol, 0) + produced
+                added.append(f"{{{symbol}}}" * produced)
+        game.log.append(
+            f"{card.name} produced {''.join(added) or 'no mana'}"
+            f"{_restriction_suffix(spend_only)}"
+        )
         return True, "resolved"
 
     pips = instruction.payload.get("pips")

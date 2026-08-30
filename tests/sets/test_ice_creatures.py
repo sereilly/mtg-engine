@@ -798,24 +798,25 @@ def test_an_unpaid_cumulative_upkeep_still_sacrifices(set_pool):
     game.resolve_upkeep(0)
 
     assert not any(perm is wall for perm in game.all_permanents())
-def test_adarkar_unicorn_refuses_a_choice_between_multi_symbol_runs(set_pool):
-    """"{T}: Add {U} or {C}{U}." The payload can express a choice only between
-    single symbols, so merging this one produced a bag reading "either one {C}
-    or two {U}" — neither of the two things the card prints.
+def test_adarkar_unicorn_reads_a_choice_between_multi_symbol_runs(set_pool):
+    """"{T}: Add {U} or {C}{U}." The older payload could express a choice only
+    between single symbols — ``pips_choice`` is one ``(symbol, count)`` pair per
+    alternative — so merging this one produced a bag reading "either one {C} or
+    two {U}", neither of the two things the card prints. It refused the line.
 
-    The line refuses instead, which leaves the card unsupported rather than
-    supported and making mana it does not have. Its *restriction* clause is
-    implemented; this is the only thing still holding it back.
+    ``pips_alternatives`` carries an alternative as a whole pip list instead, so
+    "{C} and {U} together" is sayable. The single-symbol alternation every dual
+    land prints keeps its own key and its own reading.
     """
     from engine.grammar import compile_line
     from engine.restricted_mana import mana_restriction_for
 
     unicorn = set_pool("ICE")["Adarkar Unicorn"]
-    assert not compile_card_oracle(unicorn).supported
-
-    refused = compile_line("{T}: Add {U} or {C}{U}.")
-    assert not refused.parsed
-    assert "more than one symbol" in (refused.parse_error or "")
+    program = compile_card_oracle(unicorn)
+    assert program.supported
+    payload = program.activated_abilities[0].instruction.payload
+    assert payload["pips_alternatives"] == ((("U", 1),), (("C", 1), ("U", 1)))
+    assert payload["spend_only"] == "cumulative_upkeep"
 
     # The single-symbol alternation every dual land prints is untouched.
     dual = compile_line("{T}: Add {B} or {R}.")
