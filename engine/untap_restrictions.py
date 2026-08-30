@@ -26,27 +26,37 @@ from .oracle_types import _COLOR_WORD_TO_SYMBOL, _NUMBER_WORDS
 class UntapRestriction:
     """Declarative "don't untap as normal" constraint from a permanent.
 
-    scope      -- what the restriction applies to: "all" | "land" | "creature"
-                  | "creature_color"
+    Two families, and they are different rules rather than two spellings of
+    one. A **count limit** bounds how many permanents of a printed type the
+    active player may untap and leaves the choice to them (Winter Orb, Smoke,
+    Damping Field). A **block** says which permanents do not untap at all, and
+    what it names is a printed noun phrase.
+
+    scope      -- what a count limit applies to: "all" | "land" | "creature"
+                  | "artifact"; "block" for the second family
     limit      -- max permanents of that scope the active player may untap
                   (0 with scope="all" skips the untap step entirely; None
                   means no count limit)
-    min_power  -- per-permanent block: creatures with effective power >= N
-                  don't untap (Meekstone)
+    blocked    -- the noun phrase a block names, as a filter payload
+                  ``subject_matches`` tests: "creatures with power 3 or
+                  greater" (Meekstone), "red creatures" (Magnetic Mountain),
+                  "legendary creatures" (Arena of the Ancients), "creatures
+                  without flying" (Mudslide), "Islands" (Curse of Marit Lage).
+                  One field, because those are one sentence with the noun
+                  changed -- it used to be three (``min_power``, ``color``,
+                  ``supertype``), one per card that had been printed, each with
+                  its own pattern, its own aggregate and its own branch in the
+                  untap step. "Creatures with flying don't untap" matched none
+                  of the three, so Energy Storm and Blizzard reported supported
+                  with the line doing nothing at all.
     only_while_source_untapped -- the restriction is active only while the
                   source permanent itself is untapped (Winter Orb)
-    color      -- with scope="creature_color", the mana symbol of the creatures
-                  that don't untap (Magnetic Mountain)
-    supertype  -- with scope="creature_supertype", the printed supertype of the
-                  creatures that don't untap (Arena of the Ancients)
     """
 
     scope: str
     limit: int | None = None
-    min_power: int | None = None
+    blocked: dict | None = None
     only_while_source_untapped: bool = False
-    color: str | None = None
-    supertype: str | None = None
 
 
 # "As long as this artifact is untapped, ..." (Winter Orb) — a self-state
@@ -70,20 +80,47 @@ def _limit_per_type(match: re.Match) -> UntapRestriction:
     )
 
 
-def _power_block(match: re.Match) -> UntapRestriction:
-    return UntapRestriction(scope="creature", min_power=int(match.group("power")))
+@lru_cache(maxsize=None)
+def _blocked_subject(phrase: str) -> dict | None:
+    """A printed plural noun phrase as a filter payload, or None.
+
+    Read by **the grammar's noun parser**, which is the same reader
+    `activation_restrictions._controlled_board_phrase` and
+    `static_bonuses._controls_noun_condition` ask about the identical phrase --
+    "red creatures" means one thing on this engine, and a second reader of it
+    would be free to disagree. The payload must be one `subject_matches` can
+    test: a narrowing parsed and then ignored would *widen* the restriction to
+    every permanent, which is the one direction an untap block must never take.
+    """
+    from .grammar.errors import GrammarError
+    from .grammar.lexer import tokenize
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+    from .subject_filters import untestable_filter_keys
+
+    stream = TokenStream(tokenize(phrase.strip()).tokens)
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    payload = described.to_payload()
+    if not payload or untestable_filter_keys(payload):
+        return None
+    return payload
 
 
-def _color_block(match: re.Match) -> UntapRestriction:
-    return UntapRestriction(
-        scope="creature_color", color=_COLOR_WORD_TO_SYMBOL[match.group("color")]
-    )
+def _subject_block(match: re.Match) -> "UntapRestriction | None":
+    """"<noun phrase> don't untap during their controllers' untap steps."
 
-
-def _supertype_block(match: re.Match) -> UntapRestriction:
-    return UntapRestriction(
-        scope="creature_supertype", supertype=match.group("supertype")
-    )
+    One row for what used to be three, because the three differed only in the
+    noun. A phrase the parser cannot read (or the matcher cannot test) returns
+    None, which leaves the line unclaimed and its card unsupported -- rather
+    than admitting a sentence and then blocking nothing, or blocking everything.
+    """
+    blocked = _blocked_subject(match.group("subject"))
+    return None if blocked is None else UntapRestriction(scope="block", blocked=blocked)
 
 
 # Ordered: the first pattern whose regex matches the (qualifier-stripped) line
@@ -98,29 +135,17 @@ UNTAP_RESTRICTION_PATTERNS: tuple[tuple[re.Pattern, Callable[[re.Match], UntapRe
         _limit_per_type,
     ),
     (
+        # "Creatures with power 3 or greater" (Meekstone), "red creatures"
+        # (Magnetic Mountain), "legendary creatures" (Arena of the Ancients),
+        # "creatures with flying" (Energy Storm, Blizzard), "creatures without
+        # flying" (Mudslide), "Islands" (Curse of Marit Lage). One sentence with
+        # the noun changed, so one row: the noun phrase is payload, read by the
+        # parser that reads every other printed noun phrase.
         re.compile(
-            r"^creatures with power (?P<power>\d+) or greater don't untap "
+            r"^(?P<subject>.+?) don't untap "
             r"during their controllers' untap steps$"
         ),
-        _power_block,
-    ),
-    (
-        re.compile(
-            rf"^(?P<color>{_COLOR_WORD}) creatures don't untap "
-            r"during their controllers' untap steps$"
-        ),
-        _color_block,
-    ),
-    (
-        # "Legendary creatures don't untap during their controllers' untap
-        # steps." (Arena of the Ancients.) The supertype is the parameter,
-        # held to the one word a card actually prints — a wider alternation
-        # with no card behind it is untested by construction.
-        re.compile(
-            r"^(?P<supertype>legendary) creatures don't untap "
-            r"during their controllers' untap steps$"
-        ),
-        _supertype_block,
+        _subject_block,
     ),
 )
 
@@ -132,18 +157,23 @@ def _restriction_from_line(line: str) -> UntapRestriction | None:
         line = qualifier.group("rest")
     for pattern, build in UNTAP_RESTRICTION_PATTERNS:
         match = pattern.match(line)
-        if match is not None:
-            restriction = build(match)
-            if only_while_untapped:
-                return UntapRestriction(
-                    scope=restriction.scope,
-                    limit=restriction.limit,
-                    min_power=restriction.min_power,
-                    only_while_source_untapped=True,
-                    color=restriction.color,
-                    supertype=restriction.supertype,
-                )
-            return restriction
+        if match is None:
+            continue
+        restriction = build(match)
+        # A row may decline its own match: the block row delimits any noun
+        # phrase and implements only the ones the matcher can test, so an
+        # unreadable one falls through rather than being admitted with the
+        # narrowing dropped.
+        if restriction is None:
+            continue
+        if only_while_untapped:
+            return UntapRestriction(
+                scope=restriction.scope,
+                limit=restriction.limit,
+                blocked=restriction.blocked,
+                only_while_source_untapped=True,
+            )
+        return restriction
     return None
 
 

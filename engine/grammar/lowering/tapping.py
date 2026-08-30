@@ -143,9 +143,21 @@ def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
         }
         return (OracleInstruction("tap_creatures_blocking_target", "", payload),)
     if spec.quantifier in ("all", "each") and not spec.targeted:
+        # Two checks and they ask different things, which is why both stay.
+        # This one is about the **AST**: a field of `ObjectFilter` that
+        # `to_payload` does not carry would be a restriction dropped before the
+        # matcher ever saw it (round 4's ``_FilterDraft`` bug class), so a field
+        # is listed here only once it has been seen to reach the payload. The
+        # one below is about the payload: `subject_matches` must be able to test
+        # every key in it.
+        #
+        # "Tap all **Islands**" (Curse of Marit Lage) is why `subtypes` is here.
+        # It reaches the payload as `subtype_filter`, which the matcher tests
+        # through layer 4 like every other computed type — the same read
+        # `supertypes` beside it already relied on.
         leftovers = _restrictions_beyond(
             spec.filter,
-            frozenset({"card_types", "supertypes", "colors", "controller"}),
+            frozenset({"card_types", "supertypes", "subtypes", "colors", "controller"}),
         )
         if leftovers:
             raise LoweringError(

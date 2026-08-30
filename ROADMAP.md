@@ -692,9 +692,9 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, thirty-nine rounds in. 184 → 280 of 373 supported
-(75.1%), hollow lines 9 cards, and 43 unclaimed sentences across 28 of those
-280 — the third number is new, and the warning below says what it means.** The
+**Where it stands: Phase 3, forty rounds in. 184 → 282 of 373 supported
+(75.6%), hollow lines 10 cards, and 42 unclaimed sentences across 29 of those
+282 — the third number is new, and the warning below says what it means.** The
 count is now the *compiler's*: round 39 removed a gate that widened it, so the
 census and the refusal list inside `support_report.py` agree for the first time. The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
@@ -2195,6 +2195,67 @@ the beginning of the next end step.**" The first two sentences parse and lower
 now — the supertype qualifier is payload, exactly as `engine/landwalk.py` reads
 it — and the third does not: nothing in the grammar returns a *bound* subject to
 its owner's hand, at a delay or otherwise.
+
+**Round 40 — an untap block is a noun phrase, not one field per card.
+280 → 282, and two shipped-shaped cards stopped doing nothing.**
+
+`UntapRestriction` had three fields for one sentence. "Creatures with power 3
+or greater don't untap during their controllers' untap steps" was `min_power`,
+"red creatures" was `color`, "legendary creatures" was `supertype` — three
+patterns, three aggregate sets in `_untap_constraints`, three branches in the
+untap loop, and one field added per card that had been printed. The supertype
+row was even pinned to the literal word `legendary`, with a comment explaining
+that a wider alternation would be untested by construction.
+
+**Two Ice Age cards print a fourth wording and were reporting supported.**
+Energy Storm and Blizzard both say "Creatures **with flying** don't untap during
+their controllers' untap steps", which matched none of the three fields — so the
+line was unclaimed, the table returned None, and the untap step never heard of
+it. Both cards passed the support gate on their other abilities (cumulative
+upkeep, a prevention shield) and have played that way since the ingest. Silent,
+green, and in the usual direction: the card plays better than it is printed.
+
+The subject is a **noun phrase** now, read by the grammar's noun parser — the
+same reader `activation_restrictions._controlled_board_phrase` and
+`static_bonuses._controls_noun_condition` ask about the identical words — and
+carried as a filter payload `subject_matches` tests. One row, one aggregate, one
+test in the loop, and the six phrases the pool prints all fall out of it:
+power threshold, colour, supertype, with-a-keyword, without-a-keyword, and a
+land subtype. A phrase the parser cannot read leaves the line unclaimed and its
+card unsupported, which is what keeps the row from admitting a sentence and then
+blocking nothing — or everything.
+
+**And the block came out of the creature branch.** All three fields were read
+inside `if permanent.card.primary_type == "creature"`, which was an assumption
+the three cards behind them happened to share. Curse of Marit Lage names
+Islands.
+
+**Two cards land.** Curse of Marit Lage needed its other half too: "When this
+enchantment enters, tap all Islands" was refused by the sweep's lowering, which
+lists the `ObjectFilter` fields it honours and did not list `subtypes`. That
+list is not redundant — it is round 4's guard, catching a field `to_payload`
+would drop before the matcher saw it — but the check behind it already asks the
+question that matters (can `subject_matches` test every key of the payload?),
+and `subtype_filter` is a key it tests. Mudslide lands on the strength of its
+restriction line alone.
+
+**One number went the other way and the movement is honest.** Hollow lines
+9 → 10 cards: Mudslide was unsupported before this round and is now
+supported-with-a-gap, its "that player may choose any number of tapped creatures
+… and pay {2} for each" upkeep offer still unread. That is round 1's accounting
+again — the debt moved from one report to the other rather than appearing. The
+unclaimed-sentence count fell 43 → 42 despite it, because Energy Storm's and
+Blizzard's lines are now claimed by the table that enforces them.
+
+**A refusal expired, and the test that guarded it said the opposite.**
+`test_502_3_supertype_block_is_not_claimed_for_unimplemented_supertypes`
+asserted that "Snow creatures don't untap…" stays unclaimed. Its stated reason
+was that the enforcement had no card behind the word — but the real reason was
+the hand-written `legendary` alternation, and `subject_matches` has tested
+supertypes through layer 4 all along. The assertion is inverted now, with the
+playbook's rule written into it: when a round builds machinery near an old
+decline, re-probe the decline. The widening guard beside it points at phrases
+that really are outside the engine.
 
 ## Where the sets landed
 

@@ -55,11 +55,15 @@ def test_613_1c_a_remapped_colour_word_changes_which_creatures_dont_untap(catalo
     """Magnetic Mountain: "Blue creatures don't untap…". Rewritten to red, it
     should hold red creatures down and release blue ones."""
     game, (mountain,) = _board(catalog, "Magnetic Mountain")
-    assert untap_restriction_for(mountain.effective_card.oracle_text).color == "U"
+    assert untap_restriction_for(
+        mountain.effective_card.oracle_text
+    ).blocked["color_filter"] == "U"
 
     change_color_word(mountain, "U", "R")
 
-    assert untap_restriction_for(mountain.effective_card.oracle_text).color == "R"
+    assert untap_restriction_for(
+        mountain.effective_card.oracle_text
+    ).blocked["color_filter"] == "R"
 
 
 @pytest.mark.cr("613.1c")

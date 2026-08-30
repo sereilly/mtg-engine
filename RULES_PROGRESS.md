@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**337 / 612 tracked rules covered (55%)** — 1661 tests, 0 unannotated.
+**337 / 612 tracked rules covered (55%)** — 1666 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -576,7 +576,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **502.1** First, all phased-in permanents with phasing that the active player controls phase out, and all p... *(1 tests)*
 - [ ] **502.2** Second, if it’s day and the previous turn’s active player didn’t cast any spells during that turn...
-- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(16 tests)*
+- [x] **502.3** Third, the active player determines which permanents they control will untap. Then they untap the... *(21 tests)*
 - [x] **502.4** No player receives priority during the untap step, so no spells can be cast or resolve and no abi... *(1 tests)*
 
 ### 503. Upkeep Step

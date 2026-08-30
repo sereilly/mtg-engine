@@ -111,7 +111,7 @@ def test_text_no_table_claims_is_still_unsupported(artifact_card):
     tables understands stays unsupported."""
     assert not _probe(
         artifact_card,
-        "Creatures with toughness 4 or greater don't untap during their controllers' untap steps.",
+        "Creatures with three heads don't untap during their controllers' untap steps.",
     ).supported
 
 

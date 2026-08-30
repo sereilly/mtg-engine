@@ -10,7 +10,7 @@ aggregates and enforces them, so new restriction cards never touch it.
 """
 
 from ..auras import aura_restriction_active
-from ..handlers._common import permanent_effective_colors
+from ..subject_filters import subject_matches
 from ..handlers.tapping import UNTAP_LOCK_WHILE_TAPPED_KEY
 from ..control import LINKED_CONTROL_CONDITIONS
 from ..turn_state import record_turn_start_states
@@ -91,9 +91,14 @@ class UntapStepMixin:
         # It was two named counters, which is why adding the third meant a
         # third of everything down to the browser.
         limits: dict[str, int] = {}
-        min_power_block: int | None = None
-        blocked_colors: set[str] = set()
-        blocked_supertypes: set[str] = set()
+        # Every "<noun phrase> don't untap during their controllers' untap
+        # steps" in force, as ``(filter payload, the source's controller)``.
+        # One list where there were three aggregates -- a power cap, a colour
+        # set and a supertype set, one per card that had been printed. The seat
+        # travels with the filter because CR 109.5 makes "you control" inside a
+        # noun phrase relative to the *source's* controller, not to whoever is
+        # untapping.
+        blocked: list[tuple[dict, int | None]] = []
         for perm in self.all_permanents():
             # effective_card, so a CR 613 layer-3 text change (Sleight of Mind
             # rewriting the colour word) is applied before the restriction is
@@ -112,22 +117,14 @@ class UntapStepMixin:
                         limits.get(restriction.scope, restriction.limit),
                         restriction.limit,
                     )
-                if restriction.scope == "creature" and restriction.min_power is not None:
-                    min_power_block = (
-                        restriction.min_power
-                        if min_power_block is None
-                        else min(min_power_block, restriction.min_power)
-                    )
-            elif restriction.scope == "creature_color" and restriction.color:
-                blocked_colors.add(restriction.color)
-            elif restriction.scope == "creature_supertype" and restriction.supertype:
-                blocked_supertypes.add(restriction.supertype)
+            elif restriction.blocked is not None:
+                blocked.append(
+                    (restriction.blocked, self.controller_index_of(perm))
+                )
         return {
             "skip_all_source": skip_all_source,
             "limits": limits,
-            "min_power_block": min_power_block,
-            "blocked_colors": blocked_colors,
-            "blocked_supertypes": blocked_supertypes,
+            "blocked": blocked,
         }
 
     def get_untap_land_selection_options(self, player_index: int) -> dict[str, object] | None:
@@ -247,9 +244,7 @@ class UntapStepMixin:
             return 0
 
         limits: dict[str, int] = dict(constraints["limits"])
-        min_power_block = constraints["min_power_block"]
-        blocked_colors = constraints["blocked_colors"]
-        blocked_supertypes = constraints["blocked_supertypes"]
+        blocked = list(constraints["blocked"])
 
         # The controller chooses which of the constrained permanents to untap
         # (CR 502 with a "can't untap more than N" restriction): Winter Orb
@@ -332,20 +327,25 @@ class UntapStepMixin:
                 ) and self.permanents_controlled_via(permanent):
                     continue
 
+            # "<noun phrase> don't untap during their controllers' untap
+            # steps." Meekstone's power cap, Magnetic Mountain's colour, Arena
+            # of the Ancients' supertype, Blizzard's flying and Curse of Marit
+            # Lage's Islands are one sentence with the noun changed, so they are
+            # one test — asked through `subject_matches`, which is what makes
+            # every narrowing computed (CR 613: an animated land is a creature,
+            # a text-changed colour word is the new colour).
+            #
+            # Outside the creature branch below, because the noun need not be a
+            # creature at all: keying the whole family to `primary_type ==
+            # "creature"` is what the three fields it replaced assumed, and
+            # Curse of Marit Lage names Islands.
+            if any(
+                subject_matches(self, permanent, described, observer=seat)
+                for described, seat in blocked
+            ):
+                continue
+
             if permanent.card.primary_type == "creature":
-                # Meekstone-style: creatures at or above the power cap stay tapped.
-                if min_power_block is not None and permanent.effective_power >= min_power_block:
-                    continue
-                # Magnetic Mountain: creatures of a blocked color stay tapped
-                # (a separate upkeep effect may untap them anyway, for a cost).
-                if blocked_colors and permanent_effective_colors(permanent) & blocked_colors:
-                    continue
-                # Arena of the Ancients: creatures of a blocked supertype stay
-                # tapped. Computed through layer 4 — the same read
-                # `permanent_matches_filter` makes for a "legendary" phrase —
-                # so a CR 613 text/type change is applied before the word is.
-                if blocked_supertypes & permanent.effective_supertypes:
-                    continue
                 if aura_restriction_active(
                     permanent, "doesnt_untap", game=self, seat=player_index
                 ):

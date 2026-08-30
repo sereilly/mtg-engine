@@ -60,7 +60,7 @@ def test_502_3_power_gated_untap_block():
         "Creatures with power 3 or greater don't untap during their controllers' untap steps."
     )
 
-    assert (r.scope, r.min_power) == ("creature", 3)
+    assert r.blocked == {"type_filter": "creature", "power": {"op": "ge", "value": 3}}
 
 
 @pytest.mark.cr("502.3")
@@ -71,7 +71,7 @@ def test_502_3_power_threshold_reads_the_printed_number():
         "Creatures with power 5 or greater don't untap during their controllers' untap steps."
     )
 
-    assert r.min_power == 5
+    assert r.blocked["power"] == {"op": "ge", "value": 5}
 
 
 @pytest.mark.cr("502.3")
@@ -81,8 +81,8 @@ def test_502_3_color_gated_untap_block():
     blue = _restriction("Blue creatures don't untap during their controllers' untap steps.")
     green = _restriction("Green creatures don't untap during their controllers' untap steps.")
 
-    assert (blue.scope, blue.color) == ("creature_color", "U")
-    assert (green.scope, green.color) == ("creature_color", "G")
+    assert blue.blocked == {"type_filter": "creature", "color_filter": "U"}
+    assert green.blocked == {"type_filter": "creature", "color_filter": "G"}
 
 
 @pytest.mark.cr("502.3")
@@ -100,7 +100,8 @@ def test_502_3_as_long_as_untapped_qualifier_applies_to_any_restriction():
     )
 
     assert (orb.scope, orb.limit, orb.only_while_source_untapped) == ("land", 1, True)
-    assert (composed.min_power, composed.only_while_source_untapped) == (2, True)
+    assert composed.blocked["power"] == {"op": "ge", "value": 2}
+    assert composed.only_while_source_untapped is True
 
 
 @pytest.mark.cr("502.3")
@@ -141,13 +142,157 @@ def test_502_3_supertype_gated_untap_block():
     )
 
     assert r is not None
-    assert (r.scope, r.supertype) == ("creature_supertype", "legendary")
+    assert r.blocked == {"type_filter": "creature", "supertypes": ["legendary"]}
 
 
 @pytest.mark.cr("502.3")
-def test_502_3_supertype_block_is_not_claimed_for_unimplemented_supertypes():
-    """A word the enforcement has no card behind stays unclaimed — a wording
-    outside the table must refuse, never silently widen (the round-43 rule)."""
-    assert _restriction(
+def test_502_3_any_supertype_is_read_now_that_the_matcher_answers_the_phrase():
+    """This assertion used to be the opposite, and the refusal it guarded
+    expired rather than being wrong.
+
+    The supertype was a hand-written ``(?P<supertype>legendary)`` alternation,
+    so "snow creatures" was unclaimed because the *pattern* did not name the
+    word — not because anything could not enforce it. The subject is a noun
+    phrase read by the grammar's noun parser now, and `subject_matches` tests a
+    supertype through layer 4, so the phrase is both claimed and enforced. The
+    playbook's rule: when a round builds machinery near an old decline,
+    re-probe the decline.
+    """
+    r = _restriction(
         "Snow creatures don't untap during their controllers' untap steps."
-    ) is None
+    )
+
+    assert r is not None
+    assert r.blocked == {"type_filter": "creature", "supertypes": ["snow"]}
+
+
+@pytest.mark.cr("502.3")
+def test_502_3_a_subject_the_matcher_cannot_test_is_still_unclaimed():
+    """The widening guard, pointed at phrases that really are outside the
+    engine. A narrowing parsed and then dropped would turn a block on some
+    creatures into a block on every permanent, which is the one direction this
+    must never take — so an unreadable noun phrase leaves the line unclaimed
+    and its card unsupported."""
+    for subject in (
+        "Creatures with three heads",
+        "Creatures that attacked last turn",
+        "Creatures enchanted by an Aura you don't control",
+    ):
+        assert _restriction(
+            f"{subject} don't untap during their controllers' untap steps."
+        ) is None, subject
+
+
+# ---------------------------------------------------------------------------
+# 502.3 enforcement — the block is a noun phrase, and the untap step tests it
+# ---------------------------------------------------------------------------
+
+def _blocked_board(restriction_text: str, subject):
+    """*subject* tapped on P1's battlefield, under a permanent printing
+    *restriction_text*."""
+    from engine import Game
+    from engine.models import CardDefinition, Permanent, PlayerState
+
+    source = Permanent(card=CardDefinition(
+        name="Source", mana_cost="", cmc=0.0, type_line="Enchantment",
+        oracle_text=restriction_text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": "Source", "type_line": "Enchantment"},
+    ))
+    subject.tapped = True
+    p1 = PlayerState(name="P1", battlefield=[source, subject])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    return game, subject
+
+
+def _tapped_creature(name: str, power: int = 2, keywords: tuple[str, ...] = ()):
+    from engine.models import CardDefinition, Permanent
+
+    return Permanent(card=CardDefinition(
+        name=name, mana_cost="{1}", cmc=1.0, type_line="Creature - Test",
+        oracle_text="", colors=(), color_identity=(), keywords=keywords,
+        produced_mana=(), power=str(power), toughness='2',
+        raw={"name": name, "type_line": "Creature - Test"},
+    ))
+
+
+@pytest.mark.cr("502.3")
+def test_502_3_a_block_narrowed_by_a_keyword_is_enforced():
+    """"Creatures with flying don't untap during their controllers' untap
+    steps." (Energy Storm, Blizzard.)
+
+    The regression this round exists for. The block used to be three hand-cut
+    fields — a power cap, a colour and a supertype — and this phrase matched
+    none of them, so both cards reported **supported** with the line doing
+    nothing at all. It is a noun phrase now, tested by the matcher that answers
+    every other printed noun phrase.
+    """
+    flier = _tapped_creature("Flier", keywords=("Flying",))
+    game, flier = _blocked_board(
+        "Creatures with flying don't untap during their controllers' untap steps.",
+        flier,
+    )
+
+    game.resolve_untap_step(0)
+
+    assert flier.tapped
+
+
+@pytest.mark.cr("502.3")
+def test_502_3_the_same_block_leaves_everything_else_untapping():
+    """The other half: the narrowing must narrow. A dropped one would freeze
+    the whole board, which is the direction an untap block must never widen
+    in."""
+    ground = _tapped_creature("Ground")
+    game, ground = _blocked_board(
+        "Creatures with flying don't untap during their controllers' untap steps.",
+        ground,
+    )
+
+    game.resolve_untap_step(0)
+
+    assert not ground.tapped
+
+
+@pytest.mark.cr("502.3")
+def test_502_3_a_negated_keyword_reads_as_the_complement():
+    """"Creatures **without** flying don't untap…" (Mudslide) — the same
+    sentence with the polarity printed into the noun phrase, so it needs no
+    row of its own."""
+    ground = _tapped_creature("Ground")
+    flier = _tapped_creature("Flier", keywords=("Flying",))
+    game, ground = _blocked_board(
+        "Creatures without flying don't untap during their controllers' untap steps.",
+        ground,
+    )
+    flier.tapped = True
+    game.players[0].battlefield.append(flier)
+
+    game.resolve_untap_step(0)
+
+    assert ground.tapped
+    assert not flier.tapped
+
+
+@pytest.mark.cr("502.3")
+def test_502_3_a_block_need_not_name_creatures_at_all():
+    """"Islands don't untap during their controllers' untap steps." (Curse of
+    Marit Lage.)
+
+    The three fields this replaced were read inside a ``primary_type ==
+    "creature"`` branch, which was the assumption the three cards behind them
+    happened to share. A land is what the fourth card names.
+    """
+    from engine.models import CardDefinition, Permanent
+
+    island = Permanent(card=CardDefinition(
+        name="Island", mana_cost="", cmc=0.0, type_line="Basic Land - Island",
+        oracle_text="({T}: Add {U}.)", colors=(), color_identity=(), keywords=(),
+        produced_mana=("U",), raw={"name": "Island", "type_line": "Basic Land - Island"},
+    ))
+    game, island = _blocked_board(
+        "Islands don't untap during their controllers' untap steps.", island,
+    )
+
+    game.resolve_untap_step(0)
+
+    assert island.tapped

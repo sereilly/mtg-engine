@@ -25,13 +25,12 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**43 unclaimed sentence(s) across 28 supported card(s).**
+**42 unclaimed sentence(s) across 29 supported card(s).**
 
 - **Battle Cry**
   - `whenever a creature blocks this turn, it gets +0/+1 until end of turn`
 - **Blizzard**
   - `cast this spell only if you control a snow land`
-  - `creatures with flying don't untap during their controllers' untap steps`
 - **Breath of Dreams**
   - `green creatures have "cumulative upkeep {1}."`
 - **Call to Arms**
@@ -46,7 +45,6 @@ anything anyone did, and every ingest would arrive red.
   - `whenever a creature dies, that creature's controller sacrifices a land of their choice`
 - **Energy Storm**
   - `prevent all damage that would be dealt by instant and sorcery spells`
-  - `creatures with flying don't untap during their controllers' untap steps`
 - **Fire Covenant**
   - `as an additional cost to cast this spell, pay x life`
 - **Freyalise's Charm**
@@ -72,6 +70,8 @@ anything anyone did, and every ingest would arrive red.
   - `whenever an opponent casts a green spell, you may pay {b}{b}`
   - `if you do, look at that player's hand and choose a card from it`
   - `the player discards that card`
+- **Mudslide**
+  - `at the beginning of each player's upkeep, that player may choose any number of tapped creatures without flying they control and pay {2} for each creature chosen this way. if the player does, untap those creatures`
 - **Mystic Remora**
   - `whenever an opponent casts a noncreature spell, you may draw a card unless that player pays {4}`
 - **Naked Singularity**

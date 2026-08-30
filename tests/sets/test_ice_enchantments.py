@@ -822,3 +822,77 @@ def test_withering_wisps_stays_while_a_creature_is_on_the_battlefield(set_pool):
         game.resolve_top_of_stack()
 
     assert wisps in p1.battlefield
+
+
+# --- Round 40: an untap block is a noun phrase, not one field per card ---
+def _r40_board(set_pool, source_name: str, others):
+    board = [Permanent(card=set_pool("ICE")[source_name])]
+    board.extend(others)
+    p1 = PlayerState(name="P1", battlefield=board, life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    return game, p1
+
+
+def test_curse_of_marit_lage_taps_every_island_as_it_enters(set_pool):
+    """"When this enchantment enters, tap all Islands."
+
+    The sweep's lowering listed the filter fields it honoured — card types,
+    supertypes, colours, controller — and a subtype was not among them, so the
+    line refused. The check behind that list already asked the right question
+    (can the matcher test every key of the payload?); `subtype_filter` is a key
+    it tests, through layer 4 like every other computed type.
+    """
+    island = Permanent(card=set_pool("ICE")["Snow-Covered Island"])
+    forest = Permanent(card=set_pool("ICE")["Snow-Covered Forest"])
+    game, _p1 = _r40_board(set_pool, "Curse of Marit Lage", [island, forest])
+
+    curse = game.players[0].battlefield[0]
+    game._apply_self_enters_battlefield_triggers(0, curse, None, None)
+    game.resolve_stack()
+
+    assert island.tapped
+    assert not forest.tapped, "the narrowing narrows"
+
+
+def test_curse_of_marit_lage_keeps_islands_tapped_through_the_untap_step(set_pool):
+    """"Islands don't untap during their controllers' untap steps." The block
+    used to be readable only for a power threshold, a colour word or the
+    literal word "legendary" — three fields, one per card that had been
+    printed, all of them read inside a creature-only branch."""
+    island = Permanent(card=set_pool("ICE")["Snow-Covered Island"])
+    island.tapped = True
+    game, _p1 = _r40_board(set_pool, "Curse of Marit Lage", [island])
+
+    game.resolve_untap_step(0)
+
+    assert island.tapped
+
+
+def test_blizzard_and_energy_storm_actually_hold_fliers_down(set_pool):
+    """Both cards report supported since the ingest and both printed
+    "Creatures with flying don't untap during their controllers' untap steps"
+    into a table that could not read it. The line did nothing, nothing failed,
+    and the cards played better than they are printed."""
+    from engine.untap_restrictions import untap_restriction_for
+
+    for name in ("Blizzard", "Energy Storm"):
+        card = set_pool("ICE")[name]
+        restriction = untap_restriction_for(card.oracle_text)
+
+        assert restriction is not None, name
+        assert restriction.blocked == {
+            "type_filter": "creature", "with_keywords": ["flying"],
+        }, name
+
+
+def test_mudslide_reads_the_complement_of_the_same_phrase(set_pool):
+    """"Creatures **without** flying don't untap…" — the polarity is printed
+    into the noun phrase, so the same row reads it."""
+    from engine.untap_restrictions import untap_restriction_for
+
+    restriction = untap_restriction_for(set_pool("ICE")["Mudslide"].oracle_text)
+
+    assert restriction is not None
+    assert restriction.blocked == {
+        "type_filter": "creature", "without_keywords": ["flying"],
+    }
