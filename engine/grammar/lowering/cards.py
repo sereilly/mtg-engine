@@ -510,6 +510,12 @@ def _lower_put_hand_cards_on_library(
     and silently so, since both spellings move the same number of cards.
     """
     payload: dict[str, object] = {"amount": _amount_payload(node.count)}
+    if node.whole_hand:
+        # "**the cards from** their hand" — how many is a fact about the board
+        # at resolution, so the handler counts and the payload only says to.
+        # ``amount`` above stays as it was for a reader written before this
+        # spelling existed; the flag is what the handler reads.
+        payload["whole_hand"] = True
     if node.player.kind in ("target_player", "target_opponent"):
         _describe_targets(payload, node.player)
         return (OracleInstruction("put_hand_cards_on_library", "", payload),)

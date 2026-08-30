@@ -176,6 +176,7 @@ from .lowering import (
     _lower_look_top_exile_random,
     _lower_look_top_pick,
     _lower_search_and_exile,
+    _lower_search_player_library,
     _lower_graveyard_pick_onto_battlefield,
     _lower_search_library,
     _lower_change_base_pt,
@@ -472,6 +473,13 @@ def lower_statement(
 
     if isinstance(statement, ast.CastPermission):
         return _lower_cast_permission(statement, produced)
+
+    # "Search that player's library for **that many** cards" (Jester's Mask):
+    # the count is a back-reference, so this lowering needs the record of what
+    # the steps before it produced — which is why it is dispatched here rather
+    # than from the node table below.
+    if isinstance(statement, ast.SearchPlayerLibrary):
+        return _lower_search_player_library(statement, produced)
 
     if isinstance(statement, ast.NameAndStrip):
         return (

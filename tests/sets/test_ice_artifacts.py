@@ -331,4 +331,123 @@ def test_elkin_bottles_permission_ends_at_its_controllers_next_upkeep(set_pool):
     assert [card.name for card in p1.exile] == ["Balduvian Bears"], (
         "the card stays in exile; only the permission ends"
     )
+def _cap_board(set_pool, card_name, victim_library, victim_hand=()):
+    """One Jester in play for seat 0, with seat 1 holding the named cards."""
+    pool = set_pool("ICE")
+    jester = _nosick(Permanent(card=pool[card_name]))
+    p1 = PlayerState(name="P1", battlefield=[jester], life=20)
+    p2 = PlayerState(
+        name="P2",
+        library=[pool[name] for name in victim_library],
+        hand=[pool[name] for name in victim_hand],
+        life=20,
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game._sync_control()
+    return pool, p1, p2, game
+
+
+def test_jesters_cap_searches_the_targets_library_and_exiles_three(set_pool):
+    """"{2}, {T}, Sacrifice this artifact: Search target player\'s library for
+    three cards and exile them. Then that player shuffles."
+
+    CR 608.2c: the ability\'s controller chooses, and the library is somebody
+    else\'s — two seats, which is what makes this a different effect from the
+    tutor that searches your own.
+    """
+    pool, p1, p2, game = _cap_board(
+        set_pool, "Jester\'s Cap",
+        ["Balduvian Bears", "Brown Ouphe", "Tor Giant", "Scaled Wurm"],
+    )
+
+    result = game.activate_permanent_ability(0, "Jester\'s Cap")
+    assert result.supported, result.details
+
+    prompt = game.pending_choice_of("search_library", 0)
+    assert prompt is not None, "the searcher is the one who chooses"
+    assert prompt.data["zone_seat"] == 1, "and the library is the target\'s"
+
+    assert game.confirm_search_library_picks(
+        0, [{"zone": "library", "index": 0},
+            {"zone": "library", "index": 1},
+            {"zone": "library", "index": 2}]
+    )
+    game._settle()
+
+    assert sorted(card.name for card in p2.exile) == [
+        "Balduvian Bears", "Brown Ouphe", "Tor Giant",
+    ], "CR 400.3 sends each card to its own owner\'s exile"
+    assert [card.name for card in p2.library] == ["Scaled Wurm"]
+    assert p1.exile == [] and p1.hand == []
+
+
+def test_jesters_cap_leaves_the_searchers_own_library_alone(set_pool):
+    """The seat whose zone is opened is payload, and getting it wrong is
+    silent: the search would still find three cards and still report done."""
+    pool, p1, p2, game = _cap_board(
+        set_pool, "Jester\'s Cap", ["Balduvian Bears", "Brown Ouphe", "Tor Giant"]
+    )
+    p1.library = [pool["Scaled Wurm"]]
+
+    game.activate_permanent_ability(0, "Jester\'s Cap")
+    game.confirm_search_library_picks(0, [{"zone": "library", "index": 0}])
+    game._settle()
+
+    assert [card.name for card in p1.library] == ["Scaled Wurm"]
+    assert [card.name for card in p2.exile] == ["Balduvian Bears"]
+
+
+def test_jesters_mask_empties_the_hand_then_gives_that_many_back(set_pool):
+    """"Target opponent puts the cards from their hand on top of their library.
+    Search that player\'s library for that many cards. That player puts those
+    cards into their hand, then shuffles."
+
+    Three sentences and one effect: the count comes from the first, the cards
+    from the second, and the seat that receives them is the searched player —
+    not the searcher.
+    """
+    pool, p1, p2, game = _cap_board(
+        set_pool, "Jester\'s Mask",
+        ["Scaled Wurm", "Tor Giant"],
+        victim_hand=["Balduvian Bears", "Brown Ouphe"],
+    )
+
+    result = game.activate_permanent_ability(0, "Jester\'s Mask")
+    assert result.supported, result.details
+
+    # The hand goes back first, and its owner chooses the order (CR 401.4).
+    assert game.confirm_hand_to_library(1, [0, 1])
+    game._settle()
+    assert p2.hand == []
+
+    prompt = game.pending_choice_of("search_library", 0)
+    assert prompt is not None, "the searcher searches"
+    assert prompt.data["zone_seat"] == 1
+    assert prompt.data["count"] == 2, "that many is the number the hand held"
+
+    assert game.confirm_search_library_picks(
+        0, [{"zone": "library", "index": 0}, {"zone": "library", "index": 1}]
+    )
+    game._settle()
+
+    assert len(p2.hand) == 2, "the searched player gets the finds, not the searcher"
+    assert p1.hand == []
+    assert len(p2.library) == 2, "four cards in the library, two taken out"
+
+
+def test_jesters_mask_on_an_empty_hand_searches_for_nothing(set_pool):
+    """"That many" of nothing is nothing: the search is not armed at all, so
+    the library is never opened."""
+    pool, p1, p2, game = _cap_board(
+        set_pool, "Jester\'s Mask", ["Scaled Wurm", "Tor Giant"],
+    )
+
+    result = game.activate_permanent_ability(0, "Jester\'s Mask")
+    assert result.supported, result.details
+    game._settle()
+
+    assert game.pending_choice_of("search_library", 0) is None
+    assert [card.name for card in p2.library] == ["Scaled Wurm", "Tor Giant"]
 # --- end W1G4 ---

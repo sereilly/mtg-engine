@@ -15,7 +15,7 @@ from ...lord_buffs import (LORD_BUFF_KIND)
 from ...enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
 from ...land_animation import LAND_ANIMATION_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND
-from ...oracle_types import OracleInstruction
+from ...oracle_types import HAND_CARDS_TO_LIBRARY, OracleInstruction
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       CREATED_TOKEN, EXILED_THIS_WAY)
 INSTRUCTION_CATEGORIES: dict[str, str] = {
@@ -714,6 +714,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # it and the conditionals after it read the record, rather than each
     # sentence flipping a coin of its own.
     "flip_coin": "coin_flip",
+    # "Target opponent puts the cards from their hand on top of their library.
+    # Search that player's library for **that many** cards." (Jester's Mask.)
+    # How many went is the only place the search behind it can read its count:
+    # by then the hand is empty and the library has grown by an amount nothing
+    # else records.
+    "put_hand_cards_on_library": HAND_CARDS_TO_LIBRARY,
     # "Return that card to its owner's hand. **If that card is returned to
     # its owner's hand this way**, …" (Puppet Master.) The return records
     # whether it actually took place, which is what the rider after it asks —

@@ -60,6 +60,7 @@ from .effects import (
     _parse_put_counter, _parse_put_exiled_with_source,
     _parse_put_hand_cards_on_library,
     _parse_player_puts_hand_cards_on_library,
+    _parse_player_puts_whole_hand_on_library,
     _parse_put_source_into_zone, _parse_remove_counter,
     _parse_remove_from_combat, _parse_return, _parse_reveal_hand, _parse_reveal_top,
     _parse_sacrifice,
@@ -727,6 +728,14 @@ def parse_subject_verb(
         # carried its player since it was written; only the *bare* imperative
         # ("Sacrifice a creature", which means you) had a production, so a
         # printed subject was an unrecognized verb.
+        # "Target opponent **puts the cards from their hand on top of their
+        # library**." (Jester's Mask.) Dispatched on the verb like every other
+        # player action; the production declines without consuming, so the
+        # subject-verb table below still sees every other "puts" sentence.
+        if token.text in ("puts", "put") and isinstance(source_spec, ast.PlayerRef):
+            whole_hand = _parse_player_puts_whole_hand_on_library(stream, source_spec)
+            if whole_hand is not None:
+                return whole_hand
         if token.text in ("sacrifices", "sacrifice") and isinstance(source_spec, ast.PlayerRef):
             stream.advance()
             return _parse_sacrifice(stream, source_spec)

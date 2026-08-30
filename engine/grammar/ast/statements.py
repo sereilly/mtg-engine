@@ -131,6 +131,7 @@ from .cards import (
     SearchAndExile,
     TransmuteBySacrifice,
     SearchLibrary,
+    SearchPlayerLibrary,
     Shuffle,
 )
 from .stack import (
@@ -191,7 +192,8 @@ Effect = Union[
     PhaseOut,
     AddManaForTappedLand, ProducesManaInstead, SpendManaAsThough, PreventDamage,
     RedirectDamage, DamageCantBePreventedOrRedirected, UpkeepDamageUnlessCost,
-    SearchLibrary, SearchAndExile, TransmuteBySacrifice, OwnershipExchangeUnlessPaid,
+    SearchLibrary, SearchPlayerLibrary, SearchAndExile, TransmuteBySacrifice,
+    OwnershipExchangeUnlessPaid,
     RandomRevealOwnershipExchange,
     ExileTopOfLibrary, PutExiledWithSource, ExileGraveyard, ExileCostSacrifices,
     CastPermission, LookTopExileRandom, LookTopPickToHand,

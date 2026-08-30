@@ -609,11 +609,20 @@ class PendingChoicesMixin:
                     self.log.append(
                         f"{card.name} untaps ({held} counted)"
                     )
+        elif destination == "exile":
+            # CR 400.3: the card goes to its owner's exile, and its owner is the
+            # player whose library it came out of — which is `caster` here, the
+            # *searched* seat rather than the searching one.
+            caster.exile.append(card)
         else:
             self.put_card_into_hand(caster, card)
         self.log.append(
             f"{caster.name} searched {zone} and put {card.name} "
-            + ("onto the battlefield" if destination == "battlefield" else "into hand")
+            + (
+                "onto the battlefield" if destination == "battlefield"
+                else "into exile" if destination == "exile"
+                else "into hand"
+            )
         )
         # Only a library search shuffles (CR 701.23h, and the printed "If you
         # search your library this way, shuffle"): a graveyard is an open zone,
@@ -648,7 +657,12 @@ class PendingChoicesMixin:
             return self._resolve_search_library(choice, -1, "none")
         if len(picks) > len(slots):
             return False
-        caster = self.players[choice.player_index]
+        # Whose zones are looked in, which is not always the seat answering:
+        # Jester's Cap's controller searches the *target's* library. The
+        # single-find path beside this one has asked since Reincarnation; this
+        # one read `choice.player_index`, which was latent only because no card
+        # had yet combined a counted search with somebody else's zone.
+        caster = self.players[searched_seat(choice.data, choice.player_index)]
         zones = tuple(choice.data.get("zones", ("library",)))
         working = dict(choice.data)
         seen: set[tuple[str, int]] = set()
@@ -707,6 +721,7 @@ class PendingChoicesMixin:
         self._place_or_ask_destinations(choice.player_index, cards, slots, choice.data)
         return True
 
+
     def _search_destination_slots(self, data: dict) -> list[tuple[str, bool]]:
         """The printed places a counted search's finds go, as (destination,
         enters-tapped) pairs in the printed order."""
@@ -729,10 +744,14 @@ class PendingChoicesMixin:
         """
         if not cards:
             return
+        # Where a find *lands* is its own seat: "that player puts those cards
+        # into their hand" (Jester's Mask) is the searched player's hand, not
+        # the searcher's. Defaulted to the chooser, which is every other card.
+        landing = landing_seat(data, seat)
         if len(set(slots)) <= 1:
             for card in cards:
                 destination, tapped = slots[0]
-                self._place_found_card(seat, card, destination, tapped)
+                self._place_found_card(landing, card, destination, tapped)
             return
         self.arm_pending_choice(
             "search_destination", seat,
@@ -742,12 +761,22 @@ class PendingChoicesMixin:
                 {"destination": destination, "tapped": tapped}
                 for destination, tapped in slots
             ],
+            # Carried onto the next prompt because that prompt's own payload has
+            # no zone seats on it, and the seat that answers "which card goes
+            # where" is still not necessarily the seat the cards go to.
+            landing_seat=landing,
             _cards=list(cards),
         )
 
     def _place_found_card(self, seat: int, card, destination: str, tapped: bool) -> None:
-        """One found card landing where the print sent it — the same two
-        destinations the search flow has always had."""
+        """One found card landing where the print sent it.
+
+        *seat* is whose zone receives it, which is not always the seat that
+        chose — "Search target player's library for three cards and exile
+        them" (Jester's Cap) puts them in that player's exile, because CR 400.3
+        sends an object to its **owner's** zone and the owner is the player
+        whose library it came out of.
+        """
         caster = self.players[seat]
         if destination == "battlefield":
             from ...models import Permanent as _Permanent
@@ -755,11 +784,14 @@ class PendingChoicesMixin:
             self._put_permanent_onto_battlefield(
                 seat, _Permanent(card=card, tapped=tapped), None
             )
+        elif destination == "exile":
+            caster.exile.append(card)
         else:
             self.put_card_into_hand(caster, card)
         where = (
             "onto the battlefield tapped" if destination == "battlefield" and tapped
             else "onto the battlefield" if destination == "battlefield"
+            else "into exile" if destination == "exile"
             else "into hand"
         )
         self.log.append(f"{caster.name} put {card.name} {where}")
@@ -784,10 +816,11 @@ class PendingChoicesMixin:
             return False
         if len(set(assignments)) != len(assignments):
             return False
+        landing = int(choice.data.get("landing_seat", choice.player_index))
         for card, slot_index in zip(cards, assignments):
             slot = slots[slot_index]
             self._place_found_card(
-                choice.player_index, card, slot["destination"], bool(slot.get("tapped"))
+                landing, card, slot["destination"], bool(slot.get("tapped"))
             )
         self.discard_pending_choice(choice)
         return True

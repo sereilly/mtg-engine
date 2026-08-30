@@ -19,7 +19,7 @@ from ._common import (
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
 from ..oracle_types import (DISCARDED_BY_SEAT, EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
-                            PER_OBJECT_SEAT_RECORDS)
+                            HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS)
 from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..resumption import run_resumable
 from ..search_filters import search_matches
@@ -334,10 +334,41 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
             # to its controller rather than guessing a seat.
             continue
         seats[key] = int(seat)
+    # "Search **target player's** library …" (Jester's Cap, Jester's Mask). The
+    # seat is the ability's own target rather than a record an earlier trigger
+    # wrote, so it is asked here and not through the loop above — a chosen
+    # target is not something the trigger context holds. Whose battlefield or
+    # hand receives follows it by default (`search_filters.landing_seat`), which
+    # is what makes "that player puts those cards into their hand" land in the
+    # searched player's hand and not the searcher's.
+    if instruction.payload.get("zone_owner_target") and context.target is not None:
+        if context.target in game.players:
+            seats["zone_seat"] = game.players.index(context.target)
+    # "…for **that many** cards" — the number an earlier step of this same
+    # resolution recorded (Jester's Mask's emptied hand). Read here rather than
+    # baked into the payload, because the count is a fact about the board.
+    counted_from = instruction.payload.get("amount_from")
+    count = (
+        max(0, int(context.results.get(counted_from, 0) or 0))
+        if counted_from is not None
+        else int(instruction.payload.get("count", 1))
+    )
+    destinations = list(instruction.payload.get("destinations") or ())
+    if not destinations and count > 1:
+        # A search for several cards that all go to one place (Jester's Cap's
+        # three exiles). The counted flow is driven by one entry per find, so
+        # the list is built here where the number is known — Cultivate's
+        # printing carries its own, because its finds go to different places.
+        destinations = [instruction.payload.get("destination", "hand")] * count
+    if counted_from is not None and count <= 0:
+        game.log.append(
+            f"{context.card.name}: nothing was recorded to search for"
+        )
+        return True, "resolved"
     game.arm_pending_choice(
         "search_library", caster_index,
         **seats,
-        count=instruction.payload.get("count", 1),
+        count=count,
         card_type=instruction.payload.get("card_type", "any"),
         zones=zones,
         restrictions=dict(instruction.payload.get("restrictions") or {}),
@@ -347,7 +378,7 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         # search is answered whole — every find in one pick list — and which
         # find fills which slot is then its own question, asked through the
         # `search_destination` prompt when the slots differ.
-        destinations=list(instruction.payload.get("destinations") or ()),
+        destinations=destinations,
         tapped=list(instruction.payload.get("tapped") or ()),
         # The searching card's name, for the prompts' labels — data, not
         # dispatch.
@@ -3823,8 +3854,19 @@ def put_hand_cards_on_library(game: Game, instruction: OracleInstruction, contex
     if player is None or player not in game.players:
         game.log.append(f"{context.card.name}: no player to put cards back")
         return True, "resolved"
-    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
-    actual = min(amount, len(player.hand))
+    if instruction.payload.get("whole_hand"):
+        # "**the cards from** their hand" (Jester's Mask) — every one of them,
+        # counted now rather than printed on the card. There is still an order
+        # to choose (CR 401.4), which is what the prompt is for.
+        actual = len(player.hand)
+    else:
+        amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+        actual = min(amount, len(player.hand))
+    # How many actually went, recorded for the step that reads it back:
+    # "Search that player's library for **that many** cards." Written before the
+    # prompt is armed and whatever the answer is, because the number is settled
+    # here — the prompt only decides the order.
+    context.results[HAND_CARDS_TO_LIBRARY] = actual
     if actual <= 0:
         game.log.append(f"{player.name} has no cards to put back")
         return True, "resolved"

@@ -552,22 +552,26 @@ def _parse_discard_revealed_unless_pay_life(
 
 
 def _accept_hand_to_library_tail(
-    stream: TokenStream, possessive: str
+    stream: TokenStream, possessive: str, *, ordered: bool = True
 ) -> bool:
-    """``… on top of <possessive> library in any order``, consumed whole.
+    """``… on top of <possessive> library[ in any order]``, consumed whole.
 
-    Shared by the two printed spellings so they cannot come to disagree about
-    the destination. Every word is required. Dropping "on top of" would let a
+    Shared by the printed spellings so they cannot come to disagree about the
+    destination. Every word is required. Dropping "on top of" would let a
     sentence putting cards on the *bottom* read as this one, and dropping "in
     any order" would silently discard the ordering the card gives the player —
     the rider bug this grammar refuses by construction. The possessive is the
     caller's, because it agrees with the subject the sentence already named:
     "**your** hand … **your** library", "**their** hand … **their** library".
+
+    *ordered* is False for the one printing that omits the rider — Jester's
+    Mask's "puts the cards from their hand on top of their library" — and is a
+    parameter rather than an ``accept`` so the two spellings cannot drift into
+    each other: a card that prints the words must still have them read.
     """
-    return bool(
-        stream.accept_phrase("on", "top", "of", possessive, "library")
-        and stream.accept_phrase("in", "any", "order")
-    )
+    if not stream.accept_phrase("on", "top", "of", possessive, "library"):
+        return False
+    return bool(stream.accept_phrase("in", "any", "order")) or not ordered
 
 
 def _parse_put_hand_cards_on_library(
@@ -621,6 +625,29 @@ def _parse_player_puts_hand_cards_on_library(
         stream.reset(mark)
         return None
     return ast.PutHandCardsOnLibrary(player, count)
+
+
+def _parse_player_puts_whole_hand_on_library(
+    stream: TokenStream, player: ast.PlayerRef
+) -> "ast.PutHandCardsOnLibrary | None":
+    """``<player> puts the cards from their hand on top of their library.``
+    (Jester's Mask.)
+
+    The same move Stunted Growth prints with a number, so the same node — what
+    differs is that there is no *choice* of which cards, only of the order they
+    land in. Refuses without consuming, so every other "puts" sentence keeps
+    the reading it has.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("puts", "put"):
+        return None
+    if not stream.accept_phrase("the", "cards", "from", "their", "hand"):
+        stream.reset(mark)
+        return None
+    if not _accept_hand_to_library_tail(stream, "their", ordered=False):
+        stream.reset(mark)
+        return None
+    return ast.PutHandCardsOnLibrary(player, ast.Fixed(0), whole_hand=True)
 
 
 def _accept_hand_card_count(stream: TokenStream) -> "ast.Amount | None":

@@ -413,6 +413,92 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
 #: refuses rather than landing the card somewhere the flow does not implement.
 _SEARCH_DESTINATIONS = {"hand": "hand", "battlefield": "battlefield"}
 
+#: The same question for a search of *somebody else's* library. Exile is here
+#: and not above because only this sentence prints it, and the hand is the
+#: searched player's rather than the searcher's — which is what
+#: `search_filters.landing_seat` already answers, so the zone name is the whole
+#: of the difference.
+_OTHER_SEARCH_DESTINATIONS = frozenset({"exile", "hand"})
+
+#: The player references whose seat the search flow can name. "You" is
+#: deliberately absent: that sentence is `_lower_search_library`'s, and reaching
+#: it from here would be a second reading of one template.
+_OTHER_SEARCH_PLAYERS = frozenset({"target_player", "target_opponent", "that_player"})
+
+
+def _lower_search_player_library(
+    node: ast.SearchPlayerLibrary, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """"Search target player's library for three cards and exile them. Then
+    that player shuffles." (Jester's Cap.)
+
+    The same ``search_library`` instruction the own-library tutor produces, with
+    the seat whose zone is opened carried as payload — CR 608.2c makes the
+    ability's controller the chooser either way, so what changes is one number
+    the flow already reads (``engine/search_filters.searched_seat``) and not the
+    flow.
+
+    Both printed seats resolve to the ability's *target*: "target player's
+    library" chooses one, and Jester's Mask's "that player" names the one its
+    own first sentence already chose, which is the same seat. A reference that
+    could be a third player refuses, because a search opening the wrong
+    library is a strictly different card and silently so.
+    """
+    if node.player.kind not in _OTHER_SEARCH_PLAYERS:
+        raise LoweringError(
+            f"no flow searches {node.player.kind!r}'s library", node=node
+        )
+    if node.to.name not in _OTHER_SEARCH_DESTINATIONS:
+        raise LoweringError(
+            f"the search flow has no destination {node.to.name!r}", node=node
+        )
+    if node.to.name == "hand" and (
+        node.to.owner is None or node.to.owner.kind not in _OTHER_SEARCH_PLAYERS
+    ):
+        # "…puts those cards into **their** hand" is the searched player's, which
+        # is where `landing_seat` sends a find by default. Any other owner is a
+        # third seat the flow has no way to name.
+        raise LoweringError(
+            "this search puts its finds into the searched player's own hand",
+            node=node,
+        )
+    leftover = _restrictions_beyond(node.filter, _SEARCH_HONOURED_FILTER_FIELDS)
+    if leftover:
+        raise LoweringError(
+            "the search picker cannot test this restriction: " + ", ".join(leftover),
+            node=node,
+        )
+    if len(node.filter.card_types) > 1:
+        raise LoweringError("the search picker tests one card type", node=node)
+    payload: dict[str, object] = {
+        "card_type": node.filter.card_types[0] if node.filter.card_types else "any",
+        "destination": node.to.name,
+        # The one key that makes this a search of somebody else's library. Read
+        # by the handler into `zone_seat`, which the resolver, the AI's default
+        # and the web picker all already ask.
+        "zone_owner_target": True,
+    }
+    if isinstance(node.count, ast.ThatMuch):
+        # "for **that many** cards" (Jester's Mask): the size of a hand an
+        # earlier step of this same effect emptied. Demanded of that step rather
+        # than assumed, exactly as every other back-reference is — a search for
+        # a number nobody recorded would look for none.
+        payload.update(_back_reference_payload(node.count, produced, None))
+    else:
+        amount = _amount_payload(node.count)
+        if not isinstance(amount, int) or amount <= 0:
+            raise LoweringError(
+                "this search takes a fixed count or a recorded one", node=node
+            )
+        payload["count"] = amount
+    if node.player.kind != "that_player":
+        # "target player's library" is a cast-time choice the picker must offer;
+        # "that player's" names one an earlier sentence of the same effect
+        # already made. Describing the second would raise a second picker for a
+        # target the ability already has.
+        _describe_targets(payload, node.player)
+    return (OracleInstruction("search_library", "", payload),)
+
 
 def _lower_exile_top_of_library(node: ast.ExileTopOfLibrary) -> tuple[OracleInstruction, ...]:
     """"Exile the top three cards of your library." (Chandra, Heart of Fire's

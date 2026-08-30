@@ -23,7 +23,8 @@ this one beside `_common` in its `shared` tuple.
 
 from __future__ import annotations
 
-from ...oracle_types import EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
+from ...oracle_types import (EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
+                             HAND_CARDS_TO_LIBRARY)
 from ...tokens import CREATED_TOKEN_RESULT_KEY
 from .. import ast
 from ..errors import LoweringError
@@ -247,6 +248,9 @@ _PRODUCED_QUANTITIES: frozenset[str] = frozenset({
     "damage_dealt",
     # How many cards a discard this effect asked for actually went (Recall).
     "discarded_count",
+    # How many cards a "puts the cards from their hand on top of their library"
+    # step moved (Jester's Mask), which is what the search behind it counts.
+    HAND_CARDS_TO_LIBRARY,
     CHOSEN_CAST_DAMAGE,
 })
 

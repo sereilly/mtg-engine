@@ -68,6 +68,42 @@ class PutHandCardsOnLibrary:
     """
     player: PlayerRef
     count: Amount = field(default_factory=lambda: Fixed(1))
+    #: "Target opponent puts **the cards from their hand** on top of their
+    #: library." (Jester's Mask.) The whole hand rather than a printed number,
+    #: which is not a count the parser can write down: how many there are is a
+    #: fact about the board at resolution. Its own flag rather than a magic
+    #: ``count``, because only this spelling can never be short — CR 608.2's
+    #: "as much as it can" has nothing to trim.
+    whole_hand: bool = False
+
+
+@dataclass(frozen=True)
+class SearchPlayerLibrary:
+    """``Search target player's library for three cards and exile them. Then
+    that player shuffles.`` (Jester's Cap.)
+
+    ``Search that player's library for that many cards. That player puts those
+    cards into their hand, then shuffles.`` (Jester's Mask.)
+
+    A different effect from :class:`SearchLibrary`, which that node's own
+    production has said since it was written: "the engine's search flow only
+    ever opens the searcher's own library, so 'search target player's
+    library' is a different card, not a wording of this one". Two seats are
+    involved rather than one — CR 608.2c makes the ability's controller the
+    chooser and the library is somebody else's — and both have to reach the
+    flow, which is what this node carries and :class:`SearchLibrary` has no
+    field for.
+
+    ``count`` is an amount rather than a number because Jester's Mask prints
+    "for **that many** cards", the quantity being the size of a hand the step
+    in front of it emptied. ``to`` is where every find goes: the pool's two
+    printings send them all to one place, so there is one zone rather than the
+    per-find list Cultivate needs.
+    """
+    player: PlayerRef
+    count: Amount
+    filter: ObjectFilter
+    to: Zone
 
 
 @dataclass(frozen=True)
