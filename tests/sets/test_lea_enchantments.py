@@ -2063,3 +2063,40 @@ def test_sirens_call_exempts_creature_stolen_this_turn(all_cards):
     assert result.supported
     assert veteran.metadata.get("destroy_if_did_not_attack_eot") is True
     assert bear.metadata.get("destroy_if_did_not_attack_eot") is None
+
+
+# --- Round 38 (ICE): Pestilence's end-step line, read by the grammar ---
+def test_pestilence_sacrifices_itself_on_an_empty_board(all_cards):
+    """"At the beginning of the end step, if no creatures are on the
+    battlefield, sacrifice this enchantment."
+
+    Kept as the shipped-card regression for a hook retirement: this sentence was
+    a name-keyed entry whose key was the whole line, so Withering Wisps — which
+    prints it byte for byte — reached nothing. It is a production now, and the
+    behaviour on the card that motivated the hook must not move.
+    """
+    pestilence = Permanent(card=_get(all_cards, "Pestilence"))
+    p1 = PlayerState(name="P1", battlefield=[pestilence], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game.resolve_end_step(0)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert pestilence not in p1.battlefield
+
+
+def test_pestilence_survives_while_any_creature_is_on_the_battlefield(all_cards):
+    """CR 603.4: the gate is re-checked at resolution, and it counts every
+    creature on the battlefield rather than the controller's own."""
+    pestilence = Permanent(card=_get(all_cards, "Pestilence"))
+    bear = Permanent(card=_mk_creature_card("Board Bear", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[pestilence], life=20)
+    p2 = PlayerState(name="P2", battlefield=[bear], life=20)
+    game = Game(players=[p1, p2])
+
+    game.resolve_end_step(0)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert pestilence in p1.battlefield

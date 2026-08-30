@@ -177,22 +177,6 @@ def add_corpse_counters_for_each_creature_died(game: Game, instruction: OracleIn
     return True, "resolved"
 
 
-@effect_handler("sacrifice_if_no_creatures")
-def sacrifice_if_no_creatures(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Pestilence-style: "At the beginning of the end step, if there are no creatures
-    on the battlefield, sacrifice this." Resolves off the stack; the intervening-if is
-    re-checked at resolution (CR 603.4)."""
-    source = context.source_permanent
-    if source is None:
-        return True, "resolved"
-    has_creatures = any(p.is_creature for p in game.all_permanents())
-    if has_creatures:
-        return True, "resolved"
-    if game.sacrifice_permanent(source) is not None:
-        game.log.append(f"{source.card.name} sacrificed at end step (no creatures)")
-    return True, "resolved"
-
-
 @effect_handler("end_step_damage_if_not_attacked")
 def end_step_damage_if_not_attacked(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Erg Raiders: "At the beginning of your end step, if this creature

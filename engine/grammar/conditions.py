@@ -253,6 +253,37 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         return blocking
     stream.reset(blockers_mark)
 
+    # "if **no creatures are on the battlefield**" (Pestilence, Withering
+    # Wisps). The board's own count, with no seat in it — read here, beside the
+    # "you control" clause it is *not*: that one asks a player what they have,
+    # and this one asks the zone. Pestilence used to reach a name-keyed hook
+    # whose key was this whole sentence, so the identical line on a second card
+    # reached nothing at all.
+    #
+    # The quantifier carries the comparison and only the two English articles
+    # are read: a printed number ("if two or more creatures are on the
+    # battlefield") is a threshold this does not model, and it falls through
+    # rather than being taken as presence.
+    zone_mark = stream.mark()
+    quantifier = "no" if stream.accept_word("no") else (
+        "a" if stream.accept_word("a", "an") else None
+    )
+    if quantifier is not None:
+        try:
+            present = parse_object_filter(stream)
+        except GrammarError:
+            present = None
+        if present is not None and (
+            stream.accept_phrase("are", "on", "the", "battlefield")
+            or stream.accept_phrase("is", "on", "the", "battlefield")
+        ):
+            return ast.OnBattlefield(
+                present,
+                ast.Comparison("eq", ast.Fixed(0)) if quantifier == "no"
+                else ast.Comparison("ge", ast.Fixed(1)),
+            )
+    stream.reset(zone_mark)
+
     # "if **it doesn't have rampage**" (Rapid Fire). Read before the two
     # back-references below, which open with the same pronoun: this branch is
     # pinned by the verb that follows it, and it resets when no keyword does.

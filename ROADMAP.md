@@ -692,9 +692,12 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, thirty-seven rounds in. 184 → 279 of 373 supported
-(74.8%), hollow lines 10 cards, and 43 unclaimed sentences across 28 of those
-279 — the third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
+**Where it stands: Phase 3, thirty-eight rounds in. 184 → 280 of 373 supported
+(75.1%), hollow lines 9 cards, and 43 unclaimed sentences across 28 of those
+280 — the third number is new, and the warning below says what it means.**
+Round 38 found a fourth number that disagrees with the first: the census and the
+refusal list inside one script count with two different readers, and the census
+is the wider of the two. Round 39 is that. The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
@@ -2064,6 +2067,66 @@ and Pestilence is a hook. Generalising it retires a third entry but gains no
 card on its own: Withering Wisps also needs "Activate no more times each turn
 than the number of snow Swamps you control", an activation limit counted off the
 board rather than printed as a number.
+
+**Round 38 — the board is the cap, and an end-step gate with no seat in it.
+279 → 280.**
+
+The round scheduled last time. Withering Wisps needed two pieces and both were
+generalisations of something already here.
+
+**Pestilence's end-step line was a hook whose key was the whole sentence.**
+"At the beginning of the end step, if no creatures are on the battlefield,
+sacrifice this enchantment" — and Withering Wisps prints it byte for byte, so
+it reached nothing. Every part of that sentence was already read except the
+condition: the trigger opener is in the compiler's table, the effect lowers to
+`sacrifice_self`, and CR 603.4's intervening-if travels on the payload and is
+re-checked at resolution. What was missing is a count over the **battlefield**,
+with no player in it.
+
+So `ast.OnBattlefield` sits beside `Controls` rather than inside it. The
+distinction is not pedantry: `Controls` is relative to a seat, and reading
+"no creatures are on the battlefield" as a per-seat count would agree with the
+board's count for "no" and disagree for every other quantifier the node can
+carry. The quantifier is the comparison, as it is on `Controls`, and a printed
+number is left unread rather than taken as presence.
+
+**Retiring the hook retired a scan and a handler with it.** The end step had a
+bespoke block that counted creatures itself and then looked for one instruction
+kind; the generic gated scan two blocks below it — keyed on the payload's shape,
+which is the arrangement round 45 of Legends arrived at — now reads the same
+trigger. `sacrifice_if_no_creatures`, `END_STEP_EMPTY_BOARD_KINDS` and the
+Pestilence entry are all gone. **Hooked cards 71 → 70, entries 77 → 76, and the
+projection to the full release line 1,730 → 1,708.**
+
+**The second piece is a cap with no number on the card.** "Activate no more
+times each turn than the number of snow Swamps you control" is the first
+per-turn limit in the pool whose value is a board count, and the machinery that
+answers "how often may this line be activated" was one text-only function. A
+text-only reader can only answer a counted cap with `None` — which is the value
+that means *no cap at all*, so the tally would stop and the ability would be
+uncapped on every board.
+
+The fix is that these are two questions. **Whether a line is capped** is a fact
+about the sentence (`printed_activation_caps`, what the tally asks); **what the
+cap is** is a fact about the board (`activations_allowed_each_turn`, what the
+refusal asks). One `ActivationCap` carries both shapes, so the refusal and the
+tally still come through one reader. The noun phrase is payload and goes through
+the grammar's noun parser — the same one `_controlled_board_phrase` asks — so a
+card counting Islands needs no row, and a phrase that parser cannot read leaves
+the clause unmatched and its card unsupported rather than admitted with an
+uncapped ability.
+
+**And the round found the next one.** Two halves of `support_report.py` count
+the pool with two different readers: the census calls `classify_card` and the
+refusal list calls `compile_card_oracle`, and they disagree — 93 unsupported
+against 94. `classify_card` carries an override that admits a card whose
+compiler refusal was "unsupported triggered ability" **if any other triggered
+ability of it is supported**, which is the widened-gate shape this journal keeps
+finding, with the same consequence: Illusionary Presence reports supported, is
+castable, and drops its second upkeep trigger in silence. Measured over the
+whole shipped-plus-measured pool, it is the **only** card in either direction —
+so no shipped card is affected, and the number the census has been reporting for
+this set is one too high.
 
 ## Where the sets landed
 

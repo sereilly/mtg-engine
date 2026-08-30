@@ -18,6 +18,7 @@ from ...activation_restrictions import (
     activation_denial,
     activations_allowed_each_turn,
     at_activation_limit,
+    printed_activation_caps,
     mark_activated_this_turn,
 )
 from ...auras import attached_ability_cost_reduction, aura_restriction_active
@@ -549,11 +550,18 @@ class AbilityActivationMixin:
         # come back from one reader, and a reader here spelling the words itself
         # is the second representation that lets a refusal and a tally disagree
         # about the same sentence.
-        activation_cap = activations_allowed_each_turn(ability_lower)
-        if at_activation_limit(self, permanent, ability_lower):
+        # **Whether** the line is capped is a fact about the sentence;
+        # **how much** it is capped by can be a fact about the board (Withering
+        # Wisps counts snow Swamps), so the tally below asks the first question
+        # and the refusal here asks the second. One text-only reader answering
+        # both would have to call a counted cap "no cap", which is the value
+        # that stops the tally.
+        activation_caps = printed_activation_caps(ability_lower)
+        if at_activation_limit(self, controller_index, permanent, ability_lower):
             details = (
                 f"{permanent.card.name}'s ability can only be activated "
-                f"{activation_cap} time(s) each turn"
+                f"{activations_allowed_each_turn(ability_lower, self, controller_index, permanent)}"
+                f" time(s) each turn"
             )
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
@@ -956,7 +964,7 @@ class AbilityActivationMixin:
             )
 
         # All guards/costs passed — tally an activation of a capped ability.
-        if activation_cap is not None:
+        if activation_caps:
             mark_activated_this_turn(self, permanent)
 
         # CR 606.4: a loyalty symbol is a cost to put on or remove that many

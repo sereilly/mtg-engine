@@ -39,6 +39,26 @@ class Controls:
 
 
 @dataclass(frozen=True)
+class OnBattlefield:
+    """"no creatures are on the battlefield" (Pestilence, Withering Wisps).
+
+    A count over the battlefield itself, with no player in it. That is what
+    separates it from :class:`Controls`, whose every reading is relative to a
+    seat: "you control no creatures" is a different sentence and a different
+    card, and reading this one as a `Controls` over every player would give the
+    same answer for "no" and a different one for every other quantifier — a
+    per-seat count compared against a threshold is not the board's count.
+
+    The quantifier is the comparison, exactly as it is on `Controls`: "no" is
+    zero and "a" is one or more. A number is left unread rather than guessed,
+    because a threshold silently taken as presence is a condition that holds on
+    a board the card does not name.
+    """
+    filter: ObjectFilter
+    comparison: Comparison
+
+
+@dataclass(frozen=True)
 class EveryOf:
     """"if you control an Urza's Mine **and** an Urza's Tower" — every part must
     hold (CR 104 has no conjunction rule; this is plain English "and").
@@ -539,5 +559,5 @@ Condition = Union[
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
     DealtDamageThisTurn, SubjectCharacteristicIs, BlockersOfBoundCreature,
-    SourceExiledWithCounter, SourceCounterCount,
+    SourceExiledWithCounter, SourceCounterCount, OnBattlefield,
 ]

@@ -451,11 +451,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "when this creature dies, its owner loses half their life, rounded up":
             _line("owner_loses_half_life", "triggered_loss"),
     },
-    'Pestilence': {
-        "at the beginning of the end step, if no creatures are on the battlefield, "
-        "sacrifice this enchantment":
-            _line("sacrifice_if_no_creatures", "triggered_sacrifice"),
-    },
     'Power Leak': {
         "at the beginning of the upkeep of enchanted enchantment's controller, "
         'that player may pay any amount of mana. this aura deals 2 damage to '

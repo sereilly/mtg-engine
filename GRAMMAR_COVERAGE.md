@@ -16,18 +16,18 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 82.5% | 81.2% | 44.8% | 159 |
-| LEB | 292 | 389 | 82.5% | 81.2% | 45.0% | 160 |
-| 2ED | 292 | 389 | 82.5% | 81.2% | 45.0% | 160 |
+| LEA | 290 | 388 | 82.7% | 81.4% | 45.1% | 159 |
+| LEB | 292 | 389 | 82.8% | 81.5% | 45.2% | 160 |
+| 2ED | 292 | 389 | 82.8% | 81.5% | 45.2% | 160 |
 | ARN | 78 | 108 | 75.9% | 71.3% | 49.1% | 44 |
 | ATQ | 85 | 120 | 90.0% | 90.0% | 62.5% | 68 |
-| 3ED | 296 | 389 | 84.6% | 82.8% | 47.3% | 166 |
+| 3ED | 296 | 389 | 84.8% | 83.0% | 47.6% | 166 |
 | LEG | 310 | 431 | 89.1% | 87.9% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
-| 4ED | 368 | 520 | 88.8% | 88.5% | 52.3% | 239 |
+| 4ED | 368 | 520 | 89.0% | 88.7% | 52.5% | 239 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 69.6% | 65.1% | 44.6% | 209 |
-| **All (shipped)** | **2415** | **3404** | **86.0%** | **84.9%** | **52.6%** | **1551** |
+| ICE *(measured)* | 373 | 601 | 69.9% | 65.4% | 44.9% | 210 |
+| **All (shipped)** | **2415** | **3404** | **86.1%** | **85.0%** | **52.7%** | **1551** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -39,7 +39,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 294 | 146 | expected a subject |  |
+| 287 | 144 | expected a subject |  |
 | 128 | 55 | unrecognized effect verb |  |
 | 76 | 44 | unconsumed text |  |
 | 40 | 23 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -67,7 +67,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 
 ## Cards executing through the grammar
 
-1551 cards, 1790 lines.
+1551 cards, 1795 lines.
 
 - **Abomination**
   - `Whenever this creature blocks or becomes blocked by a green or white creature, destroy that creature at end of combat.`
@@ -1974,10 +1974,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
 - **Pentagram of the Ages**
   - `{4}, {T}: The next time a source of your choice would deal damage to you this turn, prevent that damage.`
 - **Pestilence**
+  - `At the beginning of the end step, if no creatures are on the battlefield, sacrifice this enchantment.`
   - `{B}: This enchantment deals 1 damage to each creature and each player.`
+  - `At the beginning of the end step, if no creatures are on the battlefield, sacrifice this enchantment.`
   - `{B}: This enchantment deals 1 damage to each creature and each player.`
+  - `At the beginning of the end step, if no creatures are on the battlefield, sacrifice this enchantment.`
   - `{B}: This enchantment deals 1 damage to each creature and each player.`
+  - `At the beginning of the end step, if no creatures are on the battlefield, sacrifice this enchantment.`
   - `{B}: This enchantment deals 1 damage to each creature and each player.`
+  - `At the beginning of the end step, if no creatures are on the battlefield, sacrifice this enchantment.`
   - `{B}: This enchantment deals 1 damage to each creature and each player.`
 - **Pestilent Haze**
   - `• All creatures get -2/-2 until end of turn.`
@@ -3089,6 +3094,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_nu
   - `{1}{W}{W}, {T}: Return target creature an opponent controls to its owner's hand.`
 - **Witch's Cauldron**
   - `{1}{B}, {T}, Sacrifice a creature: You gain 1 life and draw a card.`
+- **Withering Wisps**
+  - `At the beginning of the end step, if no creatures are on the battlefield, sacrifice this enchantment.`
+  - `{B}: This enchantment deals 1 damage to each creature and each player. Activate no more times each turn than the number of snow Swamps you control.`
 - **Wooden Sphere**
   - `Whenever a player casts a green spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a green spell, you may pay {1}. If you do, you gain 1 life.`

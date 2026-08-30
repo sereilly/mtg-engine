@@ -722,3 +722,103 @@ def test_a_mana_cost_alone_no_longer_claims_a_line_the_compiler_refuses(set_pool
         "number of sleight counters on this aura"
     )
     assert aura_activated_ability_claim(line, "Chromatic Armor") is None
+
+
+# --- Round 38: the board is the cap, and an end-step gate with no seat in it ---
+def _wisps_board(set_pool, swamps: int = 1, creatures: int = 0):
+    """Withering Wisps out, with *swamps* snow Swamps and the mana to fire it."""
+    from engine.card_loader import load_cards
+
+    pool = set_pool("ICE")
+    wisps = Permanent(card=pool["Withering Wisps"])
+    board = [wisps] + [Permanent(card=pool["Snow-Covered Swamp"]) for _ in range(swamps)]
+    board += [_nosick(Permanent(card=pool["Balduvian Bears"])) for _ in range(creatures)]
+    p1 = PlayerState(name="P1", battlefield=board, mana_pool={"B": 9}, life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    return game, p1, wisps
+
+
+def test_withering_wisps_is_capped_by_the_swamps_you_control(set_pool):
+    """"Activate no more times each turn than the number of snow Swamps you
+    control."
+
+    The first cap in the pool whose number is printed nowhere on the card. One
+    snow Swamp, one activation — and the second is refused with nothing spent.
+    """
+    game, _p1, _wisps = _wisps_board(set_pool, swamps=1)
+
+    first = game.activate_permanent_ability(0, "Withering Wisps", ability_index=0)
+    game.resolve_top_of_stack()
+    assert first.supported
+    assert game.players[1].life == 19
+
+    second = game.activate_permanent_ability(0, "Withering Wisps", ability_index=0)
+
+    assert not second.supported
+    assert not game.stack, "a refused activation puts nothing on the stack"
+    assert game.players[1].life == 19
+
+
+def test_withering_wisps_cap_is_re_measured_on_the_board_it_is_asked_about(set_pool):
+    """Two snow Swamps, two activations. The cap is a count, not a stamp taken
+    when the permanent entered: it is asked again at each activation, so a
+    Swamp that arrives between two raises it."""
+    game, _p1, _wisps = _wisps_board(set_pool, swamps=2)
+
+    assert game.activate_permanent_ability(0, "Withering Wisps", ability_index=0).supported
+    game.resolve_top_of_stack()
+    assert game.activate_permanent_ability(0, "Withering Wisps", ability_index=0).supported
+    game.resolve_top_of_stack()
+    assert not game.activate_permanent_ability(0, "Withering Wisps", ability_index=0).supported
+
+    assert game.players[1].life == 18
+
+
+def test_a_counted_cap_is_a_cap_even_though_no_number_is_printed(set_pool):
+    """The tally asks whether the line is capped; the refusal asks what the cap
+    is. Fused into one text-only reader — as they were while every cap in the
+    pool printed its number — a counted cap can only answer "no cap", which is
+    the value that stops the tally and leaves the ability uncapped on every
+    board."""
+    from engine.activation_restrictions import (
+        activations_allowed_each_turn,
+        printed_activation_caps,
+    )
+
+    line = (
+        "{b}: this enchantment deals 1 damage to each creature and each player. "
+        "activate no more times each turn than the number of snow swamps you control"
+    )
+
+    assert printed_activation_caps(line), "the line is capped"
+    assert activations_allowed_each_turn(line) is None, "and not from the text alone"
+
+    game, _p1, wisps = _wisps_board(set_pool, swamps=3)
+    assert activations_allowed_each_turn(line, game, 0, wisps) == 3
+
+
+def test_withering_wisps_sacrifices_itself_on_an_empty_board(set_pool):
+    """"At the beginning of the end step, if no creatures are on the
+    battlefield, sacrifice this enchantment" — Pestilence's line byte for byte,
+    which reached a name-keyed hook and so reached this card not at all."""
+    game, p1, wisps = _wisps_board(set_pool, swamps=1)
+
+    game.resolve_end_step(0)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert wisps not in p1.battlefield
+
+
+def test_withering_wisps_stays_while_a_creature_is_on_the_battlefield(set_pool):
+    """The gate counts the *battlefield*, not the controller's half of it: a
+    creature anyone controls keeps the enchantment alive (CR 603.4)."""
+    pool = set_pool("ICE")
+    game, p1, wisps = _wisps_board(set_pool, swamps=1)
+    game.players[1].battlefield.append(_nosick(Permanent(card=pool["Balduvian Bears"])))
+
+    game.resolve_end_step(0)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert wisps in p1.battlefield

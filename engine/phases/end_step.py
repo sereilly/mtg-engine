@@ -30,7 +30,6 @@ END_STEP_DEATH_COUNTER_KINDS = frozenset({
     "add_corpse_counters_for_each_creature_died",
     "add_plus1_counters_for_each_creature_died",
 })
-END_STEP_EMPTY_BOARD_KINDS = frozenset({"sacrifice_if_no_creatures"})
 END_STEP_DID_NOT_ATTACK_KINDS = frozenset({"end_step_damage_if_not_attacked"})
 
 #: The two condition kinds this step dispatches, and the only difference between
@@ -50,7 +49,6 @@ END_STEP_CONDITIONS = frozenset({END_STEP_SELF_CONDITION, END_STEP_EACH_CONDITIO
 #: entry here — see ``END_STEP_INTERVENING_IF``.
 END_STEP_DISPATCHED_KINDS = (
     END_STEP_DEATH_COUNTER_KINDS
-    | END_STEP_EMPTY_BOARD_KINDS
     | END_STEP_DID_NOT_ATTACK_KINDS
 )
 
@@ -150,18 +148,6 @@ class EndStepMixin:
                 events.append(make_trigger_event(
                     controller_index, permanent, trig, trigger_context={"count": died}
                 ))
-
-        # Pestilence-style: "...if there are no creatures on the battlefield,
-        # sacrifice this." The intervening-if is re-checked when the trigger resolves.
-        all_perms = list(self.all_permanents())
-        has_creatures = any(p.is_creature for p in all_perms)
-        if not has_creatures:
-            for controller_index, permanent, trig in iter_triggered_abilities(
-                self,
-                condition_kinds={END_STEP_EACH_CONDITION},
-                instruction_kinds=END_STEP_EMPTY_BOARD_KINDS,
-            ):
-                events.append(make_trigger_event(controller_index, permanent, trig))
 
         # Erg Raiders: "at the beginning of YOUR end step" — scoped to this
         # end step's own player only, unlike the two blocks above (which don't

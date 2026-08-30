@@ -144,6 +144,61 @@ def _readable_controlled_board(match: "re.Match[str]") -> bool:
     return _controlled_board_phrase(match.group("board")) is not None
 
 
+@lru_cache(maxsize=None)
+def _counted_board_phrase(phrase: str) -> "dict | None":
+    """"snow Swamps" as a filter payload, for a clause that *counts* them.
+
+    The plural twin of :func:`_controlled_board_phrase` and the same noun
+    parser, because "a snow Swamp" and "snow Swamps" name the same set and a
+    second reader of either would be free to disagree about what a snow Swamp
+    is. What differs is only the quantifier: that one reads an article and
+    answers presence, this one reads a bare plural and answers how many.
+    """
+    from .grammar.errors import GrammarError
+    from .grammar.lexer import tokenize
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+    from .subject_filters import untestable_filter_keys
+
+    stream = TokenStream(tokenize(phrase.strip()).tokens)
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    payload = described.to_payload()
+    if not payload or untestable_filter_keys(payload):
+        return None
+    return payload
+
+
+def _readable_counted_board(match: "re.Match[str]") -> bool:
+    """Whether the noun phrase a counted cap is measured against is testable."""
+    return _counted_board_phrase(match.group("board")) is not None
+
+
+def _board_count(game: "Game", seat: int, source, phrase: str) -> int | None:
+    """How many permanents *seat* controls that *phrase* names, or None.
+
+    `subject_matches` answers the phrase, so a text-changed land type counts
+    here as it counts everywhere, and CR 109.5's observer is the seat whose
+    ability this is.
+    """
+    described = _counted_board_phrase(phrase)
+    if described is None:
+        return None
+    from .subject_filters import subject_matches
+
+    return sum(
+        1
+        for perm in game.controlled_by(seat)
+        if subject_matches(
+            game, perm, described, observer=seat, source=source
+        )
+    )
+
+
 def _defending_seat(game: "Game") -> int | None:
     """The seat "defending player" names right now, or None when nothing does.
 
@@ -352,41 +407,126 @@ def _frequency_value(word: str) -> int | None:
     return None
 
 
-#: The clause shapes that cap how often one permanent's ability may be activated
-#: in a turn, as ``(pattern, group)``. The bare "once" spellings carry no group
-#: and mean one; the "no more than" spelling names its own number. Read by
-#: :func:`activations_allowed_each_turn`, which is the *only* answer to "is this
-#: line capped, and at what" -- the refusal, the tally and the rows below all
-#: come through it.
-_ACTIVATION_LIMIT_SHAPES: tuple[tuple["re.Pattern[str]", "str | None"], ...] = (
-    # The bare clause (Dream Coat) and the tail on a timing clause (Instill
-    # Energy's "during your turn and only once each turn", Gate to Phyrexia's
-    # upkeep one). Searched rather than anchored because the tail really is one.
-    (re.compile(r"once each turn"), None),
-    (re.compile(r"^activate no more than " + _PRINTED_FREQUENCY + r" each turn$"), "freq"),
+@dataclass(frozen=True)
+class ActivationCap:
+    """One printed per-turn cap on one ability line (CR 602.5).
+
+    Two shapes, and the difference is *when* the number exists. A printed one
+    ("no more than twice each turn") is a fact about the sentence and can be
+    read off the text alone; a counted one ("no more times each turn than the
+    number of snow Swamps you control", Withering Wisps) is a fact about the
+    board and has no value until a game and a seat are named.
+
+    That is why "is this line capped" and "what is the cap" are two questions
+    with two readers -- :func:`printed_activation_caps` and
+    :func:`activations_allowed_each_turn`. Fusing them, as one text-only
+    function did while every cap in the pool was printed, means a counted cap
+    can only be answered by returning None, which is the value that means *no
+    cap at all*: the tally would stop, and the ability would be uncapped on
+    every board.
+    """
+
+    #: The number the sentence names, or None when it names a noun phrase.
+    printed: int | None = None
+    #: The noun phrase the cap counts, controlled by the activating seat.
+    counted: str | None = None
+
+    def resolve(self, game=None, controller_index=None, source=None) -> int | None:
+        """This cap as a number on the board in front of it, or None.
+
+        None means "not answerable here", never "uncapped": a counted cap asked
+        with no game is unanswered, and the caller that can refuse an activation
+        is the caller that has one.
+        """
+        if self.printed is not None:
+            return self.printed
+        if self.counted is None or game is None or controller_index is None:
+            return None
+        return _board_count(game, controller_index, source, self.counted)
+
+
+def _printed_frequency_cap(match: "re.Match[str]") -> "ActivationCap | None":
+    value = _frequency_value(match.group("freq"))
+    return None if value is None else ActivationCap(printed=value)
+
+
+def _counted_board_cap(match: "re.Match[str]") -> "ActivationCap | None":
+    """"…than the number of snow Swamps you control" (Withering Wisps).
+
+    Unreadable noun phrase, no cap -- which leaves the clause unmatched and its
+    card unsupported, rather than admitting a sentence whose number nothing can
+    work out.
+    """
+    phrase = match.group("board")
+    return ActivationCap(counted=phrase) if _counted_board_phrase(phrase) else None
+
+
+#: "…no more times each turn than the number of **snow Swamps you control**."
+#: The noun phrase is payload for the reason every printed noun phrase in this
+#: file is: a card counting Islands prints this clause, not a new one.
+_COUNTED_LIMIT = (
+    r"^activate no more times each turn than the number of "
+    r"(?P<board>.+) you control$"
 )
 
 
-def activations_allowed_each_turn(ability_text: str) -> int | None:
-    """How many times a turn this printed ability line may be activated.
+#: The clause shapes that cap how often one permanent's ability may be activated
+#: in a turn, as ``(pattern, build)``. Read by
+#: :func:`printed_activation_caps`, which is the *only* answer to "is this line
+#: capped, and by what" -- the refusal, the tally and the rows below all come
+#: through it.
+_ACTIVATION_LIMIT_SHAPES: tuple[
+    tuple["re.Pattern[str]", "Callable[[re.Match[str]], ActivationCap | None]"], ...
+] = (
+    # The bare clause (Dream Coat) and the tail on a timing clause (Instill
+    # Energy's "during your turn and only once each turn", Gate to Phyrexia's
+    # upkeep one). Searched rather than anchored because the tail really is one.
+    (re.compile(r"once each turn"), lambda match: ActivationCap(printed=1)),
+    (
+        re.compile(r"^activate no more than " + _PRINTED_FREQUENCY + r" each turn$"),
+        _printed_frequency_cap,
+    ),
+    (re.compile(_COUNTED_LIMIT), _counted_board_cap),
+)
 
-    ``None`` is not zero and not one: it means the card prints no cap at all,
-    which is every ability in the pool but these. The lowest cap wins when a
-    line prints more than one, because two caps on one line are both true.
 
-    `mixins/stack/activation.py` asks this both to refuse an activation past the
-    cap and to tally the ones it allows, so the rows below and the tally cannot
-    disagree about which lines are limited or about how limited they are.
+def printed_activation_caps(ability_text: str) -> tuple[ActivationCap, ...]:
+    """Every per-turn cap this printed ability line states.
+
+    Text only, and the question the *tally* asks: an activation is counted
+    because the line is capped, whatever the cap works out to on the board at
+    the time. An empty tuple is every ability in the pool but these.
     """
-    limits: list[int] = []
+    caps: list[ActivationCap] = []
     for clause in _clauses(ability_text):
-        for pattern, group in _ACTIVATION_LIMIT_SHAPES:
+        for pattern, build in _ACTIVATION_LIMIT_SHAPES:
             found = pattern.search(clause)
             if found is None:
                 continue
-            value = 1 if group is None else _frequency_value(found.group(group))
-            if value is not None:
-                limits.append(value)
+            cap = build(found)
+            if cap is not None:
+                caps.append(cap)
+    return tuple(caps)
+
+
+def activations_allowed_each_turn(
+    ability_text: str, game=None, controller_index: int | None = None, source=None
+) -> int | None:
+    """How many times a turn this ability line may be activated *right now*.
+
+    ``None`` is not zero and not one: it means nothing here bounds the line --
+    either it prints no cap at all, or the only cap it prints is counted off a
+    board this caller did not name. :func:`printed_activation_caps` is the
+    question to ask when what you need is whether the line is capped.
+
+    The lowest cap wins when a line states more than one, because two caps on
+    one line are both true.
+    """
+    limits = [
+        value
+        for cap in printed_activation_caps(ability_text)
+        if (value := cap.resolve(game, controller_index, source)) is not None
+    ]
     return min(limits) if limits else None
 
 
@@ -411,13 +551,18 @@ def already_activated_this_turn(game: "Game", source) -> bool:
     return activations_this_turn(game, source) >= 1
 
 
-def at_activation_limit(game: "Game", source, ability_text: str) -> bool:
-    """Whether this line's printed per-turn cap is already spent.
+def at_activation_limit(
+    game: "Game", controller_index: int, source, ability_text: str
+) -> bool:
+    """Whether this line's per-turn cap is already spent.
 
-    Asked of the line and the permanent together, because the cap is printed on
-    the line and the tally is state on the permanent.
+    Asked of the line, the seat and the permanent together: the cap is stated on
+    the line, a counted one is measured on the seat's board, and the tally is
+    state on the permanent.
     """
-    limit = activations_allowed_each_turn(ability_text)
+    limit = activations_allowed_each_turn(
+        ability_text, game, controller_index, source
+    )
     return limit is not None and activations_this_turn(game, source) >= limit
 
 
@@ -443,7 +588,25 @@ def _below_printed_activation_limit(
     delimits the word, and an unreadable one leaves the clause unmatched and its
     card unsupported.
     """
-    limit = _frequency_value(match.group("freq"))
+    cap = _printed_frequency_cap(match)
+    limit = None if cap is None else cap.resolve(game, controller_index, source)
+    return limit is not None and activations_this_turn(game, source) < limit
+
+
+def _below_counted_activation_limit(
+    game: "Game", controller_index: int, source, match
+) -> bool:
+    """"Activate no more times each turn than the number of snow Swamps you
+    control." (Withering Wisps.)
+
+    The board is the number, so the cap is re-measured at every activation
+    rather than fixed when the permanent entered: a Swamp that arrives between
+    two activations raises it, and one that leaves lowers it. Both readings
+    come through :class:`ActivationCap`, so this refusal and the tally beside it
+    cannot disagree about how many the seat is allowed.
+    """
+    cap = _counted_board_cap(match)
+    limit = None if cap is None else cap.resolve(game, controller_index, source)
     return limit is not None and activations_this_turn(game, source) < limit
 
 
@@ -673,6 +836,21 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         "already activated as many times as it may be this turn",
         reads_payload=True,
     ),
+    # "Activate no more times each turn than the number of snow Swamps you
+    # control." (Withering Wisps.) The second cap shape in the pool and the
+    # first whose number is not printed anywhere on the card -- see
+    # `ActivationCap`. The noun phrase is payload and is read by the grammar's
+    # noun parser, so the clause is one row rather than one row per noun; a
+    # phrase that parser cannot read leaves it unmatched, and the card is
+    # unsupported naming the sentence rather than admitted with an uncapped
+    # ability.
+    ActivationRestriction(
+        re.compile(_COUNTED_LIMIT),
+        _below_counted_activation_limit,
+        "already activated as many times as it may be this turn",
+        reads_payload=True,
+        payload_readable=_readable_counted_board,
+    ),
     # "Activate only before the combat damage step." (Angus Mackenzie.) The step
     # alternation is built from the engine's own turn structure, so the step is
     # payload and a step the engine does not have leaves the clause unmatched.
@@ -864,11 +1042,13 @@ def activation_denial(game, controller_index: int, source, ability_text: str) ->
 __all__ = [
     "ACTIVATION_RESTRICTIONS",
     "ONCE_EACH_TURN_MARK",
+    "ActivationCap",
     "ActivationRestriction",
     "activation_denial",
     "activation_restriction_line",
     "already_activated_this_turn",
     "limits_to_once_each_turn",
     "mark_activated_this_turn",
+    "printed_activation_caps",
     "unreadable_activation_clauses",
 ]

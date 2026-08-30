@@ -173,6 +173,37 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # arbitrarily among them is the reading no printed sentence supports.
         return all(_holds(attacker) for attacker in blocked)
 
+    if kind == "on_battlefield":
+        # "if no creatures are on the battlefield" (Pestilence, Withering
+        # Wisps). The zone's own count: every battlefield permanent, whoever
+        # controls it. The clause beside it (`controls`) starts from a list of
+        # players for exactly the reason this one cannot — a per-seat count
+        # compared against a threshold answers a different question from the
+        # board's.
+        #
+        # Asked through `subject_matches` rather than the pure matcher, so a
+        # narrowing that needs layer 6 or the ability's own source ("no *other*
+        # creatures", "no creatures with flying") is answered rather than
+        # dropped. The observer is the ability's controller, CR 109.5's seat.
+        from ..subject_filters import subject_matches
+
+        observer = (
+            game.players.index(context.caster)
+            if context.caster in game.players else None
+        )
+        count = sum(
+            1
+            for permanent in game.all_permanents()
+            if subject_matches(
+                game,
+                permanent,
+                payload.get("filter") or {},
+                observer=observer,
+                source=context.source_permanent,
+            )
+        )
+        return _compare_count(count, payload.get("op", "ge"), payload.get("count"))
+
     if kind == "controls":
         who = payload.get("who", "you")
         players = [context.caster] if who == "you" else list(game.players)

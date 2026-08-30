@@ -308,6 +308,17 @@ def _lower_condition(
                 for part in condition.conditions
             ],
         }
+    if isinstance(condition, ast.OnBattlefield):
+        # No seat travels down: the payload names the zone and the noun phrase,
+        # and the evaluator counts the board. The comparison is always set by
+        # the production (the quantifier *is* the comparison), so there is no
+        # unbounded reading to fall back to here.
+        return {
+            "kind": "on_battlefield",
+            "filter": condition.filter.to_payload(),
+            "count": condition.comparison.value.value,
+            "op": condition.comparison.op,
+        }
     if isinstance(condition, ast.Controls):
         who = condition.who.kind
         # "…**if that player** controls a Plains" (Spiritual Sanctuary). Left as
