@@ -742,6 +742,37 @@ def _lower_look_top_pick(
     return (OracleInstruction("look_top_pick_to_hand", "", payload),)
 
 
+def _lower_look_top_exile_random(
+    node: ast.LookTopExileRandom,
+) -> tuple[OracleInstruction, ...]:
+    """"Look at the top eight cards of your library. Exile four of them at
+    random, then put the rest on top of your library in any order." (Orcish
+    Librarian.)
+
+    Both counts are fixed numbers the card prints. A back-reference would have
+    to name an event this statement has no access to, and an X would have to
+    survive to a resolution that happens after the cost is paid — neither is a
+    shape any printing of this sentence has, so both refuse rather than
+    resolving to a silent zero.
+    """
+    looked = _amount_payload(node.count)
+    exiled = _amount_payload(node.exile_count)
+    if not isinstance(looked, int) or looked <= 0:
+        raise LoweringError("the look-and-exile takes a fixed count", node=node)
+    if not isinstance(exiled, int) or exiled <= 0:
+        raise LoweringError("the random exile takes a fixed count", node=node)
+    if exiled > looked:
+        raise LoweringError(
+            "more cards are exiled than are looked at", node=node
+        )
+    return (
+        OracleInstruction(
+            "look_top_exile_random", "",
+            {"amount": looked, "exile_count": exiled},
+        ),
+    )
+
+
 def _lower_graveyard_pick_onto_battlefield(
     node: ast.PutOntoBattlefield,
 ) -> tuple[OracleInstruction, ...] | None:

@@ -730,3 +730,80 @@ def test_608_2_a_non_interactive_seat_answers_with_the_default():
     assert game.pending_choices == []
     assert [c.name for c in game.players[0].hand] == ["C"]
     assert [c.name for c in game.players[0].library[:2]] == ["A", "B"]
+
+
+# ---------------------------------------------------------------------------
+# CR 401.4 — cards put into a library at one position are arranged by the owner
+# ---------------------------------------------------------------------------
+
+
+def _look_top_game(library: list[str]) -> Game:
+    p1 = PlayerState(
+        name="P1", library=[_mk_card(n, "Artifact") for n in library], life=20
+    )
+    return Game(players=[p1, PlayerState(name="P2", life=20)], interactive_seats={0})
+
+
+@pytest.mark.cr("401.4")
+def test_401_4_the_rest_going_on_top_is_arranged_by_their_owner():
+    """"…and the rest on top of your library in any order." (Diabolic Vision.)
+
+    On the *bottom* the arrangement is unobservable and the resolver has always
+    just laid the cards down. On top it is the next N draws, so CR 401.4's "may
+    arrange them in any order" has to actually be asked — a second prompt,
+    armed by answering the first, inside the one resolution.
+    """
+    game = _look_top_game(["A", "B", "C", "D", "E", "F"])
+    game.arm_pending_choice(
+        "look_top_pick", 0,
+        top_count=5, amount=5, card_name="Diabolic Vision",
+        filter={}, filters=(), optional=False,
+        rest_order="any", rest_destination="library_top",
+    )
+
+    assert game.confirm_look_top_pick(0, 1) is True
+
+    assert [c.name for c in game.players[0].hand] == ["B"]
+    assert game.pending_choice_of("reorder_library", 0) is not None
+    assert [c.name for c in game.players[0].library] == ["A", "C", "D", "E", "F"]
+
+    assert game.confirm_reorder_library(0, [3, 2, 1, 0]) is True
+    assert [c.name for c in game.players[0].library] == ["E", "D", "C", "A", "F"]
+
+
+@pytest.mark.cr("401.4")
+def test_401_4_the_rest_going_to_the_bottom_is_not_asked_about():
+    """The same clause one word over, and no prompt: nothing in the game can
+    observe the order of cards put on the bottom, so asking would be a decision
+    with no consequence. The destination is what decides, which is why it is
+    read off the card rather than defaulted."""
+    game = _look_top_game(["A", "B", "C", "D"])
+    game.arm_pending_choice(
+        "look_top_pick", 0,
+        top_count=3, amount=3, card_name="See the Truth",
+        filter={}, filters=(), optional=False,
+        rest_order="any", rest_destination="library_bottom",
+    )
+
+    assert game.confirm_look_top_pick(0, 0) is True
+
+    assert game.pending_choices == []
+    assert [c.name for c in game.players[0].library] == ["D", "B", "C"]
+
+
+@pytest.mark.cr("401.4")
+def test_401_4_a_single_card_going_back_on_top_is_no_arrangement_at_all():
+    """One card has one order, so no prompt is armed — the resolution finishes
+    rather than waiting on a decision with a single legal answer."""
+    game = _look_top_game(["A", "B", "C"])
+    game.arm_pending_choice(
+        "look_top_pick", 0,
+        top_count=2, amount=2, card_name="Diabolic Vision",
+        filter={}, filters=(), optional=False,
+        rest_order="any", rest_destination="library_top",
+    )
+
+    assert game.confirm_look_top_pick(0, 0) is True
+
+    assert game.pending_choices == []
+    assert [c.name for c in game.players[0].library] == ["B", "C"]

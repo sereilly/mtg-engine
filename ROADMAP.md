@@ -692,9 +692,9 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, thirty-two rounds in. 184 → 273 of 373 supported
-(73.2%), hollow lines 10 cards, and 44 unclaimed sentences across 29 of those
-273 — the third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
+**Where it stands: Phase 3, thirty-three rounds in. 184 → 275 of 373 supported
+(73.7%), hollow lines 10 cards, and 44 unclaimed sentences across 29 of those
+275 — the third number is new, and the warning below says what it means.** The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
 player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
 lines at zero.
@@ -711,7 +711,7 @@ upkeep alone with a whole printed paragraph compiling to nothing, Fire Covenant'
 
 Only 10 of those show in `--hollow-lines`, because a line that produces no
 *ability part* leaves nothing for that probe to find hollow. So the honest
-reading of "273 supported" is "273 compile, 244 of them with every printed line
+reading of "275 supported" is "275 compile, 246 of them with every printed line
 accounted for". **One round is still scheduled**: the support gate admits an
 artifact or enchantment when *any* ability of it is implemented — round 1's
 second finding ("a widened gate hid a static line") for a card type the round-1
@@ -723,7 +723,7 @@ one of them legitimately implemented through a reader the claim chain does not
 consult. The round is larger than this note made it sound; read round 32's
 entry before starting it.
 
-**The remaining 100 are a long tail, and the shape is Legends' rather than
+**The remaining 98 are a long tail, and the shape is Legends' rather than
 M21's.** Most of them refuse **exactly one line**, and those lines sit across
 **40+ distinct refusal sites with one card each**. The clusters are spent: the
 last multi-card ones were the three CDAs (round 9), the four self-bouncers
@@ -1817,6 +1817,40 @@ enters, choose a color" is refused, on both sides — the claim reader *and*
 silent bug. Prismatic Ward and Chromatic Armor print it. Fixing it gains no card
 on its own (both need a static Aura prevention as well), so it is scheduled
 rather than done.
+
+**Round 33 — the rest go back on top, and that is a decision. 273 → 275.**
+
+Two Ice Age cards end with the same clause: "…then put the rest on top of your
+library in any order." The engine had the clause one word over — See the Truth's
+"the rest on **the bottom**" — and the difference is not a wording. On the bottom
+CR 401.4's "the owner may arrange them in any order" is a freedom nothing can
+observe, so the resolver had always just laid the cards down; on top it *is* the
+effect, because it is the next N draws. So the top branch asks, through the
+`reorder_library` prompt that already exists, armed by *answering* the pick —
+one resolution, two decisions, which is what `ChoiceSpec.holds_priority` is for.
+
+**Diabolic Vision** — "Look at the top five cards of your library. Put one of
+them into your hand and the rest on top of your library in any order." See the
+Truth prints the same template with three differences, and every one of them was
+a **required word** in the production: the pronoun ("them" vs "those cards"), the
+destination, and a cast-zone rider that is See the Truth's own sentence. All
+three are parameters now; the rider is optional because it is a rider.
+
+**Orcish Librarian** — "{R}, {T}: Look at the top eight cards of your library.
+Exile four of them at random, then put the rest on top of your library in any
+order." Its own node rather than a mode of the pick, because nothing is picked:
+no card reaches a hand and no player chooses which cards go. What the two share
+is the tail, and they share it where it is carried out. The exile draws on the
+module RNG `run_ai_simulation` seeds, so a seed still replays a run exactly.
+
+**The set's test file split, and the guard is what said so.**
+`test_ice_cards.py` passed 2,600 lines on this round's tests and
+`test_set_test_convention.py` failed. Split by the printed type of the card each
+test is about, which is what M21 did and what `tests/sets/README.md` prescribes:
+six files (creatures 42 tests, enchantments 33, instants 14, artifacts 7,
+sorceries 6, lands 4), each keeping its share of every round section together
+with that section's own helpers. No test was lost — the count went 103 → 106,
+which is exactly this round's three.
 
 ## Where the sets landed
 

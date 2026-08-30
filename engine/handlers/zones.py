@@ -3015,6 +3015,53 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
     return True, "pending_look_top_pick"
 
 
+@effect_handler("look_top_exile_random")
+def look_top_exile_random(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Orcish Librarian: "Look at the top eight cards of your library. Exile
+    four of them at random, then put the rest on top of your library in any
+    order."
+
+    Nothing here is a decision until the last clause. The exile is at random —
+    ``random.sample`` over the module RNG ``run_ai_simulation`` seeds, so a
+    seed replays a run exactly — and the rest going back **on top** is the
+    order the player chooses, asked through the ``reorder_library`` prompt this
+    shares with ``look_top_pick_to_hand``'s top-destination tail.
+
+    A library shorter than the card's number is not an error: CR 701.19-style
+    "as many as you can" is the general rule for a count over a zone, so what is
+    there is what is looked at and the exile is capped to it.
+    """
+    caster = context.caster
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    top_count = min(amount, len(caster.library))
+    if top_count <= 0:
+        game.log.append(f"{caster.name} has no cards to look at")
+        return True, "resolved"
+    exile_count = min(
+        resolve_amount(instruction.payload.get("exile_count", 0), context.x_value),
+        top_count,
+    )
+    looked = caster.library[:top_count]
+    del caster.library[:top_count]
+    exiled_slots = set(random.sample(range(top_count), exile_count))
+    rest = [card for index, card in enumerate(looked) if index not in exiled_slots]
+    for index in sorted(exiled_slots):
+        caster.exile.append(looked[index])
+    caster.library[:0] = rest
+    game.log.append(
+        f"{caster.name} looked at the top {top_count} cards and exiled "
+        f"{exile_count} at random"
+    )
+    if len(rest) > 1:
+        seat = game.seat_index(caster)
+        game.arm_pending_choice(
+            "reorder_library", seat,
+            target_index=seat, top_count=len(rest), may_shuffle=False,
+        )
+        return True, "pending_reorder_library"
+    return True, "resolved"
+
+
 @effect_handler("discard_controller_cards")
 def discard_controller_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…discard a card." with the effect's own controller as the implied

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**336 / 612 tracked rules covered (54%)** — 1649 tests, 0 unannotated.
+**337 / 612 tracked rules covered (55%)** — 1652 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [306. Planeswalkers](#306-planeswalkers) | 9/9 | 100% |
 | [307. Sorceries](#307-sorceries) | 1/5 | 20% |
 | [400. General](#400-general) | 5/12 | 41% |
-| [401. Library](#401-library) | 3/7 | 42% |
+| [401. Library](#401-library) | 4/7 | 57% |
 | [402. Hand](#402-hand) | 3/3 | 100% |
 | [403. Battlefield](#403-battlefield) | 3/5 | 60% |
 | [404. Graveyard](#404-graveyard) | 1/3 | 33% |
@@ -495,7 +495,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **401.1** When a game begins, each player’s deck becomes their library. *(1 tests)*
 - [x] **401.2** Each library must be kept in a single face-down pile. Players can’t look at or change the order o... *(1 tests)*
 - [ ] **401.3** Any player may count the number of cards remaining in any player’s library at any time.
-- [ ] **401.4** If an effect puts two or more cards in a specific position in a library at the same time, the own...
+- [x] **401.4** If an effect puts two or more cards in a specific position in a library at the same time, the own... *(3 tests)*
 - [x] **401.5** Some effects tell a player to play with the top card of their library revealed, or say that a pla... *(1 tests)*
 - [ ] **401.6** If an effect causes a player to play with the top card of their library revealed, and that partic...
 - [ ] **401.7** If an effect causes a player to put a card into a library “Nth from the top,” and that library ha...

@@ -1,0 +1,116 @@
+"""Ice Age (ICE) land cards.
+
+ICE is a *measured* set, mid-implementation: cards land here with the round
+that buys them (tests/sets/README.md, SET_PLAYBOOK.md Phase 3), and the pool
+resolves through ``set_pool("ICE")`` even though the set is not shipped —
+reading a card file is not shipping it. The round each section names is
+written up in ROADMAP.md; a round's cards are split across these files by the
+printed type of the card each test is about.
+
+CR-level tests for the mechanics this set introduced live in ``tests/rules/`` —
+cumulative upkeep is ``tests/rules/test_cumulative_upkeep.py``. What belongs
+here is the *card*: that this printing compiles, and that its own numbers and
+text do what the card says.
+"""
+
+from __future__ import annotations
+
+from engine import Game
+from engine.cumulative_upkeep import cumulative_upkeep_cost
+from engine.models import Permanent, PlayerState
+from engine.oracle import compile_card_oracle
+from tests.helpers import _nosick
+
+
+# --- Round 1: cumulative upkeep (CR 702.24) ---
+def test_halls_of_mist_still_reports_its_unread_static_line(set_pool):
+    """A land whose cumulative upkeep now compiles, and whose *other* line the
+    engine does not implement.
+
+    The land support gate used to skip the static check for any land carrying
+    an ability, so implementing the keyword would have turned this card
+    supported with "Creatures that attacked … can't attack" doing nothing. The
+    gate reads every land now and names the line it cannot claim.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Halls of Mist"])
+
+    assert not program.supported
+    assert "can't attack" in (program.reason or "")
+# --- Round 6: snow as a supertype the rules already knew how to read ---
+def _combat(game: Game, attacker_indices: list[int]) -> None:
+    """Advance seat 0's turn to the declare-blockers step with those attackers."""
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, msg = game.declare_attackers(0, attacker_indices)
+    assert ok, msg
+    game.advance_combat_phase()  # declare_blockers
+    assert game.current_step == "declare_blockers"
+def test_rime_dryad_is_unblockable_against_a_snow_covered_forest(set_pool):
+    pool = set_pool("ICE")
+    dryad = Permanent(card=pool["Rime Dryad"])
+    blocker = Permanent(card=pool["Balduvian Bears"])
+    snow = Permanent(card=pool["Snow-Covered Forest"])
+    p1 = PlayerState(name="P1", battlefield=[dryad], life=20)
+    p2 = PlayerState(name="P2", battlefield=[blocker, snow], life=20)
+    game = Game(players=[p1, p2])
+
+    _combat(game, [0])
+    ok, _ = game.declare_blockers(1, {0: 0})
+    assert not ok
+# --- Round 27: a supertype is a computed characteristic (CR 205.4, layer 4) ---
+def _board(set_pool, *names, opponent=()):
+    """A board of ICE cards, mine and the opponent's, ready to activate."""
+    pool = set_pool("ICE")
+    mine = [Permanent(card=pool[n]) for n in names]
+    theirs = [Permanent(card=pool[n]) for n in opponent]
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=mine, life=20),
+            PlayerState(name="P2", battlefield=theirs, life=20),
+        ]
+    )
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    for perm in mine:
+        _nosick(perm)
+    return game, mine, theirs
+def test_a_thawed_forest_stops_satisfying_snow_forestwalk(set_pool):
+    """The finding, stated as behaviour. Nine call sites asked what supertypes
+    a permanent had by reading its printed type line, which was right while
+    nothing in the pool could change one — and Arcum's Weathervane is the card
+    that makes it wrong. Snow forestwalk (CR 702.14c) is one of the nine.
+    """
+    from engine.landwalk import land_satisfies, landwalk_requirement
+
+    game, (vane,), (forest,) = _board(
+        set_pool, "Arcum's Weathervane", opponent=["Snow-Covered Forest"]
+    )
+    requirement = landwalk_requirement("snow forestwalk")
+    assert land_satisfies(forest, requirement)
+
+    result = game.activate_permanent_ability(
+        0, "Arcum's Weathervane", ability_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert not land_satisfies(forest, requirement), (
+        "a thawed forest is not the snow Forest CR 702.14c asks for"
+    )
+# --- Round 31: a cumulative upkeep cost is a cost, not a mana cost ---
+def test_glacial_chasm_reads_its_upkeep_and_still_refuses_the_rest(set_pool):
+    """"Cumulative upkeep—Pay 2 life" is now a cost this engine charges, so the
+    land's refusal moves on to the two lines that are still unread. It stays
+    unsupported — the point is *which* clause the reason names."""
+    chasm = set_pool("ICE")["Glacial Chasm"]
+    program = compile_card_oracle(chasm)
+
+    assert not program.supported
+    assert "cumulative upkeep" not in (program.reason or "").lower()
+    assert cumulative_upkeep_cost(
+        "cumulative upkeep—pay 2 life"
+    ).life == 2

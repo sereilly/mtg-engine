@@ -172,6 +172,7 @@ from .lowering import (
     _lower_random_reveal_ownership_exchange,
     _lower_exile_top_of_library,
     _lower_put_exiled_with_source,
+    _lower_look_top_exile_random,
     _lower_look_top_pick,
     _lower_search_and_exile,
     _lower_graveyard_pick_onto_battlefield,
@@ -507,6 +508,9 @@ def lower_statement(
 
     if isinstance(statement, ast.LookTopPickToHand):
         return _lower_look_top_pick(statement, event)
+
+    if isinstance(statement, ast.LookTopExileRandom):
+        return _lower_look_top_exile_random(statement)
 
     if isinstance(statement, ast.SearchAndExile):
         return _lower_search_and_exile(statement)

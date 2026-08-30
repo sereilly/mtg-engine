@@ -1,0 +1,724 @@
+"""Ice Age (ICE) enchantment cards.
+
+ICE is a *measured* set, mid-implementation: cards land here with the round
+that buys them (tests/sets/README.md, SET_PLAYBOOK.md Phase 3), and the pool
+resolves through ``set_pool("ICE")`` even though the set is not shipped —
+reading a card file is not shipping it. The round each section names is
+written up in ROADMAP.md; a round's cards are split across these files by the
+printed type of the card each test is about.
+
+CR-level tests for the mechanics this set introduced live in ``tests/rules/`` —
+cumulative upkeep is ``tests/rules/test_cumulative_upkeep.py``. What belongs
+here is the *card*: that this printing compiles, and that its own numbers and
+text do what the card says.
+"""
+
+from __future__ import annotations
+
+from engine import Game
+from engine.models import Permanent, PlayerState
+from engine.named_counters import counters_on
+from engine.oracle import compile_card_oracle
+from tests.helpers import _nosick
+
+
+# --- Round 1: cumulative upkeep (CR 702.24) ---
+def _cu_trigger(card):
+    """The cumulative upkeep ability *card* compiles to, or None."""
+    return next(
+        (
+            trig
+            for trig in compile_card_oracle(card).triggered_abilities
+            if trig.instruction is not None
+            and trig.instruction.kind == "cumulative_upkeep"
+        ),
+        None,
+    )
+def test_mystic_remora_cumulative_upkeep_reaches_an_enchantment(set_pool):
+    """The rewrite has to run on the **non-creature** front end too.
+
+    Mystic Remora prints cumulative upkeep beside a trigger the engine cannot
+    yet read. The creature loop and the permanent loop are different code, and
+    with the rewrite in only the first one this card compiled *supported* with
+    its upkeep silently dropped — a strictly better card than the one printed.
+    """
+    remora = set_pool("ICE")["Mystic Remora"]
+    trigger = _cu_trigger(remora)
+
+    assert trigger is not None
+    assert trigger.condition.kind == "upkeep_self"
+    assert trigger.instruction.payload["mana"] == {"generic": 1}
+# --- Round 2: the Scarab cycle — a conditional static on an Aura's host ---
+def _scarab_board(set_pool, scarab_name: str, opponent_permanent: str | None):
+    """A 2/2 bear wearing *scarab_name*, with the opponent's board as named.
+
+    The Aura is attached with ``attach_aura`` rather than cast, because what is
+    under test is the continuous effect while attached (CR 611.3a) — recomputed
+    on every read, never applied once at attachment.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])  # a vanilla 2/2, no text at all
+    scarab = Permanent(card=pool[scarab_name])
+    p1 = PlayerState(name="P1", battlefield=[bear, scarab], life=20)
+    theirs = [Permanent(card=pool[opponent_permanent])] if opponent_permanent else []
+    p2 = PlayerState(name="P2", battlefield=theirs, life=20)
+    game = Game(players=[p1, p2])
+    attach_aura(scarab, bear)
+    game._settle()
+    return game, bear, scarab
+def test_black_scarab_grants_nothing_while_no_opponent_has_a_black_permanent(set_pool):
+    game, bear, _ = _scarab_board(set_pool, "Black Scarab", None)
+
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+def test_black_scarab_grants_plus_two_while_an_opponent_has_a_black_permanent(set_pool):
+    game, bear, _ = _scarab_board(set_pool, "Black Scarab", "Moor Fiend")  # a black creature
+
+    assert (bear.effective_power, bear.effective_toughness) == (4, 4)
+def test_black_scarab_reads_the_condition_on_every_recompute(set_pool):
+    """CR 611.3a — the condition is asked continuously, not locked in when the
+    Aura attached. Removing the opponent's black permanent removes the bonus
+    with nothing to undo."""
+    game, bear, _ = _scarab_board(set_pool, "Black Scarab", "Moor Fiend")
+    assert bear.effective_power == 4
+
+    game.remove_from_battlefield(game.players[1].battlefield[0])
+    game._settle()
+
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+def test_scarab_condition_is_measured_from_the_auras_controller(set_pool):
+    """CR 109.5: the ability is the Aura's, so "an opponent" is an opponent of
+    whoever controls the Aura — not of whoever controls the creature.
+
+    The cycle exists to be put on an opponent's creature, so this is the case
+    the card is printed for rather than a corner: P1's Scarab on P1's own black
+    creature must see P1's board as "you", find no *opponent* with a black
+    permanent, and grant nothing.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    black_bear = Permanent(card=pool["Moor Fiend"])
+    scarab = Permanent(card=pool["Black Scarab"])
+    p1 = PlayerState(name="P1", battlefield=[black_bear, scarab], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    attach_aura(scarab, black_bear)
+    game._settle()
+
+    assert (black_bear.effective_power, black_bear.effective_toughness) == (3, 3)
+def test_every_scarab_in_the_cycle_compiles_to_the_same_shape(set_pool):
+    """Five cards, one sentence with the colour word changed — the reason this
+    is a production rather than five entries."""
+    pool = set_pool("ICE")
+    colors = {
+        "Black Scarab": "B", "Blue Scarab": "U", "Green Scarab": "G",
+        "Red Scarab": "R", "White Scarab": "W",
+    }
+    for name, symbol in colors.items():
+        program = compile_card_oracle(pool[name])
+        assert program.supported, name
+        static = next(
+            i for i in program.instructions if i.kind == "conditional_static"
+        )
+        assert static.payload["subject"] == "attached", name
+        assert static.payload["power"] == 2 and static.payload["toughness"] == 2
+        assert static.payload["condition"]["who"] == "opponent", name
+        assert static.payload["condition"]["filter"]["color_filter"] == symbol, name
+# --- Round 5: Aura keyword grants, from the engine's one keyword registry ---
+def test_wings_of_aesthir_grants_both_keywords_and_the_bonus(set_pool):
+    """"Enchanted creature gets +1/+0 and has flying **and first strike**."
+
+    Two keywords on one line. The grant used to read one, so a card printing
+    two would have shipped giving half of what it prints — and matched, so
+    nothing would have said so.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    wings = Permanent(card=pool["Wings of Aesthir"])
+    p1 = PlayerState(name="P1", battlefield=[bear, wings], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    attach_aura(wings, bear)
+    game._settle()
+
+    assert (bear.effective_power, bear.effective_toughness) == (3, 2)
+    assert bear.has_keyword("flying")
+    assert bear.has_keyword("first strike")
+def test_imposing_visage_grants_menace(set_pool):
+    """A keyword the engine has implemented all along and the Aura reader did
+    not list. `auras` kept a hand-written copy of the keyword registry; it is
+    derived now, so what an Aura may grant and what the engine implements are
+    one fact."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    visage = Permanent(card=pool["Imposing Visage"])
+    p1 = PlayerState(name="P1", battlefield=[bear, visage], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    attach_aura(visage, bear)
+    game._settle()
+
+    assert compile_card_oracle(visage.card).supported
+    assert bear.has_keyword("menace")
+# --- Round 10: sweeps and grants over a set the sentence names ---
+def test_jokulhaups_destroys_three_types_and_beats_regeneration(set_pool):
+    """"Destroy all artifacts, creatures, and lands. They can't be regenerated."
+
+    A type union no per-scope sweep kind names. The filtered sweep already
+    answers it — `type_filter` takes a list and the matcher reads one as a
+    union — so this routes rather than needing a fourth hand-written scope.
+    """
+    pool = set_pool("ICE")
+    creature = Permanent(card=pool["Balduvian Bears"])
+    land = Permanent(card=pool["Forest"])
+    enchantment = Permanent(card=pool["Snowfall"])
+    p1 = PlayerState(name="P1", battlefield=[creature, land, enchantment], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+
+    program = compile_card_oracle(pool["Jokulhaups"])
+    assert program.supported
+    instruction = program.instructions[0]
+    assert instruction.kind == "destroy_all_matching"
+    assert set(instruction.payload["type_filter"]) == {"artifact", "creature", "land"}
+    assert instruction.payload["bypass_regeneration"] is True
+# --- Round 14: a hook that had a second card ---
+def test_portent_and_elemental_augury_reorder_a_library(set_pool):
+    """"Look at the top three cards of target player's library, then put them
+    back in any order."
+
+    The sentence Natural Selection prints, verbatim — and `card_hooks`' entry
+    bar is that no second card, real or plausibly printable, shares the shape.
+    Two did. Portent compiled *supported* on the strength of its cantrip line
+    while its main effect was a bare whitelist marker; Elemental Augury has no
+    second line and was unsupported outright.
+    """
+    pool = set_pool("ICE")
+    for name in ("Portent", "Elemental Augury"):
+        program = compile_card_oracle(pool[name])
+        assert program.supported, name
+        assert "reorder_target_library_top" in {
+            instruction.kind for instruction in program.instructions
+        }, name
+def test_portent_offers_the_shuffle_and_elemental_augury_does_not(set_pool):
+    """The optional shuffle is a printed sentence, so it rides the payload —
+    Portent prints it and Elemental Augury does not."""
+    pool = set_pool("ICE")
+
+    def _reorder(name):
+        return next(
+            instruction for instruction in compile_card_oracle(pool[name]).instructions
+            if instruction.kind == "reorder_target_library_top"
+        )
+
+    assert _reorder("Portent").payload["may_shuffle"] is True
+    assert _reorder("Elemental Augury").payload["may_shuffle"] is False
+# --- Round 15: two Aura effect lines with a P/T half in front ---
+def test_spectral_shield_grants_toughness_and_target_immunity(set_pool):
+    """"Enchanted creature gets +0/+2 **and** can't be the target of spells."
+
+    Two effects on one line, owned by two readers: the P/T grant is
+    `aura_static_pt_grant`'s and the immunity is `target_immunity`'s. The
+    immunity reader could not see past the P/T half, so the whole line went
+    unclaimed — the same split `_KEYWORD_GRANT` already makes with its optional
+    "gets ±N/±N and" prefix, and made in the one place both the support gate and
+    the runtime reader go through.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    shield = Permanent(card=pool["Spectral Shield"])
+    p1 = PlayerState(name="P1", battlefield=[bear, shield], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    attach_aura(shield, bear)
+    game._settle()
+
+    assert (bear.effective_power, bear.effective_toughness) == (2, 4)
+    assert not game._can_be_targeted(bear, 1)
+def test_errantry_lets_its_creature_attack_only_alone(set_pool):
+    """"Enchanted creature gets +3/+0 and **can only attack alone**." CR 506.5,
+    read as a restriction on the *declaration* — a per-creature predicate has no
+    way to say "and nobody else", which is why the attack cap beside it is
+    checked over the declared set too."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    lone = Permanent(card=pool["Balduvian Bears"])
+    friend = Permanent(card=pool["Balduvian Barbarians"])
+    errantry = Permanent(card=pool["Errantry"])
+    p1 = PlayerState(name="P1", battlefield=[lone, friend, errantry], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    attach_aura(errantry, lone)
+    game._settle()
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+
+    assert (lone.effective_power, lone.effective_toughness) == (5, 2)
+    ok, message = game.declare_attackers(0, [0, 1])
+    assert not ok and "alone" in message
+    assert game.declare_attackers(0, [0])[0], "alone is legal"
+# --- Round 16: a pay-or-else prompt aimed at the event's player ---
+def test_soul_barrier_offers_the_pay_to_the_caster_not_its_controller(set_pool):
+    """"Whenever an opponent casts a creature spell, this enchantment deals 2
+    damage to **that player** unless **they** pay {2}."
+
+    Both pay-or-else flows offered the cost to the ability's *controller*, so
+    this card and Seizures were unsupported outright. The seat is the one the
+    fire site froze into the trigger's context (CR 603.10) — the trigger has no
+    target, so `context.caster` is the enchantment's controller and prompting
+    them would charge and damage the wrong player.
+    """
+    pool = set_pool("ICE")
+    barrier = Permanent(card=pool["Soul Barrier"])
+    p1 = PlayerState(name="P1", battlefield=[barrier], life=20)
+    p2 = PlayerState(name="P2", hand=[pool["Balduvian Bears"]], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(1, "Balduvian Bears")
+    game._settle()
+
+    offers = [choice for choice in game.pending_choices if choice.kind == "optional_pay"]
+    assert len(offers) == 1
+    assert offers[0].player_index == 1, "the spell's caster is offered the cost"
+    assert offers[0].data["cost"] == {"generic": 2}
+    assert offers[0].data["damage"] == 2
+# --- Round 17: a keyword family named whole, and a negated supertype ---
+def test_hallowed_ground_returns_only_a_nonsnow_land(set_pool):
+    """"Return target **nonsnow** land you control to its owner's hand." A
+    negated supertype (CR 205.4), which no layer computes — the matcher reads
+    it off the effective type line, exactly as it reads the positive key."""
+    pool = set_pool("ICE")
+    program = compile_card_oracle(pool["Hallowed Ground"])
+    assert program.supported
+
+    ability = program.activated_abilities[0]
+    described = ability.instruction.payload["filter"]
+    assert described["exclude_supertypes"] == ["snow"]
+
+    from engine.subject_filters import subject_matches
+
+    plain = Permanent(card=pool["Forest"])
+    snowy = Permanent(card=pool["Snow-Covered Forest"])
+    p1 = PlayerState(name="P1", battlefield=[plain, snowy], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    assert subject_matches(game, plain, described, observer=0)
+    assert not subject_matches(game, snowy, described, observer=0)
+# --- Round 19: an offer whose action shares the printed subject ---
+def test_thoughtleech_offers_the_life_when_an_opponents_island_taps(set_pool):
+    """"Whenever an Island an opponent controls becomes tapped, **you may gain
+    1 life**."
+
+    The offer prints its subject once, in front of "may", and the action behind
+    it is a bare verb — the same shared-subject shape a conjunction already
+    handles ("Target player draws a card **and loses 1 life**"), one clause
+    earlier. Without it "you may gain 1 life" refused while "you may draw a
+    card" parsed, because "draw" is a bare imperative and "gain" is not.
+    """
+    pool = set_pool("ICE")
+    leech = Permanent(card=pool["Thoughtleech"])
+    island = Permanent(card=pool["Island"])
+    p1 = PlayerState(name="P1", battlefield=[leech], life=20)
+    p2 = PlayerState(name="P2", battlefield=[island], life=20)
+    game = Game(players=[p1, p2])
+
+    game.become_tapped(island)
+    game._settle()
+
+    offers = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert len(offers) == 1 and offers[0].player_index == 0
+    assert offers[0].data["cost"] == {}, "the offer costs nothing; it is a may"
+
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+    assert p1.life == 21
+# --- Round 21: a regeneration rider on a subject nothing targets ---
+def test_incinerate_kills_through_a_regeneration_shield(set_pool):
+    """"Incinerate deals 3 damage to any target. **A creature dealt damage this
+    way** can't be regenerated this turn."
+
+    CR 701.19c printed as a sentence about the *effect* rather than about a
+    pronoun — the damage twin of War Barge's "A creature destroyed this way
+    can't be regenerated", and it exists for the same reason: by the time the
+    rider is read there is no "it" left to point at, so the noun restates what
+    the damage already named. The rider parser required the sentence to open
+    with "it" or "if", so Incinerate refused its only line.
+    """
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])  # 2/2
+    bears.regeneration_shield = 1
+    p1 = PlayerState(name="P1", hand=[pool["Incinerate"]], life=20)
+    p2 = PlayerState(name="P2", battlefield=[bears], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(
+        0, "Incinerate", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+
+    assert bears.metadata["cant_be_regenerated_this_turn"]
+    assert bears not in p2.battlefield, "the shield cannot answer this damage"
+    assert bears.regeneration_shield == 1, "and it was not spent"
+def _combat(game: Game, attacker_indices: list[int]) -> None:
+    """Advance seat 0's turn to the declare-blockers step with those attackers."""
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, msg = game.declare_attackers(0, attacker_indices)
+    assert ok, msg
+    game.advance_combat_phase()  # declare_blockers
+    assert game.current_step == "declare_blockers"
+def test_lim_duls_cohort_denies_regeneration_to_what_it_blocks(set_pool):
+    """"Whenever this creature blocks or becomes blocked by a creature, **that
+    creature** can't be regenerated this turn."
+
+    The third subject the rider can have, beside a chosen target (Hurr Jackal)
+    and the ability's own source (Clergy of the Holy Nimbus): the other half of
+    the blocking pair, which nothing on the board records and only the trigger
+    knows. `_lower_cant_be` saw no event at all and refused every subject that
+    was neither, so the card compiled with its only line lowering to nothing.
+
+    Run in real combat rather than asserted on the payload, because the thing
+    that could go wrong is *which* creature is marked: on the blocks half the
+    stack item's target is the blocking creature itself, so a handler reading
+    the target would deny regeneration to the Cohort and still look resolved.
+    """
+    pool = set_pool("ICE")
+    attacker = Permanent(card=pool["Balduvian Bears"])  # 2/2
+    attacker.regeneration_shield = 1
+    cohort = Permanent(card=pool["Lim-Dûl's Cohort"])  # 2/2
+    p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
+    p2 = PlayerState(name="P2", battlefield=[cohort], life=20)
+    game = Game(players=[p1, p2])
+
+    _combat(game, [0])
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert ok, msg
+    game._settle()
+
+    assert attacker.metadata.get("cant_be_regenerated_this_turn")
+    assert not cohort.metadata.get("cant_be_regenerated_this_turn"), (
+        "the rider names the creature it blocked, not itself"
+    )
+
+    game.advance_combat_phase()  # combat_damage
+    game._settle()
+
+    assert attacker not in p1.battlefield, "2 damage is lethal and unregenerable"
+# --- Round 24: an attack cost printed on a permanent, scaled by the attack ---
+def _woodlands_board(set_pool, attackers: int, lands: int, land: str = "Forest"):
+    """Seat 0 attacking under seat 1's Flooded Woodlands, with *lands* to pay."""
+    pool = set_pool("ICE")
+    bears = [Permanent(card=pool["Balduvian Bears"]) for _ in range(attackers)]
+    for bear in bears:
+        _nosick(bear)
+    holdings = [Permanent(card=pool[land]) for _ in range(lands)]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[*bears, *holdings], life=20),
+        PlayerState(
+            name="P2", battlefield=[Permanent(card=pool["Flooded Woodlands"])], life=20
+        ),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    return game
+def test_flooded_woodlands_charges_one_land_per_attacking_green_creature(set_pool):
+    """"Green creatures can't attack unless their controller sacrifices a land
+    of their choice **for each green creature they control that's attacking**."
+
+    CR 508.1g printed on a permanent that names a *class* rather than itself,
+    with the payer being that class's controller. The "for each" tail is what
+    makes it a per-attacker cost, which is the shape `_attack_costs_of` already
+    returns — so the declaration sums it with no second adder to keep in step.
+    """
+    game = _woodlands_board(set_pool, attackers=2, lands=2)
+
+    ok, message = game.declare_attackers(0, [0, 1])
+
+    assert ok, message
+    assert not [
+        perm for perm in game.players[0].battlefield
+        if perm.card.primary_type == "land"
+    ], "two attackers, two lands"
+def test_flooded_woodlands_keeps_the_whole_team_home_when_one_land_is_short(set_pool):
+    """The cost is one payment over the declaration, and `can_attack` is a
+    per-creature predicate: it can say "there is a land for this one" and not
+    "and another for the next". Both Bears were gated as payable, declared, and
+    then charged **once** — the card doing less than it prints on exactly the
+    board it was printed to stop. The declaration is planned now, as the mana
+    half of the same rule already was.
+    """
+    game = _woodlands_board(set_pool, attackers=2, lands=1)
+
+    ok, message = game.declare_attackers(0, [0, 1])
+
+    assert not ok
+    assert "sacrifice" in message
+    assert len(game.players[0].battlefield) == 3, "nothing was half-charged"
+
+    # One attacker is still legal, and pays.
+    assert game.declare_attackers(0, [0])[0]
+    assert not [
+        perm for perm in game.players[0].battlefield
+        if perm.card.primary_type == "land"
+    ]
+def test_reclamation_is_flooded_woodlands_with_the_colour_changed(set_pool):
+    """One sentence, two cards. The restricted class and the sacrifice are both
+    payload, so the pair differs by a colour symbol — and a green creature walks
+    past Reclamation untouched."""
+    pool = set_pool("ICE")
+    payloads = {
+        name: compile_card_oracle(pool[name]).instructions[0].payload
+        for name in ("Flooded Woodlands", "Reclamation")
+    }
+
+    assert payloads["Flooded Woodlands"] == {
+        "subject": {"type_filter": "creature", "color_filter": "G"},
+        "filter": {"type_filter": "land"},
+        "count": 1,
+    }
+    assert payloads["Reclamation"] == {
+        "subject": {"type_filter": "creature", "color_filter": "B"},
+        "filter": {"type_filter": "land"},
+        "count": 1,
+    }
+
+    green = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[green], life=20),
+        PlayerState(
+            name="P2", battlefield=[Permanent(card=pool["Reclamation"])], life=20
+        ),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+
+    assert game.declare_attackers(0, [0])[0], "a green creature owes Reclamation nothing"
+# --- Round 27: a supertype is a computed characteristic (CR 205.4, layer 4) ---
+def _board(set_pool, *names, opponent=()):
+    """A board of ICE cards, mine and the opponent's, ready to activate."""
+    pool = set_pool("ICE")
+    mine = [Permanent(card=pool[n]) for n in names]
+    theirs = [Permanent(card=pool[n]) for n in opponent]
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=mine, life=20),
+            PlayerState(name="P2", battlefield=theirs, life=20),
+        ]
+    )
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    for perm in mine:
+        _nosick(perm)
+    return game, mine, theirs
+def test_melting_thaws_every_land_and_gives_it_back(set_pool):
+    """"All lands are no longer snow." A board-wide static, so it is a
+    derivation-table entry beside "All Mountains are Plains" rather than a
+    production: a continuous effect recomputed from the board, where the
+    targeted spelling's one-shot lowering would fire once and never again.
+
+    CR 611.3a/b: the lands are snow again the moment Melting leaves.
+    """
+    game, (melting, island), (their_forest,) = _board(
+        set_pool, "Melting", "Snow-Covered Island",
+        opponent=["Snow-Covered Forest"],
+    )
+    game._refresh_dynamic_creatures()
+
+    assert not island.has_supertype("snow")
+    assert not their_forest.has_supertype("snow"), "every land, not just yours"
+
+    game.remove_from_battlefield(melting)
+    game._refresh_dynamic_creatures()
+
+    assert island.has_supertype("snow")
+    assert their_forest.has_supertype("snow")
+def test_meltings_contribution_does_not_accumulate(set_pool):
+    """A derived channel is cleared and rebuilt on every continuous-effects
+    refresh (CR 611.3a), which runs constantly. Recording it the way a resolved
+    effect is recorded would leave one entry per pass, forever — the reason
+    `land_types.py` has two channels and this one is the second."""
+    game, (melting, island), _ = _board(
+        set_pool, "Melting", "Snow-Covered Island"
+    )
+
+    for _ in range(5):
+        game._refresh_dynamic_creatures()
+
+    assert island.metadata.get("derived_lost_supertypes") == ["snow"]
+def test_melting_does_not_stop_a_land_being_basic(set_pool):
+    """The sentence names one supertype. A land Melting has thawed is still a
+    basic land, so Blood Moon still passes it by (CR 205.4b)."""
+    game, (melting, island), _ = _board(
+        set_pool, "Melting", "Snow-Covered Island"
+    )
+    game._refresh_dynamic_creatures()
+
+    assert island.has_supertype("basic")
+    assert island.has_type("island"), "and still an Island"
+# --- Round 31: a cumulative upkeep cost is a cost, not a mana cost ---
+def test_infernal_darkness_charges_the_life_beside_the_mana(set_pool):
+    """"Cumulative upkeep—Pay {B} and 1 life."
+
+    The card was *supported* while charging only the {B}: the cost went to a
+    symbol scanner, which found "{B}" and ignored "and 1 life". Both halves are
+    the cost, and both escalate.
+    """
+    darkness = Permanent(card=set_pool("ICE")["Infernal Darkness"])
+    p1 = PlayerState(
+        name="P1", battlefield=[darkness], mana_pool={"B": 3}, life=20
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game.resolve_upkeep(0)
+
+    assert darkness in p1.battlefield
+    assert p1.life == 19
+def test_infernal_darkness_life_escalates_with_the_age_counters(set_pool):
+    darkness = Permanent(card=set_pool("ICE")["Infernal Darkness"])
+    p1 = PlayerState(
+        name="P1", battlefield=[darkness], mana_pool={"B": 3}, life=20
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game.resolve_upkeep(0)
+    p1.mana_pool["B"] = 3
+    game.resolve_upkeep(0)
+
+    assert counters_on(darkness, "age") == 2
+    assert p1.life == 17, "1 life then 2"
+def test_infernal_darkness_unaffordable_life_pays_nothing_at_all(set_pool):
+    """A player with the mana and not the life pays neither: CR 702.24a's last
+    sentence, asked about the whole cost rather than one half of it."""
+    darkness = Permanent(card=set_pool("ICE")["Infernal Darkness"])
+    p1 = PlayerState(
+        name="P1", battlefield=[darkness], mana_pool={"B": 3}, life=1
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    game.resolve_upkeep(0)  # 1 life, affordable
+    assert darkness in p1.battlefield
+    assert p1.life == 0
+
+    p1.life = 1
+    p1.mana_pool["B"] = 3
+    game.resolve_upkeep(0)  # 2 life, not affordable
+
+    assert darkness not in p1.battlefield
+    assert p1.life == 1, "nothing is paid when the whole cost cannot be"
+def test_the_upkeep_prompt_quotes_a_cost_that_is_not_mana(set_pool):
+    """The prompt is a label the server writes, because "{B} and 1 life" is
+    not a run of symbols and the number in it is this upkeep's, not the
+    printed one."""
+    darkness = Permanent(card=set_pool("ICE")["Infernal Darkness"])
+    p1 = PlayerState(name="P1", battlefield=[darkness], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+
+    entry = next(
+        c for c in game.get_upkeep_pay_triggers(0)
+        if c["card_name"] == "Infernal Darkness"
+    )
+
+    assert entry["cost_label"] == "{B} and 1 life"
+    assert entry["cost_pay_label"] == "Pay {B} and 1 life"
+    assert entry["cost"] == {"mana": {"B": 1}, "life": 1}
+# --- Round 32: a shield that narrows nothing, and one around the enchanted creature ---
+def _fylgja_on_a_bear(set_pool, counters: int = 4):
+    from engine.auras import attach_aura
+    from engine.named_counters import add_counters
+
+    bear = Permanent(card=set_pool("ICE")["Balduvian Bears"])
+    fylgja = Permanent(card=set_pool("ICE")["Fylgja"])
+    p1 = PlayerState(name="P1", battlefield=[bear, fylgja], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    attach_aura(fylgja, bear)
+    add_counters(fylgja, "healing", counters)
+    return game, p1, fylgja, bear
+def test_fylgja_shields_the_creature_it_enchants(set_pool):
+    """"Remove a healing counter from this Aura: Prevent the next 1 damage that
+    would be dealt to enchanted creature this turn."
+
+    A CR 615.1 shield around the Aura's *host*, which is a fourth recipient
+    beside "you", "this permanent" and a chosen target — and the one the pool
+    had never printed.
+    """
+    from engine.named_counters import counters_on
+
+    game, _p1, fylgja, bear = _fylgja_on_a_bear(set_pool)
+
+    result = game.activate_permanent_ability(0, "Fylgja", ability_index=0)
+
+    assert result.supported
+    assert counters_on(fylgja, "healing") == 3, "the counter is the cost"
+    assert bear.damage_prevention_pool == 1
+
+    assert game._mark_damage_on_permanent(bear, 3) == 2
+    assert bear.damage_marked == 2
+def test_fylgja_does_not_shield_itself(set_pool):
+    """The recipient is the Aura's *host*, not the Aura. Rock Hydra's
+    "…dealt to this creature" is the neighbouring branch and shields the
+    permanent the ability is on, so reusing it here would put the shield on
+    an enchantment nothing ever deals damage to."""
+    game, _p1, fylgja, bear = _fylgja_on_a_bear(set_pool)
+
+    game.activate_permanent_ability(0, "Fylgja", ability_index=0)
+
+    assert fylgja.damage_prevention_pool == 0
+    assert bear.damage_prevention_pool == 1
+def test_fylgja_spends_one_counter_per_point_and_runs_out(set_pool):
+    """Four counters, four points — and the fifth activation has nothing to
+    pay with, so the ability is not activated at all."""
+    from engine.named_counters import counters_on
+
+    game, _p1, fylgja, bear = _fylgja_on_a_bear(set_pool, counters=1)
+
+    assert game.activate_permanent_ability(0, "Fylgja", ability_index=0).supported
+    assert counters_on(fylgja, "healing") == 0
+    assert bear.damage_prevention_pool == 1
+
+    game.activate_permanent_ability(0, "Fylgja", ability_index=0)
+
+    assert bear.damage_prevention_pool == 1, "no counter, no second shield"
+def test_fylgjas_counter_cost_is_what_the_claim_used_to_refuse(set_pool):
+    """The Aura gate asked for the *shape* of an activation line — a run of mana
+    symbols, then a colon — standing in for the parser that reads one. CR 602.1
+    admits any cost, and Fylgja's is a counter removal, so a card the compiler
+    parses in full was reported unsupported for the shape of its cost.
+
+    The claim asks `_parse_activated_ability` now, which is the reader it was
+    describing.
+    """
+    from engine.auras import aura_activated_ability_claim
+
+    line = (
+        "remove a healing counter from this aura: prevent the next 1 damage "
+        "that would be dealt to enchanted creature this turn"
+    )
+    assert aura_activated_ability_claim(line, "Fylgja") is not None
+    assert compile_card_oracle(set_pool("ICE")["Fylgja"]).supported
+def test_a_mana_cost_alone_no_longer_claims_a_line_the_compiler_refuses(set_pool):
+    """The stand-in was wrong in both directions. Chromatic Armor's "{X}: Put a
+    sleight counter on this Aura and choose a color…" matched the shape and the
+    compiler cannot read it — a claim there is how an Aura reports supported
+    carrying an ability that does nothing."""
+    from engine.auras import aura_activated_ability_claim
+
+    line = (
+        "{x}: put a sleight counter on this aura and choose a color. x is the "
+        "number of sleight counters on this aura"
+    )
+    assert aura_activated_ability_claim(line, "Chromatic Armor") is None

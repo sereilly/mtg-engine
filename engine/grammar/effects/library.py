@@ -223,23 +223,66 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
         ):
             return ast.LookTopPickToHand(count, rest_destination="graveyard")
         stream.reset(mark)
-        for word in (
-            "put", "one", "of", "those", "cards", "into", "your", "hand",
-            "and", "the", "rest", "on", "the", "bottom", "of", "your",
-            "library", "in", "any", "order",
-        ):
+        # "Exile four of them at random, **then** put the rest on top of your
+        # library in any order." (Orcish Librarian.) Nothing is picked and
+        # nothing reaches a hand, so it is a different statement that happens
+        # to end the same way — the shared tail is read by the same words
+        # below and carried out in the same place.
+        if stream.at_word("exile"):
+            stream.expect_word("exile")
+            exile_count = parse_amount(stream)
+            for word in ("of", "them", "at", "random"):
+                stream.expect_word(word)
+            stream.accept_punct(",")
+            stream.expect_word("then")
+            for word in ("put", "the", "rest", "on"):
+                stream.expect_word(word)
+            if not stream.accept_phrase("top", "of", "your", "library"):
+                raise stream.error("expected 'top of your library'")
+            for word in ("in", "any", "order"):
+                stream.expect_word(word)
+            return ast.LookTopExileRandom(count, exile_count)
+        for word in ("put", "one", "of"):
             stream.expect_word(word)
-        if not stream.accept_punct("."):
-            raise stream.error("expected the cast-zone sentence after the sort")
-        for word in (
+        # "one of **them**" (Diabolic Vision) and "one of **those cards**" (See
+        # the Truth) name the same pile. The pronoun was written into the
+        # sequence, so the second spelling refused at the word — a card the
+        # engine implements, kept out by which word it used for the cards it
+        # had just looked at.
+        if not (stream.accept_word("them") or stream.accept_phrase("those", "cards")):
+            raise stream.error("expected 'them' or 'those cards'")
+        for word in ("into", "your", "hand", "and", "the", "rest", "on"):
+            stream.expect_word(word)
+        # Where the rest go is the card's own statement and a real difference:
+        # the bottom is out of reach, the top is the next N draws. Read rather
+        # than assumed, the same rule the graveyard branch above states.
+        if stream.accept_phrase("the", "bottom", "of", "your", "library"):
+            rest_destination = "library_bottom"
+        elif stream.accept_phrase("top", "of", "your", "library"):
+            rest_destination = "library_top"
+        else:
+            raise stream.error("expected where the rest of the cards go")
+        for word in ("in", "any", "order"):
+            stream.expect_word(word)
+        # See the Truth's cast-zone sentence, and only its. Optional because it
+        # is a *rider* on this template rather than part of it: Diabolic Vision
+        # prints the pick and stops, and demanding the sentence refused it for
+        # text it does not have.
+        mark = stream.mark()
+        if stream.accept_punct(".") and stream.accept_phrase(
             "if", "this", "spell", "was", "cast", "from", "anywhere",
             "other", "than", "your", "hand",
         ):
-            stream.expect_word(word)
-        stream.accept_punct(",")
-        for word in ("put", "each", "of", "those", "cards", "into", "your", "hand", "instead"):
-            stream.expect_word(word)
-        return ast.LookTopPickToHand(count, all_to_hand_if_cast_elsewhere=True)
+            stream.accept_punct(",")
+            for word in ("put", "each", "of", "those", "cards", "into", "your", "hand", "instead"):
+                stream.expect_word(word)
+            return ast.LookTopPickToHand(
+                count,
+                rest_destination=rest_destination,
+                all_to_hand_if_cast_elsewhere=True,
+            )
+        stream.reset(mark)
+        return ast.LookTopPickToHand(count, rest_destination=rest_destination)
     player = parse_player_ref(stream)
     if player is None:
         raise stream.error("expected the player whose hand is looked at")

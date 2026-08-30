@@ -382,6 +382,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "transmute_by_sacrifice": "zones",
     "place_held_card": "zones",
     "look_top_pick_to_hand": "zones",
+    "look_top_exile_random": "zones",
     "search_and_exile_matching": "zones",
     "grant_cast_permission": "zones",
     "grant_extra_turn": "turns",

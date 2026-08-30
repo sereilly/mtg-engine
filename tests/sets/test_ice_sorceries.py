@@ -1,0 +1,210 @@
+"""Ice Age (ICE) sorcery cards.
+
+ICE is a *measured* set, mid-implementation: cards land here with the round
+that buys them (tests/sets/README.md, SET_PLAYBOOK.md Phase 3), and the pool
+resolves through ``set_pool("ICE")`` even though the set is not shipped —
+reading a card file is not shipping it. The round each section names is
+written up in ROADMAP.md; a round's cards are split across these files by the
+printed type of the card each test is about.
+
+CR-level tests for the mechanics this set introduced live in ``tests/rules/`` —
+cumulative upkeep is ``tests/rules/test_cumulative_upkeep.py``. What belongs
+here is the *card*: that this printing compiles, and that its own numbers and
+text do what the card says.
+"""
+
+from __future__ import annotations
+
+from engine import Game
+from engine.models import Permanent, PlayerState
+from engine.oracle import compile_card_oracle
+
+
+# --- Round 3: the cantrip cycle — "at the beginning of the next turn's upkeep" ---
+def _all_instructions(program):
+    """Every instruction the program carries, card-level and per-ability.
+
+    The cycle prints its cantrip in three places — a spell's second sentence, an
+    Aura's enters trigger, an artifact's activated ability — so a reader that
+    looked only at ``program.instructions`` would find the clause on some of
+    them and quietly miss it on the rest.
+    """
+    def walk(instruction):
+        yield instruction
+        # A `sequence` is how two sentences on one line compose (Barbed
+        # Sextant's "Add one mana of any color. Draw a card at …"), so a reader
+        # that stopped at the top level would find the clause on five of the
+        # seven and report the other two clean.
+        for step in instruction.payload.get("steps", ()):
+            yield from walk(step)
+
+    for instruction in program.instructions:
+        yield from walk(instruction)
+    for ability in (*program.activated_abilities, *program.triggered_abilities):
+        if ability.instruction is not None:
+            yield from walk(ability.instruction)
+def test_the_cantrip_cycle_arms_the_unseated_upkeep_event(set_pool):
+    """Seven cards, one sentence. What makes it one round rather than seven is
+    that they all compile to the same delayed event — and it is the *unseated*
+    one, because "the next turn's upkeep" is whichever comes next."""
+    pool = set_pool("ICE")
+    for name in (
+        "Portent", "Krovikan Fetish", "Panic", "Pyknite",
+        "Touch of Vitae", "Barbed Sextant",
+    ):
+        program = compile_card_oracle(pool[name])
+        assert program.supported, name
+        events = {
+            instruction.payload.get("event")
+            for instruction in _all_instructions(program)
+            if instruction.kind == "create_delayed_trigger"
+        }
+        assert events == {"next_turns_upkeep"}, (name, events)
+# --- Round 11: "If that land was a snow land, …" (CR 608.2h) ---
+def _cast_land_destroyer(set_pool, spell: str, land: str):
+    """Cast *spell* at a *land* the opponent controls; return the board."""
+    pool = set_pool("ICE")
+    victim = Permanent(card=pool[land])
+    p1 = PlayerState(name="P1", hand=[pool[spell]], life=20)
+    p2 = PlayerState(name="P2", battlefield=[victim], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(
+        0, spell, target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+    return game, p1, p2, victim
+def test_thermokarst_gains_life_only_for_a_snow_land(set_pool):
+    """"Destroy target land. If that land was a snow land, you gain 1 life."
+
+    The condition is asked **after** the land is a card in a graveyard, so it
+    reads the object as it was (CR 608.2h) — nothing on the board can answer it.
+    """
+    _game, p1, p2, snow = _cast_land_destroyer(
+        set_pool, "Thermokarst", "Snow-Covered Forest"
+    )
+    assert snow not in p2.battlefield
+    assert p1.life == 21
+
+    _game, p1, p2, plain = _cast_land_destroyer(set_pool, "Thermokarst", "Forest")
+    assert plain not in p2.battlefield
+    assert p1.life == 20, "an ordinary Forest is not a snow land"
+def test_icequake_damages_the_controller_only_for_a_snow_land(set_pool):
+    """The other half of the cycle, whose rider names the land's controller —
+    a seat the destruction has to have recorded for the same reason."""
+    _game, p1, p2, snow = _cast_land_destroyer(
+        set_pool, "Icequake", "Snow-Covered Swamp"
+    )
+    assert snow not in p2.battlefield
+    assert p2.life == 19
+
+    _game, p1, p2, plain = _cast_land_destroyer(set_pool, "Icequake", "Swamp")
+    assert plain not in p2.battlefield
+    assert p2.life == 20
+# --- Round 28: N cards from a hand back onto the top of a library ---
+def _casting(set_pool, spell: str, *, hand=(), library=(), opponent_hand=(), opponent_library=()):
+    """The caster holding *spell*, with both seats' hidden zones set."""
+    pool = set_pool("ICE")
+    from engine.card_loader import load_catalog
+
+    shipped = {card.name: card for card in load_catalog()}
+
+    def card(name):
+        return pool.get(name) or shipped[name]
+
+    p1 = PlayerState(
+        name="P1", hand=[card(spell), *[card(n) for n in hand]],
+        library=[card(n) for n in library], life=20,
+    )
+    p2 = PlayerState(
+        name="P2", hand=[card(n) for n in opponent_hand],
+        library=[card(n) for n in opponent_library], life=20,
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.interactive_seats = {0, 1}
+    return game, p1, p2
+def test_stunted_growth_asks_the_targeted_player(set_pool):
+    """"Target player chooses three cards from their hand and puts them on top
+    of their library in any order."
+
+    The same effect over a printed subject: the seat that owns the hand is the
+    seat that chooses, and it is not the caster.
+    """
+    game, p1, p2 = _casting(
+        set_pool, "Stunted Growth",
+        library=["Hoar Shade"],
+        opponent_hand=["Balduvian Bears", "Hoar Shade", "Icy Manipulator", "Snow Fortress"],
+        opponent_library=["Dark Banishing"],
+    )
+
+    result = game.cast_from_hand(0, "Stunted Growth", target_player_index=1)
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.pending_choice_of("hand_to_library", 0) is None, "not the caster's choice"
+    choice = game.pending_choice_of("hand_to_library", 1)
+    assert choice is not None and choice.data["count"] == 3
+
+    game.confirm_hand_to_library(1, [0, 1, 2])
+    game._settle()
+
+    assert len(p2.hand) == 1
+    assert len(p2.library) == 4
+def test_stunted_growth_takes_what_a_short_hand_has(set_pool):
+    """CR 608.2: a spell does as much as it can. A player holding fewer cards
+    than the card names puts back what they have rather than the effect
+    refusing."""
+    game, _p1, p2 = _casting(
+        set_pool, "Stunted Growth",
+        library=["Hoar Shade"],
+        opponent_hand=["Balduvian Bears"],
+        opponent_library=["Dark Banishing"],
+    )
+
+    game.cast_from_hand(0, "Stunted Growth", target_player_index=1)
+    game._settle()
+
+    choice = game.pending_choice_of("hand_to_library", 1)
+    assert choice is not None and choice.data["count"] == 1
+# --- Round 33: the rest go back on top, and that is a decision ---
+def _library_of(set_pool, *names):
+    pool = set_pool("ICE")
+    return [pool[n] for n in names]
+def test_diabolic_vision_keeps_one_and_stacks_the_rest(set_pool):
+    """"Look at the top five cards of your library. Put one of them into your
+    hand and the rest on top of your library in any order."
+
+    See the Truth prints the same template with three differences — "those
+    cards" for "them", the bottom for the top, and a cast-zone rider — and
+    every one of them was written into the production as a required word.
+    """
+    library = _library_of(
+        set_pool, "Balduvian Bears", "Tor Giant", "Scaled Wurm",
+        "Forest", "Mountain", "Island",
+    )
+    p1 = PlayerState(
+        name="P1", library=list(library),
+        hand=[set_pool("ICE")["Diabolic Vision"]], life=20,
+    )
+    game = Game(
+        players=[p1, PlayerState(name="P2", life=20)], interactive_seats={0}
+    )
+
+    game.queue_from_hand(0, "Diabolic Vision")
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert game.pending_choice_of("look_top_pick", 0) is not None
+    assert game.confirm_look_top_pick(0, 1) is True
+    assert [c.name for c in p1.hand] == ["Tor Giant"]
+
+    # The four that were not taken are back on top, not on the bottom.
+    assert [c.name for c in p1.library[:4]] == [
+        "Balduvian Bears", "Scaled Wurm", "Forest", "Mountain",
+    ]
+    assert game.confirm_reorder_library(0, [3, 2, 1, 0]) is True
+    assert [c.name for c in p1.library] == [
+        "Mountain", "Forest", "Scaled Wurm", "Balduvian Bears", "Island",
+    ]

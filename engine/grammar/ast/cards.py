@@ -207,10 +207,35 @@ class LookTopPickToHand:
     #: one that bottoms them, and the difference is invisible until the pile is
     #: looked at again — so the destination is stated rather than defaulted.
     rest_destination: str = "library_bottom"
-    #: See the Truth's third sentence, which is its whole reason to exist. A
-    #: wording without it is a different card, so the two shapes cannot be
-    #: allowed to collapse into one another.
+    #: See the Truth's third sentence, which is a rider on this template rather
+    #: than part of it: Diabolic Vision prints the pick and stops. Optional in
+    #: the production for that reason, and carried here so a card that *does*
+    #: print it cannot collapse into one that does not.
     all_to_hand_if_cast_elsewhere: bool = False
+
+
+@dataclass(frozen=True)
+class LookTopExileRandom:
+    """``Look at the top eight cards of your library. Exile four of them at
+    random, then put the rest on top of your library in any order.`` (Orcish
+    Librarian.)
+
+    Its own node rather than a mode of :class:`LookTopPickToHand`, because
+    nothing is *picked*: no card reaches a hand and no player chooses which
+    cards go. What the two share is their tail — the rest going back on top in
+    an order the player chooses — and that is shared where it is carried out,
+    not by fusing the two statements that reach it.
+
+    The exile is at random, so it is the effect rather than a decision, and it
+    draws on the module RNG ``run_ai_simulation`` seeds: a given seed replays a
+    given game exactly, which is the property the AI regression tests rest on.
+    """
+    count: Amount
+    #: How many of the looked-at cards are exiled.
+    exile_count: Amount
+    #: Where the rest go. Only the top today — a card that bottomed them would
+    #: be giving up the sorting this card is played for.
+    rest_destination: str = "library_top"
 
 
 @dataclass(frozen=True)

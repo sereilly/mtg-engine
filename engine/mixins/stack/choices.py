@@ -880,6 +880,24 @@ class PendingChoicesMixin:
                 for card in rest:
                     caster.graveyard.append(card)
                 return
+            # "…and the rest on **top** of your library in any order."
+            # (Diabolic Vision.) The same clause as the bottom one word over,
+            # and a different kind of sentence: on the bottom "in any order" is
+            # a freedom nothing can observe, so this resolver has always just
+            # laid them down. On top it *is* the effect — the next N draws —
+            # so the order has to be asked for. Chained onto this answer rather
+            # than folded into it: `reorder_library` is a prompt that already
+            # exists, with its own UI, AI default and action, and CR 608.2 keeps
+            # a decision armed by answering another inside the same resolution.
+            if choice.data.get("rest_destination") == "library_top":
+                caster.library[:0] = list(rest)
+                if len(rest) > 1:
+                    seat = self.seat_index(caster)
+                    self.arm_pending_choice(
+                        "reorder_library", seat,
+                        target_index=seat, top_count=len(rest), may_shuffle=False,
+                    )
+                return
             # "…on the bottom of your library **in a random order**." (Garruk's
             # Harbinger.) A stated order, not the player's freedom: the cards
             # go down shuffled, through the module RNG `run_ai_simulation`
