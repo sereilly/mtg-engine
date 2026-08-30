@@ -132,6 +132,9 @@ _BOUND_OBJECT_DELAYED_EVENTS: frozenset[str] = frozenset({
     # not always the object it watches: this membership is the acted-on half,
     # and `DelayedTrigger.watched_permanent_id` carries the watched one.
     "bound_permanent_leaves_battlefield",
+    # Merieke Ri Berit: watches its own source, destroys **that creature** —
+    # the same two-object shape War Barge prints, with the wider event.
+    "bound_permanent_leaves_or_untaps",
 })
 
 #: The payload key the delayed machinery stamps that object's id under.

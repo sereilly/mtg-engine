@@ -207,6 +207,15 @@ def parse_leaves_battlefield_delay(stream: TokenStream) -> tuple[str, bool, str,
     if watched is None or not stream.accept_phrase("leaves", "the", "battlefield"):
         stream.reset(mark)
         return None
+    # "…leaves the battlefield **or becomes untapped**" (Merieke Ri Berit,
+    # Tawnos's Coffin). One ability answering to either event, so it is one
+    # event key announced from two sites rather than two entries — see
+    # ``delayed_triggers.DELAYED_EVENTS``. Read here, in the opener that already
+    # says which object is watched, because the second half is about the same
+    # object as the first.
+    event = "bound_permanent_leaves_battlefield"
+    if stream.accept_phrase("or", "becomes", "untapped"):
+        event = "bound_permanent_leaves_or_untaps"
     # "When" is CR 603.7b's one-shot, and the object it watches leaves the
     # battlefield exactly once — a returning permanent is a new object with a
     # new id (CR 400.7), so there is nothing for a second firing to be about.
@@ -226,9 +235,7 @@ def parse_leaves_battlefield_delay(stream: TokenStream) -> tuple[str, bool, str,
     # arming nothing at all. The leading spelling in
     # :func:`_parse_create_delayed_trigger` is where an acted-on target is
     # possible, and it grants the permission itself.
-    return (
-        "bound_permanent_leaves_battlefield", True, duration, False, watched,
-    )
+    return (event, True, duration, False, watched)
 
 
 def parse_trailing_delay(stream: TokenStream) -> tuple[str, bool, str, bool, str | None] | None:

@@ -1522,4 +1522,107 @@ def test_orcish_squatters_gives_the_land_back_when_it_leaves(
 
     assert game.controller_index_of(stolen) == 1, game.log
     assert {p.card.name for p in p2.battlefield} == {"Forest", "Island"}, game.log
+
+
+def _w1g5_merieke_board(set_pool, catalog_by_name):
+    merieke = Permanent(card=set_pool("ICE")["Merieke Ri Berit"])
+    _nosick(merieke)
+    victim = Permanent(card=catalog_by_name["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[merieke]),
+        PlayerState(name="P2", battlefield=[victim]),
+    ])
+    game.enforce_mana_costs = False
+    return game, merieke, victim
+
+
+def _w1g5_merieke_steals(game):
+    result = game.activate_permanent_ability(
+        0, "Merieke Ri Berit", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game._settle()
+
+
+def test_merieke_ri_berit_compiles_its_own_name_as_a_self_reference(set_pool):
+    """The card's oracle text names the card — printed text, not a reason to key
+    on the name. The lexer collapses it to the same SELF token "this creature"
+    produces, so the ability lowers to the ordinary linked steal plus the
+    delayed ability the second sentence creates."""
+    program = compile_card_oracle(set_pool("ICE")["Merieke Ri Berit"])
+
+    assert program.supported
+    ability = program.activated_abilities[0]
+    steps = ability.instruction.payload["steps"]
+    assert [i.kind for i in steps] == [
+        "steal_target_linked_to_source", "create_delayed_trigger",
+    ]
+    assert steps[0].payload["link_conditions"] == ["you_control_source"]
+    assert steps[1].payload["event"] == "bound_permanent_leaves_or_untaps"
+    assert steps[1].payload["instruction"].payload["bypass_regeneration"] is True
+
+
+def test_merieke_ri_berit_takes_the_creature_and_stays_tapped(
+    set_pool, catalog_by_name
+):
+    game, merieke, victim = _w1g5_merieke_board(set_pool, catalog_by_name)
+
+    _w1g5_merieke_steals(game)
+
+    assert game.controller_index_of(victim) == 0, game.log
+    assert merieke.tapped
+
+
+def test_merieke_ri_berit_destroys_the_creature_when_she_untaps(
+    set_pool, catalog_by_name
+):
+    """"When Merieke Ri Berit … becomes untapped, destroy that creature."
+    Announced from ``become_untapped``, which is the one place a permanent
+    untaps — an announcement wired into the untap step alone would miss every
+    Twiddle."""
+    game, merieke, victim = _w1g5_merieke_board(set_pool, catalog_by_name)
+    _w1g5_merieke_steals(game)
+
+    game.become_untapped(merieke)
+    game._settle()
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(victim), game.log
+    assert [c.name for c in game.players[1].graveyard] == ["Grizzly Bears"]
+
+
+def test_merieke_ri_berit_destroys_the_creature_when_she_leaves(
+    set_pool, catalog_by_name
+):
+    """The other half of the same delayed ability. It also proves the two ends
+    do not fight: the linked steal reverts control as the sweep runs, and the
+    delayed destroy still finds the creature by the id it bound."""
+    game, merieke, victim = _w1g5_merieke_board(set_pool, catalog_by_name)
+    _w1g5_merieke_steals(game)
+
+    game.remove_from_battlefield(merieke)
+    game._settle()
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(victim), game.log
+    assert [c.name for c in game.players[1].graveyard] == ["Grizzly Bears"]
+
+
+def test_merieke_ri_berit_leaves_an_untouched_board_alone(
+    set_pool, catalog_by_name
+):
+    """The delayed ability is armed only by the steal, and it watches Merieke by
+    id. Untapping some *other* permanent must not fire it — the guard against an
+    entry that answers to the first thing to untap."""
+    game, merieke, victim = _w1g5_merieke_board(set_pool, catalog_by_name)
+    other = Permanent(card=catalog_by_name["Mountain"], tapped=True)
+    game.players[0].battlefield.append(other)
+    _w1g5_merieke_steals(game)
+
+    game.become_untapped(other)
+    game._settle()
+    game.check_state_based_actions()
+
+    assert game.is_on_battlefield(victim), game.log
+    assert game.controller_index_of(victim) == 0
 # --- end W1G5 ---

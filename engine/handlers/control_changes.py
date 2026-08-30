@@ -247,6 +247,14 @@ def steal_target_linked_to_source(game: Game, instruction: OracleInstruction, co
         extra_meta={LINKED_CONTROL_CONDITIONS: conditions},
     ):
         return True, "resolved"
+    # **The rescope ``gain_control_until_eot`` makes, and for its reason.** The
+    # sentence after this one is about the creature this one just moved — "When
+    # Merieke Ri Berit leaves the battlefield or becomes untapped, destroy
+    # **that creature**" — and it resolves the announced id against
+    # `context.target`'s board. Left pointing at the seat the creature has now
+    # *left*, the delayed ability found nothing to bind and armed nothing at
+    # all, logging "had no creature to watch" while the card compiled clean.
+    context.target = caster
     game.log.append(f"{context.card.name} gains control of {target_perm.card.name}")
     return True, "resolved"
 

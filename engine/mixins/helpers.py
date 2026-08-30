@@ -768,6 +768,15 @@ class GameHelpersMixin:
             return False
         permanent.tapped = False
         emit(self, "permanent_becomes_untapped", subject=permanent)
+        # "When this creature leaves the battlefield **or becomes untapped**,
+        # destroy that creature." (Merieke Ri Berit.) The second of the two
+        # events one delayed ability answers to, announced here for the reason
+        # the linked-exile return below is: this is the one place a permanent
+        # becomes untapped, so an announcement wired into any single untapper
+        # would be one the other ten forgot.
+        fire_delayed_triggers(
+            self, "bound_permanent_leaves_or_untaps", subject=permanent,
+        )
         # "When this artifact leaves the battlefield **or becomes untapped**,
         # return that exiled card…" (Tawnos's Coffin). The second of the two
         # things that end a linked exile, and it is here for the reason the
@@ -1195,6 +1204,15 @@ class GameHelpersMixin:
         for perm in removed:
             fire_delayed_triggers(
                 self, "bound_permanent_leaves_battlefield", subject=perm,
+            )
+            # "…leaves the battlefield **or becomes untapped**" (Merieke Ri
+            # Berit). One ability answering to either event, so this site
+            # announces the second key beside the first; `become_untapped` is
+            # the other announcer. A separate call rather than a list of
+            # aliases, because an entry armed under one key must not be woken
+            # by the other's name.
+            fire_delayed_triggers(
+                self, "bound_permanent_leaves_or_untaps", subject=perm,
             )
         for perm in removed:
             self.return_linked_exile(perm, "left the battlefield", LEAVES)

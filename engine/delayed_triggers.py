@@ -70,6 +70,19 @@ DELAYED_EVENTS: dict[str, str] = {
     # leaves-the-battlefield is any move off the battlefield, so a bounce, a
     # tuck and an exile all announce it while only one of them is a death.
     "bound_permanent_leaves_battlefield": "the leaves-the-battlefield transition",
+    # "When Merieke Ri Berit leaves the battlefield **or becomes untapped**,
+    # destroy that creature." One delayed ability with two trigger events
+    # (CR 603.7), which is why it is one key announced from two sites rather
+    # than two entries: the ability fires the first time *either* happens and,
+    # having no stated duration, is done (CR 603.7b). Two entries would each be
+    # one-shot on their own and the second would still be waiting.
+    #
+    # Tawnos's Coffin prints the identical clause, so the pairing is a template
+    # rather than a card — it reaches its return through
+    # ``engine/linked_exile.py`` instead, which is that file's registry doing
+    # for an exile what this event does for an effect the grammar lowers.
+    "bound_permanent_leaves_or_untaps":
+        "the leaves-the-battlefield transition and become_untapped",
     # "Whenever that creature is dealt damage by an attacking creature this
     # turn, …" (Glyph of Life). Repeating: CR 603.7b's "unless it
     # has a stated duration", and "this turn" is that duration.
