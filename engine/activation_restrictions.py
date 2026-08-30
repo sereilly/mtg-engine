@@ -689,6 +689,26 @@ def _at_least_that_many_counters(
     return counters_on(source, match.group("counter")) >= needed
 
 
+def _no_counters_of_that_kind(
+    game: "Game", controller_index: int, source, match
+) -> bool:
+    """"Activate only if there are no charge counters on this artifact."
+    (Jeweled Amulet, Ice Cauldron.)
+
+    :func:`_at_least_that_many_counters` with the bound at zero and the printed
+    word "no" in place of a number. Asked of the *source* for that function's
+    reason, and a source that has left answers **False**: a permanent that is
+    gone has no counters, which would read as "the restriction is satisfied" —
+    but it also has no ability to activate, and the honest answer to "may this
+    be activated?" for a permanent that is not there is no.
+    """
+    from .named_counters import counters_on
+
+    if source is None:
+        return False
+    return counters_on(source, match.group("counter")) == 0
+
+
 #: Matched whole, and no pattern is a prefix of another -- held by
 #: `tests/rules/test_activation_restrictions.py`.
 ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
@@ -873,6 +893,21 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         ),
         _at_least_that_many_counters,
         "not enough counters on it yet",
+        reads_payload=True,
+    ),
+    # "Activate only if there are no charge counters on this artifact."
+    # (Jeweled Amulet, Ice Cauldron.) The floor above with the number at zero,
+    # and its own row because "no" is not one of `NUMBER_WORDS` — a clause
+    # nobody had listed is not a dead restriction, it is an unenforced one, and
+    # these two cards' whole design is that the ability charges once until the
+    # counter comes off.
+    ActivationRestriction(
+        re.compile(
+            r"^activate only if there are no (?P<counter>[a-z]+) counters "
+            r"on this [a-z]+$"
+        ),
+        _no_counters_of_that_kind,
+        "it already has one of those counters",
         reads_payload=True,
     ),
 )

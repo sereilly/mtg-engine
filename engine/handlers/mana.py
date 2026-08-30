@@ -279,6 +279,32 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         )
         return True, "resolved"
 
+    # "Add one mana of this artifact's last noted type." (Jeweled Amulet.)
+    # "Add this artifact's last noted type and amount of mana." (Ice Cauldron.)
+    # The record an earlier activation of this same permanent wrote, read off
+    # the source — a permanent with nothing noted adds nothing at all, which is
+    # what the card says: the counter it removes was put there by the very
+    # activation that did the noting.
+    from_noted = instruction.payload.get("from_noted")
+    if from_noted:
+        from ..noted_mana import noted_mana
+
+        record = noted_mana(context.source_permanent)
+        spend_only = instruction.payload.get("spend_only")
+        bucket = _mana_bucket(caster, spend_only)
+        added = []
+        for symbol, count in sorted(record.items()):
+            # "…last noted **type**" keeps only the kind: one mana of it,
+            # however much was spent. "…**type and amount**" keeps both.
+            produced = int(count) if from_noted == "type_and_amount" else 1
+            bucket[symbol] = bucket.get(symbol, 0) + produced
+            added.append(f"{{{symbol}}}" * produced)
+        game.log.append(
+            f"{card.name} produced {''.join(added) or 'no mana'}"
+            f"{_restriction_suffix(spend_only)}"
+        )
+        return True, "resolved"
+
     pips_choice = instruction.payload.get("pips_choice")
     if pips_choice:
         alternatives = [symbol for symbol, _count in pips_choice]
@@ -586,3 +612,37 @@ def _colors_opponents_lands_produce(game, caster) -> frozenset[str]:
             if perm.has_type("land"):
                 colors |= produced_mana_colors(perm.effective_card)
     return frozenset(colors)
+
+
+@effect_handler("note_mana_spent")
+def note_mana_spent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Note the type [and amount] of mana spent to pay this activation cost."
+    (Jeweled Amulet, Ice Cauldron.)
+
+    Nothing is produced. What the instruction does is copy CR 107.4b's symbols
+    out of the payment the activation path measured — the pool before the cost
+    minus the pool after it — onto the ability's own source, where "this
+    artifact's last noted type" reads it back.
+
+    The record is written even when the payment was empty, because "last noted"
+    is a *replacement*: an activation paid for free notes nothing, and the
+    adding ability must then add nothing rather than repeat the last one.
+
+    ``with_amount`` is not read here. Both cards note the same symbols; the word
+    changes what the *adding* half of the card does with them, which is where
+    ``from_noted`` is read. Carrying it on the payload rather than dropping it
+    keeps the printed difference visible to anything reading the program.
+    """
+    from ..noted_mana import note_mana_spent as _record
+
+    source = context.source_permanent
+    if source is None:
+        return False, "ability not implemented"
+    spent = (context.choices or {}).get("mana_spent_for_cost") or {}
+    _record(source, dict(spent))
+    game.log.append(
+        f"{context.card.name} noted "
+        + ("".join(f"{{{sym}}}" * int(n) for sym, n in sorted(spent.items()))
+           or "no mana")
+    )
+    return True, "resolved"

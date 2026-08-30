@@ -185,6 +185,7 @@ from .mana import (
     ANY_OTHER_TYPE,
     AddMana,
     AddManaForTappedLand,
+    NoteManaSpent,
     ProducesManaInstead,
     SpendManaAsThough,
 )
@@ -432,6 +433,7 @@ __all__ = [
     "Scry",
     "AddMana",
     "AddManaForTappedLand",
+    "NoteManaSpent",
     "ANY_OTHER_TYPE",
     "ProducesManaInstead",
     "SpendManaAsThough",

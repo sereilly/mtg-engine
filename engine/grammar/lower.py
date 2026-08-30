@@ -68,6 +68,7 @@ from .lowering import (
     _fused_draw_then_discard,
     _fused_exile_then_controller_life,
     _lower_add_mana,
+    _lower_note_mana_spent,
     _lower_add_mana_for_tapped_land,
     _amount_payload,
     _lower_produces_mana_instead,
@@ -393,6 +394,8 @@ def lower_statement(
         return _lower_add_mana(statement, produced)
     if isinstance(statement, ast.AddManaForTappedLand):
         return _lower_add_mana_for_tapped_land(statement, dispatch_event)
+    if isinstance(statement, ast.NoteManaSpent):
+        return _lower_note_mana_spent(statement)
     if isinstance(statement, ast.CreateToken):
         return _lower_create_token(statement, produced)
 

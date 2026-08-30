@@ -67,6 +67,14 @@ CHOICE_KEYS = (
     # mana value" is asked once it is (CR 608.2h). A ``CardDefinition``, not a
     # ``Permanent``, because the graveyard spelling of the cost never had one.
     "exiled_for_cost",
+    # CR 107.4b's symbols a printed mana cost actually consumed ("Note the type
+    # of mana spent to pay this activation cost", Jeweled Amulet, Ice Cauldron).
+    # A symbol dict, and on this channel for the three above's reason: the pool
+    # empties at the end of the step (CR 500.4), so by resolution nothing in the
+    # game state can say what paid. Measured as the difference the payment made
+    # rather than read off the cost — a generic pip says how much is owed and
+    # never which symbol covers it.
+    "mana_spent_for_cost",
 )
 
 

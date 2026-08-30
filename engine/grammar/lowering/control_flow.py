@@ -94,7 +94,13 @@ def _may_cost_payload(node: ast.May) -> dict[str, object]:
 #: — reaches that function's fallback, which reads the resolution's target and
 #: is a different seat entirely.
 OFFERABLE_ACTORS: frozenset[str] = frozenset(
-    {"you", "each_player", "each_opponent", "that_player"}
+    {"you", "each_player", "each_opponent", "that_player",
+     # "… unless **its controller** pays life equal to its toughness."
+     # (Essence Vortex.) The seat is not one the resolution already carries —
+     # it is read off the permanent the sentence targeted — so ``_offered_seats``
+     # answers it by asking the control seam rather than by reading
+     # ``context.target``, which is the reading the note below warns about.
+     "controller"}
 )
 
 
@@ -253,6 +259,18 @@ def _lower_may(
         # a {B} had nothing to collect it with. `engine/mana_payment.py` is what
         # made the refusal unnecessary.
         payload["cost"] = _may_cost_payload(node)
+    if node.life_cost is not None:
+        # "… unless its controller **pays life equal to its toughness**."
+        # (Essence Vortex.) Its own payload key rather than a reading of
+        # ``cost``: a cost is a symbol dict everywhere, and life is not a mana
+        # symbol — ``_player_can_pay_optional`` already keeps the two apart for
+        # Bronze Tablet, and folding them would make an unaffordable mana cost
+        # read as a life one.
+        if node.cost is not None:
+            raise LoweringError(
+                "an offer charges mana or life, not both", node=node
+            )
+        payload["life_cost"] = _life_cost_payload(node)
     if node.life_alternative is not None:
         # CR 118.8's alternative payment ("…pays {1} **or 1 life**", Erosion).
         # A second reading of the *same* offer, so it rides the one prompt
@@ -279,6 +297,31 @@ def _lower_may(
     if not (action or then or otherwise or reflexive):
         raise LoweringError("an optional action with no consequence", node=node)
     return (OracleInstruction("may", "", payload),)
+
+
+def _life_cost_payload(node: ast.May) -> object:
+    """What an offered life cost costs, as a number or as a count spec.
+
+    A printed digit is the number. "life equal to **its** toughness" is a
+    characteristic of the object the sentence targeted, and CR 613 makes that
+    computed — a creature pumped between the announcement and the offer has a
+    different toughness — so it travels as the same ``object_characteristic``
+    spec every other resolution-time characteristic reads, and the handler
+    evaluates it through the one shared evaluator.
+    """
+    amount = node.life_cost
+    if isinstance(amount, ast.Fixed):
+        return int(amount.value)
+    if isinstance(amount, ast.CharacteristicOfSubject):
+        return {
+            "object_characteristic": {
+                "characteristic": amount.characteristic,
+                "offset": amount.offset,
+            }
+        }
+    raise LoweringError(
+        f"no offer charges life measured as {type(amount).__name__}", node=node
+    )
 
 
 #: The actors that name a *set* of seats, spelled here as the lowering sees them.

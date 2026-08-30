@@ -119,6 +119,31 @@ class AddMana:
     # two written-out quantities).
     combination: tuple[str, ...] = ()
     combination_count: "Amount | int" = 0
+    #: "Add one mana of **this artifact's last noted type**." (Jeweled Amulet.)
+    #: "Add **this artifact's last noted type and amount** of mana." (Ice
+    #: Cauldron.) The mana a cost was paid with, recorded on the source by an
+    #: earlier activation (``engine/noted_mana.py``) — so no symbol can be
+    #: written here at all, and the two printed spellings differ only in whether
+    #: the *count* is remembered too. ``"type"`` or ``"type_and_amount"``.
+    from_noted: str | None = None
+
+
+@dataclass(frozen=True)
+class NoteManaSpent:
+    """"Note the type of mana spent to pay this activation cost." (Jeweled
+    Amulet.) "…note the type **and amount** of mana spent…" (Ice Cauldron.)
+
+    Not a mana production at all: nothing is added and nothing changes on any
+    board. What it does is *remember* CR 107.4b's symbols, so a later ability of
+    the same permanent can add that mana back — which is why it lives here
+    beside :class:`AddMana` rather than in a family about records.
+
+    ``with_amount`` is the one printed word between the two cards, and it is
+    payload for that reason: which half of the record the note keeps is a fact
+    about one card, not a different kind of sentence.
+    """
+
+    with_amount: bool = False
 
 
 @dataclass(frozen=True)

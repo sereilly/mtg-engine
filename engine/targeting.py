@@ -1047,6 +1047,20 @@ def _from_instructions(instructions) -> dict | None:
             nested = _from_instructions(
                 tuple(instruction.payload.get("action") or ())
                 + tuple(instruction.payload.get("then") or ())
+                # …and the **declined** branch, last. "Destroy target creature
+                # unless its controller pays life equal to its toughness"
+                # (Essence Vortex) puts the whole spell on this branch, and the
+                # creature is a target of the *spell*: CR 601.2c picks it as the
+                # spell is announced, before anybody is offered the payment, so
+                # a picker that skipped this branch would leave the spell with
+                # no prompt and the destruction pointed at nothing.
+                #
+                # Read after the two above rather than beside them, so an offer
+                # that targets on both sides still answers with the branch it
+                # takes. ``reflexive`` stays out: CR 603.12 makes it a separate
+                # ability that chooses its own targets when the payment creates
+                # it, which has not happened yet.
+                + tuple(instruction.payload.get("otherwise") or ())
             )
             if nested is not None:
                 return nested

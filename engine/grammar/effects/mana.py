@@ -134,6 +134,59 @@ def _parse_combination_symbols(stream: TokenStream) -> tuple[str, ...]:
     return tuple(symbols)
 
 
+def _parse_note_mana_spent(stream: TokenStream) -> "ast.NoteManaSpent | None":
+    """``Note the type [and amount] of mana spent to pay this activation cost.``
+    (Jeweled Amulet, Ice Cauldron.)
+
+    Every word is read. "to pay **this activation cost**" is what says the
+    record is of the ability's own payment rather than of anything else the turn
+    spent, and a production that stopped at "of mana spent" would claim a
+    sentence about some other payment and note the wrong symbols.
+
+    None rather than a raise, so a sentence opening with "note" that this cannot
+    read keeps whatever other production would have had it.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("note", "the", "type"):
+        stream.reset(mark)
+        return None
+    with_amount = bool(stream.accept_phrase("and", "amount"))
+    if stream.accept_phrase(
+        "of", "mana", "spent", "to", "pay", "this", "activation", "cost"
+    ):
+        return ast.NoteManaSpent(with_amount=with_amount)
+    stream.reset(mark)
+    return None
+
+
+def _accept_noted_mana(stream: TokenStream) -> str | None:
+    """``[one mana of] this <noun>'s last noted type [and amount] [of mana]``.
+
+    Both printed spellings of the same record, read by one function so the two
+    cards cannot come to disagree about what "last noted" means: Jeweled Amulet
+    adds "one mana of this artifact's last noted **type**", Ice Cauldron adds
+    "this artifact's last noted **type and amount** of mana".
+
+    The noun is consumed rather than matched, for ``_parse_counter_removal_cost``'s
+    reason: "this artifact" names the ability's own source and nothing about the
+    permanent's characteristics is consulted.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("this"):
+        stream.reset(mark)
+        return None
+    if stream.peek_word() is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("'s", "last", "noted", "type"):
+        stream.reset(mark)
+        return None
+    if stream.accept_phrase("and", "amount", "of", "mana"):
+        return "type_and_amount"
+    return "type"
+
+
 def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     """``Add {G}`` / ``Add {C}{C}{C}`` / ``Add one mana of any color``."""
     start = stream.mark()
@@ -147,6 +200,14 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     # the sentence it appears in is "Add {B}, then add an additional {B} …", two
     # statements whose second one only makes sense as an addition to the first.
     additional = bool(stream.accept_phrase("an", "additional"))
+
+    # "Add **this artifact's last noted type and amount** of mana." (Ice
+    # Cauldron.) Read before the pip loop because the clause names no mana
+    # symbol at all — the quantity *is* the record, so there is nothing here for
+    # the loop or for `parse_amount` below to count.
+    noted = _accept_noted_mana(stream)
+    if noted is not None:
+        return ast.AddMana((), from_noted=noted, source_text=_clause())
 
     pips: dict[str, int] = {}
     choice = False
@@ -287,6 +348,16 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
             source_text=_clause(),
         )
     stream.expect_word("of")
+    # "Add one mana of **this artifact's last noted type**." (Jeweled Amulet.)
+    # Read before "any … color", which would refuse the pronoun. The printed
+    # count is the amount already parsed, and only "one" is admitted: the record
+    # holds one type, and a card asking for two of it would be adding a quantity
+    # nothing noted.
+    noted = _accept_noted_mana(stream)
+    if noted is not None:
+        if not (isinstance(count, ast.Fixed) and count.value == 1):
+            raise stream.error("only one mana of a noted type can be added")
+        return ast.AddMana((), from_noted=noted, source_text=_clause())
     stream.accept_word("any")
     stream.accept_word("one")
     stream.expect_word("color")

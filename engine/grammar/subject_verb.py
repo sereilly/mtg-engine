@@ -36,6 +36,7 @@ from .phrases import (_parse_can_attack_as_though, _parse_duration,
 from .vocabulary import NUMBER_WORDS
 from .effects import (
     _parse_add_mana, _parse_ante, _parse_assigns_no_combat_damage, _parse_attach,
+    _parse_note_mana_spent,
     _parse_becomes, _parse_cant_attack_or_block, _parse_change_base_pt,
     _parse_no_longer_supertype,
     _parse_change_target,
@@ -491,6 +492,15 @@ def parse_subject_verb(
         return ast.Exile(subject, duration, counters=counters)
     if stream.at_word("add"):
         return _parse_add_mana(stream)
+    # "Note the type of mana spent to pay this activation cost." (Jeweled
+    # Amulet.) A bare imperative like the draw and discard above it — the
+    # ability's own controller notes it, and the record hangs off the ability's
+    # own source. Non-consuming on refusal, so a sentence opening with "note"
+    # that this cannot read falls through rather than losing its line.
+    if stream.at_word("note"):
+        noted = _parse_note_mana_spent(stream)
+        if noted is not None:
+            return noted
     if stream.at_word("look"):
         return _parse_look_at_hand(stream)
     if stream.at_word("search"):
