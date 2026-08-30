@@ -98,6 +98,13 @@ COMBAT_SHIELD = 20  # "…dealt to and dealt by that creature this turn"
 # class of source — no charges, so applying it costs its recipient nothing, and
 # it belongs with the other blankets rather than with the consumables below.
 SOURCE_TYPE_BLANKET = 25
+# "Prevent all damage that would be dealt to you." (Glacial Chasm.) The same
+# blanket with the *player* as recipient and no source narrowing at all — the
+# unnarrowed member of the family above, so it sits beside it and ahead of
+# every consumable, for the same reason: it has no charges, so applying it
+# costs its controller nothing and spends no shield that could cover later
+# damage.
+CONTROLLER_BLANKET = 28
 # "Prevent all damage that would be dealt to you this turn by attacking
 # creatures without flying." (Al-abara's Carpet.) A blanket a *player* was
 # handed rather than one a permanent prints, but a blanket all the same — no
@@ -1233,6 +1240,89 @@ def _remove_counter_per_damage(game, event: dict) -> PreventionOutcome | None:
     return PreventionOutcome(prevented=removed)
 
 
+#: "Prevent all damage that would be dealt to you." (Glacial Chasm.) A static
+#: prevention on the permanent's **controller** rather than on the permanent
+#: itself, and the unnarrowed member of the family above: no source class, no
+#: charges and no duration, because a static ability applies while its source is
+#: on the battlefield and stops the moment it is not.
+#:
+#: The printed "combat" is captured for the reason
+#: ``_PREVENT_ALL_FROM_SOURCE_TYPE_RE`` captures its own: a shield that ignored
+#: the word would stop a burn spell as well, which is a strictly larger effect
+#: than such a card prints.
+#:
+#: Anchored at both ends, and **without** a duration: "…this turn" is a one-shot
+#: effect a spell resolves, which the grammar's ``PreventDamage`` production
+#: reads and this must not claim. Claiming the line here takes it away from
+#: those productions entirely (``engine/grammar/registries.py``), so the anchor
+#: is what keeps the two sentences apart.
+_PREVENT_ALL_TO_CONTROLLER_RE = re.compile(
+    r"^prevent all (?P<combat>combat )?damage that would be dealt to you$"
+)
+
+
+def prevent_all_to_controller(line: str) -> dict | None:
+    """The blanket *line* gives the permanent's controller, or None.
+
+    One matcher, asked by the interceptor below and by the claim reader, so
+    what is implemented and what is claimed cannot drift.
+    """
+    match = _PREVENT_ALL_TO_CONTROLLER_RE.match(
+        " ".join(line.strip().lower().rstrip(".").split())
+    )
+    if match is None:
+        return None
+    return {"combat_only": bool(match.group("combat"))}
+
+
+def _controller_blanket_for(game, event: dict) -> dict | None:
+    """The blanket shielding this player, read off their own battlefield. Pure.
+
+    A player has no text of their own, so the line is found on the permanents
+    they control — the same read ``_source_type_shielded_by`` makes of a
+    damaged permanent, one relation out. Through the control seam rather than a
+    battlefield list, so a Glacial Chasm somebody else has taken control of
+    shields *them*.
+    """
+    recipient = event["recipient"]
+    if not isinstance(recipient, PlayerState):
+        return None
+    seat = game.players.index(recipient) if recipient in game.players else None
+    if seat is None:
+        return None
+    for permanent in game.controlled_by(seat):
+        for line in permanent.effective_card.oracle_text.splitlines():
+            described = prevent_all_to_controller(line)
+            if described is not None:
+                return described
+    return None
+
+
+def _applies_controller_blanket(game, event: dict) -> bool:
+    described = _controller_blanket_for(game, event)
+    if described is None:
+        return False
+    if event["amount"] <= 0:
+        return False
+    return bool(event.get("combat")) or not described["combat_only"]
+
+
+@prevention_effect(CONTROLLER_BLANKET, applies=_applies_controller_blanket)
+def _prevent_all_to_controller(game, event: dict) -> PreventionOutcome | None:
+    """Glacial Chasm: "Prevent all damage that would be dealt to you."
+
+    Every point, from every source, for as long as the permanent printing it is
+    on the battlefield. Nothing is spent and nothing is recorded — the next
+    event asks the board again, which is what makes the shield end with the
+    permanent (CR 611.2) rather than needing a sweep.
+    """
+    game.log.append(
+        f"{event['recipient'].name} prevented {event['amount']} damage "
+        "(all damage that would be dealt to them)"
+    )
+    return PreventionOutcome(prevented=event["amount"])
+
+
 def prevention_claims_line(line: str) -> bool:
     """Whether one printed line is, in full, a static prevention effect
     implemented above.
@@ -1251,4 +1341,5 @@ def prevention_claims_line(line: str) -> bool:
         or prevent_all_from_source_type(line) is not None
         or attached_prevent_all_from_source_type(line) is not None
         or attached_combat_shield_direction(line) is not None
+        or prevent_all_to_controller(line) is not None
     )

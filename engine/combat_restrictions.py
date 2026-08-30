@@ -185,6 +185,17 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "creatures_cant_attack",
     ),
     (
+        # "Creatures you control can't attack." (Glacial Chasm.) The
+        # unnarrowed member of the family below — no keyword, no negated
+        # subtype, nothing but the seat — and the same `subject` payload one
+        # enforcement site reads. The seat is captured rather than written into
+        # the assembly, because it is what the sentence narrows by: a card
+        # printing the phrase without it is a different restriction and must
+        # keep refusing rather than being read as this one.
+        re.compile(r"^creatures (?P<attack_controller>you) control can't attack$"),
+        "creatures_cant_attack",
+    ),
+    (
         # "Non-Eye creatures you control can't attack." (Evil Eye of
         # Orms-by-Gore.) The same restriction narrowed the other way — a
         # negated subtype plus a controller — and the same payload shape, so
@@ -540,6 +551,15 @@ def combat_restriction_for(
             payload["subject"] = {
                 "type_filter": "creature",
                 "without_keywords": [without_keyword],
+            }
+        # "Creatures **you** control can't attack." The seat alone, built into
+        # the same one `subject` filter its two narrowed siblings build, so the
+        # enforcement site reads one payload shape for all three.
+        attack_controller = payload.pop("attack_controller", None)
+        if attack_controller is not None:
+            payload["subject"] = {
+                "type_filter": "creature",
+                "controller": attack_controller,
             }
         excluded_subtype = payload.pop("excluded_subtype", None)
         if excluded_subtype is not None:

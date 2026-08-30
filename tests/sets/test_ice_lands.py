@@ -102,15 +102,83 @@ def test_a_thawed_forest_stops_satisfying_snow_forestwalk(set_pool):
         "a thawed forest is not the snow Forest CR 702.14c asks for"
     )
 # --- Round 31: a cumulative upkeep cost is a cost, not a mana cost ---
-def test_glacial_chasm_reads_its_upkeep_and_still_refuses_the_rest(set_pool):
-    """"Cumulative upkeep—Pay 2 life" is now a cost this engine charges, so the
-    land's refusal moves on to the two lines that are still unread. It stays
-    unsupported — the point is *which* clause the reason names."""
+def test_glacial_chasm_charges_its_upkeep_in_life(set_pool):
+    """"Cumulative upkeep—Pay 2 life" is a cost this engine charges, and the
+    keyword line is read for a land the same way it is for a creature."""
     chasm = set_pool("ICE")["Glacial Chasm"]
     program = compile_card_oracle(chasm)
 
-    assert not program.supported
     assert "cumulative upkeep" not in (program.reason or "").lower()
     assert cumulative_upkeep_cost(
         "cumulative upkeep—pay 2 life"
     ).life == 2
+    upkeep = [
+        trig for trig in program.triggered_abilities
+        if trig.instruction is not None
+        and trig.instruction.kind == "cumulative_upkeep"
+    ]
+    assert len(upkeep) == 1
+    assert upkeep[0].instruction.payload["life"] == 2
+
+
+# --- W1G1: prevention and damage shields ---
+def test_glacial_chasm_is_supported_with_every_line_accounted_for(set_pool):
+    """Four printed lines, four readers: the cumulative upkeep keyword, the
+    enters trigger, the combat restriction and the static prevention. The land
+    gate names the first line nothing claims, so this passing is the claim that
+    nothing is left."""
+    program = compile_card_oracle(set_pool("ICE")["Glacial Chasm"])
+
+    assert program.supported, program.reason
+    assert any(
+        instr.kind == "creatures_cant_attack" for instr in program.instructions
+    ), "the restriction has to be an instruction, or can_attack's board scan never sees it"
+
+
+def test_glacial_chasm_grounds_its_controllers_creatures(set_pool):
+    """"Creatures you control can't attack." (CR 506.3.) Scoped to the seat that
+    controls the land — an opponent's creatures are untouched."""
+    pool = set_pool("ICE")
+    chasm = Permanent(card=pool["Glacial Chasm"])
+    mine = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    theirs = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[chasm, mine], life=20)
+    p2 = PlayerState(name="P2", battlefield=[theirs], life=20)
+    game = Game(players=[p1, p2])
+
+    assert not game.can_attack(mine, 1)
+    assert game.can_attack(theirs, 0)
+
+
+def test_glacial_chasm_prevents_every_point_dealt_to_its_controller(set_pool):
+    """"Prevent all damage that would be dealt to you." (CR 615.) A static
+    ability with no charges: a second event this turn is prevented exactly like
+    the first, and the shield ends when the land does rather than by a sweep."""
+    pool = set_pool("ICE")
+    chasm = Permanent(card=pool["Glacial Chasm"])
+    p1 = PlayerState(name="P1", battlefield=[chasm], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    game._deal_damage_to_player(p1, 5)
+    game._deal_damage_to_player(p1, 4)
+    assert p1.life == 20
+
+    # Nothing is recorded, so the answer follows the board.
+    game.remove_from_battlefield(chasm)
+    game._deal_damage_to_player(p1, 3)
+    assert p1.life == 17
+
+
+def test_glacial_chasm_shields_only_its_own_controller(set_pool):
+    """"To you" is the land's controller (CR 109.5) — an opponent's face is not
+    covered by a Chasm on the other side of the table."""
+    pool = set_pool("ICE")
+    chasm = Permanent(card=pool["Glacial Chasm"])
+    p1 = PlayerState(name="P1", battlefield=[chasm], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+
+    game._deal_damage_to_player(p2, 6)
+    assert p2.life == 14
+# --- end W1G1 ---
