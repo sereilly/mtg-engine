@@ -208,3 +208,82 @@ def test_diabolic_vision_keeps_one_and_stacks_the_rest(set_pool):
     assert [c.name for c in p1.library] == [
         "Mountain", "Forest", "Scaled Wurm", "Balduvian Bears", "Island",
     ]
+
+
+# --- Round 42: X targets for a destroy, mirroring the untap that has them ---
+def _r42_avalanche(set_pool, snow_lands=3, plain_lands=0):
+    pool = set_pool("ICE")
+    p1 = PlayerState(name="P1", hand=[pool["Avalanche"]], life=20)
+    board = [Permanent(card=pool["Snow-Covered Forest"]) for _ in range(snow_lands)]
+    board += [Permanent(card=pool["Snow-Covered Mountain"]) for _ in range(0)]
+    p2 = PlayerState(name="P2", battlefield=board, life=20)
+    if plain_lands:
+        from engine.card_loader import load_cards
+        p2.battlefield.extend(
+            Permanent(card=set_pool("LEA")["Forest"]) for _ in range(plain_lands)
+        )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p2
+
+
+def test_avalanche_destroys_exactly_the_lands_named(set_pool):
+    """"Destroy X target snow lands."
+
+    The lowering refused this outright — "unsupported destroy quantifier" —
+    while the untap beside it had read the identical shape since Candelabra of
+    Tawnos. Each slot resolves strictly, so a target that has left is dropped
+    rather than slid onto another (CR 608.2b).
+    """
+    game, defender = _r42_avalanche(set_pool, snow_lands=3)
+
+    result = game.cast_from_hand(
+        0, "Avalanche", x_value=2,
+        target_player_index=1, target_permanent_index=[0, 1],
+    )
+    game.resolve_stack()
+
+    assert result.supported, result.details
+    assert len(defender.battlefield) == 1
+    assert len(defender.graveyard) == 2
+
+
+def test_avalanche_destroys_only_snow_lands(set_pool):
+    """The printed noun phrase is enforced at resolution as well as at
+    announcement — `resolve_target_permanents` defaults to "is it a creature?",
+    which would have matched none of these."""
+    game, defender = _r42_avalanche(set_pool, snow_lands=1, plain_lands=1)
+
+    refused = game.cast_from_hand(
+        0, "Avalanche", x_value=2,
+        target_player_index=1, target_permanent_index=[0, 1],
+    )
+    assert not refused.supported, "a plain Forest is not a legal target (CR 601.2c)"
+
+    game.cast_from_hand(
+        0, "Avalanche", x_value=1,
+        target_player_index=1, target_permanent_index=[0],
+    )
+    game.resolve_stack()
+
+    remaining = [perm.card.name for perm in defender.battlefield]
+    assert remaining == ["Forest"], "an ordinary Forest is not a snow land"
+
+
+def test_a_several_target_destroy_used_to_describe_no_targets_at_all(set_pool):
+    """The latent half of the same gap, kept as the regression.
+
+    "Destroy up to two target creatures" reached the *single*-target path:
+    `_targets_payload` refuses a several-target spec, so the instruction went
+    out with no target description, the picker had nothing to read, and the
+    spell would have destroyed one of the two permanents it names. No card in
+    the pool prints it, which is the only reason that was latent rather than
+    live.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.lower import lower_ability
+
+    instruction, = lower_ability(parse_line("destroy up to two target creatures"))
+
+    assert instruction.kind == "destroy_target_permanent"
+    assert instruction.payload["targets"]["count"] == 2

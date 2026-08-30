@@ -315,6 +315,45 @@ def _lower_destroy(
             payload["bypass_regeneration"] = True
         return (OracleInstruction("destroy_target_permanent", "", payload),)
 
+    # "Destroy X target snow lands." (Avalanche.) "Up to two target creatures"
+    # is the same shape with a printed number instead of an announced one, and
+    # both are what `_names_several_targets` names: a chosen *list*, not a
+    # chosen permanent.
+    #
+    # This branch is why "up to two" used to fall through to the single-target
+    # path below and emit an instruction with **no target description at all** —
+    # `_targets_payload` refuses a several-target spec, so `_describe_targets`
+    # added nothing, the picker had nothing to read, and the card would have
+    # destroyed one permanent of the two it names. No card in the pool prints
+    # it, which is the only reason that was latent rather than live.
+    #
+    # Gated to a filter `destroy_target_permanent`'s list branch answers in
+    # full, exactly as the untap beside it is: a narrowing dropped from a
+    # several-target destroy is not a spell that does less, it is one that
+    # destroys the wrong permanents.
+    if _names_several_targets(spec):
+        leftovers = _restrictions_beyond(
+            spec.filter,
+            frozenset({
+                "card_types", "supertypes", "subtypes", "colors", "controller",
+                "other_than_source",
+            }),
+        )
+        if leftovers:
+            raise LoweringError(
+                "the several-target destroy cannot narrow by: " + ", ".join(leftovers),
+                node=node,
+            )
+        several = _filter_payload(spec.filter)
+        if set(several) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError(
+                "the several-target destroy cannot test this restriction", node=node
+            )
+        if node.no_regen:
+            several["bypass_regeneration"] = True
+        _describe_several_targets(several, spec)
+        return (OracleInstruction("destroy_target_permanent", "", several),)
+
     if spec.quantifier not in ("target", "up_to"):
         raise LoweringError("unsupported destroy quantifier", node=node)
 

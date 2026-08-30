@@ -692,9 +692,9 @@ The set's journal, kept here while it runs so the "next set" section above stays
 a *forecast* and this stays the record. Numbers live here; the process is
 `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, forty-one rounds in. 184 → 283 of 373 supported
-(75.9%), hollow lines 10 cards, and 42 unclaimed sentences across 29 of those
-283 — the third number is new, and the warning below says what it means.** The
+**Where it stands: Phase 3, forty-two rounds in. 184 → 284 of 373 supported
+(76.1%), hollow lines 10 cards, and 42 unclaimed sentences across 29 of those
+284 — the third number is new, and the warning below says what it means.** The
 count is now the *compiler's*: round 39 removed a gate that widened it, so the
 census and the refusal list inside `support_report.py` agree for the first time. The set is still under `measured`, which is the
 state the role is designed for: nothing is broken, every gate is green, and no
@@ -2299,6 +2299,42 @@ of it already (round 24: `cant_attack_unless_pay`, with a per-declaration mana
 plan made before anything is tapped, because a per-creature predicate cannot say
 "and again for the next one"). The block side needs that plan built again over
 `declare_blockers`, which is why it is not folded in here.
+
+**Round 42 — X targets for a destroy, and the shape the untap beside it had
+already read. 283 → 284.**
+
+Avalanche: "Destroy X target snow lands." The destroy lowering refused it
+outright — *unsupported destroy quantifier* — while `untap_target_permanent`
+has read the identical shape since Candelabra of Tawnos (Antiquities round 16),
+through helpers that were written to be shared: `_names_several_targets` to
+recognise a chosen **list**, `_describe_several_targets` to say the handler
+reads one, and `resolve_target_permanents` to resolve each slot strictly, so a
+target that has left is dropped rather than slid onto another (CR 608.2b).
+The destroy simply never opted in.
+
+**The refusal was hiding a second shape that did not refuse.** "Destroy up to
+two target creatures" passes the quantifier check — `up_to` is on the allowed
+list — and then reaches `_describe_targets`, which asks `_targets_payload`,
+which *declines* a several-target spec and returns None. So the instruction went
+out with **no target description at all**: the picker had nothing to read and
+the spell would have destroyed one of the two permanents it names. No card in
+this pool prints that sentence, which is the only reason it was latent rather
+than live, and it is now a regression test.
+
+The new branch is gated the way the untap's is — the filter must be one the
+handler answers in full, checked twice for two different reasons (round 4's
+dropped-`ObjectFilter`-field guard, then the payload keys against
+`TESTABLE_SUBJECT_FILTER_KEYS`). It records `destroyed_this_way` under the key
+the *sweep* uses, because "the number of Mountains put into a graveyard this
+way" is the same question whichever branch destroyed them.
+
+**Which is the next card in this template.** Volcanic Eruption is a name-keyed
+hook whose key is its whole printed line, and its first sentence is now exactly
+Avalanche's. The hook is still live — the grammar refuses the second sentence,
+"Volcanic Eruption deals damage to each creature and each player equal to the
+number of Mountains put into a graveyard this way" — so retiring it needs an
+amount that counts what the step in front of it destroyed. The record is already
+there.
 
 ## Where the sets landed
 

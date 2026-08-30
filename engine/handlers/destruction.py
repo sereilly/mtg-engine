@@ -10,6 +10,7 @@ from ..oracle_types import PER_OBJECT_SEAT_RECORDS
 from ..resumption import run_resumable
 from ._common import (
     apply_damage_to_creature, permanent_matches_filter, resolve_target_permanent,
+    resolve_target_permanents,
 )
 from .registry import effect_handler
 
@@ -364,6 +365,51 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     target = context.target
     card = context.card
     source_permanent = context.source_permanent
+    # "Destroy X target snow lands." (Avalanche.) The several-targets
+    # description says a *list* was collected, so each slot resolves strictly
+    # and one that has left is dropped rather than slid onto another
+    # (CR 608.2b) — the same reading `untap_target_permanent` takes for
+    # Candelabra of Tawnos, through the same helper.
+    targets_desc = instruction.payload.get("targets") or {}
+    if isinstance(targets_desc, dict) and targets_desc.get("count") not in (None, 1):
+        from ..subject_filters import subject_matches
+
+        filters = {
+            key: value for key, value in instruction.payload.items()
+            if key not in ("targets", "bypass_regeneration")
+        }
+        observer = (
+            game.players.index(context.caster) if context.caster in game.players
+            else None
+        )
+        chosen = resolve_target_permanents(
+            game, context,
+            predicate=lambda perm: subject_matches(
+                game, perm, filters,
+                observer=observer, source=source_permanent,
+            ),
+        )
+        died: list[Permanent] = []
+        for perm in chosen:
+            seat = game.controller_index_of(perm)
+            if seat is None:
+                continue
+            died.extend(game._destroy_swept_permanents(
+                game.players[seat],
+                lambda candidate, victim=perm: candidate is victim,
+                allow_regeneration=not instruction.payload.get("bypass_regeneration"),
+            ))
+        # What a later sentence of the same spell counts. Recorded under the
+        # key the sweep uses, because "the number of Mountains put into a
+        # graveyard this way" is the same question whichever branch destroyed
+        # them.
+        context.results["destroyed_this_way_objects"] = died
+        context.results["destroyed_this_way"] = len(died)
+        game.log.append(
+            f"{card.name} destroyed " + ", ".join(p.card.name for p in died)
+            if died else f"{card.name}: nothing to destroy"
+        )
+        return True, "resolved"
     # A later step of the same resolution may read the victim's controller
     # ("Destroy target creature. Its controller loses 2 life." — Liliana,
     # Death Mage), and by then the permanent is gone — record it now
