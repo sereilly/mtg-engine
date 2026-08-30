@@ -21,7 +21,8 @@ from ..lexer import (MANA, render)
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import _accept_self_reference, _parse_card_alternatives, _parse_zone
+from ..phrases import (_accept_self_reference, _parse_card_alternatives,
+                       _parse_duration, _parse_zone)
 
 
 def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
@@ -363,11 +364,22 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
     """
     mark = stream.mark()
     until_eot = False
+    next_upkeep = False
     if stream.at_word("until"):
-        if not stream.accept_phrase("until", "end", "of", "turn"):
+        # Through the shared duration table, so the phrase this sentence may
+        # open with is the same set of phrases every other effect reads — a
+        # second literal here is how one family comes to accept a wording
+        # another refuses. A kind the permission cannot *end* refuses the line
+        # rather than being read as the nearest one it can.
+        leading = _parse_duration(stream)
+        if leading.kind == "until_end_of_turn":
+            until_eot = True
+        elif leading.kind == "until_your_next_upkeep":
+            next_upkeep = True
+        else:
+            stream.reset(mark)
             return None
         stream.accept_punct(",")
-        until_eot = True
     if not stream.accept_phrase("you", "may"):
         stream.reset(mark)
         return None
@@ -417,6 +429,7 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         return ast.CastPermission(
             mode=mode, what="exiled_this_way", until_end_of_turn=until_eot,
             until_source_grants_again=regrant,
+            until_your_next_upkeep=next_upkeep,
         )
     # "spells from your hand without paying their mana costs" — a cost waiver.
     # The waiver clause is required: a bare "you may cast spells from your
@@ -429,6 +442,7 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         return ast.CastPermission(
             mode=mode, what="spells_from_hand",
             until_end_of_turn=until_eot, free=True,
+            until_your_next_upkeep=next_upkeep,
         )
     # "target red instant or sorcery card from your graveyard" — the noun
     # parser reads the zone and its owner onto the filter, and lowering
@@ -437,7 +451,8 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
     if spec is not None and spec.quantifier == "target":
         _trailing_duration()
         return ast.CastPermission(
-            mode=mode, what="target_card", target=spec, until_end_of_turn=until_eot
+            mode=mode, what="target_card", target=spec, until_end_of_turn=until_eot,
+            until_your_next_upkeep=next_upkeep,
         )
     stream.reset(mark)
     return None

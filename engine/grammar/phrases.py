@@ -59,6 +59,13 @@ _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # the upkeep step is inside the turn), so they are different kinds and the
     # one nothing implements must not fall back to the one that is close.
     ("until_your_next_upkeep", ("until", "your", "next", "upkeep")),
+    # "Until **the beginning of** your next upkeep" (Elkin Bottle). The same
+    # moment spelled out, so the same kind: CR 500's upkeep step begins once,
+    # and a second kind would be a second name for one instant. Longest-match
+    # is not at risk against the entry below it — "beginning" and "end" diverge
+    # on the third word.
+    ("until_your_next_upkeep",
+     ("until", "the", "beginning", "of", "your", "next", "upkeep")),
     # "Until the end of your next upkeep" (Halfdane). A step *later* than the
     # entry above: "until your next upkeep" ends as that upkeep begins, this
     # one ends as it ends — which is the whole trick of the card printing it,

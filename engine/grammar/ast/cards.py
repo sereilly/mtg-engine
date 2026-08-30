@@ -494,6 +494,13 @@ class CastPermission:
     #: leaves, or no end step finds a creature with power 4), and then the
     #: permission lasts, which is what the card says.
     until_source_grants_again: bool = False
+    #: "**Until the beginning of your next upkeep**, you may play that card."
+    #: (Elkin Bottle.) A third stated duration (CR 611.2a), and its own field
+    #: rather than a wider ``until_end_of_turn`` because reading it as either of
+    #: the other two is wrong in a stated direction: end-of-turn throws the
+    #: exiled card away at this turn's cleanup, and no-duration leaves it
+    #: playable for the rest of the game.
+    until_your_next_upkeep: bool = False
     free: bool = False
     # "If that spell would be put into your graveyard, exile it instead." —
     # attached by the rider parser, so a wording carrying it cannot shed it.

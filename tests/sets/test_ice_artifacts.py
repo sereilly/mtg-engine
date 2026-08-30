@@ -259,3 +259,76 @@ def test_a_derived_static_rule_that_is_real_behaviour_still_supports_its_card(se
     pool = {c.name: c for c in load_cards(manifest_set_paths())}
     for name in ("Winter Orb", "Howling Mine", "Gloom", "Meekstone"):
         assert compile_card_oracle(pool[name]).supported, name
+
+
+# --- W1G4: library, hand and graveyard ---
+def _bottle_board(set_pool):
+    """Elkin Bottle in play with one card on top of its controller's library."""
+    pool = set_pool("ICE")
+    bottle = _nosick(Permanent(card=pool["Elkin Bottle"]))
+    p1 = PlayerState(
+        name="P1", battlefield=[bottle], library=[pool["Balduvian Bears"]], life=20
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return pool, p1, game
+
+
+def test_elkin_bottle_exiles_the_top_card_and_permits_playing_it(set_pool):
+    """"{3}, {T}: Exile the top card of your library. Until the beginning of
+    your next upkeep, you may play that card." (CR 601.3.)"""
+    from engine.cast_permissions import permission_for
+
+    pool, p1, game = _bottle_board(set_pool)
+
+    result = game.activate_permanent_ability(0, "Elkin Bottle")
+    assert result.supported, result.details
+    game._settle()
+
+    assert p1.library == []
+    assert [card.name for card in p1.exile] == ["Balduvian Bears"]
+    assert permission_for(game, 0, p1.exile[0], "exile") is not None
+
+    played = game.cast_from_hand(0, "Balduvian Bears", from_zone="exile")
+    assert played.supported, played.details
+    game._settle()
+    assert any(perm.card.name == "Balduvian Bears" for perm in p1.battlefield)
+
+
+def test_elkin_bottles_permission_survives_this_turns_cleanup(set_pool):
+    """"Until the beginning of your next upkeep" is not "until end of turn":
+    reading it as the nearer duration throws the exiled card away tonight."""
+    from engine.cast_permissions import permission_for
+
+    pool, p1, game = _bottle_board(set_pool)
+    game.activate_permanent_ability(0, "Elkin Bottle")
+    game._settle()
+
+    game.resolve_cleanup_step(0)
+
+    assert permission_for(game, 0, p1.exile[0], "exile") is not None
+
+
+def test_elkin_bottles_permission_ends_at_its_controllers_next_upkeep(set_pool):
+    """…and it is not unbounded either. The sweep runs as that upkeep begins,
+    beside the layer-6 grants carrying the same printed duration."""
+    from engine.cast_permissions import permission_for
+
+    pool, p1, game = _bottle_board(set_pool)
+    game.activate_permanent_ability(0, "Elkin Bottle")
+    game._settle()
+    exiled = p1.exile[0]
+
+    game.resolve_upkeep(1)
+    assert permission_for(game, 0, exiled, "exile") is not None, (
+        "the opponent's upkeep is not this seat's next upkeep"
+    )
+
+    game.resolve_upkeep(0)
+
+    assert permission_for(game, 0, exiled, "exile") is None
+    assert [card.name for card in p1.exile] == ["Balduvian Bears"], (
+        "the card stays in exile; only the permission ends"
+    )
+# --- end W1G4 ---

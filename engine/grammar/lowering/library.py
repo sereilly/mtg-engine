@@ -594,6 +594,18 @@ def _lower_cast_from_exiled_with(
     )
 
 
+#: Which printed duration an "exiled this way" permission carries, keyed by the
+#: three flags the parser sets. A key with two of them set is deliberately
+#: absent: a sentence stating two durations is one this cannot honour, and
+#: picking either would be a permission that ends at a moment the card does not
+#: name.
+_EXILED_PERMISSION_DURATIONS: dict[tuple[bool, bool, bool], str] = {
+    (True, False, False): "end_of_turn",
+    (False, True, False): "until_source_grants_again",
+    (False, False, True): "your_next_upkeep",
+}
+
+
 def _lower_cast_permission(
     node: ast.CastPermission, produced: frozenset[str]
 ) -> tuple[OracleInstruction, ...]:
@@ -620,10 +632,21 @@ def _lower_cast_permission(
         # read as the wrong one it is wrong in a stated direction — end-of-turn
         # discards Furious Rise's card at the next cleanup, and no-duration
         # leaves every card it has ever exiled playable at once.
-        if not (node.until_end_of_turn or node.until_source_grants_again):
+        # A *stated* duration is required (CR 611.2a), and there are three of
+        # them now. Which one is load-bearing: end-of-turn discards Elkin
+        # Bottle's card at this cleanup, your-next-upkeep keeps it a turn, and
+        # no-duration leaves every card the source ever exiled playable at once.
+        stated = _EXILED_PERMISSION_DURATIONS.get(
+            (
+                node.until_end_of_turn,
+                node.until_source_grants_again,
+                node.until_your_next_upkeep,
+            )
+        )
+        if stated is None:
             raise LoweringError(
-                "an exiled-cards permission without its printed duration "
-                "would outlive the card that granted it",
+                "an exiled-cards permission needs exactly one printed duration, "
+                "or it would outlive the card that granted it",
                 node=node,
             )
         return (
@@ -633,10 +656,7 @@ def _lower_cast_permission(
                     "zone": "exile",
                     "mode": node.mode,
                     "cards_from": "exiled_cards",
-                    "duration": (
-                        "end_of_turn" if node.until_end_of_turn
-                        else "until_source_grants_again"
-                    ),
+                    "duration": stated,
                 },
             ),
         )

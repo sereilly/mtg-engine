@@ -2857,6 +2857,16 @@ def exile_until_leaves_or_untaps(
     return True, "resolved"
 
 
+#: How each permission duration reads in the log, so the line says what the
+#: card said rather than what the first card to print the sentence happened to
+#: say. Absent means an unbounded grant, which reads as nothing at all.
+_PERMISSION_DURATION_WORDS = {
+    "end_of_turn": " this turn",
+    "your_next_upkeep": " until their next upkeep",
+    "until_source_grants_again": " until it exiles another card",
+}
+
+
 @effect_handler("grant_cast_permission")
 def grant_cast_permission(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """A cast-or-play permission (CR 601.3) over cards in a named zone —
@@ -2884,7 +2894,8 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
         )
         game.log.append(
             f"{caster.name} may {payload.get('mode', 'cast')} "
-            f"{', '.join(card.name for card in cards)} from exile this turn"
+            f"{', '.join(card.name for card in cards)} from exile"
+            + _PERMISSION_DURATION_WORDS.get(duration, "")
         )
         return True, "resolved"
 

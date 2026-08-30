@@ -60,7 +60,8 @@ class CastPermission:
     card_types: tuple[str, ...] = ()
     free: bool = False
     exile_instead: bool = False
-    # "end_of_turn" is swept at cleanup; "until_source_grants_again" is retired
+    # "end_of_turn" is swept at cleanup; "your_next_upkeep" at the start of the
+    # granting seat's next upkeep step; "until_source_grants_again" is retired
     # by the next grant from the same permanent; None lasts until end of game
     # (CR 611.2a), bounded by the cards staying in the granted zone.
     duration: str | None = "end_of_turn"
@@ -215,6 +216,30 @@ def expire_end_of_turn(game) -> None:
         permission
         for permission in game.cast_permissions
         if permission.duration != "end_of_turn"
+    ]
+
+
+def expire_at_upkeep(game, player_index: int) -> None:
+    """"Until the beginning of your next upkeep, you may play that card."
+    (Elkin Bottle.)
+
+    Swept as that upkeep step *begins*, alongside the layer-6 grants carrying
+    the same printed duration, and before this turn's upkeep triggers run — one
+    of which may grant a fresh permission. Whose upkeep is the grant's own
+    ``player_index``, because CR 109.5 makes "your" the controller of the
+    ability that granted it.
+
+    A permission granted *during* an upkeep survives it by construction: the
+    sweep has already run by the time anything can be activated in that step,
+    so the next one it meets is the next upkeep, which is what "next" says.
+    """
+    game.cast_permissions[:] = [
+        permission
+        for permission in game.cast_permissions
+        if not (
+            permission.duration == "your_next_upkeep"
+            and permission.player_index == player_index
+        )
     ]
 
 
