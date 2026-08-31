@@ -53,6 +53,14 @@ class Pump:
     # size of one repetition, not the whole bonus: the delta is that number
     # times the count.
     per_each: "ObjectFilter | None" = None
+    # "…for each creature blocking it **beyond the first**" (Johtull Wurm, and
+    # the reminder text CR 702.23a gives rampage). The count is one less than
+    # the set's size, which is a property of the *count* and not of the objects
+    # in it — so it rides here beside the noun phrase it modifies rather than
+    # on the filter, where no matcher could answer it. A flag rather than a
+    # number: "beyond the first" is the only offset Magic prints on this
+    # clause, and a free integer would invite a lowering to invent one.
+    per_each_beyond_first: bool = False
 
 
 @dataclass(frozen=True)

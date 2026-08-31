@@ -14,11 +14,13 @@ from ...subject_filters import (OBJECT_ONLY_FILTER_KEYS,
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
+    _describe_several_targets,
     _describe_targets,
     _filter_payload,
     _is_source,
     _REST_OF_TURN,
     _is_target,
+    _names_several_targets,
     _restrictions_beyond,
     _targets_only,
 )
@@ -29,10 +31,6 @@ from ._events import (
 )
 
 
-# The restriction `grant_unblockable_to_low_power_target` hardcodes, in
-# engine/handlers/combat.py *and* again in engine/legality.py's target
-# enumerator. Written out here so the mismatch is checked rather than assumed.
-_UNBLOCKABLE_POWER_LIMIT = ast.Comparison("le", ast.Fixed(2))
 
 
 #: Trigger events whose fire site stamps the *blocked* creatures onto the
@@ -386,7 +384,19 @@ def _lower_cant_be(
                 node=node,
             )
         return (OracleInstruction("deny_regeneration_to_block_pair", "", {}),)
-    if not _is_target(node.subject):
+    # "**X target creatures** with power 2 or less can't be blocked this turn."
+    # (Runed Arch.) The one restriction whose handler resolves a list, so the
+    # several-target shape is admitted here and nowhere else — every other
+    # branch below reads one chosen permanent, and a list arriving at one of
+    # those would be collected by the picker and dropped by the handler.
+    several = (
+        node.action == "blocked"
+        and node.by is None
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.targeted
+        and _names_several_targets(node.subject)
+    )
+    if not (_is_target(node.subject) or several):
         raise LoweringError("no handler for restricting a non-targeted subject", node=node)
     assert isinstance(node.subject, ast.TargetSpec)
     filt = node.subject.filter
@@ -442,38 +452,33 @@ def _lower_cant_be(
                     "grant_cant_be_blocked_by_until_eot", "", payload
                 ),
             )
-        # The unrestricted printing — "Target creature can't be blocked this
-        # turn." (Teleport). There is nothing beyond the creature type for a
-        # handler to honour, so the target description *is* the whole payload
-        # and engine/targeting.py can raise the picker from it.
-        if filt == ast.ObjectFilter(card_types=("creature",)):
-            return (
-                OracleInstruction(
-                    "grant_unblockable_to_target", "", _targets_only(node.subject)
-                ),
-            )
-        # The trap: the handler's "power 2 or less" is a literal in its own
-        # source, not something it reads from the payload. A card reading
-        # "power 3 or less" would compile cleanly and get the wrong threshold,
-        # so the parsed comparison is checked against the hardcoded one.
-        if filt.power != _UNBLOCKABLE_POWER_LIMIT:
+        # "Target creature can't be blocked this turn." (Teleport) / "…with
+        # **power 2 or less**…" (Dwarven Warriors, Runed Arch) / "…**you
+        # control**…" (Goblin Sappers). One production and one handler: what
+        # differs between those printings is the noun phrase, which is payload
+        # the matcher already answers.
+        #
+        # It used to be two kinds, the second with "power 2 or less" written as
+        # a literal in its own handler *and* again in legality.py's enumerator —
+        # so a card printing another threshold, or any other narrowing, refused.
+        # The reason given was that a power comparison had no payload form;
+        # `ObjectFilter.to_payload` grew one, and the refusal outlived it.
+        #
+        # The whole noun phrase rides the payload and the handler re-tests it at
+        # resolution, so a narrowing is never merely *offered* correctly: CR
+        # 608.2b's re-check is what stops a creature that has grown past the
+        # bound between activation and resolution from being made unblockable.
+        described = _filter_payload(filt)
+        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
             raise LoweringError(
-                "grant_unblockable_to_low_power_target hardcodes 'power 2 or "
-                "less'; no handler implements another threshold",
-                node=node,
+                "the unblockable grant cannot test this noun phrase", node=node
             )
-        if filt != ast.ObjectFilter(card_types=("creature",), power=_UNBLOCKABLE_POWER_LIMIT):
-            raise LoweringError(
-                "grant_unblockable_to_low_power_target honours no further target "
-                "restriction",
-                node=node,
-            )
-        # Deliberately *not* described for engine/targeting.py. `ObjectFilter.
-        # to_payload` has no vocabulary for a power comparison, so the
-        # description would read "target creature" and the picker would offer
-        # creatures the ability cannot legally affect. legality.py keeps
-        # answering this one until the description vocabulary grows.
-        return (OracleInstruction("grant_unblockable_to_low_power_target", "", {}),)
+        payload = dict(described)
+        if several:
+            _describe_several_targets(payload, node.subject)
+        else:
+            _describe_targets(payload, node.subject)
+        return (OracleInstruction("grant_unblockable_to_target", "", payload),)
 
     raise LoweringError(f"no handler for a {node.action!r} restriction", node=node)
 

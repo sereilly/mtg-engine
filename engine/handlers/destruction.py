@@ -178,6 +178,22 @@ def destroy_creatures_in_combat_with_source(game: Game, instruction: OracleInstr
     return True, "resolved"
 
 
+def _stood_opposite(candidate: Permanent, other_id: int) -> bool:
+    """Was *candidate* on the other side of a block from ``other_id`` this turn?
+
+    CR 509.1a's relation read in both directions, off the pair of records
+    ``declare_blockers_step`` writes when a block is declared: a blocker names
+    the attackers it blocked, and an attacker names the blockers that blocked
+    it. Both live on the *candidate*, which is what lets the question be asked
+    after the creature on the other side has died.
+    """
+    return other_id in set(
+        candidate.metadata.get("blocked_attacker_ids_this_turn") or ()
+    ) or other_id in set(
+        candidate.metadata.get("blocked_by_blocker_ids_this_turn") or ()
+    )
+
+
 @effect_handler("destroy_all_matching")
 def destroy_all_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Destroy all Equipment attached to that creature." (Turn to Slag.)
@@ -204,6 +220,7 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
         if key not in (
             "attached_to", "bypass_regeneration", "targets",
             "blocked_by_bound_object", "blocked_by_target_object",
+            "in_combat_with_bound_object",
         )
     }
     # "…all creatures that were blocked by **that creature** this turn."
@@ -228,6 +245,29 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             )
             return True, "resolved"
         blocked_ids = set(bound.metadata.get("blocked_attacker_ids_this_turn") or ())
+    # "…all creatures that **blocked or were blocked by** it this turn."
+    # (Venomous Breath.) The two-way reading of the same relation, and unlike
+    # the one-way branch above it does not need the bound creature to still be
+    # there: both halves are answered from a *candidate's* own metadata. That
+    # is the only reading that works when the creature the spell named died in
+    # the very combat the sentence is about — the ordinary way this card is
+    # played, not an edge case.
+    #
+    # Its own key rather than a widening of `blocked_ids`: the two phrases name
+    # different sets, and one field meaning either would leave the sweep
+    # guessing which the card printed.
+    in_combat_with_id: int | None = None
+    if instruction.payload.get("in_combat_with_bound_object"):
+        in_combat_with_id = (context.trigger_context or {}).get("bound_permanent_id")
+        if in_combat_with_id is None:
+            # No binding at all — nothing on the board can stand opposite an
+            # object the ability never named. Ending here rather than falling
+            # through, for the reason the branch above ends: a dropped relation
+            # is not a sweep that does less, it is one that takes the board.
+            game.log.append(
+                f"{context.card.name}: the creature whose combat it names is gone"
+            )
+            return True, "resolved"
     # "…all creatures that were blocked by **target Wall** this turn." (Glyph
     # of Reincarnation.) The same record read off a different referent: the
     # blocker is this spell's own target. Resolved by id, never by index — the
@@ -299,6 +339,10 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
         )
         and (host is None or perm.metadata.get("attached_to") is host)
         and (blocked_ids is None or perm.permanent_id in blocked_ids)
+        and (
+            in_combat_with_id is None
+            or _stood_opposite(perm, in_combat_with_id)
+        )
     ]
     if not matched:
         context.results["destroyed_this_way"] = 0

@@ -176,12 +176,14 @@ def targeting_instruction(instruction):
     #
     # An instruction that carries a `targets` description is one that names a
     # target, whatever its kind — a payload *shape*, not a card list. The set
-    # below stays because five kinds narrow without one (Stone Giant's
+    # below stays because four kinds narrow without one (Stone Giant's
     # "toughness less than this creature's power", Old Man of the Sea's power
     # comparison, Sorceress Queen's "other than this creature", Nettling Imp's
-    # non-Wall, Dwarven Warriors' power bound): each is a relation to the
-    # source rather than a description of the target, so it has a branch of its
-    # own below and nothing in `targets` to find it by.
+    # non-Wall): each is a relation to the *source* rather than a description of
+    # the target, so it has a branch of its own below and nothing in `targets`
+    # to find it by. Dwarven Warriors' "power 2 or less" left the list when it
+    # stopped being a relation and became a filter payload — a bound printed on
+    # the card is a description of the target like any other.
     if instruction.kind in _FILTERABLE_ABILITY_KINDS:
         return instruction
     if isinstance(instruction.payload.get("targets"), dict):
@@ -199,7 +201,6 @@ _FILTERABLE_ABILITY_KINDS = {
     "grant_regeneration_to_target_creature",
     "mark_non_wall_target_to_attack",
     "grant_flying_and_delayed_destruction",
-    "grant_unblockable_to_low_power_target",
     "set_base_pt_target_until_eot",
     "set_source_base_toughness_from_target_power",
     "steal_creature_while_tapped_and_weaker",
@@ -1278,11 +1279,6 @@ class LegalityMixin:
             from .handlers.combat import forced_attacker_is_legal
 
             return forced_attacker_is_legal(self, perm)
-        if instruction.kind == "grant_unblockable_to_low_power_target":
-            # Dwarven Warriors: "Target creature with power 2 or less can't be
-            # blocked this turn." Only creatures with effective power ≤ 2 are legal,
-            # so the UI highlights exactly those.
-            return perm.is_creature and perm.effective_power <= 2
         if instruction.kind == "grant_flying_and_delayed_destruction":
             # Stone Giant: "Target creature you control with toughness less than
             # this creature's power." Only the activating player's creatures with

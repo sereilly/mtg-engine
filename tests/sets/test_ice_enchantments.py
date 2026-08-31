@@ -896,3 +896,94 @@ def test_mudslide_reads_the_complement_of_the_same_phrase(set_pool):
     assert restriction.blocked == {
         "type_filter": "creature", "without_keywords": ["flying"],
     }
+
+
+# --- W1G2: combat relations and end of combat ---
+def _w1g2_earthlore(set_pool):
+    """Earthlore on a Forest, with an attacker and a blocker in combat."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    forest = _nosick(Permanent(card=pool["Snow-Covered Forest"]))
+    earthlore = _nosick(Permanent(card=pool["Earthlore"]))
+    blocker = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    attacker = _nosick(Permanent(card=pool["Tor Giant"]))
+    p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
+    p2 = PlayerState(name="P2", battlefield=[forest, earthlore, blocker], life=20)
+    game = Game(players=[p1, p2])
+    attach_aura(earthlore, forest)
+
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], 1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert game.declare_blockers(1, {2: 0})[0]
+    return game, forest, earthlore, blocker
+
+
+def test_earthlore_compiles_its_ability_with_the_cost_it_prints(set_pool):
+    """"Tap enchanted land: Target blocking creature gets +1/+2 until end of
+    turn. Activate only if enchanted land is untapped."
+
+    Both riders are the point. The cost was read as *nothing* — the ability
+    would have been free and repeatable — and the restriction had no row, so
+    the effect clause carrying it refused and the Aura was unsupported.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Earthlore"])
+
+    assert program.supported
+    (ability,) = program.activated_abilities
+    assert ability.cost.tap_attached is True
+    assert ability.cost.requires_tap is False, "the {T} symbol taps the Aura"
+    assert ability.instruction.kind == "pump_target_creature_until_eot"
+
+
+def test_earthlore_taps_the_land_it_enchants_to_pay(set_pool):
+    game, forest, earthlore, blocker = _w1g2_earthlore(set_pool)
+
+    result = game.activate_permanent_ability(
+        1, "Earthlore",
+        target_permanent_ids=[blocker.permanent_id],
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert forest.tapped, "the enchanted land pays the cost"
+    assert not earthlore.tapped, "the Aura itself is not what is tapped"
+    assert (blocker.effective_power, blocker.effective_toughness) == (3, 4)
+
+
+def test_earthlore_cannot_be_activated_with_the_land_tapped(set_pool):
+    """The printed restriction, enforced. Unenforced it is not a dead ability
+    but one that works more often than the card allows."""
+    game, forest, earthlore, blocker = _w1g2_earthlore(set_pool)
+    forest.tapped = True
+    before = (blocker.effective_power, blocker.effective_toughness)
+
+    result = game.activate_permanent_ability(
+        1, "Earthlore", target_permanent_ids=[blocker.permanent_id],
+    )
+    game._settle()
+
+    assert not result.supported
+    assert (blocker.effective_power, blocker.effective_toughness) == before
+
+
+def test_earthlore_only_offers_a_blocking_creature(set_pool):
+    """"Target **blocking** creature" — the attacker is not a legal target."""
+    from engine.targeting import derive_activation_spec
+
+    game, forest, earthlore, blocker = _w1g2_earthlore(set_pool)
+    (ability,) = compile_card_oracle(earthlore.card).activated_abilities
+    offered = game._enumerate_targets(
+        1, earthlore.card, derive_activation_spec(ability), for_cast=False,
+        ability_instruction=ability.instruction,
+        source_permanent=earthlore, ability_source=earthlore,
+    )
+    named = {
+        game.players[t["seat"]].battlefield[t["index"]].card.name
+        for t in offered if t["kind"] == "permanent"
+    }
+
+    assert named == {"Balduvian Bears"}, named
+# --- end W1G2 ---

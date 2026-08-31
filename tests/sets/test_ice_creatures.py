@@ -1646,3 +1646,273 @@ def test_w1g3_a_single_symbol_choice_also_lands_in_the_restricted_bucket(set_poo
     assert game.players[0].restricted_mana[key] == {"B": 1}
 
 # --- end W1G3 ---
+# --- W1G2: combat relations and end of combat ---
+def _w1g2_combat(
+    game: Game, attackers: list[int], blocks: dict[int, int | list[int]] | None = None
+) -> None:
+    """Put seat 0's attackers and seat 1's blockers in, without a turn.
+
+    *blocks* is keyed by the **blocker's** slot, as `declare_blockers` takes it.
+    """
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, msg = game.declare_attackers(0, attackers, 1)
+    assert ok, msg
+    game._set_phase_and_step("combat", "declare_blockers")
+    ok, msg = game.declare_blockers(1, blocks or {})
+    assert ok, msg
+
+
+def test_kjeldoran_frostbeast_compiles_to_the_combat_relation_sweep(set_pool):
+    """"At end of combat, destroy all creatures blocking or blocked by this
+    creature." A production, not a card hook: Abu Ja'far prints the same
+    sentence under a dies trigger and both compile to one instruction."""
+    program = compile_card_oracle(set_pool("ICE")["Kjeldoran Frostbeast"])
+
+    assert program.supported
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "end_of_combat"
+    assert trigger.instruction.kind == "destroy_creatures_in_combat_with_source"
+    # Abu Ja'far prints "They can't be regenerated"; the Frostbeast does not.
+    assert "bypass_regeneration" not in trigger.instruction.payload
+
+
+def test_kjeldoran_frostbeast_destroys_its_blocker_at_end_of_combat(set_pool):
+    """The blocker survives combat damage (a 2/4 beast against a 3/3) and is
+    destroyed anyway when the end of combat step comes."""
+    pool = set_pool("ICE")
+    beast = _nosick(Permanent(card=pool["Kjeldoran Frostbeast"]))
+    blocker = _nosick(Permanent(card=pool["Tor Giant"]))
+    bystander = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[beast], life=20)
+    p2 = PlayerState(name="P2", battlefield=[blocker, bystander], life=20)
+    game = Game(players=[p1, p2])
+
+    _w1g2_combat(game, [0], {0: [0]})
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(0)
+    game._settle()
+    assert any(p is blocker for p in p2.battlefield), "3 damage does not kill a 3/3"
+
+    game.end_combat(step_already_started=False)
+    game._settle()
+
+    assert not any(p is blocker for p in p2.battlefield)
+    assert any(c.name == "Tor Giant" for c in p2.graveyard)
+    assert any(p is bystander for p in p2.battlefield), "an uninvolved creature lives"
+
+
+def test_kjeldoran_frostbeast_destroys_the_creature_it_blocked(set_pool):
+    """The other half of "blocking or blocked by" — the beast as the blocker."""
+    pool = set_pool("ICE")
+    beast = _nosick(Permanent(card=pool["Kjeldoran Frostbeast"]))
+    attacker = _nosick(Permanent(card=pool["Tor Giant"]))
+    p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
+    p2 = PlayerState(name="P2", battlefield=[beast], life=20)
+    game = Game(players=[p1, p2])
+
+    _w1g2_combat(game, [0], {0: [0]})
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(0)
+    game._settle()
+
+    game.end_combat(step_already_started=False)
+    game._settle()
+
+    assert not any(p is attacker for p in p1.battlefield)
+    assert any(p is beast for p in p2.battlefield), "the beast itself survives"
+
+
+def test_kjeldoran_frostbeast_out_of_combat_destroys_nothing(set_pool):
+    """No relation, no victims — the sweep must not widen to the board."""
+    pool = set_pool("ICE")
+    beast = _nosick(Permanent(card=pool["Kjeldoran Frostbeast"]))
+    bystander = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[beast], life=20)
+    p2 = PlayerState(name="P2", battlefield=[bystander], life=20)
+    game = Game(players=[p1, p2])
+    game.active_player_index = 0
+
+    game.end_combat(step_already_started=False)
+    game._settle()
+
+    assert any(p is beast for p in p1.battlefield)
+    assert any(p is bystander for p in p2.battlefield)
+
+
+def test_sibilant_spirit_offers_the_draw_to_the_player_being_attacked(set_pool):
+    """"Whenever this creature attacks, defending player may draw a card."
+
+    The offer is made to the seat the *combat* named, not to the ability's
+    controller — the whole point of the card, and the direction a wrong seat
+    would be wrong in.
+    """
+    pool = set_pool("ICE")
+    spirit = _nosick(Permanent(card=pool["Sibilant Spirit"]))
+    p1 = PlayerState(name="P1", battlefield=[spirit], life=20)
+    p2 = PlayerState(
+        name="P2", life=20,
+        library=[pool["Balduvian Bears"], pool["Tor Giant"]],
+    )
+    game = Game(players=[p1, p2])
+    p1.library = [pool["Brown Ouphe"]]
+
+    program = compile_card_oracle(spirit.card)
+    (trigger,) = program.triggered_abilities
+    assert trigger.instruction.kind == "may"
+    assert trigger.instruction.payload["actor"] == "defending_player"
+
+    _w1g2_combat(game, [0], {})
+    game._settle()
+
+    (offer,) = game.pending_optional_pays
+    assert offer["card_name"] == "Sibilant Spirit"
+    assert game.players[offer["player_index"]] is p2
+
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+
+    assert len(p2.hand) == 1, "the defender drew"
+    assert p1.hand == [], "the attacker's controller did not"
+
+
+def test_sibilant_spirit_refuses_the_phrase_under_an_event_with_no_defender(set_pool):
+    """"Defending player" is a fact about a combat. Under a trigger that
+    records none the offer would be made to nobody, which is an optional
+    effect that silently never happens — so the line refuses instead."""
+    from engine.grammar import compile_line
+
+    attacks = compile_line(
+        "Whenever this creature attacks, defending player may draw a card."
+    )
+    assert attacks.usable
+
+    upkeep = compile_line(
+        "At the beginning of your upkeep, defending player may draw a card."
+    )
+    assert not upkeep.lowered
+    assert "defending player" in (upkeep.lowering_error or ""), upkeep.lowering_error
+
+
+def test_johtull_wurm_shrinks_per_blocker_beyond_the_first(set_pool):
+    """"Whenever this creature becomes blocked, it gets -2/-1 until end of turn
+    for each creature blocking it beyond the first." Negative rampage, and the
+    count is CR 702.23a's: the *first* blocker is free."""
+    pool = set_pool("ICE")
+    wurm = _nosick(Permanent(card=pool["Johtull Wurm"]))
+    blockers = [_nosick(Permanent(card=pool["Glacial Wall"])) for _ in range(3)]
+    p1 = PlayerState(name="P1", battlefield=[wurm], life=20)
+    p2 = PlayerState(name="P2", battlefield=blockers, life=20)
+    game = Game(players=[p1, p2])
+    base_power, base_toughness = wurm.effective_power, wurm.effective_toughness
+
+    _w1g2_combat(game, [0], {0: 0, 1: 0, 2: 0})
+    game._settle()
+
+    assert wurm.effective_power == base_power - 4, "two blockers beyond the first"
+    assert wurm.effective_toughness == base_toughness - 2
+
+
+def test_johtull_wurm_is_unchanged_by_a_single_blocker(set_pool):
+    """One blocker is none beyond the first, so the count is zero rather than
+    negative — the offset is floored, not subtracted blindly."""
+    pool = set_pool("ICE")
+    wurm = _nosick(Permanent(card=pool["Johtull Wurm"]))
+    wall = _nosick(Permanent(card=pool["Glacial Wall"]))
+    p1 = PlayerState(name="P1", battlefield=[wurm], life=20)
+    p2 = PlayerState(name="P2", battlefield=[wall], life=20)
+    game = Game(players=[p1, p2])
+    base_power, base_toughness = wurm.effective_power, wurm.effective_toughness
+
+    _w1g2_combat(game, [0], {0: [0]})
+    game._settle()
+
+    assert (wurm.effective_power, wurm.effective_toughness) == (
+        base_power, base_toughness
+    )
+
+
+def test_a_for_each_count_refuses_a_relation_it_cannot_take(set_pool):
+    """The bug this round found on the way past.
+
+    ``count_spec`` built its payload straight off ``to_payload``, which emits
+    nothing for a relative narrowing — so "for each creature blocking it"
+    reduced to "for each creature" and counted the whole of its owner's
+    battlefield. A count that is too large is a pump that is too big, so a
+    relation with no payload form and no evaluator now refuses the sentence."""
+    from engine.grammar import compile_line
+
+    reads = compile_line(
+        "This creature gets -1/-1 until end of turn for each creature blocking it."
+    )
+    assert reads.lowered
+    assert reads.instructions[0].payload["x_from_count"]["blocking_source"] is True
+
+    refuses = compile_line(
+        "This creature gets -1/-1 until end of turn for each creature that "
+        "dealt damage to it this turn."
+    )
+    assert not refuses.lowered
+    assert "count cannot test" in (refuses.lowering_error or ""), refuses.lowering_error
+
+
+def test_marton_stromgald_pumps_the_team_by_the_number_of_attackers(set_pool):
+    """"Whenever Márton Stromgald attacks, other attacking creatures get +1/+1
+    until end of turn for each attacking creature other than Márton Stromgald."
+
+    Three other attackers: each of them gets +3/+3, and Márton gets nothing.
+    """
+    pool = set_pool("ICE")
+    marton = _nosick(Permanent(card=pool["Márton Stromgald"]))
+    friends = [_nosick(Permanent(card=pool["Balduvian Bears"])) for _ in range(3)]
+    bench = _nosick(Permanent(card=pool["Tor Giant"]))
+    p1 = PlayerState(name="P1", battlefield=[marton, *friends, bench], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    marton_power = marton.effective_power
+
+    _w1g2_combat(game, [0, 1, 2, 3])
+    game._settle()
+
+    for friend in friends:
+        assert (friend.effective_power, friend.effective_toughness) == (5, 5), (
+            "2/2 plus +3/+3, one for each other attacker"
+        )
+    assert marton.effective_power == marton_power, "\"other\" excludes the source"
+    assert (bench.effective_power, bench.effective_toughness) == (3, 3), (
+        "a creature that stayed home is not attacking"
+    )
+
+
+def test_marton_stromgald_alone_pumps_nobody(set_pool):
+    """Attacking by himself, the count is zero and there is no team to pump."""
+    pool = set_pool("ICE")
+    marton = _nosick(Permanent(card=pool["Márton Stromgald"]))
+    p1 = PlayerState(name="P1", battlefield=[marton], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    before = (marton.effective_power, marton.effective_toughness)
+
+    _w1g2_combat(game, [0])
+    game._settle()
+
+    assert (marton.effective_power, marton.effective_toughness) == before
+
+
+def test_marton_stromgald_pumps_the_blockers_on_his_side(set_pool):
+    """The mirrored line, and the mirror is the whole point: the same sentence
+    with "blocks" in it, so it is the same production and the same handler."""
+    pool = set_pool("ICE")
+    marton = _nosick(Permanent(card=pool["Márton Stromgald"]))
+    friends = [_nosick(Permanent(card=pool["Balduvian Bears"])) for _ in range(2)]
+    attackers = [_nosick(Permanent(card=pool["Tor Giant"])) for _ in range(3)]
+    p1 = PlayerState(name="P1", battlefield=attackers, life=20)
+    p2 = PlayerState(name="P2", battlefield=[marton, *friends], life=20)
+    game = Game(players=[p1, p2])
+
+    _w1g2_combat(game, [0, 1, 2], {0: 0, 1: 1, 2: 2})
+    game._settle()
+
+    for friend in friends:
+        assert (friend.effective_power, friend.effective_toughness) == (4, 4), (
+            "2/2 plus +2/+2, one for each other blocker"
+        )
+# --- end W1G2 ---

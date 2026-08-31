@@ -25,11 +25,11 @@ import dataclasses
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ._amounts import count_spec
 from ._common import (
     _mentions_x,
     _restrictions_beyond,
     _stamp_x_from_count,
-    count_spec,
 )
 from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
 

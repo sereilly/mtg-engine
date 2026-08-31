@@ -170,6 +170,7 @@ class _FilterDraft:
     blocking_target: ast.ObjectFilter | None = None
     blocking_bound_target: bool = False
     blocked_by_bound_object: bool = False
+    in_combat_with_bound_object: bool = False
     blocked_by_target_object: ast.ObjectFilter | None = None
     blocked_by_source: bool = False
     attacking_you: bool = False
@@ -649,6 +650,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         blocking_target=d.blocking_target,
         blocking_bound_target=d.blocking_bound_target,
         blocked_by_bound_object=d.blocked_by_bound_object,
+        in_combat_with_bound_object=d.in_combat_with_bound_object,
         blocked_by_target_object=d.blocked_by_target_object,
         blocked_by_source=d.blocked_by_source,
         attacking_you=d.attacking_you,

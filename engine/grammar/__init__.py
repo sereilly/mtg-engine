@@ -80,11 +80,13 @@ from .stream import TokenStream
 #              takes no count, so the production is singular by construction
 #              ("two extra turns" fails to parse) and a non-controller taker is
 #              refused.
-#   evasion  — grant_unblockable_to_low_power_target hardcodes "power 2 or
+#   evasion  — grant_unblockable_to_low_power_target hardcoded "power 2 or
 #              less" in its own source *and* again in legality.py's target
-#              enumerator. Lowering checks the parsed comparison against that
-#              literal, so a future "power 3 or less" refuses instead of
-#              compiling cleanly onto the wrong threshold.
+#              enumerator, so lowering checked the parsed comparison against
+#              that literal and refused anything else. The bound is payload
+#              now and the kind is gone: one handler reads the whole noun
+#              phrase through `subject_matches`, which is what let Runed Arch's
+#              X targets and Goblin Sappers' "you control" print the template.
 #
 # Phase 5 also added tokens. create_token already builds the whole token card
 # from its payload (engine/tokens.py), so nothing about a token-making card is

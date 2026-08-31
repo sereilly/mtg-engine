@@ -580,3 +580,151 @@ def test_w1g3_spoils_of_evil_is_declined_and_says_which_pieces_are_missing(set_p
     )
     assert not theirs.parsed
 # --- end W1G3 ---
+# --- W1G2: combat relations and end of combat ---
+def _w1g2_venomous_board(set_pool, target_seat: int, target_index: int):
+    """P1 attacks with two; P2 has a blocker. Venomous Breath is cast by P2."""
+    pool = set_pool("ICE")
+    first = _nosick(Permanent(card=pool["Tor Giant"]))
+    second = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    blocker = _nosick(Permanent(card=pool["Glacial Wall"]))
+    p1 = PlayerState(name="P1", battlefield=[first, second], life=20)
+    p2 = PlayerState(
+        name="P2", battlefield=[blocker], life=20,
+        hand=[pool["Venomous Breath"]],
+    )
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(
+        1, "Venomous Breath",
+        target_player_index=target_seat, target_permanent_index=target_index,
+    )
+    assert result.supported, result.details
+    game._settle()
+    return game, p1, p2, first, second, blocker
+
+
+def _w1g2_one_combat(game: Game, attackers: list[int], blocks: dict[int, int]) -> None:
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, msg = game.declare_attackers(0, attackers)
+    assert ok, msg
+    game.advance_combat_phase()  # declare_blockers
+    ok, msg = game.declare_blockers(1, blocks)
+    assert ok, msg
+    game.advance_combat_phase()  # combat damage
+    game.end_combat(step_already_started=True)
+    game._settle()
+
+
+def test_venomous_breath_arms_a_two_way_relation_not_a_board_wipe(set_pool):
+    """"Destroy all creatures that blocked or were blocked by it this turn."
+
+    The relation is the whole sentence: dropped, the delayed ability would
+    destroy every creature on the battlefield.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Venomous Breath"])
+
+    assert program.supported
+    steps = program.instructions[0].payload["steps"]
+    assert steps[0].kind == "choose_target_permanent"
+    delayed = steps[1].payload
+    assert delayed["event"] == "next_end_of_combat"
+    assert delayed["binds_target"] is True
+    assert delayed["instruction"].kind == "destroy_all_matching"
+    assert delayed["instruction"].payload["in_combat_with_bound_object"] is True
+    # Not the one-way key Glyph of Doom carries — the sets differ.
+    assert "blocked_by_bound_object" not in delayed["instruction"].payload
+
+
+def test_venomous_breath_kills_the_creatures_that_blocked_its_target(set_pool):
+    """The named creature is an attacker, so the sentence names its blockers."""
+    game, p1, p2, first, _second, blocker = _w1g2_venomous_board(set_pool, 0, 0)
+
+    _w1g2_one_combat(game, [0, 1], {0: 0})
+
+    assert not any(p is blocker for p in p2.battlefield)
+    assert any(c.name == "Glacial Wall" for c in p2.graveyard)
+    assert any(p is first for p in p1.battlefield), (
+        "the named creature itself stood opposite nobody, so it is not swept"
+    )
+
+
+def test_venomous_breath_spares_the_creatures_that_never_met_its_target(set_pool):
+    """The other attacker was in the same combat and is not in the relation."""
+    game, p1, _p2, _first, second, _blocker = _w1g2_venomous_board(set_pool, 0, 0)
+
+    _w1g2_one_combat(game, [0, 1], {0: 0})
+
+    assert any(p is second for p in p1.battlefield), "an unblocked attacker lives"
+
+
+def test_venomous_breath_reads_the_relation_after_its_target_has_died(set_pool):
+    """The named creature — an attacker — dies in the very combat the sentence
+    is about, and its blocker is still destroyed."""
+    pool = set_pool("ICE")
+    doomed = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    bystander = _nosick(Permanent(card=pool["Brown Ouphe"]))
+    killer = _nosick(Permanent(card=pool["Tor Giant"]))
+    p1 = PlayerState(name="P1", battlefield=[doomed, bystander], life=20)
+    p2 = PlayerState(
+        name="P2", battlefield=[killer], life=20, hand=[pool["Venomous Breath"]],
+    )
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(
+        1, "Venomous Breath", target_player_index=0, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    _w1g2_one_combat(game, [0, 1], {0: 0})
+
+    assert not any(p is doomed for p in p1.battlefield), "3 damage kills the 2/2"
+    assert not any(p is killer for p in p2.battlefield), (
+        "the blocker is destroyed even though what it blocked is already gone"
+    )
+    assert any(p is bystander for p in p1.battlefield)
+
+
+def test_venomous_breath_names_the_attackers_a_dead_blocker_blocked(set_pool):
+    """The other half of the relation, read after the bound creature is gone.
+
+    "Creatures that were blocked by it" is a record kept on *it* — which by end
+    of combat is a card in a graveyard, since a blocker chump-blocking is the
+    ordinary way this card is played. The block is therefore written from both
+    ends when it is declared, and this sweep reads the attacker's copy.
+    """
+    pool = set_pool("ICE")
+    attacker = _nosick(Permanent(card=pool["Tor Giant"]))
+    bystander = _nosick(Permanent(card=pool["Brown Ouphe"]))
+    chump = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[attacker, bystander], life=20)
+    p2 = PlayerState(
+        name="P2", battlefield=[chump], life=20, hand=[pool["Venomous Breath"]],
+    )
+    game = Game(players=[p1, p2])
+    result = game.cast_from_hand(
+        1, "Venomous Breath", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    _w1g2_one_combat(game, [0, 1], {0: 0})
+
+    assert not any(p is chump for p in p2.battlefield), "3 damage kills the 2/2"
+    assert not any(p is attacker for p in p1.battlefield), (
+        "the creature the dead blocker blocked is still named by the sweep"
+    )
+    assert any(p is bystander for p in p1.battlefield)
+
+
+def test_venomous_breath_out_of_combat_destroys_nothing(set_pool):
+    """No block, no relation — and above all no board wipe."""
+    game, p1, p2, first, second, blocker = _w1g2_venomous_board(set_pool, 0, 0)
+
+    _w1g2_one_combat(game, [0, 1], {})
+
+    assert any(p is blocker for p in p2.battlefield)
+    assert any(p is first for p in p1.battlefield)
+    assert any(p is second for p in p1.battlefield)
+# --- end W1G2 ---

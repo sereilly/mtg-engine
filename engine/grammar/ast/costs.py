@@ -108,6 +108,22 @@ class TapPermanentsCost:
 
 
 @dataclass(frozen=True)
+class TapAttachedCost:
+    """"Tap enchanted land" (Earthlore).
+
+    The permanent this Aura or Equipment is *attached to*, which neither of its
+    two neighbours can say: `TapSelf` is the `{T}` symbol and taps the
+    permanent the ability is printed on, and `TapPermanentsCost` names a class
+    the payer picks from. Here nothing is picked — the attachment record is the
+    whole answer — so the node carries no filter and no count.
+
+    CR 301.5f puts "equipped" and "enchanted" on the same footing, so the word
+    is not carried either: what is tapped is the host, whichever noun the card
+    printed.
+    """
+
+
+@dataclass(frozen=True)
 class PayLifeCost:
     """``Pay 4 life`` in front of a colon — an activation cost (CR 119.4).
 

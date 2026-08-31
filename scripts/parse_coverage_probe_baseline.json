@@ -1,5 +1,12 @@
 [
  {
+  "card": "Abu Ja'far",
+  "clause": "destroy all creatures blocking or blocked by it. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Acid Rain",
   "clause": "destroy all forests",
   "ignored": [
@@ -415,13 +422,6 @@
   "clause": "you may pay {1}{g}. if you do, this creature gains first strike until end of turn. otherwise, each creature blocking or blocked by this creature gains first strike until end of turn",
   "ignored": [
    "creature"
-  ]
- },
- {
-  "card": "Subira, Tulzidi Caravanner",
-  "clause": "another target creature with power 2 or less can't be blocked this turn",
-  "ignored": [
-   "another"
   ]
  },
  {

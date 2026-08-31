@@ -1083,30 +1083,33 @@ def test_deny_regeneration_matches_the_legacy_payload():
     ) == [("deny_regeneration_to_target", {})]
 
 
-def test_unblockable_matches_the_legacy_payload():
-    """Dwarven Warriors' printed line."""
+def test_unblockable_carries_its_printed_power_bound():
+    """Dwarven Warriors' printed line.
+
+    The bound is payload. It used to be a literal in the handler's own source
+    and again in legality.py's enumerator, with a kind of its own
+    (``grant_unblockable_to_low_power_target``) and a lowering that compared
+    the parsed comparison against the literal — so every other threshold, and
+    every other narrowing, refused."""
     assert _instructions(
         "{T}: Target creature with power 2 or less can't be blocked this turn.",
         "Dwarven Warriors",
-    ) == [("grant_unblockable_to_low_power_target", {})]
+    ) == [(
+        "grant_unblockable_to_target",
+        {"type_filter": "creature", "power": {"op": "le", "value": 2}},
+    )]
 
 
-def test_a_different_power_threshold_is_refused():
-    """The trap this production exists to survive.
-    ``grant_unblockable_to_low_power_target`` hardcodes "power 2 or less" as a
-    literal in engine/handlers/combat.py, and again in legality.py's target
-    enumerator — the payload carries no threshold at all. A card reading
-    "power 3 or less" would therefore compile cleanly and silently get the ≤2
-    behaviour, so lowering compares the parsed comparison against the literal
-    and refuses anything else."""
-    result = compile_line(
+def test_a_different_power_threshold_now_rides_the_payload():
+    """The trap the old production existed to survive, gone rather than
+    guarded: a card reading "power 3 or less" carries 3."""
+    assert _instructions(
         "{T}: Target creature with power 3 or less can't be blocked this turn.",
-        card_name="Test",
-    )
-
-    assert result.parsed, "the line is grammatical; the refusal belongs at lowering"
-    assert not result.lowered
-    assert "power 2 or less" in result.failure_reason
+        "Test",
+    ) == [(
+        "grant_unblockable_to_target",
+        {"type_filter": "creature", "power": {"op": "le", "value": 3}},
+    )]
 
 
 def test_a_narrowed_restriction_target_is_refused():
@@ -1197,17 +1200,19 @@ def test_destroy_keeps_its_inline_no_regeneration_clause(line, card_name, kind):
     assert payload["bypass_regeneration"] is True
 
 
-def test_the_unblockable_target_is_deliberately_not_described():
-    """``ObjectFilter.to_payload`` has no vocabulary for a power comparison, so
-    a `targets` description here would read "target creature" and the picker
-    would offer creatures the ability cannot legally affect. Emitting nothing
-    keeps legality.py answering — the same call the Lace cycle makes."""
+def test_the_unblockable_target_describes_its_power_bound():
+    """This used to emit no description at all, on the grounds that
+    ``ObjectFilter.to_payload`` had no vocabulary for a power comparison — so a
+    `targets` description would have read "target creature" and the picker
+    would have offered creatures the ability could not affect. The vocabulary
+    exists now, and the bound reaches both the picker and the handler through
+    one description rather than through a literal written into each."""
     (_kind, payload), = _full_payloads(
         "{T}: Target creature with power 2 or less can't be blocked this turn.",
         "Dwarven Warriors",
     )
 
-    assert "targets" not in payload
+    assert payload["targets"]["filter"]["power"] == {"op": "le", "value": 2}
 
 
 # ---------------------------------------------------------------------------

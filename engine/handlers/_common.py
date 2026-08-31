@@ -277,6 +277,12 @@ def _scaled(total: int, spec: dict) -> int:
     without knowing it can: a factor honoured at one of the six return sites and
     forgotten at the other five is the dropped-rider bug with an arithmetic face.
     """
+    # "…for each creature blocking it **beyond the first**" (Johtull Wurm; the
+    # same words CR 702.23a gives rampage). Discounted before the multiplier,
+    # because the phrase narrows *the set being counted* and the multiplier
+    # sizes one repetition of it — and floored at zero, because a single
+    # blocker means no repetitions rather than a negative one.
+    total = max(0, total + int(spec.get("offset", 0) or 0))
     multiplier = int(spec.get("multiplier", 1) or 1)
     total = total * multiplier
     rounding = spec.get("half")
@@ -352,6 +358,23 @@ def evaluate_count(
     # nothing about who controls it. A spec carrying the key with no source to
     # resolve it counts nothing, and the lowering refuses every referent but
     # this one so that cannot arrive from a card.
+    # "…for each creature **blocking it**" (Johtull Wurm). A relation to one
+    # named permanent rather than a property of each creature counted, so it is
+    # resolved here beside `attached_to` and for that key's reason — and, like
+    # it, it settles which pile is read: a blocker sits on the *defending*
+    # player's battlefield, which the owner scope would have got wrong.
+    # `creatures_blocking` is the same reader the damage step uses, so
+    # band-propagated blocks (CR 702.22h) are counted once and not twice.
+    if spec.get("blocking_source"):
+        if source is None:
+            return 0
+        return _scaled(
+            len([
+                blocker for blocker in game.creatures_blocking(source)
+                if permanent_matches_filter(blocker, filt)
+            ]),
+            spec,
+        )
     attached_to = spec.get("attached_to")
     if attached_to is not None:
         if attached_to != "source" or source is None:

@@ -202,6 +202,17 @@ class ActivatedAbilityCost:
     # (CR 606.5), so it cannot double as the "absent" value.
     loyalty: int | None = None
     loyalty_x_sign: int | None = None
+    #: Earthlore: "**Tap enchanted land**: Target blocking creature gets +1/+2
+    #: until end of turn." An Aura whose cost taps the permanent it is attached
+    #: to — the host, never the Aura itself, which is what ``requires_tap``'s
+    #: ``{T}`` means and why this is a separate field rather than that flag.
+    #: A pre-symbol templating of the same payment: nothing else can pay it, so
+    #: there is no picker and no filter, only the attachment record.
+    #:
+    #: Last in the field order deliberately: ``parse_activated_ability_cost``
+    #: builds this with six positional arguments, so a field inserted among
+    #: them silently rebinds one of the six.
+    tap_attached: bool = False
 
     @property
     def is_loyalty(self) -> bool:

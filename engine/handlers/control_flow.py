@@ -829,12 +829,17 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     return True, "resolved"
 
 
-#: The actors that name a *set* of seats. Only these rebind ``context.target``
-#: below: a single-seat offer's target is whatever the spell or ability already
-#: chose, and overwriting it with the offered player would point every "target"
-#: in the accept branch at the wrong object (Niambi's bounce, Tolarian Kraken's
-#: reflexive tap).
-_EACH_ACTORS = frozenset({"each_player", "each_opponent"})
+#: The actors whose offered seat is **not** the one the resolution already
+#: holds. Only these rebind ``context.target`` below: an offer to "you" or to
+#: "that player" is made to a seat the spell or ability already chose, and
+#: overwriting it would point every "target" in the accept branch at the wrong
+#: object (Niambi's bounce, Tolarian Kraken's reflexive tap).
+#:
+#: "Defending player" is one seat and still belongs here, which is what the set
+#: is actually about: CR 506.2 makes it somebody the *combat* named, so a bare
+#: imperative inside the offer ("defending player may **draw a card**",
+#: Sibilant Spirit) means that seat and not the attacker's controller.
+_EACH_ACTORS = frozenset({"each_player", "each_opponent", "defending_player"})
 
 
 def _offered_seats(
@@ -884,6 +889,18 @@ def _offered_seats(
             return []
         seat = game.controller_index_of(perm)
         return [] if seat is None else [seat]
+    if actor == "defending_player":
+        # CR 506.2, frozen by the fire site (CR 603.10): which seat is being
+        # attacked is a fact about the combat, and by the time this trigger
+        # resolves the combat may have moved on. The lowering admits the word
+        # only under an event that stamps it, so an absent key here is a
+        # combat that ended, not a card nobody wired up — and no prompt is the
+        # right answer then.
+        seat = (context.trigger_context or {}).get("trigger_defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return []
+        return [] if game.players[seat].lost else [seat]
+
     return [game.players.index(context.caster if actor == "you" else context.target)]
 
 

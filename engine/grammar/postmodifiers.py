@@ -485,6 +485,34 @@ def _parse_postmodifiers(
                     if stream.accept_phrase("this", "turn"):
                         d.blocked_by_bound_object = True
                         continue
+            # "…that **blocked or were blocked by it this turn**" (Venomous
+            # Breath). The two-way reading of the clause directly above: the
+            # bound object stood on one side of a block and the sentence names
+            # whichever creatures stood on the other, whichever side that was.
+            # Its own field, not a widening of the one-way one — the set is
+            # strictly larger, and a lowering written for "were blocked by"
+            # answering this phrase would destroy creatures the card does not
+            # name.
+            #
+            # "It" and "that creature" are one referent here and both are
+            # admitted: this is the `that …` postmodifier run, whose subject is
+            # the sentence's own object, so neither spelling can be read as the
+            # ability's source. The present-participle relation
+            # (`in_combat_with_source`, "blocking or blocked by it") is a
+            # different production reached by a different first word, which is
+            # what keeps the two "it"s apart.
+            elif stream.accept_phrase("blocked", "or", "were", "blocked", "by"):
+                probe = stream.mark()
+                named_bound = stream.accept_word("it")
+                if not named_bound and stream.accept_word("that"):
+                    noun = stream.peek_word()
+                    if noun is not None and _singular(noun) in CARD_TYPES:
+                        stream.advance()
+                        named_bound = True
+                if named_bound and stream.accept_phrase("this", "turn"):
+                    d.in_combat_with_bound_object = True
+                    continue
+                stream.reset(probe)
             # "…that were blocked by **target Wall** this turn" (Glyph of
             # Reincarnation). The same history against the *spell's own target*
             # instead of a bound object, so the blocker's own noun phrase is

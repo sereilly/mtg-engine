@@ -796,6 +796,25 @@ class AbilityActivationMixin:
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             tap_cost_permanents = chosen[:ability.cost.tap_count]
 
+        # "**Tap enchanted land**: …" (Earthlore). The host, collected beside
+        # the picked tap cost above and paid with it below — one payment moment
+        # (CR 601.2h). Nothing is picked: the attachment record is the whole
+        # answer, so the only way this can fail is the Aura having no host or a
+        # host already tapped, and both refuse the activation with nothing paid
+        # (CR 602.2b) rather than tapping the Aura for nothing.
+        if ability.cost.tap_attached:
+            host = permanent.metadata.get("attached_to")
+            if host is None or not self.is_on_battlefield(host) or host.tapped:
+                details = (
+                    f"{permanent.card.name}: the permanent it is attached to "
+                    "cannot be tapped to pay its cost"
+                )
+                self.log.append(details)
+                return SimulationResult(
+                    permanent.card.name, False, "unsupported", details
+                )
+            tap_cost_permanents = [*tap_cost_permanents, host]
+
         # "Exile a creature you control" (City of Shadows) / "Exile a creature
         # card from your graveyard" (Necropolis) — a *chosen* object rather than
         # the source. **A cost is not a target** (CR 601.2b, idiom 10), so

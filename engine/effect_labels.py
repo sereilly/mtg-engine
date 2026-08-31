@@ -94,7 +94,6 @@ ACTIVATED_LABELS: dict[str, str] = {
     "grant_regeneration_to_target_creature": "activated_regenerate",
     "grant_self_flying_until_eot": "activated_pump",
     "grant_target_flying_until_eot": "activated_pump",
-    "grant_unblockable_to_low_power_target": "activated_evasion",
     "hurricane_damage": "activated_damage",
     "look_at_target_hand": "activated_look",
     "mill_target_player": "activated_mill",
@@ -145,7 +144,11 @@ ACTIVATED_LABELS: dict[str, str] = {
     "grant_target_keyword_until_eot": "activated_pump",
     "grant_team_keyword_until_eot": "activated_pump",
     "set_team_base_pt_until_eot": "activated_pump",
-    # Evasion, beside `grant_unblockable_to_low_power_target`.
+    # Evasion. Dwarven Warriors, Tawnos's Wand and Subira's second ability
+    # all reach the one grant now that the power bound is payload rather
+    # than a kind of its own — and each keeps the bucket it reported
+    # before, which is the whole reason this table exists.
+    "grant_unblockable_to_target": "activated_evasion",
     "grant_unblockable_to_self": "activated_evasion",
     # Looking at cards and choosing among them. Scry is the paradigm case and
     # the look-and-pick (Waker of Waves) is the same question with a keep.
@@ -324,6 +327,11 @@ TRIGGERED_LABELS: dict[str, str] = {
     "exile_created_token": "triggered_exile",
     "destroy_self": "triggered_destruction",
     "destroy_all_matching": "triggered_destruction",
+    # Abu Ja'far and Kjeldoran Frostbeast. Declared rather than
+    # defaulted so the shipped card keeps the bucket its card hook
+    # reported before the grammar took the template over — the reason
+    # this table exists.
+    "destroy_creatures_in_combat_with_source": "spell_pattern",
     "deal_damage_each_matching": "triggered_damage",
     "deal_damage_to_those_damaged_this_game": "triggered_damage",
     "add_corpse_counters_for_each_creature_died": "triggered_counter",

@@ -317,6 +317,15 @@ class ObjectFilter:
     # several combats, and without a bound object the phrase names a blocker
     # nobody recorded.
     blocked_by_bound_object: bool = False
+    # "…all creatures that **blocked or were blocked by** it this turn"
+    # (Venomous Breath). The two-way reading of the field above: the bound
+    # object may have been the attacker or the blocker, and the sentence names
+    # whichever creatures stood opposite it either way. Its own field rather
+    # than a widening, because the one-way clause is a strictly smaller set and
+    # a lowering written for one must not silently answer the other. Relative
+    # like its sibling, so it is never emitted and every lowering not written
+    # for it refuses the phrase by name.
+    in_combat_with_bound_object: bool = False
     # "…all creatures that were blocked by **target Wall** this turn" (Glyph of
     # Reincarnation). The same history read against a different referent: the
     # blocker is the *spell's own target* rather than the object a delayed

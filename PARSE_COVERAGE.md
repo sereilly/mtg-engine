@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**42 unclaimed sentence(s) across 29 supported card(s).**
+**40 unclaimed sentence(s) across 28 supported card(s).**
 
 - **Battle Cry**
   - `whenever a creature blocks this turn, it gets +0/+1 until end of turn`
@@ -82,10 +82,7 @@ anything anyone did, and every ingest would arrive red.
   - `if tapped for mana, plains produce {r}, swamps produce {g}, mountains produce {w}, and forests produce {b} instead of any other type`
 - **Ritual of Subdual**
   - `if a land is tapped for mana, it produces colorless mana instead of any other type`
-- **Runed Arch**
-  - `{x}, {t}, sacrifice this artifact: x target creatures with power 2 or less can't be blocked this turn`
 - **Snowfall**
-  - `whenever an island is tapped for mana, its controller may add an additional {u}`
   - `if that island is snow, its controller may add an additional {u}{u} instead`
   - `spend this mana only to pay cumulative upkeep costs`
 - **Time Bomb**
@@ -116,6 +113,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Card | Clause | Ignored words |
 | --- | --- | --- |
+| Abu Ja'far | `destroy all creatures blocking or blocked by it. they can't be regener` | all |
 | Acid Rain | `destroy all forests` | all |
 | All Hallow's Eve | `if this card is exiled with a scream counter on it, remove a scream co` | card more all |
 | Animal Sanctuary | `put a +1/+1 counter on target bird, cat, dog, goat, ox, or snake` | or |
@@ -174,7 +172,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Shipwreck Dowser | `return target instant or sorcery card from your graveyard to your hand` | or |
 | Siren's Call | `at the beginning of the next end step, destroy all non-wall creatures ` | all |
 | Spitting Slug | `you may pay {1}{g}. if you do, this creature gains first strike until ` | creature |
-| Subira, Tulzidi Caravanner | `another target creature with power 2 or less can't be blocked this tur` | another |
 | Sylvan Library | `you may draw two additional cards. if you do, choose two cards in your` | additional |
 | The Wretched | `gain control of all creatures blocking this creature for as long as yo` | all |
 | Tivadar's Crusade | `destroy all goblins` | all |
@@ -199,12 +196,12 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 987 |
+| parse rule | 988 |
 | activation cost | 398 |
 | trigger table | 339 |
 | static-line table | 234 |
 | keyword table | 222 |
-| card_hooks bespoke (name-keyed) | 109 |
+| card_hooks bespoke (name-keyed) | 107 |
 | aura enchant noun (oracle_instructions attach) | 87 |
 | activation_restrictions.py | 37 |
 | aura static (oracle_instructions/permanent_state) | 37 |

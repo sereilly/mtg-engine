@@ -85,6 +85,11 @@ _EOT_METADATA_KEYS = (
     # block pairs a blocker was part of, kept per turn because a turn holds
     # several combats and `blocked_this_combat` is cleared by each one.
     "blocked_attacker_ids_this_turn",
+    # The same pairs written from the attacker's end — the blockers a creature
+    # was blocked by this turn (Venomous Breath's two-way relation). Swept with
+    # its mirror, or the two halves of one relation would answer for different
+    # windows.
+    "blocked_by_blocker_ids_this_turn",
     # The same pairs with the attacker's controller frozen beside each id
     # (Glyph of Reincarnation). Swept with the ids it keys, or a later turn's
     # sentence would read a seat from a block that is no longer in the window.
