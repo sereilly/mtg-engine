@@ -1270,7 +1270,57 @@ def test_the_doubling_sentence_is_read_rather_than_consumed(set_pool):
     )
 
     assert without.lowered
-    assert without.instructions[0].payload == {"stake": 1, "doubling": False}
+    payload = without.instructions[0].payload
+    assert payload["stake"] == 1
+    assert payload["doubling"] is False
+
+
+def test_the_printed_target_opponent_survives_the_lowering(set_pool):
+    """The other rider in the same paragraph, and the one that *was* dropped.
+
+    The production reads "and target opponent loses N life" as fixed words, so
+    the two that matter — "target opponent" — were consumed and thrown away:
+    the handler asks ``context.target`` for the seat it stakes against, nothing
+    described the choice, and the picker therefore never ran. In a duel the one
+    opponent is the right answer by luck; at three or four seats the spell
+    staked whichever opponent the resolution happened to carry.
+
+    CR 601.2c chooses that seat as the spell is cast, so the description belongs
+    in the payload where every reader — picker, cast gate, AI — already looks
+    for one.
+    """
+    from engine.grammar import compile_line
+    from engine.targeting import _from_targets_payload
+
+    lowered = compile_line(
+        "Flip a coin. If you win the flip, you gain 1 life and target opponent "
+        "loses 1 life, and you decide whether to flip again. If you lose the "
+        "flip, you lose 1 life and that opponent gains 1 life, and that player "
+        "decides whether to flip again. Double the life stakes with each flip."
+    )
+
+    targets = lowered.instructions[0].payload["targets"]
+    assert targets["quantifier"] == "target"
+    assert _from_targets_payload(targets) == {
+        "kind": "player", "opponents_only": True,
+    }
+
+
+def test_game_of_chaos_asks_which_opponent_it_is_played_against(set_pool):
+    """And the whole point of describing it: the spell derives its own prompt.
+
+    Read through ``derive_cast_spec`` rather than off the payload, because the
+    payload is what the previous test pins — this is the consumer, and a
+    description no picker reads would be a rider dropped one step later.
+    """
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_cast_spec
+
+    card = set_pool("ICE")["Game of Chaos"]
+
+    assert derive_cast_spec(card, compile_card_oracle(card)) == {
+        "kind": "player", "opponents_only": True,
+    }
 # --- end W3G4 ---
 
 

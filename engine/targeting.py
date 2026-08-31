@@ -776,6 +776,33 @@ def _prevention_shield_spec(payload: dict) -> dict | None:
     return _from_targets_payload(payload.get("targets")) or {"kind": "any"}
 
 
+def _whole_prevention_shield_spec(payload: dict) -> dict | None:
+    """Pentagram of the Ages’ shield, and the one printing that chooses nothing.
+
+    "The next time **a source of your choice** would deal damage to you this
+    turn, prevent that damage" runs the prompt its four siblings above run — a
+    permanent on any battlefield or a spell on the stack, matched by identity,
+    so no filter narrows it. CR 609.7a is what makes them one prompt rather than
+    four: the phrase names *a source of damage*, and the set a player may choose
+    from is the rule’s, not the card’s.
+
+    ``from_source`` is the other printing — "The next time **this creature**
+    would deal damage to you this turn" (Mercenaries) — where the source is
+    printed rather than chosen, so there is nothing to ask. That is why this is
+    a payload reader and not a flat entry beside ``grant_half_prevention_shield``:
+    one kind, two printings, and a flat entry would have raised a picker on the
+    card that names its own source.
+
+    Pentagram had no entry at all until Ice Age was promoted, and the omission
+    was not a missing prompt but a **stronger card**: with nothing chosen the
+    handler falls through to ``make_whole_charge``, a shield answering to every
+    source, so the next damage from anything was prevented.
+    """
+    if payload.get("from_source"):
+        return None
+    return {"kind": "permanent", "source_of_choice": True, "also_stack": True}
+
+
 def _set_base_pt_spec(payload: dict) -> dict:
     """"Target creature ... has base power 0 until end of turn", narrowed to the
     creatures the printed line allows.
@@ -906,6 +933,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "reanimate_creature": _reanimation_spec,
     "exile_target_graveyard_card": _graveyard_exile_spec,
     "grant_prevention_shield": _prevention_shield_spec,
+    "grant_whole_prevention_shield": _whole_prevention_shield_spec,
     "set_base_pt_target_until_eot": _set_base_pt_spec,
     "grant_cast_permission": _cast_permission_spec,
 }
@@ -1075,7 +1103,52 @@ def _from_instructions(instructions) -> dict | None:
             if nested is not None:
                 return nested
             continue
+        if instruction.kind == "choose_one":
+            # A **choice made before the targets** (CR 601.2b/602.2b: modes
+            # first, then targets), so the modes are read only when the choice
+            # cannot change the answer.
+            #
+            # Barbarian Guides is why: "Choose a land type. Target creature you
+            # control gains snow landwalk of the chosen type…" lowers to one
+            # mode per land type, and all eighteen carry the *same* target
+            # description, because the type is what varies and the creature is
+            # not. Stopping at the wrapper left the whole ability with no
+            # prompt — and, because the handler enforces the printed
+            # "you control" against a target nobody chose, doing nothing at all.
+            #
+            # Non-uniform modes deliberately answer None. Essence Filter and
+            # Relic Bind choose different things in each mode, and the mode is
+            # settled first: the per-mode reader
+            # (``graveyard_target_spec(..., mode_index=)``) is what answers
+            # those, and collapsing them to the first mode's spec would offer a
+            # picker for a mode the player had not chosen.
+            modes = instruction.payload.get("modes") or ()
+            described = [
+                _from_instructions((mode.get("instruction"),))
+                if isinstance(mode, dict) and mode.get("instruction") is not None
+                else None
+                for mode in modes
+            ]
+            if described and all(spec == described[0] for spec in described[1:]):
+                if described[0] is not None:
+                    return described[0]
+            continue
         if instruction.kind == "may":
+            # "**Target opponent** may ante the top card of their library."
+            # (Amulet of Quoz.) The offer's own target, which is the *seat being
+            # offered* rather than anything the branches name — so it is read
+            # off this instruction before its branches are, the way every
+            # non-wrapper instruction is read before nothing at all.
+            #
+            # ``actor`` cannot answer this: the reference reader spells "an
+            # opponent" ``opponent`` and "target opponent" ``target_opponent``
+            # precisely so the two do not share a kind, but reading the actor
+            # here would put that distinction in two places. The lowering
+            # attaches the ordinary ``targets`` description instead, so the
+            # picker learns it the way it learns every other target.
+            own = _from_targets_payload(instruction.payload.get("targets"))
+            if own is not None:
+                return own
             # An optional action still targets — "you may tap or untap target
             # creature" names a creature whether or not the offer is taken.
             #

@@ -543,6 +543,21 @@ def test_no_mandatory_target_ability_can_be_activated_with_nothing_to_target(sup
         game.active_player_index = 0
         game.current_turn_phase = "main"
         game.current_step = "precombat_main"
+        # **A source that removed itself while the board was being set up.**
+        # Skeleton Ship prints "When you control no Islands, sacrifice Skeleton
+        # Ship" — a state trigger (CR 603.8), and this rig's board is one
+        # permanent on an otherwise empty battlefield, so the state is true the
+        # moment the game exists and the ship is in the graveyard before
+        # anything is activated. That is the card working, not failing: an
+        # activated ability of a permanent is activated from the battlefield
+        # (CR 602.2), so a permanent that is no longer there has no ability to
+        # refuse and nothing to leave unpaid. Asked through the control seam
+        # rather than by looking at the list, and skipped rather than propped up
+        # with an Island — a land on this board is a *permanent*, which would
+        # hand every `kind: "permanent"` ability a legal target and quietly
+        # empty the sweep it is meant to run.
+        if not game.is_on_battlefield(source):
+            continue
         # A source that can target itself (a creature targeting creatures) has a
         # legal target on an empty opposing board — not a no-target case.
         if game.activation_target_spec(0, 0, ability_index=index).get("valid_targets"):

@@ -157,7 +157,24 @@ def test_derives_the_expected_spec(supported_cards, name, expected):
 # when the trigger goes on the stack (CR 603.3d), not as the permanent is cast —
 # Erhnam Djinn's upkeep forestwalk grant is not a cast-time prompt.
 _REMINDER = re.compile(r"\([^)]*\)")
-_TRIGGER_PREFIX = re.compile(r"^\s*(when|whenever|at the beginning)\b")
+# The optional "until …," in front is a **delayed** triggered ability saying how
+# long it is armed (CR 603.7a) before it says when it fires: "Until end of turn,
+# whenever a creature you control attacks and isn't blocked, … to a target
+# creature" (Gaze of Pain). The whole line is still a triggered ability, so the
+# target it names is chosen when the delayed ability triggers (CR 603.3d) and
+# never as the sorcery is cast — the same reason a bare trigger prefix is
+# excluded, one duration clause further left.
+#
+# Deliberately a *prefix* and not a search. Eight shipped cards print a trigger
+# word mid-line after a real cast target — Berserk ("target creature gains
+# trample …. At the beginning of the next end step, destroy that creature"),
+# Mana Drain, Reincarnation, the three Glyphs, Sacred Boon and Ray of Command —
+# and every one of those lines opens with the cast effect that does the
+# targeting. Searching anywhere would excuse all eight from a ratchet they
+# satisfy today.
+_TRIGGER_PREFIX = re.compile(
+    r"^\s*(?:until [^,]{1,40}, )?(when|whenever|at the beginning)\b"
+)
 _TARGET_WORD = re.compile(r"\btargets?\b")
 
 # Three more line shapes whose target is not a *cast* target, each excluded for
