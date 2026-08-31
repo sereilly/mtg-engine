@@ -102,6 +102,34 @@ def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
     return {"any_card": card_type is None, "card_type": card_type}
 
 
+def _record_optional_card_target(
+    payload: dict[str, object], subject: ast.TargetSpec
+) -> None:
+    """Record that this graveyard target was printed "**up to** one".
+
+    "Target" and "up to one target" resolve one chosen card either way, so the
+    handler, the picker and the narrowing are identical and the payload was the
+    same for both — the quantifier was simply dropped. What cannot read it off
+    the printed line is the gate that asks whether an ability may be activated
+    at all: CR 601.2c lets an "up to" announcement name *no* target, so Liliana,
+    Death Mage's "+1: Return **up to one** target creature card from your
+    graveyard to your hand" is legal with an empty graveyard and Adun
+    Oakenshield's bare "target" is not.
+
+    Recorded only for the "up to" spelling, so every card printing the bare word
+    keeps emitting its payload byte for byte. ``count`` is 1 here, which is
+    below the several-targets threshold every other reader tests
+    (``targets["count"] > 1``), so nothing that walks for a list of targets sees
+    a new one.
+    """
+    if subject.quantifier == "up_to":
+        payload["targets"] = {
+            "quantifier": "up_to",
+            "kind": "card",
+            "count": subject.count,
+        }
+
+
 def _lower_put_source_into_zone(node) -> tuple[OracleInstruction, ...]:
     """``Put it into your graveyard.`` (All Hallow's Eve.)
 
@@ -758,11 +786,11 @@ def _lower_return_to_zone(
         if destination.name == "hand":
             if destination.owner is None or destination.owner.kind != "you":
                 raise LoweringError("this handler returns cards to your own hand", node=node)
+            to_hand = _graveyard_to_hand_payload(filt)
+            _record_optional_card_target(to_hand, subject)
             return (
                 OracleInstruction(
-                    "return_creature_from_graveyard_to_hand",
-                    "",
-                    _graveyard_to_hand_payload(filt),
+                    "return_creature_from_graveyard_to_hand", "", to_hand,
                 ),
             )
 
@@ -786,6 +814,7 @@ def _lower_return_to_zone(
             # keyword grant after a reanimation folds.
             if node.exile_on_leave:
                 payload["exile_on_leave"] = True
+            _record_optional_card_target(payload, subject)
             return (OracleInstruction("reanimate_creature", "", payload),)
 
         raise LoweringError(f"no handler moves a card to the {destination.name}", node=node)

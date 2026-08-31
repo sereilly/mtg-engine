@@ -945,3 +945,115 @@ def test_602_2b_an_activation_that_named_no_target_still_means_its_own_source(
     assert patrol.metadata.get("sacrifice_at_next_end_step") is True, game.log
     assert not p2.battlefield[0].metadata.get("sacrifice_at_next_end_step"), game.log
 # --- end FixB ---
+
+
+# --- LeadA: a graveyard target is a target ---
+# CR 602.2b reached every object-targeted activated ability *except* the ones
+# that point into a graveyard, because the gate asks whether the ability's
+# instruction carries a mandatory ``targets`` quantifier and the graveyard
+# lowerings carry none — the noun phrase travels as ``card_type`` instead. So
+# every one of the ten such abilities in the pool could be activated with every
+# graveyard on the table empty, paying its cost for nothing.
+
+
+@pytest.mark.cr("602.2b", "601.2c")
+def test_602_2b_a_graveyard_return_needs_a_card_in_a_graveyard(set_pool):
+    """Adun Oakenshield: "{B}{R}{G}, {T}: Return target creature card from your
+    graveyard to your hand." With the graveyard empty there is no legal target,
+    so the ability cannot be activated and the {T} is not paid."""
+    adun = _perm(set_pool("LEG")["Adun Oakenshield"])
+    game = _two_player_game(PlayerState(name="P1", battlefield=[adun]),
+                            PlayerState(name="P2"))
+
+    result = game.activate_permanent_ability(0, "Adun Oakenshield")
+
+    assert result.supported is False
+    assert adun.tapped is False
+
+
+@pytest.mark.cr("602.2b", "601.2c")
+def test_602_2b_a_reanimation_is_refused_before_its_source_is_sacrificed(set_pool):
+    """The same rule where the cost is not a tap but the permanent itself.
+
+    Obsessive Stitcher: "{2}{U}{B}, {T}, **Sacrifice this creature**: Return
+    target creature card from your graveyard to the battlefield." Unenforced,
+    the ability was activatable with an empty graveyard — and CR 601.2h pays the
+    cost before it resolves, so the creature was sacrificed for nothing.
+    """
+    pool = set_pool("M21")
+    stitcher = _perm(pool["Obsessive Stitcher"])
+    p1 = PlayerState(name="P1", battlefield=[stitcher])
+    game = _two_player_game(p1, PlayerState(name="P2"))
+
+    # ability_index 1: {T} draws and discards, the reanimation is the second.
+    result = game.activate_permanent_ability(
+        0, "Obsessive Stitcher", permanent_index=0, ability_index=1,
+    )
+
+    assert result.supported is False
+    assert [p.card.name for p in game.controlled_by(p1)] == ["Obsessive Stitcher"]
+    assert stitcher.tapped is False
+
+
+@pytest.mark.cr("602.2b", "601.2c")
+def test_602_2b_a_graveyard_exile_inside_a_sequence_is_still_a_target(set_pool):
+    """Scavenging Ooze: "{G}: Exile target card from a graveyard. If it was a
+    creature card, …" — two printed sentences, so the exile is the first *step*
+    of a sequence rather than the ability's whole instruction. The gate walked
+    only the top instruction, so the one-sentence siblings answered correctly
+    and this one did not."""
+    ooze = _perm(set_pool("M21")["Scavenging Ooze"])
+    game = _two_player_game(PlayerState(name="P1", battlefield=[ooze]),
+                            PlayerState(name="P2"))
+
+    result = game.activate_permanent_ability(0, "Scavenging Ooze")
+
+    assert result.supported is False
+
+
+@pytest.mark.cr("601.2c")
+def test_601_2c_a_graveyard_target_must_sit_in_a_pile_the_ability_reads(set_pool):
+    """"…from **your** graveyard" is a seat restriction, and a named target
+    outside it is an illegal announcement — not an announcement the resolution
+    quietly re-points at the caster's own pile, which is what happened while the
+    named-target half of the gate was unreachable for this family."""
+    pool = set_pool("LEG")
+    adun = _perm(pool["Adun Oakenshield"])
+    p1 = PlayerState(name="P1", battlefield=[adun],
+                     graveyard=[set_pool("LEA")["Grizzly Bears"]])
+    p2 = PlayerState(name="P2", graveyard=[set_pool("LEA")["Serra Angel"]])
+    game = _two_player_game(p1, p2)
+
+    result = game.activate_permanent_ability(
+        0, "Adun Oakenshield", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+
+    assert result.supported is False
+    assert adun.tapped is False
+    assert p1.hand == []                                    # nothing re-pointed
+    assert [c.name for c in p1.graveyard] == ["Grizzly Bears"]
+    assert [c.name for c in p2.graveyard] == ["Serra Angel"]
+
+
+@pytest.mark.cr("601.2c")
+def test_601_2c_up_to_one_may_still_be_activated_with_nothing_to_return(set_pool):
+    """The control, and the reason the quantifier had to reach the payload.
+
+    Liliana, Death Mage's "+1: Return **up to one** target creature card from
+    your graveyard to your hand" prints the same graveyard target as Adun
+    Oakenshield above, and CR 601.2c lets an "up to" announcement name none — so
+    an empty graveyard is no reason to refuse it. The lowering dropped the
+    quantifier (one chosen card either way, so nothing downstream had needed
+    it), which left the two abilities indistinguishable to the gate.
+    """
+    walker = _perm(set_pool("M21")["Liliana, Death Mage"])
+    game = _two_player_game(PlayerState(name="P1", battlefield=[walker]),
+                            PlayerState(name="P2"))
+
+    result = game.activate_permanent_ability(
+        0, "Liliana, Death Mage", ability_index=0,
+    )
+
+    assert result.supported is True, result.details
+# --- end LeadA ---

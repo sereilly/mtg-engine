@@ -281,8 +281,20 @@ _TARGET_STEP_KEYS = ("steps", "then", "else", "action", "otherwise", "effect")
 #: the stack lowering reads into ``ability_kinds`` rather than into a targets
 #: description, so without this row Ayesha Tanaka could be tapped with an empty
 #: stack — the cost paid for a counter that had nothing to counter.
+#: The graveyard kinds are the same row for the same reason, one zone over: a
+#: card in a graveyard is named by the noun phrase the graveyard lowering reads
+#: into ``card_type``/``card_types``/``any_card``, and no ``targets``
+#: description rides beside it. Without them **every** graveyard-targeting
+#: ability in the pool was activatable with every graveyard empty — Adun
+#: Oakenshield and Argivian Archaeologist tapped for nothing, Obsessive
+#: Stitcher and Triassic Egg *sacrificed themselves* for nothing — which is the
+#: precise failure this gate replaced a per-kind if-chain to end, still live in
+#: the one family the if-chain had never named.
 _QUANTIFIERLESS_TARGET_KINDS = frozenset({
     "grant_banding_to_target", "counter_stack_ability",
+    "reanimate_creature", "reanimate_creature_to_battlefield",
+    "return_creature_from_graveyard_to_hand", "exile_target_graveyard_card",
+    "put_graveyard_card_on_library_bottom", "put_graveyard_cards_on_library_top",
 })
 
 #: Target kinds ``illegal_targets_refusal`` declines to answer for, because a
@@ -342,6 +354,21 @@ def _ability_target_quantifiers(instruction) -> list[str]:
             if quantifier == "exactly" and isinstance(count, int) and count >= 1:
                 quantifier = "target"
             quantifiers.append(quantifier)
+        elif getattr(instr, "kind", None) in _QUANTIFIERLESS_TARGET_KINDS:
+            # A kind whose target rides somewhere other than a ``targets``
+            # description — and only where the description is genuinely absent,
+            # which is what "quantifierless" means. Liliana, Death Mage's "+1:
+            # Return **up to one** target creature card from your graveyard"
+            # lowers the same graveyard kind *with* a quantifier, and CR 601.2c
+            # lets an "up to" announcement name none: reading the kind first
+            # would have made her +1 unusable with an empty graveyard.
+            #
+            # Asked here rather than of the top instruction alone, which is how
+            # Grave Robbers and Scavenging Ooze — whose graveyard exile is the
+            # first step of a printed two-sentence ``sequence`` — answered
+            # "chooses nothing" while their single-sentence siblings answered
+            # correctly.
+            quantifiers.append("target")
         for step in payload.get("steps") or ():
             walk(step)
 
@@ -858,9 +885,7 @@ class LegalityMixin:
             )
             return None if walked else refused
         quantifiers = _ability_target_quantifiers(instruction)
-        mandatory = "target" in quantifiers or (
-            instruction is not None and instruction.kind in _QUANTIFIERLESS_TARGET_KINDS
-        )
+        mandatory = "target" in quantifiers
         if not mandatory:
             # No mandatory target to enforce — an all-"up to" target may choose
             # none, and a kind with no target quantifier resolves its own choice
