@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**32 unclaimed sentence(s) across 21 supported card(s).**
+**30 unclaimed sentence(s) across 20 supported card(s).**
 
 - **Battle Cry**
   - `whenever a creature blocks this turn, it gets +0/+1 until end of turn`
@@ -67,9 +67,6 @@ anything anyone did, and every ingest would arrive red.
   - `whenever an opponent casts a noncreature spell, you may draw a card unless that player pays {4}`
 - **Oath of Lim-Dûl**
   - `whenever you lose life, for each 1 life you lost, sacrifice a permanent other than this enchantment unless you discard a card`
-- **Snowfall**
-  - `if that island is snow, its controller may add an additional {u}{u} instead`
-  - `spend this mana only to pay cumulative upkeep costs`
 - **Time Bomb**
   - `{1}, {t}, sacrifice this artifact: this artifact deals damage equal to the number of time counters on it to each creature and each player`
 - **Touch of Vitae**

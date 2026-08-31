@@ -171,6 +171,32 @@ class AddManaForTappedLand:
     # whatever the tapped land just made, so it cannot be written as pips.
     of_type_produced: int = 0
     additional: bool = False
+    #: "…its controller **may** add an additional {U}." (Snowfall.) The word,
+    #: recorded rather than consumed and dropped — a word a production eats
+    #: without recording is one the deletion probe can delete without changing
+    #: the parse, which is the dropped-rider bug class.
+    #:
+    #: It is *not* wrapped in a :class:`May`, and that is deliberate. CR 605.4a
+    #: makes a triggered mana ability resolve without using the stack, inside
+    #: the cost payment that tapped the land — there is no priority window in
+    #: which a prompt could be answered, so the offer is recorded here and the
+    #: dispatcher takes it (`engine/mixins/turn_management.py` says why that is
+    #: safe in this engine).
+    optional: bool = False
+    #: "**If that Island is snow**, its controller may add an additional
+    #: {U}{U} **instead**." (Snowfall.) The supertype the *tapped land* must
+    #: have for the alternative to apply, and the mana it makes instead of
+    #: :attr:`pips`. One node rather than a `Conditional` around two, because
+    #: the whole clause is one triggered mana ability and the dispatcher that
+    #: runs it resolves inline: an `if_then` wrapper would hide the mana
+    #: production from the only code that fires it.
+    alt_supertype: str | None = None
+    alt_pips: tuple[tuple[str, int], ...] = ()
+    #: "Spend this mana only to pay cumulative upkeep costs." The restriction
+    #: *key* from `engine/restricted_mana.py`, exactly as :attr:`AddMana
+    #: .spend_only` carries it — which spells the mana may pay for is that
+    #: module's question, asked again by the payer.
+    spend_only: str | None = None
 
 
 @dataclass(frozen=True)

@@ -512,7 +512,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # "Whenever a Mountain is tapped for mana" (Gauntlet of Might) narrows the
     # same condition to one land type; the unnarrowed "whenever a player taps a
     # land for mana" (Manabarbs, Mana Flare) follows it.
-    ("land_tapped_for_mana",        r"whenever a (?P<tapped_land_subtype>[a-z]+) is tapped for mana"),
+    #
+    # ``an?`` because English chooses the article by the *next word*, not by
+    # anything about the rule: "a Mountain" and "**an** Island" are the same
+    # condition, and the row that read only "a " left Snowfall's whole ability
+    # undispatched — the card compiled supported on its cumulative upkeep and
+    # made no mana at all. The sibling row above it already spelled it this way.
+    ("land_tapped_for_mana",        r"whenever an? (?P<tapped_land_subtype>[a-z]+) is tapped for mana"),
     ("land_tapped_for_mana",        r"whenever a player taps a land for mana"),
     # A colour-narrowed cast trigger (the Rod/Cup/Sphere cycle). The colour is
     # captured into the condition payload so one dispatcher covers every card

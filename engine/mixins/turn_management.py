@@ -566,6 +566,16 @@ class TurnManagementMixin:
         the same seat here, because a player may only tap lands they control —
         but they are resolved separately rather than assumed equal, so a future
         card that separates them does not silently pay the wrong player.
+
+        **``optional`` is recorded and taken.** "…its controller **may** add an
+        additional {U}" (Snowfall) is an offer, and CR 605.4a gives it no
+        window in which to be answered: a triggered mana ability resolves
+        without using the stack, here, inside the cost payment that tapped the
+        land, before the spell being paid for is even announced. Nothing is
+        lost by taking it in this engine — there is no mana burn (CR 500.4
+        empties the pool at every step boundary), and Snowfall's mana is
+        restricted to cumulative upkeep costs, so unspent mana costs its
+        controller nothing. A seat that could be asked would be asked here.
         """
         recipient = str(instruction.payload.get("recipient", "that_player"))
         if recipient == "land_controller":
@@ -576,9 +586,27 @@ class TurnManagementMixin:
             seat = tapping_player_index
         player = self.players[seat]
 
+        # "**If that Island is snow**, its controller may add an additional
+        # {U}{U} **instead**." (Snowfall.) The alternative *replaces* the base
+        # production, so it is chosen here rather than added to it, and the
+        # supertype is asked of `has_supertype` — computed through the layers,
+        # so an Arcum's Weathervane that thawed the Island stops the upgrade.
+        pips = tuple(instruction.payload.get("pips", ()))
+        alt_supertype = instruction.payload.get("alt_supertype")
+        if alt_supertype and land.has_supertype(str(alt_supertype)):
+            pips = tuple(instruction.payload.get("alt_pips", ()))
+        # "Spend this mana only to pay cumulative upkeep costs." The bucket is
+        # `engine/restricted_mana.py`'s, the same one an activated mana ability
+        # writes to, so the three payment paths already ask what it may pay for.
+        spend_only = instruction.payload.get("spend_only")
+        bucket = (
+            player.restricted_mana.setdefault(str(spend_only), {})
+            if spend_only else player.mana_pool
+        )
+
         added: list[str] = []
-        for symbol, count in instruction.payload.get("pips", ()):  # "an additional {R}"
-            player.mana_pool[symbol] = player.mana_pool.get(symbol, 0) + int(count)
+        for symbol, count in pips:  # "an additional {R}"
+            bucket[symbol] = bucket.get(symbol, 0) + int(count)
             added.append(f"{{{symbol}}}" * int(count))
         # "One mana of any type that land produced" — the type is whatever the
         # land just made, which is why it cannot be written as pips.

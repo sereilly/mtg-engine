@@ -830,6 +830,24 @@ def parse_subject_verb(
                     return ast.May(source_spec, cost=cost)
                 except GrammarError:
                     stream.reset(mark_pay)
+            # "…its controller **may add** an additional {U}." (Snowfall.) The
+            # offer of a *mana production* to a seat the enclosing trigger
+            # bound. Routed to the same production the un-offered spelling one
+            # branch below reaches, because `parse_optional_action` would read
+            # the bare "add …" as :class:`ast.AddMana` — the ability's *own*
+            # controller — and pay the wrong player. The word rides the node
+            # (CR 605.4a: a triggered mana ability has no priority window in
+            # which a prompt could be answered) rather than wrapping it in a
+            # `May`, which would hide the production from the tap seam that
+            # fires it.
+            if stream.at_word("add", "adds"):
+                mark_add = stream.mark()
+                try:
+                    return _parse_player_adds_mana(
+                        stream, source_spec, optional=True
+                    )
+                except GrammarError:
+                    stream.reset(mark_add)
             try:
                 action = parse_optional_action(stream)
                 # "…**they** may copy this spell…" — the copy's controller is

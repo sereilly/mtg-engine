@@ -1965,4 +1965,82 @@ def test_illusionary_terrain_reverts_when_it_leaves(set_pool):
     game._refresh_dynamic_creatures()
 
     assert p2.battlefield[0].basic_land_types == ("forest",)
+
+def _snowfall_board(set_pool, land_name):
+    ice, lea = set_pool("ICE"), set_pool("LEA")
+    land = Permanent(card=ice.get(land_name) or lea[land_name])
+    p1 = PlayerState(
+        name="P1", battlefield=[land, Permanent(card=ice["Snowfall"])]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    p1.mana_pool = {symbol: 0 for symbol in ("W", "U", "B", "R", "G", "C")}
+    p1.restricted_mana = {}
+    return game, p1, land
+
+
+def _pools(player):
+    pool = {symbol: count for symbol, count in player.mana_pool.items() if count}
+    restricted = {
+        key: {symbol: count for symbol, count in bucket.items() if count}
+        for key, bucket in player.restricted_mana.items()
+        if any(bucket.values())
+    }
+    return pool, restricted
+
+
+def test_snowfall_adds_restricted_mana_for_an_island(set_pool):
+    """"Whenever an Island is tapped for mana, its controller may add an
+    additional {U}. … Spend this mana only to pay cumulative upkeep costs."
+
+    The whole ability failed to parse, so the card reported supported on its
+    cumulative upkeep alone and made **no mana at all**. Two things were
+    wrong at once: the trigger table read "whenever **a** … is tapped for
+    mana" and the card prints "an Island", and the offer's three sentences
+    had no production that read them together.
+    """
+    game, p1, _land = _snowfall_board(set_pool, "Island")
+
+    assert game.tap_land_for_mana(0, "Island", permanent_index=0)
+
+    pool, restricted = _pools(p1)
+    assert pool == {"U": 1}, "the Island's own mana, unrestricted"
+    assert restricted == {"cumulative_upkeep": {"U": 1}}
+
+
+def test_snowfall_doubles_the_offer_for_a_snow_island(set_pool):
+    """"If that Island is snow, its controller may add an additional {U}{U}
+    **instead**." The alternative replaces the base production rather than
+    adding to it — parsed apart, the two sentences would make three."""
+    game, p1, _land = _snowfall_board(set_pool, "Snow-Covered Island")
+
+    assert game.tap_land_for_mana(0, "Snow-Covered Island", permanent_index=0)
+
+    pool, restricted = _pools(p1)
+    assert pool == {"U": 1}
+    assert restricted == {"cumulative_upkeep": {"U": 2}}, "instead, not as well"
+
+
+def test_snowfall_ignores_a_land_that_is_not_an_island(set_pool):
+    game, p1, _land = _snowfall_board(set_pool, "Forest")
+
+    assert game.tap_land_for_mana(0, "Forest", permanent_index=0)
+
+    assert _pools(p1) == ({"G": 1}, {})
+
+
+def test_snowfall_mana_pays_a_cumulative_upkeep_and_nothing_else(set_pool):
+    """A printed restriction is only done when something enforces it. The
+    bucket is ``engine/restricted_mana.py``'s, so the three payment paths
+    already ask what it may pay for."""
+    from engine.restricted_mana import (CAST, CUMULATIVE_UPKEEP, PaymentPurpose,
+                                        spendable_restricted_mana)
+
+    game, p1, _land = _snowfall_board(set_pool, "Island")
+    assert game.tap_land_for_mana(0, "Island", permanent_index=0)
+
+    upkeep = PaymentPurpose(kind=CUMULATIVE_UPKEEP)
+    assert spendable_restricted_mana(p1, upkeep) == {"U": 1}
+    casting = PaymentPurpose(kind=CAST, card=set_pool("LEA")["Ancestral Recall"])
+    assert spendable_restricted_mana(p1, casting) == {}
 # --- end W2G2 ---
