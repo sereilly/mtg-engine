@@ -2013,3 +2013,127 @@ def test_zurs_weirding_over_an_empty_library_reveals_nothing(set_pool):
     assert not p0.drew_from_empty
     assert not p0.hand
 # --- end W3G5 ---
+
+
+# --- W3G2: combat control and attack requirements ---
+def _w3g2_total_war_board(set_pool, wall_name=None):
+    """Total War under seat 0; seat 1 holds an attacker, a stay-at-home, a
+    creature that arrived this turn and optionally a Wall. Seat 0 holds a
+    bystander, which no reading of the card may touch."""
+    pool = set_pool("ICE")
+    war = Permanent(card=pool["Total War"])
+    bystander = Permanent(card=pool["Balduvian Bears"])
+    attacker = Permanent(card=pool["Balduvian Bears"])
+    homebody = Permanent(card=pool["Balduvian Bears"])
+    newcomer = Permanent(card=pool["Balduvian Bears"])
+    theirs = [attacker, homebody, newcomer]
+    wall = None
+    if wall_name is not None:
+        wall = Permanent(card=pool[wall_name])
+        theirs.append(wall)
+    game = Game(players=[
+        PlayerState(name="P0", battlefield=[war, bystander], life=20),
+        PlayerState(name="P1", battlefield=theirs, life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._settle()
+    game.start_turn(1)
+    for perm in (attacker, homebody, bystander) + ((wall,) if wall else ()):
+        _nosick(perm)
+    # The exemption's subject: CR 302.6's condition, stamped as of *this* turn.
+    newcomer.metadata["summoning_sickness_turn"] = game.turn
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    return game, war, bystander, attacker, homebody, newcomer, wall
+
+
+def _w3g2_attack(game, seat, attacker, defending):
+    index = next(
+        i for i, perm in enumerate(game.controlled_by(game.players[seat]))
+        if perm is attacker
+    )
+    declared = game.declare_attackers(
+        seat, [index], defending_player_index=defending
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+    return declared
+
+
+def _w3g2_alive(game, seat, perm):
+    return any(other is perm for other in game.controlled_by(game.players[seat]))
+
+
+def test_w3g2_total_war_is_supported(set_pool):
+    program = compile_card_oracle(set_pool("ICE")["Total War"])
+
+    assert program.supported
+    assert [
+        (t.condition.kind, t.instruction.kind) for t in program.triggered_abilities
+    ] == [("attackers_declared", "destroy_all_matching")]
+
+
+def test_w3g2_total_war_burns_the_attacking_players_reserves(set_pool):
+    """The whole card in one declaration: the creature that attacked survives,
+    the one that stayed home does not, and the one that arrived this turn is
+    exempt."""
+    game, _war, bystander, attacker, homebody, newcomer, _ = _w3g2_total_war_board(
+        set_pool
+    )
+
+    assert _w3g2_attack(game, 1, attacker, 0)[0]
+
+    assert _w3g2_alive(game, 1, attacker), "an attacker is not a creature that didn't attack"
+    assert not _w3g2_alive(game, 1, homebody)
+    assert _w3g2_alive(game, 1, newcomer), (
+        "the printed exemption: not controlled continuously since the turn began"
+    )
+    assert _w3g2_alive(game, 0, bystander), (
+        "'that player controls' is the attacking seat, never everyone"
+    )
+
+
+def test_w3g2_total_war_spares_a_wall(set_pool):
+    """"non-Wall" is the other printed narrowing, and it is the one a dropped
+    ``exclude_subtypes`` would take with it."""
+    game, _war, _bystander, attacker, homebody, _newcomer, wall = (
+        _w3g2_total_war_board(set_pool, wall_name="Glacial Wall")
+    )
+
+    _w3g2_attack(game, 1, attacker, 0)
+
+    assert _w3g2_alive(game, 1, wall)
+    assert not _w3g2_alive(game, 1, homebody), (
+        "the control: the sweep did run, so the Wall's survival is the narrowing"
+    )
+
+
+def test_w3g2_total_war_fires_on_its_own_controllers_attack(set_pool):
+    """"Whenever **a player** attacks" — every seat's declaration, the
+    controller's included. That is the whole difference from "whenever **you**
+    attack", and a filter that kept the seat comparison would leave this
+    silent."""
+    pool = set_pool("ICE")
+    war = Permanent(card=pool["Total War"])
+    attacker = Permanent(card=pool["Balduvian Bears"])
+    homebody = Permanent(card=pool["Balduvian Bears"])
+    game = Game(players=[
+        PlayerState(name="P0", battlefield=[war, attacker, homebody], life=20),
+        PlayerState(name="P1", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._settle()
+    game.start_turn(0)
+    _nosick(attacker)
+    _nosick(homebody)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+
+    _w3g2_attack(game, 0, attacker, 1)
+
+    assert not _w3g2_alive(game, 0, homebody)
+    assert _w3g2_alive(game, 0, attacker)
+# --- end W3G2 ---

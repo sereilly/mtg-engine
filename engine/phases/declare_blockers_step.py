@@ -1285,6 +1285,24 @@ class DeclareBlockersStepMixin:
                 self.log.append(
                     f"{source.card.name} triggered (attacked and wasn't blocked)"
                 )
+            # "Until end of turn, whenever a creature you control attacks and
+            # isn't blocked, …" (Gaze of Pain.) A delayed ability belongs to no
+            # permanent, so the scan above cannot reach it — the entry is a
+            # spell's and the spell is in a graveyard. Announced here, inside
+            # the same per-attacker loop, because that is what makes the two
+            # readings of one moment agree: the printed static on the attacker
+            # and the delayed one a spell armed fire on exactly the same set of
+            # creatures.
+            #
+            # The attacker is named as the source for `_fire_delayed_block_triggers`'s
+            # reason: the sentence behind this opener says "…have **it** deal
+            # damage equal to **its** power", and CR 603.7d's own-source
+            # default would point that at the spell.
+            fire_delayed_triggers(
+                self, "creature_attacks_unblocked",
+                subject=permanent,
+                source_permanent=permanent,
+            )
 
     def _fire_delayed_block_triggers(
         self, controller_index: int, assignments: dict[int, list[int]]

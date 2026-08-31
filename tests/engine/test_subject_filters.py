@@ -358,6 +358,8 @@ _COVERED_ELSEWHERE = {
     "attacking_you": "test_attacking_you_is_two_questions_not_one",
     "unblocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
     "blocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
+    "controlled_since_turn_start":
+        "test_controlled_since_turn_start_rejects_a_creature_that_just_arrived",
 }
 
 
@@ -550,6 +552,37 @@ def test_attacking_you_is_two_questions_not_one(pool):
     )
     assert not subject_matches(game, idle, described, observer=1)
     assert not subject_matches(game, attacker, described)
+
+
+def test_controlled_since_turn_start_rejects_a_creature_that_just_arrived(pool):
+    """"…except for creatures the player hasn't controlled continuously since
+    the beginning of the turn." (Total War.)
+
+    Its own demonstration rather than a row in ``_REJECTIONS``: the answer is a
+    *comparison* against the game's turn, so the rejected permanent is told
+    apart from the accepted one by a stamp rather than by anything printed on
+    either — which is also why the pure matcher cannot answer it and why this
+    is asked through ``subject_matches``.
+
+    The same predicate CR 302.6's summoning sickness reads, so a creature that
+    changed hands this turn is exempt here for the same reason it cannot
+    attack.
+    """
+    settled = Permanent(card=pool["Grizzly Bears"])
+    arrived = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[settled, arrived]),
+        PlayerState(name="P2"),
+    ])
+    settled.metadata["summoning_sickness_turn"] = game.turn - 1
+    arrived.metadata["summoning_sickness_turn"] = game.turn
+
+    assert subject_matches(game, arrived, {"type_filter": "creature"}), (
+        "the control: the bare noun phrase must match, or the rejection below "
+        "proves nothing about the key"
+    )
+    assert subject_matches(game, settled, {"controlled_since_turn_start": True})
+    assert not subject_matches(game, arrived, {"controlled_since_turn_start": True})
 
 
 def test_no_key_is_promised_without_a_matcher_behind_it():

@@ -146,6 +146,17 @@ class ObjectFilter:
     # answered off the permanent's own per-turn record.
     attacked_this_turn: bool | None = None
     could_attack_this_turn: bool | None = None
+    # "…**except for creatures the player hasn't controlled continuously since
+    # the beginning of the turn**" (Total War). CR 302.6's condition, printed as
+    # an exception and therefore *narrowing to* the creatures that have been
+    # controlled that long — the exception is what the field says, so nothing
+    # downstream has to invert it.
+    #
+    # Relative to the game rather than to the object: the answer is a
+    # comparison against the current turn, which the pure matcher has no way to
+    # make. So it is answered in ``subject_matches`` beside the layer-6
+    # questions, and refused by ``permanent_matches_filter``.
+    controlled_since_turn_start: bool | None = None
     # "exile any number of **tokens** created with this creature" (Tetravus) —
     # the positive of ``nontoken``. Its own field rather than a tri-state,
     # because every lowering written before it exists refuses an unknown field
@@ -465,6 +476,8 @@ class ObjectFilter:
             payload["not_attacked_this_turn"] = True
         if self.could_attack_this_turn is True:
             payload["could_attack_this_turn"] = True
+        if self.controlled_since_turn_start is True:
+            payload["controlled_since_turn_start"] = True
         if self.token_only:
             payload["token_only"] = True
         if self.created_with_source:

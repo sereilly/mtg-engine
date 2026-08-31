@@ -314,6 +314,16 @@ def _lower_condition(
         # and the evaluator counts the board. The comparison is always set by
         # the production (the quantifier *is* the comparison), so there is no
         # unbounded reading to fall back to here.
+        if condition.comparison.op in ("even", "odd"):
+            # "if the number of permanents is even" (Chaos Lord). A parity
+            # prints no threshold, so no ``count`` is emitted: a zero carried
+            # here would be a number the evaluator could read as one, and
+            # `_compare_count` answers the parity before it looks.
+            return {
+                "kind": "on_battlefield",
+                "filter": condition.filter.to_payload(),
+                "op": condition.comparison.op,
+            }
         return {
             "kind": "on_battlefield",
             "filter": condition.filter.to_payload(),

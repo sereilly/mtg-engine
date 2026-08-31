@@ -191,6 +191,9 @@ class _FilterDraft:
     # ``ast.ObjectFilter``.
     attacked_this_turn: bool | None = None
     could_attack_this_turn: bool | None = None
+    # "…except for creatures the player hasn't controlled continuously since
+    # the beginning of the turn" (Total War) — see ``ast.ObjectFilter``.
+    controlled_since_turn_start: bool | None = None
     token_only: bool = False
     their_choice: bool = False
     chosen_by_opponent: bool = False
@@ -675,6 +678,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         chosen_color=d.chosen_color,
         attacked_this_turn=d.attacked_this_turn,
         could_attack_this_turn=d.could_attack_this_turn,
+        controlled_since_turn_start=d.controlled_since_turn_start,
         token_only=d.token_only,
         their_choice=d.their_choice,
         named=d.named,

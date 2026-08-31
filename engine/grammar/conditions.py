@@ -298,6 +298,34 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             )
     stream.reset(zone_mark)
 
+    # "if **the number of permanents is even**" (Chaos Lord). The same board
+    # count as the branch above, compared by *parity* rather than against a
+    # threshold — so it is the same node with a different operator, not a
+    # second condition kind: what is counted, and where, is identical.
+    #
+    # The noun phrase is read rather than assumed. "The number of permanents"
+    # is the whole board (CR 110.1 makes every object on the battlefield a
+    # permanent, whoever controls it), and a card counting something narrower
+    # is this same sentence with a different phrase.
+    parity_mark = stream.mark()
+    if stream.accept_phrase("the", "number", "of"):
+        try:
+            counted = parse_object_filter(stream)
+        except GrammarError:
+            counted = None
+        if counted is not None and stream.accept_word("is"):
+            for word in ("even", "odd"):
+                if stream.accept_word(word):
+                    return ast.OnBattlefield(
+                        counted,
+                        # The parity is the whole comparison: the sentence
+                        # prints no threshold, and a zero here would read as
+                        # one to anything that looked. `lowering/conditions.py`
+                        # emits no count for these operators for that reason.
+                        ast.Comparison(word, ast.Fixed(0)),
+                    )
+    stream.reset(parity_mark)
+
     # "if **it doesn't have rampage**" (Rapid Fire). Read before the two
     # back-references below, which open with the same pronoun: this branch is
     # pinned by the verb that follows it, and it resets when no keyword does.

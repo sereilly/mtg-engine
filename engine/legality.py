@@ -1271,6 +1271,7 @@ class LegalityMixin:
     ) -> bool:
         """Whether *perm* satisfies an activated ability instruction's own target
         restriction (beyond the text-derived kind)."""
+        instruction = _targeting_step(instruction) or instruction
         if instruction.kind == "destroy_target_permanent":
             return self._destroy_target_legal(instruction.payload, perm)
         if instruction.kind == "mark_non_wall_target_to_attack":
@@ -1745,3 +1746,45 @@ class LegalityMixin:
                 "name": f"{name}'s {kind} ability",
             })
         return targets
+
+
+#: The payload keys a composed instruction nests its steps under, in the order
+#: :func:`engine.targeting._from_instructions` reads them. Held to that order on
+#: purpose: the picker's *kind* comes from there and its *restriction* comes from
+#: here, and two walks that disagreed would offer a target the resolution then
+#: declines — the two-readers failure this file exists to prevent.
+_COMPOSED_STEP_KEYS: dict[str, tuple[str, ...]] = {
+    "sequence": ("steps",),
+    "if_then": ("then", "else"),
+    "unless_player_pays": ("unpaid",),
+    # An offer's *declined* branch is read last and is read at all for
+    # CR 601.2c's reason: Arcum's Whistle chooses its creature as the ability is
+    # activated, before anybody is offered the payment.
+    "may": ("action", "then", "otherwise"),
+}
+
+
+def _targeting_step(instruction):
+    """The instruction inside *instruction* that actually names a target, or
+    None when *instruction* is not a composition.
+
+    An ability whose whole effect sits behind an offer or a condition carries
+    its printed target restriction on the *inner* step, and the enumerator is
+    handed the outer one. Without this, Arcum's Whistle's "target non-Wall
+    creature the active player has controlled continuously since the beginning
+    of the turn" was a noun phrase the picker never asked about: it offered
+    every creature on the board, Walls and new arrivals included, and the
+    handler then refused them — a restriction enforced by nothing, which is
+    this file's own failure mode.
+    """
+    keys = _COMPOSED_STEP_KEYS.get(instruction.kind)
+    if keys is None:
+        return None
+    for key in keys:
+        for step in instruction.payload.get(key) or ():
+            found = _targeting_step(step)
+            if found is not None:
+                return found
+            if step.kind not in _COMPOSED_STEP_KEYS:
+                return step
+    return None

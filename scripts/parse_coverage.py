@@ -700,7 +700,51 @@ def _hooked_names() -> set[str]:
 # reduction is two sentences that mean nothing apart (the amount and its floor),
 # so the code that carries it out matches them joined and no sentence-only
 # predicate could recognise either half.
+def _delayed_trigger_rider_sentences(oracle_text: str) -> set[str]:
+    """Trailing sentences that belong to a delayed-trigger clause the compiler
+    reads **whole** (Gaze of Pain's "if you do, it assigns no combat damage
+    this turn").
+
+    ``_parse_delayed_attack_trigger`` hands the clause behind the opener to the
+    ordinary effect reader, so a two-sentence effect is read as two sentences —
+    but only the first of them is a delayed-trigger clause on its own, and the
+    per-sentence channel above therefore leaves the rider looking unclaimed.
+
+    The anti-rider check is the one ``claim_clause`` makes for a rule match, and
+    it is why this is a *card* channel rather than a phrase list: a trailing
+    sentence is claimed only when dropping it **changes** the instruction the
+    clause produces. A sentence the reader ignored still reads as unclaimed,
+    which is the whole point of the report.
+    """
+    claimed: set[str] = set()
+    for raw_line in (oracle_text or "").splitlines():
+        line = normalize_creature_line(raw_line.strip()).strip(" .")
+        if not line:
+            continue
+        whole = _parse_delayed_attack_trigger(line, None)
+        if whole is None:
+            continue
+        sentences = _sentences(line)
+        if len(sentences) < 2:
+            continue
+        for cut in range(1, len(sentences)):
+            prefix = ". ".join(sentences[:cut])
+            if _parse_delayed_attack_trigger(prefix, None) == whole:
+                # This prefix already means the whole clause, so everything
+                # after it was read and dropped. Claim nothing.
+                return set()
+        claimed.update(sentences[1:])
+    return claimed
+
+
 CARD_CHANNELS: tuple[tuple[str, object], ...] = (
+    (
+        # Gaze of Pain: "you may … . **If you do**, it assigns no combat damage
+        # this turn." One clause, two sentences, and the second is the half the
+        # card is played for.
+        "oracle.py (delayed trigger rider)",
+        lambda card, s: s in _delayed_trigger_rider_sentences(card.oracle_text or ""),
+    ),
     (
         "auras.py (attached ability cost reduction)",
         lambda card, s: s in aura_cost_reduction_sentences(card.oracle_text or ""),

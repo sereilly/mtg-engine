@@ -176,9 +176,20 @@ class ForceChosenCreatureToAttack:
     with the requirement the second sentence imposed. Parsed apart, two of the
     three dangle.
 
-    It carries no parameters. Every printing of this template names the same
-    creature — non-Wall, the active player's, controlled since the turn began —
-    and imposes the same requirement; what differs between the cards is the
-    activation restriction, which is a clause of the *ability* rather than of
-    this effect and is read where every other one is.
+    Every printing of this template names the same creature — non-Wall, the
+    active player's, controlled since the turn began — and imposes the same
+    requirement; what differs between Nettling Imp and Norritt is the activation
+    restriction, which is a clause of the *ability* rather than of this effect
+    and is read where every other one is.
+
+    ``unless_controller_pays_mana_value`` is Arcum's Whistle, the one printing
+    that puts a price on the requirement: "That player may pay {X}, where X is
+    that creature's mana value. If they don't pay, …". A field rather than a
+    second node because everything after the offer is this effect, unchanged —
+    the same requirement, the same delayed destruction, the same chosen
+    creature. The price is not carried: it is that creature's mana value on
+    every card that prints this, and a number here would be a parameter no
+    printing varies.
     """
+
+    unless_controller_pays_mana_value: bool = False

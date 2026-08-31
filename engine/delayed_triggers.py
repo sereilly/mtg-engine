@@ -69,6 +69,20 @@ DELAYED_EVENTS: dict[str, str] = {
     # card printing this opener has, and CR 603.7d's own-source default would
     # point the effect at a spell that is already in a graveyard.
     "creature_blocks": "the declare blockers step",
+    # "Until end of turn, whenever a creature you control **attacks and isn't
+    # blocked**, …" (Gaze of Pain.) The same step as the row above and a
+    # different moment inside it: a block is announced as it is declared
+    # (CR 509.1g), and this is the state of the *attack* once every declaration
+    # is in (CR 509.1h) — an attacker nobody blocked. Its own event for that
+    # reason rather than a narrowing of `creatures_attack`, which fires at
+    # CR 508.1 when no blocker has been declared and the question cannot yet be
+    # answered.
+    #
+    # Announced per unblocked attacker, so the fire site names that creature as
+    # the ability's source: "…have **it** deal damage equal to **its** power"
+    # is the shape the card prints, and CR 603.7d's own-source default would
+    # point it at a sorcery already in a graveyard.
+    "creature_attacks_unblocked": "the declare blockers step",
     # Subira, Tulzidi Caravanner.
     "creature_deals_combat_damage_to_player": "the combat damage step",
     # "When that creature dies this turn, …" (Reincarnation). The dying

@@ -594,6 +594,78 @@ def test_removed_creature_stops_being_attacking_and_blocking():
     assert blocker.blocked is False
 
 
+@pytest.mark.cr("506.4")
+def test_an_attacker_whose_controller_changes_is_removed_from_combat():
+    """506.4's second clause: "a permanent is removed from combat … **if its
+    controller changes**".
+
+    A control change is not a zone change, so the leave-the-battlefield
+    transition above never sees it — ``Game._sync_control`` is the one place a
+    permanent changes hands, and it moves the object between two battlefield
+    lists without touching combat. Two things were wrong at once and each hid
+    the other: the stolen creature stayed stamped ``attacking`` under its new
+    controller, and its old slot was left in ``combat_attackers`` naming
+    whichever creature slid into it.
+
+    The second creature is what makes the slot observable — with one attacker
+    and nothing behind it, the stale index points at an empty list and the
+    combat maps look fine.
+    """
+    stolen = Permanent(card=_mk_creature("Attacker", 2, 2))
+    homebody = Permanent(card=_mk_creature("Homebody", 2, 2))
+    thief_source = Permanent(card=_mk_creature("Thief", 1, 1))
+    p1 = PlayerState(name="P1", battlefield=[stolen, homebody])
+    p2 = PlayerState(name="P2", battlefield=[thief_source])
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    game.declare_attackers(0, [0])
+    assert game.combat_attackers == {0: 1}
+
+    assert game.take_control(stolen, 1, source=thief_source)
+
+    assert game.combat_attackers == {}
+    assert stolen.attacking is False
+    assert stolen.defending_player_index is None
+    assert homebody.attacking is False, (
+        "the creature that slid into slot 0 never attacked"
+    )
+
+
+@pytest.mark.cr("506.4", "509.1h")
+def test_a_blocker_whose_controller_changes_is_removed_from_combat():
+    """The other role, and the reason the prune goes through the shared
+    renumbering rather than through the attacker map alone: a blocker's slot is
+    keyed under its own defending seat.
+
+    CR 509.1h is the half that is easy to get backwards — "a creature remains
+    blocked even if all the creatures blocking it are removed from combat" — so
+    the attacker keeps taking no damage from the player it attacked. That is
+    also why False Orders and Ydwen Efreet print the unblocking clause out
+    loud: it is not what removal does by itself.
+    """
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
+    spare = Permanent(card=_mk_creature("Spare", 2, 2))
+    p1 = PlayerState(name="P1", battlefield=[attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker, spare])
+    game = Game(players=[p1, p2])
+
+    _to_declare_attackers(game)
+    game.declare_attackers(0, [0])
+    game.advance_combat_phase()
+    game.declare_blockers(1, {0: 0})
+    assert game.combat_blockers == {1: {0: [0]}}
+
+    assert game.take_control(blocker, 0, source=attacker)
+
+    assert game.combat_blockers.get(1, {}) == {}
+    assert blocker.blocking_attacker_index is None
+    assert attacker.blocked is True, (
+        "509.1h: the attacker stays blocked once every blocker has left"
+    )
+
+
 @pytest.mark.cr("506.4b")
 def test_506_4b_untapping_declared_attacker_keeps_it_in_combat():
     # 506.4b: untapping a creature already declared as an attacker doesn't remove

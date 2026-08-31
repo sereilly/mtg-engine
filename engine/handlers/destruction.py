@@ -380,9 +380,35 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
     observer = (
         game.players.index(context.caster) if context.caster in game.players else None
     )
+    # "…all untapped non-Wall creatures **that player** controls" (Total War).
+    # A seat the firing event picked, not a seat any read of the board can
+    # name — so `subject_matches` refuses it outright and says why, and the
+    # resolution holding the trigger's context is what answers. Stripped from
+    # the filter and asked as its own predicate rather than rewritten into
+    # "you": every other key in the phrase is still relative to CR 109.5's
+    # observer, and swapping the observer wholesale would re-aim them at
+    # whoever attacked.
+    #
+    # An unresolvable seat ends the resolution, for the reason every relation
+    # above ends it: a dropped narrowing on a sweep is not a card that does
+    # less, it is one that takes the board.
+    attacking_seat: int | None = None
+    if filters.get("controller") == "that_player":
+        frozen = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(frozen, int) or not (0 <= frozen < len(game.players)):
+            game.log.append(
+                f"{context.card.name}: no player for 'that player' to name"
+            )
+            return True, "resolved"
+        attacking_seat = frozen
+        filters = {k: v for k, v in filters.items() if k != "controller"}
     matched = [
         perm for perm in game.all_permanents()
-        if subject_matches(
+        if (
+            attacking_seat is None
+            or game.controller_index_of(perm) == attacking_seat
+        )
+        and subject_matches(
             game, perm, filters,
             observer=observer, source=context.source_permanent,
         )

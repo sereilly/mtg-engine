@@ -3690,24 +3690,31 @@ def test_delayed_destroy_needs_the_trigger_that_binds_the_blocking_pair():
     assert not result.lowered
 
 
-def test_a_destroy_delayed_to_the_end_step_is_not_claimed():
-    """Stone Giant and Nettling Imp defer to the next end step, which is a
-    different handler. Refusing the line is what keeps them from being
-    destroyed a combat early.
+def test_a_destroy_delayed_to_the_end_step_is_not_the_end_of_combat_one():
+    """Stone Giant and Nettling Imp defer to the next **end step**, which is a
+    different handler from the end-of-combat one above. The property is that
+    the two are told apart — destroying at end of combat what the card destroys
+    at the end step takes the creature a combat early.
 
-    The refusal moved a layer down when Infinite Authority taught the delay
-    table "at the beginning of the next end step": the opener is read now, so
-    the sentence *parses* — and then refuses to lower, because "that creature"
-    under a delay that binds no object names nothing at all. Which layer says
-    no does not matter; that one does is the whole property.
+    It used to be asserted as a refusal, because nothing read the sentence at
+    all. ``_parse_delayed_self_action`` reads "that creature" beside the "it"
+    it always read (Barbarian Guides prints the bounce spelling), so the line is
+    claimed now — by the end-step arm, which is the handler these cards want.
+    The guard therefore names the kind rather than the absence of one: a refusal
+    and the *right* reading both satisfy "not the end-of-combat handler", and
+    only one of them says which.
     """
     result = compile_line(
         "Destroy that creature at the beginning of the next end step.",
         card_name="Test",
     )
 
-    assert not result.usable
-    assert result.lowering_error
+    assert [i.kind for i in result.instructions] == [
+        "arm_self_action_at_next_end_step"
+    ]
+    assert result.instructions[0].payload == {
+        "self_action": "destroy", "subject": "bound",
+    }
 
 
 # ---------------------------------------------------------------------------

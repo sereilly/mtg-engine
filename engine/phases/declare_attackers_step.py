@@ -556,13 +556,25 @@ class DeclareAttackersStepMixin:
         # "Can attack as though it had haste" (Instill Energy) lifts CR 302.6's
         # attack clause only — not its {T}-ability clause, which is why it is a
         # restriction here rather than a haste grant.
+        program = compile_card_oracle(attacker.effective_card)
+        instr_kinds = {i.kind for i in program.instructions}
+
         if self._is_summoning_sick(attacker) and not aura_restriction_active(
             attacker, "attacks_as_though_hasty"
         ):
-            return False
-
-        program = compile_card_oracle(attacker.effective_card)
-        instr_kinds = {i.kind for i in program.instructions}
+            # "This creature can attack as though it had haste **unless it
+            # entered this turn**." (Chaos Lord.) The creature's own printed
+            # permission, beside the Aura-granted one (Instill Energy) — and
+            # the exception is read off the *entry* stamp, never off summoning
+            # sickness: this card changes controller every upkeep and
+            # `_sync_control` rewrites that stamp, so asking it would answer
+            # "it entered this turn" because of the control change the ability
+            # exists to cause, and the permission would never once apply.
+            if not (
+                "attacks_as_though_hasty_unless_it_entered" in instr_kinds
+                and not self.entered_this_turn(attacker)
+            ):
+                return False
 
         # What the defending player controls, and which answer forbids the
         # attack. Both are *data*: "unless … an Island" (Sea Serpent) and "if …
@@ -1052,7 +1064,18 @@ class DeclareAttackersStepMixin:
         ``combat_attackers`` at the filter: the trigger is about the declaration
         as it was announced, and a later removal renumbers that map.
         """
-        emit(self, "attackers_declared", seat=controller_index, attackers=list(declared))
+        emit(
+            self, "attackers_declared",
+            seat=controller_index, attackers=list(declared),
+            # Who attacked, under the key every "that player" in this engine
+            # reads (`lowering/_events.EVENT_SUBJECT_PLAYER`). "Whenever a
+            # player attacks …, destroy all creatures **that player** controls"
+            # (Total War) is the seat the *event* picked, and the seat-narrowed
+            # readings of this same announcement have always had it implicitly
+            # in `seat` — spelled under the shared name so the effect half can
+            # find it without knowing which fire site it came from.
+            event_subject_player=controller_index,
+        )
         # "Whenever an **opponent** attacks with creatures" (Mangara). The same
         # declaration asked from the other side, so it is announced here rather
         # than given a site of its own — and it carries, per seat, how many of

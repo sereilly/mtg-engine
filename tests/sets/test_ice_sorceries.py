@@ -1137,3 +1137,151 @@ def test_the_doubling_sentence_is_read_rather_than_consumed(set_pool):
     assert without.lowered
     assert without.instructions[0].payload == {"stake": 1, "doubling": False}
 # --- end W3G4 ---
+
+
+# --- W3G2: combat control and attack requirements ---
+def _w3g2_gaze_board(set_pool):
+    """Gaze of Pain in hand, one attacker, and on the other side a creature to
+    aim at plus a Wall to block with.
+
+    Seat 0 is interactive so the two prompts the ability owes — its target and
+    the "you may" — *queue* rather than take their defaults at once, which is
+    also what makes combat wait for them (CR 608.2, ``_combat_awaits_an_answer``).
+    """
+    pool = set_pool("ICE")
+    attacker = Permanent(card=pool["Balduvian Bears"])   # 2/2
+    victim = Permanent(card=pool["Balduvian Bears"])
+    blocker = Permanent(card=pool["Glacial Wall"])       # 0/7 defender
+    game = Game(players=[
+        PlayerState(
+            name="P0", battlefield=[attacker], life=20,
+            hand=[pool["Gaze of Pain"]],
+        ),
+        PlayerState(name="P1", battlefield=[victim, blocker], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game._settle()
+    game.start_turn(0)
+    for perm in (attacker, victim, blocker):
+        perm.metadata["summoning_sickness_turn"] = -99
+    return game, attacker, victim, blocker
+
+
+def _w3g2_gaze_combat(game, blocker, *, block):
+    """Cast the sorcery, attack, declare (or decline) the block, and stop at
+    the moment blocks lock — which is where the delayed ability fires."""
+    assert game.cast_from_hand(0, "Gaze of Pain").supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    assert game.declare_attackers(0, [0])[0]
+    game._settle()
+    game.advance_combat_phase()   # declare blockers
+    slot = next(
+        i for i, perm in enumerate(game.controlled_by(game.players[1]))
+        if perm is blocker
+    )
+    assert game.declare_blockers(1, {slot: [0]} if block else {})[0]
+    game._settle()
+    game.advance_combat_phase()   # blocks lock: the delayed ability fires here
+    return list(game.pending_choices_of("trigger_target"))
+
+
+def _w3g2_finish_combat(game):
+    for _ in range(len(list(game._phase_steps("combat"))) + 1):
+        if game.current_turn_phase != "combat":
+            break
+        before = (game.current_turn_phase, game.current_step)
+        game.advance_combat_phase()
+        game._settle()
+        if (game.current_turn_phase, game.current_step) == before:
+            break
+    game.check_state_based_actions()
+
+
+def test_w3g2_gaze_of_pain_is_supported(set_pool):
+    """One line, three things: a delayed ability with a stated duration
+    (CR 603.7b), an event nothing announced before it, and a "may" whose
+    rider is the second half of the card."""
+    program = compile_card_oracle(set_pool("ICE")["Gaze of Pain"])
+
+    assert program.supported
+    assert [i.kind for i in program.instructions] == ["create_delayed_trigger"]
+    assert program.instructions[0].payload["event"] == "creature_attacks_unblocked"
+    assert program.instructions[0].payload["once"] is False
+
+
+def test_w3g2_gaze_of_pain_bites_instead_of_connecting(set_pool):
+    """Taking the offer: the attacker deals its power to the chosen creature
+    and then assigns no combat damage — so the defending player's life is
+    what proves the rider ran, not a flag."""
+    game, attacker, victim, blocker = _w3g2_gaze_board(set_pool)
+
+    pending = _w3g2_gaze_combat(game, blocker, block=False)
+
+    assert len(pending) == 1, game.log
+    offered = {t["permanent_id"] for t in pending[0].data["targets"]}
+    assert victim.permanent_id in offered
+    assert game.confirm_trigger_target(0, victim.permanent_id)
+    game._settle()
+    assert game.confirm_optional_pay(0, "Gaze of Pain", accept=True)
+    _w3g2_finish_combat(game)
+
+    assert not any(
+        perm is victim for perm in game.controlled_by(game.players[1])
+    ), game.log
+    assert game.players[1].life == 20, game.log
+
+
+def test_w3g2_declining_the_gaze_leaves_the_combat_damage_alone(set_pool):
+    """"If you do" — the other half. Nothing bitten, so the rider never runs
+    and the 2/2 connects for two."""
+    game, attacker, victim, blocker = _w3g2_gaze_board(set_pool)
+
+    pending = _w3g2_gaze_combat(game, blocker, block=False)
+    assert game.confirm_trigger_target(0, victim.permanent_id)
+    game._settle()
+    assert game.confirm_optional_pay(0, "Gaze of Pain", accept=False)
+    _w3g2_finish_combat(game)
+
+    assert victim.damage_marked == 0
+    assert game.players[1].life == 18, game.log
+
+
+def test_w3g2_a_blocked_attacker_never_wakes_the_gaze(set_pool):
+    """The event is CR 509.1h — an attacker nobody blocked — so a blocked one
+    offers nothing at all. Its own event rather than a narrowing of the attack
+    declaration for exactly this: at CR 508.1 no blocker has been declared and
+    the question cannot yet be answered."""
+    game, attacker, victim, blocker = _w3g2_gaze_board(set_pool)
+
+    pending = _w3g2_gaze_combat(game, blocker, block=True)
+
+    assert pending == [], game.log
+    assert not game.pending_optional_pays
+    _w3g2_finish_combat(game)
+    assert victim.damage_marked == 0
+    assert game.players[1].life == 20
+
+
+def test_w3g2_the_gaze_watches_only_its_casters_creatures(set_pool):
+    """"a creature **you control**" — the delayed entry carries the printed
+    noun phrase, and `DelayedTrigger.matches` tests it against the seat that
+    armed it. An opponent's unblocked attacker is not the event."""
+    game, attacker, victim, blocker = _w3g2_gaze_board(set_pool)
+    assert game.cast_from_hand(0, "Gaze of Pain").supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+    entry = game.delayed_triggers[0]
+    assert entry.event == "creature_attacks_unblocked"
+    assert entry.subject_filter == {"type_filter": "creature", "controller": "you"}
+    assert entry.controller_index == 0
+    assert not entry.matches(game, "creature_attacks_unblocked", victim)
+    assert entry.matches(game, "creature_attacks_unblocked", attacker)
+# --- end W3G2 ---

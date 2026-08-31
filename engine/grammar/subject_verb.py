@@ -23,7 +23,6 @@ from .paragraphs import (
     _parse_coin_flip_damage_loop,
     _parse_pay_mana_to_prevent_upkeep_damage,
     _parse_upkeep_damage_unless_cost,
-    _parse_force_chosen_creature_to_attack,
     _parse_exchange_greatest_mana_value, _parse_exile_graveyard_until_leaves,
     _parse_exile_until_leaves_or_untaps, _parse_name_and_strip,
     _parse_name_then_consult,
@@ -37,6 +36,7 @@ from .phrases import (_parse_can_attack_as_though, _parse_duration,
                       _parse_mana_payment, _parse_pay_life, parse_bound_subject)
 from .vocabulary import NUMBER_WORDS
 from .effects import (
+    _parse_force_chosen_creature_to_attack,
     _parse_add_mana, _parse_ante, _parse_assigns_no_combat_damage, _parse_attach,
     _parse_note_mana_spent,
     _parse_becomes, _parse_cant_attack_or_block, _parse_change_base_pt,

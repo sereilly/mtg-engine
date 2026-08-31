@@ -33,6 +33,24 @@ import re
 
 # --- CR 614.1c entry state, engine/mixins/permanent_state.py ---------------
 
+#: The metadata key recording **which turn a permanent entered the
+#: battlefield**, stamped once as it arrives and never rewritten.
+#:
+#: Not a phrase and not an entry *effect*, and here anyway for this module's own
+#: stated reason: it is written by ``_initialize_permanent_state`` and read
+#: somewhere else entirely (``declare_attackers_step``), and a channel spelled
+#: at both ends is a channel that can be renamed at one.
+#:
+#: It exists because ``summoning_sickness_turn`` cannot answer the question.
+#: That stamp is CR 302.6's "since their most recent turn began": a control
+#: change re-writes it (``Game._sync_control``) and a passing turn carries it
+#: forward (``_advance_summoning_sickness``). Chaos Lord asks whether the
+#: permanent *entered* this turn while handing itself to an opponent every
+#: upkeep, so reading the sickness stamp would answer "yes" because of the very
+#: control change the card exists to cause — the card doing nothing, silently.
+ENTERED_BATTLEFIELD_TURN = "entered_battlefield_turn"
+
+
 # "This artifact enters tapped." (Nevinyrral's Disk, Time Vault). The mixin
 # probes for this substring and excludes "unless", so a conditional wording
 # ("enters tapped unless you pay …") is a different card.

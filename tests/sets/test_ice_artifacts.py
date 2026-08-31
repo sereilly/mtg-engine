@@ -1326,3 +1326,161 @@ def test_a_headless_seat_declines_the_cauldrons_offer(set_pool, catalog_by_name)
     assert counters_on(cauldron, "charge") == 1
     assert game.pending_choices == []
 # --- end W3G4 ---
+
+
+# --- W3G2: combat control and attack requirements ---
+def _w3g2_whistle_board(set_pool, *, funded=True):
+    """Arcum's Whistle under seat 0; seat 1 is the **active** player and holds
+    the creature it can aim at, a Wall it cannot, and one that arrived this
+    turn.
+
+    Both seats are interactive so the payment *queues* instead of taking its
+    default at once, which is what lets a test answer it either way.
+    """
+    pool = set_pool("ICE")
+    whistle = Permanent(card=pool["Arcum's Whistle"])
+    victim = Permanent(card=pool["Balduvian Bears"])     # mana value 2
+    wall = Permanent(card=pool["Glacial Wall"])
+    newcomer = Permanent(card=pool["Balduvian Bears"])
+    lands = (
+        [Permanent(card=pool["Snow-Covered Forest"]) for _ in range(3)]
+        if funded else []
+    )
+    game = Game(players=[
+        PlayerState(name="P0", battlefield=[whistle], life=20),
+        PlayerState(name="P1", battlefield=[victim, wall, newcomer] + lands, life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game._settle()
+    game.start_turn(1)
+    for perm in [whistle, victim, wall] + lands:
+        _nosick(perm)
+    newcomer.metadata["summoning_sickness_turn"] = game.turn
+    return game, whistle, victim, wall, newcomer
+
+
+def _w3g2_blow_the_whistle(game, whistle, victim):
+    return game.activate_permanent_ability(
+        0, "Arcum's Whistle",
+        target_player_index=1,
+        permanent_index=game.battlefield_index_of(whistle),
+        target_permanent_index=game.battlefield_index_of(victim),
+    )
+
+
+def test_w3g2_arcums_whistle_is_supported(set_pool):
+    """Nettling Imp's paragraph with a price on it. The offer is composed
+    through the ordinary "may" rather than fused, because everything after it
+    is the template unchanged."""
+    program = compile_card_oracle(set_pool("ICE")["Arcum's Whistle"])
+
+    assert program.supported
+    ability = program.activated_abilities[0]
+    assert ability.instruction.kind == "may"
+    assert ability.instruction.payload["actor"] == "that_player"
+    assert [i.kind for i in ability.instruction.payload["otherwise"]] == [
+        "mark_non_wall_target_to_attack"
+    ]
+
+
+def test_w3g2_the_whistle_offers_only_the_creature_it_may_name(set_pool):
+    """The picker asks the same question the handler does. The restriction sits
+    on the offer's *declined* branch, so the enumerator had to look inside the
+    composition — reading only the outer "may" offered every creature on the
+    board, Walls and new arrivals included, and the handler then refused them.
+    """
+    from engine.targeting import derive_activation_spec
+
+    game, whistle, victim, wall, newcomer = _w3g2_whistle_board(set_pool)
+    ability = compile_card_oracle(whistle.card).activated_abilities[0]
+
+    offered = game._enumerate_targets(
+        0, whistle.card, derive_activation_spec(ability), for_cast=False,
+        ability_instruction=ability.instruction,
+        source_permanent=whistle, ability_source=whistle,
+    )
+
+    assert [(t["seat"], t["index"]) for t in offered] == [
+        (1, game.battlefield_index_of(victim))
+    ], game.log
+
+
+def test_w3g2_refusing_the_whistles_price_forces_the_attack(set_pool):
+    """The offer is made to the creature's controller — the active player, not
+    the Whistle's — and its price is that creature's mana value."""
+    game, whistle, victim, _wall, _newcomer = _w3g2_whistle_board(set_pool)
+
+    assert _w3g2_blow_the_whistle(game, whistle, victim).supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+    owed = game.pending_choices_of("optional_pay")
+    assert [c.player_index for c in owed] == [1], game.log
+    assert game.pending_optional_pays[0]["cost"] == {"generic": 2}
+
+    game.confirm_optional_pay(1, "Arcum's Whistle", accept=False)
+    game._settle()
+
+    assert victim.metadata.get("must_attack_until_eot") is True
+    game.resolve_end_step(1)
+    assert not any(
+        perm is victim for perm in game.controlled_by(game.players[1])
+    ), game.log
+
+
+def test_w3g2_paying_the_whistles_price_buys_the_creature_off(set_pool):
+    """The other branch, and the reason the price is worth printing."""
+    game, whistle, victim, _wall, _newcomer = _w3g2_whistle_board(set_pool)
+
+    _w3g2_blow_the_whistle(game, whistle, victim)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+    game.confirm_optional_pay(1, "Arcum's Whistle", accept=True)
+    game._settle()
+
+    assert victim.metadata.get("must_attack_until_eot") is None
+    game.resolve_end_step(1)
+    assert any(perm is victim for perm in game.controlled_by(game.players[1]))
+
+
+def test_w3g2_a_payer_with_no_mana_is_never_offered_the_choice(set_pool):
+    """CR 601.2h asked of an offer: a seat that cannot pay is not asked, and
+    the requirement lands. The half that would look like a bug if the prompt
+    simply never arrived."""
+    game, whistle, victim, _wall, _newcomer = _w3g2_whistle_board(
+        set_pool, funded=False
+    )
+
+    _w3g2_blow_the_whistle(game, whistle, victim)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+    assert not game.pending_optional_pays
+    assert victim.metadata.get("must_attack_until_eot") is True
+
+
+def test_w3g2_the_whistle_is_refused_once_attackers_are_declared(set_pool):
+    """"Activate only before attackers are declared." Both directions, because
+    an unenforced timing clause is an ability that works more often than the
+    card allows."""
+    game, whistle, victim, _wall, _newcomer = _w3g2_whistle_board(set_pool)
+    assert _w3g2_blow_the_whistle(game, whistle, victim).supported, (
+        "the control: the window is open in the precombat main phase"
+    )
+
+    # A fresh board, because the first activation leaves an offer owed and the
+    # combat rail waits for it (CR 608.2).
+    game, whistle, victim, _wall, _newcomer = _w3g2_whistle_board(set_pool)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    assert game.declare_attackers(1, [game.battlefield_index_of(victim)])[0]
+
+    refused = _w3g2_blow_the_whistle(game, whistle, victim)
+
+    assert not refused.supported
+# --- end W3G2 ---

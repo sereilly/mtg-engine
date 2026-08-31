@@ -197,6 +197,32 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
                     "x_from_count": _x_definition_spec(node.x_definition, node),
                 }),
             )
+        # "{1}{R}: This creature gets +2/+0 …" (Goblin Ski Patrol) — a
+        # *resolved* ability's modification with no duration printed, which
+        # CR 611.2b makes one that lasts indefinitely. It is not the continuous
+        # effect the refusal below is about: a static ability contributes
+        # afresh on every layer recompute and is refused one layer up
+        # (`_lower_static_ability`), while this is a one-shot the persistent
+        # 7c channel already holds — the same channel a +1/+1 counter writes to,
+        # and the one `engine/pt.py` documents as "one-shot modifications that
+        # stay until something removes them".
+        #
+        # Only on the ability's own source. A durationless pump on a *target* or
+        # on a class is the same rule and would be lowered the same way, but no
+        # card in the pool prints one, and a branch with nothing behind it is a
+        # claim nothing checks.
+        if _is_source(node.subject):
+            return (
+                OracleInstruction("pump_self", "", {
+                    "power": _signed(node.power, node.power_negative),
+                    "toughness": _signed(node.toughness, node.toughness_negative),
+                    # Named rather than left absent: every payload written
+                    # before this branch means end of turn, so the handler's
+                    # default has to stay that, and an indefinite one has to say
+                    # so out loud.
+                    "duration": "indefinite",
+                }),
+            )
         raise LoweringError(_durationless_reason(node.subject), node=node)
 
     if node.x_definition is not None:

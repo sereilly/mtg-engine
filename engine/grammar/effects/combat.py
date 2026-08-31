@@ -8,6 +8,7 @@ at all.
 """
 
 from .. import ast
+from ..lexer import MANA
 from ..nouns import parse_object_filter
 from ..references import parse_recipient
 from ..stream import TokenStream
@@ -392,3 +393,130 @@ def _parse_assigns_no_combat_damage(
         return None
     duration = _parse_duration(stream)
     return ast.AssignsNoCombatDamage(subject, duration)
+
+
+# ---------------------------------------------------------------------------
+# A whole printed paragraph that is one combat effect
+# ---------------------------------------------------------------------------
+#
+# Read here rather than in `paragraphs`, which is where it was until Arcum's
+# Whistle's payment tail pushed that module past the thousand-line guard. The
+# split reuses the family name the other side already carries — the lowering is
+# `lowering/combat.py`, so one template has one home per side and a reader
+# looking for the force-to-attack template finds it under `combat` on either.
+# Nothing about the production changed in the move: it still reads its own words
+# to the end and never calls back into the sentence parser, which is what made
+# it a paragraph in the first place.
+
+def _parse_force_chosen_creature_to_attack(stream: TokenStream) -> "ast.Statement | None":
+    """``Choose target non-Wall creature the active player has controlled
+    continuously since the beginning of the turn. That creature attacks this
+    turn if able. Destroy it at the beginning of the next end step if it didn't
+    attack this turn.`` (Nettling Imp, Norritt.)
+
+    Three sentences and one effect: "that creature" and "it" are both the
+    creature the first sentence chose, and the destruction is conditional on
+    what that creature did about the requirement the second one imposed.
+
+    **This was a card hook**, keyed by name on the whole printed line — the
+    activation restriction included. Norritt prints the identical ability with a
+    shorter restriction ("Activate only before attackers are declared" against
+    Nettling Imp's "Activate only during an opponent's turn, before attackers
+    are declared") and so got nothing at all, which is the arithmetic
+    `HOOK_RELIANCE.md` exists to measure: a name-keyed entry buys one card where
+    a production buys every card printed the same way. Arcum's Whistle prints
+    this same opening sentence with a payment rider and is one round further
+    out.
+
+    Every word of the noun phrase is read rather than skipped. "Non-Wall" and
+    "the active player has controlled continuously since the beginning of the
+    turn" are the two narrowings that make this creature choosable at all, and a
+    production that consumed them into nothing would be a card that can force
+    any creature to attack — including one that just arrived, which is the
+    difference between this and Siren's Call.
+    """
+    if not stream.accept_phrase("choose", "target", "non-wall", "creature"):
+        return None
+    for word in (
+        "the", "active", "player", "has", "controlled", "continuously",
+        "since", "the", "beginning", "of", "the", "turn",
+    ):
+        if not stream.accept_word(word):
+            return None
+    if not stream.accept_punct("."):
+        return None
+    # Arcum's Whistle's tail, tried first because it is the one that opens with
+    # a *payment*: the chosen creature's controller is offered its mana value,
+    # and only a refusal imposes the requirement. Same opening sentence, same
+    # requirement, same delayed destruction — so it is a tail of this production
+    # rather than a second one, and the two narrowings above are read once.
+    if _accept_pay_to_avoid_the_attack(stream):
+        return ast.ForceChosenCreatureToAttack(unless_controller_pays_mana_value=True)
+    if not stream.accept_phrase(
+        "that", "creature", "attacks", "this", "turn", "if", "able"
+    ):
+        return None
+    if not stream.accept_punct("."):
+        return None
+    if not stream.accept_phrase(
+        "destroy", "it", "at", "the", "beginning", "of", "the", "next", "end",
+        "step", "if", "it", "didn't", "attack", "this", "turn",
+    ):
+        return None
+    return ast.ForceChosenCreatureToAttack()
+
+
+def _accept_pay_to_avoid_the_attack(stream: TokenStream) -> bool:
+    """``That player may pay {X}, where X is that creature's mana value. If they
+    don't pay, the creature attacks this turn if able, and at the beginning of
+    the next end step, destroy it if it didn't attack this turn.``
+    (Arcum's Whistle.)
+
+    Non-consuming on refusal, so Nettling Imp's shorter tail is read by the
+    branch behind it.
+
+    The X is required to be *that creature's mana value* rather than read as a
+    number: the price is a fact about the object the sentence in front of it
+    chose, and a printed {X} with any other definition would be a different
+    offer. Read here as words for the reason the noun phrase above is — this
+    whole paragraph is one production, and admitting a variable the lowering has
+    no spec for would be an offer priced at nothing.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("that", "player", "may", "pay"):
+        stream.reset(mark)
+        return False
+    if stream.accept_kind(MANA) is None:
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "where", "x", "is", "that", "creature", "'s", "mana", "value"
+    ):
+        stream.reset(mark)
+        return False
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return False
+    if not stream.accept_phrase("if", "they", "don't", "pay"):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "the", "creature", "attacks", "this", "turn", "if", "able",
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "and", "at", "the", "beginning", "of", "the", "next", "end", "step",
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "destroy", "it", "if", "it", "didn't", "attack", "this", "turn",
+    ):
+        stream.reset(mark)
+        return False
+    return True

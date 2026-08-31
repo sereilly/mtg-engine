@@ -276,6 +276,20 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         stream.expect_word("target")
         quantifier = "exactly"
         targeted = True
+        # "…to **a target creature**" (Gaze of Pain) / "one target creature".
+        # Older templating writes the article where modern templating writes
+        # nothing, and CR 115.1 makes them the same phrase: one chosen object.
+        # Collapsed to the ordinary `target` quantifier here rather than taught
+        # to every lowering, because "exactly one target" is not a *different*
+        # shape from "target" — it is the same shape spelled longer, and a
+        # second spelling is what makes half the productions refuse a sentence
+        # the other half reads.
+        #
+        # Only a printed **one**: "two target creatures" really is the
+        # several-target shape, and "X target lands" has no number until the
+        # cost is paid.
+        if not exactly_x and count == 1:
+            quantifier = "target"
     elif stream.at_word("another") and stream.peek_word(1) == "target":
         # "another target creature" (Garruk, Savage Herald) — a second chosen
         # object, distinct from the sentence's earlier choice. Guarded on the

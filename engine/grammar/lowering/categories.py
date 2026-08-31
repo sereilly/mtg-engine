@@ -314,6 +314,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # touch colour at all.
     "mark_text_modified": "text_change",
     "gain_control_until_eot": "control",
+    # "Target opponent gains control of this creature." (Chaos Lord.) The same
+    # family read from the other end — the permanent hands itself over rather
+    # than taking something — so the same category.
+    "give_control_of_source_to_player": "control",
     # The monitored linked durations (CR 611.2b): "for as long as you control
     # this creature and this creature remains tapped" (Willow Satyr, Rubinia
     # Soulsinger) and The Wretched's end-of-combat blocker steal. The

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import Permanent
-from ..pt import set_base_pt
+from ..pt import add_pt_modifier, set_base_pt
 from ._common import (
     apply_temp_pt_boost,
     attached_host,
@@ -78,6 +78,16 @@ def pump_self(game: Game, instruction: OracleInstruction, context: OracleExecuti
         power_delta = -power_delta
     if instruction.payload.get("toughness_negative"):
         toughness_delta = -toughness_delta
+    # "…gets +2/+0 …" with no duration printed (Goblin Ski Patrol) is CR
+    # 611.2b's modification that lasts indefinitely — the *persistent* layer-7c
+    # channel, the one a +1/+1 counter writes to, rather than a boost some
+    # sweep takes back. Named in the payload rather than inferred from its
+    # absence: every payload written before this key means end of turn, which
+    # is what the default keeps saying.
+    if str(instruction.payload.get("duration") or "") == "indefinite":
+        add_pt_modifier(source_permanent, power_delta, toughness_delta)
+        game.log.append(f"{card.name} gets {power_delta:+}/{toughness_delta:+}")
+        return True, "resolved"
     apply_temp_pt_boost(source_permanent, power_delta, toughness_delta)
     game.log.append(
         f"{card.name} gets {power_delta:+}/{toughness_delta:+} until end of turn"

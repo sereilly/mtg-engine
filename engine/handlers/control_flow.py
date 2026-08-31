@@ -85,6 +85,12 @@ def _compare_count(count: int, op: str, wanted: int | None) -> bool:
     this engine keeps finding — an unknown operator is False in both, but the
     absent-number default is the half that would have silently disagreed.
     """
+    # "…if the number of permanents is **even**" (Chaos Lord). A parity is a
+    # comparison with no second operand at all, which is why it is answered
+    # before the absent-number default below: that default means "at least
+    # one", and an even board of zero is a board this condition holds on.
+    if op in ("even", "odd"):
+        return (count % 2 == 0) == (op == "even")
     if wanted is None:
         return count > 0
     if op == "eq":

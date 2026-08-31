@@ -929,12 +929,22 @@ def _attack_declaration_filter(
 
     "You" is the trigger's own controller in both (CR 109.5), which is what
     leaves the Skimmer silent through an opponent's alpha strike.
+
+    - "Whenever **a player** attacks with one or more creatures" (Total War) is
+      the third, and the one that does *not* narrow by seat: any declaration
+      wakes it, the ability's controller's included. A third row rather than a
+      third kind, because the announcement is the same announcement and only
+      the question differs — which is the rule the two rows above already
+      follow. The marker is an empty named group in the pattern, so it is read
+      by membership rather than by truth.
     """
     seat = game.controller_index_of(permanent)
-    if seat is None or seat != event.payload.get("seat"):
+    if seat is None:
+        return False
+    payload = trig.condition.payload
+    if "any_attacking_seat" not in payload and seat != event.payload.get("seat"):
         return False
     attackers = event.payload.get("attackers") or ()
-    payload = trig.condition.payload
     if "others_count" in payload:
         if not any(attacker is permanent for attacker in attackers):
             return False

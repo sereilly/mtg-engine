@@ -74,6 +74,14 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # frozen when the combat asked the question — so they are answerable from
     # the object alone, like every other state word here.
     "attacked_this_turn", "not_attacked_this_turn", "could_attack_this_turn",
+    # "…except for creatures the player hasn't controlled continuously since
+    # the beginning of the turn" (Total War). CR 302.6's condition, and the one
+    # state word here that the *object* cannot answer alone: the record on the
+    # permanent is a turn number, and whether it is old enough is a comparison
+    # against the game's. So it is tested below rather than delegated, like the
+    # layer-6 keyword questions — and refused by the pure matcher, which has no
+    # game to compare against.
+    "controlled_since_turn_start",
     # "target **attacking** creature" (Disharmony's untap). CR 508.1a makes
     # attacking a state of the permanent itself, so it is answerable from the
     # object alone — ``Permanent.attacking`` is stamped at declaration and
@@ -351,6 +359,16 @@ def subject_matches(
         if owner_seat is None or observer is None:
             return False
         if (owner_seat == observer) != (owner == "you"):
+            return False
+    # "…the player **has** controlled continuously since the beginning of the
+    # turn" (Total War's exemption, stored as the set it leaves behind). The
+    # predicate is `Game._controlled_since_turn_start`, the same one CR 302.6's
+    # summoning sickness and Rocket Launcher's activation clause already ask —
+    # one reading of "controlled continuously since the turn began", so a
+    # creature that changed hands this turn is exempt here for the same reason
+    # it cannot attack.
+    if described.get("controlled_since_turn_start"):
+        if not game._controlled_since_turn_start(obj):
             return False
     # Keywords are asked of layer 6, so a creature *granted* defender answers a
     # defender-narrowed filter exactly as a printed one does.

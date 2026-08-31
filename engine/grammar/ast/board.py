@@ -150,7 +150,21 @@ class GainControl:
     subject: Recipient
     duration: str
     tap_when_lost: bool = False
+    #: Who gains control, when the sentence names them ("**target opponent**
+    #: gains control of this creature", Chaos Lord; "**an opponent** may gain
+    #: control of a creature you control of their choice", Infernal Denizen).
+    #: ``None`` is the ability's own controller, which is what every other
+    #: "gain control of …" spelling means and what every reader written before
+    #: this field assumed — so the default keeps them exactly as they were.
+    #:
+    #: A field rather than a second node because the two sentences differ in one
+    #: word: everything else about a control change — the timestamp, the
+    #: contribution, what ends it — is the same rule whoever the seat is.
+    #:
+    #: Two parallel branches added this field in the same wave under two names
+    #: (``gained_by`` and ``gainer``) for two cards. One fact, one field.
     gained_by: "PlayerRef | None" = None
+    #: Whether the seat above may decline it ("**may** gain control").
     offered: bool = False
 
 

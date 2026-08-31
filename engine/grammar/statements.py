@@ -545,6 +545,17 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
             # optional form of the unwrapped sentence — the verb table already
             # accepts the uninflected spelling the causative leaves behind, so
             # consuming "have" is the whole difference.
+            #
+            # "you may **choose to** have it …" (Gaze of Pain) is the same
+            # offer written out. CR 601.2 has no such step: the choosing *is*
+            # the "may", so the two words say twice what one word already said,
+            # and reading them as anything else would invent a decision the card
+            # does not make. Consumed only in front of "have", so a sentence
+            # where "choose" really is the verb ("you may choose a colour")
+            # keeps its own reading.
+            if stream.at_word("choose") and stream.peek_word(1) == "to":
+                if stream.peek_word(2) == "have":
+                    stream.advance(2)
             stream.accept_word("have")
             try:
                 action = _parse_optional_action(stream)

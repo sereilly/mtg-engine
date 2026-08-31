@@ -86,6 +86,31 @@ _EVENT_SUBJECT_DESTROY_EVENTS: frozenset[str] = frozenset({
 })
 
 
+def _refuse_unfrozen_that_player(described: dict, event: str | None, node) -> None:
+    """Refuse a sweep narrowed by "**that player** controls" under an event that
+    names no player.
+
+    ``controller`` is in :data:`TESTABLE_SUBJECT_FILTER_KEYS`, so the generic
+    gate above says yes to the *key* — and ``subject_matches`` then refuses the
+    *value*, because "that player" is a seat only the resolution holding the
+    trigger's context knows. Put together that is a sweep which compiles, fires
+    and destroys nothing, with the card reported supported: the quiet failure
+    this whole file is arranged to make loud.
+
+    So the permission is the same one every other back-reference asks for —
+    that the firing event froze a seat (:data:`_EVENT_SUBJECT_PLAYERS`). A
+    spell, which has no event at all, cannot print the phrase meaningfully and
+    is refused here rather than at the table.
+    """
+    if described.get("controller") != "that_player":
+        return
+    if event in _EVENT_SUBJECT_PLAYERS:
+        return
+    raise LoweringError(
+        "'that player controls' needs a trigger that froze a seat", node=node
+    )
+
+
 def _lower_destroy(
     node: ast.Destroy,
     event: str | None = None,
@@ -248,6 +273,7 @@ def _lower_destroy(
         if narrowing:
             if untestable_filter_keys(described):
                 raise LoweringError("no sweep handler for this narrowing", node=node)
+            _refuse_unfrozen_that_player(described, event, node)
             narrowed_payload = dict(described)
             if node.no_regen:
                 narrowed_payload["bypass_regeneration"] = True

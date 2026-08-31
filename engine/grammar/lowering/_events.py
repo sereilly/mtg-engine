@@ -177,6 +177,13 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     # the cast froze rather than a target. Read as `target_player` instead, the
     # ability would ask for a choice the card never offers.
     "opponent_casts_spell",
+    # "Whenever a player attacks with one or more creatures, destroy all …
+    # creatures **that player** controls" (Total War). The declaration names
+    # the attacking seat and the declare-attackers step freezes it; under the
+    # seat-narrowed readings of this same condition ("whenever **you** attack")
+    # the phrase would mean the controller, which is the same answer — so one
+    # entry covers every row of the kind.
+    "attackers_declared",
 })
 
 #: Delayed-trigger events (CR 603.7) whose fire site freezes the **owner** of
