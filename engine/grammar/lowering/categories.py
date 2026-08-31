@@ -836,6 +836,14 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # The removal records whether a counter was there to remove, and the
     # if-you-can't branch reads the record back, negated.
     "remove_counter_from_self": "removed_counter",
+    # "Sacrifice two Swamps. **If you can't**, …" (Infernal Denizen.) The
+    # sacrifice records whether every payer could actually pay the printed
+    # count — CR 701.17b, and CR 608.2's "as much as possible" is exactly why
+    # it is the printed count rather than "at least one": a player with one
+    # Swamp cannot sacrifice two, so nothing is sacrificed and the branch runs.
+    # Written *before* the prompt is armed, because an interactive seat answers
+    # a queued prompt long after this instruction has returned.
+    "sacrifice_matching_permanent": "sacrificed_this_way",
     # "Tap up to two target creatures. **Those creatures** don't untap…"
     # (Frost Breath.) The tap records which permanents it affected, by id, and
     # the sentence after it reads that record rather than re-resolving the slots

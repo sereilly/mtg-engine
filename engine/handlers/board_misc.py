@@ -1286,6 +1286,19 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     # rounding are applied in one place (CR 107.2/107.3).
     per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
     count = int(instruction.payload.get("count", 1))
+    # "Sacrifice two Swamps. **If you can't**, …" (Infernal Denizen.) Whether
+    # the sacrifice could be performed at all, recorded here rather than after
+    # the prompt: an interactive seat answers a queued choice long after this
+    # instruction has returned, so the only moment at which the answer exists
+    # synchronously is before the prompt is armed. What it records is the
+    # question CR 701.17b asks — does the payer control the printed number of
+    # permanents the phrase describes — which is the same predicate
+    # ``_action_is_takeable`` puts in front of an *optional* sacrifice, so an
+    # offer and a mandatory action cannot disagree about what "can't" means.
+    #
+    # True when nobody owed anything, because a step that asked for nothing is
+    # not a step that failed.
+    could_pay = True
     for seat in payers:
         owed = (
             evaluate_count(game, game.players[seat], per_seat)
@@ -1295,12 +1308,22 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
             # CR 608.2's "as much as possible": a seat that owes none is not
             # asked, rather than being handed a prompt with no answer.
             continue
+        described = dict(instruction.payload.get("filter") or {})
+        if len(game._sacrifice_candidate_indices(
+            game.players[seat], described, exclude
+        )) < owed:
+            # The printed count is indivisible: a player with one of the two
+            # Swamps sacrifices neither, and the "if you can't" branch behind
+            # this step is what the card says happens instead.
+            could_pay = False
+            continue
         game.arm_forced_sacrifice(
             seat, owed,
-            filter=dict(instruction.payload.get("filter") or {}),
+            filter=described,
             exclude=exclude,
             reason=context.card.name,
         )
+    context.results["sacrificed_this_way"] = could_pay
     return True, "resolved"
 
 

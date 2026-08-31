@@ -254,6 +254,27 @@ def steal_target_linked_to_source(game: Game, instruction: OracleInstruction, co
     if target_perm is None:
         game.log.append(f"{context.card.name}: no valid target to gain control of")
         return True, "resolved"
+    # "**An opponent may** gain control of a creature you control of their
+    # choice…" (Infernal Denizen.) Who *keeps* the permanent is not always the
+    # resolving object's controller (CR 109.5's default): here it is the seat
+    # that made the pick, recorded by the `choose_permanent` in front of this
+    # step under the one key that step always writes. An unrecognized word names
+    # nobody rather than falling back to the caster — the caster is the seat
+    # this sentence has said it is *not*, and handing them the creature would
+    # turn a drawback into a second copy of the {T} ability.
+    gains_to = instruction.payload.get("new_controller")
+    if gains_to is not None:
+        if gains_to != "chooser":
+            return False, f"unsupported new controller {gains_to!r}"
+        chooser_seat = context.results.get("chosen_player")
+        if not isinstance(chooser_seat, int) or not (
+            0 <= chooser_seat < len(game.players)
+        ):
+            game.log.append(
+                f"{context.card.name}: nobody was asked, so nobody gains control"
+            )
+            return True, "resolved"
+        caster = game.players[chooser_seat]
     from ..control import LINKED_CONTROL_CONDITIONS
 
     if not game.take_control(

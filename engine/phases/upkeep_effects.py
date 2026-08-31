@@ -831,26 +831,6 @@ class UpkeepEffectsMixin:
                 owner, victim = tied[0]
                 self._destroy_least_power_creature(owner, victim, permanent.card.name)
 
-    @upkeep_effect("upkeep_self", "upkeep_sacrifice_other_creature_or_deal_damage")
-    def _on__upkeep_self__upkeep_sacrifice_other_creature_or_deal_damage(self, ctx: UpkeepContext) -> None:
-        controller = ctx.controller
-        kind = ctx.kind
-        permanent = ctx.permanent
-        trig = ctx.trig
-        # Lord of the Pit: "sacrifice a creature other than this
-        # creature. If you can't, this creature deals N damage to
-        # you." The controller chooses which other creature (a human
-        # is prompted; AI/headless picks inline). With no other
-        # creature, the damage consequence applies instead.
-        self.arm_forced_sacrifice(
-            self.players.index(controller),
-            1,
-            filter={"type_filter": "creature"},
-            exclude=permanent,
-            reason=permanent.card.name,
-            on_short={"kind": "damage", "amount": int(trig.instruction.payload.get("damage", 0))},
-        )
-
     @upkeep_effect("upkeep_self", "upkeep_pay_or_sacrifice_self")
     def _on__upkeep_self__upkeep_pay_or_sacrifice_self(self, ctx: UpkeepContext) -> None:
         controller = ctx.controller

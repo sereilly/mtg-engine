@@ -125,6 +125,83 @@ def _linked_steal_filter(node: ast.GainControl, subject: ast.TargetSpec) -> dict
     return described
 
 
+#: How a printed subject names the seat a steal hands the permanent to, and the
+#: seat that picks it. Two seats in one word, because the sentence prints one:
+#: "an opponent may gain control of a creature … **of their choice**" (Infernal
+#: Denizen) makes the offered player both the chooser and the new controller,
+#: and reading them as two answers is how a three-seat game ends up asking one
+#: player and handing the creature to another.
+#:
+#: A word not in here refuses rather than defaulting to the effect's controller,
+#: which is the one seat the sentence has said it is *not*.
+_OFFERED_STEAL_CHOOSERS: dict[str, str] = {"target_opponent": "opponent"}
+
+
+def _lower_offered_steal(
+    node: ast.GainControl, subject: ast.TargetSpec
+) -> tuple[OracleInstruction, ...]:
+    """"<player> may gain control of <a permanent> of their choice …"
+
+    Two instructions, the pairing Preacher already uses: the pick is armed on
+    the seat that makes it and the steal behind it reads the recorded answer.
+    What is new is which seat *keeps* the permanent — ``new_controller`` — and
+    that the prompt may be declined, which is where the printed "may" lives.
+
+    The subject is a quantified noun phrase rather than a target: nothing is
+    announced when the trigger goes on the stack, and CR 601.2c has nothing to
+    say about a choice made during resolution.
+    """
+    chooser = _OFFERED_STEAL_CHOOSERS.get(
+        node.gained_by.kind if node.gained_by is not None else ""
+    )
+    if chooser is None:
+        raise LoweringError(
+            "no handler for a control change handed to this player", node=node
+        )
+    if subject.quantifier != "a" or subject.count != 1:
+        raise LoweringError(
+            "an offered steal picks exactly one permanent", node=node
+        )
+    described = _filter_payload(
+        subject.filter, carried_separately=frozenset({"their_choice"})
+    )
+    # Lifted, not carried: who picks is the prompt's own seat, and no candidate
+    # can be asked whether it is "of their choice". Left in the payload it would
+    # be a key `subject_matches` has no matcher for, which is the whole point of
+    # the untestable-keys gate below.
+    described.pop("their_choice", None)
+    # The candidate rule asks `subject_matches` with the *ability's* seat as
+    # observer, which is what makes "a creature **you** control" mean the
+    # Denizen's controller and not the opponent doing the picking — the same
+    # reading, and the same gate, the tapped-source branch above relies on.
+    if untestable_filter_keys(described):
+        raise LoweringError(
+            "the control change cannot test this restriction", node=node
+        )
+    return (
+        OracleInstruction(
+            "choose_permanent", "",
+            {
+                "result_key": CHOSEN_PERMANENT,
+                "chooser": chooser,
+                "filter": described,
+                # The printed "may": one declinable prompt rather than an offer
+                # in front of a choice (see :class:`ast.GainControl`.offered).
+                "optional": bool(node.offered),
+                "prompt": "Choose a creature to gain control of.",
+            },
+        ),
+        OracleInstruction(
+            "steal_target_linked_to_source", "",
+            {
+                "permanents_from": CHOSEN_PERMANENT,
+                "new_controller": "chooser",
+                "link_conditions": ["source_on_battlefield"],
+            },
+        ),
+    )
+
+
 def _lower_gain_control(
     node: ast.GainControl, produced: frozenset[str]
 ) -> tuple[OracleInstruction, ...]:
@@ -279,6 +356,16 @@ def _lower_gain_control(
         # records, with the one weaker condition — so it is that instruction
         # with a different `link_conditions` list rather than a kind of its own:
         # what differs is which fact the sweep re-checks, and that is data.
+        if node.gained_by is not None:
+            # "An opponent may gain control of a creature you control of their
+            # choice for as long as this creature remains on the battlefield."
+            # (Infernal Denizen.) Preacher's decomposition — the pick belongs to
+            # another seat, so it is the ordinary ``choose_permanent`` prompt and
+            # the steal behind it reads the answer — with the two facts Preacher
+            # does not print: the offer ("may", carried as the prompt's own
+            # ``optional``) and the *new controller*, who is the seat picking
+            # rather than the ability's own.
+            return _lower_offered_steal(node, subject)
         if subject.quantifier != "target":
             raise LoweringError(
                 "the linked-control handler needs a named target", node=node
