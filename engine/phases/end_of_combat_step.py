@@ -14,6 +14,7 @@ from ..models import Permanent
 from ..pt import remove_temporary_pt
 from ..oracle import compile_card_oracle
 from ..damage_redirects import clear_redirects
+from ..prevention import clear_directional_shields
 from ..shields import END_OF_COMBAT, clear_shields
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event
 
@@ -48,6 +49,12 @@ class EndOfCombatStepMixin:
                 permanent.metadata.pop("animate_until_end_of_combat", None)
                 permanent.metadata.pop("absolute_power", None)
                 permanent.metadata.pop("absolute_toughness", None)
+            # "…prevent all combat damage that would be dealt to and dealt by
+            # that creature **this combat**." (Winter's Chill.) The directional
+            # marker's window is data on the record, so this sweep asks for the
+            # window rather than knowing which card printed it — the same shape
+            # `clear_shields` below has for the collection form.
+            clear_directional_shields(permanent, END_OF_COMBAT)
             permanent.metadata.pop("blocked_this_combat", None)
         # "…this combat" (Johan). The exemptions are scoped to the combat
         # phase, so they end where every other until-end-of-combat effect above

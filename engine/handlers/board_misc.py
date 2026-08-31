@@ -17,7 +17,7 @@ from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
 from ..tokens import (CREATED_TOKEN_RESULT_KEY, CREATED_WITH_PERMANENT_ID,
                      make_token_card, tokens_created_with)
 from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
-                      block_pair_permanents, evaluate_count,
+                      block_pair_permanents, bound_permanent, evaluate_count,
                       permanent_matches_filter,
                       resolve_amount, resolve_target_permanent,
                       resolve_target_permanents)
@@ -145,7 +145,12 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
             )
             return True, "no object"
     if payload.get("binds_target"):
-        bound = resolve_target_permanent(game, context)
+        # The **innermost** binding, not the resolution's target list: inside
+        # "for each of those creatures, … destroy that creature at end of
+        # combat" (Winter's Chill) the ability is created once per creature and
+        # is about that one. Outside a loop this is the target the spell chose,
+        # which is every other card that arms one.
+        bound = bound_permanent(game, context)
         if bound is None:
             # The target is gone (CR 608.2b): there is nothing for the delayed
             # ability to be about, so none is created.

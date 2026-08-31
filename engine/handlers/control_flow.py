@@ -1033,12 +1033,14 @@ def _offered_seats(
         # which for a spell that targets a creature is not a player at all.
         # With the target gone by resolution there is nobody to offer, and the
         # caller's ``otherwise`` branch has nothing left to destroy either.
-        from ._common import resolve_target_permanent
+        #
+        # The innermost binding, for `bound_permanent`'s stated reason: inside
+        # "for each of those creatures, **its controller** may pay {1} or {2}"
+        # (Winter's Chill) the possessive names the creature the iteration is
+        # on, and the resolution's own target list is all of them at once.
+        from ._common import bound_permanent
 
-        perm = resolve_target_permanent(
-            game, context, predicate=lambda p: True,
-            fallback_on_invalid_choice=False,
-        )
+        perm = bound_permanent(game, context, predicate=lambda p: True)
         if perm is None:
             return []
         seat = game.controller_index_of(perm)

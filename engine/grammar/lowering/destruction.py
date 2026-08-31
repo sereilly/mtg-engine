@@ -14,7 +14,8 @@ than assumed — so this is a family boundary and not a size cut.
 
 import dataclasses
 
-from ...oracle_types import X_FROM_COUNT_PER_RECIPIENT, OracleInstruction
+from ...oracle_types import (CHOSEN_TARGET_PERMANENTS,
+                             X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
 from ...subject_filters import (
     TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter, untestable_filter_keys,
 )
@@ -556,6 +557,33 @@ def _lower_activated_delayed_destroy(
     spec = node.subject
     if not isinstance(spec, ast.TargetSpec):
         return None
+    # "…**destroy that creature** at end of combat." (Winter's Chill.) The
+    # third subject this shape names, and the one a loop supplies: the sentence
+    # sits inside "for each of those creatures", so it is about the creature the
+    # iteration is on and there is no block pair to read. Gated on the producer
+    # for the "it" branch's reason — with no earlier step that chose a set of
+    # permanents the words name nothing, and the block-pair reading below is the
+    # better refusal for the cards that really are about a pair.
+    if spec.quantifier == "that" and CHOSEN_TARGET_PERMANENTS in produced:
+        if _restrictions_beyond(spec.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound creature carries no narrowing the destroy could honour",
+                node=node,
+            )
+        if node.no_regen:
+            raise LoweringError(
+                "the end-of-combat destroy handler does not bypass regeneration",
+                node=node,
+            )
+        return (
+            OracleInstruction("create_delayed_trigger", "", {
+                "event": "next_end_of_combat",
+                "instruction": OracleInstruction("destroy_bound_permanent", "", {}),
+                "once": True,
+                "duration": "end_of_turn",
+                "binds_target": True,
+            }),
+        )
     # The pronoun is read **before** the self-reference, and the order is the
     # card: `parse_recipient` gives a bare "it" the same `is_source` filter a
     # card naming itself gets, and tells them apart by the quantifier alone. Put

@@ -165,6 +165,17 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
         if dealt_by is None:
             raise stream.error("expected whose damage to prevent")
     duration = _parse_duration(stream)
+    # "…dealt to and dealt by that creature **this combat**." (Winter's Chill.)
+    # Read here rather than in the shared duration table, and the narrowness is
+    # the point: "this combat" appears mid-sentence on six other cards in the
+    # pool ("blocked by only that creature this combat", "can't be blocked this
+    # combat except by …"), and a trailing-duration reader that claimed it
+    # everywhere would swallow those words from productions that do not mean a
+    # duration by them. Its own kind rather than ``until_end_of_combat``'s for
+    # the reason "this turn" is not ``until_end_of_turn``: two printed spellings
+    # of one window are two kinds here, and the sweep is what makes them one.
+    if duration.kind is None and stream.accept_phrase("this", "combat"):
+        duration = ast.Duration("this_combat")
     # "…that would be dealt **this turn to Dogs you control**" (Pack Leader).
     # The printed order puts the duration first, and both orders are the same
     # sentence — so the recipient is read on either side rather than the card

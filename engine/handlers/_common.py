@@ -1260,6 +1260,43 @@ def resolve_target_permanent(
     )
 
 
+def bound_permanent(
+    game: Game,
+    context: OracleExecutionContext,
+    *,
+    predicate: Callable[[Permanent], bool] | None = None,
+) -> Permanent | None:
+    """The permanent a sentence's back-reference names — "that creature", "it",
+    "its controller" — resolved against the **innermost** binding.
+
+    Two bindings can be in scope at once, and the printed pronoun cannot say
+    which. A spell or ability binds the target it chose (CR 601.2c), and a
+    ``for_each`` running over permanents binds the object of the iteration it is
+    in the middle of. Inside a loop the loop wins, because that is what the loop
+    is: "Choose X target attacking creatures. **For each of those creatures**,
+    its controller may pay {1} … destroy **that creature** at end of combat"
+    (Winter's Chill) names a different creature each time round, and the
+    resolution's own target list is *all* of them.
+
+    Outside a loop this is exactly :func:`resolve_target_permanent`, which is
+    why it is a wrapper rather than a second reader: every caller that already
+    resolved a target keeps doing so, and the only thing that changes is that
+    the loop's object is asked about first.
+
+    ``iteration_target`` is not always a permanent — a loop may walk cards in a
+    hand (Sylvan Library) — so the id is what qualifies it, never the mere
+    presence of an item.
+    """
+    iterated = context.iteration_target
+    if getattr(iterated, "permanent_id", None) is not None:
+        if predicate is None or predicate(iterated):
+            return iterated
+        return None
+    return resolve_target_permanent(
+        game, context, predicate=predicate, fallback_on_invalid_choice=False,
+    )
+
+
 def _one_choice(chosen: object) -> object:
     """The first entry of a multi-target choice, or *chosen* unchanged.
 

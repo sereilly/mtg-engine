@@ -18,6 +18,7 @@ from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from ._common import (
+    _REST_OF_COMBAT,
     _REST_OF_TURN,
     _amount_payload,
     _describe_targets,
@@ -523,11 +524,19 @@ def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]
         and node.to.quantifier in ("it", "target", "that")
         and (node.dealt_by is None or node.to_and_by)
     ):
-        if node.duration.kind not in _REST_OF_TURN:
+        if node.duration.kind not in _REST_OF_TURN + _REST_OF_COMBAT:
             raise LoweringError(
-                "the directional shield lasts exactly this turn", node=node
+                "the directional shield lasts this turn or this combat",
+                node=node,
             )
         payload: dict[str, object] = {"combat_only": bool(node.combat_only)}
+        if node.duration.kind in _REST_OF_COMBAT:
+            # "…**this combat**" (Winter's Chill). The narrower window, carried
+            # so the end-of-combat sweep can end it: read and dropped, the
+            # shield would go on preventing through a second combat phase the
+            # card never mentions. The word is the whole difference between
+            # this and Maze of Ith's turn-long shield.
+            payload["duration"] = "end_of_combat"
         if node.to_and_by:
             # "Prevent all combat damage that would be dealt **to and dealt
             # by** that creature this turn." Both ends of the event, which is

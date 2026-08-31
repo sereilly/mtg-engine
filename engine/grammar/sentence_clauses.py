@@ -426,6 +426,128 @@ def _parse_unless_player_pays(stream: TokenStream, parse_body) -> "ast.UnlessPla
 _ENUMERATED_PAYERS = frozenset({"each_player", "each_opponent", "target_opponent"})
 
 
+#: The player references a graded toll's outcome sentences may name. All three
+#: are the *offered* seat rather than a seat of their own: "that player" and
+#: "they" are the back-reference every consumer already reads as one referent,
+#: and "its controller" is the offer's own printed actor restated.
+_TOLL_OUTCOME_PAYERS = frozenset({"that_player", "controller"})
+
+
+def _graded_offer(statement) -> "ast.May | None":
+    """The cost offer an outcome sentence would attach to, or None.
+
+    One statement in and one node out, because the offer may be printed inside
+    a loop — "**For each of those creatures,** its controller may pay {1} or
+    {2}" (Winter's Chill) — and the sentences behind it are still about that
+    one offer. Anything else is not this shape and keeps whatever refusal it
+    already had.
+    """
+    if isinstance(statement, ast.ForEach):
+        statement = statement.effect
+    if not isinstance(statement, ast.May) or statement.cost is None:
+        return None
+    if not isinstance(statement.actor, ast.PlayerRef):
+        return None
+    return statement
+
+
+def _replace_offer(statement, offer: "ast.May"):
+    """*statement* with its offer swapped for *offer* — the inverse of
+    :func:`_graded_offer`, so the loop around it survives the rewrite."""
+    if isinstance(statement, ast.ForEach):
+        return dataclasses.replace(statement, effect=offer)
+    return offer
+
+
+def _accept_graded_toll_outcomes(parse_body, stream, statement):
+    """``. If that player doesn't, <A>. If that player pays only {N}, <B>.``
+
+    "Choose X target attacking creatures. For each of those creatures, its
+    controller may pay {1} or {2}. **If that player doesn't, destroy that
+    creature at end of combat. If that player pays only {1}, prevent all combat
+    damage** …" (Winter's Chill.)
+
+    The sentences that say what each way of covering an offer *buys*. They are
+    read here, around the sentence that made the offer, rather than as
+    statements of their own for the reason every other clause in this module is:
+    they modify a sentence the parser has already read, and on their own they
+    name a decision nobody made. Two of them, and each is a different question —
+    "doesn't" is the decline branch every ``May`` already has, and "pays only
+    {N}" is which of CR 118.8's alternatives was taken, which is the part no
+    offer in the pool had needed before: an alternative is normally a second way
+    to cover *one* consequence, and here the three ways buy three different
+    things.
+
+    Refuses without consuming, so a sentence opening with "if" that is not one
+    of these keeps whatever reading it had.
+    """
+    offer = _graded_offer(statement)
+    if offer is None:
+        return None
+    costs = (offer.cost, *offer.cost_alternatives)
+    outcomes = list(offer.option_effects) or [None] * len(costs)
+    otherwise = offer.otherwise
+    changed = False
+    while True:
+        mark = stream.mark()
+        if not (stream.accept_punct(".") and stream.accept_word("if")):
+            stream.reset(mark)
+            break
+        payer = parse_player_ref(stream)
+        if payer is None or payer.kind not in _TOLL_OUTCOME_PAYERS:
+            stream.reset(mark)
+            break
+        # "…**doesn't**" — the decline branch. Folded onto the offer's own
+        # ``otherwise`` rather than becoming a conditional beside it, because
+        # that is the same branch: two spellings of one field would be two
+        # places for a handler to look.
+        declined = bool(stream.accept_word("doesn't"))
+        paid: "ast.ManaCost | None" = None
+        if not declined:
+            if not (stream.accept_word("pays", "pay") and stream.accept_word("only")):
+                stream.reset(mark)
+                break
+            try:
+                paid = _parse_mana_payment(stream)
+            except GrammarError:
+                stream.reset(mark)
+                break
+        if not stream.accept_punct(","):
+            stream.reset(mark)
+            break
+        try:
+            body = parse_body(stream)
+        except GrammarError:
+            stream.reset(mark)
+            break
+        if declined:
+            if otherwise is not None:
+                # Two decline branches would be two consequences for one
+                # refusal, and nothing says which. Refusing keeps the line's
+                # own error rather than silently dropping one of them.
+                stream.reset(mark)
+                break
+            otherwise = body
+        else:
+            # "…pays **only {1}**" names one of the printed alternatives. A
+            # cost the offer never printed is a sentence about an option that
+            # does not exist, so the clause is handed back rather than attached
+            # to whichever option happens to be first.
+            if paid not in costs:
+                stream.reset(mark)
+                break
+            outcomes[costs.index(paid)] = body
+        changed = True
+    if not changed:
+        return None
+    return _replace_offer(
+        statement,
+        dataclasses.replace(
+            offer, otherwise=otherwise, option_effects=tuple(outcomes),
+        ),
+    )
+
+
 def _accept_trailing_toll(
     parse_body,
     stream: TokenStream, body: ast.Statement
