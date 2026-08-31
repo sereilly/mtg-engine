@@ -312,7 +312,8 @@ def _attach_repeat_this_process(stream: TokenStream, steps: list) -> bool:
         return False
     try:
         imperative = _as_imperative(phrase)
-        restated_stream = TokenStream(tokenize(imperative).tokens, imperative)
+        restated = tokenize(imperative)
+        restated_stream = TokenStream(restated.tokens, restated.source)
         restated = parse_statement(restated_stream)
         if not restated_stream.exhausted:
             raise GrammarError("unconsumed text", line=imperative)
@@ -835,12 +836,14 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
         first_quote = next(i for i, token in enumerate(body) if token.kind == QUOTE)
         colon = _split_on_colon(body[:first_quote])
         if colon is not None:
-            costs = _parse_costs(TokenStream(body[:colon], line))
-            effect = _parse_quoted_token_line(TokenStream(body[colon + 1:], line))
+            costs = _parse_costs(TokenStream(body[:colon], lexed.source))
+            effect = _parse_quoted_token_line(
+                TokenStream(body[colon + 1:], lexed.source)
+            )
             if effect is not None and not isinstance(effect, ast.TriggeredAbilityNode):
                 return ast.ActivatedAbilityNode(costs, effect)
             raise GrammarError("granted ability in quotes", line=line)
-        token_line = _parse_quoted_token_line(TokenStream(body, line))
+        token_line = _parse_quoted_token_line(TokenStream(body, lexed.source))
         if token_line is not None:
             # Already a whole ability line when a trigger prefix was read;
             # otherwise a bare effect that still needs wrapping.
@@ -850,7 +853,10 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
         raise GrammarError("granted ability in quotes", line=line)
 
     body = lexed.tokens[start:]
-    stream = TokenStream(body, line)
+    # `lexed.source`, never the raw *line*: the tokens' offsets index the string
+    # the lexer walked, and a production recovering a printed span through
+    # `text_between` slices this. See `LexResult.source`.
+    stream = TokenStream(body, lexed.source)
 
     keywords = _is_keyword_line(stream)
     if keywords is not None and stream.exhausted:
@@ -867,8 +873,8 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
 
     colon = _split_on_colon(body)
     if colon is not None:
-        costs = _parse_costs(TokenStream(body[:colon], line))
-        effect_stream = TokenStream(body[colon + 1:], line)
+        costs = _parse_costs(TokenStream(body[:colon], lexed.source))
+        effect_stream = TokenStream(body[colon + 1:], lexed.source)
         statement = _statements_from_sentences(effect_stream)
         return ast.ActivatedAbilityNode(costs, statement)
 

@@ -880,11 +880,23 @@ def _lower_become_color(
 def _lower_change_text(node: ast.ChangeText) -> tuple[OracleInstruction, ...]:
     """``Change the text of target spell or permanent …`` (CR 612).
 
-    No ``targets`` description is emitted, for the reason the Lace cycle
-    established: the vocabulary has no way to say "a spell on the stack *or* a
-    permanent", so describing it at all would drop one of the two zones from the
-    picker. ``engine/legality.py`` keeps answering ``spell_or_permanent``.
+    For the Lace cycle's own wording no ``targets`` description is emitted: the
+    vocabulary has no way to say "a spell on the stack *or* a permanent", so
+    describing it at all would drop one of the two zones from the picker, and
+    ``engine/legality.py`` keeps answering ``spell_or_permanent``.
+
+    A **narrowed** subject is the opposite case. "Change the text of target
+    white enchantment you control that doesn't have cumulative upkeep"
+    (Balduvian Shaman) names a set of permanents and nothing on the stack, so
+    the description is what carries the printed restriction to the picker and
+    to the resolution check. Left off, the ability would have read as the Lace
+    cycle's and been aimable at any permanent on the board — a restriction the
+    card prints and nothing enforces.
     """
     if not _is_target(node.subject):
         raise LoweringError("a text change has to name what it changes", node=node)
-    return (OracleInstruction("mark_text_modified", "", {"mode": node.mode}),)
+    payload: dict[str, object] = {"mode": node.mode}
+    assert isinstance(node.subject, ast.TargetSpec)
+    if _filter_payload(node.subject.filter):
+        _describe_targets(payload, node.subject)
+    return (OracleInstruction("mark_text_modified", "", payload),)

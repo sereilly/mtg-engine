@@ -1108,18 +1108,27 @@ def _grant_ability_texts(game, permanent, instruction, context) -> None:
 
 
 def _target_grant_predicate(game, instruction, context):
-    """Which creatures a targeted grant may reach, from its printed filter.
+    """Which permanents a targeted grant may reach, from its printed filter.
 
     Split out of ``grant_target_keyword_until_eot`` so the quoted-ability grant
     asks the *same* three questions rather than a second spelling of them: the
     printed filter, CR 109.5's source exclusion, and the seat "you control"
     compares against.
+
+    ``subject_types`` is the printed noun of a grant whose target was chosen by
+    the clause in front of it ("that **enchantment** gains …", Balduvian
+    Shaman). Every other card printing that shape says "creature", which is why
+    the type was assumed rather than read — and an assumed creature is a
+    silently empty target set for the first card that says anything else.
     """
     filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    types = tuple(instruction.payload.get("subject_types") or ()) or ("creature",)
     source = context.source_permanent
 
     def legal(perm) -> bool:
-        if not perm.is_creature or not permanent_matches_filter(perm, filters):
+        if not any(perm.has_type(card_type) for card_type in types):
+            return False
+        if not permanent_matches_filter(perm, filters):
             return False
         if filters.get("exclude_self") and perm is source:
             return False
