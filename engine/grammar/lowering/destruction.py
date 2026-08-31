@@ -443,6 +443,9 @@ def _lower_destroy(
     if spec.quantifier not in ("target", "up_to"):
         raise LoweringError("unsupported destroy quantifier", node=node)
 
+    if filt.their_choice:
+        return _lower_destroy_of_their_choice(node, spec, event)
+
     # "Destroy target artifact **with mana value X**." (Detonate.) The bound is
     # the X chosen on the cast, so it has no literal to ride the payload as an
     # ordinary narrowing — it is split off into a flag the legality check reads
@@ -463,6 +466,91 @@ def _lower_destroy(
         payload["bypass_regeneration"] = True
     _describe_targets(payload, spec)
     return (OracleInstruction("destroy_target_permanent", "", payload),)
+
+
+def _lower_destroy_of_their_choice(
+    node: ast.Destroy, spec: ast.TargetSpec, event: str | None
+) -> tuple[OracleInstruction, ...]:
+    """"…destroy target nonartifact creature **that player controls of their
+    choice**." (The Abyss.)
+
+    Preacher's decomposition, and for Preacher's reason: the pick belongs to a
+    seat that is not the ability's controller, so it is the ordinary
+    ``choose_permanent`` prompt — armed on that seat, answered into the
+    resolution's scratchpad — and the destroy behind it reads the recorded id
+    through ``permanents_from`` instead of a target. Both halves already exist;
+    what is new is only the pairing, exactly as it was there.
+
+    A deliberate, recorded deviation from CR 603.3d, the same one Preacher's
+    branch in ``control_changes`` documents: the printed word is "target", and a
+    triggered ability's targets are chosen as it is *put on the stack*. This
+    engine announces an upkeep trigger's targets from one seat, so the affected
+    player's pick is made at resolution instead. What that costs is the CR
+    608.2b re-check and shroud on the picked creature; what the alternative
+    costs is a second seat inside the upkeep step's announcement.
+
+    Three refusals, and each is a way the phrase could otherwise mean something
+    the card does not print:
+
+    * a quantifier other than "target" — "of their choice" names one pick, and
+      the prompt records one id;
+    * a controller other than "that player" — "their" is a pronoun, and the
+      only player this sentence has already named is the one the condition did;
+    * an event that froze no seat, which is :func:`_refuse_unfrozen_that_player`
+      one branch over: with no seat there is nobody to ask, and a prompt armed
+      on nobody is an effect that silently does not happen.
+    """
+    filt = spec.filter
+    if spec.quantifier != "target":
+        raise LoweringError(
+            "'of their choice' names one permanent to destroy", node=node
+        )
+    described = _filter_payload(
+        filt, carried_separately=frozenset({"their_choice"})
+    )
+    _refuse_unfrozen_that_player(described, event, node)
+    if described.get("controller") != "that_player":
+        raise LoweringError(
+            "'of their choice' names no player this destroy can ask", node=node
+        )
+    # Both lifted, not carried. Who picks is the prompt's own seat and no
+    # candidate can be asked whether it is "of their choice"; whose creatures
+    # may be picked is the prompt's ``controlled_by``, because
+    # ``subject_matches`` refuses ``that_player`` outright — the seat is known
+    # only to the resolution holding the trigger's context, which is where the
+    # prompt is armed. Left in the payload either one would be a key the
+    # candidate rule cannot test, which is the whole point of the gate below.
+    described.pop("their_choice", None)
+    described.pop("controller", None)
+    if untestable_filter_keys(described):
+        raise LoweringError(
+            "the destroy prompt cannot test this restriction", node=node
+        )
+    destroy_payload: dict[str, object] = {"permanents_from": CHOSEN_PERMANENT}
+    if node.no_regen:
+        destroy_payload["bypass_regeneration"] = True
+    return (
+        OracleInstruction("sequence", "", {"steps": (
+            OracleInstruction(
+                "choose_permanent", "",
+                {
+                    "result_key": CHOSEN_PERMANENT,
+                    # "**That player** … of **their** choice": one seat named
+                    # twice, so the prompt is armed on the seat the firing
+                    # event froze and the candidates come from that same seat's
+                    # battlefield. `controlled_by` is what makes the second
+                    # half a seat question rather than a filter key — the
+                    # matcher answers "you control" relative to the *ability's*
+                    # controller, which is the wrong player here.
+                    "chooser": EVENT_SUBJECT_PLAYER,
+                    "controlled_by": "chooser",
+                    "filter": described,
+                    "prompt": "Choose a creature you control to be destroyed.",
+                },
+            ),
+            OracleInstruction("destroy_target_permanent", "", destroy_payload),
+        )}),
+    )
 
 
 def _lower_delayed_destroy(

@@ -231,13 +231,20 @@ def _lower_combat_restriction(
                 + (", ".join(sorted(untestable)) or "nothing was described"),
                 node=node,
             )
-        described = _filter_payload(payload["sacrifice_filter"])
         # "…a land **of their choice**". Lifted off rather than carried: it says
         # the paying player picks, which is what the charger does already
         # (`default_sacrifice_pick` stands in for a chooser it can hand off to),
         # so a payload key would be one nothing reads. What is *not* satisfied
         # by that is somebody else picking, and `chosen_by_opponent` is outside
         # the allowed set below, so it refuses.
+        #
+        # Named at the call site because ``_filter_payload`` now refuses the
+        # word outright: it is the caller's claim that the choice is really
+        # made somewhere, and an unnamed key is a refusal.
+        described = _filter_payload(
+            payload["sacrifice_filter"],
+            carried_separately=frozenset({"their_choice"}),
+        )
         described.pop("their_choice", None)
         untestable = untestable_filter_keys(described, allowed=OBJECT_ONLY_FILTER_KEYS)
         if untestable:

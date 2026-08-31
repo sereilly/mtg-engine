@@ -40,6 +40,9 @@ def _filter_payload(
     ``owner`` out of the payload into its own key, because the handler needs the
     ability's controller to answer "an opponent owns" at all. Naming the field
     at the call site is what keeps that from reading as a field nobody honours.
+
+    It excuses ``their_choice`` from the refusal below for the same reason and
+    with the same claim: the caller performs the choice rather than testing it.
     """
     payload = filt.to_payload()
     # `to_payload` cannot express a zone, so every handler reached through here
@@ -58,6 +61,25 @@ def _filter_payload(
     if dropped:
         raise LoweringError(
             f"{', '.join(dropped)} has no payload form here", node=filt
+        )
+    # "of their choice" says *who picks*. No matcher can test it — it is
+    # deliberately outside ``TESTABLE_SUBJECT_FILTER_KEYS`` — so a payload
+    # carrying it into a handler is a key nothing reads, and the phrase is then
+    # silently the ability's controller picking.
+    #
+    # ``to_payload`` emits the word precisely so a gate can *see* it, and the
+    # gates that look are the ones asking "are all these keys testable?".
+    # Several lowerings ask no such gate, which is how The Abyss shipped with
+    # ``their_choice`` in its payload and the affected player never asked. So
+    # the refusal is here instead, at the one place every filter payload is
+    # built: a lowering whose own rule puts the choice somewhere names the
+    # field in *carried_separately* and lifts it off (``_lower_sacrifice``,
+    # CR 701.21a; the destroy's ``choose_permanent`` decomposition), and
+    # everywhere else the word refuses — which is what ``board``'s comment has
+    # claimed since Run Afoul landed and nothing enforced.
+    if payload.get("their_choice") and "their_choice" not in carried_separately:
+        raise LoweringError(
+            "'of their choice' has nothing here to ask the player", node=filt
         )
     return payload
 
