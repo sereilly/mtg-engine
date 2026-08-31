@@ -25,20 +25,12 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**8 unclaimed sentence(s) across 4 supported card(s).**
+**2 unclaimed sentence(s) across 2 supported card(s).**
 
-- **Call to Arms**
-  - `white creatures get +1/+1 as long as the chosen color is the most common color among nontoken permanents the chosen player controls but isn't tied for most common`
-  - `when the chosen color isn't the most common color among nontoken permanents the chosen player controls or is tied for most common, sacrifice this enchantment`
 - **Infinite Hourglass**
   - `all creatures get +1/+0 for each time counter on this artifact`
 - **Justice**
   - `whenever a red creature or spell deals damage, this enchantment deals that much damage to that creature's or spell's controller`
-- **Zur's Weirding**
-  - `if a player would draw a card, they reveal it instead`
-  - `then any other player may pay 2 life`
-  - `if a player does, put that card into its owner's graveyard`
-  - `otherwise, that player draws a card`
 
 ## Acknowledged simplifications
 
@@ -146,13 +138,13 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | trigger table | 339 |
 | static-line table | 234 |
 | keyword table | 222 |
-| card_hooks bespoke (name-keyed) | 100 |
+| card_hooks bespoke (name-keyed) | 99 |
 | aura enchant noun (oracle_instructions attach) | 87 |
 | activation_restrictions.py | 37 |
 | aura static (oracle_instructions/permanent_state) | 37 |
 | loyalty cost | 33 |
 | auras.py (attached effect) | 23 |
-| mixin text scan | 16 |
+| mixin text scan | 15 |
 | oracle.py (modal trigger head) | 13 |
 | cast_restrictions.py | 11 |
 | cost_modifiers.py | 9 |
@@ -167,6 +159,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | x spend color (stack/activation) | 1 |
 | target_restrictions.py | 1 |
 | land_play_allowance.py | 1 |
+| lord_buffs.py (state trigger) | 1 |
 | handler ← counter_top_stack_spell | 1 |
 | revealed_hands.py | 1 |
 | named_protection.py | 1 |

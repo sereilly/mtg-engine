@@ -886,6 +886,26 @@ def parse_subject_verb(
                 # both facts are in hand rather than guessed in the handler.
                 if isinstance(action, ast.CopySpell):
                     action = dataclasses.replace(action, controller=source_spec)
+                # "**An opponent may** gain control of a creature you control
+                # **of their choice** for as long as this creature remains on
+                # the battlefield." (Infernal Denizen.) The same binding the
+                # copy above makes — the sentence's subject onto the action —
+                # and then the offer *folds into* that action instead of
+                # wrapping it, because "may" and "of their choice" are one
+                # decision made by one seat: choose one of those creatures, or
+                # none. Two nodes would be two prompts to the same player, and
+                # two non-interactive defaults that have to agree.
+                #
+                # Only when the pick is the subject's own ("of their choice").
+                # "An opponent may gain control of target creature" is an
+                # ordinary offer of an action whose object somebody else
+                # already named, and stays a ``May``.
+                if isinstance(action, ast.GainControl) and getattr(
+                    getattr(action.subject, "filter", None), "their_choice", False
+                ):
+                    return dataclasses.replace(
+                        action, gained_by=source_spec, offered=True
+                    )
                 return ast.May(source_spec, action=action)
             except GrammarError:
                 stream.reset(mark_may)

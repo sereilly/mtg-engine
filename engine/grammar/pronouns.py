@@ -16,6 +16,7 @@ below it.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import replace
 
 from . import ast
@@ -23,8 +24,10 @@ from .errors import GrammarError
 from .lexer import PT, QUOTE
 from .effects import _parse_gains, _parse_loses
 from .effects.characteristics import _parse_quoted_abilities
+from .phrases import _accept_self_reference
 from .statements import _parse_condition
 from .stream import TokenStream
+from .vocabulary import CARD_TYPES
 
 
 _RIDER_FOLDED = ast.RawEffect("rider-folded")
@@ -345,3 +348,89 @@ def _attach_returned_text_change(
         ),
     )
     return True
+
+
+def _attach_sacrifice_when_control_lost(
+    stream: TokenStream, steps: list
+) -> bool:
+    """Fold "Sacrifice the creature when you lose control of this creature."
+    into the battlefield entry before it (Seraph, Krovikan Vampire).
+
+    CR 603.7's delayed triggered ability, watching a control change the sentence
+    in front of it has not made yet: the permanent it is about is the one that
+    entry is about to create, which is exactly why it is a rider and not a step.
+    Parsed alone, "the creature" names nothing at all.
+
+    Both printings are read: Krovikan Vampire says "Sacrifice **it**" and Seraph
+    "Sacrifice **the creature**", and the pronoun and the repeated noun are one
+    referent (idiom 20) — the pair ``lowering/control_changes`` and
+    ``lowering/stack`` already read together. The noun is consumed against the
+    card types rather than skipped, the discipline
+    ``riders._attach_tap_when_control_lost`` states: a sentence naming something
+    the entry never made would otherwise be read as this one.
+
+    "…of **this** creature" is the ability's own source, and only that spelling
+    is admitted. A control change about any other object is one the sweep in
+    ``engine/linked_sacrifice.py`` has no record to check, so the words stay
+    unconsumed and the line fails loudly.
+
+    Marked wherever the entry sits, through a structural walk, because Seraph
+    prints it *inside* a delayed ability ("…at the beginning of the next end
+    step") and Krovikan Vampire does not.
+    """
+    if not any(_finds_battlefield_entry(step) for step in steps):
+        return False
+    mark = stream.mark()
+    if not stream.accept_word("sacrifice"):
+        stream.reset(mark)
+        return False
+    if not stream.accept_word("it"):
+        if not stream.accept_word("the"):
+            stream.reset(mark)
+            return False
+        noun = stream.peek_word()
+        if noun is None or noun not in CARD_TYPES:
+            stream.reset(mark)
+            return False
+        stream.advance()
+    if not stream.accept_phrase("when", "you", "lose", "control", "of"):
+        stream.reset(mark)
+        return False
+    if not _accept_self_reference(stream):
+        stream.reset(mark)
+        return False
+    for index, step in enumerate(steps):
+        steps[index] = _marks_entry_watched(step)
+    return True
+
+
+def _finds_battlefield_entry(node) -> bool:
+    """Whether *node* contains a :class:`ast.PutOntoBattlefield`."""
+    return _marks_entry_watched(node) is not node
+
+
+def _marks_entry_watched(node):
+    """*node* with every ``PutOntoBattlefield`` in it marked.
+
+    A structural walk rather than a per-shape probe, for
+    ``riders._marks_control_change_watched``'s reason: the entry can be a step,
+    a conjunct, or the effect of a delayed ability, and a list of the shapes it
+    has been seen in goes stale the way every fire-site list in this engine has.
+    """
+    if isinstance(node, ast.PutOntoBattlefield):
+        return replace(node, sacrifice_when_control_lost=True)
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        changed = {}
+        for field in dataclasses.fields(node):
+            value = getattr(node, field.name)
+            if isinstance(value, tuple):
+                walked = tuple(_marks_entry_watched(item) for item in value)
+                if any(a is not b for a, b in zip(walked, value)):
+                    changed[field.name] = walked
+                continue
+            walked = _marks_entry_watched(value)
+            if walked is not value:
+                changed[field.name] = walked
+        if changed:
+            return replace(node, **changed)
+    return node

@@ -155,6 +155,23 @@ class DiedThisTurn:
 
 
 @dataclass(frozen=True)
+class DamagedBySourceDiedThisTurn:
+    """"if a creature dealt damage by **this creature** this turn died"
+    (Krovikan Vampire) — CR 603.4's intervening-if over a *relation*.
+
+    Its own node beside :class:`DiedThisTurn` rather than a filter on it,
+    because the relation has no payload form: ``ObjectFilter``'s
+    ``dealt_damage_to_source_this_turn`` is never emitted, and
+    ``died_this_turn`` is answered off a bare game-wide counter that could not
+    read one if it were. Folded in, the condition would be satisfied by any
+    death at all — every end step of every game with a creature trade in it.
+
+    Carries no fields: the relation is to the ability's own source, and the
+    ledger the evaluator reads lives on that permanent.
+    """
+
+
+@dataclass(frozen=True)
 class DiedThisWay:
     """"for each creature that **died this way**" (Glyph of Reincarnation).
 
@@ -630,7 +647,7 @@ class TurnIsYours:
 Condition = Union[
     EveryOf, CoinFlipResult, Controls, DestroyedThisWay, DestroyedTargetWas,
     DiscardedCardWas,
-    IsState, StartedTheTurnState, DiedThisTurn,
+    IsState, StartedTheTurnState, DiedThisTurn, DamagedBySourceDiedThisTurn,
     ItIsColor, ObjectHasKeyword,
     HadPlus1Counter, ItWas,
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,

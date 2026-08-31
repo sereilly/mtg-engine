@@ -568,12 +568,20 @@ def _attach_if_you_cant(stream: TokenStream, steps: list[ast.Statement]) -> bool
     it" is a fact; the lowering (``_lower_steps``) is what checks that the
     step records an answer to read, exactly as it does for "if you do".
 
-    Only a ``RemoveCounter`` is folded onto: it is the producing step the pool
-    prints this rider after, and a wider fold would pair the words with steps
-    whose "can't" nobody records.
+    "At the beginning of your upkeep, sacrifice two Swamps. **If you can't**,
+    tap this creature, and …" (Infernal Denizen.) The second producing step this
+    rider is printed after, and the same question of it: CR 701.17b makes
+    sacrificing a permanent you do not control impossible, so "can't" is a board
+    the printed count cannot be paid out of. The sacrifice records the answer
+    the way the counter removal does (``_PRODUCES``), which is what keeps this
+    fold from being a claim the lowering cannot check.
+
+    Only these two are folded onto: they are the producing steps the pool prints
+    this rider after, and a wider fold would pair the words with steps whose
+    "can't" nobody records.
     """
     last = steps[-1] if steps else None
-    if not isinstance(last, ast.RemoveCounter):
+    if not isinstance(last, (ast.RemoveCounter, ast.Sacrifice)):
         return False
     mark = stream.mark()
     if not (

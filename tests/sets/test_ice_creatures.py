@@ -24,6 +24,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game
+from engine.control import change_control
 from engine.auras import attach_aura
 from engine.cumulative_upkeep import cumulative_upkeep_cost
 from engine.models import Permanent, PlayerState
@@ -2213,3 +2214,366 @@ def test_the_supplicant_will_not_eat_a_creature_of_the_wrong_color(set_pool):
     assert bears in p0.battlefield
     assert not supplicant.tapped
 # --- end W3G4 ---
+
+
+# --- W3G5: death triggers, control, computed characteristics ---
+def _w3g5_settle(game):
+    """Resolve everything the last action put on the stack, then settle."""
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+
+# Infernal Denizen — "At the beginning of your upkeep, sacrifice two Swamps. If
+# you can't, tap this creature, and an opponent may gain control of a creature
+# you control of their choice for as long as this creature remains on the
+# battlefield."
+
+
+def _w3g5_denizen(set_pool, swamps: int):
+    pool = set_pool("ICE")
+    denizen = Permanent(card=pool["Infernal Denizen"])
+    bears = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(
+        name="P0",
+        battlefield=[denizen, bears]
+        + [Permanent(card=pool["Swamp"]) for _ in range(swamps)],
+    )
+    p1 = PlayerState(name="P1")
+    game = Game(players=[p0, p1])
+    game.active_player_index = 0
+    return game, denizen, bears, p0, p1
+
+
+def test_infernal_denizen_pays_its_upkeep_with_two_swamps(set_pool):
+    game, denizen, bears, p0, _p1 = _w3g5_denizen(set_pool, swamps=2)
+
+    game.resolve_upkeep(0)
+    _w3g5_settle(game)
+
+    assert not [p for p in game.controlled_by(0) if p.card.name == "Swamp"]
+    assert not denizen.tapped, "the cost was paid, so the penalty never applies"
+    assert game.controller_index_of(bears) == 0
+
+
+def test_infernal_denizen_with_one_swamp_sacrifices_neither(set_pool):
+    """CR 701.17b: the printed count is indivisible. A player with one of the
+    two Swamps cannot sacrifice two, so nothing is sacrificed and the "if you
+    can't" branch is what happens instead."""
+    game, denizen, _bears, _p0, _p1 = _w3g5_denizen(set_pool, swamps=1)
+
+    game.resolve_upkeep(0)
+    _w3g5_settle(game)
+
+    assert [p for p in game.controlled_by(0) if p.card.name == "Swamp"], (
+        "one Swamp is not two, so it stays"
+    )
+    assert denizen.tapped
+
+
+def test_infernal_denizen_hands_a_creature_to_the_opponent_who_picks_it(set_pool):
+    """"An opponent may gain control of a creature you control of their choice."
+    The pick and the offer are one decision made by one seat, and the seat that
+    makes it is the seat that keeps the creature — not the Denizen's."""
+    game, _denizen, _bears, _p0, _p1 = _w3g5_denizen(set_pool, swamps=0)
+
+    game.resolve_upkeep(0)
+    _w3g5_settle(game)
+
+    stolen = list(game.controlled_by(1))
+    assert stolen, "the opponent took something"
+    assert all(game.owner_index_of(perm) == 0 for perm in stolen), (
+        "control moved; ownership did not (CR 108.3)"
+    )
+
+
+def test_infernal_denizen_leaving_gives_the_creature_back(set_pool):
+    """"…for as long as this creature remains on the battlefield" (CR 611.2b).
+    The contribution is monitored, so the sweep ends it the moment the Denizen
+    goes."""
+    game, denizen, _bears, _p0, _p1 = _w3g5_denizen(set_pool, swamps=0)
+    game.resolve_upkeep(0)
+    _w3g5_settle(game)
+    taken = [perm for perm in game.controlled_by(1) if perm is not denizen]
+
+    game.remove_from_battlefield(denizen)
+    game._settle()
+
+    for perm in taken:
+        assert game.controller_index_of(perm) == 0
+
+
+# Lost Order of Jarkeld — "As this creature enters, choose an opponent." /
+# "Lost Order of Jarkeld's power and toughness are each equal to 1 plus the
+# number of creatures the chosen player controls."
+
+
+def _w3g5_jarkeld(set_pool, opponent_creatures: int):
+    pool = set_pool("ICE")
+    p0 = PlayerState(name="P0", hand=[pool["Lost Order of Jarkeld"]])
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[
+            Permanent(card=pool["Balduvian Bears"]) for _ in range(opponent_creatures)
+        ],
+    )
+    game = Game(players=[p0, p1])
+    game.active_player_index = 0
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Lost Order of Jarkeld")
+    _w3g5_settle(game)
+    knight = next(
+        perm for perm in game.controlled_by(0)
+        if perm.card.name == "Lost Order of Jarkeld"
+    )
+    return game, knight, p0, p1
+
+
+def test_lost_order_of_jarkeld_counts_the_chosen_players_creatures(set_pool):
+    """CR 604.3: a characteristic-defining P/T, recomputed on every read. The
+    printed 1+* is 1 plus what the seat chosen on entry controls."""
+    game, knight, _p0, p1 = _w3g5_jarkeld(set_pool, opponent_creatures=2)
+
+    assert knight.metadata["chosen_player_index"] == 1
+    assert (knight.effective_power, knight.effective_toughness) == (3, 3)
+
+    p1.battlefield.append(Permanent(card=set_pool("ICE")["Balduvian Bears"]))
+    game._settle()
+    assert (knight.effective_power, knight.effective_toughness) == (4, 4)
+
+
+def test_lost_order_of_jarkeld_counts_what_the_chosen_player_controls(set_pool):
+    """"Controls", not "owns": a creature the chosen player has lost control of
+    is not one they control, so the count goes down when it is stolen."""
+    game, knight, _p0, p1 = _w3g5_jarkeld(set_pool, opponent_creatures=2)
+    assert knight.effective_power == 3
+
+    change_control(p1.battlefield[0], 0, source=knight)
+    game._sync_control()
+    game._settle()
+
+    assert (knight.effective_power, knight.effective_toughness) == (2, 2)
+
+
+# Mistfolk — "{U}: Counter target spell that targets this creature."
+
+
+def _w3g5_mistfolk(set_pool, aim_at_mistfolk: bool):
+    pool = set_pool("ICE")
+    mistfolk = Permanent(card=pool["Mistfolk"])
+    theirs = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", battlefield=[mistfolk])
+    p1 = PlayerState(name="P1", battlefield=[theirs], hand=[pool["Flare"]])
+    game = Game(players=[p0, p1])
+    game.start_turn(1)
+    queued = game.queue_from_hand(
+        1, "Flare",
+        target_player_index=0 if aim_at_mistfolk else 1,
+        target_permanent_index=0,
+    )
+    assert queued.supported, queued.details
+    p0.mana_pool.update({"U": 1})
+    return game, mistfolk, p0, p1
+
+
+def test_mistfolk_counters_a_spell_aimed_at_itself(set_pool):
+    game, _mistfolk, _p0, p1 = _w3g5_mistfolk(set_pool, aim_at_mistfolk=True)
+
+    result = game.queue_permanent_ability(0, "Mistfolk", target_stack_index=0)
+    game.resolve_stack()
+    game._settle()
+
+    assert result.supported, result.details
+    assert not game.stack
+    assert [card.name for card in p1.graveyard] == ["Flare"]
+
+
+def test_mistfolk_refuses_to_activate_against_a_spell_aimed_elsewhere(set_pool):
+    """CR 602.2b: the target is chosen as the ability is activated, so a stack
+    with nothing it may counter refuses *before* the {U} is spent. The picker
+    and the resolution ask one predicate, so they cannot disagree about which
+    spell qualifies."""
+    game, _mistfolk, p0, _p1 = _w3g5_mistfolk(set_pool, aim_at_mistfolk=False)
+
+    result = game.queue_permanent_ability(0, "Mistfolk", target_stack_index=0)
+
+    assert not result.supported
+    assert p0.mana_pool.get("U", 0) == 1, "nothing was paid"
+
+
+# Seraph — "Whenever a creature dealt damage by this creature this turn dies,
+# put that card onto the battlefield under your control at the beginning of the
+# next end step. Sacrifice the creature when you lose control of this creature."
+
+
+def _w3g5_seraph(set_pool):
+    pool = set_pool("ICE")
+    seraph = Permanent(card=pool["Seraph"])
+    bears = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", battlefield=[seraph])
+    p1 = PlayerState(name="P1", battlefield=[bears])
+    game = Game(players=[p0, p1])
+    game.active_player_index = 0
+    game._mark_damage_on_permanent(bears, 2, source=seraph)
+    game._settle()
+    _w3g5_settle(game)
+    return game, seraph, p0, p1
+
+
+def test_seraph_returns_what_it_killed_at_the_next_end_step(set_pool):
+    """The trigger arms a delayed ability (CR 603.7) that remembers the dead
+    card (CR 608.2h) — the end step it fires on records nothing itself."""
+    game, _seraph, _p0, p1 = _w3g5_seraph(set_pool)
+
+    assert [card.name for card in p1.graveyard] == ["Balduvian Bears"]
+    assert [d.event for d in game.delayed_triggers] == ["next_end_step"]
+
+    game.resolve_end_step(0)
+    _w3g5_settle(game)
+
+    assert "Balduvian Bears" in [p.card.name for p in game.controlled_by(0)]
+    assert not p1.graveyard
+
+
+def test_seraph_leaving_sacrifices_what_it_returned(set_pool):
+    """"Sacrifice the creature when you lose control of this creature." The card
+    goes to its **owner's** graveyard: control moved, ownership never did."""
+    game, seraph, _p0, p1 = _w3g5_seraph(set_pool)
+    game.resolve_end_step(0)
+    _w3g5_settle(game)
+
+    game.remove_from_battlefield(seraph)
+    game._settle()
+
+    assert "Balduvian Bears" not in [p.card.name for p in game.controlled_by(0)]
+    assert [card.name for card in p1.graveyard] == ["Balduvian Bears"]
+
+
+# Krovikan Vampire — Seraph's sentence with the trigger the other way round.
+
+
+def _w3g5_krovikan(set_pool, kill: bool = True):
+    pool = set_pool("ICE")
+    vampire = Permanent(card=pool["Krovikan Vampire"])
+    bears = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", battlefield=[vampire])
+    p1 = PlayerState(name="P1", battlefield=[bears])
+    game = Game(players=[p0, p1])
+    game.active_player_index = 0
+    if kill:
+        game._mark_damage_on_permanent(bears, 2, source=vampire)
+        game._settle()
+        _w3g5_settle(game)
+    return game, vampire, p0, p1
+
+
+def test_krovikan_vampire_returns_what_it_killed_at_the_end_step(set_pool):
+    """The intervening-if reads a ledger, because by the end step the creature
+    is gone and the damage record it carried has gone with it."""
+    game, vampire, _p0, p1 = _w3g5_krovikan(set_pool)
+
+    assert [
+        card.name
+        for card in vampire.metadata["damaged_creatures_that_died_this_turn"]
+    ] == ["Balduvian Bears"]
+
+    game.resolve_end_step(0)
+    _w3g5_settle(game)
+
+    assert "Balduvian Bears" in [p.card.name for p in game.controlled_by(0)]
+    assert not p1.graveyard
+
+
+def test_krovikan_vampire_does_nothing_when_nothing_it_damaged_died(set_pool):
+    """CR 603.4: a gated trigger whose condition is false does not trigger at
+    all. The game-wide "a creature died" counter cannot answer this question,
+    which is why the condition is its own."""
+    game, _vampire, _p0, _p1 = _w3g5_krovikan(set_pool, kill=False)
+
+    game.resolve_end_step(0)
+    _w3g5_settle(game)
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Krovikan Vampire"]
+
+
+def test_krovikan_vampire_changing_hands_sacrifices_what_it_returned(set_pool):
+    """"When **you** lose control of this creature" — the Vampire being stolen
+    is exactly the case, and nothing has changed zones."""
+    game, vampire, _p0, p1 = _w3g5_krovikan(set_pool)
+    game.resolve_end_step(0)
+    _w3g5_settle(game)
+    assert "Balduvian Bears" in [p.card.name for p in game.controlled_by(0)]
+
+    change_control(vampire, 1, source=object())
+    game._sync_control()
+    game._settle()
+
+    assert "Balduvian Bears" not in [p.card.name for p in game.controlled_by(0)]
+    assert [card.name for card in p1.graveyard] == ["Balduvian Bears"]
+
+
+# Shyft — "At the beginning of your upkeep, you may have this creature become
+# the color or colors of your choice. (This effect lasts indefinitely.)"
+
+
+def _w3g5_shyft(set_pool, interactive=(), opponent=("Abyssal Specter",)):
+    pool = set_pool("ICE")
+    shyft = Permanent(card=pool["Shyft"])
+    p0 = PlayerState(name="P0", battlefield=[shyft])
+    p1 = PlayerState(
+        name="P1", battlefield=[Permanent(card=pool[name]) for name in opponent]
+    )
+    game = Game(players=[p0, p1])
+    game.active_player_index = 0
+    game.interactive_seats = set(interactive)
+    game.resolve_upkeep(0)
+    for _ in range(6):
+        if game.stack and not game.pending_choices:
+            game.resolve_top_of_stack()
+            continue
+        break
+    game._settle()
+    return game, shyft
+
+
+def test_shyft_takes_a_deterministic_colour_for_a_seat_nobody_asks(set_pool):
+    """The stated default: the colour the opponents hold least of among
+    nontoken permanents — a creature sharing a colour with the board is the one
+    every colour-hoser reaches. Ties break on the printed WUBRG order, so a
+    seeded run reproduces."""
+    game, shyft = _w3g5_shyft(set_pool)
+
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert not game.pending_choices
+    assert game._effective_colors(shyft) == {"W"}, "the opponent's board is black"
+
+
+def test_shyft_lets_an_interactive_seat_name_two_colours(set_pool):
+    """CR 105.2: "the color **or colors**" offers a set, and a two-coloured
+    object is one object of two colours. Layer 5 has taken a tuple since Dream
+    Coat; what did not exist was a way for a player to name one."""
+    game, shyft = _w3g5_shyft(set_pool, interactive=(0,))
+
+    assert game.confirm_optional_pay(0, card_name="Shyft", accept=True)
+    game._settle()
+    assert [c.kind for c in game.pending_choices] == ["color_set_choice"]
+
+    assert game.confirm_color_set_choice(0, ["W", "R"])
+    game._settle()
+
+    assert game._effective_colors(shyft) == {"W", "R"}
+
+
+def test_shyft_declined_stays_the_colour_it_was_printed(set_pool):
+    """"You **may**" — a declined offer changes nothing, and the creature is
+    still the blue it was printed."""
+    game, shyft = _w3g5_shyft(set_pool, interactive=(0,))
+
+    assert game.confirm_optional_pay(0, card_name="Shyft", accept=False)
+    game._settle()
+
+    assert not game.pending_choices
+    assert game._effective_colors(shyft) == {"U"}
+# --- end W3G5 ---

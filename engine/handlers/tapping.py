@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..oracle_types import X_FROM_COUNT
 from ._common import (
     permanent_matches_filter,
     resolve_amount,
@@ -221,10 +222,31 @@ def _tap_or_untap_all_matching(
     from ..subject_filters import subject_matches
 
     observer = game.players.index(context.caster) if context.caster in game.players else None
+    described = dict(instruction.payload)
+    # This kind's payload *is* its filter, with no wrapper key — so a
+    # dispatch-level key stamped onto it has to be lifted off before it is read
+    # as one. "…**where X is** the number of Islands tapped this way" (Monsoon)
+    # stamps its definition on every instruction of the sentence, this sweep
+    # included, and the matcher would then be handed a key no filter has.
+    described.pop(X_FROM_COUNT, None)
+    # "…all untapped Islands **that player** controls" (Monsoon). The seat is
+    # the one the firing event froze (CR 603.10), not the source's controller —
+    # which is the wrong seat on every end step but their own.
+    # ``subject_matches`` refuses ``that_player`` outright and says why: the
+    # seat is known only to the resolution holding the trigger's context, which
+    # is here. Rewritten into the relative key the matcher does answer, against
+    # that seat, exactly as ``untap_up_to_matching`` rewrites Mudslide's "they
+    # control".
+    if described.get("controller") == "that_player":
+        frozen = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(frozen, int) or not (0 <= frozen < len(game.players)):
+            return False, "no seat was frozen for 'that player'"
+        observer = frozen
+        described["controller"] = "you"
     matched = [
         perm for perm in game.all_permanents()
         if subject_matches(
-            game, perm, instruction.payload,
+            game, perm, described,
             observer=observer, source=context.source_permanent,
         )
     ]
@@ -236,6 +258,19 @@ def _tap_or_untap_all_matching(
                 changed.append(perm)
         elif game.become_untapped(perm):
             changed.append(perm)
+    # "…where X is the number of Islands **tapped this way**" (Monsoon). How
+    # many the sweep actually turned, which is the only place the sentence after
+    # it can read the number from: by then the board says how many are tapped,
+    # not how many this effect tapped, and CR 611.2c fixed the set when the
+    # effect began. The victims themselves are deliberately *not* recorded —
+    # unlike a destruction sweep's, they are still on the battlefield, so a card
+    # asking about them would have somewhere to look; none does, and a record
+    # nothing reads is a claim nothing checks.
+    #
+    # The tap direction only, for that same reason: no card counts what an
+    # untap sweep untapped, and ``_PRODUCES`` declares what this records.
+    if make_tapped:
+        context.results["tapped_this_way"] = len(changed)
     verb = "tapped" if make_tapped else "untapped"
     if changed:
         game.log.append(

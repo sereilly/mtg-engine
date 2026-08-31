@@ -8,6 +8,8 @@ reads. The modal head refuses on exactly the same principle, against the number
 of modes the engine can carry out.
 """
 
+import dataclasses
+
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
@@ -215,17 +217,34 @@ def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...
     )
 
 
-def _counter_targets_filter(inner: ast.ObjectFilter, node) -> dict[str, object]:
-    """The payload for "that targets <noun phrase>", or a refusal.
+def _counter_targets_filter(
+    inner: ast.ObjectFilter, node
+) -> tuple[dict[str, object], bool]:
+    """The payload for "that targets <noun phrase>" and whether that phrase is
+    the ability's own source, or a refusal.
 
     Three gates, and each closes a way the phrase could be admitted and then
     ignored: a field ``to_payload`` never reads, a field it reads only
     sometimes, and a key the matcher the handler calls cannot answer. The
     narrowing is the whole card here — a counter that skips it counters every
     instant on the stack — so anything short of "testable in full" refuses.
+
+    ``is_source`` is **lifted** rather than carried, the way
+    ``chosen_by_opponent`` is one family over. It is not a property of any
+    candidate — "this creature" is an identity, not a description — and
+    ``to_payload`` deliberately emits no key for it: the word is consumed
+    structurally almost everywhere else ("tap this creature" is ``tap_self``),
+    so a positive key would appear in every filter in the pool and be refused by
+    every gate that has never seen one. Here it is a second question, asked
+    beside the filter by whoever holds the ability's source.
     """
     from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 
+    # "…that targets **this creature**" (Mistfolk). Lifted first, so the field
+    # is not reported as a narrowing nothing reads by the gate below it.
+    targets_source = bool(inner.is_source)
+    if targets_source:
+        inner = dataclasses.replace(inner, is_source=False)
     beyond = _restrictions_beyond(inner, _PAYLOAD_HONOURED_FILTER_FIELDS)
     if beyond:
         raise LoweringError(
@@ -238,7 +257,7 @@ def _counter_targets_filter(inner: ast.ObjectFilter, node) -> dict[str, object]:
             "nothing tests a targeted permanent by " + ", ".join(sorted(untestable)),
             node=node,
         )
-    return payload
+    return payload, targets_source
 
 
 def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...]:
@@ -309,7 +328,15 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
         # produces is one ``subject_matches`` tests — an untestable narrowing
         # here is a counter that reaches spells the card does not name, which is
         # the direction nothing crashes and the card is simply wrong.
-        payload["targets_filter"] = _counter_targets_filter(filt.targets_object, node)
+        described, targets_source = _counter_targets_filter(filt.targets_object, node)
+        payload["targets_filter"] = described
+        if targets_source:
+            # "Counter target spell **that targets this creature**." (Mistfolk.)
+            # A separate key because it is a separate question: the filter says
+            # what the spell's target must *be*, and this says which permanent
+            # it must be. Both are re-asked at resolution and both narrow the
+            # picker, so the ability cannot be activated with nothing to counter.
+            payload["targets_source"] = True
     if filt.colors:
         if len(filt.colors) > 1:
             raise LoweringError("no handler for a multi-colour counter filter", node=node)

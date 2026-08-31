@@ -38,10 +38,36 @@ import re
 # ("enters tapped unless you pay …") is a different card.
 ENTERS_TAPPED = "enters tapped"
 
-# "As this artifact enters, choose an opponent." (Black Vise) and its two-choice
-# sibling (Jihad). Separate constants because the mixin branches on them: the
-# colour half is what decides whether an interactive caster is prompted.
-CHOOSE_OPPONENT_ON_ENTER = "as this artifact enters, choose an opponent"
+# "As this artifact enters, choose an opponent." (Black Vise) / "As this
+# **creature** enters, choose an opponent." (Lost Order of Jarkeld.) The printed
+# noun is *data*, for the reason the colour-only sibling below states in full:
+# the literal read "artifact" and nothing else, so a creature printing the same
+# sentence about itself reached nothing at all. That is the same bug the colour
+# reader was converted for, one card later.
+#
+# The negative lookahead is that reader's, for the same reason: Jihad's line
+# starts with these words and continues "and a color", and without it the
+# two-choice sentence would be claimed here with its colour dropped.
+_CHOOSE_OPPONENT_ON_ENTER_RE = re.compile(
+    r"as this [a-z]+ enters, choose an opponent(?! and)"
+)
+
+
+def chooses_opponent_on_enter(text: str) -> bool:
+    """Whether *text* asks its controller for an opponent as the permanent
+    enters.
+
+    A substring probe like the mixin's own, because the mixin asks it of the
+    card's whole normalized text; :func:`enter_effect_line` asks the whole-line
+    question through this same matcher, so what is performed and what is
+    claimed cannot drift.
+    """
+    return bool(_CHOOSE_OPPONENT_ON_ENTER_RE.search(text or ""))
+
+
+# Its two-choice sibling (Jihad, Call to Arms). A separate reader because the
+# mixin branches on them: the colour half is what decides whether an interactive
+# caster is prompted.
 CHOOSE_COLOR_AND_OPPONENT_ON_ENTER = (
     "as this enchantment enters, choose a color and an opponent"
 )
@@ -572,7 +598,6 @@ _SELF_SUBJECTS: tuple[str, ...] = (
 # otherwise swallow text nothing performs.
 _ENTRY_LINES: tuple[tuple[str, str], ...] = (
     (ENTERS_TAPPED, ""),
-    (CHOOSE_OPPONENT_ON_ENTER, ""),
     (CHOOSE_COLOR_AND_OPPONENT_ON_ENTER, ""),
     (CHOOSE_CARD_NAME_ON_ENTER, ""),
     (COPY_CREATURE_ON_ENTER, ""),
@@ -665,6 +690,8 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "enters with X P/T counters"
     if enters_with_x_named_counters(normalized) is not None:
         return "enters with X named counters"
+    if chooses_opponent_on_enter(normalized):
+        return "chooses an opponent as it enters"
     if chooses_color_on_enter(normalized):
         return "chooses a color as it enters"
     if chooses_two_land_types_on_enter(normalized):
@@ -689,7 +716,7 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
 __all__ = [
     "CHOOSE_CARD_NAME_ON_ENTER",
     "CHOOSE_COLOR_AND_OPPONENT_ON_ENTER",
-    "CHOOSE_OPPONENT_ON_ENTER",
+    "chooses_opponent_on_enter",
     "chooses_color_on_enter",
     "chooses_two_land_types_on_enter",
     "COPY_ARTIFACT_ON_ENTER",

@@ -182,6 +182,12 @@ DRAW_DISCARD_INSTEAD = 30  # Chains of Mephistopheles
 # they are ordered by the number that keeps each of them behind every
 # replacement the player armed for their own benefit.
 DRAW_REVEALS_TOP = 31  # Enduring Renewal
+# The third of the three, and the same reasoning again: it takes the draw away
+# unless somebody buys it back. It goes behind the other two because it is the
+# only one that asks a *different* seat a question — a draw already consumed by
+# a Lamp or a Renewal never puts that question, which is the ordering the
+# drawing player would choose and the rule permits.
+DRAW_REVEALED_UNLESS_PAID = 32  # Zur's Weirding
 EXTRA_PLUS1_COUNTER = 10  # Conclave Mentor
 EXILE_INSTEAD_OF_ENTERING = 10  # Containment Priest
 # Before it, and before every other entry replacement. CR 614.17c: an event that
@@ -2068,6 +2074,117 @@ def _substitute_land_mana(game, payload: dict) -> ReplacementOutcome | None:
 # Which printed lines this registry implements, for the two readers that ask
 # ---------------------------------------------------------------------------
 
+#: Zur's Weirding, all four printed sentences. The constant is the whole line
+#: because the interceptor performs the whole line — the reveal, the offer to
+#: every other player, the graveyard behind a payment and the draw behind none.
+#: A claim stopping at the first sentence would admit a card whose whole point
+#: is the three behind it.
+#:
+#: The 2 is part of the constant rather than payload. It could be read as a
+#: shape the way Forethought Amulet's cap is, but nothing would be gained: one
+#: card in the pool prints this sentence, and a constant is what
+#: ``replacement_claims_line`` can compare a whole line against without a second
+#: reader to keep in step.
+REVEAL_DRAW_UNLESS_PAID_TEXT = (
+    "if a player would draw a card, they reveal it instead. then any other "
+    "player may pay 2 life. if a player does, put that card into its owner's "
+    "graveyard. otherwise, that player draws a card"
+)
+
+#: What the offer costs, read by the interceptor, the prompt and the payment so
+#: the three cannot disagree about the number the card prints.
+REVEAL_DRAW_LIFE_COST = 2
+
+
+def _zurs_weirding_sources(game, payload: dict) -> list:
+    """Every permanent whose text is this replacement and that has not already
+    had its opportunity on this event (CR 614.5).
+
+    The whole board, not one seat's: the sentence says "**a** player", so the
+    enchantment replaces its controller's own draws as well as their opponents'
+    — ``_chains_sources`` scans the same way for the same printed word, and
+    ``_reveal_top_sources`` scans one seat's because Enduring Renewal says
+    "you".
+    """
+    exclude = set(payload.get("exclude_sources") or ())
+    return [
+        perm
+        for perm in game.all_permanents()
+        if REVEAL_DRAW_UNLESS_PAID_TEXT in (perm.effective_card.oracle_text or "").lower()
+        and perm.permanent_id not in exclude
+    ]
+
+
+def _applies_reveal_draw_unless_paid(game, payload: dict) -> bool:
+    return int(payload.get("count", 0)) > 0 and bool(
+        _zurs_weirding_sources(game, payload)
+    )
+
+
+@replacement_effect(
+    "draw", DRAW_REVEALED_UNLESS_PAID, applies=_applies_reveal_draw_unless_paid
+)
+def _reveal_draw_unless_paid(game, payload: dict) -> ReplacementOutcome | None:
+    """Zur's Weirding: "If a player would draw a card, they reveal it instead.
+    Then any other player may pay 2 life. If a player does, put that card into
+    its owner's graveyard. Otherwise, that player draws a card."
+
+    One draw at a time, because that is what the sentence replaces (CR 121.2
+    makes an N-card draw N individual draws); the draws queued behind it ride
+    the prompt and are made through the seam again when it is answered.
+
+    The offer is put to **every other player in turn order** (CR 101.4) and the
+    first to pay ends the round — so it is the ordinary pending-choice queue
+    with the rest of the poll carried in the prompt's own data, the arrangement
+    Chains of Mephistopheles uses one order over: arm the prompt, hang the draw
+    on it. An interactive seat answers it; every other seat takes the stated
+    default where the offer stands, so headless and AI play never block.
+
+    The card is **not** moved here. It is revealed and left on top: until
+    somebody pays, it is still the card the drawing player is about to draw, and
+    CR 121.1's draw is what puts it in a hand. Moving it early would make a
+    declined offer a draw of the *second* card down.
+
+    An empty library reveals nothing and draws nothing: CR 704.5b fires on an
+    *attempted* draw, and the attempt was replaced.
+    """
+    player = payload["player"]
+    seat = game.players.index(player)
+    count = int(payload["count"])
+    source = min(
+        _zurs_weirding_sources(game, payload), key=lambda perm: perm.permanent_id
+    )
+    excludes = tuple(payload.get("exclude_sources") or ()) + (source.permanent_id,)
+    drawn = 0
+    if not player.library:
+        game.log.append(
+            f"{player.name} has no card to reveal ({source.card.name})"
+        )
+        if count > 1:
+            drawn += game._draw_with_replacements(
+                player, count - 1,
+                exclude_sources=tuple(payload.get("exclude_sources") or ()),
+            )
+        payload["drawn"] = drawn
+        return ReplacementOutcome(replaced=True)
+    revealed = player.library[0]
+    game.record_reveal(seat, [revealed.name])
+    game.log.append(
+        f"{player.name} reveals {revealed.name} instead of drawing "
+        f"({source.card.name})"
+    )
+    game.offer_revealed_draw_buyout(
+        seat,
+        card_name=revealed.name,
+        source_name=source.card.name,
+        queued_draws=max(0, count - 1),
+        exclude_sources=excludes,
+        queued_exclude_sources=tuple(payload.get("exclude_sources") or ()),
+    )
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
+
+
 #: Each entry is ``(the phrase an interceptor above self-selects on, the
 #: trailing clause that same interceptor also performs)``. The tail is spelled
 #: out in full rather than left as an open-ended "and whatever follows" — it is
@@ -2132,6 +2249,11 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # three printed sentences, because the interceptor performs all three — the
     # reveal, the graveyard for a creature card and the draw for anything else.
     (REVEAL_TOP_INSTEAD_OF_DRAW_TEXT, ""),
+    # _reveal_draw_unless_paid (Zur's Weirding): the constant is all four
+    # printed sentences, because the interceptor performs all four — the reveal,
+    # the offer to every other player in turn order, the graveyard behind a
+    # payment and the draw behind none.
+    (REVEAL_DRAW_UNLESS_PAID_TEXT, ""),
     # _lands_cannot_enter (Worms of the Earth): the phrase is the whole line,
     # and every land entering from anywhere is refused — the interceptor tests
     # the type through layer 4 rather than the printed one, so the claim covers

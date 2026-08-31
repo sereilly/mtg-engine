@@ -44,7 +44,7 @@ _LOYALTY_PICKER_HONOURED = frozenset({"card_types", "subtypes", "controller"})
 #: The scratchpad key a granted CR 615 shield is recorded under
 #: (``handlers/prevention.PREVENTION_SHIELD_RESULT``), spelled here rather than
 #: imported because a lowering may not reach into the handlers. The two are held
-#: together by ``lowering/categories._PRODUCES``, which is what the ``produced``
+#: together by ``lowering/_records._PRODUCES``, which is what the ``produced``
 #: check below reads — a key that stopped being written would take the gate with
 #: it rather than leaving a back-reference pointing at nothing.
 PREVENTION_SHIELD_RECORD = "prevention_shield"

@@ -8,7 +8,7 @@ quantity counted off a board or out of the scratchpad against the sentence that
 spends it, and a floor rather than a family because this module reads it.
 
 `deal_damage` is the one instruction that records a value other steps can read
-(`_PRODUCES` in `categories.py`), which is why "deal damage, then gain that much
+(`_PRODUCES` in `_records.py`), which is why "deal damage, then gain that much
 life" is two instructions in a sequence rather than a fused kind.
 """
 

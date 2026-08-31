@@ -799,6 +799,41 @@ def _pay_life_to_save(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("color_set_choice")
+def _color_set_choice(ctx: PromptContext, choices: list) -> dict:
+    """Shyft: "you may have this creature become the color or colors of your
+    choice." ``several`` is what tells the client whether to let more than one
+    be picked — the printed offer, not a UI preference."""
+    data = choices[0].data
+    permanent = data.get("permanent")
+    return {
+        "player_index": choices[0].player_index,
+        "card_name": data.get("card_name", ""),
+        "permanent_name": getattr(getattr(permanent, "card", None), "name", ""),
+        "colors": list(data.get("colors") or []),
+        "several": bool(data.get("several")),
+    }
+
+
+@prompt_renderer("revealed_draw_buyout")
+def _revealed_draw_buyout(ctx: PromptContext, choices: list) -> dict:
+    """Zur's Weirding: "Then any other player may pay 2 life."
+
+    One offer at a time -- the poll asks each other seat in turn about one
+    revealed card -- so the first queued choice is the whole prompt. The card's
+    name rides the prompt because the whole decision is about which card it is,
+    and the reveal itself is a moment rather than a zone.
+    """
+    data = choices[0].data
+    return {
+        "player_index": choices[0].player_index,
+        "card_name": data.get("card_name", ""),
+        "revealed_name": data.get("revealed_name", ""),
+        "drawing_player": data.get("drawing_player", ""),
+        "life": int(data.get("life", 2)),
+    }
+
+
 @prompt_renderer("hand_reveal")
 def _hand_reveal(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]

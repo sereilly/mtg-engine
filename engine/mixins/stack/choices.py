@@ -2232,6 +2232,13 @@ class PendingChoicesMixin:
             if color is not None:
                 # Jihad's anthem is conditioned on the chosen color/player.
                 self._recalculate_lord_buffs()
+            # "…equal to 1 plus the number of creatures **the chosen player**
+            # controls." (Lost Order of Jarkeld.) A characteristic-defining P/T
+            # counting a board the answer just named, so the answer has to be
+            # what it counts: the default stamped at entry was a different seat,
+            # and the refresh that ran then measured that one. The land-types
+            # branch above already recomputes for the same reason.
+            self._refresh_dynamic_creatures()
         self.discard_pending_choice(choice)
         self.check_state_based_actions()
         return True
@@ -3897,6 +3904,261 @@ class PendingChoicesMixin:
             choice, mine and self.players[choice.player_index].life > life
         )
 
+    # -- Becoming the colour or colours of your choice (Shyft) --------------
+
+    def arm_color_set_choice(
+        self, player_index: int, *, permanent, card_name: str, several: bool
+    ) -> None:
+        """Ask *player_index* which colour or colours *permanent* becomes.
+
+        The colour a *triggered* ability sets has nowhere else to come from: an
+        activated one carries it on the activation (``choices["new_color"]``),
+        and nothing announces a trigger. So the question is put here, on the
+        standing queue, and CR 609.3 is why it is put at resolution rather than
+        when the trigger goes on the stack.
+
+        A deterministic default is stamped before the prompt, the discipline
+        every entry choice follows: the colour the *opponents* hold least of
+        among nontoken permanents, which is the choice a player makes with this
+        card — a creature that shares a colour with the board is the one every
+        colour-hoser reaches. The same reasoning ``_default_terrain_land_types``
+        writes down, one card over.
+        """
+        colors = ["W", "U", "B", "R", "G"]
+        default = self._least_common_opponent_color(player_index)
+        self.arm_pending_choice(
+            "color_set_choice", player_index,
+            card_name=card_name,
+            permanent=permanent,
+            several=bool(several),
+            colors=colors,
+            default_colors=[default],
+        )
+
+    def _least_common_opponent_color(self, seat: int) -> str:
+        """The colour *seat*'s opponents control fewest of, among nontoken
+        permanents. Ties break on the printed WUBRG order, so a seeded run
+        reproduces."""
+        counts = {color: 0 for color in ("W", "U", "B", "R", "G")}
+        for other, player in enumerate(self.players):
+            if other == seat or player.lost:
+                continue
+            for perm in self.controlled_by(other):
+                if perm.metadata.get("is_token"):
+                    continue
+                for color in self._effective_colors(perm):
+                    if color in counts:
+                        counts[color] += 1
+        order = list(counts)
+        return min(order, key=lambda color: (counts[color], order.index(color)))
+
+    def confirm_color_set_choice(self, player_index: int, colors) -> bool:
+        """Answer "become the color or colors of your choice"."""
+        return self.resolve_pending_choice(
+            "color_set_choice", player_index, colors=colors
+        )
+
+    def _resolve_color_set_choice(self, choice: PendingChoice, colors) -> bool:
+        """Write the chosen set as this permanent's colour (CR 613 layer 5).
+
+        Refused rather than silently narrowed when the card offered one colour
+        and the answer names several — "the color of your choice" is one, and a
+        prompt that took two would be a card nobody printed.
+        """
+        data = choice.data
+        wanted = list(colors) if isinstance(colors, (list, tuple)) else [colors]
+        symbols = []
+        for entry in wanted:
+            try:
+                symbol = self._normalize_mana_color(entry)
+            except ValueError:
+                return False
+            if symbol and symbol not in symbols:
+                symbols.append(symbol)
+        if not symbols:
+            return False
+        if len(symbols) > 1 and not data.get("several"):
+            return False
+        permanent = data["permanent"]
+        self.discard_pending_choice(choice)
+        if not self.is_on_battlefield(permanent):
+            # It left while the prompt was owed; there is nothing to recolour
+            # and the prompt still clears.
+            return True
+        # A tuple whenever the card offered a set, so layer 5 writes every
+        # colour rather than the first — the shape `collect_color_effects`
+        # already reads, and a bare symbol otherwise.
+        permanent.metadata["color_override"] = (
+            tuple(symbols) if data.get("several") else symbols[0]
+        )
+        self._recalculate_lord_buffs()
+        self.log.append(
+            f"{permanent.card.name} became {'/'.join(symbols)} "
+            f"({data.get('card_name', '')})"
+        )
+        return True
+
+    def _default_color_set_choice(self, choice: PendingChoice) -> None:
+        self._resolve_color_set_choice(choice, choice.data.get("default_colors") or [])
+
+    # -- Buying a revealed draw out of a hand (Zur's Weirding) --------------
+
+    def offer_revealed_draw_buyout(
+        self,
+        drawing_seat: int,
+        *,
+        card_name: str,
+        source_name: str,
+        queued_draws: int,
+        exclude_sources: tuple[int, ...],
+        queued_exclude_sources: tuple[int, ...] = (),
+        remaining_seats: list[int] | None = None,
+    ) -> None:
+        """Put "any other player may pay 2 life" to the next seat that owes an
+        answer, or finish the replaced draw when nobody is left.
+
+        CR 101.4: the offer goes round **every other player** in turn order
+        starting with the active player, and the first to pay ends the round.
+        The rest of the round rides in the prompt's own data rather than in a
+        loop here, because a human seat's answer arrives on a later request and
+        a loop would have to survive that; the resolver arms the next seat.
+
+        A seat that has left the game is nobody (CR 800.4a), and it is filtered
+        on every pass rather than once, so a player who lost while the poll was
+        open is not asked.
+        """
+        from ...replacements import REVEAL_DRAW_LIFE_COST
+
+        if remaining_seats is None:
+            count = len(self.players)
+            active = self.active_player_index or 0
+            remaining_seats = sorted(
+                (
+                    index for index, player in enumerate(self.players)
+                    if index != drawing_seat and not player.lost
+                ),
+                key=lambda index: ((index - active) % count, index),
+            )
+        live = [
+            seat for seat in remaining_seats
+            if 0 <= seat < len(self.players) and not self.players[seat].lost
+        ]
+        if not live:
+            self._finish_revealed_draw(
+                drawing_seat, bought=False,
+                queued_draws=queued_draws,
+                exclude_sources=exclude_sources,
+                queued_exclude_sources=queued_exclude_sources,
+                source_name=source_name,
+            )
+            return
+        self.arm_pending_choice(
+            "revealed_draw_buyout", live[0],
+            card_name=source_name,
+            revealed_name=card_name,
+            drawing_seat=drawing_seat,
+            drawing_player=self.players[drawing_seat].name,
+            life=REVEAL_DRAW_LIFE_COST,
+            _remaining_seats=live[1:],
+            _queued_draws=int(queued_draws),
+            _exclude_sources=tuple(exclude_sources),
+            _queued_exclude_sources=tuple(queued_exclude_sources),
+        )
+
+    def confirm_revealed_draw_buyout(self, player_index: int, accept: bool = True) -> bool:
+        """Answer "any other player may pay 2 life" for the revealed card."""
+        return self.resolve_pending_choice(
+            "revealed_draw_buyout", player_index, accept=bool(accept)
+        )
+
+    def _resolve_revealed_draw_buyout(self, choice: PendingChoice, accept: bool) -> bool:
+        """Pay and bin the revealed card, or decline and pass the offer on."""
+        data = choice.data
+        player = self.players[choice.player_index]
+        life = int(data.get("life", 2))
+        drawing_seat = int(data["drawing_seat"])
+        self.discard_pending_choice(choice)
+        # CR 119.4: a player may pay N life only with at least N to pay. Down to
+        # exactly 0 is legal and the state-based check that follows ends the
+        # game -- this is a refusal to pay what is not there.
+        if accept and player.life >= life:
+            player.life -= life
+            self.log.append(
+                f"{player.name} paid {life} life ({data.get('card_name', '')})"
+            )
+            self._finish_revealed_draw(
+                drawing_seat, bought=True,
+                queued_draws=int(data.get("_queued_draws", 0)),
+                exclude_sources=tuple(data.get("_exclude_sources") or ()),
+                queued_exclude_sources=tuple(
+                    data.get("_queued_exclude_sources") or ()
+                ),
+                source_name=str(data.get("card_name", "")),
+            )
+            return True
+        self.log.append(
+            f"{player.name} declined to pay {life} life "
+            f"({data.get('card_name', '')})"
+        )
+        self.offer_revealed_draw_buyout(
+            drawing_seat,
+            card_name=str(data.get("revealed_name", "")),
+            source_name=str(data.get("card_name", "")),
+            queued_draws=int(data.get("_queued_draws", 0)),
+            exclude_sources=tuple(data.get("_exclude_sources") or ()),
+            queued_exclude_sources=tuple(data.get("_queued_exclude_sources") or ()),
+            remaining_seats=list(data.get("_remaining_seats") or ()),
+        )
+        return True
+
+    def _default_revealed_draw_buyout(self, choice: PendingChoice) -> None:
+        """The stated policy for a seat nobody is asking: **decline**.
+
+        Not a valuation (``engine/ai_valuation.py`` is where one would go) but a
+        policy, and one the shape of the offer forces: this is put to every
+        other player on *every* draw for as long as the enchantment is on the
+        battlefield, so a default that paid would spend a seat's whole life
+        total inside a few turns of somebody else's draw steps. Declining costs
+        nothing and leaves the card doing to a table of humans what it does.
+        """
+        self._resolve_revealed_draw_buyout(choice, False)
+
+    def _finish_revealed_draw(
+        self, drawing_seat: int, *, bought: bool, queued_draws: int,
+        exclude_sources: tuple[int, ...],
+        queued_exclude_sources: tuple[int, ...],
+        source_name: str,
+    ) -> None:
+        """The two branches the poll ends in, plus the draws queued behind it.
+
+        "If a player does, put that card into its owner's graveyard. Otherwise,
+        that player draws a card." The card has been on top of the library all
+        along (see the interceptor), so the payment moves it and a declined
+        offer simply lets the draw happen -- through the seam, carrying this
+        source in ``exclude_sources``, because CR 614.5 gives a replacement one
+        opportunity per event and the draw this one just created must not be
+        replaced by it again.
+        """
+        player = self.players[drawing_seat]
+        if bought and player.library:
+            card = player.library.pop(0)
+            player.graveyard.append(card)
+            self.log.append(
+                f"{card.name} was put into {player.name}'s graveyard "
+                f"({source_name})"
+            )
+        elif not bought:
+            self._draw_with_replacements(
+                player, 1, exclude_sources=exclude_sources
+            )
+        if queued_draws > 0:
+            # CR 121.2: the draws behind this one are their own events and get
+            # their own trip through the seam -- including this replacement
+            # again, which is what a two-card draw under Zur's Weirding is.
+            self._draw_with_replacements(
+                player, queued_draws, exclude_sources=queued_exclude_sources
+            )
+
     # -- Which permanent receives a loyalty counter (Liliana's Scrounger) ----
 
     def confirm_loyalty_recipient(self, player_index: int, permanent_id: int) -> bool:
@@ -4521,6 +4783,42 @@ register_choice(
     # deterministic answer before the flag is set — so headless and AI play run
     # exactly as they did.
     suspends=True,
+)
+
+register_choice(
+    "color_set_choice",
+    resolve=lambda game, choice, r: game._resolve_color_set_choice(
+        choice, r.get("colors")
+    ),
+    default=lambda game, choice: game._default_color_set_choice(choice),
+    action="color_set_choice_confirm",
+    prompt_key="color_set_choice",
+    blocked_detail="choose the colour or colours before other actions",
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The colour is the whole of what this resolution does; nothing after it in
+    # the same trigger reads the answer, so the loop has nothing to wait for.
+    default_at_arm=True,
+)
+
+register_choice(
+    "revealed_draw_buyout",
+    resolve=lambda game, choice, r: game._resolve_revealed_draw_buyout(
+        choice, r["accept"]
+    ),
+    default=lambda game, choice: game._default_revealed_draw_buyout(choice),
+    action="revealed_draw_buyout_confirm",
+    prompt_key="revealed_draw_buyout",
+    blocked_detail="answer the revealed-card offer before other actions",
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The answer decides what happens to the card the drawing player is about to
+    # draw -- and whether the seat behind you is asked at all -- so the replaced
+    # draw genuinely stops here.
+    suspends=True,
+    # A non-interactive seat never queues it: the draw it replaced has to
+    # finish, so the stated default is taken where the offer stands.
+    default_at_arm=True,
 )
 
 register_choice(

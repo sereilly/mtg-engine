@@ -1119,7 +1119,10 @@ class LegalityMixin:
         if kind == "graveyard_creature":
             return self._enumerate_graveyard_creatures(caster_index, spec)
         if kind == "stack":
-            return self._enumerate_stack_targets(caster_index, card, spec)
+            return self._enumerate_stack_targets(
+                caster_index, card, spec,
+                source=ability_source or source_permanent,
+            )
         if kind == "spell_or_permanent":
             # Lace recolor: legal on any permanent on the battlefield or any spell
             # on the stack. Enumerate both and concatenate. Unsubstantiate narrows
@@ -1595,7 +1598,7 @@ class LegalityMixin:
         return targets
 
     def _enumerate_stack_targets(
-        self, caster_index: int, card: CardDefinition, spec: dict
+        self, caster_index: int, card: CardDefinition, spec: dict, source=None
     ) -> list[dict]:
         """The spells on the stack this spec may point at.
 
@@ -1604,6 +1607,11 @@ class LegalityMixin:
         control"). It is the same seat ``subject_matches`` calls the observer,
         and CR 109.5 is why it is the counter's controller rather than the
         controller of the spell being looked at.
+
+        *source* is the ability's own permanent, for the one narrowing that is
+        an identity rather than a description: "…that targets **this creature**"
+        (Mistfolk). A spell is offered only while it is still pointing at that
+        permanent, which is what keeps the {U} from being paid for nothing.
         """
         targets: list[dict] = []
         color_filter = spec.get("stack_color_filter")
@@ -1649,11 +1657,13 @@ class LegalityMixin:
             # targets of the spell being offered, against the seat whose spell
             # or ability is doing the countering.
             targets_filter = spec.get("stack_targets_filter")
-            if targets_filter:
+            targets_source = source if spec.get("stack_targets_source") else None
+            if targets_filter or targets_source is not None:
                 from .handlers.stack import _spell_targets_matching
 
                 if not _spell_targets_matching(
-                    self, item, dict(targets_filter), caster_index
+                    self, item, dict(targets_filter or {}), caster_index,
+                    source=targets_source,
                 ):
                     continue
             # "…**with a single target if that target is you**" (Reflecting

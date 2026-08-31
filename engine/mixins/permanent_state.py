@@ -10,7 +10,7 @@ from ..enter_effects import (
     chooses_color_on_enter,
     chooses_two_land_types_on_enter,
     CHOOSE_CARD_NAME_ON_ENTER,
-    CHOOSE_OPPONENT_ON_ENTER,
+    chooses_opponent_on_enter,
     COPY_ARTIFACT_ON_ENTER,
     COPY_CREATURE_ON_ENTER,
     ENTERS_TAPPED,
@@ -111,6 +111,26 @@ def _count_dynamic_pt(
         # Avenger). Whose battlefield is already payload, so this is one more
         # value for it rather than a second counter.
         battlefields = [p.battlefield for p in game.players if p is not player]
+    elif scope == "chosen_player":
+        # "…the number of creatures **the chosen player** controls" (Lost Order
+        # of Jarkeld). The seat this permanent chose as it entered (CR 614.1c),
+        # read off the permanent rather than off the game — the record belongs
+        # to one object, the way `chosen_number` two branches up does.
+        #
+        # Through the control seam, not `player.battlefield`: the sentence says
+        # "controls", and a creature the chosen player has *stolen* is one they
+        # control. The scopes beside this one predate the seam and are ratcheted
+        # where they are; a new one has no reason to join them.
+        #
+        # No record is a permanent still entering — the choice is part of
+        # arriving — and an empty board is the honest answer for it: the printed
+        # constant alone, which is what the card is worth until the seat exists.
+        seat = permanent.metadata.get("chosen_player_index")
+        battlefields = (
+            [list(game.controlled_by(seat))]
+            if isinstance(seat, int) and 0 <= seat < len(game.players)
+            else []
+        )
     elif (
         scope == "defender_when_attacking"
         and permanent.attacking
@@ -323,7 +343,8 @@ class PermanentStateMixin:
                     options=list(bodies),
                 )
 
-        # "As this artifact enters, choose an opponent." (Black Vise) /
+        # "As this artifact enters, choose an opponent." (Black Vise) / "As
+        # this creature enters, choose an opponent." (Lost Order of Jarkeld.) /
         # "As this enchantment enters, choose a color and an opponent." (Jihad)
         # Deterministic defaults are stamped immediately (the cast target, else
         # the first living opponent; the color the opponent controls most among
@@ -332,7 +353,7 @@ class PermanentStateMixin:
         # gets a prompt whose confirm_enter_choice overwrites the defaults
         # before anything consults them.
         needs_color = CHOOSE_COLOR_AND_OPPONENT_ON_ENTER in text
-        if needs_color or CHOOSE_OPPONENT_ON_ENTER in text:
+        if needs_color or chooses_opponent_on_enter(text):
             opponents = [
                 i for i, p in enumerate(self.players) if i != caster_index and not p.lost
             ]
@@ -1595,6 +1616,36 @@ class PermanentStateMixin:
             for perm in self.controlled_by(seat)
         )
 
+    def _chosen_color_most_common_condition(self, source_perm: Permanent) -> bool:
+        """Call to Arms: whether "the chosen color is the most common color
+        among nontoken permanents the chosen player controls **but isn't tied
+        for most common**" holds for *source_perm*'s stored choices.
+
+        A strict maximum, which is what the second half of the clause says and
+        why it is one predicate rather than a superlative plus a rider. A
+        multicoloured permanent is counted once for every colour it is
+        (CR 105.2 makes it one object of several colours, not several objects),
+        and a colourless board has no most common colour at all — every colour
+        is tied at nothing, so the answer is False rather than vacuously True.
+
+        The sibling condition beside this one asks "controls **a**"; the census
+        is the only difference, which is why the two live in one table.
+        """
+        seat = source_perm.metadata.get("chosen_player_index")
+        color = source_perm.metadata.get("chosen_color")
+        if not isinstance(seat, int) or not (0 <= seat < len(self.players)) or not color:
+            return False
+        counts: dict[str, int] = {}
+        for perm in self.controlled_by(seat):
+            if perm.metadata.get("is_token"):
+                continue
+            for other in self._effective_colors(perm):
+                counts[other] = counts.get(other, 0) + 1
+        mine = counts.get(color, 0)
+        if mine <= 0:
+            return False
+        return all(count < mine for other, count in counts.items() if other != color)
+
     @staticmethod
     def _protection_quality_of(word: str) -> tuple[str, str] | None:
         """The canonical quality one word of a protection clause names, or None.
@@ -2102,6 +2153,7 @@ class PermanentStateMixin:
     # tests/engine/test_lord_buff_table.py holds the two lists to each other.
     _LORD_BUFF_CONDITIONS = {
         "chosen_color_permanent": "_chosen_color_permanent_condition",
+        "chosen_color_most_common": "_chosen_color_most_common_condition",
     }
 
     def _lord_buff_condition(

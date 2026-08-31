@@ -351,6 +351,9 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # without the row the ability answered None and the guard could not tell
     # the two apart.
     "recolor_enchanted_chosen_color": {"kind": "none"},
+    # Shyft: the same positive "nothing to point at" — the sentence names
+    # the source itself, so no picker is offered and none is missing.
+    "recolor_self_chosen_color": {"kind": "none"},
     "tap_or_untap_target": {"kind": "permanent"},
     "drain_target_lands_mana": {"kind": "player"},
     "tap_target_player_lands_and_drain_mana": {"kind": "player"},
@@ -624,6 +627,14 @@ def _counter_spec(payload: dict) -> dict:
         # narrowing excludes would let Ring of Immortals be activated with
         # nothing it could legally counter — the cost paid for no effect.
         spec["stack_targets_filter"] = dict(targets_filter)
+    if payload.get("targets_source"):
+        # "…that targets **this creature**" (Mistfolk). The picker resolves the
+        # word against the ability's own permanent, which `legality` has in hand
+        # and this table does not — so the flag travels and the enumeration
+        # answers it. Without it the ability offers every spell on the stack and
+        # then counters nothing, which is the {U} paid for no effect the
+        # narrowing beside it exists to prevent.
+        spec["stack_targets_source"] = True
     return spec
 
 

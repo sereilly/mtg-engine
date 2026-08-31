@@ -45,6 +45,7 @@ from .lexer import (BULLET, PUNCT, QUOTE, tokenize)
 from .costs import _parse_costs
 from .registries import registry_for_line
 from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
+                       _attach_sacrifice_when_control_lost,
                        _parse_conditional_pronoun_grant_rider,
                        _parse_conditional_quoted_grant_rider,
                        _parse_pronoun_grant_rider, _parse_pronoun_verb_rider)
@@ -52,7 +53,8 @@ from .riders import (_attach_destroyed_this_way, _attach_exchanged_this_way, _at
 from .phrases import accept_member_state_clause
 from .stream import TokenStream
 from .vocabulary import (KEYWORD_INDEX, match_longest)
-from .rebinding import (rebind_attachment_pronoun_to_sentence_target,
+from .rebinding import (bind_recorded_card,
+                        rebind_attachment_pronoun_to_sentence_target,
                         rebind_pronoun_to_event_subject)
 from .triggers import _parse_trigger_event
 from .effects import (
@@ -402,6 +404,14 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # Command.) CR 603.7's delayed trigger on the control change the
             # sentence before it made — a clause about that sentence, not a
             # step: alone, "the creature" names nothing.
+            # "Sacrifice the creature when you lose control of this creature."
+            # (Seraph, Krovikan Vampire.) The same CR 603.7 delay one verb over,
+            # and read beside its sibling so the two spellings of "when you lose
+            # control" stay together — but folded onto a battlefield *entry*
+            # rather than onto a control change, which is why it is its own
+            # production and lives with the pronoun binders.
+            if _attach_sacrifice_when_control_lost(stream, steps):
+                continue
             if _attach_tap_when_control_lost(stream, steps):
                 stream.accept_punct(".")
                 continue
@@ -938,7 +948,14 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
         statement = _statements_from_sentences(stream)
         return ast.TriggeredAbilityNode(
             event,
-            rebind_pronoun_to_event_subject(event, statement),
+            # Two bindings, both of them about the whole line: which object a
+            # bare pronoun names, and which event recorded the card "that card"
+            # names. Only a reader holding the trigger, the intervening-if and
+            # the effect at once can answer either.
+            bind_recorded_card(
+                event.kind, intervening,
+                rebind_pronoun_to_event_subject(event, statement),
+            ),
             intervening,
         )
     stream.reset(0)

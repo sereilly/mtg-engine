@@ -270,24 +270,55 @@ class GameEndingMixin:
                         changed = True
                         break
 
+            # "Sacrifice the creature when you lose control of this creature."
+            # (Seraph, Krovikan Vampire.) CR 603.7's delayed trigger over an
+            # event with no single fire site — a permanent leaves, a control
+            # effect hands it away, one that had handed it to you ends — so it
+            # is a record the sweep re-checks, the arrangement the linked
+            # control changes above already use. ``engine/linked_sacrifice.py``
+            # states why the link is by seat and by id.
+            from ..linked_sacrifice import LINKED_SACRIFICE, linked_sacrifices_owed
+
+            for permanent in linked_sacrifices_owed(self):
+                permanent.metadata.pop(LINKED_SACRIFICE, None)
+                self.sacrifice_permanent(permanent)
+                self.log.append(
+                    f"{permanent.card.name} sacrificed (its keeper lost control "
+                    "of the creature that returned it)"
+                )
+                changed = True
+
             # Jihad: "When the chosen player controls no nontoken permanents of
-            # the chosen color, sacrifice this enchantment." A state trigger
-            # (CR 603.8) checked alongside SBAs like the no-lands sacrifices
-            # above, so it fires the moment the last matching permanent leaves.
-            for player in self.players:
+            # the chosen color, sacrifice this enchantment." Call to Arms: the
+            # same trigger over the same choices, asking a census instead. A
+            # state trigger (CR 603.8) checked alongside SBAs like the no-lands
+            # sacrifices above, so it fires the moment the condition stops
+            # holding.
+            #
+            # Through ``lord_buffs.sacrifice_state_trigger`` rather than a
+            # literal, and keyed to the **same** condition the anthem beside it
+            # hangs on: the trigger is that question negated, and two copies of
+            # it would be free to disagree — an enchantment that keeps buffing
+            # after it should have been sacrificed, or the reverse.
+            from ..lord_buffs import sacrifice_state_trigger
+
+            for seat, player in enumerate(self.players):
                 for perm in list(self.controlled_by(player)):
-                    if (
-                        "when the chosen player controls no nontoken permanents of the chosen color"
-                        in perm.effective_card.oracle_text.lower()
-                        and isinstance(perm.metadata.get("chosen_player_index"), int)
-                        and not self._chosen_color_permanent_condition(perm)
-                    ):
+                    if not isinstance(perm.metadata.get("chosen_player_index"), int):
+                        continue
+                    for line in (perm.effective_card.oracle_text or "").splitlines():
+                        condition = sacrifice_state_trigger(line)
+                        if condition is None:
+                            continue
+                        if self._lord_buff_condition(seat, perm, condition):
+                            continue
                         self.sacrifice_permanent(perm)
                         self.log.append(
-                            f"{perm.card.name} sacrificed (the chosen player controls no "
-                            "nontoken permanents of the chosen color)"
+                            f"{perm.card.name} sacrificed (what its state trigger "
+                            "names about the chosen color no longer holds)"
                         )
                         changed = True
+                        break
 
             # City in a Bottle: "other nontoken permanents with a name
             # originally printed in [set] are on the battlefield, their

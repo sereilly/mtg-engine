@@ -357,14 +357,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "may attach this aura to a land of their choice":
             _line("destroy_tapped_land_and_reoffer_aura", "triggered_destruction"),
     },
-    'Lord of the Pit': {
-        "at the beginning of your upkeep, sacrifice a creature other than this "
-        "creature. if you can't, this creature deals 7 damage to you":
-            _line(
-                "upkeep_sacrifice_other_creature_or_deal_damage", "upkeep_effect",
-                damage=7,
-            ),
-    },
     'Mana Short': {
         'tap all lands target player controls and that player loses all unspent '
         'mana':

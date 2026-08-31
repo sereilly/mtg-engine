@@ -34,10 +34,22 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     battlefield [under your control]`` (Ugin, Liliana's emblem)."""
     stream.expect_word("put")
     move_mark = stream.mark()
-    try:
-        moved = parse_recipient(stream)
-    except GrammarError:
-        moved = None
+    # "Put **that card** onto the battlefield under your control." (Seraph,
+    # Krovikan Vampire.) The bound object: the card of the creature the trigger
+    # watched die, which by resolution is in a graveyard and so is a *card*,
+    # not a permanent anything could target. Read locally, exactly as the return
+    # production reads the identical phrase one family over, and for that
+    # production's reason — teaching the shared noun parser the words would hand
+    # them to every line that prints them. The lowering checks a binder exists.
+    moved: "ast.Recipient | None"
+    if stream.accept_phrase("that", "card"):
+        moved = ast.TargetSpec("that", ast.ObjectFilter(is_card=True))
+    else:
+        stream.reset(move_mark)
+        try:
+            moved = parse_recipient(stream)
+        except GrammarError:
+            moved = None
     if moved is not None and stream.at_word("on", "onto"):
         # "…on top of **their** library" (Drafna's Restoration) is the same
         # destination as "its owner's": CR 404.1 puts a card in the graveyard of

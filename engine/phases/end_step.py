@@ -278,7 +278,19 @@ class EndStepMixin:
                 continue
             if (id(permanent), id(trig.instruction)) in already:
                 continue
-            events.append(make_trigger_event(controller_index, permanent, trig))
+            events.append(make_trigger_event(
+                controller_index, permanent, trig,
+                # Whose end step this firing is, frozen now (CR 603.10). "At the
+                # beginning of each player's end step, tap all untapped Islands
+                # **that player** controls and this enchantment deals X damage
+                # **to the player**" (Monsoon) is one ability with a different
+                # seat each time it fires, and by the time the stack resolves it
+                # the only seat still readable off the board is the source's
+                # controller — which is the wrong one on every end step but
+                # their own. The upkeep announcement has stamped the same key
+                # for the same reason since Mana Vortex.
+                trigger_context={"event_subject_player": player_index},
+            ))
 
         # Emblems (CR 114.4): "At the beginning of your end step, …" (Garruk,
         # Unleashed's emblem) fires from the command zone — scoped to this end

@@ -62,6 +62,12 @@ _EOT_METADATA_KEYS = (
     DAMAGE_EXILES_INSTEAD,
     # Sengir Vampire damage-source tracking (cleared each turn)
     "damaged_by_sources_this_turn",
+    # "…**if a creature dealt damage by this creature this turn died**"
+    # (Krovikan Vampire). The other end of the record above: what a permanent
+    # damaged and then outlived. Swept with it, because they are halves of one
+    # turn-scoped fact and a ledger that outlived the damage record would
+    # reanimate a creature on a turn nothing had died on.
+    "damaged_creatures_that_died_this_turn",
     # The other direction of the same record: whom this permanent has dealt
     # damage to this turn (Whirling Dervish's intervening-if). Two keys because
     # they answer two questions and are read by two different clauses — the

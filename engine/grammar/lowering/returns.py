@@ -22,7 +22,8 @@ from ...subject_filters import (TESTABLE_SUBJECT_FILTER_KEYS,
                                 untestable_filter_keys)
 from .. import ast
 from ..errors import LoweringError
-from ._events import (CHOSEN_PERMANENT as _ATTACH_HOST_KEY, EVENT_SUBJECT_OWNER,
+from ._events import (BOUND_CARD_EVENTS,
+                      CHOSEN_PERMANENT as _ATTACH_HOST_KEY, EVENT_SUBJECT_OWNER,
                       _EVENT_SUBJECT_OWNERS, _back_reference_payload)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
@@ -127,13 +128,6 @@ def _lower_put_source_into_zone(node) -> tuple[OracleInstruction, ...]:
             node=node,
         )
     return (OracleInstruction("put_self_into_zone", "", {"zone": "graveyard"}),)
-
-#: The trigger events whose fire site records the dying card, so "that card" /
-#: "it" in the effect behind them names something the handler can find. Written
-#: as a set rather than one literal because two fire sites stamp ``dead_card``
-#: and a third would only have to be added here — where an event *not* listed
-#: refuses the sentence rather than resolving to nothing.
-_BOUND_CARD_EVENTS = frozenset({"attached_creature_dies", "permanent_dies"})
 
 
 def _lower_return_to_zone(
@@ -278,7 +272,7 @@ def _lower_return_to_zone(
         # stamp ``dead_card``; under anything else the words name a card nobody
         # wrote down, and the honest answer is a refusal — the handler would
         # find nothing and the card would compile supported and do nothing.
-        if event not in _BOUND_CARD_EVENTS:
+        if event not in BOUND_CARD_EVENTS:
             raise LoweringError(
                 "'that card' names the firing event's object, and this event "
                 "records none",

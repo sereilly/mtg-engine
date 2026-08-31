@@ -22,6 +22,7 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING
 
+from ..damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ..exiled_records import is_live, record_in_context, source_object
 from ..named_counters import counters_on
 from ..oracle_types import PER_OBJECT_SEAT_RECORDS, OracleInstruction
@@ -513,6 +514,15 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         victim_ids = marked.get("victim_ids") or ()
         destroyed = set(game.destroyed_at_end_of_combat_this_turn)
         return any(victim_id in destroyed for victim_id in victim_ids)
+    if kind == DAMAGED_BY_SOURCE_DIED:
+        # "…if a creature dealt damage by this creature this turn died"
+        # (Krovikan Vampire). The ledger the source carries, not the game-wide
+        # death counter beside it: the counter cannot say *which* creature died
+        # or who damaged it, and reading it here would fire this trigger on
+        # every end step of every game with a trade in it.
+        from ..damage_deaths import creatures_it_damaged_that_died
+
+        return bool(creatures_it_damaged_that_died(context.source_permanent))
     if kind == "died_this_turn":
         return int(getattr(game, "creatures_died_this_turn", 0) or 0) > 0
 

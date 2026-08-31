@@ -75,6 +75,22 @@ class CountOfDeathsThisWay:
 
 
 @dataclass(frozen=True)
+class CountOfTapsThisWay:
+    """"the number of Islands **tapped this way**" (Monsoon) — how many
+    permanents the *preceding step of this same effect* turned.
+
+    :class:`CountOfDeathsThisWay` one verb over, and its own node for the same
+    reason: read as the plain filter it would count every Island on the board,
+    including the ones that were already tapped and the ones on a battlefield
+    the sweep never touched.
+
+    The set is therefore a back-reference, and lowering refuses it unless a step
+    of the same effect actually recorded one.
+    """
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class ColorsAmong:
     """"for each color among permanents you control" — how many *colours* the
     named objects have between them (Chromatic Orrery).

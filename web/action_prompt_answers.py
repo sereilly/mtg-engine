@@ -441,6 +441,27 @@ def _action_pay_life_to_save_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="no pay-to-save offer pending for you")
 
+@action_handler("color_set_choice_confirm")
+def _action_color_set_choice_confirm(session, req, seat_type):
+    # Shyft: "become the color or colors of your choice."
+    if not req.mana_colors:
+        raise HTTPException(status_code=400, detail="mana_colors is required")
+    ok = session.game.confirm_color_set_choice(req.seat, list(req.mana_colors))
+    if not ok:
+        raise HTTPException(status_code=400, detail="that colour choice is not open")
+
+@action_handler("revealed_draw_buyout_confirm")
+def _action_revealed_draw_buyout_confirm(session, req, seat_type):
+    # Zur's Weirding: "Then any other player may pay 2 life." One offer at a
+    # time, so the answer is just accept/decline.
+    if req.accept is None:
+        raise HTTPException(status_code=400, detail="accept (true/false) is required")
+    ok = session.game.confirm_revealed_draw_buyout(req.seat, bool(req.accept))
+    if not ok:
+        raise HTTPException(
+            status_code=400, detail="no revealed-card offer pending for you"
+        )
+
 @action_handler("land_type_confirm")
 def _action_land_type_confirm(session, req, seat_type):
     # Phantasmal Terrain: the controller picks the enchanted land's basic type.

@@ -26,7 +26,8 @@ from .amounts import parse_comparison
 from .nouns import parse_object_filter
 from .readers import accept_source_reference, accept_source_reference_spec
 from .references import parse_player_ref, parse_target_spec
-from .phrases import _parse_duration, _parse_keywords, parse_bound_subject
+from .phrases import (_accept_self_reference, _parse_duration,
+                      _parse_keywords, parse_bound_subject)
 from .stream import TokenStream
 from .vocabulary import COLOR_WORDS, NUMBER_WORDS
 
@@ -401,6 +402,20 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                 pass
     stream.reset(that_mark)
     stream.reset(this_way)
+
+    # "if a creature **dealt damage by this creature this turn** died"
+    # (Krovikan Vampire). Read before the bare spelling below it — the two share
+    # their first two words and differ in everything that follows — and read as
+    # its own condition rather than as a filter on that one, because the
+    # relation has no payload form and would be dropped (see the node).
+    relation = stream.mark()
+    if stream.accept_phrase("a", "creature", "dealt", "damage", "by"):
+        if _accept_self_reference(stream) and stream.accept_phrase(
+            "this", "turn", "died"
+        ):
+            _parse_duration(stream)
+            return ast.DamagedBySourceDiedThisTurn()
+    stream.reset(relation)
 
     if stream.accept_phrase("a", "creature", "died"):
         _parse_duration(stream)

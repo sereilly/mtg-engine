@@ -130,11 +130,28 @@ class GainControl:
     creature, tap it." (Ray of Command, Magus of the Unseen) — CR 603.7's
     delayed trigger, folded onto the change it watches rather than parsed as a
     step of its own, because on its own the sentence names no object at all.
+
+    *gained_by* is who ends up controlling it, when that is **not** the effect's
+    own controller: "an opponent may gain control of a creature you control of
+    their choice" (Infernal Denizen). The field is what gives "their choice" an
+    antecedent — "their" is the sentence's printed subject, and a node that did
+    not carry the subject would have to guess which seat picks. Absent means the
+    ordinary reading, the resolving object's controller (CR 109.5).
+
+    *offered* is the "may" in front of that verb, folded onto this node rather
+    than left as an enclosing :class:`May`. The offer and the pick are one
+    decision made by one seat — the seat named by *gained_by*, which is also the
+    seat *their_choice* names — so they are one prompt, declinable. Wrapped in a
+    ``May`` instead they would be two prompts to the same player whose two
+    answers could disagree, and whose two non-interactive defaults would have to
+    be kept in step.
     """
 
     subject: Recipient
     duration: str
     tap_when_lost: bool = False
+    gained_by: "PlayerRef | None" = None
+    offered: bool = False
 
 
 @dataclass(frozen=True)
@@ -458,6 +475,21 @@ class PutOntoBattlefield:
     # they name different seats the moment a creature has been stolen.
     under_owners_control: bool = False
     gains: tuple[str, ...] = ()
+    #: "Put that card onto the battlefield under your control. **Sacrifice the
+    #: creature when you lose control of this creature.**" (Seraph, Krovikan
+    #: Vampire.) CR 603.7's delayed trigger, folded onto the entry it watches
+    #: rather than parsed as a step of its own, because on its own the sentence
+    #: names an object that does not exist yet — the permanent this entry is
+    #: about to make. The same fold, for the same reason, that
+    #: :class:`GainControl`.tap_when_lost is.
+    sacrifice_when_control_lost: bool = False
+    #: Which event recorded the card "**that card**" names, when that is not the
+    #: trigger the effect is lowered under: the death that *created* a delay
+    #: (CR 608.2h, Seraph), or an intervening-if that names the record instead
+    #: of the fire site (Krovikan Vampire). Stamped by the parser, which is the
+    #: only reader that has the whole printed line in view —
+    #: ``rebinding.bind_recorded_card``.
+    bound_card_from: str | None = None
 
 
 @dataclass(frozen=True)

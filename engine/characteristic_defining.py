@@ -105,13 +105,27 @@ def _graveyard_type_count(match: re.Match) -> dict[str, object]:
     }
 
 
+#: The printed battlefield, as a ``scope`` value. A table rather than a chain of
+#: conditionals because the phrase is data: a card printing a fifth one adds a
+#: row here and a branch in the one counter that reads it.
+_WHOSE_BATTLEFIELD: dict[str, str] = {
+    "you": "you",
+    "your opponents": "opponents",
+    # "the chosen player" (Lost Order of Jarkeld) — the seat this permanent
+    # chose as it entered (CR 614.1c), recorded on the permanent itself, which
+    # is why the counter reads it off the permanent it is refreshing rather than
+    # off the game.
+    "the chosen player": "chosen_player",
+}
+
+
 def _type_count_plus(match: re.Match) -> dict[str, object]:
     """Gaea's Avenger. A card-type tally on a named battlefield, plus a printed
     constant — three payload keys rather than three templates."""
     return {
         "count": "card_type",
         "card_type": match.group("card_type"),
-        "scope": "opponents" if match.group("whose") == "your opponents" else "you",
+        "scope": _WHOSE_BATTLEFIELD[match.group("whose")],
         "plus": int(match.group("plus")),
     }
 
@@ -312,11 +326,16 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
         # **artifacts your opponents control**." The constant, the card type
         # and whose battlefield are all payload, so the three ways this card
         # differs from Nightmare cost no code beyond this row.
+        #
+        # "…1 plus the number of creatures **the chosen player** controls."
+        # (Lost Order of Jarkeld.) A fourth value for the battlefield the
+        # sentence names, and nothing else: the offset it needs was already
+        # payload, so the card differs from Gaea's Avenger by one alternative.
         re.compile(
             rf"^{_SUBJECT} power and toughness are each equal to "
             r"(?P<plus>\d+) plus the number of "
             r"(?P<card_type>artifact|creature|enchantment|land)s "
-            r"(?P<whose>you|your opponents) controls?$"
+            r"(?P<whose>you|your opponents|the chosen player) controls?$"
         ),
         _type_count_plus,
     ),

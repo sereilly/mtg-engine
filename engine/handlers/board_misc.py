@@ -134,7 +134,16 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
     # not one of those objects is still where it was. Frozen whole rather than
     # key by key, because a list of which values a delayed ability might read
     # is a list that goes stale the moment a new one prints.
-    captured = dict(context.results or {})
+    # What the *creating* ability knew is both halves: its own scratchpad and
+    # the context its fire site froze. "Whenever a creature dealt damage by this
+    # creature this turn dies, put that card onto the battlefield … at the
+    # beginning of the next end step" (Seraph) reads the dead card out of the
+    # second half, and only the second half — a trigger's context is not a
+    # resolution record and nothing had ever carried it across a delay.
+    #
+    # The trigger context goes *under* the scratchpad, so a value this
+    # resolution actually produced wins over one the event merely reported.
+    captured = {**(context.trigger_context or {}), **(context.results or {})}
     arm_delayed_trigger(game, DelayedTrigger(
         controller_index=seat,
         event=payload.get("event", "creatures_attack"),
@@ -406,6 +415,38 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
         return True, "resolved"
     target.metadata["color_override"] = symbol
     game.log.append(f"{target.card.name} became {symbol} ({context.card.name})")
+    return True, "resolved"
+
+
+@effect_handler("recolor_self_chosen_color")
+def recolor_self_chosen_color(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You may have this creature become the color or colors of your choice."
+    (Shyft.)
+
+    The third subject in the chosen-colour family, and the only one whose choice
+    is made during a *triggered* ability's resolution — the other two are
+    activated, so their colour rides the activation on ``choices["new_color"]``
+    and is in hand by the time the handler runs. Nothing announces a trigger's
+    colour, so this one asks: the standing ``color_set_choice`` prompt, on the
+    ability's controller.
+
+    The prompt takes a **set**, because "the color **or colors**" offers one
+    (CR 105.2 makes a two-coloured object one object). Layer 5 has written a
+    tuple since Dream Coat; what did not exist was a way for a player to name
+    more than one.
+    """
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+    seat = game.controller_index_of(source_permanent)
+    if seat is None:
+        return True, "resolved"
+    game.arm_color_set_choice(
+        seat,
+        permanent=source_permanent,
+        card_name=context.card.name,
+        several=bool(instruction.payload.get("several")),
+    )
     return True, "resolved"
 
 
@@ -1305,6 +1346,19 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     # rounding are applied in one place (CR 107.2/107.3).
     per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
     count = int(instruction.payload.get("count", 1))
+    # "Sacrifice two Swamps. **If you can't**, …" (Infernal Denizen.) Whether
+    # the sacrifice could be performed at all, recorded here rather than after
+    # the prompt: an interactive seat answers a queued choice long after this
+    # instruction has returned, so the only moment at which the answer exists
+    # synchronously is before the prompt is armed. What it records is the
+    # question CR 701.17b asks — does the payer control the printed number of
+    # permanents the phrase describes — which is the same predicate
+    # ``_action_is_takeable`` puts in front of an *optional* sacrifice, so an
+    # offer and a mandatory action cannot disagree about what "can't" means.
+    #
+    # True when nobody owed anything, because a step that asked for nothing is
+    # not a step that failed.
+    could_pay = True
     for seat in payers:
         owed = (
             evaluate_count(game, game.players[seat], per_seat)
@@ -1314,12 +1368,22 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
             # CR 608.2's "as much as possible": a seat that owes none is not
             # asked, rather than being handed a prompt with no answer.
             continue
+        described = dict(instruction.payload.get("filter") or {})
+        if len(game._sacrifice_candidate_indices(
+            game.players[seat], described, exclude
+        )) < owed:
+            # The printed count is indivisible: a player with one of the two
+            # Swamps sacrifices neither, and the "if you can't" branch behind
+            # this step is what the card says happens instead.
+            could_pay = False
+            continue
         game.arm_forced_sacrifice(
             seat, owed,
-            filter=dict(instruction.payload.get("filter") or {}),
+            filter=described,
             exclude=exclude,
             reason=context.card.name,
         )
+    context.results["sacrificed_this_way"] = could_pay
     return True, "resolved"
 
 

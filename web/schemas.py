@@ -73,6 +73,8 @@ ActionKind = Literal[
     "effect_order_confirm",
     "resolve_optional_pay",
     "pay_life_to_save_confirm",
+    "revealed_draw_buyout_confirm",
+    "color_set_choice_confirm",
     "land_type_confirm",
     "number_choice_confirm",
     "confirm_mana_payment",
@@ -318,6 +320,11 @@ class GameActionRequest(BaseModel):
     # time would leave a half-made choice the engine has no state for.
     hand_indices: list[int] | None = None
     mana_color: Literal["W", "U", "B", "R", "G", "C"] | None = None
+    # "…become the color **or colors** of your choice" (Shyft). A *set*,
+    # which `mana_color` above cannot carry: CR 105.2 makes a two-coloured
+    # object one object, and the engine has written a tuple to layer 5 since
+    # Dream Coat — what was missing was a way for a player to name one.
+    mana_colors: list[Literal["W", "U", "B", "R", "G"]] | None = None
     # Text-change spells (Magical Hack / Sleight of Mind): the "from" word to
     # replace. `mana_color` carries the "to" word. Both are color symbols (a basic
     # land type is addressed by its color: W=plains, U=island, B=swamp, R=mountain,
