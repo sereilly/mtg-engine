@@ -580,6 +580,23 @@ def _accept_trailing_toll(
     rather than dropped: a toll nobody is charged is the effect happening
     unconditionally, which is the card without its clause.
     """
+    # A printed **restriction** is not an effect a toll can put a penalty on.
+    # "This creature can't block creatures with power 3 or greater **unless you
+    # pay {1}**" (Hipparion) reads as an offer only if you forget that the body
+    # is a static fact about declaring blockers, not something that resolves —
+    # so the offer would be made at no moment, and the restriction would go
+    # unenforced. `engine/combat_restrictions.py` is the reader that implements
+    # it, gating `_can_block_attacker` and charging in `declare_blockers`.
+    #
+    # Refusing here rather than at lowering is the rule CLAUDE.md states for
+    # exactly this collision: a derivation table is reached only where every
+    # production refuses the line **in full**, because parsed-but-unlowered is
+    # still parsed and takes the table's line away. Held by
+    # `test_combat_restrictions_match_the_derivation_table_exactly`, which
+    # compares the two readers over the whole shipped pool and found this one.
+    if isinstance(body, ast.CombatRestriction):
+        return None
+
     mark = stream.mark()
     if not stream.accept_word("unless"):
         return None

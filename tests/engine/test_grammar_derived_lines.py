@@ -179,6 +179,21 @@ def test_combat_restrictions_match_the_derivation_table_exactly():
         # card is in a measured set — the row is what keeps the promotion from
         # turning a silent absence into a red suite.
         "attacks_as_though_hasty_unless_it_entered",
+        # Hipparion: "can't block creatures with power 3 or greater **unless you
+        # pay {1}**". The trailing-toll production could read this sentence, and
+        # did until ICE's promotion put the card in front of this guard: it wrapped
+        # the restriction as the `otherwise` branch of a resolution-time offer,
+        # which is a moment a static line never has, so the restriction went
+        # unenforced. The production now refuses a `CombatRestriction` body, which
+        # is the rule CLAUDE.md states for a sentence two readers want — the table
+        # is reached only where every production refuses the line in full.
+        "cant_block_power_n_or_greater_unless_pay",
+        # Halls of Mist: "Creatures that attacked during their controller's last
+        # turn can't attack." A board-wide restriction whose subject is a fact
+        # about a *previous* turn; the table scans every seat's record in
+        # `can_attack` and the grammar has no production, so the line fails the
+        # parser — the same shape and the same reason as the two above.
+        "creatures_that_attacked_last_turn_cant_attack",
     }
 
     compared = 0

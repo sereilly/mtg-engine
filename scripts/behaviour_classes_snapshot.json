@@ -1,5 +1,7 @@
 [
   [
+    "Balduvian Barbarians",
+    "Balduvian Bears",
     "Barbary Apes",
     "Barktooth Warbeard",
     "Craw Wurm",
@@ -30,6 +32,7 @@
     "Pearled Unicorn",
     "Raging Bull",
     "Savannah Lions",
+    "Scaled Wurm",
     "Scarwood Goblins",
     "Scathe Zombies",
     "Sir Shandlar of Eberyn",
@@ -38,6 +41,7 @@
     "Staunch Shieldmate",
     "The Lady of the Mountain",
     "Tobias Andrion",
+    "Tor Giant",
     "Torsten Von Ursus",
     "Walking Corpse",
     "Water Elemental",
@@ -54,6 +58,22 @@
     "Scryb Sprites"
   ],
   [
+    "Elvish Archers",
+    "Hornet Cobra",
+    "Land Leeches",
+    "Ramirez DePietro",
+    "Sabretooth Tiger",
+    "Stone-Throwing Devils"
+  ],
+  [
+    "Glacial Wall",
+    "Wall of Earth",
+    "Wall of Heat",
+    "Wall of Ice",
+    "Wall of Stone",
+    "Wall of Wood"
+  ],
+  [
     "Adventurers' Guildhouse",
     "Cathedral of Serra",
     "Mountain Stronghold",
@@ -68,11 +88,25 @@
     "Wolverine Pack"
   ],
   [
+    "Black Scarab",
+    "Blue Scarab",
+    "Green Scarab",
+    "Red Scarab",
+    "White Scarab"
+  ],
+  [
     "Black Ward",
     "Blue Ward",
     "Green Ward",
     "Red Ward",
     "White Ward"
+  ],
+  [
+    "Bog Wraith",
+    "Lost Soul",
+    "Marsh Goblins",
+    "Moor Fiend",
+    "Pygmy Allosaurus"
   ],
   [
     "Circle of Protection: Black",
@@ -96,18 +130,17 @@
     "Touch of Darkness"
   ],
   [
-    "Elvish Archers",
-    "Hornet Cobra",
-    "Land Leeches",
-    "Ramirez DePietro",
-    "Stone-Throwing Devils"
+    "Hematite Talisman",
+    "Lapis Lazuli Talisman",
+    "Malachite Talisman",
+    "Nacre Talisman",
+    "Onyx Talisman"
   ],
   [
-    "Wall of Earth",
-    "Wall of Heat",
-    "Wall of Ice",
-    "Wall of Stone",
-    "Wall of Wood"
+    "Benalish Hero",
+    "Kjeldoran Warrior",
+    "Shield Bearer",
+    "Timber Wolves"
   ],
   [
     "Deathlace",
@@ -122,14 +155,14 @@
     "Unholy Strength"
   ],
   [
-    "Bog Wraith",
-    "Lost Soul",
-    "Marsh Goblins"
-  ],
-  [
     "Darkness",
     "Fog",
     "Holy Day"
+  ],
+  [
+    "Devouring Deep",
+    "Pale Bears",
+    "Segovian Leviathan"
   ],
   [
     "Granite Gargoyle",
@@ -142,8 +175,16 @@
     "Stone Rain"
   ],
   [
+    "Adarkar Sentinel",
+    "Dragon Engine"
+  ],
+  [
     "Aladdin's Ring",
     "Rod of Ruin"
+  ],
+  [
+    "Armor of Faith",
+    "Holy Armor"
   ],
   [
     "Army of Allah",
@@ -152,10 +193,6 @@
   [
     "Bad Moon",
     "Crusade"
-  ],
-  [
-    "Benalish Hero",
-    "Timber Wolves"
   ],
   [
     "Black Knight",
@@ -194,12 +231,28 @@
     "Sea Serpent"
   ],
   [
-    "Devouring Deep",
-    "Segovian Leviathan"
-  ],
-  [
     "Drowned",
     "Walking Dead"
+  ],
+  [
+    "Essence Flare",
+    "Unstable Mutation"
+  ],
+  [
+    "Flooded Woodlands",
+    "Reclamation"
+  ],
+  [
+    "Forest",
+    "Snow-Covered Forest"
+  ],
+  [
+    "Frozen Shade",
+    "Hoar Shade"
+  ],
+  [
+    "Fyndhorn Elves",
+    "Llanowar Elves"
   ],
   [
     "Giant Growth",
@@ -210,11 +263,63 @@
     "Marsh Gas"
   ],
   [
+    "Hydroblast",
+    "Pyroblast"
+  ],
+  [
+    "Island",
+    "Snow-Covered Island"
+  ],
+  [
+    "Juniper Order Druid",
+    "Ley Druid"
+  ],
+  [
+    "Kjeldoran Phalanx",
+    "Pikemen"
+  ],
+  [
+    "Kjeldoran Skycaptain",
+    "Kjeldoran Skyknight"
+  ],
+  [
     "Moorish Cavalry",
     "War Mammoth"
   ],
   [
+    "Mountain",
+    "Snow-Covered Mountain"
+  ],
+  [
+    "Orcish Artillery",
+    "Orcish Cannoneers"
+  ],
+  [
+    "Order of the Sacred Torch",
+    "Stromgald Cabal"
+  ],
+  [
+    "Piety",
+    "Rally"
+  ],
+  [
+    "Plains",
+    "Snow-Covered Plains"
+  ],
+  [
+    "Prodigal Sorcerer",
+    "Zuran Spellcaster"
+  ],
+  [
     "Resurrection",
     "Rise Again"
+  ],
+  [
+    "Snow-Covered Swamp",
+    "Swamp"
+  ],
+  [
+    "Wall of Fire",
+    "Wall of Lava"
   ]
 ]

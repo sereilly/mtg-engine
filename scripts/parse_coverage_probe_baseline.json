@@ -23,6 +23,13 @@
   ]
  },
  {
+  "card": "Anarchy",
+  "clause": "destroy all white permanents",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Animal Sanctuary",
   "clause": "put a +1/+1 counter on target bird, cat, dog, goat, ox, or snake",
   "ignored": [
@@ -55,6 +62,13 @@
   "clause": "put a +1/+1 counter on each creature you control",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Battle Cry",
+  "clause": "untap all white creatures you control",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -115,6 +129,27 @@
   ]
  },
  {
+  "card": "Cloak of Confusion",
+  "clause": "you may have it assign no combat damage this turn. if you do, defending player discards a card at random",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
+  "card": "Curse of Marit Lage",
+  "clause": "tap all islands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Dance of the Dead",
+  "clause": "if it's on the battlefield, it loses \"enchant creature card in a graveyard\" and gains \"enchant creature put onto the battlefield with this aura.\" put enchanted creature card onto the battlefield tapped under your control and attach this aura to it. when this aura leaves the battlefield, that creature's controller sacrifices it",
+  "ignored": [
+   "tapped"
+  ]
+ },
+ {
   "card": "Drain Life",
   "clause": "drain life deals x damage to any target. you gain life equal to the damage dealt, but not more life than the player's life total before the damage was dealt, the planeswalker's loyalty before the damage was dealt, or the creature's toughness",
   "ignored": [
@@ -122,10 +157,46 @@
   ]
  },
  {
+  "card": "Dread Wight",
+  "clause": "put a paralyzation counter on each creature blocking or blocked by this creature and tap those creatures. each of those creatures doesn't untap during its controller's untap step for as long as it has a paralyzation counter on it. each of those creatures gains \"{4}: remove a paralyzation counter from this creature.\"",
+  "ignored": [
+   "each",
+   "creature"
+  ]
+ },
+ {
+  "card": "Dreams of the Dead",
+  "clause": "return target white or black creature card from your graveyard to the battlefield. that creature gains \"cumulative upkeep {2}.\" if the creature would leave the battlefield, exile it instead of putting it anywhere else",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Eater of the Dead",
   "clause": "if this creature is tapped, exile target creature card from a graveyard and untap this creature",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Elder Druid",
+  "clause": "you may tap or untap target artifact, creature, or land",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
+  "card": "Enervate",
+  "clause": "tap target artifact, creature, or land",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
+  "card": "Errant Minion",
+  "clause": "that player may pay any amount of mana. this aura deals 2 damage to that player. prevent x of that damage, where x is the amount of mana that player paid this way",
+  "ignored": [
+   "aura"
   ]
  },
  {
@@ -159,6 +230,13 @@
   ]
  },
  {
+  "card": "Fire Covenant",
+  "clause": "fire covenant deals x damage divided as you choose among any number of target creatures",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
   "card": "Flashfires",
   "clause": "destroy all plains",
   "ignored": [
@@ -166,10 +244,24 @@
   ]
  },
  {
+  "card": "Freyalise Supplicant",
+  "clause": "this creature deals damage to any target equal to half the sacrificed creature's power, rounded down",
+  "ignored": [
+   "down"
+  ]
+ },
+ {
   "card": "Fungal Rebirth",
   "clause": "return target permanent card from your graveyard to your hand. if a creature died this turn, create two 1/1 green saproling creature tokens",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Fyndhorn Pollen",
+  "clause": "all creatures get -1/-0 until end of turn",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -250,10 +342,32 @@
   ]
  },
  {
+  "card": "Infuse",
+  "clause": "untap target artifact, creature, or land",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Johan",
   "clause": "you may have johan gain \"johan can't attack\" until end of combat. if you do, attacking doesn't cause creatures you control to tap this combat if johan is untapped",
   "ignored": [
    "have"
+  ]
+ },
+ {
+  "card": "Jokulhaups",
+  "clause": "destroy all artifacts, creatures, and lands. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Kjeldoran Frostbeast",
+  "clause": "destroy all creatures blocking or blocked by this creature",
+  "ignored": [
+   "all",
+   "creature"
   ]
  },
  {
@@ -299,6 +413,14 @@
   ]
  },
  {
+  "card": "Minion of Leshrac",
+  "clause": "this creature deals 5 damage to you unless you sacrifice a creature other than this creature. if this creature deals damage to you this way, tap it",
+  "ignored": [
+   "creature",
+   "creature"
+  ]
+ },
+ {
   "card": "Mishra's Factory",
   "clause": "target assembly-worker creature gets +1/+1 until end of turn",
   "ignored": [
@@ -313,6 +435,13 @@
   ]
  },
  {
+  "card": "Monsoon",
+  "clause": "tap all untapped islands that player controls and this enchantment deals x damage to the player, where x is the number of islands tapped this way",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Nevinyrral's Disk",
   "clause": "destroy all artifacts, creatures, and enchantments",
   "ignored": [
@@ -324,6 +453,13 @@
   "clause": "other orc creatures get +1/+1 until end of turn",
   "ignored": [
    "creatures"
+  ]
+ },
+ {
+  "card": "Orcish Healer",
+  "clause": "regenerate target black or green creature",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -381,6 +517,13 @@
   ]
  },
  {
+  "card": "Sacred Boon",
+  "clause": "prevent the next 3 damage that would be dealt to target creature this turn. at the beginning of the next end step, put a +0/+1 counter on that creature for each 1 damage prevented this way",
+  "ignored": [
+   "1"
+  ]
+ },
+ {
   "card": "Season of the Witch",
   "clause": "destroy all untapped creatures that didn't attack this turn, except for creatures that couldn't attack",
   "ignored": [
@@ -417,10 +560,52 @@
   ]
  },
  {
+  "card": "Shyft",
+  "clause": "you may have this creature become the color or colors of your choice",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
+  "card": "Snow Hound",
+  "clause": "return this creature and target green or blue creature you control to their owner's hand",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
+  "card": "Songs of the Damned",
+  "clause": "add {b} for each creature card in your graveyard",
+  "ignored": [
+   "card"
+  ]
+ },
+ {
   "card": "Spitting Slug",
   "clause": "you may pay {1}{g}. if you do, this creature gains first strike until end of turn. otherwise, each creature blocking or blocked by this creature gains first strike until end of turn",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Spoils of Evil",
+  "clause": "for each artifact or creature card in target opponent's graveyard, add {c} and you gain 1 life",
+  "ignored": [
+   "card"
+  ]
+ },
+ {
+  "card": "Spoils of War",
+  "clause": "distribute x +1/+1 counters among any number of target creatures",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
+  "card": "Stench of Evil",
+  "clause": "destroy all plains. for each land destroyed this way, stench of evil deals 1 damage to that land's controller unless they pay {2}",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -450,6 +635,13 @@
   "ignored": [
    "all",
    "abilities"
+  ]
+ },
+ {
+  "card": "Total War",
+  "clause": "destroy all untapped non-wall creatures that player controls that didn't attack, except for creatures the player hasn't controlled continuously since the beginning of the turn",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -509,6 +701,20 @@
   ]
  },
  {
+  "card": "Venomous Breath",
+  "clause": "choose target creature. at this turn's next end of combat, destroy all creatures that blocked or were blocked by it this turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Vexing Arcanix",
+  "clause": "target player chooses a card name, then reveals the top card of their library. if that card has the chosen name, that player puts it into their hand. otherwise, they put it into their graveyard and this artifact deals 2 damage to them",
+  "ignored": [
+   "artifact"
+  ]
+ },
+ {
   "card": "Voodoo Doll",
   "clause": "if this artifact is untapped, destroy this artifact and it deals damage to you equal to the number of pin counters on it",
   "ignored": [
@@ -545,6 +751,20 @@
   ]
  },
  {
+  "card": "Whiteout",
+  "clause": "all creatures lose flying until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Word of Undoing",
+  "clause": "return target creature and all white auras you own attached to it to their owners' hands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Worms of the Earth",
   "clause": "any player may sacrifice two lands of their choice or have this enchantment deal 5 damage to that player. if a player does either, destroy this enchantment",
   "ignored": [
@@ -554,6 +774,13 @@
  {
   "card": "Wrath of God",
   "clause": "destroy all creatures. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Wrath of Marit Lage",
+  "clause": "tap all red creatures",
   "ignored": [
    "all"
   ]

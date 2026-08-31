@@ -307,6 +307,24 @@ ACTIVATED_LABELS: dict[str, str] = {
     # differs between them is which fact the sweep re-checks and that is
     # payload.
     "steal_target_linked_to_source": "activated_steal",
+    # --- Ice Age's promotion -------------------------------------------------
+    # Every kind below was written while ICE was a *measured* set, where this
+    # guard could not see it: it reads `load_catalog()`, the shipped pool. The
+    # labels feed `SimulationResult`, the support report's buckets and the
+    # `triggered_` prefix `web/serialization.py` turns into `is_triggered`, so
+    # a kind without one falls back to `activated_<category>` and silently
+    # re-buckets its card. Promotion is where that debt comes due, by design.
+    "change_supertype": "activated_characteristic",
+    "change_land_type_until": "activated_characteristic",
+    "animate_target_until_eot": "activated_characteristic",
+    "grant_self_ability_text": "activated_pump",
+    "return_self_from_graveyard": "activated_return",
+    "return_source_card_to_owners_hand": "activated_return",
+    "reorder_target_library_top": "activated_library",
+    "look_top_exile_random": "activated_library",
+    "reassign_blockers_between_attackers": "activated_combat",
+    "redirect_source_class_damage_until_eot": "activated_prevention",
+    "grant_whole_prevention_shield": "activated_prevention",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -508,6 +526,22 @@ TRIGGERED_LABELS: dict[str, str] = {
     # Cosmic Horror, beside the four `upkeep_pay_or_*` entries above: a
     # pay-or-consequence upkeep trigger the upkeep registry runs.
     "upkeep_pay_or_destroy_self": "upkeep_effect",
+    # --- Ice Age's promotion -------------------------------------------------
+    # Written while ICE was measured, where this guard - which reads
+    # `load_catalog()`, the shipped pool - could not see them. Each names what
+    # the ability is *for*, which is the question the support report and
+    # `SimulationResult` ask. The `may` and `if_then` wrappers among ICE's new
+    # triggers are in TRIGGERED_LABELS_BY_CONDITION instead, for this table's
+    # own stated reason: a wrapper says nothing about its contents.
+    "discard_target_cards": "triggered_discard",
+    "return_bound_card_to_owners_hand": "triggered_return",
+    "reanimate_bound_card": "triggered_return",
+    "add_named_counter_to_target": "triggered_counter",
+    "prevent_damage_to_target_until_eot": "triggered_prevention",
+    "exile_target_permanent": "triggered_exile",
+    "exile_bound_card_from_graveyard": "triggered_exile",
+    "unless_player_pays": "upkeep_effect",
+    "deny_regeneration_to_block_pair": "spell_pattern",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps
@@ -570,6 +604,17 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # neither a cast nor a combat step, so it gets the word for what it watches,
     # beside `("you_cast_spell", "may")` above.
     ("nonmana_ability_activated", "may"): "triggered_activation",
+    # --- Ice Age's promotion ---
+    # `may`, `if_then` and `for_each` are wrappers: they say a decision or a
+    # loop happens and nothing about what it does, so the condition is the only
+    # half of the pair that names the moment.
+    ("opponent_casts_spell", "may"): "spell_pattern",
+    ("creature_attacks", "may"): "spell_pattern",
+    ("permanent_becomes_tapped", "may"): "spell_pattern",
+    ("upkeep_self", "if_then"): "upkeep_effect",
+    ("upkeep_self", "for_each"): "upkeep_effect",
+    ("you_lose_life", "for_each"): "spell_pattern",
+    ("end_step_enchanted_controller", "if_then"): "triggered_destruction",
 }
 
 
