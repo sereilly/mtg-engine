@@ -1704,4 +1704,25 @@ def test_mountain_titan_stops_growing_when_the_turn_ends(
     assert game.delayed_triggers == [], game.log
     _w1g5_cast(game, "Dark Ritual")
     assert titan.effective_power == 2, game.log
+
+
+def test_merieke_ri_berit_cannot_take_a_guardian_beast_artifact(
+    set_pool, catalog_by_name
+):
+    """The linked steal is the general one now, so the prohibition it used to
+    carry alone had to move somewhere every control change asks — and this is
+    the check that it still holds where it always did."""
+    beast = Permanent(card=catalog_by_name["Guardian Beast"])
+    lotus = Permanent(card=catalog_by_name["Black Lotus"])
+    merieke = Permanent(card=set_pool("ICE")["Merieke Ri Berit"])
+    _nosick(merieke)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[merieke]),
+        PlayerState(name="P2", battlefield=[beast, lotus]),
+    ])
+    game.enforce_mana_costs = False
+
+    assert game.cant_gain_control(lotus, 0)
+    assert not game.take_control(lotus, 0, source=merieke)
+    assert game.controller_index_of(lotus) == 1
 # --- end W1G5 ---

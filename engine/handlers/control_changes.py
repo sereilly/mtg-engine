@@ -74,6 +74,16 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
             bound = game.permanent_by_id(permanent_id)
             if bound is None:
                 continue
+            # Guardian Beast at the seam's own question: Magus of the Unseen
+            # untaps and borrows an *artifact*, which is exactly what the Beast
+            # protects. `change_control` is reached directly here (there is no
+            # source permanent to key the contribution on), so the prohibition
+            # is asked rather than inherited from `take_control`.
+            if game.cant_gain_control(bound, context.caster):
+                game.log.append(
+                    f"{context.card.name}: {bound.card.name} can't change controllers"
+                )
+                continue
             change_control(bound, seat, source=context.card, until_eot=True)
             if instruction.payload.get("tap_when_lost"):
                 bound.metadata[TAP_WHEN_CONTROL_LOST] = True
@@ -109,6 +119,11 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     )
     if target is None:
         game.log.append(f"{context.card.name}: no valid permanent to gain control of")
+        return True, "resolved"
+    if game.cant_gain_control(target, context.caster):
+        game.log.append(
+            f"{context.card.name}: {target.card.name} can't change controllers"
+        )
         return True, "resolved"
     seat = game.players.index(context.caster)
     change_control(target, seat, source=context.card, until_eot=True)
@@ -227,13 +242,12 @@ def steal_target_linked_to_source(game: Game, instruction: OracleInstruction, co
             game, context,
             predicate=lambda p: (
                 permanent_matches_filter(p, filters)
-                # Guardian Beast: "other players can't gain control of" the
-                # noncreature artifacts it protects. Carried across from the
-                # artifact-only steal this kind absorbed — the rule is about
-                # gaining control, not about which noun the thief prints, and
-                # dropping it with the kind would have been a restriction lost
-                # in the thief's favour.
-                and not game._untapped_artifact_protector_active(p)
+                # Guardian Beast, asked here as well as at the seam
+                # (`Game.cant_gain_control`, which `take_control` also asks):
+                # the two answer different moments. This one keeps the
+                # resolution from choosing a permanent it would then decline;
+                # the seam is the backstop for every other way control moves.
+                and not game.cant_gain_control(p, caster)
             ),
             fallback_on_invalid_choice=False,
         )
@@ -352,6 +366,15 @@ def exchange_control_of_targets(game: Game, instruction: OracleInstruction, cont
             break
         if controller in ("opponent", "not_you") and controlled_by_caster:
             break
+        # Guardian Beast: an exchange hands each permanent to the *other* seat,
+        # so a protected artifact on either side means no part of the exchange
+        # happens (CR 701.12a's atomicity, CR 614.17's prohibition).
+        other = chosen[1 - index] if index < 2 else None
+        other_seat = (
+            game.controller_index_of(other) if other is not None else None
+        )
+        if other_seat is not None and game.cant_gain_control(permanent, other_seat):
+            break
         legal.append(permanent)
 
     if len(legal) != 2 or legal[0] is legal[1]:
@@ -455,6 +478,15 @@ def exchange_control_of_bound(game: Game, instruction: OracleInstruction, contex
     if seat_of_first is None or seat_of_second is None or seat_of_first == seat_of_second:
         game.log.append(
             f"{card.name}: both permanents have one controller, so nothing happens"
+        )
+        return True, "resolved"
+    # Guardian Beast on the bound spelling too: Juxtapose's second exchange is
+    # over *artifacts*, which is precisely what the Beast protects.
+    if game.cant_gain_control(first, seat_of_second) or game.cant_gain_control(
+        second, seat_of_first
+    ):
+        game.log.append(
+            f"{card.name}: a permanent can't change controllers, so nothing happens"
         )
         return True, "resolved"
     change_control(first, seat_of_second, source=instruction)

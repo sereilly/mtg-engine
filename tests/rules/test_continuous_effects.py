@@ -1233,4 +1233,52 @@ def test_611_3a_a_whose_turn_static_switches_at_the_turn_boundary():
 
     game.begin_turn_bookkeeping(0)
     assert perm.has_keyword("first strike")
+
+
+@pytest.mark.cr("101.2", "611.3b")
+def test_101_2_a_cant_gain_control_effect_beats_an_exchange():
+    """Guardian Beast: "As long as this creature is untapped, noncreature
+    artifacts you control ... other players can't gain control of them."
+
+    101.2: when one effect directs something to happen and another says it
+    can't, the "can't" wins. Exactly one control handler asked - the linked
+    steal - so an exchange (Gauntlets of Chaos, Juxtapose) and an
+    until-end-of-turn borrow (Magus of the Unseen) took a protected artifact
+    with the Beast untapped and nothing failing. The question is now on the
+    control seam, which is where 611.3b puts it: the effect applies at all times
+    the Beast is on the battlefield, not at the sites somebody remembered.
+    """
+    from engine.control import change_control
+
+    beast = Permanent(card=_mk_card(
+        "Guardian Beast", "Creature - Beast",
+        "As long as this creature is untapped, noncreature artifacts you "
+        "control can't be enchanted, they have indestructible, and other "
+        "players can't gain control of them.",
+    ))
+    protected = Permanent(card=_mk_card("Shiny Rock", "Artifact"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[beast, protected]),
+        PlayerState(name="P2"),
+    ])
+
+    assert game.cant_gain_control(protected, 1)
+    # Its own controller re-recording control of it is not a *gain*.
+    assert not game.cant_gain_control(protected, 0)
+
+    # And the prohibition ends with the state it names, with nothing to clear:
+    # the Beast tapping is the whole of it.
+    beast.tapped = True
+    assert not game.cant_gain_control(protected, 1)
+    beast.tapped = False
+
+    # The seam refuses the contribution rather than leaving each handler to.
+    assert not game.take_control(protected, 1, source=beast)
+    assert game.controller_index_of(protected) == 0
+
+    # An effect that reaches `change_control` directly is the reason the
+    # question is a *predicate* rather than a return value: the caller asks it.
+    change_control(protected, 1, source=beast)
+    game._sync_control()
+    assert game.controller_index_of(protected) == 1
 # --- end W1G5 ---

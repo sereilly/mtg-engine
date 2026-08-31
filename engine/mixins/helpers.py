@@ -307,6 +307,30 @@ class GameHelpersMixin:
             return base
         return self.controller_index_of(permanent)
 
+    def cant_gain_control(self, permanent: Permanent, seat) -> bool:
+        """Whether *seat* is forbidden right now to gain control of *permanent*.
+
+        Guardian Beast: "As long as this creature is untapped, noncreature
+        artifacts you control ... **other players can't gain control of
+        them**." CR 614.17 - a "can't" is not a replacement effect but follows
+        the same rules, and the rule this one states is about the *gaining*,
+        never about which sentence does the gaining.
+
+        Which is why it lives on the seam rather than in one handler. Exactly
+        one asked it - the artifact-only linked steal - so Gauntlets of Chaos
+        and Juxtapose exchanged a protected artifact away and Magus of the
+        Unseen borrowed one, all three with the Beast untapped and nothing
+        failing. A list of the handlers that move control is the fire-site list
+        this codebase keeps finding incomplete.
+
+        "**Other** players": a permanent's own controller re-recording control
+        of it is not a gain, so the seats are compared first.
+        """
+        holder = self.controller_index_of(permanent)
+        if holder is None or holder == self.seat_index(seat):
+            return False
+        return self._untapped_artifact_protector_active(permanent)
+
     def take_control(
         self,
         permanent: Permanent,
@@ -325,6 +349,11 @@ class GameHelpersMixin:
         """
         holding = self._holding_seat(permanent)
         if holding is None:
+            return False
+        # CR 614.17's prohibition, asked at the one place a steal records its
+        # contribution rather than in each steal handler (see
+        # :meth:`cant_gain_control`).
+        if self.cant_gain_control(permanent, seat):
             return False
         # A board built by hand (a test, a debug menu) never recorded a base, so
         # the seat it is sitting on now is the base — captured before the
