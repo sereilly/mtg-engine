@@ -478,28 +478,19 @@ class SpellCastingMixin:
             self.log.append(timing_denial)
             return SimulationResult(card.name, False, classification.effect_kind, timing_denial)
 
-        # A printed additional cost (CR 601.2b). Checked here, before a single
-        # mana is spent: CR 601.2h says an unpayable cost can't be paid, and the
-        # consequence is that the spell can't be cast at all — not that it is
-        # cast for free, which is what happened while the phrase lived in the
-        # spell-pattern whitelist. Paid further down, once every other cost has
-        # cleared and the card itself has left the hand.
-        # Only the costs this *zone* charges. Demonic Embrace prints one card
-        # with two prices — {1}{B}{B} from the hand and {1}{B}{B} plus 3 life
-        # plus a card from the graveyard — so a cost naming a zone applies to
-        # that zone alone, and an unmarked cost ("as an additional cost to cast
-        # this spell") applies wherever the spell is cast from.
+        # A printed additional cost (CR 601.2b). Only the costs this *zone*
+        # charges: Demonic Embrace prints one card with two prices —
+        # {1}{B}{B} from the hand and {1}{B}{B} plus 3 life plus a card from the
+        # graveyard — so a cost naming a zone applies to that zone alone, and
+        # an unmarked cost ("as an additional cost to cast this spell") applies
+        # wherever the spell is cast from.
+        #
+        # Gathered here and *checked* below, once X has been announced. See the
+        # gate's own note for why the check moved.
         cast_costs = tuple(
             cost for cost in additional_costs(card)
             if cost.from_zone is None or cost.from_zone == from_zone
         )
-        unpayable = self._unpayable_additional_cost(
-            caster_index, card, cast_costs, spell_hand_index=hand_index,
-            from_zone=from_zone,
-        )
-        if unpayable is not None:
-            self.log.append(unpayable)
-            return SimulationResult(card.name, False, classification.effect_kind, unpayable)
 
         # Resolve the named discard **here**, while `cost_hand_index` still
         # indexes the hand the caster was looking at. The spell leaves that hand
@@ -608,6 +599,28 @@ class SpellCastingMixin:
                 reduction=cost_reduction,
             )
 
+        # The printed additional costs, checked now: CR 601.2h says an unpayable
+        # cost can't be paid, and the consequence is that the spell can't be
+        # cast at all — not that it is cast for free, which is what happened
+        # while the phrase lived in the spell-pattern whitelist.
+        #
+        # **Here** rather than beside the gathering above, and the move is the
+        # whole of Fire Covenant's fix: "pay X life" cannot be measured until X
+        # is announced (CR 601.2b, CR 107.3), and the gate used to run first —
+        # so the clause was left out of the cost table entirely and the card,
+        # already `supported` on its damage line, was cast for nothing. This is
+        # also where CR 601.2 puts the check: 601.2h is after 601.2b's
+        # announcements and 601.2c's targets, and nothing between the two
+        # positions spends anything, so a refusal here costs the caster exactly
+        # what a refusal above it did.
+        unpayable = self._unpayable_additional_cost(
+            caster_index, card, cast_costs, spell_hand_index=hand_index,
+            from_zone=from_zone, x_value=resolved_x_value,
+        )
+        if unpayable is not None:
+            self.log.append(unpayable)
+            return SimulationResult(card.name, False, classification.effect_kind, unpayable)
+
         # A cost waiver ("cast spells from your hand without paying their mana
         # costs", Chandra, Flame's Catalyst's −8). An X spell defaults to
         # *paying*, because a waived {X} is locked to 0 (CR 107.3b) and paying
@@ -663,6 +676,7 @@ class SpellCastingMixin:
             caster_index, card, cast_costs,
             cost_permanent_index=cost_permanent_index,
             cost_hand_card=cost_hand_card,
+            x_value=resolved_x_value,
         )
         if permission is not None:
             consume_permission(self, permission, card)
@@ -784,6 +798,7 @@ class SpellCastingMixin:
         *,
         spell_hand_index: int | None,
         from_zone: str,
+        x_value: int | None = None,
     ) -> str | None:
         """Why *card*'s printed additional costs can't be paid, or None.
 
@@ -791,6 +806,11 @@ class SpellCastingMixin:
         whole casting a rewind, so the answer is that the spell is not cast,
         never that it is cast without the cost. Asked before any mana leaves the
         pool, so a refusal costs the caster nothing.
+
+        *x_value* is the announced X (CR 601.2b), for the one cost whose amount
+        is not printed: Fire Covenant's "pay X life". It reaches both this and
+        the payment through ``AdditionalCost.life_charged``, so the gate and the
+        charge cannot come to disagree about the number.
         """
         caster = self.players[caster_index]
         for cost in costs:
@@ -804,10 +824,11 @@ class SpellCastingMixin:
             # CR 118.4: a player may pay life only down to 0, and CR 601.2h then
             # makes an unpayable cost an uncastable spell rather than a free
             # one. Checked with the others, before anything is spent.
-            if cost.pay_life and caster.life < cost.pay_life:
+            life = cost.life_charged(x_value)
+            if life and caster.life < life:
                 return (
                     f"{card.name} can't be cast: {caster.name} cannot pay "
-                    f"{cost.pay_life} life with {caster.life} remaining "
+                    f"{life} life with {caster.life} remaining "
                     f"(CR 601.2h)"
                 )
             if cost.discard_cards:
@@ -871,6 +892,7 @@ class SpellCastingMixin:
         *,
         cost_permanent_index: int | None,
         cost_hand_card: "CardDefinition | None",
+        x_value: int | None = None,
     ) -> Permanent | None:
         """Perform *card*'s printed additional costs, returning what was
         sacrificed (for the spell whose effect asks about it).
@@ -907,10 +929,11 @@ class SpellCastingMixin:
                     self.log.append(
                         f"{caster.name} sacrificed {name} to cast {card.name}"
                     )
-            if cost.pay_life:
-                caster.life -= cost.pay_life
+            life = cost.life_charged(x_value)
+            if life:
+                caster.life -= life
                 self.log.append(
-                    f"{caster.name} paid {cost.pay_life} life to cast {card.name}"
+                    f"{caster.name} paid {life} life to cast {card.name}"
                 )
             if cost.discard_cards:
                 for _ in range(cost.discard_cards):

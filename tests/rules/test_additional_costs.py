@@ -339,16 +339,35 @@ def test_601_2b_both_sentences_that_list_costs_read_one_vocabulary():
 
 @pytest.mark.cr("601.2b")
 def test_601_2b_a_clause_the_engine_cannot_charge_leaves_the_line_unread():
-    """Every clause must be read or the whole sentence is refused. "Pay X life"
-    (Fire Covenant) is the live one: X is announced as the spell is cast and
-    this engine resolves it *after* the additional costs are charged, so a
-    clause for it would charge zero — which is a spell cast for free wearing a
-    cost's clothes."""
+    """Every clause must be read or the whole sentence is refused — a clause
+    dropped is a spell cast for less than it prints.
+
+    "Pay X life" (Fire Covenant) used to be the example here, on the grounds
+    that X was announced after the costs were charged. That was true of the
+    engine and not of the card: the announcement is CR 601.2b and the charge is
+    CR 601.2h, in that order, and the gate ran in the wrong one. It is read now;
+    an exile clause nothing charges is not."""
     from engine.cast_costs import additional_cost_for_line
 
     assert additional_cost_for_line(
-        "As an additional cost to cast this spell, pay X life."
-    ) is None
-    assert additional_cost_for_line(
         "As an additional cost to cast this spell, exile a creature."
     ) is None
+
+
+@pytest.mark.cr("601.2h")
+def test_601_2h_an_x_life_cost_is_charged_the_announced_x():
+    """"As an additional cost to cast this spell, pay X life." (Fire Covenant.)
+
+    The amount is not printed on the card at all — it is the X the caster
+    announces — so the gate and the charge have to read the same number, which
+    is what ``AdditionalCost.life_charged`` is for."""
+    from engine.cast_costs import additional_cost_for_line
+
+    cost = additional_cost_for_line(
+        "As an additional cost to cast this spell, pay X life."
+    )
+
+    assert cost is not None and cost.pay_life_x
+    assert cost.life_charged(4) == 4
+    assert cost.life_charged(None) == 0, "an unannounced X is CR 107.3b's zero"
+    assert cost.describe() == "pay X life"
