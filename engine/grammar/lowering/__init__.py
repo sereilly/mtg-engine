@@ -479,6 +479,7 @@ __all__ = [
     "_lower_set_life_total",
     "_lower_gain_life",
     "_title",
+    "_lower_count_objects",
     "_lower_create_emblem",
     "_lower_create_copy_token",
     "_lower_create_token",

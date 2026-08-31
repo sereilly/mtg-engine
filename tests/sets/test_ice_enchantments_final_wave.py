@@ -252,3 +252,250 @@ def test_w4g1_the_leave_rider_refuses_a_move_that_cannot_arm_it(set_pool):
     with pytest.raises((GrammarError, LoweringError)):
         lower_ability(parse_line(line))
 # --- end W4G1 ---
+
+
+# --- ChaosMoon: a turn-scoped board mood ---
+#
+# Chaos Moon. "At the beginning of each upkeep, count the number of permanents.
+# If the number is odd, until end of turn, red creatures get +1/+1 and whenever
+# a player taps a Mountain for mana, that player adds an additional {R}. If the
+# number is even, until end of turn, red creatures get -1/-1 and if a player
+# taps a Mountain for mana, that Mountain produces colorless mana instead of any
+# other type."
+#
+# The last card in the set, and four pieces of machinery: a counted number a
+# sibling sentence reads back, a delayed triggered *mana* ability that composes
+# with the anthem beside it, CR 605.4a's inline resolution, and a mana swap
+# armed on every seat rather than on the enchantment's controller.
+
+
+def _chaos_moon_board(set_pool, *, extra_mine=()):
+    """Chaos Moon, a Mountain each, and one red creature on the far side.
+
+    The permanent count is the whole of what this card branches on, so every
+    test here states its own board size rather than inheriting one -- a fixture
+    that quietly gained a permanent would flip every assertion at once.
+    """
+    ice = set_pool("ICE")
+    lea = set_pool("LEA")
+    moon = Permanent(card=ice["Chaos Moon"])
+    mine = Permanent(card=lea["Mountain"])
+    theirs = Permanent(card=lea["Mountain"])
+    goblin = Permanent(card=lea["Mons's Goblin Raiders"])
+    p0 = PlayerState(name="P0", battlefield=[moon, mine, *extra_mine], life=20)
+    p1 = PlayerState(name="P1", battlefield=[theirs, goblin], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    return game, p0, p1, mine, goblin
+
+
+def _odd_board(set_pool):
+    """Five permanents: the board above plus a Plains, which is also the land
+    the "a Mountain" narrowing has to leave alone."""
+    return _chaos_moon_board(
+        set_pool, extra_mine=[Permanent(card=set_pool("LEA")["Plains"])]
+    )
+
+
+def test_chaos_moon_compiles_its_whole_paragraph(set_pool):
+    """Three sentences, one trigger, and no intervening "if".
+
+    The shape is the assertion. CR 603.4 reads an "if" that *immediately follows
+    a trigger condition* as the intervening-if of the whole ability, so a card
+    printing one in the first sentence would gate both branches on it and the
+    second could never run. Chaos Moon prints a count instead, and the two
+    branches are siblings under a plain sequence.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Chaos Moon"])
+    assert program.supported
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "upkeep_each"
+    assert trigger.instruction.kind == "sequence"
+    assert "intervening_if" not in trigger.instruction.payload
+
+    count, odd, even = trigger.instruction.payload["steps"]
+    assert count.kind == "count_objects"
+    assert count.payload["filter"] == {}, "CR 110.1: every permanent, whoever controls it"
+    assert odd.payload["condition"] == {"kind": "counted_number", "op": "odd"}
+    assert even.payload["condition"] == {"kind": "counted_number", "op": "even"}
+
+
+def test_the_number_refuses_without_a_count_in_front_of_it(set_pool):
+    """"The number" is a back-reference, not a second count.
+
+    Its producer is declared (``lowering/_records._PRODUCES``) and the condition
+    refuses without one -- which matters because an unproduced record answers
+    False for *both* parities, so the card would silently do neither branch.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises(LoweringError):
+        lower_ability(parse_line(
+            "If the number is odd, red creatures get +1/+1 until end of turn."
+        ))
+
+
+def test_chaos_moon_on_an_odd_board_pumps_red_and_doubles_a_mountain(set_pool):
+    """Five permanents. "Red creatures get +1/+1 and whenever a player taps a
+    Mountain for mana, that player adds an additional {R}."
+
+    Both halves of one "and", which is the part the delayed trigger had to
+    become composable for: the clause used to be readable only as a whole line.
+    """
+    game, p0, _p1, _mine, goblin = _odd_board(set_pool)
+    assert len(list(game.all_permanents())) == 5
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert (goblin.effective_power, goblin.effective_toughness) == (2, 2), game.log
+    assert game.tap_land_for_mana(0, "Mountain"), game.log
+    assert p0.mana_pool["R"] == 2, "the land's own {R} plus the additional one"
+
+
+def test_chaos_moons_odd_mana_reaches_every_players_mountains(set_pool):
+    """"whenever **a player** taps a Mountain" names no seat, so the ability
+    answers to an opponent's Mountain exactly as it does to its controller's.
+
+    The mirror of the even branch's test below, and the reason both exist: a
+    test that taps only its own land passes whether or not the effect is
+    seat-scoped.
+    """
+    game, _p0, p1, _mine, _goblin = _odd_board(set_pool)
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert game.tap_land_for_mana(1, "Mountain"), game.log
+    assert p1.mana_pool["R"] == 2, game.log
+
+
+def test_chaos_moons_odd_mana_leaves_a_non_mountain_alone(set_pool):
+    """"a **Mountain**" is a printed noun phrase tested by the fire site, so the
+    Plains beside it makes exactly what it always made."""
+    game, p0, _p1, _mine, _goblin = _odd_board(set_pool)
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert game.tap_land_for_mana(0, "Plains"), game.log
+    assert p0.mana_pool["W"] == 1 and p0.mana_pool["R"] == 0, game.log
+
+
+@pytest.mark.cr("605.4a", "605.1b")
+def test_chaos_moons_odd_mana_never_reaches_the_stack(set_pool):
+    """CR 605.4a: a triggered mana ability does not go on the stack.
+
+    The rule's own subject is exactly this clause. Every *other* delayed trigger
+    in the engine is enqueued, so this one is announced through the enumerating
+    half of that machinery and resolved where it stands -- inside the cost
+    payment that tapped the land, before any spell it pays for is announced.
+    """
+    game, p0, _p1, _mine, _goblin = _odd_board(set_pool)
+
+    game.resolve_upkeep(0)
+    game._settle()
+    assert game.stack == []
+
+    assert game.tap_land_for_mana(0, "Mountain"), game.log
+    assert game.stack == [], "a triggered mana ability resolves without the stack"
+    assert p0.mana_pool["R"] == 2, "and it resolved"
+
+
+def test_chaos_moon_on_an_even_board_shrinks_red_and_greys_a_mountain(set_pool):
+    """Four permanents. "Red creatures get -1/-1 and if a player taps a Mountain
+    for mana, that Mountain produces colorless mana instead of any other type."
+    """
+    game, p0, p1, _mine, goblin = _chaos_moon_board(set_pool)
+    assert len(list(game.all_permanents())) == 4
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert goblin not in p1.battlefield, "a 1/1 at -1/-1 is 0/0 (CR 704.5f)"
+    assert game.tap_land_for_mana(0, "Mountain"), game.log
+    assert p0.mana_pool["C"] == 1 and p0.mana_pool["R"] == 0, game.log
+
+
+def test_chaos_moons_even_swap_reaches_every_players_mountains(set_pool):
+    """The piece a one-sided test cannot see.
+
+    ``land_mana_swaps.swapped_symbol`` asks the **land's own controller** for
+    their records, so a swap armed only on Chaos Moon's controller would leave
+    every opponent's Mountain making red on a board the card says is colourless.
+    "A player taps" names no seat, so the effect arms one record per seat.
+    """
+    game, _p0, p1, _mine, _goblin = _chaos_moon_board(set_pool)
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert game.tap_land_for_mana(1, "Mountain"), game.log
+    assert p1.mana_pool["C"] == 1 and p1.mana_pool["R"] == 0, game.log
+
+
+@pytest.mark.cr("603.7b", "611.2c")
+def test_chaos_moons_mood_is_gone_next_turn(set_pool):
+    """"Until end of turn" over both halves.
+
+    CR 611.2c locks the anthem's set in when it begins and the cleanup step ends
+    it; CR 603.7b's stated duration is what expires the delayed ability, through
+    the sweep that has always dropped a turn-scoped entry. Two mechanisms, one
+    printed window, so both are asserted together.
+    """
+    game, p0, _p1, mine, goblin = _odd_board(set_pool)
+
+    game.resolve_upkeep(0)
+    game._settle()
+    assert (goblin.effective_power, goblin.effective_toughness) == (2, 2)
+    assert game.delayed_triggers
+
+    game.resolve_cleanup_step(0)
+    mine.tapped = False
+    p0.mana_pool.clear()
+
+    assert game.delayed_triggers == []
+    assert (goblin.effective_power, goblin.effective_toughness) == (1, 1), game.log
+    assert game.tap_land_for_mana(0, "Mountain"), game.log
+    assert p0.mana_pool["R"] == 1, "the Mountain's own {R} and nothing more"
+
+
+def test_a_delayed_mana_ability_refuses_without_a_stated_duration(set_pool):
+    """An invented sentence, because a guard aimed at a printed line stops
+    guarding the day somebody implements it.
+
+    A repeating delayed ability with no window is one nothing ever lifts, and
+    CR 603.7b's other reading -- "will trigger only once" -- is a different
+    card. So the opener leaves the duration unstated and the lowering refuses
+    unless a leading "until end of turn" filled it in.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises(LoweringError):
+        lower_ability(parse_line(
+            "Whenever a player taps a Mountain for mana, "
+            "that player adds an additional {R}."
+        ))
+
+
+def test_a_delayed_mana_opener_refuses_an_effect_the_seam_cannot_resolve(set_pool):
+    """CR 605.4a is why: the seam that announces this event resolves its
+    abilities inline, inside a cost payment, so it can only carry out a mana
+    production. An effect it cannot perform refuses at the parse rather than
+    arming an ability that would be found and skipped.
+    """
+    from engine.grammar import compile_line
+
+    compiled = compile_line(
+        "Until end of turn, whenever a player taps a Mountain for mana, "
+        "that player draws a card."
+    )
+    assert not compiled.usable, compiled
+# --- end ChaosMoon ---
