@@ -5022,6 +5022,24 @@ class BattlefieldCanvas {
     return s.current_turn_phase === "combat" && s.current_step === "declare_blockers";
   }
 
+  // Which defender's blocks this viewer is declaring, or null for none.
+  // CR 509.1a's chooser: normally the defending player, and another seat while
+  // "You choose which creatures block this combat and how those creatures
+  // block" (Melee) is in effect. The creatures dragged are still the
+  // *defender's*, which is why this answers with a seat rather than a boolean —
+  // the drag has to know whose row it may pick up from. Mirrors
+  // `blockDeclarationDefender` in app.js, off the same server-shipped map.
+  _blockDeclarationDefender() {
+    const combat = this.currentState?.combat;
+    if (!combat) return null;
+    const defender = combat.defending_player_index;
+    if (!Number.isInteger(defender)) return null;
+    const chooserMap = combat.camouflage_active ? null : combat.block_chooser;
+    const raw = chooserMap ? (chooserMap[defender] ?? chooserMap[String(defender)]) : undefined;
+    const chooser = Number.isInteger(raw) ? raw : defender;
+    return chooser === this.viewerSeat ? defender : null;
+  }
+
   _handleMouseDown(event) {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -5152,10 +5170,11 @@ class BattlefieldCanvas {
       if (!ps.combatDrag && !ps.cancelled && (dx > 4 || dy > 4)) {
         // The only drag interaction: in declare_blockers, dragging one of my
         // creatures onto an attacker assigns it as a blocker.
+        const blockDefender = this._blockDeclarationDefender();
         const canCombatDrag =
           this._isCombatBlockerPhase() &&
-          this.currentState?.combat?.defending_player_index === this.viewerSeat &&
-          ps.seat === this.viewerSeat &&
+          blockDefender !== null &&
+          ps.seat === blockDefender &&
           ps.card?.attached_to_index == null;
         if (canCombatDrag) {
           ps.combatDrag = true;
@@ -5262,7 +5281,10 @@ class BattlefieldCanvas {
       const target = this._hitTest(pt.world.x, pt.world.y, pt.region ? pt.region.seat : null);
       if (
         target &&
-        target.seat !== this.viewerSeat &&
+        // The attacker is on the other side of the block from the creature
+        // being dragged — which is the defender's row, not necessarily the
+        // viewer's own (CR 509.1a's chooser may be someone else).
+        target.seat !== ps.seat &&
         target.key !== ps.key &&
         this.onBlockerAssign
       ) {

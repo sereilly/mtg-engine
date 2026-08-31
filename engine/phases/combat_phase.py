@@ -550,6 +550,17 @@ class CombatPhaseMixin:
             # Camouflage (cast during this turn's declare-attackers step): the
             # defender assigns piles instead of declaring blockers.
             "camouflage_active": self.is_camouflage_active(),
+            # "You choose which creatures block this combat and how those
+            # creatures block." (Melee.) CR 509.1a's chooser per defending
+            # seat, so the client can offer the declaration to whoever actually
+            # owes it — and go on drawing the *defender's* creatures as the
+            # ones that block, which is what the card leaves alone. Every seat
+            # maps to itself in an ordinary combat, so a reader may use it
+            # unconditionally.
+            "block_chooser": {
+                seat: self.block_chooser_index(seat)
+                for seat in sorted(self.combat_defending_players())
+            },
             # Banding (CR 702.22): declared attacking bands and the per-attacker
             # blockers added by band propagation (702.22h).
             "bands": [list(band) for band in self.combat_bands],
