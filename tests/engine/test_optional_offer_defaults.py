@@ -261,3 +261,83 @@ def test_the_leading_step_is_what_the_sentence_offers(kind, expected):
         OracleInstruction("draw_controller_cards", "", {"amount": 1}),
     )
     assert offered_action_is_a_payment(steps, {"caster"}) is expected
+
+
+# ---------------------------------------------------------------------------
+# The same policy one layer in: a "Choose one —" whose alternatives are not
+# alike. ``_default_mode_choice`` took printed order, which is a fine policy
+# while the modes are two ways of doing the same size of thing and a bad one
+# the moment a price is printed beside a free alternative.
+# ---------------------------------------------------------------------------
+
+
+def _modal_choices(catalog):
+    """Every ``choose_one`` the pool compiles, with its modes' instructions."""
+    seen = set()
+    for card in sorted(catalog, key=lambda c: c.name):
+        program = compile_card_oracle(card)
+        if not program.supported:
+            continue
+        for instruction in _program_instructions(program):
+            if instruction.kind != "choose_one":
+                continue
+            modes = [
+                mode for mode in (instruction.payload.get("modes") or ())
+                if isinstance(mode, dict) and mode.get("instruction") is not None
+            ]
+            if not modes:
+                continue
+            key = (card.name, tuple(mode["label"] for mode in modes))
+            if key in seen:
+                continue
+            seen.add(key)
+            yield card, modes
+
+
+def _mode_taken(modes) -> int:
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+
+    class _Context:
+        caster = game.players[0]
+        target = game.players[1]
+
+    choice = PendingChoice("mode_choice", 0, {
+        "card_name": "probe",
+        "labels": [mode["label"] for mode in modes],
+        "_modes": tuple(mode["instruction"] for mode in modes),
+        "_context": _Context(),
+    })
+    return game._first_unpriced_mode(choice)
+
+
+def test_a_modal_choice_prefers_an_alternative_that_costs_the_chooser_nothing(catalog):
+    """Asked of every modal choice in the pool, by shape: the first alternative
+    that is not paid out of the chooser's own resources, and printed order when
+    every one of them is (Crypt Lurker's "sacrifice a creature or discard a
+    creature card" — two prices, and picking the smaller is valuation)."""
+    wrong = []
+    for card, modes in _modal_choices(catalog):
+        priced = [
+            offered_action_is_a_payment((mode["instruction"],), {"caster"})
+            for mode in modes
+        ]
+        want = next((i for i, p in enumerate(priced) if not p), 0)
+        got = _mode_taken(modes)
+        if got != want:
+            wrong.append((card.name, got, want))
+    assert not wrong, wrong
+
+
+def test_the_pool_still_contains_a_modal_choice_that_is_not_uniform(catalog):
+    """The guard above passes vacuously if every modal in the pool offers two
+    alternatives of the same kind. Exactly one does not, which is why printed
+    order survived this long."""
+    mixed = [
+        card.name
+        for card, modes in _modal_choices(catalog)
+        if len({
+            offered_action_is_a_payment((mode["instruction"],), {"caster"})
+            for mode in modes
+        }) > 1
+    ]
+    assert mixed, "no modal choice mixes a price with a free alternative"

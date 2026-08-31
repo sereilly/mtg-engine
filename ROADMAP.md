@@ -842,8 +842,36 @@ a warning about carrying a finding between rounds without re-probing it.
 * **Five handler paths still resolve by index alone**, reached today only by
   instants and so caught by the CR 608.2b gate first. The next *activated*
   ability printed with "return target creature to its owner's hand" walks in.
-* 39 supported cards arm a free `optional_pay` whose headless default accepts
-  every one — nobody chose that; it falls out of the affordability check.
+* ~~39 supported cards arm a free `optional_pay` whose headless default accepts
+  every one — nobody chose that; it falls out of the affordability check.~~
+  **Closed.** The count was 58 cards / 60 offers, and "39" and the later "59"
+  were counting different walks of the same tree rather than different things.
+  The policy is stated now: **take gifts, pay tolls, make no trades**. A free
+  offer is refused when its *offered action* spends the seat's own resources —
+  `ai_valuation.offered_action_is_a_payment`, over the instruction kinds the
+  rules define as done to oneself (CR 701.21a sacrifice, 701.9a discard,
+  118.3b pay life, 407.4 ante, 701.13a exile) — **and** the card prints nothing
+  for refusing. Eight offers flip to declined (Crypt Lurker, Dire Fleet
+  Warmonger, Ice Cauldron, Leviathan, Rebirth, Safe Haven, Tetravus' second
+  upkeep trigger, Worms of the Earth); the nine *tolls* are deliberately
+  untouched, because refusing one is not free either and picking the smaller of
+  two losses is valuation, not a default — the same rule that says pay Season
+  of the Witch's 2 life says sacrifice Curse Artifact's artifact, and no
+  property of the compiled program separates them.
+* **The same defect one layer in, found by the sweep and fixed with it:**
+  `_default_mode_choice` answered "Choose one —" with **printed order**, which
+  is fine while the alternatives are alike and is not for the one card in the
+  pool where they are not. Sylvan Library's "pay 4 life or put the card on top
+  of your library" put the price first, so a headless seat drew two extra cards
+  every draw step and paid 8 life for them — **dead on the third**. It now takes
+  the first alternative that costs it nothing; an all-priced modal (Crypt
+  Lurker) keeps printed order.
+* **Still open in this area:** a *toll* has no default anybody chose either. It
+  is asked and answered by affordability today (pay if the mana is floating,
+  else take the penalty), and nine cards ride on it. The missing piece is a
+  valuation — which of two losses is smaller — and by CLAUDE.md's split that is
+  `ai_policy` work with an `ai_valuation` derivation behind it, not another
+  branch in `_default_optional_pay`.
 
 **Phase 1 (ingest and measure).** 383 printings, 373 unique cards, **346 new to
 the pool** — the largest set ingested and the first since M21 that is mostly new

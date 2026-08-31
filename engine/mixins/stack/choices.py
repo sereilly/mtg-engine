@@ -3872,18 +3872,71 @@ class PendingChoicesMixin:
                 return candidate
         return None
 
+    def _offered_mode_instructions(self, choice: PendingChoice) -> tuple:
+        """The instruction behind each offered mode, whichever site armed it.
+
+        ``_resolve_mode_choice`` already distinguishes the two by the data on
+        the prompt rather than by a list of kinds; this reads the same two keys
+        so a third arming site is a data question there and here alike.
+        """
+        if choice.data.get("_trigger_item") is None:
+            return tuple(choice.data.get("_modes") or ())
+        return tuple(
+            getattr(option, "instruction", None)
+            for option in (choice.data.get("_options") or ())
+        )
+
+    def _first_unpriced_mode(self, choice: PendingChoice) -> int:
+        """The first offered mode that does not spend the chooser's own
+        resources, or 0 when every one of them does.
+
+        ``_default_optional_pay``'s policy one layer in: "pay 4 life **or** put
+        the card on top of your library" (Sylvan Library) offers a price beside
+        a free alternative, and printed order put the price first. A seat
+        nobody asked drew two extra cards every draw step and paid 8 life for
+        them — dead on the third one, out of a card whose whole design is that
+        the player decides how much life it is worth.
+
+        All-priced alternatives keep printed order: "sacrifice a creature or
+        discard a creature card" (Crypt Lurker) is a choice between two prices
+        and picking the smaller is valuation, exactly as it is for a toll.
+        """
+        from ...ai_valuation import offered_action_is_a_payment
+
+        seat = self.players[choice.player_index]
+        context = choice.data.get("_context")
+        # The printed player references that resolve to the chooser. With no
+        # resolution context — the modal-trigger site — the chooser *is* the
+        # ability's controller, which is what "caster" names.
+        self_recipients = {"caster"}
+        if context is not None:
+            if getattr(context, "caster", None) is not seat:
+                self_recipients.discard("caster")
+            if getattr(context, "target", None) is seat:
+                self_recipients.update(("target", "target_player"))
+        for index, instruction in enumerate(self._offered_mode_instructions(choice)):
+            if instruction is None:
+                continue
+            if not offered_action_is_a_payment((instruction,), self_recipients):
+                return index
+        return 0
+
     def _default_mode_choice(self, choice: PendingChoice) -> bool:
         """What a non-interactive seat answers a "Choose one —" prompt with:
-        the first *offered* mode.
+        the first *offered* mode that is not a price paid out of its own
+        resources, and the first offered mode when they all are.
 
-        A stated policy, not a valuation — the same one the choice registry has
-        always taken — and "offered" rather than "printed" because CR 700.2b
-        has already removed from the list any mode whose targets could not be
-        chosen. The target inside that mode is
+        A stated policy, not a valuation, and "offered" rather than "printed"
+        because CR 700.2b has already removed from the list any mode whose
+        targets could not be chosen. The target inside that mode is
         ``_default_trigger_mode_target``'s, which is derived from the mode's
         own effect family rather than named per card.
+
+        It was plain printed order, which is a policy nobody chose for the one
+        card in the pool where the alternatives are not alike — see
+        ``_first_unpriced_mode``.
         """
-        return self._resolve_mode_choice(choice, 0)
+        return self._resolve_mode_choice(choice, self._first_unpriced_mode(choice))
 
     def _apply_optional_pay_decline(self, player_index: int, entry: dict) -> None:
         """The consequence of NOT paying an optional-pay prompt. Plain "may pay"

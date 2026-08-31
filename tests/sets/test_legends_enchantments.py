@@ -2166,7 +2166,10 @@ def test_sylvan_library_never_offers_a_life_payment_a_seat_cannot_make(set_pool)
 def test_sylvan_library_runs_to_the_end_for_a_non_interactive_seat(set_pool):
     """Every prompt the ability arms has a default, so a headless or AI seat
     never stalls part-way through it — and the resolution leaves nothing
-    suspended behind it."""
+    suspended behind it. It also does not pay for the privilege: "pay 4 life
+    **or** put the card on top of your library" is a price beside a free
+    alternative, and printed order used to decide — 8 life a turn, dead on the
+    third draw step."""
     game, p1 = _r34_sylvan_library(set_pool, interactive=False)
 
     game.resolve_draw_step(0)
@@ -2174,7 +2177,8 @@ def test_sylvan_library_runs_to_the_end_for_a_non_interactive_seat(set_pool):
 
     assert game.pending_choices == []
     assert game.effect_suspended is False
-    assert len(p1.hand) == 3
+    assert p1.life == 20, game.log
+    assert len(p1.hand) == 1, game.log
 
 # ---------------------------------------------------------------------------
 # Imprison (round 34) — the last of the set's three "you may pay {1}" Auras,
