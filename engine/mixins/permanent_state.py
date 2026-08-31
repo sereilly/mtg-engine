@@ -1597,6 +1597,36 @@ class PermanentStateMixin:
             for perm in self.controlled_by(seat)
         )
 
+    def _chosen_color_most_common_condition(self, source_perm: Permanent) -> bool:
+        """Call to Arms: whether "the chosen color is the most common color
+        among nontoken permanents the chosen player controls **but isn't tied
+        for most common**" holds for *source_perm*'s stored choices.
+
+        A strict maximum, which is what the second half of the clause says and
+        why it is one predicate rather than a superlative plus a rider. A
+        multicoloured permanent is counted once for every colour it is
+        (CR 105.2 makes it one object of several colours, not several objects),
+        and a colourless board has no most common colour at all — every colour
+        is tied at nothing, so the answer is False rather than vacuously True.
+
+        The sibling condition beside this one asks "controls **a**"; the census
+        is the only difference, which is why the two live in one table.
+        """
+        seat = source_perm.metadata.get("chosen_player_index")
+        color = source_perm.metadata.get("chosen_color")
+        if not isinstance(seat, int) or not (0 <= seat < len(self.players)) or not color:
+            return False
+        counts: dict[str, int] = {}
+        for perm in self.controlled_by(seat):
+            if perm.metadata.get("is_token"):
+                continue
+            for other in self._effective_colors(perm):
+                counts[other] = counts.get(other, 0) + 1
+        mine = counts.get(color, 0)
+        if mine <= 0:
+            return False
+        return all(count < mine for other, count in counts.items() if other != color)
+
     @staticmethod
     def _protection_quality_of(word: str) -> tuple[str, str] | None:
         """The canonical quality one word of a protection clause names, or None.
@@ -2104,6 +2134,7 @@ class PermanentStateMixin:
     # tests/engine/test_lord_buff_table.py holds the two lists to each other.
     _LORD_BUFF_CONDITIONS = {
         "chosen_color_permanent": "_chosen_color_permanent_condition",
+        "chosen_color_most_common": "_chosen_color_most_common_condition",
     }
 
     def _lord_buff_condition(

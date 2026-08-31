@@ -64,6 +64,7 @@ from engine.draw_step_modifiers import (  # noqa: E402
     draw_step_bonus_for, draw_step_skip_line,
 )
 from engine.global_statics import global_static_for  # noqa: E402
+from engine.lord_buffs import sacrifice_state_trigger  # noqa: E402
 from engine.auras import (  # noqa: E402
     aura_effect_claim,
     aura_static_pt_grant,
@@ -167,9 +168,6 @@ _MIXIN_TEXT_SCANS = (
     "if you can't, you lose the game",
     # helpers.py:461 — the leave-the-battlefield loss, matched on this phrase.
     "when this enchantment is put into a graveyard from the battlefield, you lose the game",
-    # game_ending.py:177 — a CR 603.8 state trigger checked alongside the SBAs,
-    # matched on this phrase plus the stored enter-choice (Jihad).
-    "when the chosen player controls no nontoken permanents of the chosen color",
     "whenever you're dealt damage, put that many vitality counters on this aura",  # upkeep_step vitality flow (Living Artifact)
     "you don't lose the game for having 0 or less life",                 # game_ending.py (Lich)
     "as this enchantment enters, you lose life equal to your life total",  # permanent_state.py:195 (Lich)
@@ -351,6 +349,15 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # for a granted ability, through the affected permanent's effective
     # card. There is no instruction to point at, so without this channel a
     # card whose whole behaviour is one of these reads as unclaimed text.
+    # "When the chosen player controls no nontoken permanents of the chosen
+    # color, sacrifice this enchantment." (Jihad, Call to Arms.) A CR 603.8
+    # state trigger checked alongside the SBAs in game_ending.py, keyed to the
+    # same condition the anthem beside it hangs on. Asked of the table that
+    # sweep reads, rather than the literal that used to sit in
+    # ``_MIXIN_TEXT_SCANS`` — a second copy of it, and one card later the second
+    # copy would have needed the second phrase too.
+    ("lord_buffs.py (state trigger)",
+     lambda s: sacrifice_state_trigger(s) is not None),
     ("global_statics.py", lambda s: global_static_for(s) is not None),
     # The rider of a global static that outlives its source. It is part of the
     # same ability, matched on the two-sentence form, but arrives here as its

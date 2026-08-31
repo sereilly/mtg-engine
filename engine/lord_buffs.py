@@ -93,7 +93,49 @@ GRANTED_ACTIVATED_ABILITIES: dict[str, str] = {
 CONDITIONS: dict[str, str] = {
     "as long as the chosen player controls a nontoken permanent of the chosen color":
         "chosen_color_permanent",
+    # Call to Arms, Jihad's sentence with a *census* in place of "controls a".
+    # Both halves of the printed clause are one question and one row: "the most
+    # common ... but isn't tied for most common" is a strict maximum, and a row
+    # for the superlative alone would be an anthem that also applied on a tie.
+    "as long as the chosen color is the most common color among nontoken "
+    "permanents the chosen player controls but isn't tied for most common":
+        "chosen_color_most_common",
 }
+
+
+#: The CR 603.8 state trigger printed beside a conditional anthem: "**When**
+#: <the condition stops holding>, sacrifice this enchantment." Keyed to the same
+#: condition the anthem hangs on, because it is the same question negated — a
+#: second table of predicates would be free to disagree with the first, which on
+#: these two cards means an enchantment that keeps buffing after it should have
+#: been sacrificed, or the reverse.
+#:
+#: Read by ``engine/mixins/game_ending.py``, which checks it alongside the
+#: state-based actions, and by ``scripts/parse_coverage.py``, so what is
+#: performed and what is claimed cannot drift. Jihad's line was a literal in
+#: both of those files until Call to Arms printed the second one.
+SACRIFICE_WHEN_CONDITION_FAILS: dict[str, str] = {
+    "when the chosen player controls no nontoken permanents of the chosen color":
+        "chosen_color_permanent",
+    "when the chosen color isn't the most common color among nontoken "
+    "permanents the chosen player controls or is tied for most common":
+        "chosen_color_most_common",
+}
+
+
+def sacrifice_state_trigger(line: str) -> str | None:
+    """The condition whose failure *line*'s state trigger sacrifices on, or None.
+
+    Matched against the printed clause in front of ", sacrifice this
+    <noun>" — the sacrifice half is the same on both cards and the noun is the
+    permanent's own type, so what identifies the trigger is the condition.
+    """
+    normalized = " ".join((line or "").strip().lower().rstrip(".").split())
+    for clause, condition in SACRIFICE_WHEN_CONDITION_FAILS.items():
+        for noun in ("enchantment", "artifact", "creature", "permanent"):
+            if normalized == f"{clause}, sacrifice this {noun}":
+                return condition
+    return None
 
 #: The subset of the vocabulary above that is printed as a single adjective in
 #: front of the noun ("**untapped** creatures you control"). Derived rather than
@@ -587,6 +629,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
 
 __all__ = [
     "CONDITIONS", "GRANTED_ACTIVATED_ABILITIES", "LORD_BUFF_KIND", "LordBuff",
-    "LordBuffFilter", "QUALIFIER_FIELDS", "grantable_keywords", "lord_buff_for",
-    "lord_buff_from_payload", "lord_buff_payload",
+    "LordBuffFilter", "QUALIFIER_FIELDS", "SACRIFICE_WHEN_CONDITION_FAILS",
+    "grantable_keywords", "lord_buff_for",
+    "lord_buff_from_payload", "lord_buff_payload", "sacrifice_state_trigger",
 ]
