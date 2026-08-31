@@ -386,7 +386,7 @@ def lower_statement(
         # other, nested or not. Gated on `whole_effect` it refused Infinite
         # Authority, whose "destroy the other creature at end of combat" is the
         # first of a trigger's *two* sentences and so lowers under a `Sequence`.
-        return _lower_destroy(statement, event, event_subject)
+        return _lower_destroy(statement, event, event_subject, produced)
     if isinstance(statement, ast.DoesntUntapNextStep):
         # `produced` is the whole gate: this sentence acts on what an earlier
         # step of the same effect recorded, so it refuses when nothing did.

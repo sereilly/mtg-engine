@@ -21,6 +21,8 @@ text do what the card says.
 
 from __future__ import annotations
 
+import pytest
+
 from engine import Game
 from engine.auras import attach_aura
 from engine.cumulative_upkeep import cumulative_upkeep_cost
@@ -1440,4 +1442,148 @@ def test_wiitigo_stops_growing_the_upkeep_after_that(set_pool):
     game._settle()
 
     assert wiitigo.effective_power == 6
+
+
+def _w2g3_sappers(set_pool):
+    """Seat 0 with the Sappers and a bear; seat 1 with a bear to block with."""
+    pool = set_pool("ICE")
+    sappers = _nosick(Permanent(card=pool["Goblin Sappers"]))
+    bears = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    blocker = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[sappers, bears], life=20),
+        PlayerState(name="P2", battlefield=[blocker], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.active_player_index = 0
+    game._set_phase_and_step("precombat_main", None)
+    return game, sappers, bears
+
+
+def _w2g3_sappers_combat(game):
+    """Attack with the creature in slot 1 and run combat to its end."""
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [1], 1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    refusal = game.declare_blockers(1, {0: 1})
+    assert game.declare_blockers(1, {})[0]
+    game.end_combat(step_already_started=True)
+    game._settle()
+    return refusal
+
+
+def test_goblin_sappers_compiles_both_of_its_abilities(set_pool):
+    """Neither ability buys the card on its own: a creature is supported only
+    when every line is claimed, and the two lines differ by four words.
+
+    "Destroy **it** and this creature at end of combat" is two delayed abilities
+    (CR 603.7), and they are two *different* ones: "it" is the creature the
+    step in front chose and "this creature" is the ability's own source, which
+    CR 603.7d freezes into the entry. One instruction with a flag could only
+    have spelled one of them.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Goblin Sappers"])
+
+    assert program.supported
+    cheap, dear = program.activated_abilities
+    assert [step.kind for step in cheap.instruction.payload["steps"]] == [
+        "grant_unblockable_to_target",
+        "create_delayed_trigger",
+        "create_delayed_trigger",
+    ]
+    inner = [
+        step.payload["instruction"].kind
+        for step in cheap.instruction.payload["steps"][1:]
+    ]
+    assert inner == ["destroy_bound_permanent", "destroy_self"]
+    assert [step.kind for step in dear.instruction.payload["steps"]] == [
+        "grant_unblockable_to_target",
+        "create_delayed_trigger",
+    ]
+
+
+def test_goblin_sappers_cheap_ability_takes_its_own_source_with_it(set_pool):
+    """{R}{R}: the target is unblockable, and at end of combat both it and the
+    Sappers are destroyed."""
+    game, sappers, bears = _w2g3_sappers(set_pool)
+
+    result = game.activate_permanent_ability(
+        0, "Goblin Sappers", permanent_index=0, ability_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    game._settle()
+    assert result.supported, result.details
+    assert bears.metadata.get("cant_be_blocked_until_eot")
+
+    refusal = _w2g3_sappers_combat(game)
+
+    assert refusal[0] is False
+    assert [p.card.name for p in game.controlled_by(0)] == []
+    assert sorted(c.name for c in game.players[0].graveyard) == [
+        "Balduvian Bears", "Goblin Sappers",
+    ]
+
+
+def test_goblin_sappers_expensive_ability_spares_the_sappers(set_pool):
+    """{R}{R}{R}{R}: the same sentence with "and this creature" deleted, which
+    is the whole difference between the two abilities."""
+    game, sappers, bears = _w2g3_sappers(set_pool)
+
+    result = game.activate_permanent_ability(
+        0, "Goblin Sappers", permanent_index=0, ability_index=1,
+        target_player_index=0, target_permanent_index=1,
+    )
+    game._settle()
+    assert result.supported, result.details
+
+    _w2g3_sappers_combat(game)
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Goblin Sappers"]
+    assert [c.name for c in game.players[0].graveyard] == ["Balduvian Bears"]
+
+
+def test_a_delayed_destroy_of_it_refuses_when_nothing_chose_a_permanent(set_pool):
+    """The gate that makes the card correct rather than merely compiling.
+
+    ``parse_recipient`` reads a bare "it" as the ability's own source, so
+    without a producer in front of it "Destroy it at end of combat" would arm a
+    destruction of the *Sappers* and never touch the creature the card is
+    about — compiling, resolving, logging, and doing the wrong thing.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    node = parse_line(
+        "{R}: Destroy it at end of combat.", card_name="Probe"
+    )
+    with pytest.raises(LoweringError):
+        lower_ability(node)
+
+
+def test_and_this_creature_only_joins_a_union_that_ends_the_sentence(set_pool):
+    """The refusal test for the widened union.
+
+    "…and this <type>" is a second *object* on Goblin Sappers and the *subject
+    of a second clause* on Monsoon, Earthbind and Vexing Arcanix — a permanent
+    naming itself is the commonest subject on a card. So the union takes the
+    phrase only where nothing follows it but a terminator or the delay.
+    """
+    from engine.grammar import ast
+    from engine.grammar import parse_line
+
+    node = parse_line(
+        "Destroy target land and this creature deals 2 damage to you.",
+        card_name="Probe",
+    )
+
+    # Two clauses, not one destroy with two victims: the land dies and the
+    # source deals the damage. Read as a union, this line would have destroyed
+    # the permanent printing it and dropped the damage entirely.
+    assert isinstance(node.statement, ast.Sequence)
+    first, second = node.statement.steps
+    assert isinstance(first, ast.Destroy)
+    assert first.subject.filter.card_types == ("land",)
+    assert isinstance(second, ast.DealDamage)
 # --- end W2G3 ---

@@ -601,6 +601,13 @@ def grant_unblockable_to_self(game: Game, instruction: OracleInstruction, contex
     return True, "resolved"
 
 
+#: The scratchpad key the unblockable grant records its creatures under. One
+#: name, because the handler writes it and ``lowering/categories._PRODUCES``
+#: declares it, and a second spelling would make the lowering's gate vacuous
+#: while the record sat unread.
+UNBLOCKABLE_PERMANENTS = "unblockable_permanents"
+
+
 @effect_handler("grant_unblockable_to_target")
 def grant_unblockable_to_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target creature can't be blocked this turn." (Teleport) / "…with
@@ -648,6 +655,15 @@ def grant_unblockable_to_target(game: Game, instruction: OracleInstruction, cont
     for target_creature in chosen:
         target_creature.metadata["cant_be_blocked_until_eot"] = True
         game.log.append(f"{target_creature.card.name} can't be blocked this turn")
+    # "…can't be blocked this turn. **Destroy it** … at end of combat." (Goblin
+    # Sappers.) The sentence after this one names what this one chose, and the
+    # scratchpad is where it reads it — the same record a tap or an untap
+    # writes, under the same shape (ids, never indices), so the lowering that
+    # gates on "did an earlier step of this effect name a permanent?" asks one
+    # question of all three.
+    context.results[UNBLOCKABLE_PERMANENTS] = [
+        perm.permanent_id for perm in chosen
+    ]
     return True, "resolved"
 
 

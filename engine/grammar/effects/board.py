@@ -289,7 +289,27 @@ def _parse_further_subjects(
         # candidate for this union at all.
         if (
             not isinstance(nxt, ast.TargetSpec)
-            or nxt.quantifier not in ("all", "each", "target")
+            or nxt.quantifier not in ("all", "each", "target", "this")
+        ):
+            stream.reset(mark)
+            return extra
+        # **"this <type>" is the fourth, and the only one that needs a second
+        # test.** "Destroy it **and this creature** at end of combat" (Goblin
+        # Sappers) is a union; "tap all untapped Islands that player controls
+        # **and this enchantment deals X damage** to the player" (Monsoon) is
+        # two clauses whose second one opens with the very same noun phrase, and
+        # so do Earthbind and Vexing Arcanix. The three quantifiers above cannot
+        # begin a clause, and this one can — a permanent naming itself is the
+        # commonest *subject* on a card.
+        #
+        # So the union takes it only where the phrase ends the sentence: at a
+        # terminator, or in front of the one trailing clause a union may carry
+        # (the "at end of combat" delay, read by the caller). Anything else is a
+        # verb about to arrive, and the "and" belongs to the statement parser.
+        if nxt.quantifier == "this" and not (
+            stream.exhausted
+            or stream.at_punct(".", ";", ",")
+            or stream.at_word("at")
         ):
             stream.reset(mark)
             return extra

@@ -32,6 +32,7 @@ from ._common import (
     is_mana_value_x,
 )
 from ._events import (
+    _RECORDED_PERMANENTS,
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_PLAYER,
     binds_block_pair,
@@ -79,9 +80,10 @@ def _lower_destroy(
     node: ast.Destroy,
     event: str | None = None,
     event_subject: object | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     if node.delay:
-        return _lower_delayed_destroy(node, event, event_subject)
+        return _lower_delayed_destroy(node, event, event_subject, produced)
     if not isinstance(node.subject, ast.TargetSpec):
         raise LoweringError("destroy needs an object target", node=node)
     spec = node.subject
@@ -413,6 +415,7 @@ def _lower_delayed_destroy(
     node: ast.Destroy,
     event: str | None,
     event_subject: object | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"…destroy that creature at end of combat." (Thicket Basilisk, Cockatrice.)
 
@@ -421,7 +424,19 @@ def _lower_delayed_destroy(
     the subject is. Under any other trigger the same sentence names a creature
     nobody recorded, and the handler would destroy nothing while the card
     reported as supported.
+
+    **The other printing of the same delay is an activated ability's tail**:
+    "Target creature you control can't be blocked this turn. Destroy it and
+    this creature at end of combat." (Goblin Sappers.) No trigger has fired, so
+    there is no pair to read — the sentence names what the step in front of it
+    chose, and what it lowers to is CR 603.7's delayed ability rather than the
+    block-pair handler. Read first, because its two subjects ("it", the source)
+    are ones the pair reading refuses anyway, and refusing them here with the
+    producer named is the more useful failure.
     """
+    delayed = _lower_activated_delayed_destroy(node, produced)
+    if delayed is not None:
+        return delayed
     if not binds_block_pair(event, event_subject):
         raise LoweringError(
             "a delayed destroy at end of combat only has a handler on a "
@@ -455,6 +470,78 @@ def _lower_delayed_destroy(
     if filt.subtypes:
         payload["subtype_filter"] = filt.subtypes[0]
     return (OracleInstruction("delayed_destroy_blocked_or_blocker", "", payload),)
+
+
+def _lower_activated_delayed_destroy(
+    node: ast.Destroy, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...] | None:
+    """"…Destroy it [and this creature] at end of combat." (Goblin Sappers.)
+
+    Returns None — the caller falls through to the block-pair reading — unless
+    the subject is one of the two this shape names.
+
+    **"It" is gated on a producer**, and that gate is the whole of the card's
+    correctness. `parse_recipient` reads a bare "it" as the ability's own
+    source, so with nothing recorded the Sappers' first ability would arm two
+    delayed destructions of the Sappers and never touch the creature it made
+    unblockable — a card that compiles, resolves, logs, and does the wrong
+    thing. The producer is the record the step in front wrote
+    (`_RECORDED_PERMANENTS`); the entry then binds the ability's chosen target,
+    which for a one-target ability is the same permanent by construction.
+
+    **"This creature" needs no producer** and takes no binding: CR 603.7d
+    freezes the creating ability's source into the entry, and `destroy_self`
+    reads it back. That is why the two subjects lower to two different inner
+    instructions rather than one with a flag — an entry that bound nothing and
+    then destroyed "the bound object" would destroy nothing at all.
+
+    `no_regen` refuses, for `_lower_delayed_destroy`'s reason one screen down:
+    neither inner handler is asked to bypass regeneration here, and a clause
+    read and dropped is a creature that regenerates from a card that says it
+    cannot.
+    """
+    spec = node.subject
+    if not isinstance(spec, ast.TargetSpec):
+        return None
+    # The pronoun is read **before** the self-reference, and the order is the
+    # card: `parse_recipient` gives a bare "it" the same `is_source` filter a
+    # card naming itself gets, and tells them apart by the quantifier alone. Put
+    # the other way round, "Destroy it and this creature" arms two destructions
+    # of the Sappers and leaves the unblockable creature alone — the card
+    # compiling, resolving, logging, and doing the wrong thing.
+    if spec.quantifier == "it":
+        if not spec.filter.is_source:
+            # A rebound pronoun (an "it" the parser pointed at a trigger's
+            # event subject) is not this shape: the referent is the event's,
+            # not an earlier step's.
+            return None
+        if _RECORDED_PERMANENTS.isdisjoint(produced):
+            raise LoweringError(
+                "\"it\" names the permanent an earlier step of this effect "
+                "chose, and no step here recorded one",
+                node=node,
+            )
+        inner = OracleInstruction("destroy_bound_permanent", "", {})
+    elif _is_source(spec):
+        inner = OracleInstruction("destroy_self", "", {})
+    else:
+        return None
+    if node.no_regen:
+        raise LoweringError(
+            "the end-of-combat destroy handler does not bypass regeneration",
+            node=node,
+        )
+    return (
+        OracleInstruction("create_delayed_trigger", "", {
+            "event": "next_end_of_combat",
+            "instruction": inner,
+            # CR 603.7b: "at end of combat" names one moment, so the ability
+            # fires once and expires with the turn if that moment never comes.
+            "once": True,
+            "duration": "end_of_turn",
+            **({"binds_target": True} if inner.kind == "destroy_bound_permanent" else {}),
+        }),
+    )
 
 
 def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleInstruction, ...]:
