@@ -13,9 +13,11 @@ from ..auras import aura_restriction_active
 from ..replacements import apply_replacements
 from ..subject_filters import subject_matches
 from ..handlers.board_misc import LAND_TYPE_UNTIL_UNTAP
-from ..handlers.tapping import UNTAP_LOCK_WHILE_TAPPED_KEY
+from ..handlers.tapping import (UNTAP_BLOCKED_WHILE_COUNTERS_KEY,
+                                UNTAP_LOCK_WHILE_TAPPED_KEY)
 from ..land_types import end_land_type_changes_from
 from ..control import LINKED_CONTROL_CONDITIONS
+from ..named_counters import counters_on
 from ..turn_state import record_turn_start_states
 from ..turn_state import attacked_during_seats_last_turn
 from ..untap_restrictions import (
@@ -58,8 +60,6 @@ def _self_untap_blocked(game, permanent, seat: int) -> bool:
     "your last turn" name — so the attack condition is ordinal arithmetic
     against that seat's own turn counter rather than against the game's.
     """
-    from ..named_counters import counters_on
-
     blocked = False
     for line in (permanent.effective_card.oracle_text or "").splitlines():
         if SELF_DOESNT_UNTAP_PHRASE not in line.lower():
@@ -295,6 +295,21 @@ class UntapStepMixin:
             # more of a player's permanents from untapping". Cleared below, for
             # this step whether or not it kept anything tapped.
             if permanent.metadata.get("skip_next_untap"):
+                continue
+
+            # "…doesn't untap during its controller's untap step **for as
+            # long as it has a paralyzation counter on it**." (Dread Wight.)
+            # The condition is a fact about this permanent, so the record
+            # travels with it — and it is the counter's *name* rather than a
+            # flag, because the restriction has no end date (CR 611.2b) and
+            # lapses of itself the moment the last such counter comes off.
+            # Nothing clears it; this read is the whole enforcement.
+            if any(
+                counters_on(permanent, str(counter)) > 0
+                for counter in (
+                    permanent.metadata.get(UNTAP_BLOCKED_WHILE_COUNTERS_KEY) or ()
+                )
+            ):
                 continue
 
             # "…doesn't untap during its controller's untap step for as long as

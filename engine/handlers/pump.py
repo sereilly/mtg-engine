@@ -1111,7 +1111,26 @@ def grant_target_ability_text(game: Game, instruction: OracleInstruction, contex
     the reason recorded on ``grant_target_keyword_until_eot`` above: a picker
     and a resolution that disagree are a target the player may announce and the
     effect then declines to affect.
+
+    "Each of **those creatures** gains …" (Dread Wight) is the same grant over
+    a set an earlier step of this effect recorded, by id — not a target, so
+    there is no picker and no noun phrase to re-check: CR 611.2c fixed the set
+    when the effect began and the record *is* that set. A permanent that left
+    in between is a new object when it returns (CR 400.7) and simply misses the
+    grant; an empty record is a legal outcome rather than an error.
     """
+    recorded_key = instruction.payload.get("permanents_from")
+    if recorded_key is not None:
+        granted = 0
+        for permanent_id in (context.results or {}).get(str(recorded_key)) or ():
+            permanent = game.permanent_by_id(permanent_id)
+            if permanent is None:
+                continue
+            _grant_ability_texts(game, permanent, instruction, context)
+            granted += 1
+        if not granted:
+            game.log.append(f"{context.card.name}: nothing was left to grant to")
+        return True, "resolved"
     target_creature = resolve_target_permanent(
         game, context, predicate=_target_grant_predicate(game, instruction, context)
     )

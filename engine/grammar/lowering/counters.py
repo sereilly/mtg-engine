@@ -498,6 +498,46 @@ def _lower_put_counter(
                 {"counter": node.counter},
             ),
         )
+    # "Put a paralyzation counter on **each creature blocking or blocked by
+    # this creature**." (Dread Wight.) The CR 122.1 marker of the two branches
+    # above, on a set named by a combat relation to the ability's own source
+    # (CR 509) rather than by any characteristic its members carry — the same
+    # subject `destroy_creatures_in_combat_with_source` (Abu Ja'far) and
+    # `grant_keyword_to_creatures_in_combat_with_source` (Spitting Slug) act on,
+    # so it is the third member of that family rather than a shape of its own.
+    #
+    # Nothing is described for a picker: the relation is not a filter any
+    # candidate answers, and there is no choice to make. The gates are the two
+    # its siblings use — a narrowing beyond the card type would be carried and
+    # dropped, which would mark a strictly larger set than the card names.
+    if (
+        not is_pt_counter(node.counter)
+        and not node.up_to
+        and isinstance(node.subject, ast.TargetSpec)
+        and not node.subject.targeted
+        and node.subject.quantifier in ("all", "each")
+        and node.subject.filter.in_combat_with_source
+    ):
+        leftover = _restrictions_beyond(
+            node.subject.filter,
+            frozenset({"card_types", "in_combat_with_source"}),
+        )
+        if leftover or node.subject.filter.card_types != ("creature",):
+            raise LoweringError(
+                "the combat-pair counter placement reads creatures in combat "
+                "with its source and nothing narrower",
+                node=node,
+            )
+        if not isinstance(node.count, ast.Fixed):
+            raise LoweringError(
+                "a named counter is placed a fixed number at a time", node=node
+            )
+        return (
+            OracleInstruction(
+                "add_named_counter_to_creatures_in_combat_with_source", "",
+                {"counter": node.counter, "count": node.count.value},
+            ),
+        )
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)
     if isinstance(node.count, ast.ThatMuch) and _is_source(node.subject):

@@ -489,6 +489,40 @@ def _tap_several_targets(
     return True, "resolved"
 
 
+@effect_handler("tap_recorded_permanents")
+def tap_recorded_permanents(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…put a paralyzation counter on each creature blocking or blocked by
+    this creature and tap **those creatures**." (Dread Wight.)
+
+    Neither a sweep nor a choice: the set is whatever an earlier step of this
+    same effect recorded (CR 611.2c fixed it when the effect began), and the
+    record is the only place it can be read from — the sentence in front of
+    this one named its creatures by a combat relation, and this trigger
+    resolves in the step where CR 511.2 takes every creature out of combat.
+
+    By id, because a permanent may have left in between: a returning one is a
+    new object (CR 400.7) and this effect never named it, so it is simply not
+    tapped. An empty record is a legal outcome, not an error.
+    """
+    recorded = (context.results or {}).get(
+        str(instruction.payload.get("permanents_from", ""))
+    ) or ()
+    tapped = []
+    for permanent_id in recorded:
+        permanent = game.permanent_by_id(permanent_id)
+        if permanent is None or permanent.tapped:
+            continue
+        # Through ``become_tapped``, so everything that must happen when a
+        # permanent becomes tapped happens — the same reason ``tap_self`` does.
+        game.become_tapped(permanent)
+        tapped.append(permanent.card.name)
+    game.log.append(
+        f"{context.card.name} tapped {', '.join(tapped)}"
+        if tapped else f"{context.card.name}: nothing was left to tap"
+    )
+    return True, "resolved"
+
+
 @effect_handler("skip_next_untap")
 def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Those creatures don't untap during their controller's next untap step."
@@ -750,5 +784,56 @@ def restrict_untap_while_source_tapped(game: Game, instruction: OracleInstructio
     source.metadata[UNTAP_LOCK_WHILE_TAPPED_KEY] = target.permanent_id
     game.log.append(
         f"{target.card.name} won't untap while {context.card.name} remains tapped"
+    )
+    return True, "resolved"
+
+
+#: The counters whose presence keeps a permanent from untapping, recorded on the
+#: **restricted** permanent rather than on the source — the condition is a fact
+#: about it ("for as long as **it** has a paralyzation counter on it", Dread
+#: Wight), so the record has to travel with it and the source may be long gone.
+#:
+#: A tuple of counter names, not one, because two effects may hold the same
+#: permanent under two different counters and the restriction ends only when
+#: *neither* is on it any more. Written here and read by
+#: ``engine/phases/untap_step.py``; one name for the same reason
+#: :data:`UNTAP_LOCK_WHILE_TAPPED_KEY` has one.
+UNTAP_BLOCKED_WHILE_COUNTERS_KEY = "untap_blocked_while_counters"
+
+
+@effect_handler("restrict_untap_while_counter")
+def restrict_untap_while_counter(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each of those creatures doesn't untap during its controller's untap
+    step **for as long as it has a paralyzation counter on it**." (Dread
+    Wight.)
+
+    A continuous effect with no end date (CR 611.2b), so nothing clears it: the
+    untap step re-asks the condition every turn and the restriction lapses of
+    itself when the last counter comes off — which is what the ability the same
+    card grants is for. That is why the counter's *name* is recorded rather
+    than a flag: a flag would freeze the creature for the rest of the game,
+    which is the exact trap ``self_untap_counter_condition`` was written to
+    avoid one file over.
+
+    The set is whatever an earlier step of this effect recorded, by id — a
+    permanent that left is a new object when it returns (CR 400.7) and carries
+    neither the counter nor the restriction.
+    """
+    counter = str(instruction.payload.get("counter", ""))
+    recorded = (context.results or {}).get(
+        str(instruction.payload.get("permanents_from", ""))
+    ) or ()
+    marked = []
+    for permanent_id in recorded:
+        permanent = game.permanent_by_id(permanent_id)
+        if permanent is None:
+            continue
+        held = tuple(permanent.metadata.get(UNTAP_BLOCKED_WHILE_COUNTERS_KEY) or ())
+        if counter not in held:
+            permanent.metadata[UNTAP_BLOCKED_WHILE_COUNTERS_KEY] = held + (counter,)
+        marked.append(permanent.card.name)
+    game.log.append(
+        f"{', '.join(marked)} won't untap while holding a {counter} counter"
+        if marked else f"{context.card.name}: nothing was held down"
     )
     return True, "resolved"

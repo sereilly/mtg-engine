@@ -378,6 +378,19 @@ class ReturnToZone:
     # text, which CR 603.6d makes a static ability, and this permanent is not
     # printed with one.
     entering_tapped: bool = False
+    # "Return target … creature card from your graveyard to the battlefield.
+    # … **If the creature would leave the battlefield, exile it instead of
+    # putting it anywhere else.**" (Dreams of the Dead.) A CR 614 replacement
+    # armed on the permanent this move creates.
+    #
+    # A field on the move rather than a statement of its own, for the reason
+    # ``gains`` beside it is one: the permanent does not exist until this step
+    # runs, so an independent instruction would have nothing to arm — and what
+    # it arms is not a target anything chose, since this ability's target is a
+    # *card* in a graveyard. The parse folds the sentence in
+    # (``pronouns._parse_exile_instead_of_leaving_rider``), which is where the
+    # keyword grant after a reanimation is already folded.
+    exile_on_leave: bool = False
     # "…to the battlefield **under the control of that creature's owner**."
     # (Reincarnation.) CR 110.2: a permanent enters under the control of the
     # spell's controller unless the effect says otherwise, and this is an
@@ -641,6 +654,28 @@ class DoesntUntapWhileSourceTapped:
     step at all.
     """
     subject: Recipient
+
+
+@dataclass(frozen=True)
+class DoesntUntapWhileCounter:
+    """``<subject> doesn't untap during its controller's untap step **for as
+    long as it has a <name> counter on it**.`` (Dread Wight.)
+
+    The third member of the family :class:`DoesntUntapNextStep` and
+    :class:`DoesntUntapWhileSourceTapped` make, and a sibling rather than
+    either of them with a field, because what ends the restriction is the whole
+    difference: Frost Breath's expires by being spent at the *next* untap step,
+    Phyrexian Gremlins' when the source untaps, and this one when the marked
+    permanent no longer carries the counter — a condition about the restricted
+    permanent itself, which is what makes it removable by the very ability the
+    same card grants.
+
+    ``counter`` is the counter's printed name (CR 122.1), payload for the
+    reason every printed word in this family is one: a card saying "paralysis"
+    is the same restriction and must need no second node.
+    """
+    subject: Recipient
+    counter: str
 
 
 @dataclass(frozen=True)

@@ -48,6 +48,7 @@ from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
                        _attach_sacrifice_when_control_lost,
                        _parse_conditional_pronoun_grant_rider,
                        _parse_conditional_quoted_grant_rider,
+                       _parse_exile_instead_of_leaving_rider,
                        _parse_pronoun_grant_rider, _parse_pronoun_verb_rider)
 from .riders import (_attach_destroyed_this_way, _attach_exchanged_this_way, _attach_if_that_card_was_returned, _attach_if_you_cant, _attach_if_you_do, _attach_otherwise, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .phrases import accept_member_state_clause
@@ -461,6 +462,12 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             who_cant = _parse_who_cant_rider(stream, steps)
             if who_cant is not None:
                 steps.append(who_cant)
+                continue
+            # "If the creature would leave the battlefield, exile it instead
+            # of putting it anywhere else." (Dreams of the Dead.) Read before
+            # the two "instead" riders below, whose own openings would consume
+            # the "if" and rewind — leaving this sentence to fail the line.
+            if _parse_exile_instead_of_leaving_rider(stream, steps) is not None:
                 continue
             if _parse_exile_instead_rider(stream, steps):
                 continue

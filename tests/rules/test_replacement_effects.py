@@ -5,7 +5,8 @@ Covers:
   614.1 — Definition and categories of replacement effects
   614.4 — Replacement effects must exist before the event
   614.5 — A replacement effect doesn't invoke itself repeatedly
-  614.6 — A replaced event never happens
+  614.6 — A replaced event never happens, at each destination a permanent
+          leaving the battlefield can reach
   614.7 — If the event never happens, the replacement does nothing
   614.7a — 0-damage source has no event to replace
   614.8 — Regeneration as a destruction-replacement effect
@@ -967,3 +968,109 @@ def test_614_1c_a_rider_the_seam_cannot_perform_refuses_the_whole_line():
     # "This artifact enters tapped" belongs to engine/enter_effects.py — the
     # permanent's own entry state, read off its own text.
     assert enter_tapped_static_for("this artifact enters tapped") is None
+
+
+# ---------------------------------------------------------------------------
+# 614.6 — a permanent leaving the battlefield, at each destination it can reach
+# ---------------------------------------------------------------------------
+#
+# The engine's other battlefield-exit replacement is ``would_die``, and it fires
+# from the graveyard transition alone. "If [this] would leave the battlefield,
+# exile it instead of putting it anywhere else" is the wider event: a permanent
+# leaves for a graveyard, a hand, a library or an exile, and only the first of
+# those reaches ``_permanent_to_graveyard``. So the event is fired at each
+# destination, and these tests are the rule rather than the card — nothing here
+# names Dreams of the Dead, which is what arms it in play.
+
+
+def _leaving_permanent():
+    from engine.replacements import EXILE_ON_LEAVING_BATTLEFIELD
+
+    permanent = Permanent(card=_mk_card("Borrowed Body", "Creature — Zombie", ""))
+    permanent.metadata[EXILE_ON_LEAVING_BATTLEFIELD] = True
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[permanent]),
+        PlayerState(name="P2"),
+    ])
+    return game, game.players[0], permanent
+
+
+@pytest.mark.cr("614.6", "614.1a")
+def test_614_6_a_replaced_move_to_a_graveyard_never_happens():
+    """The destination ``would_die`` already covers, reached through the wider
+    event: the card is in exile and the graveyard is empty, so nothing that
+    watches a death saw one."""
+    game, player, permanent = _leaving_permanent()
+
+    game._permanent_to_graveyard(player, permanent)
+    game.remove_from_battlefield(permanent)
+
+    assert [card.name for card in player.graveyard] == []
+    assert [card.name for card in player.exile] == ["Borrowed Body"]
+
+
+@pytest.mark.cr("614.6")
+def test_614_6_a_replaced_move_to_a_hand_never_happens():
+    """The destination a "would die" reading misses entirely."""
+    game, player, permanent = _leaving_permanent()
+
+    arrived = game.put_card_into_hand(
+        player, permanent.card, from_battlefield=permanent
+    )
+    game.remove_from_battlefield(permanent)
+
+    assert arrived is False, "the seam reports that no card reached the hand"
+    assert [card.name for card in player.hand] == []
+    assert [card.name for card in player.exile] == ["Borrowed Body"]
+
+
+@pytest.mark.cr("614.6")
+def test_614_6_a_replaced_move_to_a_library_never_happens():
+    game, player, permanent = _leaving_permanent()
+
+    arrived = game.put_card_into_library(
+        player, permanent.card, "top", from_battlefield=permanent
+    )
+    game.remove_from_battlefield(permanent)
+
+    assert arrived is False
+    assert player.library == []
+    assert [card.name for card in player.exile] == ["Borrowed Body"]
+
+
+@pytest.mark.cr("614.7")
+def test_614_7_a_move_that_is_not_a_battlefield_exit_is_not_replaced():
+    """CR 614.7: the effect watches for one event, and a card going to a hand
+    from somewhere other than the battlefield is not it. The seam is told which
+    permanent is leaving, and told nothing when none is."""
+    game, player, permanent = _leaving_permanent()
+
+    arrived = game.put_card_into_hand(player, permanent.card)
+
+    assert arrived is True
+    assert [card.name for card in player.hand] == ["Borrowed Body"]
+    assert player.exile == []
+
+
+@pytest.mark.cr("614.6", "111.7")
+def test_614_6_a_token_has_no_card_for_the_replacement_to_exile():
+    """CR 111.7: a token that leaves the battlefield ceases to exist, so there
+    is nothing for "exile it instead" to move.
+
+    Refused in the *applicability* predicate rather than in the body, because
+    CR 616.1 counts the effects in contention before running any of them — an
+    effect that could not be carried out must not be one of them. The zone seam
+    stops a token card of its own accord as well, which is the belt this is the
+    braces for.
+    """
+    from engine.replacements import (EXILE_ON_LEAVING_BATTLEFIELD,
+                                     _applies_exile_instead_of_leaving)
+
+    game, player, permanent = _leaving_permanent()
+    permanent.metadata["is_token"] = True
+
+    assert permanent.metadata[EXILE_ON_LEAVING_BATTLEFIELD] is True
+    assert not _applies_exile_instead_of_leaving(
+        game, {"permanent": permanent, "player": player, "destination": "hand"}
+    )
+    assert player.exile == []

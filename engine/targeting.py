@@ -341,7 +341,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "exile_creature_gain_life_equal_to_power": {"kind": "creature"},
     "bounce_target_creature": {"kind": "creature"},
     "phase_out_target_creature_until_source_leaves": {"kind": "creature"},
-    "reanimate_creature": {"kind": "graveyard_creature", "own_graveyard_only": True},
     "exchange_ante_with_top_library": {"kind": "none"},
     # Dream Coat: "Enchanted creature becomes the color or colors of your
     # choice." The *permanent* is not chosen — an Aura's ability acts on its
@@ -796,7 +795,28 @@ def _cast_permission_spec(payload: dict) -> dict | None:
         spec["card_types"] = list(card_types)
     colors = tuple(payload.get("colors") or ())
     if colors:
-        spec["graveyard_color_filter"] = colors[0]
+        # Every printed colour, not the first: "white or black" is a union
+        # (CR 105.2b), and offering only the first silently takes half the
+        # legal choices away.
+        spec["graveyard_colors"] = list(colors)
+    return spec
+
+
+def _reanimation_spec(payload: dict) -> dict:
+    """"Return target creature card from your graveyard to the battlefield",
+    narrowed by the colours the phrase prints (Dreams of the Dead's "white or
+    black").
+
+    Derived rather than a fixed dict for :func:`_graveyard_return_spec`'s
+    reason: the handler re-checks the same narrowing against the same predicate
+    (``graveyard_card_matches``), so a picker that offered more would be
+    offering choices the resolution then declines — and one that offered fewer
+    would take a legal choice away.
+    """
+    spec: dict = {"kind": "graveyard_creature", "own_graveyard_only": True}
+    colors = tuple(payload.get("colors") or ())
+    if colors:
+        spec["graveyard_colors"] = list(colors)
     return spec
 
 
@@ -876,6 +896,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # then done to it.
     "redirect_damage_from_target_spell_until_eot": _counter_spec,
     "return_creature_from_graveyard_to_hand": _graveyard_return_spec,
+    "reanimate_creature": _reanimation_spec,
     "exile_target_graveyard_card": _graveyard_exile_spec,
     "grant_prevention_shield": _prevention_shield_spec,
     "set_base_pt_target_until_eot": _set_base_pt_spec,

@@ -1333,8 +1333,32 @@ class EffectsMixin:
         caster: PlayerState,
         target: PlayerState | None = None,
         target_permanent_index: int | None = None,
-    ) -> bool:
+        card_filter=None,
+    ) -> "Permanent | None":
+        """Put one creature card from a graveyard onto *caster*'s battlefield.
+
+        Returns the arriving :class:`Permanent`, or None when there was none to
+        return. **The object, not a boolean**: the sentences a card prints after
+        its reanimation are about the permanent that just arrived ("that
+        creature gains …", "if the creature would leave the battlefield …"), and
+        the permanent does not exist until this runs — so this is the one place
+        that can say which one it is. Reading it back as "the newest arrival on
+        the caster's battlefield" is a guess that an enters-trigger creating a
+        token makes wrong.
+
+        *card_filter* is the printed noun phrase narrowing which card may come
+        back ("target **white or black** creature card", Dreams of the Dead),
+        applied here as well as at announcement for the reason every filter is
+        applied twice: a picker and a resolution that disagree are a target the
+        player may announce and the effect then declines to affect.
+        """
         controller_index = self.players.index(caster)
+
+        def eligible(card) -> bool:
+            if card.primary_type != "creature":
+                return False
+            return card_filter is None or card_filter(card)
+
         # "Return target creature card from your graveyard" (Resurrection): honor the
         # creature the caster chose (Rule 601.2c) instead of always grabbing the
         # first one. target is the graveyard's owner; for Resurrection that is the
@@ -1343,18 +1367,20 @@ class EffectsMixin:
         if (
             isinstance(target_permanent_index, int)
             and 0 <= target_permanent_index < len(source.graveyard)
-            and source.graveyard[target_permanent_index].primary_type == "creature"
+            and eligible(source.graveyard[target_permanent_index])
         ):
             revived = source.graveyard.pop(target_permanent_index)
-            self._put_permanent_onto_battlefield(controller_index, Permanent(card=revived), None)
-            return True
+            arrival = Permanent(card=revived)
+            self._put_permanent_onto_battlefield(controller_index, arrival, None)
+            return arrival
         # Fallback (AI / legacy callers with no explicit choice): first creature.
         for idx, card in enumerate(caster.graveyard):
-            if card.primary_type == "creature":
+            if eligible(card):
                 revived = caster.graveyard.pop(idx)
-                self._put_permanent_onto_battlefield(controller_index, Permanent(card=revived), None)
-                return True
-        return False
+                arrival = Permanent(card=revived)
+                self._put_permanent_onto_battlefield(controller_index, arrival, None)
+                return arrival
+        return None
 
     def _bounce_target_creature(
         self, target: PlayerState, target_permanent_index: int | None = None
@@ -1368,8 +1394,14 @@ class EffectsMixin:
         # (they differ when the creature was stolen, e.g. by Control Magic).
         owner_idx = self.owner_index_of(chosen)
         owner = self.players[owner_idx] if owner_idx is not None else target
-        self.put_card_into_hand(owner, chosen.card)
-        if owner_idx is not None:
+        # Only when it actually arrived: the seam answers False for a token, a
+        # commander diverted to the command zone and a CR 614 replacement that
+        # sent the card elsewhere, and none of those is a permanent put into a
+        # hand from the battlefield.
+        arrived = self.put_card_into_hand(
+            owner, chosen.card, from_battlefield=chosen
+        )
+        if arrived and owner_idx is not None:
             self.permanents_to_hand_this_turn[owner_idx] = (
                 self.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
             )

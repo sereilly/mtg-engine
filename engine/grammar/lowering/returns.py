@@ -712,8 +712,37 @@ def _lower_return_to_zone(
     # stronger question than a hand-kept list of exceptions to this one, which
     # is what it used to be (``excluded_subtypes``, ``other_than_source``,
     # ``controller``, ``excluded_types``, stripped before asking).
-    if node.from_zone is not None and _reads_no_return_restriction(filt):
+    # "Return target **white or black** creature card from your graveyard to
+    # the battlefield." (Dreams of the Dead.) The one adjective the reanimation
+    # *does* read: it travels as ``colors`` on the payload, and the picker, the
+    # activation gate and the handler all test it through the one predicate
+    # (``graveyard_card_matches``). Lifted out of the blanket refusal here
+    # rather than weakened inside it, so every other zone-change handler keeps
+    # refusing every adjective — none of them reads one.
+    gated = filt
+    if (
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name == "battlefield"
+        and filt.colors
+    ):
+        gated = dataclasses.replace(filt, colors=())
+    if node.from_zone is not None and _reads_no_return_restriction(gated):
         raise LoweringError("no return handler honours this restriction", node=node)
+    # The leave-the-battlefield rider is armed by exactly one handler (the
+    # reanimation below). Every other move here would carry the word and do
+    # nothing with it, and this rider is a *drawback* — dropped, the card is
+    # strictly better than the one printed, which is the one direction a
+    # dropped rider must never fail in.
+    if node.exile_on_leave and not (
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name == "battlefield"
+    ):
+        raise LoweringError(
+            "only a reanimation arms the leave-the-battlefield replacement",
+            node=node,
+        )
 
     source, destination = node.from_zone, node.to
 
@@ -745,7 +774,19 @@ def _lower_return_to_zone(
             # here: claiming it would silently narrow the player's choice.
             if filt.card_types != ("creature",):
                 raise LoweringError("the reanimation handler only moves creature cards", node=node)
-            return (OracleInstruction("reanimate_creature", "", {}),)
+            # A printed colour narrowing rides the payload; a card with none
+            # keeps emitting the empty payload byte for byte.
+            payload: dict[str, object] = (
+                {"colors": tuple(filt.colors)} if filt.colors else {}
+            )
+            # "…**If the creature would leave the battlefield, exile it instead
+            # of putting it anywhere else.**" (Dreams of the Dead.) Folded onto
+            # the move by the parse, because the permanent it applies to does
+            # not exist until this instruction runs — the same reason the
+            # keyword grant after a reanimation folds.
+            if node.exile_on_leave:
+                payload["exile_on_leave"] = True
+            return (OracleInstruction("reanimate_creature", "", payload),)
 
         raise LoweringError(f"no handler moves a card to the {destination.name}", node=node)
 

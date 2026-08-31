@@ -984,3 +984,208 @@ def test_w3g2_a_permanent_records_the_turn_it_entered(set_pool):
 
     assert not game.entered_this_turn(arriving)
 # --- end W3G2 ---
+
+
+# --- W4G1: a counter on a combat pair, and the three sentences that read it ---
+#
+# Dread Wight. "At end of combat, put a paralyzation counter on each creature
+# blocking or blocked by this creature and tap those creatures. Each of those
+# creatures doesn't untap during its controller's untap step for as long as it
+# has a paralyzation counter on it. Each of those creatures gains "{4}: Remove
+# a paralyzation counter from this creature.""
+#
+# Four steps under one trigger, three of which name a set the first one chose.
+# Nothing here is card-name-keyed: the counter placement joins the two
+# productions that already read "blocking or blocked by" (Abu Ja'far's
+# destruction, Spitting Slug's keyword grant), and the three readers take the
+# set out of the resolution scratchpad the way Frost Breath's untap marker and
+# Winter Blast's damage already do.
+
+
+def _w4g1_dread_wight_board(set_pool, blocker_name: str = "Glacial Wall"):
+    """The Wight attacking into one blocker, with an uninvolved creature beside
+    it. *blocker_name* defaults to a 0/7 so the pair survives the damage step —
+    the point of the card is what happens to a creature that lives through it.
+    """
+    pool = set_pool("ICE")
+    wight = _nosick(Permanent(card=pool["Dread Wight"]))
+    blocker = _nosick(Permanent(card=pool[blocker_name]))
+    bystander = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[wight], life=20)
+    p2 = PlayerState(name="P2", battlefield=[blocker, bystander], life=20)
+    game = Game(players=[p1, p2])
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, msg = game.declare_attackers(0, [0], 1)
+    assert ok, msg
+    game._set_phase_and_step("combat", "declare_blockers")
+    ok, msg = game.declare_blockers(1, {0: [0]})
+    assert ok, msg
+    game._set_phase_and_step("combat", "combat_damage")
+    game.resolve_combat_damage(0)
+    game._settle()
+    return game, wight, blocker, bystander
+
+
+def test_w4g1_dread_wight_compiles_all_four_steps(set_pool):
+    """One trigger, four instructions, and three of them read the set the
+    first one recorded — the producer key rather than a second target."""
+    program = compile_card_oracle(set_pool("ICE")["Dread Wight"])
+
+    assert program.supported
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "end_of_combat"
+    assert trigger.instruction.kind == "sequence"
+    steps = trigger.instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "add_named_counter_to_creatures_in_combat_with_source",
+        "tap_recorded_permanents",
+        "restrict_untap_while_counter",
+        "grant_target_ability_text",
+    ]
+    recorded = "permanents_given_counters"
+    assert steps[0].payload == {"counter": "paralyzation", "count": 1}
+    assert steps[1].payload == {"permanents_from": recorded}
+    assert steps[2].payload == {
+        "counter": "paralyzation", "permanents_from": recorded,
+    }
+    # The grant carries no ``targets`` description: the set was chosen by the
+    # sentence in front of it, and describing it again would ask for a target
+    # the card never offers.
+    assert "targets" not in steps[3].payload
+    assert steps[3].payload["permanents_from"] == recorded
+    assert steps[3].payload["abilities"] == (
+        "{4}: Remove a paralyzation counter from this creature",
+    )
+
+
+def test_w4g1_dread_wight_marks_and_taps_the_creature_that_blocked_it(set_pool):
+    """The whole first sentence, against a board with an uninvolved creature on
+    it: the relation is the set, not "every creature that player controls"."""
+    game, _wight, blocker, bystander = _w4g1_dread_wight_board(set_pool)
+
+    game.end_combat(step_already_started=False)
+    game._settle()
+
+    assert counters_on(blocker, "paralyzation") == 1
+    assert blocker.tapped
+    assert counters_on(bystander, "paralyzation") == 0
+    assert not bystander.tapped
+
+
+def test_w4g1_dread_wight_keeps_the_marked_creature_tapped(set_pool):
+    """The second sentence. The restriction has no end date (CR 611.2b): the
+    untap step re-asks whether the counter is there, so the creature stays down
+    turn after turn while it is."""
+    game, _wight, blocker, bystander = _w4g1_dread_wight_board(set_pool)
+    game.end_combat(step_already_started=False)
+    game._settle()
+    bystander.tapped = True
+
+    game.turn += 1
+    game.active_player_index = 1
+    game.resolve_untap_step(1)
+
+    assert blocker.tapped, "the paralyzation counter holds it down"
+    assert not bystander.tapped, "an unmarked creature untaps as normal"
+
+    # And again the turn after, because nothing spends the restriction.
+    game.turn += 2
+    game.resolve_untap_step(1)
+
+    assert blocker.tapped
+
+
+def test_w4g1_removing_the_counter_releases_the_creature(set_pool):
+    """The third sentence closing the loop on the second: the granted ability
+    is what ends the restriction, and it ends it by taking the counter off
+    rather than by clearing any marker."""
+    game, _wight, blocker, _bystander = _w4g1_dread_wight_board(set_pool)
+    game.end_combat(step_already_started=False)
+    game._settle()
+
+    granted = compile_card_oracle(blocker.effective_card)
+    assert [ability.source_line for ability in granted.activated_abilities] == [
+        "{4}: Remove a paralyzation counter from this creature"
+    ]
+
+    game.players[1].mana_pool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 4}
+    game.activate_permanent_ability(1, "Glacial Wall")
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+    assert counters_on(blocker, "paralyzation") == 0
+
+    game.turn += 1
+    game.active_player_index = 1
+    game.resolve_untap_step(1)
+
+    assert not blocker.tapped, "with the counter gone the restriction lapses"
+
+
+def test_w4g1_dread_wight_marks_the_creature_it_blocked(set_pool):
+    """The other half of "blocking or blocked by", with the Wight as blocker —
+    and the reading that the capture exists for: this trigger resolves in the
+    priority window at the end of the end-of-combat step, by which time CR
+    511.2 has taken every creature out of combat."""
+    pool = set_pool("ICE")
+    wight = _nosick(Permanent(card=pool["Dread Wight"]))
+    attacker = _nosick(Permanent(card=pool["Scaled Wurm"]))
+    p1 = PlayerState(name="P1", battlefield=[attacker], life=20)
+    p2 = PlayerState(name="P2", battlefield=[wight], life=20)
+    game = Game(players=[p1, p2])
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, msg = game.declare_attackers(0, [0], 1)
+    assert ok, msg
+    game._set_phase_and_step("combat", "declare_blockers")
+    ok, msg = game.declare_blockers(1, {0: [0]})
+    assert ok, msg
+
+    game.end_combat(step_already_started=False)
+    game._settle()
+
+    assert counters_on(attacker, "paralyzation") == 1
+    assert attacker.tapped
+
+
+def test_w4g1_dread_wight_out_of_combat_marks_nothing(set_pool):
+    """No relation, no set — the placement must not widen to the board, which
+    is the direction a dropped relation would fail in."""
+    pool = set_pool("ICE")
+    wight = _nosick(Permanent(card=pool["Dread Wight"]))
+    bystander = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[wight], life=20)
+    p2 = PlayerState(name="P2", battlefield=[bystander], life=20)
+    game = Game(players=[p1, p2])
+    game.active_player_index = 0
+
+    game.end_combat(step_already_started=False)
+    game._settle()
+
+    assert counters_on(bystander, "paralyzation") == 0
+    assert not bystander.tapped
+
+
+def test_w4g1_a_bound_plural_with_no_producer_refuses(set_pool):
+    """The gate under all three readers, on invented lines the compiler must
+    refuse: "those creatures" with nothing in front of it names a set nothing
+    recorded, and a lowering that shrugged would compile a card that silently
+    does nothing.
+
+    Invented rather than borrowed from a real card, deliberately: a guard
+    pointed at a printed line stops guarding the day somebody implements it.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import GrammarError, LoweringError
+    from engine.grammar.lower import lower_ability
+
+    for line in (
+        "Tap those creatures.",
+        "Those creatures don't untap during their controller's untap step "
+        "for as long as it has a slumber counter on it.",
+        'Those creatures gain "{1}: This creature gets +1/+0 until end of turn."',
+    ):
+        with pytest.raises((GrammarError, LoweringError)):
+            lower_ability(parse_line(line))
+# --- end W4G1 ---

@@ -84,7 +84,24 @@ class EndOfCombatStepMixin:
         for controller_index, permanent, trig in iter_triggered_abilities(
             self, condition_kinds={"end_of_combat"}
         ):
-            trigger_context = {}
+            # "…creatures blocking or blocked by this creature" (Kjeldoran
+            # Frostbeast's destruction, Dread Wight's counters). CR 509's
+            # relation, captured **for every end-of-combat trigger whether or
+            # not it asks** — the same discipline the dies transition takes with
+            # ``dead_power``, and for a sharper reason here: this batch goes on
+            # the stack now and resolves in the priority window at the *end* of
+            # ``end_combat``, by which time ``_reset_combat_state`` has emptied
+            # the maps the relation reads. It used to be captured for one named
+            # instruction kind, which cannot see a kind nested inside a
+            # ``sequence`` — Dread Wight's counters, tap, untap restriction and
+            # grant are four steps under one — and a fire site that enumerates
+            # kinds is complete only up to the last card that touched it.
+            #
+            # Permanent objects, which is CR 603.10's last-known information and
+            # what the handlers already expect.
+            trigger_context = {
+                "combat_opponents": self.creatures_in_combat_with(permanent),
+            }
             if trig.instruction is not None and trig.instruction.kind == "steal_blockers_of_source":
                 # "all creatures blocking this creature" — CR 611.2c fixes the
                 # set when the effect begins, and this is the last moment the
@@ -101,23 +118,7 @@ class EndOfCombatStepMixin:
                         blocker = self.permanent_at(defending_idx, blocker_idx)
                         if blocker is not None:
                             blocker_ids.append(blocker.permanent_id)
-                trigger_context = {"blocker_ids": tuple(blocker_ids)}
-            elif (
-                trig.instruction is not None
-                and trig.instruction.kind == "destroy_creatures_in_combat_with_source"
-            ):
-                # "At end of combat, destroy all creatures blocking or blocked
-                # by this creature." (Kjeldoran Frostbeast.) The same capture
-                # the dies transition makes for Abu Ja'far's printing of the
-                # sentence, made a step earlier for the same reason: this batch
-                # goes on the stack here and resolves in the priority window at
-                # the *end* of `end_combat`, by which time
-                # `_reset_combat_state` has emptied the maps the relation reads.
-                # Captured as Permanent objects — CR 603.10's last-known
-                # information, and what the handler already expects.
-                trigger_context = {
-                    "combat_opponents": self.creatures_in_combat_with(permanent)
-                }
+                trigger_context["blocker_ids"] = tuple(blocker_ids)
             events.append(
                 make_trigger_event(
                     controller_index, permanent, trig,

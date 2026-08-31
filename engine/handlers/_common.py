@@ -712,8 +712,14 @@ def graveyard_card_matches(spec: dict, card) -> bool:
     # would have gone on being wrong.
     if card_types and not any(card_has_type(card, name) for name in card_types):
         return False
-    color = spec.get("graveyard_color_filter")
-    if color and color not in card.colors:
+    # "target **white or black** creature card" (Dreams of the Dead). A union:
+    # the card answers when it is any one of the printed colours. It was a
+    # single symbol read as ``colors[0]`` off a phrase that could name several,
+    # so a two-colour phrase offered one colour and silently refused the other —
+    # the narrowing this predicate exists to keep honest, in the direction that
+    # takes cards away from the player.
+    colors = spec.get("graveyard_colors")
+    if colors and not any(color in card.colors for color in colors):
         return False
     if card_types or spec.get("any_card"):
         return True

@@ -158,7 +158,9 @@ class EndStepMixin:
                     self.players[owner_index] if owner_index is not None else controller
                 )
                 self.remove_from_battlefield(permanent)
-                self.put_card_into_hand(owner, permanent.card)
+                self.put_card_into_hand(
+                    owner, permanent.card, from_battlefield=permanent
+                )
                 self.log.append(
                     f"{permanent.card.name} returned to {owner.name}'s hand at end step"
                 )

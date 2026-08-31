@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**340 / 612 tracked rules covered (55%)** — 1687 tests, 0 unannotated.
+**340 / 612 tracked rules covered (55%)** — 1692 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -222,7 +222,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **111.4** A spell or ability that creates a token sets both its name and its subtype(s). If the spell or ab... *(2 tests)*
 - [ ] **111.5** If a spell or ability would create a token, but a rule or effect states that a permanent with one...
 - [ ] **111.6** A token is subject to anything that affects permanents in general or that affects the token’s car...
-- [x] **111.7** A token that’s in a zone other than the battlefield ceases to exist. This is a state-based action... *(5 tests)*
+- [x] **111.7** A token that’s in a zone other than the battlefield ceases to exist. This is a state-based action... *(6 tests)*
 - [ ] **111.8** A token that has left the battlefield can’t move to another zone or come back onto the battlefiel...
 - [ ] **111.9** Some effects instruct a player to create a legendary token. These may be written “create [name], ...
 - [x] **111.10** Some effects instruct a player to create a predefined token. These effects use the definition bel... *(2 tests)*
@@ -786,13 +786,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(32 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(33 tests, subrules abcd)*
 - [ ] **614.2** Some replacement effects apply to damage from a source. See rule 609.7.
 - [ ] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re...
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
 - [x] **614.5** A replacement effect doesn’t invoke itself repeatedly; it gets only one opportunity to affect an ... *(5 tests)*
-- [x] **614.6** If an event is replaced, it never happens. A modified event occurs instead, which may in turn tri... *(5 tests)*
-- [x] **614.7** If a replacement effect would replace an event, but that event never happens, the replacement eff... *(4 tests, subrules a)*
+- [x] **614.6** If an event is replaced, it never happens. A modified event occurs instead, which may in turn tri... *(9 tests)*
+- [x] **614.7** If a replacement effect would replace an event, but that event never happens, the replacement eff... *(5 tests, subrules a)*
 - [x] **614.8** Regeneration is a destruction-replacement effect. The word “instead” doesn’t appear on the card b... *(9 tests)*
 - [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(8 tests)*
 - [x] **614.10** An effect that causes a player to skip an event, step, phase, or turn is a replacement effect. “S... *(4 tests, subrules a)*

@@ -187,7 +187,7 @@ from .lowering import (
     _lower_search_library,
     _lower_change_base_pt,
     _lower_set_base_pt,
-    _lower_doesnt_untap_next_step,
+    _lower_untap_restriction,
     _lower_untap_chosen_by_paying,
     _lower_delayed_self_action,
     _lower_damage_reduced_by_paid_mana,
@@ -229,7 +229,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.Pump: _lower_pump,
     ast.SetBasePT: _lower_set_base_pt,
     ast.ChangeBasePT: _lower_change_base_pt,
-    ast.GainAbilityText: _lower_gain_ability_text,
     ast.ReanimateEnchantedCard: _lower_reanimate_enchanted_card,
     ast.GainKeyword: _lower_gain_keyword,
     ast.DoublePower: _lower_double_power,
@@ -405,16 +404,18 @@ def lower_statement(
         # Authority, whose "destroy the other creature at end of combat" is the
         # first of a trigger's *two* sentences and so lowers under a `Sequence`.
         return _lower_destroy(statement, event, event_subject, produced)
-    if isinstance(statement, ast.DoesntUntapNextStep):
-        # `produced` is the whole gate: this sentence acts on what an earlier
-        # step of the same effect recorded, so it refuses when nothing did.
-        return _lower_doesnt_untap_next_step(statement, produced)
+    # In the chain rather than the name-only table, both: each acts on what an
+    # earlier step recorded, and `produced` refuses when nothing did.
+    if isinstance(statement, ast.GainAbilityText):
+        return _lower_gain_ability_text(statement, produced)
+    if isinstance(statement, (ast.DoesntUntapNextStep, ast.DoesntUntapWhileCounter)):
+        return _lower_untap_restriction(statement, produced)
     if isinstance(statement, (ast.Tap, ast.Untap)):
         # The **unfiltered** event, for the same reason `_lower_destroy` takes
         # one: whether a repeated "that <noun>" names the permanent the source
         # is attached to is a fact about the trigger, true of every clause under
         # it, and Mind Whip's tap sits inside a `may`'s otherwise branch.
-        return _lower_tap(statement, event)
+        return _lower_tap(statement, event, produced)
     if isinstance(statement, ast.AddMana):
         return _lower_add_mana(statement, produced)
     if isinstance(statement, ast.AddManaForTappedLand):
