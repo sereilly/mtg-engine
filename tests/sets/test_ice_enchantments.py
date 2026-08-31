@@ -1689,3 +1689,133 @@ def test_necropotence_pays_life_and_returns_the_card_at_its_next_end_step(set_po
     assert [card.name for card in p1.hand] == ["Balduvian Bears"]
     assert p1.exile == []
 # --- end W1G4 ---
+
+
+# --- W2G2: mana-production replacements and land-type changes ---
+def _lands_board(set_pool, permanent_name=None, lands=("Forest", "Plains", "Island", "Mountain", "Swamp"), opponents=False):
+    """A seat with one basic of each type, and optionally a permanent printing a
+    mana-production replacement — on either battlefield.
+
+    The lands are LEA basics on purpose: their whole printed text is CR 305.6
+    reminder text, so they compile to no mana ability and fall through the tap
+    seam's ``produced_mana`` branch. ``_dual_board`` below covers the other one.
+    """
+    perms = [Permanent(card=set_pool("LEA")[name]) for name in lands]
+    p1 = PlayerState(name="P1", battlefield=list(perms))
+    p2 = PlayerState(name="P2")
+    if permanent_name is not None:
+        source = Permanent(card=set_pool("ICE")[permanent_name])
+        (p2 if opponents else p1).battlefield.append(source)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2, perms
+
+
+def _tap_every_land(game, player, lands=("Forest", "Plains", "Island", "Mountain", "Swamp")):
+    player.mana_pool = {symbol: 0 for symbol in ("W", "U", "B", "R", "G", "C")}
+    for index, name in enumerate(lands):
+        assert game.tap_land_for_mana(0, name, permanent_index=index), name
+    return {symbol: count for symbol, count in player.mana_pool.items() if count}
+
+
+def test_ritual_of_subdual_makes_every_land_produce_colorless(set_pool):
+    """"If a land is tapped for mana, it produces colorless mana instead of any
+    other type."
+
+    CR 106.12b: a replacement effect over the mana production event, so the
+    only way to see it is to tap the lands and read the pool. The compiler
+    would have been happy with a claimed line that changed nothing.
+    """
+    game, p1, _p2, _lands = _lands_board(set_pool, "Ritual of Subdual")
+
+    assert _tap_every_land(game, p1) == {"C": 5}
+
+
+def test_ritual_of_subdual_is_gone_when_the_enchantment_is(set_pool):
+    """Nothing is stamped on the lands, so the static stops applying the moment
+    its source leaves — the half a recorded swap would have got wrong."""
+    game, p1, _p2, _lands = _lands_board(set_pool, "Ritual of Subdual")
+    game.remove_from_battlefield(p1.battlefield[-1])
+
+    assert _tap_every_land(game, p1) == {"W": 1, "U": 1, "B": 1, "R": 1, "G": 1}
+
+
+def test_ritual_of_subdual_covers_an_opponents_lands_too(set_pool):
+    """"**A land**" names no seat, so the enchantment reaches every
+    battlefield — the same reading Worms of the Earth's "Lands can't enter the
+    battlefield" gets, and the reason this is not a per-seat record."""
+    game, p1, _p2, _lands = _lands_board(set_pool, "Ritual of Subdual", opponents=True)
+
+    assert _tap_every_land(game, p1) == {"C": 5}
+
+
+def test_infernal_darkness_makes_every_land_produce_black(set_pool):
+    """The same sentence with the symbol as payload: a card printing another
+    colour needs no code."""
+    game, p1, _p2, _lands = _lands_board(set_pool, "Infernal Darkness")
+
+    assert _tap_every_land(game, p1) == {"B": 5}
+
+
+def test_reality_twist_substitutes_by_land_type(set_pool):
+    """"If tapped for mana, Plains produce {R}, Swamps produce {G}, Mountains
+    produce {W}, and Forests produce {B} instead of any other type."
+
+    Four clauses, and the Island the card does not name still makes {U} — which
+    is what separates this from the untyped spelling above.
+    """
+    game, p1, _p2, _lands = _lands_board(set_pool, "Reality Twist")
+
+    assert _tap_every_land(game, p1) == {"R": 1, "G": 1, "W": 1, "B": 1, "U": 1}
+
+
+def test_reality_twist_reads_the_type_through_layer_4(set_pool):
+    """A land made a Swamp by an effect is one of the Swamps the clause names.
+
+    ``has_type``, not the printed type line: the substitution is keyed to what
+    the land *is* when it is tapped, so an Evil Presence Forest produces {G}
+    and not {B}.
+    """
+    from engine.land_types import change_land_type
+
+    game, p1, _p2, lands = _lands_board(set_pool, "Reality Twist", lands=("Forest",))
+    change_land_type(lands[0], "swamp", source="a test", label="test")
+
+    p1.mana_pool = {symbol: 0 for symbol in ("W", "U", "B", "R", "G", "C")}
+    assert game.tap_land_for_mana(0, "Forest", permanent_index=0)
+
+    assert p1.mana_pool["G"] == 1, "a Swamp, so the Swamp clause"
+    assert p1.mana_pool["B"] == 0, "not the Forest clause it no longer answers"
+
+
+def test_ritual_of_subdual_covers_a_land_whose_mana_ability_compiles(set_pool):
+    """A dual land runs its own compiled ability and writes into the pool
+    itself, so the substitution cannot be a swap on ``produced_mana``.
+
+    The tap seam snapshots the pool and moves whatever came out, which is the
+    one place both production branches meet.
+    """
+    game, p1, _p2, _lands = _lands_board(
+        set_pool, "Ritual of Subdual", lands=("Tundra",)
+    )
+
+    p1.mana_pool = {symbol: 0 for symbol in ("W", "U", "B", "R", "G", "C")}
+    assert game.tap_land_for_mana(0, "Tundra", permanent_index=0, chosen_color="U")
+
+    assert p1.mana_pool["C"] == 1
+    assert p1.mana_pool["U"] == 0, "the blue is replaced, not added to"
+
+
+def test_ritual_of_subdual_line_is_claimed_by_the_replacement_registry(set_pool):
+    """The interceptor is what implements the line, so the claim asks it — the
+    card would otherwise carry a printed sentence nothing accounts for."""
+    from engine.grammar.registries import registry_for_line
+
+    for name in ("Ritual of Subdual", "Infernal Darkness", "Reality Twist"):
+        card = set_pool("ICE")[name]
+        line = [
+            text for text in card.oracle_text.split("\n")
+            if text.lower().startswith("if ")
+        ][0]
+        assert registry_for_line(line) == "replacements", name
+# --- end W2G2 ---

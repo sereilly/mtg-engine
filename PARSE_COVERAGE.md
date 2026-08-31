@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**38 unclaimed sentence(s) across 26 supported card(s).**
+**34 unclaimed sentence(s) across 22 supported card(s).**
 
 - **Battle Cry**
   - `whenever a creature blocks this turn, it gets +0/+1 until end of turn`
@@ -56,8 +56,6 @@ anything anyone did, and every ingest would arrive red.
 - **Illusionary Terrain**
   - `as this enchantment enters, choose two basic land types`
   - `basic lands of the first chosen type are the second chosen type`
-- **Infernal Darkness**
-  - `if a land is tapped for mana, it produces {b} instead of any other type`
 - **Infinite Hourglass**
   - `all creatures get +1/+0 for each time counter on this artifact`
 - **Justice**
@@ -70,14 +68,8 @@ anything anyone did, and every ingest would arrive red.
   - `at the beginning of each player's upkeep, that player may choose any number of tapped creatures without flying they control and pay {2} for each creature chosen this way. if the player does, untap those creatures`
 - **Mystic Remora**
   - `whenever an opponent casts a noncreature spell, you may draw a card unless that player pays {4}`
-- **Naked Singularity**
-  - `if tapped for mana, plains produce {r}, islands produce {g}, swamps produce {w}, mountains produce {u}, and forests produce {b} instead of any other type`
 - **Oath of Lim-Dûl**
   - `whenever you lose life, for each 1 life you lost, sacrifice a permanent other than this enchantment unless you discard a card`
-- **Reality Twist**
-  - `if tapped for mana, plains produce {r}, swamps produce {g}, mountains produce {w}, and forests produce {b} instead of any other type`
-- **Ritual of Subdual**
-  - `if a land is tapped for mana, it produces colorless mana instead of any other type`
 - **Snowfall**
   - `if that island is snow, its controller may add an additional {u}{u} instead`
   - `spend this mana only to pay cumulative upkeep costs`
