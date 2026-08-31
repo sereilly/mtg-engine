@@ -40,6 +40,7 @@ from .prevention import (
     _parse_damage_redirect,
     _parse_optional_damage_redirect,
     _parse_damage_cant_be_prevented,
+    parse_source_damage_lock,
     _parse_bound_targeting_prevention,
 )
 from .counters import (
@@ -164,6 +165,7 @@ __all__ = [
     "_parse_damage_redirect",
     "_parse_optional_damage_redirect",
     "_parse_damage_cant_be_prevented",
+    "parse_source_damage_lock",
     "_parse_bound_targeting_prevention",
     "_parse_damage_dealt_riders",
     "_parse_gets",

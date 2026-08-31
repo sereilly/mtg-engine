@@ -23,7 +23,7 @@ from .amounts import parse_amount
 from .errors import GrammarError
 from .lexer import PT
 from .nouns import parse_object_filter
-from .effects import _parse_create_token
+from .effects import _parse_create_token, parse_source_damage_lock
 from .pronouns import _RIDER_FOLDED, _statement_bound_target
 from .phrases import _accept_number
 from .statements import _parse_condition, parse_statement
@@ -836,6 +836,39 @@ def _attach_exchanged_this_way(stream: TokenStream, steps: list[ast.Statement]) 
     return True
 
 
+def _attach_source_damage_lock(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """Fold "If <the source> would deal damage to a creature, that damage can't
+    be prevented or dealt instead to another permanent or player." into the
+    damage sentence before it (Lava Burst).
+
+    A rider rather than a step: the sentence deals no damage and destroys
+    nothing, it says which effects may modify the damage the sentence in front
+    of it deals. Parsed as a step it would name no event at all.
+
+    Whippoorwill prints the *other* sentence about the same two registries —
+    "Damage that would be dealt to that creature this turn can't be …" — and
+    that one is a step, because it arms a marker on a creature that outlives the
+    resolution. Keeping them apart is the whole reason this is not the same
+    production: read as Whippoorwill's, Lava Burst would lock every later
+    source's damage to the same creature for the turn.
+    """
+    if not steps:
+        return False
+    mark = stream.mark()
+    if not parse_source_damage_lock(stream):
+        return False
+    try:
+        steps[-1] = _attach_riders(
+            steps[-1], ast.DamageRiders(unpreventable_to_creature=True)
+        )
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    return True
+
+
 def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.Statement:
     """Fold damage riders into the most recent DealDamage of *statement*."""
     if isinstance(statement, ast.DealDamage):
@@ -844,6 +877,10 @@ def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.St
             exile_if_dies=statement.riders.exile_if_dies or riders.exile_if_dies,
             divided=statement.riders.divided,
             divided_evenly=statement.riders.divided_evenly,
+            unpreventable_to_creature=(
+                statement.riders.unpreventable_to_creature
+                or riders.unpreventable_to_creature
+            ),
         )
         return ast.DealDamage(
             statement.source, statement.amount, statement.recipients, merged, statement.chooser

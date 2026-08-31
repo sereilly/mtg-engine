@@ -262,7 +262,40 @@ def _lower_damage(
                 f"no damage handler carries the printed {key!r} rider here",
                 node=node,
             )
+    if node.riders.unpreventable_to_creature and not _lock_survives(lowered):
+        raise LoweringError(
+            "no damage handler carries the printed can't-be-prevented lock here",
+            node=node,
+        )
     return lowered
+
+
+def _lock_survives(lowered: tuple[OracleInstruction, ...]) -> bool:
+    """Whether Lava Burst's lock reaches a branch that actually applies it.
+
+    The same post-condition the two riders above get, spelled out separately
+    because it is stricter than "the key is present". ``deal_damage`` is one
+    handler with a dozen branches, and only the two that damage **one chosen
+    creature** hand the flag to the damage event — the sweeps, the divided
+    list, the several-targets loop and the player recipients each build their
+    own event and would carry the key without reading it. So the shapes refuse
+    here rather than compiling supported with a lock nothing arms; a card that
+    prints one of them is a card this needs widening for, and it will say so.
+    """
+    if len(lowered) != 1 or lowered[0].kind != "deal_damage":
+        return False
+    payload = lowered[0].payload
+    if not payload.get("unpreventable_to_creature"):
+        return False
+    # A named recipient is a player, the source, or a per-seat sweep — none of
+    # them the single chosen creature the flag is threaded to.
+    if payload.get("recipient") is not None:
+        return False
+    targets = payload.get("targets") or {}
+    if targets.get("kind") == "divided":
+        return False
+    count = targets.get("count")
+    return not (isinstance(count, int) and count > 1)
 
 
 def _lower_damage_shape(
@@ -465,6 +498,8 @@ def _lower_damage_shape(
         payload["no_regen"] = True
     if node.riders.exile_if_dies:
         payload["exile_if_dies"] = True
+    if node.riders.unpreventable_to_creature:
+        payload["unpreventable_to_creature"] = True
 
     # Divided damage (Fireball) picks its targets at cast time and carries them
     # on the stack item, so the noun phrase here is "any number of targets"

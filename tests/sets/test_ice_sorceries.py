@@ -464,3 +464,92 @@ def test_a_union_of_two_targeted_phrases_is_refused(set_pool):
     program = compile_card_oracle(set_pool("ICE")["Fumarole"])
 
     assert not program.supported
+
+
+# --- W2G5: mass effects and X-spells ---
+def _w2g5_burst_game(set_pool, *, victim_name="Tor Giant"):
+    """Seat 0 holding Lava Burst; seat 1 with one creature out."""
+    pool = set_pool("ICE")
+    p1 = PlayerState(name="P1", hand=[pool["Lava Burst"]], life=20)
+    victim = Permanent(card=pool[victim_name])
+    p2 = PlayerState(name="P2", battlefield=[victim], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    return pool, p1, p2, victim, game
+
+
+def test_lava_burst_damage_to_a_creature_ignores_a_shield(set_pool):
+    """"If Lava Burst would deal damage to a creature, that damage can't be
+    prevented or dealt instead to another permanent or player."
+
+    A three-point prevention shield on the creature absorbs nothing: the lock
+    drops the contenders that prevent or move the damage, and keeps every other
+    kind.
+    """
+    from engine.shields import Shield, add_shield, shields_on, PREVENT_NEXT_N
+
+    pool, p1, p2, victim, game = _w2g5_burst_game(set_pool)
+    add_shield(victim, Shield(kind=PREVENT_NEXT_N, amount=3, uses=None))
+
+    result = game.cast_from_hand(
+        0, "Lava Burst", target_player_index=1, target_permanent_index=0, x_value=3
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert victim.damage_marked == 3, "the shield had nothing to absorb"
+    assert shields_on(victim)[0].amount == 3, "and nothing was spent doing it"
+
+
+def test_lava_burst_shield_on_a_creature_still_works_against_another_source(set_pool):
+    """The control the assertion above needs: the shield is a real shield. The
+    same three points from an ordinary source are prevented in full — so what
+    the test above measured is the lock, not a shield that never worked."""
+    from engine.shields import Shield, add_shield, PREVENT_NEXT_N
+
+    pool, p1, p2, victim, game = _w2g5_burst_game(set_pool)
+    add_shield(victim, Shield(kind=PREVENT_NEXT_N, amount=3, uses=None))
+
+    game._mark_damage_on_permanent(victim, 3, source=pool["Balduvian Bears"])
+
+    assert victim.damage_marked == 0
+
+
+def test_lava_burst_damage_to_a_player_is_shielded_as_normal(set_pool):
+    """"…would deal damage to **a creature**" is the whole scope of the clause.
+    Aimed at a face, Lava Burst is an ordinary damage spell and a Circle-shaped
+    shield answers it — reading the lock as unconditional is the direction that
+    makes the card larger than printed."""
+    from engine.shields import Shield, add_shield, PREVENT_NEXT_N
+
+    pool, p1, p2, victim, game = _w2g5_burst_game(set_pool)
+    add_shield(p2, Shield(kind=PREVENT_NEXT_N, amount=3, uses=None))
+
+    result = game.cast_from_hand(0, "Lava Burst", target_player_index=1, x_value=3)
+    game._settle()
+
+    assert result.supported, result.details
+    assert p2.life == 20
+
+
+def test_lava_burst_lock_is_not_left_on_the_creature(set_pool):
+    """The clause is about this spell's damage, not about the creature. A
+    second source aiming at the same creature later in the turn is shielded
+    normally — which is the difference between this rider and Whippoorwill's
+    marker, and the reason it rides the event."""
+    from engine.shields import Shield, add_shield, PREVENT_NEXT_N
+
+    pool, p1, p2, victim, game = _w2g5_burst_game(set_pool)
+    game.cast_from_hand(
+        0, "Lava Burst", target_player_index=1, target_permanent_index=0, x_value=1
+    )
+    game._settle()
+    assert victim.damage_marked == 1
+
+    add_shield(victim, Shield(kind=PREVENT_NEXT_N, amount=2, uses=None))
+    game._mark_damage_on_permanent(victim, 2, source=pool["Balduvian Bears"])
+
+    assert victim.damage_marked == 1, "the later damage was prevented"
+# --- end W2G5 ---
