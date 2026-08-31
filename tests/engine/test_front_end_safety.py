@@ -27,6 +27,7 @@ import pytest
 
 import engine.oracle as oracle
 from engine.card_loader import load_catalog
+from engine.oracle_types import clear_compilation_caches
 
 
 # Cards where a grammar production deliberately replaces a card hook's kind with
@@ -77,17 +78,138 @@ def _kinds(program) -> set[str]:
 
 @pytest.fixture(scope="module")
 def with_and_without_grammar():
+    """Both readings of the pool, and the swap put back exactly as it was.
+
+    ``clear_compilation_caches`` rather than ``_compile_card_oracle.cache_clear``:
+    three more caches hold answers the compiler produced, and with the grammar
+    stubbed out they cache what the *hooks alone* said. The one that collected
+    was ``granted_abilities.granted_ability_supported``, which compiles a
+    granted ability's quoted text on a probe card — stubbed, it answered False
+    for every grant in the pool and kept that answer afterwards, so Dread Wight
+    and Musician reported their granted lines unreadable for the rest of the
+    process. The failure surfaced in ``test_parse_coverage.py``, a different
+    file entirely: a stale cache does not fail where it is written, which is why
+    the reversibility is asserted below rather than trusted.
+    """
     cards = load_catalog()
     live = {c.name: _kinds(oracle.compile_card_oracle(c)) for c in cards}
     original = oracle._grammar_instruction
     oracle._grammar_instruction = lambda *args, **kwargs: None
-    oracle._compile_card_oracle.cache_clear()
+    clear_compilation_caches()
     try:
         hooks_only = {c.name: _kinds(oracle.compile_card_oracle(c)) for c in cards}
     finally:
         oracle._grammar_instruction = original
-        oracle._compile_card_oracle.cache_clear()
+        clear_compilation_caches()
     return live, hooks_only
+
+
+#: The compiler entry points a cache's body names when its values are compiled
+#: answers. Not a list of caches — a list of the *functions a compiled answer
+#: comes out of*, which is what makes the sweep below derive its expectation
+#: instead of restating it.
+_COMPILER_ENTRY_POINTS = frozenset({
+    "compile_card_oracle", "_compile_card_oracle", "expand_ability_lines",
+    "_parse_triggered_ability", "compile_line", "parse_line",
+})
+
+
+def _reaches_the_compiler(func) -> bool:
+    """Whether *func*'s body (nested code objects included) names one."""
+    code = getattr(func, "__code__", None)
+    if code is None:
+        return False
+    names: set[str] = set()
+    stack = [code]
+    while stack:
+        current = stack.pop()
+        names |= set(current.co_names)
+        stack += [c for c in current.co_consts if hasattr(c, "co_names")]
+    return bool(names & _COMPILER_ENTRY_POINTS)
+
+
+def _engine_lru_caches():
+    """Every ``lru_cache``d function reachable from ``engine``, once each."""
+    import importlib
+    import pkgutil
+
+    import engine
+
+    modules = [engine]
+    for found in pkgutil.walk_packages(engine.__path__, "engine."):
+        try:
+            modules.append(importlib.import_module(found.name))
+        except Exception:  # a module that needs a game to import is not a cache
+            continue
+    seen = {}
+    for module in modules:
+        for name, obj in vars(module).items():
+            wrapped = getattr(obj, "__wrapped__", None)
+            if wrapped is None or not hasattr(obj, "cache_clear"):
+                continue
+            seen.setdefault((wrapped.__module__, wrapped.__qualname__), obj)
+    return seen
+
+
+def test_every_cache_holding_a_compiled_answer_is_registered_for_clearing():
+    """The completeness half of ``clear_compilation_caches`` (engine/oracle_types.py).
+
+    The fixture above stubs the grammar out and puts it back, and that is only
+    reversible if every cache holding a *compiled* answer is emptied on both
+    edges. ``granted_abilities.granted_ability_supported`` was not, and the way
+    it failed is why this guard derives its expectation rather than listing the
+    caches: with the stub in, the pool's compile asked it two questions the live
+    pool had never asked — the lowercased, period-stripped forms of Dread
+    Wight's and Musician's granted lines — and cached **False** for both. The
+    live answers were still cached under their own keys, so every compiled
+    program came back identical and nothing looked wrong; the two poisoned keys
+    were the ones ``scripts/parse_coverage.py`` asks, and the failure surfaced
+    hundreds of tests later in a different file as two unclaimed sentences.
+
+    So a guard comparing programs across the swap cannot see this — verified by
+    writing one first and watching it pass. What is checkable is the property
+    the fix rests on: a cache whose body reaches the compiler must be
+    registered. Derived by scanning the bytecode of every ``lru_cache``d
+    function in ``engine/``, so the *fifth* such cache is caught by whoever
+    writes it rather than by whoever remembers this comment.
+    """
+    from engine.oracle_types import _COMPILATION_CACHES
+
+    # The walk imports modules, and importing one is what runs its
+    # ``@compilation_cache``. So the sweep runs *first* and the registry is read
+    # after it — the other order reads a registry the walk is about to add to,
+    # and reports every not-yet-imported cache as unregistered.
+    caches = _engine_lru_caches()
+    registered = {
+        (f.__wrapped__.__module__, f.__wrapped__.__qualname__)
+        for f in _COMPILATION_CACHES
+    }
+    unregistered = sorted(
+        key for key, cached in caches.items()
+        if _reaches_the_compiler(cached.__wrapped__) and key not in registered
+    )
+
+    assert not unregistered, (
+        "these caches hold answers the compiler produced but are not registered "
+        "with @compilation_cache, so `clear_compilation_caches()` leaves them "
+        f"holding whatever a stubbed compiler said: {unregistered}"
+    )
+
+
+def test_the_registered_caches_are_all_still_compiler_caches():
+    """The other direction, so a cache that stops calling the compiler does not
+    keep the decorator forever — the stale-acknowledgement shape this repo
+    fails on everywhere else."""
+    from engine.oracle_types import _COMPILATION_CACHES
+
+    assert _COMPILATION_CACHES, "an empty registry clears nothing"
+    stale = sorted(
+        f"{f.__wrapped__.__module__}.{f.__wrapped__.__qualname__}"
+        for f in _COMPILATION_CACHES
+        if not _reaches_the_compiler(f.__wrapped__)
+    )
+
+    assert not stale, f"registered but no longer compiler-derived: {stale}"
 
 
 def test_no_card_silently_loses_an_instruction_to_the_grammar(with_and_without_grammar):
@@ -158,9 +280,9 @@ def test_every_card_in_the_pool_is_supported():
 
 
 def _compile_pool(cards):
-    oracle._compile_card_oracle.cache_clear()
+    clear_compilation_caches()
     programs = {card.name: oracle.compile_card_oracle(card) for card in cards}
-    oracle._compile_card_oracle.cache_clear()
+    clear_compilation_caches()
     return programs
 
 

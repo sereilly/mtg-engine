@@ -448,3 +448,56 @@ PER_OBJECT_SEAT_RECORDS: dict[str, str] = {
     # new object that no battlefield read can find a seat for (idiom 6).
     "controller": "swept_controller_seats",
 }
+
+
+# ---------------------------------------------------------------------------
+# Caches whose values are the compiler's answers
+# ---------------------------------------------------------------------------
+#
+# Turning the grammar off and back on is a thing the engine genuinely does —
+# `tests/engine/test_front_end_safety.py` swaps `oracle._grammar_instruction`
+# for a stub to measure what the card hooks would read on their own. That swap
+# is only reversible if every cache holding a *compiled* answer is emptied on
+# the way in and on the way out, and clearing `_compile_card_oracle` alone is
+# not enough: three more caches sit downstream of it.
+#
+# `engine/granted_abilities.granted_ability_supported` is the one that
+# collected. It compiles the quoted text of a granted ability on a probe card
+# to decide whether the engine can read it, so with the grammar stubbed out it
+# cached **False** for every grant in the pool — and kept it after the stub was
+# gone. Dread Wight and Musician then reported their granted lines unreadable
+# for the rest of the process, which showed up as an unclaimed-parse failure in
+# a *different* test file, hundreds of tests later. A stale cache does not fail
+# where it is written.
+#
+# Registered by the caches themselves rather than listed here, because a list
+# of cache names is the same second copy as a list of fire sites: the fourth
+# one is added by whoever writes it, not by whoever remembers this comment.
+# This module is where the registry lives because it imports nothing from the
+# engine, so `oracle` and the modules that import `oracle` can both reach it.
+_COMPILATION_CACHES: list[Any] = []
+
+
+def compilation_cache(func):
+    """Register an ``lru_cache``d function whose values came from the compiler.
+
+    Apply *outside* ``functools.lru_cache`` (nearest the ``def``), so what is
+    registered is the wrapper carrying ``cache_clear``::
+
+        @compilation_cache
+        @lru_cache(maxsize=None)
+        def granted_ability_supported(...): ...
+    """
+    _COMPILATION_CACHES.append(func)
+    return func
+
+
+def clear_compilation_caches() -> None:
+    """Empty every cache holding a compiled answer.
+
+    One call, so a caller that swaps a piece of the compiler out does not have
+    to know how many caches there are — which is the whole of what went wrong
+    before it existed.
+    """
+    for cached in _COMPILATION_CACHES:
+        cached.cache_clear()

@@ -23,6 +23,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from .oracle_types import compilation_cache
+
 #: The probe card's type line. A granted ability is nearly always granted to a
 #: creature, and the printed *type* is what makes "this creature" resolvable
 #: while the line is being classified. It is deliberately not derived from the
@@ -32,6 +34,7 @@ from functools import lru_cache
 _PROBE_TYPE_LINE = "Creature"
 
 
+@compilation_cache
 @lru_cache(maxsize=None)
 def granted_ability_supported(text: str, self_name: str | None = None) -> bool:
     """Whether the engine compiles *text* into the ability it prints.
