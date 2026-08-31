@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **1160**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **76**
+- With deletion-probe findings (ignored words): **77**
 
 ## Acknowledged simplifications
 
@@ -45,6 +45,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Chandra, Flame's Catalyst | `you may cast target red instant or sorcery card from your graveyard. i` | or card |
 | Chandra, Heart of Fire | `search your graveyard and library for any number of red instant and/or` | and/or |
 | Cleanse | `destroy all black creatures` | all |
+| Drain Life | `drain life deals x damage to any target. you gain life equal to the da` | life |
 | Eater of the Dead | `if this creature is tapped, exile target creature card from a graveyar` | creature |
 | Eternal Flame | `eternal flame deals x damage to target opponent or planeswalker and ha` | flame |
 | Eureka | `starting with you, each player may put a permanent card from their han` | permanent |
@@ -116,7 +117,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | trigger table | 339 |
 | static-line table | 234 |
 | keyword table | 222 |
-| card_hooks bespoke (name-keyed) | 99 |
+| card_hooks bespoke (name-keyed) | 98 |
 | aura enchant noun (oracle_instructions attach) | 87 |
 | activation_restrictions.py | 37 |
 | aura static (oracle_instructions/permanent_state) | 37 |

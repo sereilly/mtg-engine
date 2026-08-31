@@ -115,6 +115,13 @@
   ]
  },
  {
+  "card": "Drain Life",
+  "clause": "drain life deals x damage to any target. you gain life equal to the damage dealt, but not more life than the player's life total before the damage was dealt, the planeswalker's loyalty before the damage was dealt, or the creature's toughness",
+  "ignored": [
+   "life"
+  ]
+ },
+ {
   "card": "Eater of the Dead",
   "clause": "if this creature is tapped, exile target creature card from a graveyard and untap this creature",
   "ignored": [

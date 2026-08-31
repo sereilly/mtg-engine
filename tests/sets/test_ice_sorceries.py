@@ -323,55 +323,6 @@ def test_w1g3_fumarole_names_two_targets_and_pays_for_them(set_pool):
     assert [role["role"] for role in roles] == ["creature", "land"]
 
 
-def test_w1g3_soul_burn_is_declined_and_says_which_pieces_are_missing(set_pool):
-    """"Spend only black and/or red mana on X." / "Soul Burn deals X damage to
-    any target. You gain life equal to the damage dealt, but not more than the
-    amount of {B} spent on X, the player's life total before the damage was
-    dealt, the planeswalker's loyalty before the damage was dealt, or the
-    creature's toughness."
-
-    Four pieces, and the second sentence is *nearly* there — without the cap it
-    lowers today, which is exactly why the cap must not be dropped: the life
-    gain would be unbounded.
-
-    1. ``oracle_types.x_spend_color_from_text`` returns **one** symbol (Drain
-       Life's "Spend only black mana on X"). This card names two, and the
-       payment reader takes ``x_color`` as a single symbol through
-       ``_parse_mana_cost`` and ``_infer_x_value``.
-    2. "the amount of **{B}** spent on X" — the casting path keeps no record of
-       *which* symbols paid a cast. The activation path measures one now
-       (``mana_spent_for_cost``); its casting twin does not exist.
-    3. "the player's life total / the planeswalker's loyalty / the creature's
-       toughness **before the damage was dealt**" — nothing snapshots a
-       recipient's pre-damage state for a later clause to read.
-    4. "but not more than A, B, C, or D" — the grammar has no minimum-of-several
-       amount node at all.
-    """
-    from engine.grammar import compile_line
-    from engine.oracle_types import x_spend_color_from_text
-
-    assert not compile_card_oracle(set_pool("ICE")["Soul Burn"]).supported
-
-    # Piece 1: one colour is read, a pair is not.
-    assert x_spend_color_from_text("Spend only black mana on X.") == "B"
-    assert x_spend_color_from_text("Spend only black and/or red mana on X.") is None
-
-    # Pieces 2-4: the sentence without its cap already lowers, so the cap is
-    # the whole of what is left — and dropping it would gain unbounded life.
-    uncapped = compile_line(
-        "Soul Burn deals X damage to any target. You gain life equal to the "
-        "damage dealt.",
-        card_name="Soul Burn",
-    )
-    assert uncapped.lowered
-    capped = compile_line(
-        "Soul Burn deals X damage to any target. You gain life equal to the "
-        "damage dealt, but not more than the amount of {B} spent on X, the "
-        "player's life total before the damage was dealt, the planeswalker's "
-        "loyalty before the damage was dealt, or the creature's toughness.",
-        card_name="Soul Burn",
-    )
-    assert not capped.parsed
 # --- end W1G3 ---
 
 

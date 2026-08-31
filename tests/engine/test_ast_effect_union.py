@@ -41,6 +41,11 @@ _NOT_STATEMENTS = {
     # folded into the effect it modifies by `_attach_riders`. Nothing dispatches
     # on it and it never stands alone as a step.
     "DamageRiders",
+    # A term of GainLife's "…but not more than A, B, or C" cap (Drain Life,
+    # Soul Burn). Part of how much life the gain is, not a step of its own:
+    # `_lower_gain_life` folds the whole tuple into the gain's payload and
+    # nothing dispatches on it.
+    "LifeGainCap",
 }
 
 

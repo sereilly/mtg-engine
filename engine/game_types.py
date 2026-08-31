@@ -75,6 +75,15 @@ CHOICE_KEYS = (
     # rather than read off the cost — a generic pip says how much is owed and
     # never which symbol covers it.
     "mana_spent_for_cost",
+    # How much of X each colour paid, for a cast whose X is colour-restricted
+    # ("Spend only black and/or red mana on X." — Soul Burn, Drain Life). Its
+    # own channel beside ``mana_spent_for_cost`` above rather than a widening of
+    # it, because it is a different question: that one is what the whole cost
+    # consumed, measured as a pool delta, and a delta cannot say whether a black
+    # unit paid X, the mandatory {B} pip or the generic {2}. This is the
+    # allocation the payment was *built* from, so "the amount of {B} spent on X"
+    # is exact.
+    "x_mana_spent",
 )
 
 

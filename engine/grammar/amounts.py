@@ -763,13 +763,22 @@ def accept_life_gain_cap(stream: TokenStream) -> tuple["ast.LifeGainCap", ...]:
         stream.reset(mark)
         return ()
     terms: list[ast.LifeGainCap] = []
+    closed = False
     while True:
         term = _accept_life_gain_cap_term(stream)
         if term is None:
             stream.reset(mark)
             return ()
         terms.append(term)
-        if not stream.accept_punct(","):
+        if closed or not stream.accept_punct(","):
             break
-        stream.accept_word("or")
+        # The conjunction is required before the last of several terms, and
+        # reading it is what ends the list. Treating "or" as optional
+        # punctuation let "A, B, C" — a printed list with a term missing out of
+        # the middle of it — parse as happily as the printed "A, B, or C",
+        # which is the dropped-rider class the deletion probe watches for.
+        closed = stream.accept_word("or")
+    if not closed and len(terms) > 1:
+        stream.reset(mark)
+        return ()
     return tuple(terms)
