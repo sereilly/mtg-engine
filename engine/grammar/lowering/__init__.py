@@ -194,6 +194,7 @@ from .cards import (
 )
 from .mana import (
     _lower_add_mana,
+    _lower_note_mana_spent,
     _TAPPED_LAND_MANA_RECIPIENTS,
     _lower_add_mana_for_tapped_land,
     _lower_produces_mana_instead,
@@ -392,6 +393,7 @@ __all__ = [
     "_lower_put_hand_cards_on_library",
     "_lower_scry",
     "_lower_add_mana",
+    "_lower_note_mana_spent",
     "_TAPPED_LAND_MANA_RECIPIENTS",
     "_lower_add_mana_for_tapped_land",
     "_lower_produces_mana_instead",

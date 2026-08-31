@@ -102,6 +102,48 @@ class AddMana:
     # shape a life gain and a counter placement already carry — so it is a
     # filter here rather than a number, and the count is taken at resolution.
     per_each: object | None = None
+    # "Add {U} **or** {C}{U}." (Adarkar Unicorn.) The printed alternatives when
+    # at least one of them is a *run* of more than one symbol, which ``pips`` +
+    # ``choice`` cannot say: that pair is ``(symbol, count)`` pairs, one per
+    # alternative, so it expresses "one of these colours" and not "{U}, or {C}
+    # and {U} together". Each alternative is its own pip list here, and ``pips``
+    # stays empty — the two spellings are read by different branches, so a
+    # reader that has learned only the older key adds nothing rather than
+    # everything.
+    runs_choice: tuple[tuple[tuple[str, int], ...], ...] = ()
+    # "Add three mana **in any combination of** {R} and/or {G}." (Orcish
+    # Lumberjack, Burnt Offering.) The symbols the player may choose among, with
+    # ``combination_count`` mana produced and each unit chosen independently —
+    # which is what separates it from ``any_color`` ("of any **one** color", one
+    # choice for the whole clause) and from ``runs_choice`` (a choice between
+    # two written-out quantities).
+    combination: tuple[str, ...] = ()
+    combination_count: "Amount | int" = 0
+    #: "Add one mana of **this artifact's last noted type**." (Jeweled Amulet.)
+    #: "Add **this artifact's last noted type and amount** of mana." (Ice
+    #: Cauldron.) The mana a cost was paid with, recorded on the source by an
+    #: earlier activation (``engine/noted_mana.py``) — so no symbol can be
+    #: written here at all, and the two printed spellings differ only in whether
+    #: the *count* is remembered too. ``"type"`` or ``"type_and_amount"``.
+    from_noted: str | None = None
+
+
+@dataclass(frozen=True)
+class NoteManaSpent:
+    """"Note the type of mana spent to pay this activation cost." (Jeweled
+    Amulet.) "…note the type **and amount** of mana spent…" (Ice Cauldron.)
+
+    Not a mana production at all: nothing is added and nothing changes on any
+    board. What it does is *remember* CR 107.4b's symbols, so a later ability of
+    the same permanent can add that mana back — which is why it lives here
+    beside :class:`AddMana` rather than in a family about records.
+
+    ``with_amount`` is the one printed word between the two cards, and it is
+    payload for that reason: which half of the record the note keeps is a fact
+    about one card, not a different kind of sentence.
+    """
+
+    with_amount: bool = False
 
 
 @dataclass(frozen=True)

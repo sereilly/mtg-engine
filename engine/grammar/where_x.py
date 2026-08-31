@@ -15,7 +15,7 @@ is for.
 from . import ast
 from .amounts import (
     accept_added_base, accept_counters_on_source, accept_damage_dealt_this_turn,
-    accept_exiled_for_cost,
+    accept_exiled_for_cost, accept_sacrificed_for_cost,
 )
 from .lexer import NUMBER
 from .nouns import parse_object_filter
@@ -283,6 +283,14 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
     exiled = accept_exiled_for_cost(stream)
     if exiled is not None:
         return exiled
+    # "…where X is **the sacrificed creature's mana value**" (Burnt Offering).
+    # The exile above one zone over: what the *spell's* own additional cost ate
+    # (CR 601.2b), read through the one reader both front ends share so the
+    # where-clause and an "equal to" amount cannot come to name different
+    # channels.
+    sacrificed = accept_sacrificed_for_cost(stream)
+    if sacrificed is not None:
+        return sacrificed
     # Three aggregates over one noun phrase, and the words are what tell them
     # apart: "the number of" counts the objects, "the greatest power among"
     # takes a maximum over them (Carrion Grub).

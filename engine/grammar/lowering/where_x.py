@@ -59,6 +59,8 @@ def lower_where_x(
         return _lower_where_x_this_way(node, inner, produced)
     if isinstance(node.definition, ast.ExiledForCost):
         return _lower_where_x_exiled_for_cost(node, inner)
+    if isinstance(node.definition, ast.SacrificedForCost):
+        return _lower_where_x_sacrificed_for_cost(node, inner)
     if isinstance(node.definition, ast.CountersOnSource):
         return _lower_where_x_counters(node, inner)
     if isinstance(node.definition, ast.TotalPowerSacrificedThisWay):
@@ -111,6 +113,36 @@ def _lower_where_x_exiled_for_cost(
         )
     return _stamp_x_from_count(
         inner, {"cost_exile_characteristic": node.definition.characteristic}
+    )
+
+
+def _lower_where_x_sacrificed_for_cost(
+    node: ast.WhereX, inner: tuple[OracleInstruction, ...]
+) -> tuple[OracleInstruction, ...]:
+    """"…, where X is **the sacrificed creature's mana value**." (Burnt
+    Offering.)
+
+    :func:`_lower_where_x_exiled_for_cost` one zone over, and the same argument:
+    the creature was eaten by the spell's own additional cost (CR 601.2b) before
+    the spell was ever on the stack, so nothing on a board answers for it and
+    the number is last-known information (CR 608.2h) the payment path recorded.
+
+    Mana value alone, for that function's reason: the channel carries the
+    permanent, and its *computed* P/T does not exist once it has left the
+    battlefield (CR 613.1), so admitting "power" would stamp a definition the
+    resolution answers with a zero. A card printing one is a refusal here rather
+    than a silent nothing.
+    """
+    if not _mentions_x(inner):
+        raise LoweringError("a where-clause defined an X nothing reads", node=node)
+    if node.definition.characteristic != "mana_value":
+        raise LoweringError(
+            "only the sacrificed permanent's mana value is read back from a "
+            "cost payment",
+            node=node,
+        )
+    return _stamp_x_from_count(
+        inner, {"cost_sacrifice_characteristic": node.definition.characteristic}
     )
 
 

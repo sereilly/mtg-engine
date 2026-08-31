@@ -43,6 +43,15 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
     matching what the legacy rule wrote, and keeping the payload honest about
     what the handler actually consults.
     """
+    if node.of_drawn:
+        # "…discard one **of them**" points at cards a *previous step* drew, and
+        # only the fused draw-then-discard below holds them. Anywhere else the
+        # pronoun has no referent, so the restriction would be dropped and the
+        # discard would come out of the whole hand — wider than the card says.
+        raise LoweringError(
+            "'discard one of them' only reads the cards the step before it drew",
+            node=node,
+        )
     # "Discard your hand" (Chandra, Heart of Fire) — the effect's controller
     # discards every card. Checked before the targeted forms: the subject is
     # the implied "you", which they refuse.
@@ -244,12 +253,18 @@ def _fused_draw_then_discard(
         return None
     if not (isinstance(draw.count, ast.Fixed) and isinstance(discard.count, ast.Fixed)):
         return None
-    return (
-        OracleInstruction(
-            "draw_then_discard_self", "",
-            {"draw": draw.count.value, "discard": discard.count.value},
-        ),
-    )
+    payload: dict[str, object] = {
+        "draw": draw.count.value, "discard": discard.count.value,
+    }
+    if discard.of_drawn:
+        # "Draw two cards, then discard one **of them**." (Krovikan Sorcerer.)
+        # The discard is restricted to what this same resolution just drew — an
+        # identity, not a characteristic — and this is the only lowering that
+        # can carry it, because it is the only one that performs both halves.
+        # Dropped instead, the seat could pitch anything in hand, which is a
+        # strictly better card than the one printed.
+        payload["from_drawn"] = True
+    return (OracleInstruction("draw_then_discard_self", "", payload),)
 
 
 def _fused_discard_then_draw(

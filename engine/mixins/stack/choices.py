@@ -1265,9 +1265,19 @@ class PendingChoicesMixin:
         described = dict(choice.data.get("filter") or {})
         hand = self.players[choice.player_index].hand
         alternatives = (described,) if described else ()
+        # "Draw two cards, then discard one **of them**." (Krovikan Sorcerer.)
+        # An identity restriction rather than a characteristic one, so it
+        # arrives as the hand positions the arming step drew into rather than as
+        # a filter: every copy of a card in a hand is the *same* Python object
+        # (`web/deck_builder.py` repeats one definition per copy), so "one of
+        # the cards you just drew" cannot be told from "another copy of the same
+        # card you were already holding" by anything but position.
+        only = choice.data.get("only_indices")
+        allowed = set(only) if only is not None else None
         return [
             index for index, card in enumerate(hand)
-            if card_matches_any(card, alternatives)
+            if (allowed is None or index in allowed)
+            and card_matches_any(card, alternatives)
         ]
 
     def _resolve_discard(self, choice: PendingChoice, hand_indices: list[int], to_library: bool) -> bool:

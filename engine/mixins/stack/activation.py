@@ -907,6 +907,14 @@ class AbilityActivationMixin:
                     f"{permanent.card.name}'s ability costs "
                     f"{{{before_total - reduced_generic - coloured}}} less to activate"
                 )
+        # "Note the type of mana spent to pay this activation cost." (Jeweled
+        # Amulet, Ice Cauldron.) CR 107.4b's symbols, measured as the difference
+        # the payment made to the pool rather than predicted from the cost: a
+        # generic pip says how *much* is owed and never which symbol pays it,
+        # and the payer's own choice — and any restricted bucket it drew on — is
+        # only visible afterwards. Empty when nothing was charged, which is a
+        # note of nothing and not an absent note.
+        pool_before = dict(controller.mana_pool)
         if self.enforce_mana_costs and any(required_cost.values()):
             if not self._pay_mana_cost(
                 controller, required_cost,
@@ -915,6 +923,12 @@ class AbilityActivationMixin:
                 details = f"insufficient mana to activate {permanent.card.name}"
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
+        mana_spent_for_cost = {
+            symbol: spent
+            for symbol in ("W", "U", "B", "R", "G", "C")
+            if (spent := pool_before.get(symbol, 0)
+                - controller.mana_pool.get(symbol, 0)) > 0
+        }
 
         if requires_tap:
             if self._is_summoning_sick(permanent):
@@ -1107,6 +1121,12 @@ class AbilityActivationMixin:
                 # ``color`` key the any-colour shape uses; the handler holds it
                 # to the printed alternatives.
                 or instruction.payload.get("pips_choice")
+                # "Add three mana in any combination of {R} and/or {G}" (Orcish
+                # Lumberjack). The same channel again: the seat names one of the
+                # printed symbols and the handler makes every unit that symbol.
+                # Left off, the ability would always produce the first printed
+                # colour however the seat answered.
+                or instruction.payload.get("combination")
             )
         ):
             selected_color = self._normalize_mana_color(mana_color)
@@ -1145,6 +1165,7 @@ class AbilityActivationMixin:
                     choices={
                         "exiled_for_cost": exiled_for_cost,
                         "counters_removed_for_cost": counters_removed_for_cost,
+                        "mana_spent_for_cost": mana_spent_for_cost,
                         "sacrificed_set_for_cost": list(sacrifice_cost_set),
                         "sacrificed_for_cost": sacrifice_cost_permanent,
                         "discarded_for_cost": (
@@ -1196,6 +1217,12 @@ class AbilityActivationMixin:
                     # it: the counters are off the permanent before the ability
                     # is on the stack, so the number survives nowhere else.
                     "counters_removed_for_cost": counters_removed_for_cost,
+                    # …and CR 107.4b's symbols the mana cost actually consumed
+                    # ("Note the type of mana spent to pay this activation
+                    # cost", Jeweled Amulet), measured off the pool rather than
+                    # predicted from the cost: a generic pip never says which
+                    # symbol paid it.
+                    "mana_spent_for_cost": mana_spent_for_cost,
                     # …and the permanents an "any number of" sacrifice cost ate
                     # (Sword of the Ages), whose total power the effect reads
                     # back once they are cards in a graveyard.

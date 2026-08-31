@@ -259,3 +259,168 @@ def test_a_derived_static_rule_that_is_real_behaviour_still_supports_its_card(se
     pool = {c.name: c for c in load_cards(manifest_set_paths())}
     for name in ("Winter Orb", "Howling Mine", "Gloom", "Meekstone"):
         assert compile_card_oracle(pool[name]).supported, name
+
+
+# --- W1G3: mana, additional costs, cost restrictions ---
+def _w1g3_amulet(set_pool):
+    """Seat 0 with a Jeweled Amulet out and nothing else, ready to activate."""
+    pool = set_pool("ICE")
+    amulet = Permanent(card=pool["Jeweled Amulet"])
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[amulet], life=20),
+            PlayerState(name="P2", life=20),
+        ]
+    )
+    game.active_player_index = 0
+    # Costs enforced, which the default rig turns off: what this card records is
+    # *what the payment spent*, so an unpaid cost is a note of nothing and the
+    # test would pass on a handler that recorded nothing at all.
+    game.enforce_mana_costs = True
+    game._sync_control()
+    _nosick(amulet)
+    return game, amulet
+
+
+def test_w1g3_jeweled_amulet_gives_back_the_type_of_mana_it_was_paid_with(set_pool):
+    """"{1}, {T}: Put a charge counter on this artifact. Note the type of mana
+    spent to pay this activation cost." / "{T}, Remove a charge counter from
+    this artifact: Add one mana of this artifact's last noted type."
+
+    CR 107.4b's symbols are the record. A generic pip never says which symbol
+    covered it, so what is noted is measured off the pool — the difference the
+    payment made — rather than read off the cost, and the whole point of the
+    card is that the {R} that went in is the {R} that comes back out.
+    """
+    from engine.named_counters import counters_on
+    from engine.noted_mana import noted_mana
+
+    game, amulet = _w1g3_amulet(set_pool)
+    game.players[0].mana_pool["R"] = 1
+
+    charged = game.activate_permanent_ability(0, "Jeweled Amulet", ability_index=0)
+    game._settle()
+
+    assert charged.supported, charged.details
+    assert counters_on(amulet, "charge") == 1
+    assert noted_mana(amulet) == {"R": 1}
+    assert game.players[0].mana_pool["R"] == 0, "the {1} was paid with the red mana"
+
+    amulet.tapped = False
+    spent = game.activate_permanent_ability(0, "Jeweled Amulet", ability_index=1)
+    game._settle()
+
+    assert spent.supported, spent.details
+    assert counters_on(amulet, "charge") == 0
+    assert game.players[0].mana_pool["R"] == 1
+
+
+def test_w1g3_jeweled_amulet_notes_the_colour_that_actually_paid(set_pool):
+    """The same activation with a blue mana floating instead. Nothing about the
+    card changes and nothing about the code does either — which is the test:
+    the symbol is data the payment reported, not a colour anybody wrote down."""
+    from engine.noted_mana import noted_mana
+
+    game, amulet = _w1g3_amulet(set_pool)
+    game.players[0].mana_pool["U"] = 1
+
+    game.activate_permanent_ability(0, "Jeweled Amulet", ability_index=0)
+    game._settle()
+
+    assert noted_mana(amulet) == {"U": 1}
+
+
+def test_w1g3_jeweled_amulet_cannot_be_charged_twice(set_pool):
+    """"Activate only if there are no charge counters on this artifact."
+    (CR 602.5.)
+
+    An unenforced restriction is not a dead ability; it is an ability that works
+    more often than the card allows. Without the table row this ability charges
+    every turn, stacking counters and making a mana a turn out of nothing.
+    """
+    from engine.named_counters import counters_on
+
+    game, amulet = _w1g3_amulet(set_pool)
+    game.players[0].mana_pool["R"] = 2
+
+    game.activate_permanent_ability(0, "Jeweled Amulet", ability_index=0)
+    game._settle()
+    amulet.tapped = False
+
+    again = game.activate_permanent_ability(0, "Jeweled Amulet", ability_index=0)
+    game._settle()
+
+    assert not again.supported
+    assert counters_on(amulet, "charge") == 1
+
+
+def test_w1g3_a_jeweled_amulet_that_noted_nothing_adds_nothing(set_pool):
+    """The empty record is a real answer. "Last noted type" with no payment
+    behind it names no type, so the second ability produces no mana — where a
+    handler that fell back to a default colour would make the artifact a free
+    mana source."""
+    game, amulet = _w1g3_amulet(set_pool)
+    from engine.named_counters import add_counters
+
+    add_counters(amulet, "charge", 1)
+    before = dict(game.players[0].mana_pool)
+
+    game.activate_permanent_ability(0, "Jeweled Amulet", ability_index=1)
+    game._settle()
+
+    assert dict(game.players[0].mana_pool) == before
+
+
+def test_w1g3_ice_cauldron_is_declined_and_says_which_pieces_are_missing(set_pool):
+    """Ice Cauldron shares Jeweled Amulet's note-the-mana machinery. What it
+    still needs is three pieces, each checked here so the next round has
+    something to build against rather than the word "complex":
+
+    1. "**You may exile a nonland card from your hand**" — an *optional* exile
+       out of a hand; the exile lowering refuses with "only a single chosen
+       permanent or card is exiled".
+    2. "**You may cast that card for as long as it remains exiled**" — no
+       production at all: a casting permission scoped to one exiled *card
+       object*, with a lifetime nothing sweeps. ``cast_permissions`` keys its
+       grants by printed text and by zone, never by object.
+    3. "**Spend this mana only to cast the last card exiled with this
+       artifact**" — a ``restricted_mana`` row whose predicate names one card
+       object. The buckets are keyed by a *string* and the predicate reads a
+       ``PaymentPurpose``, so a per-object restriction has no representation.
+
+    Declined rather than half-built: the two halves that do work are real, and
+    admitting the card on them would give it "add this artifact's last noted
+    type and amount of mana" with the restriction dropped — mana more freely
+    spendable than the card allows.
+    """
+    from engine.grammar import compile_line
+    from engine.restricted_mana import mana_restriction_for
+
+    program = compile_card_oracle(set_pool("ICE")["Ice Cauldron"])
+    assert not program.supported
+
+    optional_exile = compile_line("{X}, {T}: You may exile a nonland card from your hand.")
+    assert not optional_exile.lowered
+    assert "exiled" in (optional_exile.lowering_error or "")
+
+    permission = compile_line("You may cast that card for as long as it remains exiled.")
+    assert not permission.parsed
+
+    assert mana_restriction_for(
+        "Spend this mana only to cast the last card exiled with this artifact."
+    ) is None
+
+    # …and the two halves this round did buy, so a later round can see which
+    # parts it does not have to rebuild.
+    noted = compile_line(
+        "{X}, {T}: Put a charge counter on this artifact and note the type and "
+        "amount of mana spent to pay this activation cost. Activate only if "
+        "there are no charge counters on this artifact."
+    )
+    assert noted.lowered
+    added = compile_line(
+        "{T}, Remove a charge counter from this artifact: Add this artifact's "
+        "last noted type and amount of mana."
+    )
+    assert added.lowered
+# --- end W1G3 ---

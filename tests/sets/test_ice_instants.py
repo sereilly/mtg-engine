@@ -395,3 +395,188 @@ def test_the_targeted_restriction_is_not_the_blanket_one(set_pool):
     assert "targets" in targeted.instructions[0].payload
     assert blanket.instructions[0].kind == "cant_block_until_eot"
     assert "filter" in blanket.instructions[0].payload
+
+
+# --- W1G3: mana, additional costs, cost restrictions ---
+def _w1g3_cast_board(set_pool, spell, mine=(), theirs=()):
+    """Seat 0 holding *spell*, with those ICE permanents on each battlefield."""
+    pool = set_pool("ICE")
+    ours = [Permanent(card=pool[n]) for n in mine]
+    yours = [Permanent(card=pool[n]) for n in theirs]
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=ours, hand=[pool[spell]], life=20),
+            PlayerState(name="P2", battlefield=yours, life=20),
+        ]
+    )
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    for perm in ours + yours:
+        _nosick(perm)
+    return game, ours, yours
+
+
+def test_w1g3_burnt_offering_pays_a_creature_for_its_mana_value_in_mana(set_pool):
+    """"As an additional cost to cast this spell, sacrifice a creature." /
+    "Add X mana in any combination of {B} and/or {R}, where X is the sacrificed
+    creature's mana value."
+
+    Two pieces meeting. The cost is CR 601.2b's, charged by ``cast_costs`` while
+    the spell is announced; X is read back off what it ate (CR 608.2h), because
+    by resolution the creature is a card in a graveyard. Glacial Wall's mana
+    value is 3, so three mana come out — never one, and never zero.
+    """
+    game, ours, _ = _w1g3_cast_board(
+        set_pool, "Burnt Offering", mine=["Glacial Wall"]
+    )
+    wall = ours[0]
+
+    game.cast_from_hand(0, "Burnt Offering", cost_permanent_index=0)
+    game._settle()
+
+    assert wall not in game.players[0].battlefield, "the additional cost was paid"
+    pool = game.players[0].mana_pool
+    assert pool["B"] + pool["R"] == 3, pool
+
+
+def test_w1g3_burnt_offering_reads_the_mana_value_of_the_creature_it_ate(set_pool):
+    """The number is the sacrificed creature's, not a constant. A 2-drop pays
+    two mana where the 3-drop above paid three — which is what makes the
+    where-clause a reference rather than a printed digit."""
+    game, ours, _ = _w1g3_cast_board(
+        set_pool, "Burnt Offering", mine=["Balduvian Bears"]  # mana value 2
+    )
+
+    game.cast_from_hand(0, "Burnt Offering", cost_permanent_index=0)
+    game._settle()
+
+    pool = game.players[0].mana_pool
+    assert pool["B"] + pool["R"] == 2, pool
+
+
+def test_w1g3_essence_vortex_destroys_when_the_controller_declines(set_pool):
+    """"Destroy target creature unless its controller pays life equal to its
+    toughness. A creature destroyed this way can't be regenerated."
+
+    The payer is read off the *targeted permanent* through the control seam —
+    not off ``context.target``, which for a spell aimed at a creature is not a
+    player at all. Declining runs the penalty, and the penalty carries the
+    no-regeneration rider the trailing sentence prints.
+    """
+    game, _, theirs = _w1g3_cast_board(
+        set_pool, "Essence Vortex", theirs=["Glacial Wall"]  # 0/7
+    )
+    wall = theirs[0]
+    game.interactive_seats = {1}
+
+    game.cast_from_hand(
+        0, "Essence Vortex", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+
+    offer = game.pending_choice_of("optional_pay")
+    assert offer is not None, "the creature's controller was never asked"
+    assert offer.player_index == 1
+    assert offer.data["life_cost"] == 7, "life equal to its toughness"
+
+    game.confirm_optional_pay(1, accept=False)
+    game._settle()
+
+    assert wall not in game.players[1].battlefield
+    assert game.players[1].life == 20
+
+
+def test_w1g3_essence_vortex_spares_a_creature_whose_controller_pays(set_pool):
+    """The other branch, and the one that proves the offer is real: paying the
+    toughness in life keeps the creature. Without it the "unless" clause is a
+    rider nobody charges and the spell is unconditional removal."""
+    game, _, theirs = _w1g3_cast_board(
+        set_pool, "Essence Vortex", theirs=["Glacial Wall"]
+    )
+    wall = theirs[0]
+    game.interactive_seats = {1}
+
+    game.cast_from_hand(
+        0, "Essence Vortex", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+    game.confirm_optional_pay(1, accept=True)
+    game._settle()
+
+    assert wall in game.players[1].battlefield
+    assert game.players[1].life == 13
+
+
+def test_w1g3_essence_vortex_reads_the_toughness_it_finds_at_resolution(set_pool):
+    """CR 613 makes toughness computed, so the number is taken when the offer is
+    made rather than when the spell was announced. A 2/2 asks for two."""
+    game, _, theirs = _w1g3_cast_board(
+        set_pool, "Essence Vortex", theirs=["Balduvian Bears"]  # 2/2
+    )
+    game.interactive_seats = {1}
+
+    game.cast_from_hand(
+        0, "Essence Vortex", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+
+    assert game.pending_choice_of("optional_pay").data["life_cost"] == 2
+
+
+def test_w1g3_essence_vortex_offers_the_creature_as_a_cast_target(set_pool):
+    """The whole spell sits on the offer's *declined* branch, and CR 601.2c
+    picks its target as the spell is announced — before anybody is asked to pay.
+    A picker that read only the accept branch left this spell with no prompt and
+    the destruction pointed at nothing."""
+    from engine.targeting import derive_cast_spec
+
+    pool = set_pool("ICE")
+    card = pool["Essence Vortex"]
+
+    assert derive_cast_spec(card, compile_card_oracle(card)) == {"kind": "creature"}
+
+
+# --- W1G3 (cont.): the one declined instant, with its pieces named ---
+def test_w1g3_spoils_of_evil_is_declined_and_says_which_pieces_are_missing(set_pool):
+    """"For each artifact or creature card in target opponent's graveyard, add
+    {C} and you gain 1 life."
+
+    Five pieces. The refusal site says "expected a subject", which is the
+    generic no-production message and names none of them:
+
+    1. There is no leading ``For each <noun phrase>, <effect>`` production at
+       all. The two that exist are a counter placement
+       (``effects/counters``) and the "for each creature that died this way"
+       back-reference (``statements``); a bare sentence opening with "for" has
+       no reading.
+    2. The *trailing* spelling that does exist ("Add {C} for each …") reads only
+       the caster's own zone: "in **target opponent's** graveyard" leaves
+       unconsumed text where "in your graveyard" parses.
+    3. ``lowering/mana._lower_add_mana``'s per-each branch refuses any owner but
+       "you" — "the mana multiplier counts the producer's own board".
+    4. The loop body is two effects joined by "and", and
+       ``handlers/control_flow.for_each`` iterates battlefield permanents or a
+       set an earlier step recorded. Cards in a graveyard are neither, so even a
+       parsed loop would have nothing to walk.
+    5. The spell targets a **player**, and with no instruction describing one
+       ``targeting.derive_cast_spec`` gives the picker nothing to ask for.
+    """
+    from engine.grammar import compile_line
+
+    assert not compile_card_oracle(set_pool("ICE")["Spoils of Evil"]).supported
+
+    # Piece 1: the leading form has no production.
+    leading = compile_line(
+        "For each artifact or creature card in target opponent's graveyard, "
+        "add {C} and you gain 1 life."
+    )
+    assert not leading.parsed
+
+    # Piece 2: the trailing form reads the caster's zone and only that one.
+    assert compile_line("Add {C} for each creature card in your graveyard.").lowered
+    theirs = compile_line(
+        "Add {C} for each artifact or creature card in target opponent's graveyard."
+    )
+    assert not theirs.parsed
+# --- end W1G3 ---

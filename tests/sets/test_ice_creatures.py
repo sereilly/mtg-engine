@@ -798,24 +798,25 @@ def test_an_unpaid_cumulative_upkeep_still_sacrifices(set_pool):
     game.resolve_upkeep(0)
 
     assert not any(perm is wall for perm in game.all_permanents())
-def test_adarkar_unicorn_refuses_a_choice_between_multi_symbol_runs(set_pool):
-    """"{T}: Add {U} or {C}{U}." The payload can express a choice only between
-    single symbols, so merging this one produced a bag reading "either one {C}
-    or two {U}" — neither of the two things the card prints.
+def test_adarkar_unicorn_reads_a_choice_between_multi_symbol_runs(set_pool):
+    """"{T}: Add {U} or {C}{U}." The older payload could express a choice only
+    between single symbols — ``pips_choice`` is one ``(symbol, count)`` pair per
+    alternative — so merging this one produced a bag reading "either one {C} or
+    two {U}", neither of the two things the card prints. It refused the line.
 
-    The line refuses instead, which leaves the card unsupported rather than
-    supported and making mana it does not have. Its *restriction* clause is
-    implemented; this is the only thing still holding it back.
+    ``pips_alternatives`` carries an alternative as a whole pip list instead, so
+    "{C} and {U} together" is sayable. The single-symbol alternation every dual
+    land prints keeps its own key and its own reading.
     """
     from engine.grammar import compile_line
     from engine.restricted_mana import mana_restriction_for
 
     unicorn = set_pool("ICE")["Adarkar Unicorn"]
-    assert not compile_card_oracle(unicorn).supported
-
-    refused = compile_line("{T}: Add {U} or {C}{U}.")
-    assert not refused.parsed
-    assert "more than one symbol" in (refused.parse_error or "")
+    program = compile_card_oracle(unicorn)
+    assert program.supported
+    payload = program.activated_abilities[0].instruction.payload
+    assert payload["pips_alternatives"] == ((("U", 1),), (("C", 1), ("U", 1)))
+    assert payload["spend_only"] == "cumulative_upkeep"
 
     # The single-symbol alternation every dual land prints is untouched.
     dual = compile_line("{T}: Add {B} or {R}.")
@@ -1409,3 +1410,239 @@ def test_a_condition_on_a_kind_nothing_asks_about_refuses_the_line(set_pool):
         "this creature can't block as long as you control a snow land"
     ) is None
     assert combat_restriction_for("this creature can't block") is not None
+
+
+# --- W1G3: mana, additional costs, cost restrictions ---
+def _w1g3_cost(**pips):
+    """A whole mana cost as a symbol dict — every symbol present, the way
+    engine/mana_payment.py says a cost is spelled everywhere."""
+    cost = {symbol: 0 for symbol in ("W", "U", "B", "R", "G", "C")}
+    cost["generic"] = 0
+    cost.update(pips)
+    return cost
+
+
+def _w1g3_board(set_pool, *names, hand=(), library=()):
+    """Seat 0 with those ICE permanents out, unsick, costs unenforced."""
+    pool = set_pool("ICE")
+    mine = [Permanent(card=pool[n]) for n in names]
+    game = Game(
+        players=[
+            PlayerState(
+                name="P1", battlefield=mine,
+                hand=[pool[n] for n in hand],
+                library=[pool[n] for n in library],
+                life=20,
+            ),
+            PlayerState(name="P2", life=20),
+        ]
+    )
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    for perm in mine:
+        _nosick(perm)
+    return game, mine
+
+
+def test_w1g3_orcish_lumberjack_makes_three_mana_from_one_forest(set_pool):
+    """"{T}, Sacrifice a Forest: Add three mana in any combination of {R}
+    and/or {G}."
+
+    The count and the two symbols are payload; each unit's colour is the seat's
+    choice at resolution. Three mana, not one — the clause refused on
+    "expected 'of'" before this, so the card was unsupported rather than wrong.
+    """
+    game, (jack, forest) = _w1g3_board(set_pool, "Orcish Lumberjack", "Forest")
+
+    result = game.activate_permanent_ability(0, "Orcish Lumberjack")
+    game._settle()
+
+    assert result.supported, result.details
+    assert forest not in game.players[0].battlefield, "the Forest paid the cost"
+    pool = game.players[0].mana_pool
+    assert pool["R"] + pool["G"] == 3
+    assert all(
+        pool[symbol] == 0 for symbol in pool if symbol not in ("R", "G")
+    ), "only the printed symbols are produced"
+
+
+def test_w1g3_orcish_lumberjack_honours_the_colour_the_seat_named(set_pool):
+    """The seat's pick rides the same ``mana_color`` channel a dual land's
+    choice does. All three of the green, because "any combination" includes
+    every unit being the same symbol."""
+    game, _ = _w1g3_board(set_pool, "Orcish Lumberjack", "Forest")
+
+    game.activate_permanent_ability(0, "Orcish Lumberjack", mana_color="G")
+    game._settle()
+
+    assert game.players[0].mana_pool["G"] == 3
+    assert game.players[0].mana_pool["R"] == 0
+
+
+def test_w1g3_orcish_lumberjack_takes_an_explicit_split(set_pool):
+    """"…in any combination of" really is a per-unit choice, and the engine can
+    say so: a named split of two green and one red is honoured whole. Only the
+    printed symbols and only the printed total — anything else is a split that
+    was never offered, and is discarded rather than part-applied."""
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers.registry import EFFECT_HANDLERS
+
+    game, (jack, _forest) = _w1g3_board(set_pool, "Orcish Lumberjack", "Forest")
+    program = compile_card_oracle(jack.card)
+    instruction = program.activated_abilities[0].instruction
+
+    EFFECT_HANDLERS[instruction.kind](
+        game, instruction,
+        OracleExecutionContext(
+            caster=game.players[0], target=game.players[1], card=jack.card,
+            source_permanent=jack,
+            choices={"mana_combination": {"G": 2, "R": 1}},
+        ),
+    )
+
+    assert game.players[0].mana_pool["G"] == 2
+    assert game.players[0].mana_pool["R"] == 1
+
+
+def test_w1g3_adarkar_unicorn_mana_pays_a_cumulative_upkeep_and_nothing_else(set_pool):
+    """"{T}: Add {U} or {C}{U}. Spend this mana only to pay cumulative upkeep
+    costs." (CR 106.6.)
+
+    Both halves, together: the alternative the seat takes is a written-out
+    *quantity* (the larger one by default — nothing costs anything to choose and
+    this engine has no mana burn), and every unit of it lands in the restricted
+    bucket rather than in the pool. A restriction parsed and then charged by
+    nobody is mana more freely spendable than the card allows, so the second
+    half is the one that matters.
+    """
+    from engine.restricted_mana import CAST, CUMULATIVE_UPKEEP, PaymentPurpose
+
+    game, (unicorn,) = _w1g3_board(set_pool, "Adarkar Unicorn")
+
+    result = game.activate_permanent_ability(0, "Adarkar Unicorn")
+    game._settle()
+
+    assert result.supported, result.details
+    player = game.players[0]
+    assert player.mana_pool["U"] == 0 and player.mana_pool["C"] == 0
+    assert player.restricted_mana["cumulative_upkeep"] == {"C": 1, "U": 1}
+
+    # It cannot be spent on a spell…
+    assert not game._pay_mana_cost(
+        player, _w1g3_cost(U=1),
+        purpose=PaymentPurpose(CAST, card=unicorn.card),
+    )
+    assert player.restricted_mana["cumulative_upkeep"]["U"] == 1
+    # …and it can be spent on a cumulative upkeep.
+    assert game._pay_mana_cost(
+        player, _w1g3_cost(U=1, generic=1),
+        purpose=PaymentPurpose(CUMULATIVE_UPKEEP, source=unicorn),
+    )
+    assert player.restricted_mana["cumulative_upkeep"] == {"C": 0, "U": 0}
+
+
+def test_w1g3_krovikan_sorcerer_discard_cost_is_narrowed_by_colour(set_pool):
+    """"{T}, Discard a nonblack card: Draw a card."
+
+    A discard cost narrowed by a *colour exclusion*. ``exclude_colors`` had no
+    entry in the card matcher's key set, so the phrase was refused whole and the
+    card was unsupported — the direction that costs support rather than
+    narrowing, but a gap either way.
+    """
+    from engine.subject_filters import card_matches_any
+
+    pool = set_pool("ICE")
+    program = compile_card_oracle(pool["Krovikan Sorcerer"])
+    assert program.supported
+    narrowing = program.activated_abilities[0].cost.discard_filters
+    assert narrowing == ({"exclude_colors": ["B"]},)
+
+    assert card_matches_any(pool["Balduvian Bears"], narrowing)   # red
+    assert not card_matches_any(pool["Hoar Shade"], narrowing)    # black
+
+
+def test_w1g3_krovikan_sorcerer_draws_for_a_nonblack_card(set_pool):
+    """Played out: the cost eats the red card in hand and the draw happens."""
+    game, _ = _w1g3_board(
+        set_pool, "Krovikan Sorcerer",
+        hand=["Balduvian Bears"], library=["Glacial Wall", "Glacial Wall"],
+    )
+
+    result = game.activate_permanent_ability(0, "Krovikan Sorcerer", ability_index=0)
+    game._settle()
+
+    assert result.supported, result.details
+    assert [c.name for c in game.players[0].hand] == ["Glacial Wall"]
+
+
+def test_w1g3_krovikan_sorcerer_discards_one_of_the_two_it_drew(set_pool):
+    """"{T}, Discard a black card: Draw two cards, then discard one **of
+    them**."
+
+    "Of them" is an identity restriction, not a characteristic one: the discard
+    comes out of the two cards this resolution just drew. Dropped, the seat
+    could pitch anything in hand — a strictly better card than the one printed —
+    and the prompt is held to the hand positions the draw landed in, because
+    every copy of a card in a hand is the same Python object and no filter can
+    tell one from another.
+    """
+    game, _ = _w1g3_board(
+        set_pool, "Krovikan Sorcerer",
+        hand=["Hoar Shade", "Balduvian Bears"],
+        library=["Glacial Wall", "Arnjlot's Ascent"],
+    )
+    game.interactive_seats = {0}
+
+    result = game.activate_permanent_ability(0, "Krovikan Sorcerer", ability_index=1)
+    game._settle()
+
+    assert result.supported, result.details
+    choice = game.pending_choice_of("discard")
+    assert choice is not None
+    hand = game.players[0].hand
+    eligible = game.live_discard_candidates(choice)
+    assert [hand[i].name for i in eligible] == ["Glacial Wall", "Arnjlot's Ascent"]
+
+
+def test_w1g3_a_single_symbol_choice_also_lands_in_the_restricted_bucket(set_pool):
+    """The sibling branch Adarkar Unicorn's shape exposed.
+
+    "Add {B} or {R}" lowers to ``pips_choice``, and its lowering has always
+    carried ``spend_only`` beside it — but the handler branch wrote straight
+    into ``mana_pool`` and never asked. No card in the pool prints the pair
+    today, which is exactly why the miss was invisible: had the Unicorn been
+    printed "Add {U} or {C}" instead of "{U} or {C}{U}", it would have gone down
+    that branch and made unrestricted mana while reporting itself supported.
+
+    Named through the Unicorn's own restriction key so the two branches are held
+    to one answer.
+    """
+    from engine.game_types import OracleExecutionContext
+    from engine.grammar import compile_line
+    from engine.handlers.registry import EFFECT_HANDLERS
+
+    unicorn = set_pool("ICE")["Adarkar Unicorn"]
+    key = compile_card_oracle(unicorn).activated_abilities[0].instruction.payload[
+        "spend_only"
+    ]
+
+    line = compile_line(
+        "{T}: Add {B} or {R}. Spend this mana only to pay cumulative upkeep costs."
+    )
+    instruction = line.instructions[0]
+    assert instruction.payload["pips_choice"] == (("B", 1), ("R", 1))
+    assert instruction.payload["spend_only"] == key
+
+    game, _ = _w1g3_board(set_pool, "Adarkar Unicorn")
+    EFFECT_HANDLERS[instruction.kind](
+        game, instruction,
+        OracleExecutionContext(
+            caster=game.players[0], target=game.players[1], card=unicorn,
+        ),
+    )
+
+    assert game.players[0].mana_pool["B"] == 0
+    assert game.players[0].restricted_mana[key] == {"B": 1}
+
+# --- end W1G3 ---

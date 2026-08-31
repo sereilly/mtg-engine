@@ -751,6 +751,28 @@ def _narrow_to_takeable_actions(
     return tuple(narrowed), True
 
 
+def _resolved_life_cost(game, printed, context: OracleExecutionContext) -> int:
+    """How much life an offered life cost charges, read at resolution.
+
+    A printed digit arrives as an int. "life equal to **its** toughness"
+    (Essence Vortex) arrives as an ``object_characteristic`` spec, because
+    CR 613 makes toughness computed and a creature pumped after the spell was
+    announced has a different one — so the number is taken here, through the
+    evaluator every other resolution-time count shares, rather than at lowering.
+
+    Zero when the spec names an object the resolution no longer has, which is
+    the honest reading: nothing is charged, and the caller's decline branch has
+    nothing left to act on either.
+    """
+    if not printed:
+        return 0
+    if isinstance(printed, dict):
+        from ._common import count_from_payload
+
+        return max(0, count_from_payload(game, context, printed))
+    return max(0, int(printed))
+
+
 def _resolved_cost(printed, context: OracleExecutionContext) -> dict:
     """An offered cost with its variable amount read at resolution.
 
@@ -845,6 +867,23 @@ def _offered_seats(
             i for i in game.opponents_of(game.players.index(context.caster))
             if not game.players[i].lost
         ]
+    if actor == "controller":
+        # "… unless **its controller** pays life equal to its toughness."
+        # (Essence Vortex.) The seat is read off the permanent the sentence
+        # targeted, through the control seam — never off ``context.target``,
+        # which for a spell that targets a creature is not a player at all.
+        # With the target gone by resolution there is nobody to offer, and the
+        # caller's ``otherwise`` branch has nothing left to destroy either.
+        from ._common import resolve_target_permanent
+
+        perm = resolve_target_permanent(
+            game, context, predicate=lambda p: True,
+            fallback_on_invalid_choice=False,
+        )
+        if perm is None:
+            return []
+        seat = game.controller_index_of(perm)
+        return [] if seat is None else [seat]
     return [game.players.index(context.caster if actor == "you" else context.target)]
 
 
@@ -900,8 +939,15 @@ def _offer_to_seat(
     # of the same question — a player with the life but not the mana can still
     # take this offer — so it is asked through the one predicate rather than by
     # a second test here.
-    if cost and not game._player_can_pay_optional(player, {
+    # "… unless its controller pays **life equal to its toughness**" (Essence
+    # Vortex). A life cost with no mana half, read at resolution because the
+    # number can be a computed characteristic (CR 613) — through the same
+    # evaluator every other resolution-time count goes through, so "its
+    # toughness" means here what it means anywhere else.
+    life_cost = _resolved_life_cost(game, instruction.payload.get("life_cost"), context)
+    if (cost or life_cost) and not game._player_can_pay_optional(player, {
         "cost": cost,
+        "life_cost": life_cost,
         "life_alternative": int(instruction.payload.get("life_alternative", 0) or 0),
     }):
         if on_decline:
@@ -928,6 +974,7 @@ def _offer_to_seat(
     entry = {
         "card_name": context.card.name,
         "cost": cost,
+        "life_cost": life_cost,
         "life": 0,
         "_source_permanent": context.source_permanent,
         # Instructions to run on accept/decline, with the resolution context
@@ -949,6 +996,8 @@ def _offer_to_seat(
             if life_alternative
             else f"Pay {mana_cost_label(cost)}?"
         )
+    elif life_cost:
+        entry["prompt"] = f"Pay {life_cost} life?"
     # Mirror a plain "gain N life" consequence into the legacy `life` field so
     # the prompt UI keeps describing what accepting does. Display only —
     # _pay_optional runs the instruction branch and returns before reading it.

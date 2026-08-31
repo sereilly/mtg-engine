@@ -179,7 +179,13 @@ CARD_ONLY_FILTER_KEYS = frozenset(
      # battlefield object to be asked of — the same argument ``mana_value`` beside
      # it already makes, and what puts it here rather than among the layer
      # questions only ``subject_matches`` can answer.
-     "color_filter"}
+     "color_filter",
+     # "Discard a **nonblack** card" (Krovikan Sorcerer). The negative of
+     # ``color_filter`` and answered off the same printed mana cost (CR 202.2),
+     # so it is testable here for exactly the reason the positive is — and it
+     # has to be listed, because a colour exclusion the charger could not test
+     # made the whole cost refuse rather than be charged narrowly.
+     "exclude_colors"}
 )
 
 

@@ -86,6 +86,7 @@ from .control_changes import (
 )
 from .mana import (
     _parse_add_mana,
+    _parse_note_mana_spent,
     _parse_player_adds_mana,
     _parse_produces_instead,
     _parse_you_tap_produces_instead,
@@ -200,6 +201,7 @@ __all__ = [
     "_parse_mill",
     "_parse_scry",
     "_parse_add_mana",
+    "_parse_note_mana_spent",
     "_parse_cast_permission",
     "_parse_exile_cost_sacrifices",
     "_parse_exile_graveyard",

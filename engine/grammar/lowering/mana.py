@@ -106,6 +106,37 @@ def _lower_add_mana(
                 {"color": node.from_sacrificed_cost, "bonus": 0, "spend_only": None},
             ),
         )
+    if node.from_noted:
+        # "Add one mana of this artifact's last noted type." (Jeweled Amulet.)
+        # No symbol at all: what is added is the record an earlier activation of
+        # the same permanent wrote (``engine/noted_mana.py``), which only a
+        # resolution holding the source can read. ``from_noted`` says which half
+        # of the record the clause uses — the type alone, or the amount with it.
+        payload = {"from_noted": node.from_noted}
+        if node.spend_only is not None:
+            payload["spend_only"] = node.spend_only
+        return (OracleInstruction("add_mana_from_text", "", payload),)
+    if node.runs_choice:
+        # "Add {U} or {C}{U}." (Adarkar Unicorn.) Its own key for the reason
+        # ``pips_choice`` is one: a reader that has not learned it adds nothing
+        # rather than every alternative, and "nothing" is the failing-safe
+        # direction for a mana ability.
+        payload = {"pips_alternatives": node.runs_choice}
+        if node.spend_only is not None:
+            payload["spend_only"] = node.spend_only
+        return (OracleInstruction("add_mana_from_text", "", payload),)
+    if node.combination:
+        # "Add three mana in any combination of {R} and/or {G}." (Orcish
+        # Lumberjack.) The count and the symbols are both payload; which unit is
+        # which colour is the seat's choice at resolution, so nothing about it
+        # is decided here.
+        payload = {
+            "combination": node.combination,
+            "combination_count": _amount_payload(node.combination_count),
+        }
+        if node.spend_only is not None:
+            payload["spend_only"] = node.spend_only
+        return (OracleInstruction("add_mana_from_text", "", payload),)
     if node.pips:
         # A printed "or" ships under its own key, never as bare ``pips``: a
         # reader that has not learned ``pips_choice`` then adds *nothing*
@@ -210,6 +241,24 @@ def _lower_add_mana(
         # written before it is byte-identical.
         payload["any_color_from"] = node.any_color_from
     return (OracleInstruction("add_mana_from_text", "", payload),)
+
+
+def _lower_note_mana_spent(
+    node: ast.NoteManaSpent,
+) -> tuple[OracleInstruction, ...]:
+    """"Note the type [and amount] of mana spent to pay this activation cost."
+    (Jeweled Amulet, Ice Cauldron.)
+
+    One instruction with the one printed difference as payload. Nothing is
+    produced and nothing on any board changes; the record goes on the ability's
+    own source, which is what "**this artifact's** last noted type" one line
+    later reads.
+    """
+    return (
+        OracleInstruction(
+            "note_mana_spent", "", {"with_amount": bool(node.with_amount)}
+        ),
+    )
 
 
 # Which player the mana goes to, from the clause's own subject. Both spellings

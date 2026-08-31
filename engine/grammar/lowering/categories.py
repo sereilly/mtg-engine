@@ -588,6 +588,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Enchantments) — the sweep twin of the bounce above.
     "return_all_matching": "zones",
     "add_mana_from_text": "mana",
+    # "Note the type of mana spent to pay this activation cost."
+    # (Jeweled Amulet.) No mana is produced; what the instruction does is
+    # remember CR 107.4b's symbols on the source for a later ability of the
+    # same permanent to add back.
+    "note_mana_spent": "mana",
     # "Add an amount of {B} equal to the sacrificed artifact's mana value"
     # (Priest of Yawgmoth). The handler predates the grammar reading this
     # sentence — two hooks produced it — so the kind is named for the creature

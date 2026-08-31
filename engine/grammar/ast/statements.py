@@ -94,6 +94,7 @@ from .board import (
 from .mana import (
     AddMana,
     AddManaForTappedLand,
+    NoteManaSpent,
     ProducesManaInstead,
     SpendManaAsThough,
 )
@@ -189,7 +190,7 @@ Effect = Union[
     ChooseCardsInHand, PutIteratedCardOnLibrary,
     ExileGraveyardUntilLeaves, CastFromExiledWith, ForceChosenCreatureToAttack,
     PhaseOut,
-    AddManaForTappedLand, ProducesManaInstead, SpendManaAsThough, PreventDamage,
+    AddManaForTappedLand, NoteManaSpent, ProducesManaInstead, SpendManaAsThough, PreventDamage,
     RedirectDamage, DamageCantBePreventedOrRedirected, UpkeepDamageUnlessCost,
     SearchLibrary, SearchAndExile, TransmuteBySacrifice, OwnershipExchangeUnlessPaid,
     RandomRevealOwnershipExchange,
@@ -295,6 +296,15 @@ class May:
     #: other second cost should grow the field into a cost union rather than
     #: reuse this one for something it cannot say.
     life_alternative: int | None = None
+    #: "…unless its controller **pays life equal to its toughness**." (Essence
+    #: Vortex.) A life cost with no mana alternative at all, which is a
+    #: different field from ``life_alternative`` above for the reason
+    #: ``_player_can_pay_optional`` states about the two payload keys: folding
+    #: them would make an unaffordable mana cost read as a life one. An
+    #: :class:`Amount` rather than an int, because the printed number can be a
+    #: characteristic of the object the sentence already named and only the
+    #: resolution knows it (CR 613 makes toughness computed).
+    life_cost: "Amount | None" = None
     #: "**Starting with you**, each player may …" (Eureka). Which seat is asked
     #: first. CR 101.4 already orders a multi-seat offer from the active player,
     #: and for a sorcery those are the same seat — but they are not the same

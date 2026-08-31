@@ -125,21 +125,33 @@ def test_grammar_refuses_the_rider_shape_instead_of_swallowing_it():
 
     The refusal moved one layer down when Erosion printed this shape about a
     seat the offer *can* name ("…unless **that player** pays {1} or 1 life"):
-    the destroy family reads the tail now, and what refuses "its controller" is
-    ``lowering/control_flow.OFFERABLE_ACTORS`` — the four references
+    the destroy family reads the tail now, and what refuses an unresolvable
+    payer is ``lowering/control_flow.OFFERABLE_ACTORS`` — the references
     ``handlers/control_flow._offered_seats`` can actually resolve. That is a
     strictly better refusal for the bug class this file guards, because it names
     the payer rather than reporting unconsumed text, and it claims nothing:
     ``scripts/parse_coverage.py`` reads ``usable``, which a lowering refusal
     leaves False. So both halves are asserted — the line is unusable, and the
     reason says which word it could not honour.
+
+    The example is "an opponent" rather than "its controller", which used to
+    stand here: Essence Vortex made the controller resolvable, by reading the
+    seat off the targeted permanent through the control seam. The refusal is the
+    point, not which word triggers it, and the assertion below keeps both — the
+    payer this engine *can* name lowers, and the one it cannot still refuses.
     """
     from engine.grammar import compile_line
 
-    result = compile_line("Destroy target creature unless its controller pays {4}.")
+    result = compile_line("Destroy target creature unless an opponent pays {4}.")
     assert not result.usable
     assert not result.lowered
-    assert "controller" in (result.lowering_error or ""), result.lowering_error
+    assert "target_opponent" in (result.lowering_error or ""), result.lowering_error
+
+    resolvable = compile_line(
+        "Destroy target creature unless its controller pays {4}."
+    )
+    assert resolvable.usable
+    assert resolvable.instructions[0].payload["actor"] == "controller"
 
 
 def test_the_gate_is_the_shipped_pool_and_measured_sets_are_reported():

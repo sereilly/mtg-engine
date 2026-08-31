@@ -307,6 +307,37 @@ def _parse_further_subjects(
         extra.append(nxt)
 
 
+def _accept_unless_life_cost(stream: TokenStream) -> "ast.Amount | None":
+    """The life half of "… unless <player> pays <life>", or None, cursor unmoved.
+
+    Two printed shapes and no third: "**3 life**" and "**life equal to its
+    toughness**" (Essence Vortex). The second is not a number this parser could
+    count — CR 613 makes toughness computed, so it is whatever the creature has
+    when the offer is made — and it travels as the characteristic reference the
+    resolution reads.
+
+    None rather than a raise, so the mana payment beside it keeps its reading of
+    every clause that is not a life cost.
+    """
+    mark = stream.mark()
+    if stream.accept_word("life"):
+        if stream.accept_phrase("equal", "to", "its"):
+            for name in ("toughness", "power"):
+                if stream.accept_word(name):
+                    return ast.CharacteristicOfSubject(name, 0)
+        stream.reset(mark)
+        return None
+    try:
+        amount = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if isinstance(amount, ast.Fixed) and amount.value > 0 and stream.accept_word("life"):
+        return amount
+    stream.reset(mark)
+    return None
+
+
 def _accept_life_alternative(stream: TokenStream) -> int | None:
     """``or 1 life`` trailing a mana payment (Erosion) — CR 118.8, or None.
 
@@ -373,6 +404,24 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
             and payer.kind != "you"
             and stream.accept_word("pays", "pay")
         ):
+            # "… unless its controller pays **life equal to its toughness**."
+            # (Essence Vortex.) A life cost with no mana half, so it is read
+            # before the mana payment below — which would refuse the word
+            # "life" and take the whole line with it. The trailing "A creature
+            # destroyed this way can't be regenerated" belongs to the *decline*
+            # branch, and is read here because this production returns before
+            # the tail reader further down ever runs.
+            life = _accept_unless_life_cost(stream)
+            if life is not None:
+                stream.accept_punct(".", ",")
+                unregenerable = _accept_destroyed_this_way_no_regen(stream)
+                return ast.May(
+                    actor=payer,
+                    life_cost=life,
+                    otherwise=ast.Destroy(
+                        subject, no_regen=unregenerable, delay=""
+                    ),
+                )
             cost = _parse_mana_payment(stream)
             return ast.May(
                 actor=payer,

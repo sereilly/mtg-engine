@@ -134,6 +134,19 @@ def count_from_payload(
         if cost_exile == "mana_value":
             return max(0, int(getattr(exiled, "cmc", 0) or 0))
         return 0
+    # "…where X is **the sacrificed creature's mana value**" (Burnt Offering).
+    # The branch above one zone over: what the spell's own additional cost ate
+    # (CR 601.2b), off the record the payment path kept. The channel carries a
+    # `Permanent`, so the mana value is read through its card.
+    cost_sacrifice = spec.get("cost_sacrifice_characteristic")
+    if cost_sacrifice is not None:
+        sacrificed = (context.choices or {}).get("sacrificed_for_cost")
+        card = getattr(sacrificed, "card", None) or sacrificed
+        if card is None:
+            return 0
+        if cost_sacrifice == "mana_value":
+            return max(0, int(getattr(card, "cmc", 0) or 0))
+        return 0
     characteristic = spec.get("object_characteristic")
     if isinstance(characteristic, dict):
         return _characteristic_of_object(game, context, characteristic, instruction)
@@ -497,6 +510,15 @@ def _card_matches_filter(card, filt: dict) -> bool:
     color_filter = filt.get("color_filter")
     if color_filter and color_filter not in (getattr(card, "colors", ()) or ()):
         return False
+    # "a **nonblack** card" (Krovikan Sorcerer). The negative of the test above,
+    # off the same printed colours, and OR'd the same way a type exclusion is: a
+    # card carrying *any* excluded colour is out, which is what "nonblack,
+    # nonred" would mean printed together.
+    excluded_colors = filt.get("exclude_colors") or ()
+    if excluded_colors:
+        held = getattr(card, "colors", ()) or ()
+        if any(color in held for color in excluded_colors):
+            return False
     named = filt.get("named")
     # Through `name_key`, so the parser's rendering of a legendary name
     # ("chandra , flame 's catalyst") and Oracle's spelling of it compare equal —

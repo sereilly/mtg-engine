@@ -287,3 +287,94 @@ def test_a_several_target_destroy_used_to_describe_no_targets_at_all(set_pool):
 
     assert instruction.kind == "destroy_target_permanent"
     assert instruction.payload["targets"]["count"] == 2
+
+
+# --- W1G3: mana, additional costs, cost restrictions ---
+def test_w1g3_fumarole_is_declined_on_its_second_target_not_its_cost(set_pool):
+    """"As an additional cost to cast this spell, pay 3 life." / "Destroy target
+    creature and target land."
+
+    The cost half already works — ``cast_costs``'s preamble-plus-clause table
+    names Fumarole in its own docstring, and the refusal report's "expected a
+    subject" on that line is the *grammar* declining a sentence the cost table
+    claims, not a gap. What is missing is the second target, and it is missing
+    in four places rather than one:
+
+    1. ``effects/board._parse_further_subjects`` raises "no spell picks two
+       targets from one verb" on purpose;
+    2. ``targeting.derive_cast_spec`` answers with a single ``kind``, so the
+       picker has no way to ask for a creature *and* a land;
+    3. the wire carries one ``target_permanent_index`` per cast, and
+       ``target_permanent_ids`` is a list of ids for *one* described set;
+    4. ``legality.cast_target_refusal`` and ``illegal_targets_refusal`` are
+       written around one target list from one instruction (CR 601.2c,
+       CR 608.2b), and two heterogeneous targets need both checked separately.
+
+    Landing the parse alone would compile the card supported and leave it
+    uncastable, its second target picked by nobody.
+    """
+    from engine.cast_costs import additional_costs
+    from engine.grammar import compile_line
+
+    fumarole = set_pool("ICE")["Fumarole"]
+    assert not compile_card_oracle(fumarole).supported
+
+    # The cost is read and would be charged.
+    (cost,) = additional_costs(fumarole)
+    assert cost.pay_life == 3
+
+    refused = compile_line("Destroy target creature and target land.")
+    assert not refused.parsed
+    assert "two targets" in (refused.parse_error or "")
+
+
+def test_w1g3_soul_burn_is_declined_and_says_which_pieces_are_missing(set_pool):
+    """"Spend only black and/or red mana on X." / "Soul Burn deals X damage to
+    any target. You gain life equal to the damage dealt, but not more than the
+    amount of {B} spent on X, the player's life total before the damage was
+    dealt, the planeswalker's loyalty before the damage was dealt, or the
+    creature's toughness."
+
+    Four pieces, and the second sentence is *nearly* there — without the cap it
+    lowers today, which is exactly why the cap must not be dropped: the life
+    gain would be unbounded.
+
+    1. ``oracle_types.x_spend_color_from_text`` returns **one** symbol (Drain
+       Life's "Spend only black mana on X"). This card names two, and the
+       payment reader takes ``x_color`` as a single symbol through
+       ``_parse_mana_cost`` and ``_infer_x_value``.
+    2. "the amount of **{B}** spent on X" — the casting path keeps no record of
+       *which* symbols paid a cast. The activation path measures one now
+       (``mana_spent_for_cost``); its casting twin does not exist.
+    3. "the player's life total / the planeswalker's loyalty / the creature's
+       toughness **before the damage was dealt**" — nothing snapshots a
+       recipient's pre-damage state for a later clause to read.
+    4. "but not more than A, B, C, or D" — the grammar has no minimum-of-several
+       amount node at all.
+    """
+    from engine.grammar import compile_line
+    from engine.oracle_types import x_spend_color_from_text
+
+    assert not compile_card_oracle(set_pool("ICE")["Soul Burn"]).supported
+
+    # Piece 1: one colour is read, a pair is not.
+    assert x_spend_color_from_text("Spend only black mana on X.") == "B"
+    assert x_spend_color_from_text("Spend only black and/or red mana on X.") is None
+
+    # Pieces 2-4: the sentence without its cap already lowers, so the cap is
+    # the whole of what is left — and dropping it would gain unbounded life.
+    uncapped = compile_line(
+        "Soul Burn deals X damage to any target. You gain life equal to the "
+        "damage dealt.",
+        card_name="Soul Burn",
+    )
+    assert uncapped.lowered
+    capped = compile_line(
+        "Soul Burn deals X damage to any target. You gain life equal to the "
+        "damage dealt, but not more than the amount of {B} spent on X, the "
+        "player's life total before the damage was dealt, the planeswalker's "
+        "loyalty before the damage was dealt, or the creature's toughness.",
+        card_name="Soul Burn",
+    )
+    assert not capped.parsed
+# --- end W1G3 ---
