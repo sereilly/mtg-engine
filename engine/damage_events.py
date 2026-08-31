@@ -234,6 +234,17 @@ def _apply_dealer_riders(game, source, recipient) -> None:
     for on_dealer, on_victim in _DEALER_RIDERS:
         if source.metadata.get(on_dealer):
             recipient.metadata[on_victim] = True
+    # The same rider printed as a *standing* ability rather than stamped by a
+    # resolving one ("Creatures dealt damage by this creature this turn can't be
+    # regenerated this turn" — what Bone Shaman grants itself). A marker cannot
+    # carry it: the ability can be granted and taken away again, and a metadata
+    # flag written when the grant resolved would outlive the grant. So it is
+    # derived from the damager's text here, at the same seam and for the same
+    # reason the markers are read here.
+    from .regeneration import CANT_BE_REGENERATED, denies_regeneration
+
+    if denies_regeneration(source):
+        recipient.metadata[CANT_BE_REGENERATED] = True
 
 
 def damage_candidates(recipient, event: dict | None = None) -> list[Candidate]:

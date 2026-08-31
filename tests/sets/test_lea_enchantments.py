@@ -2100,3 +2100,36 @@ def test_pestilence_survives_while_any_creature_is_on_the_battlefield(all_cards)
         game.resolve_top_of_stack()
 
     assert pestilence in p1.battlefield
+
+
+# --- W3G1: granted abilities in quotes ---
+def test_animate_dead_applies_its_penalty_once(set_pool):
+    """"Enchanted creature gets -1/-0" is an ordinary Aura static in CR 613
+    layer 7c, derived from the attached Aura's own text on every recompute.
+
+    The reanimation branch in ``_apply_aura_effect`` used to add a second copy
+    by hand, so a reanimated 2/2 came back at 0/2 — and Dance of the Dead's
+    "+1/+1", the same template one word apart, went through the derived path
+    alone, so the two printings did not even agree with each other.
+    """
+    pool = set_pool("LEA")
+    p1 = PlayerState(
+        name="P1", battlefield=[], life=20,
+        hand=[pool["Animate Dead"]], graveyard=[pool["Grizzly Bears"]],
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game._settle()
+    p1.mana_pool["B"] = 1
+
+    assert game.cast_from_hand(
+        0, "Animate Dead", target_player_index=0, target_permanent_index=0
+    ).supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+    bear = next(p for p in p1.battlefield if p.card.name == "Grizzly Bears")
+    aura = next(p for p in p1.battlefield if p.card.name == "Animate Dead")
+    assert aura.metadata.get("attached_to") is bear
+    assert (bear.effective_power, bear.effective_toughness) == (1, 2)
+# --- end W3G1 ---

@@ -27,7 +27,7 @@ from engine.cumulative_upkeep import cumulative_upkeep_cost
 from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick
+from tests.helpers import _mk_creature_card, _nosick
 
 # --- Round 1: cumulative upkeep (CR 702.24) ---
 def _cu_trigger(card):
@@ -79,21 +79,25 @@ def test_soldevi_simulacrum_escalates_across_two_upkeeps(set_pool):
     assert counters_on(sim, "age") == 2
     assert sum(1 for f in forests if f.tapped) == 2
     assert sim in p1.battlefield
-def test_musician_still_refuses_a_cost_the_engine_cannot_charge(set_pool):
-    """The keyword compiles, but "That enchantment gains ..." does not, so the
-    card stays unsupported naming the clause it cannot read.
+def test_a_readable_cumulative_upkeep_does_not_admit_an_unreadable_line():
+    """What the gate must not do is admit a permanent on the strength of a
+    keyword it *can* read while dropping a line it cannot.
 
-    Kept from round 1 as the shape rather than the card: what the gate must not
-    do is admit a permanent on the strength of a keyword it *can* read while
-    dropping a line it cannot."""
-    musician = set_pool("ICE")["Musician"]
-    program = compile_card_oracle(musician)
+    Kept from round 1 as the shape rather than the card. Musician was the
+    example until wave 3 implemented it, and the shape outlives every card that
+    happens to have it — so the second line here is invented rather than
+    printed, and the test asserts the compiler really does refuse it before
+    asserting what that refusal costs the card."""
+    unreadable = "This creature hums a fourth above whatever it blocks."
+    probe = _mk_creature_card(
+        "Cumulative Probe", 1, 1, "\n".join(("Cumulative upkeep {1}", unreadable))
+    )
+    program = compile_card_oracle(probe)
 
-    assert not program.supported
-    # The refusal names the granted-ability line, not the keyword: the cost
-    # reader admits "{1}" and the gate still says no.
-    assert "music counter" in (program.reason or "")
     assert cumulative_upkeep_cost("cumulative upkeep {1}") is not None
+    assert not program.supported
+    # The refusal names the line the engine cannot read, not the keyword it can.
+    assert "hums a fourth" in (program.reason or "")
 # --- Round 3: the cantrip cycle — "at the beginning of the next turn's upkeep" ---
 def test_pyknite_draws_at_the_next_turns_upkeep(set_pool):
     """The cantrip run end to end: the creature enters, arms the delayed

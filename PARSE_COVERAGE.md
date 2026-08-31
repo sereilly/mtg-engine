@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**13 unclaimed sentence(s) across 7 supported card(s).**
+**11 unclaimed sentence(s) across 6 supported card(s).**
 
 - **Call to Arms**
   - `white creatures get +1/+1 as long as the chosen color is the most common color among nontoken permanents the chosen player controls but isn't tied for most common`
@@ -39,9 +39,6 @@ anything anyone did, and every ingest would arrive red.
   - `all creatures get +1/+0 for each time counter on this artifact`
 - **Justice**
   - `whenever a red creature or spell deals damage, this enchantment deals that much damage to that creature's or spell's controller`
-- **Touch of Vitae**
-  - `until end of turn, target creature gains haste and "{0}: untap this creature`
-  - `activate only once."`
 - **Zur's Weirding**
   - `if a player would draw a card, they reveal it instead`
   - `then any other player may pay 2 life`
@@ -149,12 +146,12 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 989 |
+| parse rule | 991 |
 | activation cost | 398 |
 | trigger table | 339 |
 | static-line table | 234 |
 | keyword table | 222 |
-| card_hooks bespoke (name-keyed) | 103 |
+| card_hooks bespoke (name-keyed) | 100 |
 | aura enchant noun (oracle_instructions attach) | 87 |
 | activation_restrictions.py | 37 |
 | aura static (oracle_instructions/permanent_state) | 37 |

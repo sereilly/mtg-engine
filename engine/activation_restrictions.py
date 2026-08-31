@@ -71,6 +71,14 @@ class ActivationRestriction:
     #: than sniffed: a signature guessed by introspection is a signature that
     #: silently stops being guessed right.
     reads_payload: bool = False
+    #: Whether `is_legal` takes the whole printed ability **line** as a fourth
+    #: argument instead. Declared for the same reason, and separate from
+    #: `reads_payload` because the two answer different questions: a payload row
+    #: reads the parameters *inside* its own clause, and a line row has to know
+    #: which ability the clause is a tail of. CR 602.5c is why one row needs
+    #: that -- a use budget spent on one acquired ability says nothing about an
+    #: identically worded one -- and the clause alone cannot tell them apart.
+    reads_line: bool = False
     #: Whether the clause's *payload* is one this file can act on, asked of the
     #: match alone. A row whose capture ends in `.+` matches more sentences than
     #: it implements -- "controls a snow land" and "controls the highest life
@@ -627,6 +635,101 @@ def _below_counted_activation_limit(
     return limit is not None and activations_this_turn(game, source) < limit
 
 
+#: The metadata key a **once-only** activation tallies on its permanent, keyed
+#: by the printed ability line rather than by the turn.
+#:
+#: "Until end of turn, target creature gains haste and "{0}: Untap this
+#: creature. Activate only once."" (Touch of Vitae.) The clause beside it in
+#: this file -- "Activate only once each turn" -- is a per-turn budget and
+#: `ACTIVATION_TALLY_MARK` holds it; this one is not bounded by a turn at all,
+#: so a tally that reset with the turn would be a restriction the card does not
+#: have. It is per *line* rather than per permanent because CR 602.5c says the
+#: budget belongs to the ability as acquired, not to the object: a permanent
+#: holding two differently worded once-only abilities has two of them.
+ONCE_ONLY_TALLY_MARK = "once_only_ability_activations"
+
+#: The clause itself, spelled once. The row below matches it and
+#: :func:`prints_once_only_restriction` asks the write site about it, so the
+#: refusal and the tally cannot come to disagree about which lines are budgeted
+#: -- the same arrangement `printed_activation_caps` makes for the per-turn cap.
+_ONCE_ONLY_CLAUSE = re.compile(r"^activate only once$")
+
+
+def _once_only_key(ability_text: str) -> str:
+    """One spelling of an ability line, for comparing two of them.
+
+    The granted-ability channel's normalization, imported rather than restated:
+    the line this tally is keyed by is the line `Permanent.effective_card`
+    folded in, and two spellings of "the same sentence" is how a budget comes to
+    be spent against a line nobody activated.
+    """
+    from .keywords import normalized_ability_line
+
+    return normalized_ability_line(ability_text)
+
+
+def prints_once_only_restriction(ability_text: str) -> bool:
+    """Whether *ability_text* prints "Activate only once"."""
+    return any(
+        _ONCE_ONLY_CLAUSE.match(clause.rstrip("."))
+        for clause in _clauses(ability_text)
+    )
+
+
+def once_only_activations(source, ability_text: str) -> int:
+    """How many times this once-only line has already been activated."""
+    if source is None:
+        return 0
+    tally = source.metadata.get(ONCE_ONLY_TALLY_MARK)
+    if not isinstance(tally, dict):
+        return 0
+    return int(tally.get(_once_only_key(ability_text), 0))
+
+
+def mark_once_only_activation(source, ability_text: str) -> None:
+    """Spend this line's one use."""
+    if source is None:
+        return
+    key = _once_only_key(ability_text)
+    tally = source.metadata.setdefault(ONCE_ONLY_TALLY_MARK, {})
+    tally[key] = int(tally.get(key, 0)) + 1
+
+
+def clear_once_only_tally(source, ability_text: str) -> None:
+    """Give this line a fresh use budget (CR 602.5c).
+
+    Called when the line is *granted*, not when it is activated: the rule says a
+    restriction on an acquired ability applies "only to that ability as acquired
+    from that object", so a second grant of the same sentence is a second
+    ability with a budget of its own. Without this, a creature enchanted by two
+    Touch of Vitae in different turns would untap once and refuse forever after.
+
+    Two grants of the same line standing at once share the one budget, which is
+    stricter than the rule and never looser -- the direction a missing
+    restriction must never fail in.
+    """
+    if source is None:
+        return
+    tally = source.metadata.get(ONCE_ONLY_TALLY_MARK)
+    if isinstance(tally, dict):
+        tally.pop(_once_only_key(ability_text), None)
+        if not tally:
+            source.metadata.pop(ONCE_ONLY_TALLY_MARK, None)
+
+
+def _not_yet_activated_at_all(
+    game: "Game", controller_index: int, source, ability_text: str
+) -> bool:
+    """"Activate only once." (Touch of Vitae's granted ability.)
+
+    Per-*line* state on the permanent, so a control change carries it
+    (CR 602.5b) and a differently worded ability on the same permanent keeps its
+    own budget (CR 602.5c). A source that is gone has spent nothing, for the
+    reason `_not_yet_activated_this_turn` gives one clause up.
+    """
+    return once_only_activations(source, ability_text) < 1
+
+
 def mark_activated_this_turn(game: "Game", source) -> None:
     """Tally one activation of a permanent whose ability prints a per-turn cap."""
     if source is None:
@@ -950,6 +1053,19 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         _not_yet_activated_this_turn,
         "only once each turn",
     ),
+    # "Activate only once." (Touch of Vitae grants it; nothing in the pool
+    # prints it on a card of its own.) One word shorter than the row above and a
+    # different rule: no turn bounds it, so the budget is spent for as long as
+    # the permanent holds the ability. Anchored, so it cannot be satisfied by
+    # the per-turn row's sentence, and reading the whole line rather than the
+    # clause because CR 602.5c makes the budget the *ability's* rather than the
+    # permanent's.
+    ActivationRestriction(
+        _ONCE_ONLY_CLAUSE,
+        _not_yet_activated_at_all,
+        "only once",
+        reads_line=True,
+    ),
     # "Activate no more than twice each turn." (Vampire Bats.) The *only* clause
     # in the pool that does not begin "Activate only", and the one that showed
     # `_clauses` was collecting by that prefix rather than by the verb: the
@@ -1186,11 +1302,12 @@ def activation_denial(game, controller_index: int, source, ability_text: str) ->
         if found is None:
             continue
         entry, match = found
-        legal = (
-            entry.is_legal(game, controller_index, source, match)
-            if entry.reads_payload
-            else entry.is_legal(game, controller_index, source)
-        )
+        if entry.reads_payload:
+            legal = entry.is_legal(game, controller_index, source, match)
+        elif entry.reads_line:
+            legal = entry.is_legal(game, controller_index, source, ability_text)
+        else:
+            legal = entry.is_legal(game, controller_index, source)
         if not legal:
             return entry.denial
     return None
@@ -1198,7 +1315,12 @@ def activation_denial(game, controller_index: int, source, ability_text: str) ->
 
 __all__ = [
     "ACTIVATION_RESTRICTIONS",
-    "ONCE_EACH_TURN_MARK",
+    "ACTIVATION_TALLY_MARK",
+    "ONCE_ONLY_TALLY_MARK",
+    "clear_once_only_tally",
+    "mark_once_only_activation",
+    "once_only_activations",
+    "prints_once_only_restriction",
     "ActivationCap",
     "ActivationRestriction",
     "activation_denial",

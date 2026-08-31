@@ -253,6 +253,25 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
         target_perm = target.battlefield[perm_idx]
     elif target.battlefield:
         target_perm = target.battlefield[0]
+    # "target **white enchantment you control that doesn't have cumulative
+    # upkeep**" (Balduvian Shaman). The Lace cycle prints no narrowing at all
+    # and carries no description, so this is the whole of the check for it; a
+    # card that does print one is held to it here as well as at the picker, for
+    # the reason the grant handlers next door state — a picker and a resolution
+    # that disagree are a target the player may announce and the effect then
+    # declines to affect.
+    from ..subject_filters import subject_matches
+
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    if described and not subject_matches(
+        game, target_perm, described,
+        # CR 109.5: "you control" is the seat whose ability this is, and
+        # `context.caster` is that seat for a spell and an activation alike.
+        observer=game.seat_index(context.caster),
+        source=context.source_permanent,
+    ):
+        game.log.append(f"{card.name}: no legal permanent to change the text of")
+        return True, "resolved"
     if target_perm is not None:
         target_perm.metadata["text_modified"] = True
 

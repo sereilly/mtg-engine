@@ -92,6 +92,24 @@ def _accept_bands_with_other(stream: TokenStream) -> str | None:
     return name
 
 
+def _at_keyword_item(stream: TokenStream) -> bool:
+    """Whether another keyword-list item starts here, without consuming it.
+
+    The lookahead the list's joining words need: a conjunction belongs to the
+    keyword list only when a keyword follows it, and the two spellings of an
+    item — an indexed word and CR 702.22b's printed noun phrase — have to be
+    asked about together, or "and bands with other legendary creatures" would
+    read as the end of the list.
+    """
+    mark = stream.mark()
+    try:
+        if _accept_bands_with_other(stream) is not None:
+            return True
+    finally:
+        stream.reset(mark)
+    return match_longest(stream.words_from(), 0, KEYWORD_INDEX) is not None
+
+
 def _parse_keywords(stream: TokenStream) -> tuple[str, ...]:
     # "all **landwalk** abilities" (Hammerheim) — a card naming a keyword
     # *family* rather than listing its members. CR 702.14a makes landwalk a
@@ -161,11 +179,24 @@ def _parse_keywords(stream: TokenStream) -> tuple[str, ...]:
         # strike, or trample" (four) — English punctuates a list of four
         # differently from a list of two and the card means the same thing
         # either way, which is the same reason the subtype parser reads both.
-        # A comma is consumed only when a keyword follows it, so a line that
-        # ends its keyword list and goes on keeps the comma for whatever reads
-        # the rest.
+        # A conjunction is consumed only when a keyword follows it, so a line
+        # that ends its keyword list and goes on keeps the joining word for
+        # whatever reads the rest.
+        #
+        # That rule used to hold for the comma alone: "and" and "or" were taken
+        # unconditionally, which swallowed the word joining the keyword list to
+        # the *next clause* of the same sentence. "Target creature gains trample
+        # **and** gets +2/+0 until end of turn" is the shape, and the branch in
+        # `_parse_gains` written for it had been unreachable ever since — it
+        # asks for an "and" that was already gone, rewinds, and the line fails
+        # on unconsumed text. A quoted grant behind the same conjunction
+        # ("gains haste **and** "{0}: Untap this creature."", Touch of Vitae)
+        # was refused the same way.
+        joined = stream.mark()
         if stream.accept_word("and") or stream.accept_word("or"):
-            continue
+            if _at_keyword_item(stream):
+                continue
+            stream.reset(joined)
         comma = stream.mark()
         if stream.accept_punct(","):
             stream.accept_word("or")

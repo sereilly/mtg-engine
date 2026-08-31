@@ -61,6 +61,25 @@ def _reads_no_return_restriction(filt: ast.ObjectFilter) -> bool:
     )
 
 
+def _lower_reanimate_enchanted_card(
+    node: ast.ReanimateEnchantedCard,
+) -> tuple[OracleInstruction, ...]:
+    """The reanimation Aura's entry line (Animate Dead, Dance of the Dead).
+
+    The same instruction the ordinary graveyard-to-battlefield return lowers to,
+    because it is the same move — what differs is who chose the card (the Aura's
+    own enchant clause, at cast time) and what happens around it, and both of
+    those are ``_apply_aura_effect``'s to perform off the Aura's text.
+
+    So this lowering carries no payload. The printed "tapped" is on the node
+    because the node describes the sentence, but the *reader* of that word is
+    ``engine/auras.AURA_REANIMATION_TAPPED``, asked once at the fire site — a
+    payload copy here would be a second answer to which printing this is, and
+    the gate in `engine/auras.py` reads the first.
+    """
+    return (OracleInstruction("reanimate_creature", "", {}),)
+
+
 def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
     """The card-type half of a graveyard-to-hand return's payload.
 

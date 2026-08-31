@@ -1870,3 +1870,257 @@ def test_the_mount_carries_nobody_until_its_ability_is_activated(set_pool):
 
     assert mount in list(game.controlled_by(game.players[0]))
 # --- end W2G4 ---
+
+
+# --- W3G1: granted abilities in quotes ---
+def _shaman_game(pool):
+    """Bone Shaman for seat 0, a regenerating Bear for seat 1."""
+    shaman = _nosick(Permanent(card=pool["Bone Shaman"]))
+    victim = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    victim.regeneration_shield = True
+    p1 = PlayerState(name="P1", battlefield=[shaman], life=20)
+    p2 = PlayerState(name="P2", battlefield=[victim], life=20)
+    game = Game(players=[p1, p2])
+    game._settle()
+    return game, shaman, victim
+
+
+def _activate_shaman(game):
+    game.players[0].mana_pool["B"] = 1
+    result = game.activate_permanent_ability(0, "Bone Shaman")
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+    return result
+
+
+def test_bone_shaman_grants_itself_the_no_regeneration_rider(set_pool):
+    """"{B}: Until end of turn, this creature gains "Creatures dealt damage by
+    this creature this turn can't be regenerated this turn.""
+
+    A grant of a whole printed sentence (CR 113.3), and the sentence is a
+    *static* one the damage seam reads off the damager — so the assertion is
+    that a shielded creature Bone Shaman damages dies anyway (CR 701.19c).
+    """
+    pool = set_pool("ICE")
+    game, shaman, victim = _shaman_game(pool)
+
+    assert _activate_shaman(game).supported
+    game._mark_damage_on_permanent(victim, 2, source=shaman)
+    game.check_state_based_actions()
+
+    assert victim not in list(game.controlled_by(game.players[1]))
+    assert [card.name for card in game.players[1].graveyard] == ["Balduvian Bears"]
+
+
+def test_bone_shaman_leaves_regeneration_alone_before_it_is_activated(set_pool):
+    """The shield is the control: without the grant the same damage is survived,
+    so the test above is measuring the granted ability and not the damage."""
+    pool = set_pool("ICE")
+    game, shaman, victim = _shaman_game(pool)
+
+    game._mark_damage_on_permanent(victim, 2, source=shaman)
+    game.check_state_based_actions()
+
+    assert victim in list(game.controlled_by(game.players[1]))
+    assert not victim.regeneration_shield
+
+
+def test_bone_shaman_stops_denying_regeneration_when_the_grant_expires(set_pool):
+    """"Until end of turn" — a duration dropped from a quoted grant would be a
+    permanent ability nobody printed."""
+    pool = set_pool("ICE")
+    game, shaman, victim = _shaman_game(pool)
+    _activate_shaman(game)
+    game.resolve_cleanup_step(0)
+    game._settle()
+    # CR 514.2 ends the shield with the turn as well, so it is re-armed here:
+    # what this test is about is the *grant* expiring, and a victim with nothing
+    # to regenerate with would pass it whether or not the grant did.
+    victim.regeneration_shield = True
+
+    game._mark_damage_on_permanent(victim, 2, source=shaman)
+    game.check_state_based_actions()
+
+    assert victim in list(game.controlled_by(game.players[1]))
+
+
+def _musician_game(pool, lands: int = 0):
+    """Musician for seat 0, a Bear (and *lands* Forests) for seat 1."""
+    musician = _nosick(Permanent(card=pool["Musician"]))
+    bear = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[musician], life=20)
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[bear] + [Permanent(card=pool["Forest"]) for _ in range(lands)],
+        life=20,
+    )
+    game = Game(players=[p1, p2])
+    game._settle()
+    return game, musician, bear
+
+
+def _play_musician(game, musician):
+    musician.tapped = False
+    result = game.activate_permanent_ability(
+        0, "Musician", target_player_index=1, target_permanent_index=0
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+    return result
+
+
+def test_musician_grants_the_quoted_upkeep_ability_with_the_counter(set_pool):
+    """"{T}: Put a music counter on target creature. If it doesn't have "At the
+    beginning of your upkeep, destroy this creature unless you pay {1} for each
+    music counter on it," it gains that ability."
+
+    The grant and the counter are one activation, and the granted ability
+    counts the counters this ability is putting there.
+    """
+    pool = set_pool("ICE")
+    game, musician, bear = _musician_game(pool)
+
+    assert _play_musician(game, musician).supported
+    assert counters_on(bear, "music") == 1
+    assert "destroy this creature unless you pay {1}" in (
+        bear.effective_card.oracle_text
+    )
+
+
+def test_musician_does_not_grant_the_ability_a_second_time(set_pool):
+    """"**If it doesn't have** …" — CR 611.2c lets a permanent hold one ability
+    twice, so a dropped condition here would be two upkeep triggers asking for
+    the same counters."""
+    pool = set_pool("ICE")
+    game, musician, bear = _musician_game(pool)
+
+    _play_musician(game, musician)
+    _play_musician(game, musician)
+
+    assert counters_on(bear, "music") == 2
+    text = bear.effective_card.oracle_text
+    assert text.count("destroy this creature unless you pay {1}") == 1
+
+
+def test_musicians_granted_upkeep_destroys_a_creature_that_cannot_pay(set_pool):
+    """The grant is only done when the granted ability *fires*: two counters is
+    {2}, and one Forest does not cover it."""
+    pool = set_pool("ICE")
+    game, musician, bear = _musician_game(pool, lands=1)
+    _play_musician(game, musician)
+    _play_musician(game, musician)
+
+    game.start_turn(1)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+    assert bear not in list(game.controlled_by(game.players[1]))
+    assert [card.name for card in game.players[1].graveyard] == ["Balduvian Bears"]
+
+
+def test_musicians_granted_upkeep_scales_with_the_music_counters(set_pool):
+    """"{1} **for each music counter on it**" — a multiplier dropped here would
+    charge {1} for a creature carrying five counters."""
+    pool = set_pool("ICE")
+    game, musician, bear = _musician_game(pool, lands=2)
+    _play_musician(game, musician)
+    _play_musician(game, musician)
+
+    game.start_turn(1)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+    assert bear in list(game.controlled_by(game.players[1]))
+    assert not any(
+        perm.card.name == "Forest" and not perm.tapped
+        for perm in game.controlled_by(game.players[1])
+    )
+
+
+def _shaman_text_game(pool, target_name: str, *, opponents: bool = False):
+    """Balduvian Shaman for seat 0, *target_name* for whichever seat is named."""
+    shaman = _nosick(Permanent(card=pool["Balduvian Shaman"]))
+    target = Permanent(card=pool[target_name])
+    p1 = PlayerState(
+        name="P1", battlefield=[shaman] + ([] if opponents else [target]), life=20
+    )
+    p2 = PlayerState(name="P2", battlefield=[target] if opponents else [], life=20)
+    game = Game(players=[p1, p2])
+    game._settle()
+    return game, target
+
+
+def _activate_balduvian_shaman(game, *, seat: int, index: int, swap=("B", "U")):
+    result = game.activate_permanent_ability(
+        0, "Balduvian Shaman",
+        target_player_index=seat, target_permanent_index=index,
+        old_color=swap[0], mana_color=swap[1],
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+    return result
+
+
+def test_balduvian_shaman_swaps_a_color_word_and_grants_cumulative_upkeep(set_pool):
+    """"{T}: Change the text of target white enchantment you control that
+    doesn't have cumulative upkeep by replacing all instances of one color word
+    with another. … That enchantment gains "Cumulative upkeep {1}.""
+
+    CR 612.1's text change in layer 3 and CR 113.3's quoted grant in layer 6,
+    on one target chosen once — so both halves are asserted off the
+    enchantment's *effective* text, which is where each lands.
+    """
+    pool = set_pool("ICE")
+    game, reclamation = _shaman_text_game(pool, "Reclamation")
+
+    assert _activate_balduvian_shaman(game, seat=0, index=1).supported
+
+    text = reclamation.effective_card.oracle_text
+    assert text.startswith("Blue creatures can't attack")
+    assert "black" not in text.lower()
+    assert "Cumulative upkeep {1}" in text
+
+
+def test_balduvian_shamans_grant_costs_the_enchantment_at_the_next_upkeep(set_pool):
+    """The grant is only done when the granted ability fires: with no mana for
+    the age counter's {1}, CR 702.24a sacrifices the enchantment."""
+    pool = set_pool("ICE")
+    game, reclamation = _shaman_text_game(pool, "Reclamation")
+    _activate_balduvian_shaman(game, seat=0, index=1)
+
+    game.resolve_upkeep(0)
+
+    assert counters_on(reclamation, "age") == 1
+    assert reclamation not in list(game.controlled_by(game.players[0]))
+    assert [card.name for card in game.players[0].graveyard] == ["Reclamation"]
+
+
+def test_balduvian_shaman_refuses_an_enchantment_that_already_has_the_keyword(set_pool):
+    """"…**that doesn't have cumulative upkeep**". A dropped narrowing here is
+    an ability that works more often than the card allows — and it would stack
+    a second escalating cost on a permanent that already pays one."""
+    pool = set_pool("ICE")
+    game, cold_snap = _shaman_text_game(pool, "Cold Snap")
+
+    result = _activate_balduvian_shaman(game, seat=0, index=1)
+
+    assert not result.supported
+    assert "Cumulative upkeep {1}" not in cold_snap.effective_card.oracle_text
+
+
+def test_balduvian_shaman_refuses_an_enchantment_you_do_not_control(set_pool):
+    """"…**you control**" — the other half of the printed narrowing, and the
+    half CR 109.5 measures against the ability's controller."""
+    pool = set_pool("ICE")
+    game, theirs = _shaman_text_game(pool, "Reclamation", opponents=True)
+
+    result = _activate_balduvian_shaman(game, seat=1, index=0)
+
+    assert not result.supported
+    assert theirs.effective_card.oracle_text.startswith("Black creatures can't attack")
+# --- end W3G1 ---

@@ -351,6 +351,10 @@ def _action_activate(session, req, seat_type):
             target_player_index=target,
             permanent_index=permanent_index,
             mana_color=req.mana_color,
+            # The "from" word of a text change activated as an ability
+            # (Balduvian Shaman); the cast side already forwards the same
+            # field, and the request schema has carried it all along.
+            old_color=req.old_color,
             target_permanent_index=(
                 req.target_permanent_indices
                 if req.target_permanent_indices is not None

@@ -333,6 +333,13 @@ def _lower_gain_ability_text(node: ast.GainAbilityText) -> tuple[OracleInstructi
         # rather than assuming one answer.
         "duration": _GRANT_DURATIONS.get(node.duration.kind),
     }
+    # "If it doesn't have "<ability>," it gains that ability." (Musician.) The
+    # printed condition is about the very sentence being granted, so it rides
+    # on the grant rather than wrapping it: CR 611.2c allows a permanent to
+    # hold one ability twice, and a second copy of Musician's would ask for the
+    # upkeep payment a second time.
+    if node.only_if_absent:
+        payload["only_if_absent"] = True
     if _is_source(node.subject):
         return (OracleInstruction("grant_self_ability_text", "", payload),)
     # "Put a matrix counter on target creature and **that creature** gains …"
@@ -348,6 +355,15 @@ def _lower_gain_ability_text(node: ast.GainAbilityText) -> tuple[OracleInstructi
         and not _restrictions_beyond(node.subject.filter, frozenset({"card_types"}))
     )
     if bound:
+        # The printed noun, carried even though the *choice* was made by the
+        # clause in front of this one: "**that enchantment** gains …"
+        # (Balduvian Shaman) is not a creature, and the grant's resolution
+        # otherwise asks whether it is — the default every other card printing
+        # this shape has wanted. Dropped, the enchantment is no valid target and
+        # the grant silently does nothing.
+        types = tuple(node.subject.filter.card_types)
+        if types:
+            payload["subject_types"] = types
         return (OracleInstruction("grant_target_ability_text", "", payload),)
     if not _is_target(node.subject):
         raise LoweringError("unsupported granted-ability subject", node=node)

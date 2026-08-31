@@ -20,6 +20,8 @@ from ...activation_restrictions import (
     at_activation_limit,
     printed_activation_caps,
     mark_activated_this_turn,
+    mark_once_only_activation,
+    prints_once_only_restriction,
 )
 from ...auras import attached_ability_cost_reduction, aura_restriction_active
 from ...cost_modifiers import ability_cost_tax, ability_self_reduction_amount
@@ -68,6 +70,13 @@ class AbilityActivationMixin:
         target_player_index: int | None = None,
         permanent_index: int | None = None,
         mana_color: str | None = None,
+        # "…replacing all instances of one color word with another" (Balduvian
+        # Shaman). A text change names *two* words, and `mana_color` is only
+        # ever the second — the key an any-colour mana ability and Alchor's
+        # Tomb also use. The word being replaced arrives here, on the same key
+        # the cast side already carries it on, so `mark_text_modified` reads
+        # one pair whether a spell or an ability asked the question.
+        old_color: str | None = None,
         target_permanent_index: int | None = None,
         # The chosen targets' stable ids, when the caller already knows them
         # (the web layer resolves them off the wire). Several targets may sit
@@ -100,6 +109,7 @@ class AbilityActivationMixin:
             target_player_index=target_player_index,
             permanent_index=permanent_index,
             mana_color=mana_color,
+            old_color=old_color,
             target_permanent_index=target_permanent_index,
             target_permanent_ids=target_permanent_ids,
             target_stack_index=target_stack_index,
@@ -177,6 +187,13 @@ class AbilityActivationMixin:
         target_player_index: int | None = None,
         permanent_index: int | None = None,
         mana_color: str | None = None,
+        # "…replacing all instances of one color word with another" (Balduvian
+        # Shaman). A text change names *two* words, and `mana_color` is only
+        # ever the second — the key an any-colour mana ability and Alchor's
+        # Tomb also use. The word being replaced arrives here, on the same key
+        # the cast side already carries it on, so `mark_text_modified` reads
+        # one pair whether a spell or an ability asked the question.
+        old_color: str | None = None,
         target_permanent_index: int | None = None,
         # The chosen targets' stable ids, when the caller already knows them
         # (the web layer resolves them off the wire). Several targets may sit
@@ -999,6 +1016,13 @@ class AbilityActivationMixin:
         # All guards/costs passed — tally an activation of a capped ability.
         if activation_caps:
             mark_activated_this_turn(self, permanent)
+        # The same stamp for the cap with no turn in it ("Activate only once",
+        # Touch of Vitae's granted ability). Beside the per-turn one and in the
+        # same position, because both are budgets spent by an activation the
+        # rules allowed — and asked of the table rather than of the words here,
+        # so the refusal and the stamp read one sentence the same way.
+        if prints_once_only_restriction(ability_lower):
+            mark_once_only_activation(permanent, ability_lower)
 
         # CR 606.4: a loyalty symbol is a cost to put on or remove that many
         # loyalty counters, paid as the ability is activated — so the walker's
@@ -1266,6 +1290,9 @@ class AbilityActivationMixin:
                     # so a handler need not know whether a spell or an ability
                     # asked the question.
                     "new_color": self._normalize_mana_color(mana_color),
+                    # The word a text change replaces, beside the one it
+                    # replaces it with. See the parameter's note above.
+                    "old_color": self._normalize_mana_color(old_color),
                 },
             )
         )

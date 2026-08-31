@@ -68,6 +68,22 @@ class LexResult:
     tokens: tuple[GToken, ...]
     reminder_text: tuple[str, ...]
     normalized: str
+    #: The same string with the card's own capitalisation kept — reminder text
+    #: cut and whitespace collapsed exactly as :attr:`normalized`, so a token's
+    #: offsets index both.
+    #:
+    #: This is what a :class:`TokenStream` must be given as its line. Every
+    #: production that recovers a *printed* span through
+    #: ``TokenStream.text_between`` — a granted ability's quoted text, a mana
+    #: restriction, a registry-claimed sentence, a mode's label — slices that
+    #: line at token offsets, and those offsets belong to the string the lexer
+    #: actually walked. Handed the raw line instead, the slice is right only
+    #: while nothing was cut: reminder text ahead of the span shifts every
+    #: offset behind it, and the words that come back are somebody else's.
+    #: Balduvian Shaman is the card that showed it — a parenthetical example
+    #: between its two sentences, and the quoted ability it grants came back as
+    #: a slice of the reminder text.
+    source: str
 
 
 def strip_reminder_text(text: str) -> tuple[str, tuple[str, ...]]:
@@ -185,7 +201,12 @@ def tokenize(line: str, *, card_name: str | None = None) -> LexResult:
     grammar knowing anything about card names.
     """
     stripped, reminders = strip_reminder_text(line)
-    normalized = normalize(stripped)
+    # One reduction, read twice: `normalized` is what the token patterns match
+    # and `source` is what a printed span is sliced out of. Lower-casing does
+    # not move a character, so the two agree offset for offset — which is the
+    # whole of the contract `source` documents.
+    source = _WHITESPACE_RE.sub(" ", stripped.strip())
+    normalized = source.lower()
     self_spans = _self_reference_spans(normalized, card_name)
 
     tokens: list[GToken] = []
@@ -226,7 +247,7 @@ def tokenize(line: str, *, card_name: str | None = None) -> LexResult:
         else:
             tokens.append(GToken(kind, raw, start, end))
 
-    return LexResult(tuple(tokens), reminders, normalized)
+    return LexResult(tuple(tokens), reminders, normalized, source)
 
 
 def render(tokens: tuple[GToken, ...], start: int = 0) -> str:

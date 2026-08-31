@@ -2845,9 +2845,17 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # table above the gate asks the code that performs it rather than keeping a
     # literal. Anchored there, so a conditional variant keeps refusing instead
     # of being admitted and then regenerating unconditionally.
-    from .regeneration import self_regeneration_line
+    from .regeneration import denies_regeneration_line, self_regeneration_line
 
     if self_regeneration_line(normalized):
+        return True
+    # "Creatures dealt damage by this creature this turn can't be regenerated
+    # this turn." (Bone Shaman grants it to itself.) CR 701.19c from the
+    # damager's end — a standing property of the creature rather than a rider
+    # stamped on one event, so `damage_events._apply_dealer_riders` derives it
+    # from the permanent's effective text at the one seam every damage event
+    # passes through, and there is nothing here to lower.
+    if denies_regeneration_line(normalized):
         return True
     # A CR 601.2f cost change the casting path derives from every permanent's
     # own text — "Noncreature spells cost {1} more to cast" (Vryn Wingmare),
@@ -3571,7 +3579,7 @@ def _derived_static_claims(
     from .global_statics import global_static_for
     from .land_play_allowance import land_play_allowance_for
     from .prevention import prevention_claims_line
-    from .regeneration import self_regeneration_line
+    from .regeneration import denies_regeneration_line, self_regeneration_line
     from .replacements import replacement_claims_line
     from .revealed_hands import revealed_hands_line
     from .target_immunity import CLAIM as TARGET_IMMUNITY_CLAIM
@@ -3644,7 +3652,17 @@ def _derived_static_claims(
     # instruction — and on a creature whose only line is this sentence, no
     # instruction would mean the card reports unsupported however well the
     # replacement works. Asked of the same reader that performs it.
-    if any(self_regeneration_line(line) for line in oracle_text.splitlines()):
+    # "Creatures dealt damage by this creature this turn can't be regenerated
+    # this turn." (Bone Shaman grants it.) The dealer-side twin, claimed beside
+    # its neighbour because it is the same arrangement: the damage seam derives
+    # it from the permanent's own text, so there is no instruction, and without
+    # this the sentence would be admitted by nothing — which for a *granted*
+    # ability means the grant itself refuses, since the probe compiles the
+    # quoted sentence as a card of its own.
+    if any(
+        self_regeneration_line(line) or denies_regeneration_line(line)
+        for line in oracle_text.splitlines()
+    ):
         claims.append("regeneration")
     # The *name-keyed* half of the same CR 504 story (Island Sanctuary's
     # skip-your-draw-for-protection), registered in card_hooks and carried out by

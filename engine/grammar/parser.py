@@ -46,6 +46,7 @@ from .costs import _parse_costs
 from .registries import registry_for_line
 from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
                        _parse_conditional_pronoun_grant_rider,
+                       _parse_conditional_quoted_grant_rider,
                        _parse_pronoun_grant_rider, _parse_pronoun_verb_rider)
 from .riders import (_attach_destroyed_this_way, _attach_exchanged_this_way, _attach_if_that_card_was_returned, _attach_if_you_cant, _attach_if_you_do, _attach_otherwise, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .phrases import accept_member_state_clause
@@ -311,7 +312,8 @@ def _attach_repeat_this_process(stream: TokenStream, steps: list) -> bool:
         return False
     try:
         imperative = _as_imperative(phrase)
-        restated_stream = TokenStream(tokenize(imperative).tokens, imperative)
+        restated = tokenize(imperative)
+        restated_stream = TokenStream(restated.tokens, restated.source)
         restated = parse_statement(restated_stream)
         if not restated_stream.exhausted:
             raise GrammarError("unconsumed text", line=imperative)
@@ -437,6 +439,14 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             conditional_grant = _parse_conditional_pronoun_grant_rider(stream, steps)
             if conditional_grant is not None:
                 steps.append(conditional_grant)
+                continue
+            # "If it doesn't have "<ability>," it gains that ability."
+            # (Musician.) The quoted twin of the rider above, read after it
+            # because that one's condition parser would refuse a quote and
+            # rewind — leaving this sentence to fail the whole line.
+            quoted_grant = _parse_conditional_quoted_grant_rider(stream, steps)
+            if quoted_grant is not None:
+                steps.append(quoted_grant)
                 continue
             who_cant = _parse_who_cant_rider(stream, steps)
             if who_cant is not None:
@@ -732,6 +742,44 @@ _ASSIGN_UNBLOCKED_LINE_RE = re.compile(
 )
 
 
+#: The reanimation Aura's entry line, whole (Animate Dead, Dance of the Dead) —
+#: a whole-line pattern for the reason the emblem shape below is one: the
+#: quotation marks are part of what the sentence says, and the three sentences
+#: are one effect on one object rather than three statements. The two printings
+#: differ by one verb and one word of timing, which is what makes this a
+#: template rather than a card, and what retired the name-keyed hook that used
+#: to claim the first of them. Exact on purpose: a card printing one of the
+#: three sentences and not the others is a different card.
+_REANIMATION_AURA_LINE_RE = re.compile(
+    r'^\s*when this (?:aura|enchantment) enters, if it.s on the battlefield, '
+    r'it loses ["“]enchant creature card in a graveyard["”] and gains '
+    r'["“]enchant creature put onto the battlefield with this '
+    r'(?:aura|enchantment)\.?["”]\.?\s*'
+    r'(?:return|put) enchanted creature card (?:to|onto) the battlefield '
+    r'(?P<tapped>tapped )?under your control and attach this '
+    r'(?:aura|enchantment) to it\.\s*'
+    r'when this (?:aura|enchantment) leaves the battlefield, '
+    r'that creature.s controller sacrifices it\.?\s*$',
+    re.IGNORECASE,
+)
+
+
+def _parse_reanimation_aura_line(line: str) -> "ast.TriggeredAbilityNode | None":
+    """The reanimation Aura's entry line as one triggered ability, or None.
+
+    Off the raw text, as the emblem shape below is: what the pattern pins down
+    is the quoted rewrite and the sentence order, both of them punctuation the
+    token stream has already discarded.
+    """
+    match = _REANIMATION_AURA_LINE_RE.match(line.strip())
+    if match is None:
+        return None
+    return ast.TriggeredAbilityNode(
+        ast.TriggerEvent(kind="enters_battlefield", word="when"),
+        ast.ReanimateEnchantedCard(tapped=bool(match.group("tapped"))),
+    )
+
+
 def _parse_emblem_line(line: str) -> "ast.CreateEmblem | None":
     """The whole-line emblem shape, read off the raw text.
 
@@ -803,6 +851,12 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
         emblem = _parse_emblem_line(line)
         if emblem is not None:
             return ast.SpellEffectLine(emblem)
+        # The reanimation Aura's whole entry line (Animate Dead, Dance of the
+        # Dead), before the token paths below: they see three sentences where
+        # the card states one deal, and would refuse the quoted rewrite anyway.
+        reanimation = _parse_reanimation_aura_line(lexed.source)
+        if reanimation is not None:
+            return reanimation
         if _ASSIGN_UNBLOCKED_LINE_RE.match(line.strip()):
             return ast.SpellEffectLine(
                 ast.RawEffect("grant_team_assign_unblocked_until_eot")
@@ -826,12 +880,14 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
         first_quote = next(i for i, token in enumerate(body) if token.kind == QUOTE)
         colon = _split_on_colon(body[:first_quote])
         if colon is not None:
-            costs = _parse_costs(TokenStream(body[:colon], line))
-            effect = _parse_quoted_token_line(TokenStream(body[colon + 1:], line))
+            costs = _parse_costs(TokenStream(body[:colon], lexed.source))
+            effect = _parse_quoted_token_line(
+                TokenStream(body[colon + 1:], lexed.source)
+            )
             if effect is not None and not isinstance(effect, ast.TriggeredAbilityNode):
                 return ast.ActivatedAbilityNode(costs, effect)
             raise GrammarError("granted ability in quotes", line=line)
-        token_line = _parse_quoted_token_line(TokenStream(body, line))
+        token_line = _parse_quoted_token_line(TokenStream(body, lexed.source))
         if token_line is not None:
             # Already a whole ability line when a trigger prefix was read;
             # otherwise a bare effect that still needs wrapping.
@@ -841,7 +897,10 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
         raise GrammarError("granted ability in quotes", line=line)
 
     body = lexed.tokens[start:]
-    stream = TokenStream(body, line)
+    # `lexed.source`, never the raw *line*: the tokens' offsets index the string
+    # the lexer walked, and a production recovering a printed span through
+    # `text_between` slices this. See `LexResult.source`.
+    stream = TokenStream(body, lexed.source)
 
     keywords = _is_keyword_line(stream)
     if keywords is not None and stream.exhausted:
@@ -858,8 +917,8 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
 
     colon = _split_on_colon(body)
     if colon is not None:
-        costs = _parse_costs(TokenStream(body[:colon], line))
-        effect_stream = TokenStream(body[colon + 1:], line)
+        costs = _parse_costs(TokenStream(body[:colon], lexed.source))
+        effect_stream = TokenStream(body[colon + 1:], lexed.source)
         statement = _statements_from_sentences(effect_stream)
         return ast.ActivatedAbilityNode(costs, statement)
 

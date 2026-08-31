@@ -469,6 +469,26 @@ def _parse_postmodifiers(
             elif stream.accept_phrase("isn't", "enchanted"):
                 d.not_enchanted = True
                 continue
+            # "…**that doesn't have cumulative upkeep**" (Balduvian Shaman).
+            # The relative-clause spelling of "without <keyword>" a few lines
+            # up — the same restriction and the same field, because the
+            # difference is Wizards' templating and nothing else. Read here so
+            # the two printings cannot come to mean two things, and refusing
+            # without consuming when the words behind it are not a keyword
+            # list, so every other "that doesn't …" keeps failing on its own
+            # words.
+            elif stream.at_word("doesn't"):
+                keyword_probe = stream.mark()
+                stream.advance()
+                if stream.accept_word("have"):
+                    try:
+                        d.without_keywords.extend(_parse_keyword_list(stream))
+                        continue
+                    except Exception:
+                        pass
+                stream.reset(keyword_probe)
+                stream.reset(probe)
+                break
             elif stream.accept_word("targets"):
                 stream.accept_word("a", "an")
                 d.targets_object = parse_filter(stream)
