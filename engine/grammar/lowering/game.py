@@ -366,6 +366,12 @@ _LOSE_GAME_KINDS = {
     "you": "player_loses_game",
     "target_player": "target_player_loses_game",
     "target_opponent": "target_player_loses_game",
+    # "If you win the flip, **that player** loses the game." (Amulet of Quoz.)
+    # The seat the sentence in front of it named, which is the same
+    # ``context.target`` the two rows above resolve to — ``player_loses_game``
+    # reads that one field, so this is a third spelling of the row rather than
+    # a fourth answer.
+    "that_player": "target_player_loses_game",
 }
 
 

@@ -109,8 +109,19 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         return ast.PlayerRef("defending_player")
     if stream.accept_phrase("the", "chosen", "player"):
         return ast.PlayerRef("chosen_player")
+    # "**An** opponent" is *not* "target opponent", and reading it as one was a
+    # fork: CR 601.2c chooses nothing here, so the phrase names whichever
+    # opponent the effect eventually reaches -- every one of them in turn for
+    # "unless an opponent pays {2}" (Scarwood Bandits), and the seat the
+    # resolution happens to carry for anything that guessed. The two spellings
+    # shared a kind until Amulet of Quoz printed "**target** opponent may ante
+    # the top card of their library" and needed that kind to mean a chosen seat.
+    #
+    # ``opponent`` is not a new referent: ``_OPPONENT_PAYERS`` and the noun
+    # parser's controller narrowing ("a permanent **an opponent** controls")
+    # have spelled the article's reading that way all along.
     if stream.accept_phrase("an", "opponent"):
-        return ast.PlayerRef("target_opponent")
+        return ast.PlayerRef("opponent")
 
     # "that land's controller" / "this creature's controller" / "**the**
     # Wall's controller" (Word of Blasting) — a possessive noun phrase resolving

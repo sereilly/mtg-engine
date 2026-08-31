@@ -321,7 +321,10 @@ def parse_subject_verb(
     # "Flip a coin." (CR 705.1) — a bare imperative like the ones below, and
     # the only production that reads the word, so any other "flip …" sentence
     # (Chaos Orb's) falls through untouched.
-    if stream.at_word("flip"):
+    # "**You** flip a coin" is the same sentence with its subject printed
+    # (Amulet of Quoz), so the gate admits the pronoun too and the production
+    # refuses quietly for every other "you …" line.
+    if stream.at_word("flip", "you"):
         flip = _parse_flip_coin(stream)
         if flip is not None:
             return flip

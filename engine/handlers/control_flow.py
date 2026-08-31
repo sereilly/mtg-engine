@@ -971,6 +971,20 @@ def _offered_seats(
             return []
         seat = game.controller_index_of(perm)
         return [] if seat is None else [seat]
+    if actor == "target_opponent":
+        # "**Target opponent** may ante the top card of their library."
+        # (Amulet of Quoz.) The seat the ability chose, held in
+        # ``context.target`` — and verified rather than trusted, because
+        # ``references.parse_player_ref`` gives the bare article "an opponent"
+        # this same kind and that phrase chooses nobody. A recorded seat that
+        # is the ability's own controller, or missing, is not an opponent this
+        # ability targeted, and an offer made to nobody is the honest answer —
+        # the same one the defending-player branch below gives for a combat
+        # that has moved on.
+        chosen = context.target
+        if chosen is None or chosen is context.caster or chosen.lost:
+            return []
+        return [game.players.index(chosen)]
     if actor == "defending_player":
         # CR 506.2, frozen by the fire site (CR 603.10): which seat is being
         # attacked is a fact about the combat, and by the time this trigger

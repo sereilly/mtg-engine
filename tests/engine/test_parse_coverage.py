@@ -139,13 +139,20 @@ def test_grammar_refuses_the_rider_shape_instead_of_swallowing_it():
     seat off the targeted permanent through the control seam. The refusal is the
     point, not which word triggers it, and the assertion below keeps both — the
     payer this engine *can* name lowers, and the one it cannot still refuses.
+
+    The word the refusal names changed from ``target_opponent`` to ``opponent``
+    when Amulet of Quoz printed "**target** opponent may …": the reference
+    reader had been giving both spellings one kind, so admitting the chosen seat
+    would have admitted the article too. "An opponent" chooses nobody
+    (CR 601.2c) and still has no offerable seat, which is why the refusal is
+    unchanged in everything but the word it quotes.
     """
     from engine.grammar import compile_line
 
     result = compile_line("Destroy target creature unless an opponent pays {4}.")
     assert not result.usable
     assert not result.lowered
-    assert "target_opponent" in (result.lowering_error or ""), result.lowering_error
+    assert "'opponent'" in (result.lowering_error or ""), result.lowering_error
 
     resolvable = compile_line(
         "Destroy target creature unless its controller pays {4}."

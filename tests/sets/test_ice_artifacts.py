@@ -228,22 +228,40 @@ def test_celestial_sword_sacrifices_the_creature_it_pumped(set_pool):
 # --- Round 36: an activation restriction is not evidence the permanent works ---
 
 
-def test_amulet_of_quoz_is_not_supported_on_the_strength_of_its_timing_clause(set_pool):
-    """"{T}, Sacrifice this artifact: Target opponent may ante the top card of
-    their library. … **Activate only during your upkeep.**"
+def test_a_timing_clause_is_not_evidence_the_permanent_works():
+    """"{T}, Sacrifice this artifact: <something nothing reads>. **Activate only
+    during your upkeep.**"
 
-    The ability is the whole card and the compiler cannot read it. What kept the
-    artifact reported *supported* was the last sentence: "activate only during
-    your upkeep" is claimed by `activation_restrictions.py`, which leaves a
-    `derived_static_rule` instruction behind, and the gate took any instruction
-    that was not a bare whitelist marker as evidence the permanent does
-    something.
+    Round 36's guard. What used to keep such a card reported *supported* was the
+    last sentence: "activate only during your upkeep" is claimed by
+    `activation_restrictions.py`, which leaves a `derived_static_rule`
+    instruction behind, and the gate took any instruction that was not a bare
+    whitelist marker as evidence the permanent does something.
 
     It is not. A restriction says *when an ability may be activated*, so it is a
     clause of that ability — and when no ability of the card is readable it is a
     rule about nothing.
+
+    The subject is an invented card rather than Amulet of Quoz, which is what it
+    used to be. That card is supported now, and a guard about a *shape* that
+    picks a real card as its example expires the day someone implements it —
+    silently reporting a rule nobody is testing any more. The shape cannot
+    expire, so the example is built to it.
     """
-    program = compile_card_oracle(set_pool("ICE")["Amulet of Quoz"])
+    from engine.models import CardDefinition
+
+    card = CardDefinition(
+        name="Timing Clause Probe",
+        mana_cost="{2}", cmc=2.0, type_line="Artifact",
+        oracle_text=(
+            "{T}, Sacrifice this artifact: Target opponent hums a tune of "
+            "their choice.\nActivate only during your upkeep."
+        ),
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Timing Clause Probe", "type_line": "Artifact"},
+    )
+
+    program = compile_card_oracle(card)
 
     assert not program.supported
     assert "no ability of this permanent is implemented" in (program.reason or "")
@@ -1010,4 +1028,131 @@ def test_goblin_lyre_flips_once_for_both_of_its_sentences(set_pool):
         game._settle()
 
     assert (p0.life, p1.life) == (20, 18)
+def _quoz_board(set_pool, library=3, interactive=()):
+    """An ante game with Amulet of Quoz out and the opponent's upkeep-legal
+    window open. ``library`` is how many cards the opponent has to ante with."""
+    pool = set_pool("ICE")
+    amulet = _nosick(Permanent(card=pool["Amulet of Quoz"]))
+    p0 = PlayerState(name="P0", battlefield=[amulet], life=20)
+    p1 = PlayerState(
+        name="P1", life=20, library=[pool["Balduvian Bears"]] * library
+    )
+    game = Game(players=[p0, p1])
+    # CR 407: every seam in engine/ante.py is inert without this.
+    game.playing_for_ante = True
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase, game.current_step = "beginning", "upkeep"
+    game.interactive_seats = set(interactive)
+    return game, p0, p1
+
+
+def test_amulet_of_quoz_offers_the_ante_to_the_targeted_opponent(set_pool):
+    """"Target opponent may ante the top card of their library."
+
+    The offer's payer is the seat the ability *targeted*. It used to be refused
+    outright — "an opponent" and "target opponent" shared one AST kind, so
+    admitting the chosen seat would have admitted the article, which chooses
+    nobody (CR 601.2c). The two are separate kinds now, and only the chosen one
+    is offerable.
+    """
+    game, p0, p1 = _quoz_board(set_pool, interactive=(1,))
+
+    game.queue_permanent_ability(
+        0, "Amulet of Quoz", target_player_index=1, permanent_index=0
+    )
+    game._settle()
+
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("optional_pay", 1)
+    ]
+
+    game.confirm_optional_pay(1, accept=True)
+    game._settle()
+
+    assert [(seat, card.name) for seat, card in game.cards_in_ante()] == [
+        (1, "Balduvian Bears")
+    ]
+    assert len(p1.library) == 2
+    assert not p0.lost and not p1.lost
+
+
+def test_declining_the_ante_stakes_the_game_on_the_flip(set_pool):
+    """"**If they don't**, you flip a coin. If you win the flip, that player
+    loses the game. If you lose the flip, you lose the game."
+
+    The three sentences after the offer are steps of its *decline* branch, not
+    siblings of it: the flip only happens when the ante did not, and the two
+    conditionals read that flip. Left as siblings they would run whether or not
+    the opponent took the offer, and read a coin flip that never happened.
+    """
+    from unittest.mock import patch
+
+    for roll, loser, survivor in ((0.0, "P1", "P0"), (0.99, "P0", "P1")):
+        game, p0, p1 = _quoz_board(set_pool, interactive=(1,))
+
+        with patch("engine.handlers._common.random.random", return_value=roll):
+            game.queue_permanent_ability(
+                0, "Amulet of Quoz", target_player_index=1, permanent_index=0
+            )
+            game._settle()
+            game.confirm_optional_pay(1, accept=False)
+            game._settle()
+
+        lost = {player.name for player in game.players if player.lost}
+        assert lost == {loser}
+        assert game.get_winner().name == survivor
+        # Declining anted nothing: the library is untouched.
+        assert len(p1.library) == 3
+        assert not game.cards_in_ante()
+
+
+def test_an_opponent_with_no_library_cannot_take_the_offer(set_pool):
+    """CR 407.4 antes a card, and an empty library has none — so the offer is
+    not takeable and the flip happens. Asserted because an offer that "succeeds"
+    over nothing would run the accept branch off an ante that never took place,
+    which is the whole card skipped in the opponent's favour."""
+    from unittest.mock import patch
+
+    game, p0, p1 = _quoz_board(set_pool, library=0)
+
+    with patch("engine.handlers._common.random.random", return_value=0.0):
+        game.queue_permanent_ability(
+            0, "Amulet of Quoz", target_player_index=1, permanent_index=0
+        )
+        game._settle()
+        game.auto_resolve_pending_choices()
+        game._settle()
+
+    assert p1.lost and not p0.lost
+
+
+def test_the_amulet_may_only_be_activated_in_your_upkeep(set_pool):
+    """"Activate only during your upkeep." A printed restriction is only done
+    when something enforces it, and `activation_restrictions.py` is what does —
+    the same table the support gate reads."""
+    game, _p0, _p1 = _quoz_board(set_pool)
+    game.current_turn_phase = game.current_step = "precombat_main"
+
+    result = game.activate_permanent_ability(
+        0, "Amulet of Quoz", target_player_index=1, permanent_index=0
+    )
+
+    assert not result.supported
+    assert "only during your upkeep" in result.details
+
+
+def test_the_amulet_is_an_ante_card_and_stays_out_of_an_ordinary_deck(set_pool):
+    """"Remove this card from your deck before playing if you're not playing for
+    ante." The line is claimed by `engine/ante.py` — one constant read by the
+    support gate and by deck construction, so what bars the card and what
+    claims the line cannot describe different text."""
+    from engine.ante import is_ante_card, is_ante_deck_line
+
+    card = set_pool("ICE")["Amulet of Quoz"]
+    assert is_ante_card(card)
+    assert is_ante_deck_line(
+        "remove this card from your deck before playing if you're not "
+        "playing for ante."
+    )
 # --- end W3G4 ---

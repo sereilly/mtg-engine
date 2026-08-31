@@ -54,6 +54,13 @@ def _parse_flip_coin(stream: TokenStream) -> ast.Statement | None:
     one foot" is a different action, and its card hook must keep getting it.
     """
     mark = stream.mark()
+    # "**You** flip a coin." (Amulet of Quoz.) CR 705.1 gives the flip a
+    # flipper, and both spellings name the same one: the controller of the
+    # effect, which is who ``flip_coin`` records the result for and who "if you
+    # win the flip" then asks about. So the subject is a spelling, read here
+    # rather than as a second production — two readers of one sentence is how
+    # the two come to disagree about whose flip it is.
+    stream.accept_word("you")
     if stream.accept_phrase("flip", "a", "coin"):
         return ast.FlipCoin()
     stream.reset(mark)
