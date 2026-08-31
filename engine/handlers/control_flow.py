@@ -641,6 +641,62 @@ def flip_a_coin(game: Game, instruction: OracleInstruction, context: OracleExecu
     return True, "resolved"
 
 
+@effect_handler("coin_flip_stakes_loop")
+def coin_flip_stakes_loop(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Game of Chaos: one round of the flip, and the offer that buys the next.
+
+    CR 705.2: the flip is the *caster's*, and who it names is what makes the two
+    halves different — winning gains the caster the stake and takes it off the
+    target, losing does the reverse, and the player the round went **against**
+    is not the one who decides whether it happens again. The winner decides.
+
+    The next round is armed by *answering* that offer rather than by a loop
+    here, for the reason ``unless_player_pays`` above chains the same way: the
+    two seats answer alternately and neither answer exists while the other is
+    being asked. The stake the next round runs at rides the re-armed
+    instruction's payload, which is where the doubling lives — the same
+    ``{**payload, …}`` shape the chain beside it uses for its seat counter.
+
+    A resolution with no opponent to point at does nothing: "target opponent"
+    is chosen at announcement (CR 601.2c), and a spell whose only target is
+    gone has nobody to stake against.
+    """
+    caster = context.caster
+    opponent = context.target
+    card_name = getattr(context.card, "name", "an effect")
+    if opponent is None or opponent is caster:
+        game.log.append(f"{card_name}: no opponent to play against")
+        return True, "resolved"
+    stake = max(0, int(instruction.payload.get("stake", 1)))
+    won = flip_coin()
+    context.results["coin_flip"] = won
+    if won:
+        game._gain_life(caster, stake, card_name)
+        opponent.life -= stake
+        decider = caster
+    else:
+        caster.life -= stake
+        game._gain_life(opponent, stake, card_name)
+        decider = opponent
+    game.log.append(
+        f"{card_name}: {caster.name} {'won' if won else 'lost'} the flip "
+        f"for {stake} life"
+    )
+    # "Double the life stakes with each flip." Applied to what the *next* round
+    # would run at, not to this one: the first flip is for the printed number.
+    next_stake = stake * 2 if instruction.payload.get("doubling") else stake
+    game.arm_pending_choice(
+        "flip_again", game.players.index(decider),
+        card_name=card_name,
+        stake=next_stake,
+        _again=OracleInstruction(
+            instruction.kind, "", {**instruction.payload, "stake": next_stake}
+        ),
+        _context=context,
+    )
+    return True, "resolved"
+
+
 @effect_handler("choose_number")
 def choose_number(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Choose a number between 0 and 7." (Shapeshifter.)
@@ -971,6 +1027,20 @@ def _offered_seats(
             return []
         seat = game.controller_index_of(perm)
         return [] if seat is None else [seat]
+    if actor == "target_opponent":
+        # "**Target opponent** may ante the top card of their library."
+        # (Amulet of Quoz.) The seat the ability chose, held in
+        # ``context.target`` — and verified rather than trusted, because
+        # ``references.parse_player_ref`` gives the bare article "an opponent"
+        # this same kind and that phrase chooses nobody. A recorded seat that
+        # is the ability's own controller, or missing, is not an opponent this
+        # ability targeted, and an offer made to nobody is the honest answer —
+        # the same one the defending-player branch below gives for a combat
+        # that has moved on.
+        chosen = context.target
+        if chosen is None or chosen is context.caster or chosen.lost:
+            return []
+        return [game.players.index(chosen)]
     if actor == "defending_player":
         # CR 506.2, frozen by the fire site (CR 603.10): which seat is being
         # attacked is a fact about the combat, and by the time this trigger

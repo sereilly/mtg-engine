@@ -258,6 +258,7 @@ from .combat import (
 )
 from .game import (
     Ante,
+    CoinFlipStakesLoop,
     CreateEmblem,
     GainLife,
     LoseLife,
@@ -513,6 +514,7 @@ __all__ = [
     # game
     "CreateEmblem",
     "Ante",
+    "CoinFlipStakesLoop",
     "PayLife",
     "SetLifeTotal",
     "GainLife",

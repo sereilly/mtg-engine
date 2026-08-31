@@ -2124,3 +2124,92 @@ def test_balduvian_shaman_refuses_an_enchantment_you_do_not_control(set_pool):
     assert not result.supported
     assert theirs.effective_card.oracle_text.startswith("Black creatures can't attack")
 # --- end W3G1 ---
+
+
+# --- W3G4: coin flips, ante, noted mana ---
+def _supplicant_board(set_pool, fodder_name, boost=0):
+    """Freyalise Supplicant and one creature to feed it, on an untapped board."""
+    pool = set_pool("ICE")
+    supplicant = _nosick(Permanent(card=pool["Freyalise Supplicant"]))
+    fodder = _nosick(Permanent(card=pool[fodder_name]))
+    p0 = PlayerState(name="P0", battlefield=[supplicant, fodder], life=20)
+    game = Game(players=[p0, PlayerState(name="P1", life=20)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    if boost:
+        add_pt_modifier(fodder, boost, 0)
+    game._settle()
+    return game, p0, game.players[1], supplicant, fodder
+
+
+def test_freyalise_supplicant_deals_half_the_eaten_creatures_power(set_pool):
+    """"{T}, Sacrifice a red or white creature: This creature deals damage to
+    any target equal to **half the sacrificed creature's power, rounded down**."
+
+    Two gaps in two layers. `parse_equal_to` already reads "the sacrificed
+    creature's <characteristic>", but it hands a leading "half" to the quantity
+    parser before it gets there — so a fraction *of* a payment channel had no
+    reader at all. And the damage lowering had no branch for the channel, which
+    the resolution-time evaluator answered only for a mana value.
+
+    Balduvian Barbarians' 3 is the rounding: half of an odd power is one less,
+    not one more.
+    """
+    game, _p0, p1, supplicant, _fodder = _supplicant_board(
+        set_pool, "Balduvian Barbarians"
+    )
+
+    game.queue_permanent_ability(
+        0, "Freyalise Supplicant",
+        target_player_index=1, permanent_index=0, cost_permanent_index=1,
+    )
+    game._settle()
+
+    assert p1.life == 19
+    assert supplicant.tapped
+
+
+def test_the_supplicant_halves_the_power_the_creature_last_had(set_pool):
+    """CR 608.2h: the cost is paid before the ability is on the stack, so the
+    number is last-known information — the creature's **effective** power,
+    including a pump, not the printed one on its card. A reader off the card
+    would call a boosted 3/2 a 3 and deal one damage less."""
+    game, _p0, p1, _supplicant, _fodder = _supplicant_board(
+        set_pool, "Balduvian Barbarians", boost=1
+    )
+
+    game.queue_permanent_ability(
+        0, "Freyalise Supplicant",
+        target_player_index=1, permanent_index=0, cost_permanent_index=1,
+    )
+    game._settle()
+
+    assert p1.life == 18
+
+
+def test_the_supplicant_will_not_eat_a_creature_of_the_wrong_color(set_pool):
+    """"Sacrifice a **red or white** creature" is a cost, and a cost that cannot
+    be paid is an ability that cannot be activated (CR 601.2h). Balduvian Bears
+    is green, so nothing is sacrificed and nothing is dealt."""
+    pool = set_pool("ICE")
+    supplicant = _nosick(Permanent(card=pool["Freyalise Supplicant"]))
+    bears = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p0 = PlayerState(name="P0", battlefield=[supplicant, bears], life=20)
+    game = Game(players=[p0, PlayerState(name="P1", life=20)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._settle()
+
+    result = game.queue_permanent_ability(
+        0, "Freyalise Supplicant",
+        target_player_index=1, permanent_index=0, cost_permanent_index=1,
+    )
+    game._settle()
+
+    assert not result.supported
+    assert game.players[1].life == 20
+    assert bears in p0.battlefield
+    assert not supplicant.tapped
+# --- end W3G4 ---

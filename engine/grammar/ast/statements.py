@@ -164,6 +164,7 @@ from .combat import (
 )
 from .game import (
     Ante,
+    CoinFlipStakesLoop,
     CreateEmblem,
     CreateCopyToken,
     CreateToken,
@@ -186,6 +187,7 @@ from .game import (
 
 Effect = Union[
     CoinFlipDamageLoop,
+    CoinFlipStakesLoop,
     DamageThoseDamagedThisGame,
     DamageRidersUntilEndOfTurn,
     DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, ChangeSupertype, ChangeLandType, LoseKeyword, PlayerGetsCounters, PutCounter, RemoveCounter,

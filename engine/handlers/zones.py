@@ -2484,6 +2484,53 @@ def put_cards_from_hand_onto_battlefield(game: Game, instruction: OracleInstruct
     return True, "resolved"
 
 
+def exile_from_hand_candidates(game, payload: dict, player) -> list[int]:
+    """The hand slots "you may exile a <filter> card from your hand" may be
+    answered with (Ice Cauldron).
+
+    Public for ``put_from_hand_candidates``' reason exactly: the renderer shows
+    the seat what it may pick and the resolver checks what came back, and a list
+    built twice is a list that can be offered wider than it is checked.
+    """
+    described = payload.get("card_filter") or {}
+    return [
+        index
+        for index, card in enumerate(player.hand)
+        if _card_matches_filter(card, described)
+    ]
+
+
+@effect_handler("exile_chosen_card_from_hand")
+def exile_chosen_card_from_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You may exile a nonland card from your hand." (Ice Cauldron.)
+
+    The card is chosen on resolution out of a hidden zone, so the pick *is* the
+    effect and it goes through the pending-choice queue. The offer suspends the
+    resolution: the sentence behind it — "you may cast that card for as long as
+    it remains exiled" — reads what this exiled, and a step that ran before the
+    answer would grant permission over an empty list.
+
+    Nothing eligible is an offer never made rather than an offer declined, the
+    same rule ``put_chosen_card_from_hand_onto_battlefield`` states beside it.
+    """
+    caster = context.caster
+    seat = game.players.index(caster)
+    payload = dict(instruction.payload)
+    if not exile_from_hand_candidates(game, payload, caster):
+        game.log.append(
+            f"{context.card.name}: {caster.name} has no card to exile"
+        )
+        return True, "resolved"
+    game.arm_pending_choice(
+        "exile_from_hand_choice", seat,
+        card_name=context.card.name,
+        _payload=payload,
+        _context=context,
+        _source_permanent=context.source_permanent,
+    )
+    return True, "resolved"
+
+
 def put_from_hand_candidates(game, payload: dict, player) -> list[int]:
     """The hand slots a "put a … card from your hand onto the battlefield" offer
     may be answered with.
@@ -3059,6 +3106,7 @@ _PERMISSION_DURATION_WORDS = {
     "end_of_turn": " this turn",
     "your_next_upkeep": " until their next upkeep",
     "until_source_grants_again": " until it exiles another card",
+    "while_exiled": " for as long as it remains exiled",
 }
 
 

@@ -114,6 +114,68 @@ def _per_recipient_count(node: ast.DealDamage) -> dict | None:
     return spec
 
 
+#: Characteristics of a cost-eaten permanent that ``count_from_payload``
+#: actually reads back (``engine/handlers/_common.py``). A mana value comes off
+#: the card and survives anything; a power or a toughness is the *effective*
+#: one the permanent last had on the battlefield (CR 608.2h), which the
+#: `Permanent` object still carries after it leaves — the same read
+#: `target_gains_life` has made for Life Chisel since that card landed.
+#:
+#: Written down here because a characteristic this lowering emits and the
+#: evaluator cannot answer is a card that reports supported and deals nothing.
+_READABLE_COST_SACRIFICE_CHARACTERISTICS = frozenset(
+    {"mana_value", "power", "toughness"}
+)
+
+
+def _lower_cost_sacrifice_damage(
+    node: ast.DealDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"…deals damage to any target equal to **the sacrificed creature's
+    power**." (Freyalise Supplicant, halved by the caller.)
+
+    The number is a characteristic of the permanent the ability's own cost ate
+    (CR 601.2h), so it is not on any board by the time this resolves — it is
+    read off the record the activation kept, through the one ``x_from_count``
+    channel every other computed amount already travels on. That is what lets
+    the printed "half … , rounded down" ride along: `_lower_halved_damage`
+    stamps the rounding onto the same spec and the count evaluator applies it
+    once, where the number is computed.
+    """
+    assert isinstance(node.amount, ast.SacrificedForCost)
+    characteristic = node.amount.characteristic
+    if characteristic not in _READABLE_COST_SACRIFICE_CHARACTERISTICS:
+        raise LoweringError(
+            "no handler reads the sacrificed permanent's "
+            f"{characteristic!r}",
+            node=node,
+        )
+    if node.riders != ast.DamageRiders():
+        raise LoweringError("a counted damage carries no riders yet", node=node)
+    if len(node.recipients) != 1:
+        raise LoweringError("a counted damage reaches one recipient", node=node)
+    recipient = node.recipients[0]
+    payload: dict[str, object] = {
+        "amount": "x",
+        X_FROM_COUNT: {"cost_sacrifice_characteristic": characteristic},
+    }
+    if isinstance(recipient, ast.PlayerRef):
+        # The seat is recorded for `_lower_counted_damage`'s reason: a sentence
+        # about a player with no recipient key would be dealt to whatever
+        # permanent an earlier step left in the context.
+        if recipient.kind not in ("target_player", "target_opponent", "you"):
+            raise LoweringError("no handler aims this counted damage", node=node)
+        payload["recipient"] = "caster" if recipient.kind == "you" else "target_player"
+    elif not (
+        _is_target(recipient)
+        or (isinstance(recipient, ast.TargetSpec)
+            and recipient.quantifier == "any_target")
+    ):
+        raise LoweringError("no handler aims this counted damage", node=node)
+    _describe_targets(payload, recipient)
+    return (OracleInstruction("deal_damage", "", payload),)
+
+
 def _damaged_player_is(recipients: tuple[ast.Recipient, ...], kind: str) -> bool:
     """Whether the damage lands on exactly one player reference of *kind*."""
     return (
@@ -179,6 +241,27 @@ def _lower_counted_damage(
                             X_FROM_COUNT: {
                                 **per_recipient, "owner": EVENT_SUBJECT_PLAYER,
                             },
+                        },
+                    ),
+                )
+            # "…deals damage to **you** equal to the number of creatures
+            # **that opponent** controls." (Goblin Lyre.) Not a loop either:
+            # the damage lands on one fixed seat — the ability's own controller
+            # — while the counted board belongs to the seat the sentence in
+            # front of this one chose. So there is one number, and the phrase
+            # is a *scope* on the count rather than a filter on it, which is
+            # exactly what `owner` is. `that_player` is the spelling every
+            # other spec already uses for that seat ("the number of cards in
+            # **that player's** hand" reaches `count_from_payload` the same
+            # way), so no new vocabulary and no second answer.
+            if recipient.kind == "you":
+                return (
+                    OracleInstruction(
+                        "deal_damage", "",
+                        {
+                            "amount": "x",
+                            "recipient": "caster",
+                            X_FROM_COUNT: {**per_recipient, "owner": "that_player"},
                         },
                     ),
                 )

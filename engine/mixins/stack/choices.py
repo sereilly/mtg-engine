@@ -2608,6 +2608,121 @@ class PendingChoicesMixin:
         if not options or not self._resolve_cast_choice(choice, options[0]):
             self._record_cast_choice(choice, 0)
 
+    # -- Whether a coin flip happens again, and at what stake ----------------
+
+    def confirm_flip_again(self, player_index: int, accept: bool = True) -> bool:
+        """Answer Game of Chaos's "…decides whether to flip again"."""
+        return self.resolve_pending_choice(
+            "flip_again", player_index, accept=accept
+        )
+
+    def _resolve_flip_again(self, choice: PendingChoice, accept: bool) -> bool:
+        """Run the paragraph again, or stop.
+
+        The next round is the *same* instruction with the next stake already on
+        its payload, carried here when the offer was armed — so this does not
+        have to know what the card doubles or who decides next, which is the
+        handler's business and stays there.
+        """
+        again = choice.data.get("_again")
+        context = choice.data.get("_context")
+        self.discard_pending_choice(choice)
+        player = self.players[choice.player_index]
+        if not accept or again is None or context is None:
+            self.log.append(
+                f"{player.name} declined to flip again "
+                f"({choice.data.get('card_name', 'an effect')})"
+            )
+            return True
+        self._execute_oracle_instruction(again, context)
+        return True
+
+    def _default_flip_again(self, choice: PendingChoice) -> None:
+        """The stated policy: **stop**.
+
+        Not a valuation. The offer doubles the stake every round and the flip is
+        even money, so there is no number a seat with no policy can be right
+        about — and a default of "yes" is not a default, it is a game that never
+        ends. A seat that should press its luck needs a weight in
+        ``engine/ai_valuation.py``, not a branch here.
+        """
+        self._resolve_flip_again(choice, False)
+
+    # -- A card exiled out of a hand -----------------------------------------
+
+    def live_exile_from_hand_choices(self, choice: PendingChoice) -> list[int]:
+        """The hand slots still eligible, from the engine's own rule.
+
+        Re-run rather than stored, for ``live_put_from_hand_choices``' reason:
+        the list the seat is offered and the list its answer is checked against
+        have to be one list.
+        """
+        from ...handlers.zones import exile_from_hand_candidates
+
+        return exile_from_hand_candidates(
+            self, choice.data.get("_payload") or {}, self.players[choice.player_index]
+        )
+
+    def confirm_exile_from_hand_choice(self, player_index: int, hand_index) -> bool:
+        """Answer the pending pick. ``hand_index`` of None declines, which is
+        always an answer here: the sentence that arms this prompt says "you
+        **may**"."""
+        return self.resolve_pending_choice(
+            "exile_from_hand_choice", player_index, hand_index=hand_index
+        )
+
+    def _resolve_exile_from_hand_choice(self, choice: PendingChoice, hand_index) -> bool:
+        """Exile the chosen card, and record it for the sentence behind this one.
+
+        Two records, both needed and both about the same card:
+
+        * ``exiled_cards`` on the resolution's scratchpad is what "you may cast
+          **that card**" reads (`_PRODUCES`);
+        * the linked-exile entry on the artifact is what "the last card exiled
+          with **this artifact**" reads, long after this resolution is over
+          (CR 610.3) — and it lives on the permanent rather than on the game
+          because the permanent is what the phrase names.
+        """
+        from ...linked_exile import link_exiled_card
+
+        player = self.players[choice.player_index]
+        live = self.live_exile_from_hand_choices(choice)
+        name = choice.data.get("card_name", "Effect")
+        if hand_index is None:
+            self.log.append(f"{player.name} exiled no card ({name})")
+            self.discard_pending_choice(choice)
+            return True
+        if hand_index not in live:
+            return False
+        card = player.hand[hand_index]
+        # Through the hand seam: a deck repeats one immutable definition per
+        # copy, so an identity filter over the hand would remove every copy
+        # where this removes exactly one.
+        self.take_card_from_hand(player, card)
+        player.exile.append(card)
+        source = choice.data.get("_source_permanent")
+        if source is not None:
+            link_exiled_card(source, card, choice.player_index)
+        context = choice.data.get("_context")
+        if context is not None:
+            context.results.setdefault("exiled_cards", []).append(card)
+        self.log.append(f"{player.name} exiled {card.name} from their hand ({name})")
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_exile_from_hand_choice(self, choice: PendingChoice) -> None:
+        """The stated policy: **decline**.
+
+        The opposite of the put-onto-the-battlefield pick beside it, and for the
+        same kind of reason stated the other way round. That offer trades a card
+        in hand for a permanent on the battlefield, which is more board; this
+        one trades a card in hand for a card in exile plus a charge counter, and
+        the permission to cast it is only worth anything to a seat that then
+        spends the noted mana on it. A headless seat that took the offer would
+        bury a card every time the artifact was activated.
+        """
+        self._resolve_exile_from_hand_choice(choice, None)
+
     # -- A card put onto the battlefield out of a hand -----------------------
 
     def arm_put_from_hand_choice(self, player_index: int, payload: dict, context) -> None:
@@ -4590,6 +4705,50 @@ register_choice(
     # keeps AI and headless play free of the suspension above.
     default_at_arm=True,
     spectator_visible=True,
+)
+
+register_choice(
+    "flip_again",
+    resolve=lambda game, choice, r: game._resolve_flip_again(
+        choice, bool(r.get("accept", True))
+    ),
+    default=lambda game, choice: game._default_flip_again(choice),
+    action="flip_again_confirm",
+    prompt_key="flip_again",
+    blocked_detail="decide whether to flip again before other actions",
+    # The answer is whether the *rest of this resolution* happens at all, so
+    # nothing may run past it (CR 608.2) — and the round it starts arms the next
+    # offer, which is how a chain of decisions stays one resolution.
+    suspends=True,
+    # A non-interactive seat never queues it: the stated default is to stop, and
+    # taking it where the offer stands is what keeps AI and headless play from
+    # holding a resolution open on a decision nobody will make.
+    default_at_arm=True,
+    # Both players' life totals are public, and so is whose decision it is.
+    hidden_for_ai=False,
+    spectator_visible=True,
+)
+
+register_choice(
+    "exile_from_hand_choice",
+    resolve=lambda game, choice, r: game._resolve_exile_from_hand_choice(
+        choice, r.get("hand_index")
+    ),
+    default=lambda game, choice: game._default_exile_from_hand_choice(choice),
+    action="exile_from_hand_confirm",
+    prompt_key="exile_from_hand_choice",
+    blocked_detail="choose a card to exile before other actions",
+    # The sentence behind this one reads what was exiled ("you may cast that
+    # card for as long as it remains exiled"), so nothing after it may run
+    # until it is answered (CR 608.2).
+    suspends=True,
+    # …and a non-interactive seat therefore never queues it: the rest of the
+    # activation — the charge counter and the mana note — has to finish, which
+    # is the same reason `cast_choice` and `pay_life_to_save` take their default
+    # where the offer stands.
+    default_at_arm=True,
+    # A hand is hidden (CR 400.2), so the options are the chooser's alone.
+    hidden_for_ai=False,
 )
 
 register_choice(

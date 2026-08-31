@@ -98,6 +98,15 @@ def _may_cost_payload(node: ast.May) -> dict[str, object]:
 #: reads the resolution's target and is a different seat entirely.
 OFFERABLE_ACTORS: frozenset[str] = frozenset(
     {"you", "each_player", "each_opponent", "that_player", "defending_player",
+     # "**Target opponent** may ante the top card of their library." (Amulet of
+     # Quoz.) The seat the ability chose, which is exactly what
+     # ``context.target`` holds — the same read "that player" beside it gets,
+     # arrived at by a different route. Admitted with a branch of its own in
+     # ``_offered_seats`` rather than through that function's fallback, because
+     # the reference reader spells "**an** opponent" the same way and that
+     # phrase chooses nobody: the branch checks the recorded seat is a real
+     # opponent and offers to nobody when it is not.
+     "target_opponent",
      # "… unless **its controller** pays life equal to its toughness."
      # (Essence Vortex.) The seat is not one the resolution already carries —
      # it is read off the permanent the sentence targeted — so ``_offered_seats``
@@ -518,14 +527,28 @@ def _each_player_optional_discard(
 #: after "you may draw two additional cards. If you do, choose two cards…") is
 #: naming something this effect really does write.
 #:
-#: ``otherwise`` and ``reflexive`` are deliberately absent, for the reasons
-#: ``_lower_may`` gives about threading *into* them: the first runs only when
-#: the action did not happen, and the second is a separate ability under
-#: CR 603.12 with a scratchpad of its own.
+#: ``reflexive`` is deliberately absent, for the reason ``_lower_may`` gives
+#: about threading *into* it: it is a separate ability under CR 603.12 with a
+#: scratchpad of its own. ``otherwise`` is absent from *this* tuple and has one
+#: of its own below, because its records are visible on a different condition.
 _MAY_BRANCHES_VISIBLE_AFTER = ("action", "then")
 
+#: The branch whose records are visible only to a step that runs *because the
+#: offer was declined*. "Target opponent may ante the top card of their library.
+#: **If they don't, you flip a coin.** If you win the flip, that player loses
+#: the game." (Amulet of Quoz.) The flip is written by the decline branch, so
+#: the sentences reading it are steps of that branch however they were
+#: punctuated -- the mirror of the fold below, one branch over, and the reason
+#: it is a tuple of its own rather than a third entry above: a step is folded
+#: into whichever branch actually writes what it reads, and the two branches
+#: never both run.
+_MAY_DECLINE_BRANCH = ("otherwise",)
 
-def _records_produced(instruction: OracleInstruction) -> frozenset[str]:
+
+def _records_produced(
+    instruction: OracleInstruction,
+    branches: tuple[str, ...] = _MAY_BRANCHES_VISIBLE_AFTER,
+) -> frozenset[str]:
     """The scratchpad keys *instruction* may write, its own and its offer's.
 
     An offer records nothing itself, so a step after "you may … If you do,
@@ -536,12 +559,16 @@ def _records_produced(instruction: OracleInstruction) -> frozenset[str]:
 
     Read through ``_PRODUCES`` at every level rather than a second table, so an
     instruction's record has one declaration however deeply it is nested.
+
+    *branches* is which of an offer's branches to look inside. The caller asks
+    twice, once per fold target, because the answer decides which branch a later
+    step belongs in.
     """
     keys = set(produced_keys(instruction.kind))
     if instruction.kind == "may":
-        for branch in _MAY_BRANCHES_VISIBLE_AFTER:
+        for branch in branches:
             for nested in instruction.payload.get(branch) or ():
-                keys |= _records_produced(nested)
+                keys |= _records_produced(nested, branches)
     return frozenset(keys)
 
 
@@ -574,8 +601,9 @@ def _fold_into_offer(
     instructions: tuple[OracleInstruction, ...],
     offer_index: int,
     folded: tuple[OracleInstruction, ...],
+    branch: str = "then",
 ) -> tuple[OracleInstruction, ...]:
-    """*instructions* with *folded* appended to the offer's "if you do" branch.
+    """*instructions* with *folded* appended to one of the offer's branches.
 
     "You may draw two additional cards. If you do, choose two cards in your
     hand drawn this turn. **For each of those cards, …**" (Sylvan Library.) The
@@ -593,8 +621,12 @@ def _fold_into_offer(
     the strength of one card.
     """
     offer = instructions[offer_index]
-    then = tuple(offer.payload.get("then") or ()) + folded
-    rebuilt = OracleInstruction(offer.kind, offer.value, {**offer.payload, "then": then})
+    # *branch* is "then" for a step reading what the offer's action recorded and
+    # "otherwise" for one reading what its decline recorded (Amulet of Quoz's
+    # coin flip). The same argument either way: the step runs exactly when the
+    # branch that writes what it reads runs.
+    kept = tuple(offer.payload.get(branch) or ()) + folded
+    rebuilt = OracleInstruction(offer.kind, offer.value, {**offer.payload, branch: kept})
     return instructions[:offer_index] + (rebuilt,) + instructions[offer_index + 1:]
 
 
@@ -614,6 +646,9 @@ def _lower_steps(
     # consequence, whatever the punctuation says.
     offer_index: int | None = None
     offer_keys: frozenset[str] | None = None
+    # The same, for the offer's *decline* branch. Tracked apart from the pair
+    # above because a step is folded into the branch that writes what it reads.
+    decline_keys: frozenset[str] | None = None
     for step in steps:
         # "…**If you do**, …" after an action that was not optional. The branch
         # asks whether the step before it took place, and this is the one place
@@ -668,8 +703,21 @@ def _lower_steps(
             instructions = _fold_into_offer(instructions, offer_index, lowered)
             last_produced = None
             continue
+        # "...If they don't, you flip a coin. If you win the flip, ..." (Amulet
+        # of Quoz.) A step reading only what the *decline* branch records
+        # belongs inside it, for the reason above exactly: left as a sibling it
+        # runs whether or not the offer was taken, and reads a coin flip that
+        # never happened.
+        if offer_index is not None and decline_keys and all(
+            _references_record(instruction, decline_keys) for instruction in lowered
+        ):
+            instructions = _fold_into_offer(
+                instructions, offer_index, lowered, branch="otherwise"
+            )
+            last_produced = None
+            continue
         last_produced = None
-        offer_index = offer_keys = None
+        offer_index = offer_keys = decline_keys = None
         for position, instruction in enumerate(lowered):
             # Two different questions, and they take different answers. What is
             # *available* to a back-reference includes what an offer's branches
@@ -680,8 +728,14 @@ def _lower_steps(
             result = primary_produced(instruction.kind)
             if result is not None:
                 last_produced = result
-            if instruction.kind == "may" and inner:
+            declined = _records_produced(instruction, _MAY_DECLINE_BRANCH)
+            # The decline branch's records are threaded forward too. What makes
+            # that safe is the fold above, which puts a step reading one of them
+            # *inside* the branch that writes it.
+            produced = produced | declined
+            if instruction.kind == "may" and (inner or declined):
                 offer_index = len(instructions) + position
                 offer_keys = inner
+                decline_keys = declined - inner
         instructions += lowered
     return instructions

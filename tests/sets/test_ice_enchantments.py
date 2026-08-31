@@ -1558,3 +1558,242 @@ def test_dance_of_the_dead_offers_its_controller_the_untap_payment(set_pool):
 
 
 # --- end W3G1 ---
+
+
+# --- W3G4: coin flips, ante, noted mana ---
+def test_iceberg_enters_with_the_announced_x_in_ice_counters(set_pool):
+    """"This enchantment enters with **X ice** counters on it."
+
+    Round 18 made the counter *kind* data for the X form (Balduvian Hydra) and
+    the *number* data for the named form (Rasputin), and the crossing case fell
+    between the two: the named reader matched Iceberg's shape and then refused
+    "x" as a number word. The card compiled supported, entered with an empty
+    counter store, and could never pay for its own second ability — which is
+    the whole card.
+    """
+    from engine.named_counters import counters_on
+
+    pool = set_pool("ICE")
+    p0 = PlayerState(name="P0", hand=[pool["Iceberg"]], life=20)
+    game = Game(players=[p0, PlayerState(name="P1", life=20)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+
+    game.cast_from_hand(0, "Iceberg", x_value=3)
+    game._settle()
+
+    berg = p0.battlefield[0]
+    assert counters_on(berg, "ice") == 3
+
+    # And the counters are spendable: "Remove an ice counter from this
+    # enchantment: Add {C}" is the ability the entry state exists to feed.
+    berg.metadata["summoning_sickness_turn"] = -99
+    game.activate_permanent_ability(0, "Iceberg", permanent_index=0, ability_index=1)
+    game._settle()
+
+    assert counters_on(berg, "ice") == 2
+    assert p0.mana_pool["C"] == 1
+
+
+def test_iceberg_cast_for_no_x_enters_with_nothing(set_pool):
+    """X is the value announced on casting (CR 601.2b), not a printed number, so
+    an Iceberg cast for zero really does arrive empty. Asserted because the loop
+    that places the counters has to read a *missing* X the same way — a default
+    of one would be a card nobody printed."""
+    from engine.named_counters import counters_on
+
+    pool = set_pool("ICE")
+    p0 = PlayerState(name="P0", hand=[pool["Iceberg"]], life=20)
+    game = Game(players=[p0, PlayerState(name="P1", life=20)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+
+    game.cast_from_hand(0, "Iceberg", x_value=0)
+    game._settle()
+
+    assert counters_on(p0.battlefield[0], "ice") == 0
+
+
+def test_the_x_named_counter_reader_declines_the_printed_number_form(set_pool):
+    """The two readers are separate on purpose and must stay disjoint: a printed
+    count is read off the line and X is read off the cast, at different times.
+    A reader that answered both would place one counter where Rasputin prints
+    seven, or seven where Iceberg's X was three."""
+    from engine.enter_effects import (
+        enters_with_named_counter, enters_with_x_named_counters,
+    )
+
+    assert enters_with_x_named_counters(
+        "this enchantment enters with x ice counters on it"
+    ) == "ice"
+    assert enters_with_named_counter(
+        "this enchantment enters with x ice counters on it"
+    ) is None
+    assert enters_with_x_named_counters(
+        "this creature enters with seven dream counters on it"
+    ) is None
+    # A P/T counter is the other X reader's, not this one's.
+    assert enters_with_x_named_counters(
+        "this creature enters with x +1/+1 counters on it"
+    ) is None
+def _drought_board(set_pool, catalog_by_name, swamps, hand=(), droughts=1):
+    """Seat 0 under *droughts* Droughts, holding *hand*, with *swamps* Swamps."""
+    pool = set_pool("ICE")
+    perms = [Permanent(card=pool["Drought"]) for _ in range(droughts)]
+    perms += [Permanent(card=catalog_by_name["Swamp"]) for _ in range(swamps)]
+    p0 = PlayerState(
+        name="P0", life=20, battlefield=perms,
+        hand=[catalog_by_name[name] for name in hand],
+    )
+    game = Game(players=[p0, PlayerState(name="P1", life=20)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._settle()
+    return game, p0
+
+
+def _swamps_left(player):
+    return sum(1 for perm in player.battlefield if perm.card.name == "Swamp")
+
+
+def test_drought_charges_one_swamp_per_black_symbol_to_cast(set_pool, catalog_by_name):
+    """"Spells cost an additional "Sacrifice a Swamp" to cast for each black
+    mana symbol in their mana costs."
+
+    A non-mana additional cost imposed from a board (CR 601.2f), and the first
+    in the pool whose *size* is read off the object being taxed rather than
+    printed. Hypnotic Specter's {1}{B}{B} is two symbols, so it eats two.
+    """
+    game, p0 = _drought_board(
+        set_pool, catalog_by_name, swamps=3, hand=("Hypnotic Specter",)
+    )
+
+    result = game.cast_from_hand(0, "Hypnotic Specter")
+    game._settle()
+
+    assert result.supported
+    assert _swamps_left(p0) == 1
+
+
+def test_a_spell_whose_swamps_cannot_be_found_is_not_cast_at_a_discount(
+    set_pool, catalog_by_name
+):
+    """CR 118.4 with CR 601.2h: an unpayable cost makes the spell uncastable,
+    never free. One Swamp against a two-symbol cost is the case a gate that
+    asked each demand its own question would have let through."""
+    game, p0 = _drought_board(
+        set_pool, catalog_by_name, swamps=1, hand=("Hypnotic Specter",)
+    )
+
+    result = game.cast_from_hand(0, "Hypnotic Specter")
+    game._settle()
+
+    assert not result.supported
+    assert "Swamp" in result.details
+    # Nothing was spent: the refusal is before the payment.
+    assert _swamps_left(p0) == 1
+    assert [c.name for c in p0.hand] == ["Hypnotic Specter"]
+
+
+def test_two_droughts_charge_twice(set_pool, catalog_by_name):
+    """Each Drought is its own ability, so two of them want two Swamps each for
+    a two-symbol spell — and the picks are made across both demands together,
+    because one Swamp cannot pay two of them."""
+    game, p0 = _drought_board(
+        set_pool, catalog_by_name, swamps=3, hand=("Hypnotic Specter",), droughts=2
+    )
+    assert not game.cast_from_hand(0, "Hypnotic Specter").supported
+
+    game, p0 = _drought_board(
+        set_pool, catalog_by_name, swamps=4, hand=("Hypnotic Specter",), droughts=2
+    )
+    assert game.cast_from_hand(0, "Hypnotic Specter").supported
+    game._settle()
+    assert _swamps_left(p0) == 0
+
+
+def test_drought_leaves_a_spell_with_no_black_symbols_alone(set_pool, catalog_by_name):
+    """The count is zero, so there is no additional cost — not an unpayable one.
+    Asserted because a tax that charged one sacrifice per *spell* would look
+    identical on every card the pool happens to test with."""
+    game, p0 = _drought_board(
+        set_pool, catalog_by_name, swamps=0, hand=("Disenchant",)
+    )
+
+    assert game.cast_from_hand(0, "Disenchant").supported
+
+
+def test_drought_charges_the_activation_half_too(set_pool, catalog_by_name):
+    """"Activated abilities cost an additional "Sacrifice a Swamp" to activate
+    for each black mana symbol in their activation costs."
+
+    The same sentence about the other announcement (CR 602.2b routes through
+    CR 601.2b-i), so it is the same table read at the other payment site. Frozen
+    Shade's "{B}: +1/+1" is one symbol.
+    """
+    pool = set_pool("ICE")
+    shade = _nosick(Permanent(card=catalog_by_name["Frozen Shade"]))
+    p0 = PlayerState(
+        name="P0", life=20, mana_pool={"B": 5},
+        battlefield=[
+            shade,
+            Permanent(card=pool["Drought"]),
+            Permanent(card=catalog_by_name["Swamp"]),
+        ],
+    )
+    game = Game(players=[p0, PlayerState(name="P1", life=20)])
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game._settle()
+
+    assert game.activate_permanent_ability(0, "Frozen Shade", permanent_index=0).supported
+    game._settle()
+    assert (shade.effective_power, shade.effective_toughness) == (1, 2)
+    assert _swamps_left(p0) == 0
+
+    # And with the Swamp gone, the second activation is refused with nothing
+    # spent: a restriction that only worked the first time is not a restriction.
+    before = dict(p0.mana_pool)
+    refused = game.activate_permanent_ability(0, "Frozen Shade", permanent_index=0)
+    assert not refused.supported
+    assert p0.mana_pool == before
+
+
+def test_the_two_halves_must_pair_before_the_table_claims_the_line():
+    """"Spells cost an additional "Sacrifice a Swamp" to **activate** for each
+    black mana symbol in their **activation** costs" describes nothing this
+    engine can charge, and reading it as either half would tax the wrong
+    objects. A line the table cannot honour is unclaimed, which is what leaves
+    its card visibly unsupported rather than quietly mis-taxed."""
+    from engine.cost_modifiers import cost_modifier_claims_line
+
+    assert cost_modifier_claims_line(
+        'Spells cost an additional "Sacrifice a Swamp" to cast for each black '
+        "mana symbol in their mana costs."
+    )
+    assert cost_modifier_claims_line(
+        'Activated abilities cost an additional "Sacrifice a Swamp" to '
+        "activate for each black mana symbol in their activation costs."
+    )
+    assert not cost_modifier_claims_line(
+        'Spells cost an additional "Sacrifice a Swamp" to activate for each '
+        "black mana symbol in their activation costs."
+    )
+
+
+def test_a_hybrid_symbol_counts_as_the_colour_it_contains():
+    """CR 107.4e: a hybrid symbol containing B **is** a black mana symbol, so a
+    literal count of "{B}" would undercharge a card the pool has not printed
+    yet. The rule is what the card says, not what the pool happens to hold."""
+    from engine.cost_modifiers import _symbols_in
+
+    assert _symbols_in("{1}{B}{B}", "B") == 2
+    assert _symbols_in("{B/R}{1}", "B") == 1
+    assert _symbols_in("{3}{R}", "B") == 0
+    # An activation cost is a symbol dict rather than a printed string, and the
+    # same reader answers it.
+    assert _symbols_in({"B": 2, "generic": 1}, "B") == 2
+# --- end W3G4 ---

@@ -400,6 +400,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # grant over it. All zone work — the permission is about which zone a card
     # may be cast from — so no new category and GRAMMAR_CATEGORIES is unchanged.
     "exile_top_of_library": "zones",
+    "exile_chosen_card_from_hand": "zones",
     "put_exiled_with_source": "zones",
     "exile_graveyard_until_leaves": "zones",
     "exile_until_leaves_or_untaps": "zones",
@@ -665,6 +666,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # keeps the category of whatever that branch does — a coin flip over a
     # damage effect must not be able to turn "damage" on.
     "flip_coin": "coin_flips",
+    "coin_flip_stakes_loop": "coin_flips",
     # "Choose a number between 0 and 7." (Shapeshifter.) Its own category for
     # the reason the coin flip has one: the number is a *value* a player picks,
     # and what reads it back is a different sentence with a category of its own.
@@ -827,6 +829,8 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # Both exiles record what they exiled, which is what "you may play cards
     # exiled this way" / "you may cast them this turn" read.
     "exile_top_of_library": "exiled_cards",
+    # …and Ice Cauldron's hand exile, written when its prompt is answered.
+    "exile_chosen_card_from_hand": "exiled_cards",
     "search_and_exile_matching": "exiled_cards",
     # And the graveyard exile, which is what "If **it** was a creature card"
     # reads (Scavenging Ooze) — the same key, because the question the

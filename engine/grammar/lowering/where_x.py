@@ -26,6 +26,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
+from ._amounts import _READABLE_COST_SACRIFICE_CHARACTERISTICS
 from ._common import (
     _mentions_x,
     _restrictions_beyond,
@@ -127,18 +128,23 @@ def _lower_where_x_sacrificed_for_cost(
     the spell was ever on the stack, so nothing on a board answers for it and
     the number is last-known information (CR 608.2h) the payment path recorded.
 
-    Mana value alone, for that function's reason: the channel carries the
-    permanent, and its *computed* P/T does not exist once it has left the
-    battlefield (CR 613.1), so admitting "power" would stamp a definition the
-    resolution answers with a zero. A card printing one is a refusal here rather
-    than a silent nothing.
+    Mana value **and** the P/T, held to the set the resolution-time evaluator
+    actually answers (`_READABLE_COST_SACRIFICE_CHARACTERISTICS`) rather than to
+    a list written here. It read "mana value alone" until Freyalise Supplicant
+    needed the power one family over, on the stated ground that a computed P/T
+    "does not exist once the permanent has left the battlefield" — which was
+    never true of this channel: it carries the `Permanent`, whose effective P/T
+    is exactly CR 608.2h's last-known information, and `target_gains_life` has
+    read the toughness off it for Life Chisel since that card landed. A
+    characteristic outside the set is still a refusal, because a definition the
+    evaluator cannot answer is a card that reports supported and computes zero.
     """
     if not _mentions_x(inner):
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    if node.definition.characteristic != "mana_value":
+    if node.definition.characteristic not in _READABLE_COST_SACRIFICE_CHARACTERISTICS:
         raise LoweringError(
-            "only the sacrificed permanent's mana value is read back from a "
-            "cost payment",
+            "no handler reads the sacrificed permanent's "
+            f"{node.definition.characteristic!r} back from a cost payment",
             node=node,
         )
     return _stamp_x_from_count(

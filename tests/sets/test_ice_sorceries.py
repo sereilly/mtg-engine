@@ -1002,3 +1002,138 @@ def test_forgotten_lore_on_an_empty_graveyard_chooses_nothing(set_pool):
     assert game.pending_choice_of("graveyard_pick_for_price", 1) is None
     assert p1.hand == []
 # --- end W2G1 ---
+
+
+# --- W3G4: coin flips, ante, noted mana ---
+def _chaos_game(set_pool, interactive=(0, 1)):
+    """Game of Chaos in hand, both seats at 20, both able to answer a prompt."""
+    pool = set_pool("ICE")
+    p0 = PlayerState(name="P0", hand=[pool["Game of Chaos"]], life=20)
+    p1 = PlayerState(name="P1", life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game.interactive_seats = set(interactive)
+    return game, p0, p1
+
+
+def test_game_of_chaos_pays_the_winner_and_lets_the_winner_decide(set_pool):
+    """"Flip a coin. If you win the flip, you gain 1 life and target opponent
+    loses 1 life, and **you** decide whether to flip again."
+
+    Who decides is the half a composed lowering cannot carry: it is not the
+    caster, it is whoever the *result* named. Both outcomes are checked,
+    because a handler that always offered the caster passes the winning one.
+    """
+    from unittest.mock import patch
+
+    game, p0, p1 = _chaos_game(set_pool)
+    with patch("engine.handlers._common.random.random", return_value=0.0):
+        game.cast_from_hand(0, "Game of Chaos", target_player_index=1)
+        game._settle()
+
+    assert (p0.life, p1.life) == (21, 19)
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("flip_again", 0)
+    ]
+
+
+def test_losing_the_flip_hands_the_decision_to_the_opponent(set_pool):
+    """"If you lose the flip, you lose 1 life and that opponent gains 1 life,
+    and **that player** decides whether to flip again." """
+    from unittest.mock import patch
+
+    game, p0, p1 = _chaos_game(set_pool)
+    with patch("engine.handlers._common.random.random", return_value=0.99):
+        game.cast_from_hand(0, "Game of Chaos", target_player_index=1)
+        game._settle()
+
+    assert (p0.life, p1.life) == (19, 21)
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("flip_again", 1)
+    ]
+
+
+def test_the_life_stakes_double_with_each_flip(set_pool):
+    """"Double the life stakes with each flip." One, then two, then four — so
+    three winning flips take the caster from 20 to 27 and the opponent to 13.
+    The first flip is for the printed number: the doubling applies to the round
+    the *offer* buys, which is what the prompt's stake says.
+    """
+    from unittest.mock import patch
+
+    game, p0, p1 = _chaos_game(set_pool)
+    with patch("engine.handlers._common.random.random", return_value=0.0):
+        game.cast_from_hand(0, "Game of Chaos", target_player_index=1)
+        game._settle()
+        assert game.pending_choice_of("flip_again", 0).data["stake"] == 2
+
+        game.confirm_flip_again(0, accept=True)
+        game._settle()
+        assert (p0.life, p1.life) == (23, 17)
+        assert game.pending_choice_of("flip_again", 0).data["stake"] == 4
+
+        game.confirm_flip_again(0, accept=True)
+        game._settle()
+        assert (p0.life, p1.life) == (27, 13)
+
+        game.confirm_flip_again(0, accept=False)
+        game._settle()
+
+    assert (p0.life, p1.life) == (27, 13)
+    assert game.pending_choices == []
+    assert game.effect_suspended is False
+    assert game.stack == []
+
+
+def test_a_headless_seat_stops_after_one_flip(set_pool):
+    """The stated default, and the reason it is stated: the offer doubles the
+    stake every round and the flip is even money, so "yes" is not a default, it
+    is a game that never ends. The resolution still finishes."""
+    from unittest.mock import patch
+
+    game, p0, p1 = _chaos_game(set_pool, interactive=())
+    with patch("engine.handlers._common.random.random", return_value=0.99):
+        game.cast_from_hand(0, "Game of Chaos", target_player_index=1)
+        game._settle()
+
+    assert (p0.life, p1.life) == (19, 21)
+    assert game.pending_choices == []
+    assert game.effect_suspended is False
+
+
+def test_the_paragraph_refuses_when_its_four_stakes_disagree(set_pool):
+    """The four printed amounts are one quantity. A production that let them
+    differ would compile a card nobody printed, and the stake the handler runs
+    at would be whichever of the four the lowering happened to read."""
+    from engine.grammar import compile_line
+
+    result = compile_line(
+        "Flip a coin. If you win the flip, you gain 1 life and target opponent "
+        "loses 2 life, and you decide whether to flip again. If you lose the "
+        "flip, you lose 1 life and that opponent gains 1 life, and that player "
+        "decides whether to flip again. Double the life stakes with each flip."
+    )
+
+    assert not result.parsed
+
+
+def test_the_doubling_sentence_is_read_rather_than_consumed(set_pool):
+    """It is optional in the production and load-bearing in the payload: a card
+    printing the same first three sentences without it keeps a constant stake,
+    which is a real card one sentence shorter. Consumed-and-dropped would make
+    the words free to delete with no change to what runs, which is the
+    dropped-rider bug the deletion probe exists for."""
+    from engine.grammar import compile_line
+
+    without = compile_line(
+        "Flip a coin. If you win the flip, you gain 1 life and target opponent "
+        "loses 1 life, and you decide whether to flip again. If you lose the "
+        "flip, you lose 1 life and that opponent gains 1 life, and that player "
+        "decides whether to flip again."
+    )
+
+    assert without.lowered
+    assert without.instructions[0].payload == {"stake": 1, "doubling": False}
+# --- end W3G4 ---

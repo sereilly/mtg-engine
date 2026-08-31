@@ -23,6 +23,7 @@ from ._amounts import (
     _damaged_player_is,
     _lower_board_count_damage,
     _lower_chosen_cast_damage,
+    _lower_cost_sacrifice_damage,
     _lower_counted_damage,
 )
 from ._sacrifices import _SACRIFICE_CARRIED, _forced_sacrifice_filter
@@ -377,6 +378,11 @@ def _lower_damage_shape(
         return _lower_halved_damage(node, event, produced)
     if isinstance(node.amount, ast.CountOf):
         return _lower_counted_damage(node, event)
+    # "…equal to the sacrificed creature's power" (Freyalise Supplicant, under
+    # the half above). A characteristic of what the cost ate rather than a count
+    # of anything on a board, so it sits beside the count rather than inside it.
+    if isinstance(node.amount, ast.SacrificedForCost):
+        return _lower_cost_sacrifice_damage(node)
     if isinstance(node.amount, ast.BoardCount):
         return _lower_board_count_damage(node, produced)
     # "Target creature you control deals damage equal to its power to another

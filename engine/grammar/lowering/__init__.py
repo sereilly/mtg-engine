@@ -68,9 +68,11 @@ from ._common import (
     _stamp_x_from_count,
 )
 from ._amounts import (
+    _READABLE_COST_SACRIFICE_CHARACTERISTICS,
     _SWAMPS_THEY_CONTROL,
     _BOARD_COUNT_DAMAGE,
     _damaged_player_is,
+    _lower_cost_sacrifice_damage,
     _lower_counted_damage,
     _lower_board_count_damage,
     count_spec,
@@ -274,6 +276,7 @@ from .game import (
     _lower_lose_life,
     _lower_pay_life,
     _lower_coin_flip_damage_loop,
+    _lower_coin_flip_stakes_loop,
     _lower_damage_this_game_history,
 )
 
@@ -316,6 +319,8 @@ __all__ = [
     "_SWAMPS_THEY_CONTROL",
     "_BOARD_COUNT_DAMAGE",
     "_damaged_player_is",
+    "_READABLE_COST_SACRIFICE_CHARACTERISTICS",
+    "_lower_cost_sacrifice_damage",
     "_lower_counted_damage",
     "_lower_board_count_damage",
     "_lower_damage_unless_pay",
@@ -325,6 +330,7 @@ __all__ = [
     "_lower_damage_dealt_riders",
     "_lower_damage_conjunction",
     "_lower_coin_flip_damage_loop",
+    "_lower_coin_flip_stakes_loop",
     "_lower_damage_this_game_history",
     "_lower_damage_cant_be_prevented",
     "_lower_prevent_damage",

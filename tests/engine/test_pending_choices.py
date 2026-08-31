@@ -326,6 +326,15 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # resolution, and the second reshapes the hand and the library the
         # first filled, so nothing after it may read either.
         "hand_to_library",
+        # "You may exile a nonland card from your hand. **You may cast that
+        # card** for as long as it remains exiled." (Ice Cauldron.) The second
+        # sentence grants permission over exactly what the first exiled, so a
+        # step that ran before the answer would grant it over nothing.
+        "exile_from_hand_choice",
+        # "…and you decide whether to flip again." (Game of Chaos.) The answer
+        # is whether the rest of the resolution happens at all, and the round it
+        # starts arms the next offer.
+        "flip_again",
     }, suspending
 
 

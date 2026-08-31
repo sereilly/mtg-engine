@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import dataclasses
 from ...oracle_types import OracleInstruction
-from ...subject_filters import OBJECT_ONLY_FILTER_KEYS
+from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, card_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._events import CREATED_TOKEN, EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
@@ -30,6 +30,44 @@ from ._common import (
 
 
 _EXILED_CREATURE = ast.ObjectFilter(card_types=("creature",))
+
+
+def _lower_exile_card_from_hand(
+    node: ast.Exile, subject: ast.TargetSpec
+) -> OracleInstruction:
+    """"You may exile a nonland card from your hand." (Ice Cauldron.)
+
+    The narrowing is read through ``chargeable_card_filter``'s sibling gate the
+    hand pick beside it uses (``lowering/cards.py``'s "choose N cards in your
+    hand"), for that function's reason: a *card* phrase is answered by a
+    different matcher from a permanent phrase, and a key that matcher cannot
+    test would be dropped where it is tested — an exile wider than the card
+    prints.
+    """
+    filt = subject.filter
+    if filt.zone_owner is None or filt.zone_owner.kind != "you":
+        raise LoweringError("the hand exile reads your own hand", node=node)
+    if node.duration.kind is not None or node.counters:
+        raise LoweringError(
+            "a hand exile carries no duration or counters yet", node=node
+        )
+    leftover = _restrictions_beyond(
+        filt,
+        _PAYLOAD_HONOURED_FILTER_FIELDS | {"is_card", "zone", "zone_owner"},
+    )
+    if leftover:
+        raise LoweringError(
+            f"the hand exile does not honour {leftover[0]!r}", node=node
+        )
+    payload_filter = filt.to_payload()
+    payload_filter.pop("zone", None)
+    payload_filter.pop("zone_owner", None)
+    described = card_only_filter(payload_filter)
+    if described is None:
+        raise LoweringError("no hand pick can test this narrowing", node=node)
+    return OracleInstruction(
+        "exile_chosen_card_from_hand", "", {"card_filter": described}
+    )
 
 
 def _lower_exile(
@@ -259,6 +297,20 @@ def _lower_exile(
         several: dict[str, object] = _filter_payload(filt)
         _describe_several_targets(several, subject)
         return (OracleInstruction("exile_target_permanent", "", several),)
+    # "You may exile **a nonland card from your hand**." (Ice Cauldron.) Not a
+    # target and not a permanent: the card is chosen on resolution (CR 601.2c
+    # names nothing) out of a hidden zone, so the pick is the effect and it is
+    # a prompt. Read before the single-target gate below, which is about
+    # battlefield permanents and graveyard cards and would refuse this outright.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "a"
+        and subject.count == 1
+        and not subject.targeted
+        and subject.filter.zone == "hand"
+        and subject.filter.is_card
+    ):
+        return (_lower_exile_card_from_hand(node, subject),)
     if (
         not isinstance(subject, ast.TargetSpec)
         or subject.quantifier != "target"

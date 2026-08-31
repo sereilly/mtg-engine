@@ -157,7 +157,18 @@ def count_from_payload(
         if card is None:
             return 0
         if cost_sacrifice == "mana_value":
-            return max(0, int(getattr(card, "cmc", 0) or 0))
+            return max(0, _scaled(int(getattr(card, "cmc", 0) or 0), spec))
+        # "…equal to half **the sacrificed creature's power**, rounded down"
+        # (Freyalise Supplicant). The *effective* P/T the permanent last had on
+        # the battlefield (CR 608.2h), read off the `Permanent` the payment path
+        # recorded rather than off its card — the same read `target_gains_life`
+        # has made for Life Chisel's toughness since that card landed, which is
+        # why this is one more characteristic on an existing channel and not a
+        # second channel. Read off `sacrificed`, not `card`: the printed numbers
+        # are the card's and the computed ones are the permanent's.
+        if cost_sacrifice in ("power", "toughness"):
+            last_known = getattr(sacrificed, f"effective_{cost_sacrifice}", None)
+            return max(0, _scaled(int(last_known or 0), spec))
         return 0
     characteristic = spec.get("object_characteristic")
     if isinstance(characteristic, dict):

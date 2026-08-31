@@ -62,7 +62,10 @@ class CastPermission:
     exile_instead: bool = False
     # "end_of_turn" is swept at cleanup; "your_next_upkeep" at the start of the
     # granting seat's next upkeep step; "until_source_grants_again" is retired
-    # by the next grant from the same permanent; None lasts until end of game
+    # by the next grant from the same permanent; "while_exiled" is swept by
+    # nothing, because ``_covers`` already re-checks that the named card is
+    # still in the granted zone and that is exactly what the words say (Ice
+    # Cauldron); None lasts until end of game
     # (CR 611.2a), bounded by the cards staying in the granted zone.
     duration: str | None = "end_of_turn"
     source_name: str = ""

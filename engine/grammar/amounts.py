@@ -233,6 +233,22 @@ def _parse_counted_amount(
 
         return ast.CountOf(parse_object_filter(stream))
     stream.reset(mark)
+    # "half **the sacrificed creature's power**, rounded down" (Freyalise
+    # Supplicant). A characteristic of what the ability's own cost ate, read
+    # here for the reason the count above is read here: `parse_equal_to` asks
+    # the same two payment-channel readers, but it hands "half" straight to the
+    # quantity parser *before* it reaches them — so a fraction **of** a channel
+    # had no reader at all and the line refused at "the sacrificed creature 's
+    # power" while the unhalved sentence one card over parsed fine.
+    #
+    # The leading "the" is this reader's, exactly as it is one function up.
+    channel = stream.mark()
+    stream.accept_word("the")
+    for accept_channel in (accept_sacrificed_for_cost, accept_exiled_for_cost):
+        payment = accept_channel(stream)
+        if payment is not None:
+            return payment
+    stream.reset(channel)
     # "half **the damage dealt by one of those sorcery spells this turn**"
     # (Backdraft). A history narrowed by a choice, not a count of anything, so
     # it is read here where "half" can take it — the same position "the number

@@ -469,6 +469,39 @@ def _action_kudzu_reattach_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="invalid Kudzu reattach selection")
 
+@action_handler("flip_again_confirm")
+def _action_flip_again_confirm(session, req, seat_type):
+    # Game of Chaos: the player the last flip favoured says whether it happens
+    # again, at double the stake. Only that seat may answer — the offer is made
+    # to one player and the other has just lost the round.
+    pending = next(
+        (c for c in session.game.pending_choices_of("flip_again")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no coin flip pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if not session.game.confirm_flip_again(req.seat, req.accept is not False):
+        raise HTTPException(status_code=400, detail="invalid coin-flip answer")
+
+@action_handler("exile_from_hand_confirm")
+def _action_exile_from_hand_confirm(session, req, seat_type):
+    # Ice Cauldron: the seat picks a card in its hand to exile under the
+    # artifact, or declines (accept=False / no hand_index). Declining is always
+    # an answer here — the sentence says "you may" — and the engine re-checks
+    # the pick against the same candidate rule the prompt was drawn from, so a
+    # client offering a whole hand cannot widen the choice.
+    pending = next(
+        (c for c in session.game.pending_choices_of("exile_from_hand_choice")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no card exile pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    hand_index = None if req.accept is False else req.hand_index
+    if not session.game.confirm_exile_from_hand_choice(req.seat, hand_index):
+        raise HTTPException(status_code=400, detail="invalid card choice")
+
 @action_handler("put_from_hand_confirm")
 def _action_put_from_hand_confirm(session, req, seat_type):
     # Eureka: the offered seat picks a card in its hand to put onto the

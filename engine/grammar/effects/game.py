@@ -46,6 +46,82 @@ def _parse_game_is_a_draw(stream: TokenStream) -> ast.Statement | None:
     return None
 
 
+def _parse_coin_flip_stakes_loop(stream: TokenStream) -> ast.Statement | None:
+    """``Flip a coin. If you win the flip, you gain N life and target opponent
+    loses N life, and you decide whether to flip again. If you lose the flip,
+    you lose N life and that opponent gains N life, and that player decides
+    whether to flip again. [Double the life stakes with each flip.]``
+    (Game of Chaos.)
+
+    Read whole, for the reason Mana Clash's flip loop is: every sentence after
+    the first reads a flip only the first produces, and the offer that repeats
+    the paragraph is answered by whichever player the *result* names — which no
+    sentence read on its own can say.
+
+    It lives with the `game` family rather than in `paragraphs`, where the pool's
+    other whole-paragraph productions sit, because that module is at the size
+    guard and this paragraph's node and lowering are `ast/game.py`'s and
+    `lowering/game.py`'s: putting it here re-forms the mirror instead of
+    forking it, and ``_parse_flip_coin`` beside it already reads the first
+    sentence on its own.
+
+    Every fixed word is *expected* once the second sentence has been entered,
+    not accepted, for that production's stated reason: each is a way the
+    paragraph could mean something smaller and still parse. The four printed
+    amounts must be the one quantity they are printed as — a production that let
+    them differ would compile a card nobody printed — and the closing sentence
+    is genuinely optional, so that reading it changes what happens rather than
+    being consumed and dropped.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("flip", "a", "coin"):
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase("if", "you", "win", "the", "flip"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("you", "gain"):
+        stream.reset(mark)
+        return None
+    stake = parse_amount(stream)
+    if not stream.accept_phrase("life", "and", "target", "opponent", "loses"):
+        stream.reset(mark)
+        return None
+    amounts = [stake, parse_amount(stream)]
+    if not stream.accept_word("life"):
+        raise stream.error("expected the life the opponent loses")
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "and", "you", "decide", "whether", "to", "flip", "again"
+    ):
+        raise stream.error("expected the offer to flip again")
+    stream.accept_punct(".")
+    if not stream.accept_phrase("if", "you", "lose", "the", "flip"):
+        raise stream.error("expected the losing half of the flip")
+    stream.accept_punct(",")
+    if not stream.accept_phrase("you", "lose"):
+        raise stream.error("expected the life you lose")
+    amounts.append(parse_amount(stream))
+    if not stream.accept_phrase("life", "and", "that", "opponent", "gains"):
+        raise stream.error("expected the life that opponent gains")
+    amounts.append(parse_amount(stream))
+    if not stream.accept_word("life"):
+        raise stream.error("expected the life the opponent gains")
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "and", "that", "player", "decides", "whether", "to", "flip", "again"
+    ):
+        raise stream.error("expected the losing half's offer to flip again")
+    stream.accept_punct(".")
+    doubling = stream.accept_phrase(
+        "double", "the", "life", "stakes", "with", "each", "flip"
+    )
+    if any(other != stake for other in amounts[1:]):
+        raise stream.error("the four printed stakes must be one quantity")
+    return ast.CoinFlipStakesLoop(stake, bool(doubling))
+
+
 def _parse_flip_coin(stream: TokenStream) -> ast.Statement | None:
     """``Flip a coin.`` (CR 705.1.)
 
@@ -54,6 +130,13 @@ def _parse_flip_coin(stream: TokenStream) -> ast.Statement | None:
     one foot" is a different action, and its card hook must keep getting it.
     """
     mark = stream.mark()
+    # "**You** flip a coin." (Amulet of Quoz.) CR 705.1 gives the flip a
+    # flipper, and both spellings name the same one: the controller of the
+    # effect, which is who ``flip_coin`` records the result for and who "if you
+    # win the flip" then asks about. So the subject is a spelling, read here
+    # rather than as a second production — two readers of one sentence is how
+    # the two come to disagree about whose flip it is.
+    stream.accept_word("you")
     if stream.accept_phrase("flip", "a", "coin"):
         return ast.FlipCoin()
     stream.reset(mark)

@@ -211,6 +211,36 @@ def enters_with_named_counter(line: str, card_name: str | None = None) -> tuple[
     # strictly smaller card, silently.
     return None if count is None else (count, match.group("counter"))
 
+
+#: The **X** form of the named-counter sentence above: "This enchantment enters
+#: with **X ice** counters on it." (Iceberg.) Its own pattern for the reason
+#: `ENTERS_WITH_X_PT_COUNTERS` is its own pattern one screen up: the count is
+#: not printed at all, it is the value announced when the spell was cast
+#: (CR 601.2b), so it is read from a different place at a different time.
+#:
+#: The pair of X patterns is the point. Round 18 made the *kind* data for the
+#: P/T form, which is why Balduvian Hydra's "+1/+0" costs no code; the named
+#: form beside it kept refusing "x" as a number word, so Iceberg placed nothing
+#: and its "Remove an ice counter: Add {C}" ability could never be paid for.
+#: A card compiling supported and entering with an empty counter store is
+#: exactly the failure `enters_with_pt_counters` refuses a bad number word to
+#: avoid, one counter family over.
+ENTERS_WITH_X_NAMED_COUNTERS = re.compile(
+    r"^this [a-z]+ enters with x (?P<counter>[a-z]+) counters? on it$"
+)
+
+
+def enters_with_x_named_counters(
+    line: str, card_name: str | None = None
+) -> str | None:
+    """The counter word an "enters with X <word> counters" line places, or None.
+
+    Read by the entry state and by the support gate, like every other reader in
+    this file, so what is placed and what is claimed cannot drift.
+    """
+    match = ENTERS_WITH_X_NAMED_COUNTERS.match(_self_normalized(line, card_name))
+    return None if match is None else match.group("counter")
+
 #: "As this creature enters, sacrifice any number of untapped Forests."
 #: (Wood Elemental.) CR 614.1c again: the sacrifice happens *as* the permanent
 #: arrives, which is what lets a characteristic-defining P/T read the number
@@ -633,6 +663,8 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "enters with P/T counters"
     if enters_with_x_pt_counters(normalized) is not None:
         return "enters with X P/T counters"
+    if enters_with_x_named_counters(normalized) is not None:
+        return "enters with X named counters"
     if chooses_color_on_enter(normalized):
         return "chooses a color as it enters"
     if chooses_two_land_types_on_enter(normalized):
@@ -670,6 +702,8 @@ __all__ = [
     "enters_with_named_counter",
     "ENTERS_WITH_X_PT_COUNTERS",
     "enters_with_x_pt_counters",
+    "ENTERS_WITH_X_NAMED_COUNTERS",
+    "enters_with_x_named_counters",
     "EXILE_CARDS_ON_ENTER",
     "exile_cards_on_enter",
     "entry_exile_requirement",
