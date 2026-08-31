@@ -59,6 +59,8 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("creature_dealt_damage_by_self_dies",
      ("a", "creature", "dealt", "damage", "by", "this", "creature", "this", "turn", "dies")),
     ("creature_dies", ("a", "creature", "dies")),
+    # "Whenever you discard a card" (Necropotence).
+    ("you_discard_card", ("you", "discard", "a", "card")),
     # "Whenever **equipped** creature dies" (Malefic Scythe) / "When
     # **enchanted** creature dies" (Creature Bond). One condition for both
     # words: an Equipment and an Aura attach the same way here, and the trigger

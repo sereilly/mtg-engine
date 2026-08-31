@@ -55,6 +55,8 @@ from .effects import (
     _parse_gain_control, _parse_gains, _parse_game_is_a_draw, _parse_gets,
     _parse_exchange_life_totals,
     _parse_has, _parse_life_total_becomes, _parse_look_at_hand, _parse_loses,
+    _parse_exile_bound_card,
+    _parse_put_exiled_card_into_hand,
     _parse_exile_cost_sacrifices,
     _parse_mill, _parse_modal_head, _parse_player_adds_mana,
     _parse_prevent, _parse_put_iterated_card_on_library,
@@ -350,6 +352,13 @@ def parse_subject_verb(
         from_hand = _parse_put_hand_cards_on_library(stream)
         if from_hand is not None:
             return from_hand
+        # "Put that card into your hand." (Necropotence, inside its delay.)
+        # Same treatment and same reason as the three above: the counter
+        # production reads "that" as a counter kind and refuses with a site
+        # naming counters.
+        exiled_back = _parse_put_exiled_card_into_hand(stream)
+        if exiled_back is not None:
+            return exiled_back
         # "Put it into your graveyard." (All Hallow's Eve.) The ability moving
         # its own source; same treatment and same reason as the two above.
         moved = _parse_put_source_into_zone(stream)
@@ -467,6 +476,12 @@ def parse_subject_verb(
         cost_sacrifices = _parse_exile_cost_sacrifices(stream)
         if cost_sacrifices is not None:
             return cost_sacrifices
+        # "Exile **that card** from your graveyard." (Necropotence.) The object
+        # the firing event named, which the recipient parser below cannot read —
+        # it reads permanents and chosen cards, and this is neither.
+        bound_card = _parse_exile_bound_card(stream)
+        if bound_card is not None:
+            return bound_card
         stream.advance()
         subject = parse_recipient(stream)
         if subject is None:

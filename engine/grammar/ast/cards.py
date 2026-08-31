@@ -357,6 +357,37 @@ class RevealHandAndChoose:
 
 
 @dataclass(frozen=True)
+class PutExiledCardIntoHand:
+    """``Put that card into your hand.`` (Necropotence, inside its delay.)
+
+    "That card" is the one an earlier step of the **same effect** exiled, so
+    this reads the resolution's own record rather than choosing anything —
+    the same back-reference "you may play cards exiled this way" makes, and
+    demanded of its producer for the same reason: a sentence with nothing
+    behind it is the sentence read wrong.
+
+    The zone is fixed by the node: only a hand is printed, and a card printing
+    another destination is a different sentence this production refuses.
+    """
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
+class ExileBoundCard:
+    """``Exile that card from your graveyard.`` (Necropotence.)
+
+    The card the firing event named, exiled out of the zone that event put it
+    in. Not an :class:`Exile` of a permanent: nothing is on the battlefield and
+    nothing is chosen — "that card" is the discard the trigger watched, and the
+    only place it can be read is the event's own captured context.
+
+    ``from_zone`` is read rather than assumed, because "exile that card" with no
+    zone would be a different sentence about an object that may be anywhere.
+    """
+    from_zone: Zone
+
+
+@dataclass(frozen=True)
 class ExileCostSacrifices:
     """"…, then **exile this artifact and those creature cards**." (Sword of
     the Ages.)

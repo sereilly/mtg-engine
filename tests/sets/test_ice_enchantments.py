@@ -1010,4 +1010,107 @@ def test_enduring_renewal_reveals_only_its_controllers_hand(set_pool):
 
     assert hand_revealed_to(game, owner_seat=0, viewer_seat=1)
     assert not hand_revealed_to(game, owner_seat=1, viewer_seat=0)
+def _necro_board(set_pool, library=(), hand=()):
+    pool = set_pool("ICE")
+    necro = Permanent(card=pool["Necropotence"])
+    p1 = PlayerState(
+        name="P1",
+        library=[pool[name] for name in library],
+        hand=[pool[name] for name in hand],
+        life=20,
+    )
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    # Past the first turn, whose draw step CR 103.8a skips anyway.
+    game.turn = 3
+    game._put_permanent_onto_battlefield(0, necro, None)
+    return pool, p1, p2, game
+
+
+def test_necropotence_skips_its_controllers_draw_step(set_pool):
+    """"Skip your draw step." — CR 614.10's mandatory skip, which is not the
+    optional one beside it in the table: nothing is offered and nothing is
+    bought."""
+    pool, p1, p2, game = _necro_board(set_pool, library=["Balduvian Bears"])
+
+    drawn = game.resolve_draw_step(0)
+
+    assert drawn == 0
+    assert p1.hand == []
+    assert [card.name for card in p1.library] == ["Balduvian Bears"]
+
+
+def test_necropotence_does_not_skip_the_opponents_draw_step(set_pool):
+    """"**Your** draw step" — the controller's own, so a scan over every seat
+    would turn a one-sided drawback into a Stasis."""
+    pool, p1, p2, game = _necro_board(set_pool)
+    p2.library = [pool["Balduvian Bears"]]
+
+    drawn = game.resolve_draw_step(1)
+
+    assert drawn == 1
+    assert [card.name for card in p2.hand] == ["Balduvian Bears"]
+
+
+def test_necropotence_exiles_what_its_controller_discards(set_pool):
+    """"Whenever you discard a card, exile that card from your graveyard."
+
+    CR 701.9a's discard is an action abilities watch, and the card is located
+    by identity: a graveyard is a list of card definitions and two copies of a
+    card are the same object.
+    """
+    pool, p1, p2, game = _necro_board(set_pool, hand=["Balduvian Bears"])
+    discarded = p1.hand[0]
+    assert game.take_card_from_hand(p1, discarded)
+
+    game._discard_card(p1, discarded)
+    game._settle()
+
+    assert p1.graveyard == []
+    assert [card.name for card in p1.exile] == ["Balduvian Bears"]
+
+
+def test_necropotence_ignores_an_opponents_discard(set_pool):
+    """"…**you** discard a card" is CR 109.5's answer: the ability's
+    controller. An opponent's discard stays in their graveyard."""
+    pool, p1, p2, game = _necro_board(set_pool)
+    theirs = pool["Balduvian Bears"]
+    p2.hand.append(theirs)
+    assert game.take_card_from_hand(p2, theirs)
+
+    game._discard_card(p2, theirs)
+    game._settle()
+
+    assert [card.name for card in p2.graveyard] == ["Balduvian Bears"]
+    assert p2.exile == []
+
+
+def test_necropotence_pays_life_and_returns_the_card_at_its_next_end_step(set_pool):
+    """"Pay 1 life: Exile the top card of your library face down. Put that card
+    into your hand at the beginning of your next end step."
+
+    Two steps and a delay: the exile is now, the hand is a delayed triggered
+    ability (CR 603.7) that reads what this resolution recorded (CR 603.7d).
+    """
+    pool, p1, p2, game = _necro_board(set_pool, library=["Balduvian Bears", "Brown Ouphe"])
+
+    result = game.activate_permanent_ability(0, "Necropotence")
+    assert result.supported, result.details
+    game._settle()
+
+    assert p1.life == 19, "the life is the cost"
+    assert [card.name for card in p1.exile] == ["Balduvian Bears"]
+    assert p1.hand == [], "not yet — the card comes back at the end step"
+
+    # An opponent's end step is not this seat's.
+    game.resolve_end_step(1)
+    game._settle()
+    assert p1.hand == []
+
+    game.resolve_end_step(0)
+    game._settle()
+
+    assert [card.name for card in p1.hand] == ["Balduvian Bears"]
+    assert p1.exile == []
 # --- end W1G4 ---

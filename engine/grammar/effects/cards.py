@@ -250,6 +250,47 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     return None
 
 
+def _parse_put_exiled_card_into_hand(
+    stream: TokenStream,
+) -> "ast.PutExiledCardIntoHand | None":
+    """``Put that card into your hand.`` (Necropotence.)
+
+    Refuses without consuming, like every other "put" production beside it, so
+    the counter reading keeps its own refusal site. "That card" is the one an
+    earlier step of this same effect exiled; lowering demands the producer.
+    """
+    mark = stream.mark()
+    stream.expect_word("put")
+    if not stream.accept_phrase("that", "card", "into"):
+        stream.reset(mark)
+        return None
+    zone = _parse_zone(stream)
+    if zone.name != "hand" or zone.owner is None:
+        stream.reset(mark)
+        return None
+    return ast.PutExiledCardIntoHand(zone.owner)
+
+
+def _parse_exile_bound_card(stream: TokenStream) -> "ast.ExileBoundCard | None":
+    """``Exile that card from your graveyard.`` (Necropotence.)
+
+    Refuses without consuming, like the other exile productions beside it, so
+    an ordinary exile keeps its own refusal. The zone is required: "exile that
+    card" alone names an object that could be anywhere, and this handler looks
+    in exactly one place.
+    """
+    mark = stream.mark()
+    stream.expect_word("exile")
+    if not stream.accept_phrase("that", "card"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("from"):
+        stream.reset(mark)
+        return None
+    zone = _parse_zone(stream)
+    return ast.ExileBoundCard(zone)
+
+
 def _parse_exile_cost_sacrifices(stream: TokenStream) -> ast.Statement | None:
     """``Exile this <noun> and those <noun> cards.`` (Sword of the Ages.)
 

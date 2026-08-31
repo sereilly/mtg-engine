@@ -520,6 +520,46 @@ def lower_statement(
             ),
         )
 
+    if isinstance(statement, ast.PutExiledCardIntoHand):
+        # The producer gate every back-reference makes: "that card" names what
+        # a step of this same effect exiled, and a sentence with no exile behind
+        # it would put nothing anywhere while the card compiled supported.
+        if "exiled_cards" not in produced:
+            raise LoweringError(
+                "'that card' names a card no step of this effect exiled",
+                node=statement,
+            )
+        if statement.player.kind != "you":
+            raise LoweringError(
+                f"no handler puts an exiled card into {statement.player.kind!r}'s "
+                "hand",
+                node=statement,
+            )
+        return (OracleInstruction("put_exiled_cards_into_hand", "", {}),)
+
+    if isinstance(statement, ast.ExileBoundCard):
+        # "Exile **that card** from your graveyard." (Necropotence.) The object
+        # the firing event named, so the event has to be one whose fire site
+        # records it — under anything else the words name a card nobody wrote
+        # down, and the handler would find nothing while the card compiled
+        # supported.
+        if event != "you_discard_card":
+            raise LoweringError(
+                "'that card' names the firing event's object, and this event "
+                "records none",
+                node=statement,
+            )
+        if statement.from_zone.name != "graveyard" or (
+            statement.from_zone.owner is None
+            or statement.from_zone.owner.kind != "you"
+        ):
+            raise LoweringError(
+                "the bound-card exile reaches the discarding player's own "
+                "graveyard",
+                node=statement,
+            )
+        return (OracleInstruction("exile_bound_card_from_graveyard", "", {}),)
+
     if isinstance(statement, ast.NameThenConsult):
         return (
             OracleInstruction(

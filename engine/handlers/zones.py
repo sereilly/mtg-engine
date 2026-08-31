@@ -557,6 +557,10 @@ def _resolve_one_discard(game: Game, player_index: int, hand_index: int, to_libr
         player, card,
         cause_seat=(choice.data.get("_cause_seat") if choice is not None else None),
     )
+    # …and the board's watchers (Necropotence). The second of the two discard
+    # seams: a watcher announced on one path only would fire for a random
+    # discard and not for a chosen one, which is half the cards in the pool.
+    game.announce_discard(player, card)
     return True
 
 
@@ -3404,6 +3408,82 @@ def name_then_reveal_top(game: Game, instruction: OracleInstruction, context: Or
         _damage_source=context.source_permanent or context.card,
     )
     return True, "pending_name_then_reveal_top"
+
+
+@effect_handler("put_exiled_cards_into_hand")
+def put_exiled_cards_into_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Necropotence: "Put that card into your hand at the beginning of your next
+    end step."
+
+    The cards a step of the same effect exiled, read out of the resolution
+    scratchpad — which for a *delayed* ability is the copy frozen when it was
+    created (CR 603.7d, ``DelayedTrigger.captured``). Nothing else could name
+    them: by the time the end step arrives the exile zone holds whatever else
+    has gone there since, and a card in it is not distinguishable by name.
+
+    Located by identity and only in the caster's own exile, so a card that has
+    already left is not conjured back.
+    """
+    # Two places one record can be, and which one depends on how far the
+    # sentence travelled. Inside a single resolution it is the scratchpad; a
+    # *delayed* ability's creation froze the whole scratchpad into the entry
+    # (CR 603.7d) and it arrives as the trigger's captured context. Reading only
+    # the first is why this fired at the end step and found nothing.
+    cards = list(
+        (context.trigger_context or {}).get("exiled_cards")
+        or context.results.get("exiled_cards")
+        or ()
+    )
+    caster = context.caster
+    moved: list = []
+    for card in cards:
+        for index, held in enumerate(caster.exile):
+            if held is card:
+                caster.exile.pop(index)
+                # Through the write seam, so CR 903.9b rides it.
+                if game.put_card_into_hand(caster, card):
+                    moved.append(card)
+                break
+    if moved:
+        game.log.append(
+            f"{caster.name} put {', '.join(card.name for card in moved)} "
+            "into their hand from exile"
+        )
+    else:
+        game.log.append(f"{context.card.name}: nothing was left in exile to take")
+    return True, "resolved"
+
+
+@effect_handler("exile_bound_card_from_graveyard")
+def exile_bound_card_from_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Necropotence: "Whenever you discard a card, exile that card from your
+    graveyard."
+
+    The card the discard announced, located by **identity** in the graveyard it
+    was put into. A name match would find the wrong copy: a graveyard is a list
+    of ``CardDefinition`` and every copy of a card in a deck is the same
+    immutable object.
+
+    Gone by the time this resolves — exiled in response, or moved by a
+    replacement that sent the discard somewhere other than the graveyard
+    (Library of Leng) — means the ability does nothing, which is CR 603.6's
+    answer rather than a failure.
+    """
+    card = (context.trigger_context or {}).get("discarded_card")
+    if card is None:
+        return True, "resolved"
+    owner = context.caster
+    for index, held in enumerate(owner.graveyard):
+        if held is card:
+            owner.graveyard.pop(index)
+            owner.exile.append(card)
+            game.log.append(
+                f"{card.name} was exiled from {owner.name}'s graveyard "
+                f"({context.card.name})"
+            )
+            return True, "resolved"
+    game.log.append(f"{card.name} was no longer in {owner.name}'s graveyard")
+    return True, "resolved"
 
 
 @effect_handler("name_then_consult")

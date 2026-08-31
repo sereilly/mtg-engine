@@ -76,6 +76,13 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     # would otherwise be swept away before the step it names arrives.
     (("at", "the", "beginning", "of", "the", "next", "end", "step"),
      "next_end_step", True, "until_it_triggers", False),
+    # "At the beginning of **your** next end step, …" (Necropotence). Not the
+    # row above: that one is the next end step there is, whoever's turn it falls
+    # in, and this one waits for one of the controller's own. On an opponent's
+    # turn those are a turn apart, and a card exiled back a turn late is the
+    # wrong card — the same distinction the two upkeep rows draw.
+    (("at", "the", "beginning", "of", "your", "next", "end", "step"),
+     "controllers_next_end_step", True, "until_it_triggers", False),
     # "At the beginning of your next upkeep, …" (Giant Slug, Hazezon Tamar).
     # The controller's own upkeep, however many turns away — so it waits for
     # the step rather than expiring with the turn.

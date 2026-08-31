@@ -241,6 +241,11 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"graveyard from the battlefield"),
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) is put into a graveyard from the battlefield"),
+    # "Whenever **you** discard a card" (Necropotence). CR 701.9a's discard is
+    # an action abilities watch, and the two discard seams announce it — the
+    # random/forced one and the chosen one — so both spellings of a discard
+    # reach this condition rather than only the one the first card exercised.
+    ("you_discard_card",            r"whenever you discard a card"),
     ("creature_dies",               r"whenever a creature dies"),
     # "Whenever equipped creature dies" (Malefic Scythe) / "When enchanted
     # creature dies" (Creature Bond). One kind for both words: an Equipment and
@@ -3416,7 +3421,8 @@ def _derived_static_claims(
     """
     from .card_hooks import DRAW_STEP_MODIFIERS
     from .cost_modifiers import cost_modifier_claims_line
-    from .draw_step_modifiers import draw_step_bonus_for, draw_step_skip_for
+    from .draw_step_modifiers import (draw_step_bonus_for, draw_step_skip_for,
+                                      skips_own_draw_step)
     from .enter_effects import enter_effect_line
     from .evasion_negation import negated_evasion_abilities
     from .extra_triggers import extra_triggers_for
@@ -3468,6 +3474,12 @@ def _derived_static_claims(
     if negated_evasion_abilities(oracle_text):
         claims.append("evasion_negation")
     if draw_step_bonus_for(oracle_text) is not None:
+        claims.append("draw_step_modifiers")
+    # "Skip your draw step." (Necropotence.) The draw step reads the
+    # permanent's own text, so there is no instruction — and on an enchantment
+    # whose other two lines are a trigger and an activated ability, no claim
+    # here would leave this one silently unread.
+    if skips_own_draw_step(oracle_text):
         claims.append("draw_step_modifiers")
     # "<permanent> can't be the target of Aura spells" (Bartel Runeaxe, Tetsuo
     # Umezawa). `_can_be_targeted` reads the permanent's own text at the moment

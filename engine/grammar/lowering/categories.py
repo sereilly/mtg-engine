@@ -430,6 +430,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Demonic Consultation, beside it: the same guess, taken against your own
     # library and paid for with its top cards.
     "name_then_consult": "zones",
+    # Necropotence, exiling what its controller just discarded.
+    "exile_bound_card_from_graveyard": "zones",
+    # Necropotence again, the other half: what its own exile put aside comes
+    # back at its controller\'s next end step.
+    "put_exiled_cards_into_hand": "zones",
     "exile_all_matching": "zones",
     "grant_team_keyword_until_eot": "pump",
     # A durationless keyword grant to the enchanted creature (Cocoon's hatch):
