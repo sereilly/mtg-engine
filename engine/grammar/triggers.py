@@ -701,12 +701,9 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # "this creature attacks" entry is the generic reading of the second.
         mark = stream.mark()
         # "Whenever **a player** attacks with one or more creatures" (Total
-        # War) — the same declaration, asked of every seat instead of the
-        # ability's controller. One kind with the difference in the condition's
-        # payload, which is `engine/oracle.py`'s reading of the same line and
-        # the rule this engine already follows for these two rows: what differs
-        # is the question, not the event. Read before the "you attack" branch
-        # below, whose shape it shares from the third word on.
+        # War) — the same declaration asked of every seat instead of the
+        # ability's controller, so one kind with the difference in the
+        # condition's payload: what differs is the question, not the event.
         if stream.accept_phrase("a", "player", "attacks", "with"):
             count = _accept_number(stream)
             if count is not None and stream.accept_phrase("or", "more"):
