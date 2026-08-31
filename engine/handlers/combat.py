@@ -65,7 +65,13 @@ def coin_flip_remove_blocker(game: Game, instruction: OracleInstruction, context
         game.log.append(f"{context.card.name} won the coin flip")
         return True, "resolved"
     controller_index = game.players.index(controller)
-    game._remove_blocker_from_combat(controller_index, idx)
+    # Ydwen Efreet prints ", …creatures it was blocking that had become blocked
+    # by only this creature this combat become unblocked" — the clause that
+    # overrides CR 509.1h, which is why it is asked for here rather than
+    # inherited from the removal.
+    game._remove_blocker_from_combat(
+        controller_index, idx, frees_blocked_attackers=True
+    )
     game.log.append(f"{context.card.name} lost the coin flip: removed from combat")
     return True, "resolved"
 
@@ -236,15 +242,19 @@ def randomize_blockers(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
-def _take_permanent_out_of_combat(game: Game, perm: Permanent) -> bool:
+def _take_permanent_out_of_combat(
+    game: Game, perm: Permanent, *, frees_blocked_attackers: bool = False,
+) -> bool:
     """Remove *perm* from combat, whichever role it holds (CR 506.4c).
 
     Combat state is index-keyed (see the control-seam notes), so the slot is
     derived once through the seam (``battlefield_index_of``) and every map
     that carries it is pruned together — an attacker's entry, its
     planeswalker assignment, its band, and any blocker's record of blocking
-    it. A blocker goes through ``_remove_blocker_from_combat``, which already
-    unblocks attackers this creature was the only blocker of.
+    it. A blocker goes through ``_remove_blocker_from_combat``, which keeps
+    each attacker blocked (CR 509.1h) unless the card printed the sentence
+    that says otherwise — ``frees_blocked_attackers``, which is Imprison's
+    clause and not something removal does.
     """
     idx = game.battlefield_index_of(perm)
     if idx is None:
@@ -268,7 +278,9 @@ def _take_permanent_out_of_combat(game: Game, perm: Permanent) -> bool:
         game.log.append(f"{perm.card.name} was removed from combat")
         return True
     if idx in game.combat_blockers.get(seat, {}):
-        game._remove_blocker_from_combat(seat, idx)
+        game._remove_blocker_from_combat(
+            seat, idx, frees_blocked_attackers=frees_blocked_attackers
+        )
         game.log.append(f"{perm.card.name} was removed from combat")
         return True
     return False
@@ -403,11 +415,15 @@ def remove_from_combat(game: Game, instruction: OracleInstruction, context: Orac
     recorded (CR 611.2c fixed the set when the effect began) — nothing is
     chosen here, and an empty record is a legal outcome, not an error."""
     key = instruction.payload.get("permanents_from")
+    # CR 509.1h is the default; the printed ", and creatures it was blocking …
+    # become unblocked" (Imprison) is what overrides it, so the card decides
+    # rather than the removal.
+    frees = bool(instruction.payload.get("frees_blocked_attackers"))
     for permanent_id in context.results.get(key) or ():
         perm = game.permanent_by_id(permanent_id)
         if perm is None:
             continue
-        _take_permanent_out_of_combat(game, perm)
+        _take_permanent_out_of_combat(game, perm, frees_blocked_attackers=frees)
     return True, "resolved"
 
 
@@ -440,7 +456,10 @@ def remove_creature_from_combat(game: Game, instruction: OracleInstruction, cont
     # blocker and unblock any attacker whose only blocker it was. combat_blockers is
     # nested by defender (CR 802), so look up this defender's own blocker entries.
     target_player_index = game.players.index(target)
-    game._remove_blocker_from_combat(target_player_index, removed_index)
+    # False Orders prints the same overriding clause Ydwen Efreet does.
+    game._remove_blocker_from_combat(
+        target_player_index, removed_index, frees_blocked_attackers=True
+    )
 
     game.log.append(f"{card.name} removed {removed.card.name} from combat")
     return True, "resolved"

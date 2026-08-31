@@ -955,12 +955,24 @@ class DeclareBlockersStepMixin:
                     self.combat_band_blocks[member] = extra
                 active.battlefield[member].blocked = True
 
-    def _remove_blocker_from_combat(self, defender_player_index: int, blocker_index: int) -> None:
-        """Take a creature out of combat as a blocker (CR 702.22f-style
-        cleanup, but for the blocking side): drop it from ``combat_blockers``
-        and unblock any attacker whose only blocker it was. Shared by False
-        Orders' "remove target creature ... from combat" and Ydwen Efreet's
-        "remove this creature from combat" (coin-flip block-fail)."""
+    def _remove_blocker_from_combat(
+        self, defender_player_index: int, blocker_index: int,
+        *, frees_blocked_attackers: bool = False,
+    ) -> None:
+        """Take a creature out of combat as a blocker (CR 506.4): drop it from
+        ``combat_blockers`` and from every map keyed by its slot.
+
+        **The attacker stays blocked.** CR 509.1h: "A creature remains blocked
+        even if all the creatures blocking it are removed from combat." This
+        used to unblock it unconditionally, and every caller in the pool happens
+        to print that unblocking as its own printed clause — Ydwen Efreet, False
+        Orders and Imprison all say "creatures it was blocking that had become
+        blocked by only this creature this combat become unblocked", which is a
+        thing those cards *do* rather than a thing removal does. So the default
+        is the rule and ``frees_blocked_attackers`` is the clause; a caller that
+        does not print it (General Jarkeld's reassignment, and any card printed
+        next) gets CR 509.1h instead of inheriting three cards' extra sentence.
+        """
         own_blocker_map = self.combat_blockers.get(defender_player_index, {})
         if blocker_index not in own_blocker_map:
             return
@@ -983,7 +995,7 @@ class DeclareBlockersStepMixin:
             removed.blocking_attacker_controller = None
             removed.blocking_attacker_index = None
         active = self.players[self.active_player_index]
-        for a_idx in freed_attackers:
+        for a_idx in (freed_attackers if frees_blocked_attackers else ()):
             still_blocked = any(
                 a_idx in atks
                 for blocker_map in self.combat_blockers.values()

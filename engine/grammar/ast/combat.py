@@ -81,9 +81,18 @@ class RemoveFromCombat:
     and lowering holds it to that shape so a freestanding "remove target
     creature from combat" (False Orders' longer paragraph) keeps failing
     loudly instead of borrowing a producer nothing ran.
+
+    ``frees_blocked_attackers`` is the printed clause that follows on three
+    cards — ", and creatures it was blocking that had become blocked by only
+    that creature this combat become unblocked" (Imprison, and the same
+    sentence on Ydwen Efreet and False Orders). It is carried rather than
+    consumed because it is not a restatement of the removal: CR 509.1h keeps an
+    attacker blocked when its blockers leave combat, so unblocking it is
+    something those cards add.
     """
 
     subject: Recipient
+    frees_blocked_attackers: bool = False
 
 
 @dataclass(frozen=True)

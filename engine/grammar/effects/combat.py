@@ -268,26 +268,27 @@ def _parse_remove_from_combat(stream: TokenStream) -> ast.RemoveFromCombat | Non
     if subject is None or not stream.accept_phrase("from", "combat"):
         stream.reset(mark)
         return None
-    _accept_freed_blockers_restatement(stream)
-    return ast.RemoveFromCombat(subject)
+    frees = _accept_freed_blockers_restatement(stream)
+    return ast.RemoveFromCombat(subject, frees_blocked_attackers=frees)
 
 
-def _accept_freed_blockers_restatement(stream: TokenStream) -> None:
+def _accept_freed_blockers_restatement(stream: TokenStream) -> bool:
     """Consume ", and creatures it was blocking that had become blocked by only
-    that creature this combat become unblocked" (Imprison).
+    that creature this combat become unblocked" (Imprison), reporting whether it
+    was there.
 
-    CR 506.4c already says this: a creature removed from combat stops being a
-    blocker, and an attacker it was the only blocker of stops being blocked.
-    The engine says it in one place — ``_remove_blocker_from_combat``, which
-    every removal goes through — so the printed clause restates the sentence in
-    front of it rather than adding to it, and there is nothing for a payload to
-    carry that is not already true of every removal.
+    It is **not** a restatement, which is what this comment used to say. CR
+    506.4 takes the creature out of combat and CR 509.1h then keeps the attacker
+    blocked — "a creature remains blocked even if all the creatures blocking it
+    are removed from combat" — so unblocking it is something Imprison, Ydwen
+    Efreet and False Orders each *add*, and every one of them prints the
+    sentence for that reason. Carried as payload, therefore, rather than
+    consumed and forgotten: the removal itself must not do it, or a card printed
+    without the clause would inherit three cards' extra sentence.
 
-    Consumed rather than carried for that reason, the way "each of" is in
-    ``references.parse_target_spec``. Consumed rather than *ignored* because a
-    production must claim every token of its line: left over, these words would
-    fail the line at "unconsumed text" and Imprison would stay unsupported with
-    both of its halves working.
+    Consumed rather than *ignored* because a production must claim every token
+    of its line: left over, these words would fail the line at "unconsumed text"
+    and Imprison would stay unsupported with both of its halves working.
 
     All-or-nothing — a partial match rewinds, so a card printing some *other*
     consequence after the removal keeps its tokens and fails loudly.
@@ -301,17 +302,18 @@ def _accept_freed_blockers_restatement(stream: TokenStream) -> None:
     ):
         if not stream.accept_word(word):
             stream.reset(mark)
-            return
+            return False
     # "that creature" (False Orders, Imprison) and "this creature" (Ydwen
     # Efreet) are the same referent printed two ways — the creature the
     # sentence just removed.
     if not stream.accept_word("that", "this"):
         stream.reset(mark)
-        return
+        return False
     for word in ("creature", "this", "combat", "become", "unblocked"):
         if not stream.accept_word(word):
             stream.reset(mark)
-            return
+            return False
+    return True
 
 
 def _parse_attacking_doesnt_tap(

@@ -527,7 +527,17 @@ def _lower_remove_from_combat(
             node=node,
         )
     return (
-        OracleInstruction("remove_from_combat", "", {"permanents_from": source}),
+        OracleInstruction(
+            "remove_from_combat", "",
+            {
+                "permanents_from": source,
+                # The printed "…and creatures it was blocking … become
+                # unblocked" (Imprison). CR 509.1h is the default and this is
+                # the sentence that overrides it, so the *card* decides rather
+                # than the removal.
+                "frees_blocked_attackers": node.frees_blocked_attackers,
+            },
+        ),
     )
 
 
