@@ -723,12 +723,10 @@ _EXILED_PERMISSION_DURATIONS: dict[tuple[bool, bool, bool, bool], str] = {
     (True, False, False, False): "end_of_turn",
     (False, True, False, False): "until_source_grants_again",
     (False, False, True, False): "your_next_upkeep",
-    # "…for as long as it remains exiled" (Ice Cauldron). Nothing sweeps this
-    # one: ``cast_permissions._covers`` re-checks on every read that the card is
-    # still in the granted zone, which *is* the printed duration. Stated anyway
-    # rather than lowered as "no duration", because the two mean different
-    # things — an unstated grant would also be the answer for a card that said
-    # nothing, and this card says something.
+    # "…for as long as it remains exiled" (Ice Cauldron). Nothing sweeps it:
+    # ``cast_permissions._covers`` re-checks the card is still in the granted
+    # zone on every read, which *is* the printed duration. Stated rather than
+    # lowered as "no duration", which is what a card saying nothing means.
     (False, False, False, True): "while_exiled",
 }
 

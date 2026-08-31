@@ -829,8 +829,7 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # Both exiles record what they exiled, which is what "you may play cards
     # exiled this way" / "you may cast them this turn" read.
     "exile_top_of_library": "exiled_cards",
-    # …and the hand exile (Ice Cauldron), written when its prompt is answered —
-    # which is why that prompt suspends the resolution.
+    # …and Ice Cauldron's hand exile, written when its prompt is answered.
     "exile_chosen_card_from_hand": "exiled_cards",
     "search_and_exile_matching": "exiled_cards",
     # And the graveyard exile, which is what "If **it** was a creature card"
