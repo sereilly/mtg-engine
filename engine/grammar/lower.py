@@ -532,16 +532,16 @@ def lower_statement(
                 "the guess is made by the player the spell targets",
                 node=statement,
             )
-        return (
-            OracleInstruction(
-                "name_then_reveal_top", "",
-                {
-                    "match_zone": statement.match_zone,
-                    "miss_zone": statement.miss_zone,
-                    "targets": _targets_payload(statement.who),
-                },
-            ),
-        )
+        payload: dict[str, object] = {
+            "match_zone": statement.match_zone,
+            "miss_zone": statement.miss_zone,
+            "targets": _targets_payload(statement.who),
+        }
+        if statement.miss_damage:
+            # Emitted only when the card prints it, so Petra Sphinx's payload
+            # stays byte-identical and no behaviour signature moves.
+            payload["miss_damage"] = statement.miss_damage
+        return (OracleInstruction("name_then_reveal_top", "", payload),)
 
     if isinstance(statement, ast.RevealUntil):
         return _lower_reveal_until(statement, produced)

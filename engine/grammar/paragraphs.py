@@ -544,17 +544,49 @@ def _parse_name_then_reveal_top(
     stream.advance()
     if not stream.accept_punct("."):
         raise stream.error("expected the miss sentence after the hit")
-    for word in ("if", "it", "doesn't"):
-        stream.expect_word(word)
+    # Two printed spellings of one complement. Petra Sphinx says "If it
+    # doesn't", Vexing Arcanix says "Otherwise" — the same branch, so the same
+    # reading rather than a second production. Both are consumed rather than
+    # skipped, for the reason the docstring gives: a line omitting the miss
+    # sentence is a card whose miss does nothing.
+    if stream.accept_word("otherwise"):
+        subject_words = ("they",)
+    else:
+        for word in ("if", "it", "doesn't"):
+            stream.expect_word(word)
+        subject_words = ("the", "player")
     if not stream.accept_punct(","):
         raise stream.error("expected the comma before the miss's destination")
-    for word in ("the", "player", "puts", "it", "into", "their"):
+    for word in subject_words:
+        stream.expect_word(word)
+    # Singular "they" takes the plural verb, so the two spellings of this
+    # sentence differ by one letter: "the player **puts**" and "they **put**".
+    if not stream.accept_word("puts", "put"):
+        raise stream.error("expected the verb that moves the revealed card")
+    for word in ("it", "into", "their"):
         stream.expect_word(word)
     miss_zone = stream.peek_word()
     if miss_zone not in _REVEAL_DESTINATIONS:
         raise stream.error("expected the zone a non-matching card goes to")
     stream.advance()
-    return ast.NameThenRevealTop(who, match_zone, miss_zone)
+    # "…**and this artifact deals 2 damage to them**." (Vexing Arcanix.) The
+    # rest of the miss branch, read here because "them" is the player this
+    # paragraph has been about throughout — a sentence of its own would have no
+    # antecedent and no way to know the guess missed.
+    miss_damage = 0
+    mark_damage = stream.mark()
+    if stream.accept_word("and"):
+        if accept_source_reference(stream) and stream.accept_word("deals"):
+            amount = stream.peek()
+            if amount is None or not str(amount.text).isdigit():
+                raise stream.error("expected how much damage the miss deals")
+            stream.advance()
+            miss_damage = int(amount.text)
+            for word in ("damage", "to", "them"):
+                stream.expect_word(word)
+        else:
+            stream.reset(mark_damage)
+    return ast.NameThenRevealTop(who, match_zone, miss_zone, miss_damage)
 
 
 def _parse_exchange_greatest_mana_value(stream: TokenStream) -> ast.Statement | None:

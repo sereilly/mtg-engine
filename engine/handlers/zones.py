@@ -2133,13 +2133,29 @@ def look_at_target_hand(game: Game, instruction: OracleInstruction, context: Ora
     # Only the most recent reveal is shown, so a second look replaces the first
     # rather than queueing behind it.
     game.clear_pending_choices("hand_reveal", viewer_index)
+    # "…**a card at random** in target player's hand" (Urza's Bauble): one card,
+    # picked by nobody. Through the module RNG the rest of the engine seeds, so
+    # a given seed replays the look exactly. An empty hand shows nothing rather
+    # than failing — CR 608.2 does as much as it can.
+    if instruction.payload.get("random_card"):
+        shown = (
+            [random.choice(target.hand).name] if target.hand else []
+        )
+    else:
+        shown = [c.name for c in target.hand]
     game.arm_pending_choice(
         "hand_reveal", viewer_index,
         target_index=game.players.index(target),
-        card_names=[c.name for c in target.hand],
+        card_names=shown,
     )
-    seen = len(target.hand)
-    game.log.append(f"{card.name}: {viewer.name} looked at {target.name}'s hand ({seen} cards)")
+    game.log.append(
+        f"{card.name}: {viewer.name} looked at "
+        + (
+            f"{len(shown)} card(s) at random in {target.name}'s hand"
+            if instruction.payload.get("random_card")
+            else f"{target.name}'s hand ({len(shown)} cards)"
+        )
+    )
     return True, "resolved"
 
 
@@ -3343,6 +3359,13 @@ def name_then_reveal_top(game: Game, instruction: OracleInstruction, context: Or
         default_name=_commonest_visible_name(
             game, seat, ("library",), exclude_basics=False
         ),
+        # "…and this artifact deals 2 damage to them" (Vexing Arcanix): the
+        # miss branch's second half. The source travels with it because by the
+        # time the prompt is answered this resolution has returned, and a
+        # damage event needs to know what dealt it (colour-scoped prevention,
+        # CR 702.16i protection, "a source you control").
+        miss_damage=int(instruction.payload.get("miss_damage", 0) or 0),
+        _damage_source=context.source_permanent or context.card,
     )
     return True, "pending_name_then_reveal_top"
 

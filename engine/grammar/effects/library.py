@@ -167,6 +167,17 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
     """
     stream.expect_word("look")
     stream.expect_word("at")
+    # "Look at **a card at random in** target player's hand." (Urza's Bauble.)
+    # Read before the count branches below, because it opens with an article
+    # rather than with "the top" and would otherwise fall through to the player
+    # reference and fail the line on the word "a".
+    if stream.accept_phrase("a", "card", "at", "random", "in"):
+        who = parse_player_ref(stream)
+        if who is None:
+            raise stream.error("expected the player whose hand is looked at")
+        stream.expect_word("'s")
+        stream.expect_word("hand")
+        return ast.LookAtHand(who, random_card=True)
     # "Look at the top three cards of your library. Put one of those cards
     # into your hand and the rest on the bottom of your library in any order.
     # If this spell was cast from anywhere other than your hand, put each of

@@ -450,4 +450,97 @@ def test_jesters_mask_on_an_empty_hand_searches_for_nothing(set_pool):
 
     assert game.pending_choice_of("search_library", 0) is None
     assert [card.name for card in p2.library] == ["Scaled Wurm", "Tor Giant"]
+def _arcanix_board(set_pool, top_card):
+    pool = set_pool("ICE")
+    arcanix = _nosick(Permanent(card=pool["Vexing Arcanix"]))
+    p1 = PlayerState(name="P1", battlefield=[arcanix], life=20)
+    p2 = PlayerState(name="P2", library=[pool[top_card]], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game._sync_control()
+    return pool, p1, p2, game
+
+
+def test_vexing_arcanix_puts_a_named_card_into_the_hand(set_pool):
+    """"{3}, {T}: Target player chooses a card name, then reveals the top card
+    of their library. If that card has the chosen name, that player puts it
+    into their hand."""
+    pool, p1, p2, game = _arcanix_board(set_pool, "Balduvian Bears")
+
+    result = game.activate_permanent_ability(
+        0, "Vexing Arcanix", target_player_index=1
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert game.confirm_name_then_reveal_top(1, "Balduvian Bears")
+
+    assert [card.name for card in p2.hand] == ["Balduvian Bears"]
+    assert p2.library == []
+    assert p2.life == 20, "a hit deals no damage"
+
+
+def test_vexing_arcanix_bins_a_missed_card_and_deals_two(set_pool):
+    """"Otherwise, they put it into their graveyard **and this artifact deals
+    2 damage to them**."
+
+    The damage is the half Petra Sphinx does not print, so reading the two
+    cards as one sentence would have made Vexing Arcanix a Petra Sphinx that
+    costs three more mana.
+    """
+    pool, p1, p2, game = _arcanix_board(set_pool, "Balduvian Bears")
+
+    game.activate_permanent_ability(0, "Vexing Arcanix", target_player_index=1)
+    game._settle()
+
+    assert game.confirm_name_then_reveal_top(1, "Brown Ouphe")
+
+    assert [card.name for card in p2.graveyard] == ["Balduvian Bears"]
+    assert p2.hand == []
+    assert p2.life == 18
+
+
+def test_urzas_bauble_shows_one_card_and_draws_next_upkeep(set_pool):
+    """"{T}, Sacrifice this artifact: Look at a card at random in target
+    player\'s hand. You draw a card at the beginning of the next turn\'s
+    upkeep."
+
+    Two sentences and two effects: the look is now, the draw is a delayed
+    trigger (CR 603.7).
+    """
+    pool = set_pool("ICE")
+    bauble = _nosick(Permanent(card=pool["Urza\'s Bauble"]))
+    p1 = PlayerState(
+        name="P1", battlefield=[bauble], library=[pool["Scaled Wurm"]], life=20
+    )
+    p2 = PlayerState(
+        name="P2",
+        hand=[pool["Balduvian Bears"], pool["Brown Ouphe"], pool["Tor Giant"]],
+        life=20,
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game._sync_control()
+
+    result = game.activate_permanent_ability(
+        0, "Urza\'s Bauble", target_player_index=1
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    look = game.pending_choice_of("hand_reveal", 0)
+    assert look is not None, "the searcher is shown something"
+    assert len(look.data["card_names"]) == 1, "one card at random, not the hand"
+    assert look.data["card_names"][0] in (
+        "Balduvian Bears", "Brown Ouphe", "Tor Giant",
+    )
+    assert len(p2.hand) == 3, "looking moves nothing"
+    assert p1.hand == [], "the draw is not now"
+
+    game.resolve_upkeep(1)
+    game._settle()
+
+    assert [card.name for card in p1.hand] == ["Scaled Wurm"]
 # --- end W1G4 ---

@@ -647,6 +647,12 @@ class NameThenRevealTop:
     who: PlayerRef
     match_zone: str
     miss_zone: str
+    #: "…and this artifact **deals 2 damage to them**." (Vexing Arcanix.) The
+    #: miss branch's second half, payload on the same node because it is a
+    #: consequence of the same guess: nothing outside this paragraph knows
+    #: whether the name was hit. 0 is the honest "no such rider" — CR 120.8
+    #: makes a 0-damage event no event at all, so the two cannot be confused.
+    miss_damage: int = 0
 
 
 @dataclass(frozen=True)
@@ -712,6 +718,13 @@ class LookAtHand:
     content of the clause.
     """
     player: PlayerRef
+    #: "Look at **a card at random** in target player's hand." (Urza's Bauble.)
+    #: How much of the hand is seen, which is the other half of the clause's
+    #: content: one card chosen by nobody, rather than all of them. A flag and
+    #: not a count because "at random" is what makes it uncountable — a card
+    #: printing "two cards at random" would need the number, and would refuse
+    #: here until it had it.
+    random_card: bool = False
 
 
 @dataclass(frozen=True)

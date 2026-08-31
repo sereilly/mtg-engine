@@ -207,7 +207,13 @@ def _lower_look_at_hand(node: ast.LookAtHand) -> tuple[OracleInstruction, ...]:
         raise LoweringError(
             f"no handler for looking at {node.player.kind!r}'s hand", node=node
         )
-    return (OracleInstruction("look_at_target_hand", "", _targets_only(node.player)),)
+    payload = dict(_targets_only(node.player))
+    if node.random_card:
+        # "…**a card at random** in target player's hand" (Urza's Bauble). How
+        # much of the hand is shown, emitted only when the card narrows it, so
+        # Glasses of Urza's payload stays byte-identical.
+        payload["random_card"] = True
+    return (OracleInstruction("look_at_target_hand", "", payload),)
 
 
 def _lower_look_at_library_top(

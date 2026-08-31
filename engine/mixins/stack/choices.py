@@ -1806,6 +1806,18 @@ class PendingChoicesMixin:
             f"{player.name} named {named or 'nothing'} and revealed "
             f"{revealed.name} — it goes to their {zone_name}"
         )
+        # "…and this artifact deals 2 damage to them" (Vexing Arcanix). Only on
+        # a miss, and after the card has moved, because that is the printed
+        # order. Through the one damage entry point, so the shields, the CR 614
+        # replacements and the "dealt damage" triggers all see it.
+        miss_damage = 0 if hit else int(data.get("miss_damage", 0) or 0)
+        if miss_damage:
+            self._deal_damage_to_player(
+                player, miss_damage, source=data.get("_damage_source"),
+                then=lambda dealt: self.log.append(
+                    f"{player.name} is dealt {dealt} damage for the miss"
+                ),
+            )
         return True
 
     def _default_name_then_reveal_top(self, choice: PendingChoice) -> None:
