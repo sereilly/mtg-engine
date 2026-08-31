@@ -128,6 +128,14 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
         "board-derived P/T — permanent_state._refresh_aspect_of_wolf",
     ),
     (
+        # Snowblind. A board-counted penalty whose *board* depends on the
+        # combat, clamped so it can never kill the creature — see
+        # :func:`aura_board_counted_penalty` for what each piece is and why the
+        # noun is payload.
+        _LazyPattern(lambda: _build_board_counted_penalty()),
+        "board-counted clamped penalty — permanent_state._refresh_board_counted_penalties",
+    ),
+    (
         # The Ward cycle. The trailing sentence is part of the same effect.
         re.compile(
             rf"^{_ATTACHED} {_NOUN} has protection from (?:{_COLORS})\."
@@ -838,6 +846,66 @@ def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
         if re.match(r"(?:for )?as long as\b", tail):
             continue
         return int(match.group(1)), int(match.group(2))
+    return None
+
+
+#: Snowblind: "Enchanted creature gets -X/-Y. If that creature is attacking, X
+#: is the number of snow lands defending player controls. Otherwise, X is the
+#: number of snow lands its controller controls. Y is equal to X or to enchanted
+#: creature's toughness minus 1, whichever is smaller."
+#:
+#: Four sentences, one effect, and every one of them is load-bearing: the count,
+#: the two boards it can be counted on, and the clamp. Matched together for the
+#: reason ``_ABILITY_COST_REDUCTION`` above matches its pair together — the
+#: clamp without the count modifies nothing, and the count without the clamp is
+#: a card that kills what it enchants.
+#:
+#: The counted noun is payload, read by the grammar's own noun parser rather
+#: than spelled here, so "snow lands" means on this card what it means on every
+#: other line in the engine. The repeated phrase must be the *same* phrase: a
+#: card counting two different things is not this sentence, and reading only
+#: the first would give the second board the wrong count.
+def _build_board_counted_penalty() -> re.Pattern[str]:
+    return re.compile(
+        r"^enchanted creature gets -x/-y\. "
+        r"if that creature is attacking, x is the number of (?P<attacking>.+?) "
+        r"defending player controls\. "
+        r"otherwise, x is the number of (?P<otherwise>.+?) its controller "
+        r"controls\. y is equal to x or to enchanted creature's toughness "
+        r"minus 1, whichever is smaller$"
+    )
+
+
+_BOARD_COUNTED_PENALTY = _LazyPattern(_build_board_counted_penalty)
+
+
+def aura_board_counted_penalty(oracle_text: str) -> dict | None:
+    """The payload of Snowblind's clamped, board-counted penalty, or None.
+
+    ``{"filter": <noun-phrase payload>}`` — what to count. Whose board it is
+    counted on is not payload: the sentence says, and the answer changes with
+    the combat, so it is asked at every recompute by
+    ``permanent_state._refresh_board_counted_penalties``.
+
+    The noun phrase is refused unless ``subject_matches`` can test it, the same
+    gate every other text-keyed table applies: a narrowing the matcher cannot
+    answer would be dropped, and a dropped narrowing here counts *every land*
+    rather than the snow ones.
+    """
+    from .grammar import subject_filter_payload
+    from .subject_filters import untestable_filter_keys
+
+    for raw_line in (oracle_text or "").splitlines():
+        match = _BOARD_COUNTED_PENALTY.match(_line_text(raw_line))
+        if match is None:
+            continue
+        phrase = match.group("attacking").strip()
+        if phrase != match.group("otherwise").strip():
+            return None
+        described = subject_filter_payload(phrase, plural=True)
+        if not described or untestable_filter_keys(described):
+            return None
+        return {"filter": described}
     return None
 
 

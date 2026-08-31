@@ -846,6 +846,56 @@ class PermanentStateMixin:
                 )
                 _add_static_pt(creature, lands // 2, (lands + 1) // 2)
 
+    def _refresh_board_counted_penalties(self) -> None:
+        """Snowblind: "Enchanted creature gets -X/-Y", where X counts a class of
+        permanent on **whichever** board the combat points at, and Y is clamped
+        so the creature is never killed by it.
+
+        Derived rather than remembered, like every other Aura contribution: X
+        changes when a land enters and when the creature attacks, and neither
+        of those is a moment anything could hook. CR 611.3a says a continuous
+        effect applies whenever its criteria are met, and "the number of snow
+        lands defending player controls" is a criterion re-read on every pass.
+
+        **The toughness the clamp reads is the toughness without this effect.**
+        The derived channel this contributes to was cleared at the top of the
+        refresh, so ``effective_toughness`` here is base P/T plus every other
+        layer — which is the reading the printed clamp means: "toughness minus
+        1" is what makes Snowblind unable to kill, and reading a toughness this
+        effect had already reduced would make the clamp chase itself.
+        """
+        from ..auras import aura_board_counted_penalty, auras_attached_to
+        from ..subject_filters import subject_matches
+
+        for seat, host in self.permanents_with_controller():
+            for aura in auras_attached_to(host):
+                payload = aura_board_counted_penalty(
+                    aura.effective_card.oracle_text
+                )
+                if payload is None:
+                    continue
+                # CR 506.2: the board is the *defending player's* while the
+                # creature is attacking, and its own controller's otherwise.
+                # The defending seat is stamped on the attacker at declaration,
+                # so this is a read rather than a search — and an attacker
+                # whose defender is gone falls back to its controller, which is
+                # the sentence's own "otherwise".
+                counted_seat = seat
+                if host.attacking and isinstance(host.defending_player_index, int):
+                    counted_seat = host.defending_player_index
+                if not (0 <= counted_seat < len(self.players)):
+                    continue
+                described = payload["filter"]
+                amount = sum(
+                    1
+                    for perm in self.controlled_by(counted_seat)
+                    if subject_matches(self, perm, described)
+                )
+                if amount <= 0:
+                    continue
+                clamp = max(0, host.effective_toughness - 1)
+                _add_static_pt(host, -amount, -min(amount, clamp))
+
     def _refresh_linked_tapped_pumps(self, all_permanents) -> None:
         """"…gets +2/-2 for as long as this artifact remains tapped."
         (Ashnod's Battle Gear, Tawnos's Weaponry.)
@@ -898,6 +948,9 @@ class PermanentStateMixin:
         # creatures must see the lands this pass animates, not last pass's.
         self._refresh_land_animation(all_permanents, animations)
         self._refresh_aspect_of_wolf()
+        # After the other 7c contributions, because its clamp reads the
+        # toughness the creature has *without* it — see the method.
+        self._refresh_board_counted_penalties()
 
         # "Attacking creatures you control get +X/+Y" (Orcish Oriflamme) used to
         # be counted here, into a channel of its own, because the lord-buff

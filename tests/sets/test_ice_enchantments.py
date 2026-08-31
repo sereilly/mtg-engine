@@ -2156,4 +2156,91 @@ def test_breath_of_dreams_stops_granting_when_it_leaves(set_pool):
     assert "cumulative upkeep" not in (green.effective_card.oracle_text or "").lower()
 
 
+def _snowblind_board(set_pool, *, mine: int, theirs: int):
+    """P1's bear under P1's Snowblind, with snow lands on both sides."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])  # a vanilla 2/2
+    snowblind = Permanent(card=pool["Snowblind"])
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[bear, snowblind]
+        + [Permanent(card=pool["Snow-Covered Forest"]) for _ in range(mine)],
+        life=20,
+    )
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=pool["Snow-Covered Island"]) for _ in range(theirs)],
+        life=20,
+    )
+    game = Game(players=[p1, p2])
+    attach_aura(snowblind, bear)
+    game._settle()
+    return game, bear, snowblind
+
+
+def test_snowblind_counts_its_controllers_snow_lands_out_of_combat(set_pool):
+    game, bear, _ = _snowblind_board(set_pool, mine=1, theirs=3)
+
+    # X = 1, Y = min(X, toughness - 1) = 1.
+    assert (bear.effective_power, bear.effective_toughness) == (1, 1)
+
+
+def test_snowblind_clamps_the_toughness_but_not_the_power(set_pool):
+    """"Y is equal to X or to enchanted creature's toughness minus 1, whichever
+    is smaller" — the clamp is what stops the Aura killing what it enchants, and
+    it applies to Y alone."""
+    game, bear, _ = _snowblind_board(set_pool, mine=3, theirs=0)
+
+    assert (bear.effective_power, bear.effective_toughness) == (-1, 1)
+
+
+def test_snowblind_counts_the_defending_players_snow_lands_while_attacking(set_pool):
+    """CR 506.2. The condition is read at every recompute, so the same board
+    gives two different answers depending on whether the creature is in
+    combat — which is the whole card."""
+    game, bear, _ = _snowblind_board(set_pool, mine=0, theirs=3)
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+
+    bear.attacking = True
+    bear.defending_player_index = 1
+    game._settle()
+
+    assert (bear.effective_power, bear.effective_toughness) == (-1, 1)
+
+
+def test_a_detached_snowblind_takes_its_penalty_with_it(set_pool):
+    from engine.auras import detach_aura
+
+    game, bear, snowblind = _snowblind_board(set_pool, mine=2, theirs=0)
+    assert bear.effective_power == 0
+
+    detach_aura(snowblind, bear)
+    game._settle()
+
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+
+
+def test_snowblind_ignores_a_nonsnow_land(set_pool):
+    """The noun phrase is read by the grammar's own parser and refused if the
+    matcher cannot test it, so "snow" is a narrowing rather than decoration —
+    dropped, the card would count every land on the board."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    snowblind = Permanent(card=pool["Snowblind"])
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[bear, snowblind] + [Permanent(card=pool["Forest"]) for _ in range(3)],
+        life=20,
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    attach_aura(snowblind, bear)
+    game._settle()
+
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+
+
 # --- end W2G4 ---
