@@ -228,6 +228,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.SetBasePT: _lower_set_base_pt,
     ast.ChangeBasePT: _lower_change_base_pt,
     ast.GainAbilityText: _lower_gain_ability_text,
+    ast.ReanimateEnchantedCard: _lower_reanimate_enchanted_card,
     ast.GainKeyword: _lower_gain_keyword,
     ast.DoublePower: _lower_double_power,
     ast.SwitchPT: _lower_switch_pt,
@@ -456,9 +457,6 @@ def lower_statement(
 
     if isinstance(statement, ast.Discard):
         return _lower_discard(statement, event)
-
-    if isinstance(statement, ast.ReanimateEnchantedCard):
-        return _lower_reanimate_enchanted_card(statement)
 
     if isinstance(statement, ast.ReturnToZone):
         # `produced` is what makes "…for each card discarded this way" legal:

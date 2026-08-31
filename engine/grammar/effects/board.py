@@ -512,13 +512,10 @@ def _accept_per_counter_multiplier(stream: TokenStream) -> str | None:
     """``for each <word> counter on it`` trailing a printed cost, or None.
 
     "Destroy this creature unless you pay {1} **for each music counter on it**"
-    — the ability Musician grants. The cost is the printed one charged once per
-    counter, which is CR 702.24a's escalation with the keyword's name taken off
-    it; the counter word is payload, so a card printing a different one needs no
-    production of its own.
-
-    Returns None with the cursor untouched, because a flat cost is the ordinary
-    spelling and must keep reading exactly as it did.
+    — the ability Musician grants: CR 702.24a's escalation with the keyword's
+    name taken off it. The counter word is payload, so a card printing a
+    different one needs no production. Returns None with the cursor untouched,
+    because a flat cost must keep reading exactly as it did.
     """
     mark = stream.mark()
     if not stream.accept_phrase("for", "each"):
