@@ -987,3 +987,169 @@ def test_earthlore_only_offers_a_blocking_creature(set_pool):
 
     assert named == {"Balduvian Bears"}, named
 # --- end W1G2 ---
+# --- W1G5: statics, continuous effects, control changes ---
+def _w1g5_brand_board(set_pool, catalog_by_name):
+    """Brand of Ill Omen on a creature its **opponent** controls.
+
+    Which is the arrangement the sentence is about: "enchanted creature's
+    controller" is the controller of the *creature* (CR 109.5), not of the Aura,
+    so the seat the Aura shuts down is not the seat that played it.
+    """
+    from engine.auras import attach_aura
+
+    bear = catalog_by_name["Grizzly Bears"]
+    host = Permanent(card=bear)
+    aura = Permanent(card=set_pool("ICE")["Brand of Ill Omen"])
+    game = Game(players=[
+        PlayerState(
+            name="P1", battlefield=[host],
+            hand=[bear, catalog_by_name["Lightning Bolt"]],
+        ),
+        PlayerState(name="P2", battlefield=[aura]),
+    ])
+    game.enforce_mana_costs = False
+    attach_aura(aura, host)
+    return game, aura
+
+
+def test_brand_of_ill_omen_compiles_with_both_of_its_lines_claimed(set_pool):
+    """Cumulative upkeep is the keyword the engine already implements; the
+    second line is the new one. The card was unsupported on that line alone."""
+    from engine.auras import aura_controller_cast_ban, unclaimed_aura_lines
+    from engine.oracle import normalize_creature_line
+
+    brand = set_pool("ICE")["Brand of Ill Omen"]
+
+    assert compile_card_oracle(brand).supported
+    assert unclaimed_aura_lines(
+        [normalize_creature_line(line) for line in brand.oracle_text.splitlines()],
+        brand.name,
+    ) == []
+    assert aura_controller_cast_ban(
+        "Enchanted creature's controller can't cast creature spells."
+    ) == "creature"
+
+
+def test_brand_of_ill_omen_stops_the_hosts_controller_casting_creatures(
+    set_pool, catalog_by_name
+):
+    """A printed restriction is only done when something enforces it — so this
+    asserts the *cast*, not the derivation."""
+    game, _ = _w1g5_brand_board(set_pool, catalog_by_name)
+
+    refused = game.cast_from_hand(0, "Grizzly Bears")
+
+    assert not refused.supported
+    assert "Brand of Ill Omen" in refused.details
+
+
+def test_brand_of_ill_omen_leaves_every_other_spell_alone(
+    set_pool, catalog_by_name
+):
+    """The card type is payload, and the ban is exactly the type printed."""
+    game, _ = _w1g5_brand_board(set_pool, catalog_by_name)
+
+    assert game.cast_from_hand(0, "Lightning Bolt").supported, game.log
+
+
+def test_brand_of_ill_omen_stops_banning_when_it_leaves(
+    set_pool, catalog_by_name
+):
+    """The attachment record *is* the restriction: an Aura that is no longer
+    attached is no longer asked, so there is nothing to clear."""
+    game, aura = _w1g5_brand_board(set_pool, catalog_by_name)
+    game._destroy_swept_permanents(game.players[1], lambda perm: perm is aura)
+
+    assert game.cast_from_hand(0, "Grizzly Bears").supported, game.log
+
+
+def test_brand_of_ill_omen_does_not_touch_the_auras_own_controller(
+    set_pool, catalog_by_name
+):
+    """"Enchanted creature's controller" is one seat, and it is the host's.
+    Reading it as the Aura's would shut down the player who cast it."""
+    game, _ = _w1g5_brand_board(set_pool, catalog_by_name)
+    game.players[1].hand.append(catalog_by_name["Grizzly Bears"])
+
+    assert game.cast_from_hand(1, "Grizzly Bears").supported, game.log
+
+
+def _w1g5_winds_board(set_pool, catalog_by_name):
+    """Freyalise's Winds under P1, with a permanent on each side."""
+    winds = Permanent(card=set_pool("ICE")["Freyalise's Winds"])
+    mine = Permanent(card=catalog_by_name["Grizzly Bears"])
+    theirs = Permanent(card=catalog_by_name["Mountain"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[winds, mine]),
+        PlayerState(name="P2", battlefield=[theirs]),
+    ])
+    game.enforce_mana_costs = False
+    return game, mine, theirs
+
+
+def _w1g5_tap(game, permanent):
+    game.become_tapped(permanent)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+
+def test_freyalises_winds_counters_every_permanent_that_taps(
+    set_pool, catalog_by_name
+):
+    """"Whenever **a permanent** becomes tapped" — every one, on either
+    battlefield. The trigger read "permanent" as a card type and `has_type`
+    answers False for it, so the ability fired on nothing at all."""
+    game, mine, theirs = _w1g5_winds_board(set_pool, catalog_by_name)
+
+    _w1g5_tap(game, mine)
+    _w1g5_tap(game, theirs)
+
+    assert counters_on(mine, "wind") == 1, game.log
+    assert counters_on(theirs, "wind") == 1, game.log
+
+
+def test_freyalises_winds_spends_a_counter_instead_of_untapping(
+    set_pool, catalog_by_name
+):
+    """CR 614: the second line is a *replacement*, not an untap restriction —
+    the permanent stays tapped and the counters go away, so it is free one turn
+    later. A row in ``untap_restrictions`` would have locked it forever."""
+    game, mine, _ = _w1g5_winds_board(set_pool, catalog_by_name)
+    _w1g5_tap(game, mine)
+
+    game.resolve_untap_step(0)
+    assert mine.tapped, game.log
+    assert counters_on(mine, "wind") == 0, game.log
+
+    game.resolve_untap_step(0)
+    assert not mine.tapped, game.log
+
+
+def test_freyalises_winds_leaves_an_uncountered_permanent_alone(
+    set_pool, catalog_by_name
+):
+    """The replacement's applicability is a *pure* predicate over the counters
+    the permanent actually holds, so a permanent that tapped before the Winds
+    arrived untaps normally."""
+    game, mine, _ = _w1g5_winds_board(set_pool, catalog_by_name)
+    mine.tapped = True
+
+    game.resolve_untap_step(0)
+
+    assert not mine.tapped, game.log
+
+
+def test_freyalises_winds_claims_both_of_its_lines(set_pool):
+    """The card compiles supported off its trigger alone, which is exactly the
+    shape ``--hollow-lines`` exists to catch: the replacement is claimed by the
+    file that implements it, so the second line is not a rider dropped in
+    silence."""
+    from engine.replacements import counters_instead_of_untap, replacement_claims_line
+
+    winds = set_pool("ICE")["Freyalise's Winds"]
+    replacement_line = winds.oracle_text.splitlines()[1]
+
+    assert compile_card_oracle(winds).supported
+    assert counters_instead_of_untap(replacement_line) == "wind"
+    assert replacement_claims_line(replacement_line)
+# --- end W1G5 ---

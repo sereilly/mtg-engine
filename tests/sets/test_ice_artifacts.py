@@ -492,3 +492,72 @@ def test_runed_arch_offers_only_creatures_within_its_power_bound(set_pool):
 
     assert named == {"Balduvian Bears"}, named
 # --- end W1G2 ---
+# --- W1G5: statics, continuous effects, control changes ---
+def _w1g5_sphere_board(set_pool, catalog_by_name):
+    """Vibrating Sphere under P1, with a 2/2 on each side."""
+    p1 = PlayerState(name="P1", battlefield=[
+        Permanent(card=set_pool("ICE")["Vibrating Sphere"]),
+        Permanent(card=catalog_by_name["Grizzly Bears"]),
+    ])
+    p2 = PlayerState(name="P2", battlefield=[
+        Permanent(card=catalog_by_name["Grizzly Bears"]),
+    ])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1.battlefield[1], p2.battlefield[0]
+
+
+def test_vibrating_sphere_compiles_both_halves_as_conditional_anthems(set_pool):
+    """Two printed sentences, two ``lord_buff`` instructions, each carrying the
+    condition rather than being applied flat. The negation is a flag on the one
+    ``your_turn`` payload the evaluator already answered for Radha, Heart of
+    Keld — a second kind would be two readers of "whose turn is it"."""
+    program = compile_card_oracle(set_pool("ICE")["Vibrating Sphere"])
+
+    assert program.supported
+    assert [(i.kind, i.payload.get("condition")) for i in program.instructions] == [
+        ("lord_buff", {"kind": "your_turn"}),
+        ("lord_buff", {"kind": "your_turn", "negated": True}),
+    ]
+
+
+def test_vibrating_sphere_buffs_only_on_its_controllers_turn(
+    set_pool, catalog_by_name
+):
+    """The bonus has to be *present* in one condition and *absent* in the other;
+    a conditional static applied unconditionally passes half of that."""
+    game, mine, theirs = _w1g5_sphere_board(set_pool, catalog_by_name)
+
+    game.begin_turn_bookkeeping(0)
+
+    assert (mine.effective_power, mine.effective_toughness) == (4, 2), game.log
+    assert (theirs.effective_power, theirs.effective_toughness) == (2, 2), game.log
+
+
+def test_vibrating_sphere_debuffs_on_every_other_turn(set_pool, catalog_by_name):
+    """"During turns other than yours, creatures you control get -0/-2." The
+    penalty still reaches only the Sphere's controller's creatures — "other than
+    yours" narrows the *turn*, never the set."""
+    game, mine, theirs = _w1g5_sphere_board(set_pool, catalog_by_name)
+
+    game.begin_turn_bookkeeping(1)
+
+    assert (mine.effective_power, mine.effective_toughness) == (2, 0), game.log
+    assert (theirs.effective_power, theirs.effective_toughness) == (2, 2), game.log
+
+
+def test_vibrating_sphere_switches_back_and_forth_across_turns(
+    set_pool, catalog_by_name
+):
+    """CR 611.3a: a static ability is not locked in. The bonus is written into a
+    channel that is cleared and rebuilt, so a turn passing has to trigger the
+    rebuild — nothing else on the board changes at that moment."""
+    game, mine, _ = _w1g5_sphere_board(set_pool, catalog_by_name)
+
+    seen = []
+    for seat in (0, 1, 0, 1):
+        game.begin_turn_bookkeeping(seat)
+        seen.append((mine.effective_power, mine.effective_toughness))
+
+    assert seen == [(4, 2), (2, 0), (4, 2), (2, 0)], game.log
+# --- end W1G5 ---

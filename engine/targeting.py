@@ -445,9 +445,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # `deal_damage`, which takes a player or a permanent; the opponent's half is
     # a pending choice made after resolution, not a target chosen here.
     "deal_damage_and_opponent_choice": {"kind": "any"},
-    # Aladdin: `resolve_target_permanent(..., predicate=p.has_type("artifact"))`.
-    # The kind's name says "permanent", the code it runs says artifact.
-    "steal_target_permanent_linked_to_self": {"kind": "artifact"},
     # Gaea's Liege and Pyramids' second mode: both resolve through a
     # `primary_type == "land"` predicate.
     "change_target_land_type": {"kind": "land"},

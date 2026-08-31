@@ -5,8 +5,16 @@ The steal family: a control change is a *contribution* recorded through
 and each handler here differs only in what ends it — cleanup for the
 until-end-of-turn form, the ON_LEAVE hook for Aladdin's, the monitored
 ``LINKED_CONTROL_CONDITIONS`` sweep (CR 611.2b, ``mixins/game_ending.py``)
-for the linked Legends steals. Split out of ``board_misc.py`` when this
+for every "for as long as …" steal. Split out of ``board_misc.py`` when this
 family pushed it past the 1,000-line signal.
+
+Aladdin used to have a handler of its own, ``steal_target_permanent_linked_to_self``,
+which looked for an *artifact* in its own code — so the identical printed
+sentence about a land (Orcish Squatters) or a creature (Merieke Ri Berit) had
+nowhere to go. The type is payload now and Aladdin resolves through
+``steal_target_linked_to_source`` like every other one; the ON_LEAVE hook stays,
+because the sweep and the hook end the same contribution and ending it twice is
+a no-op.
 """
 
 from __future__ import annotations
@@ -66,6 +74,16 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
             bound = game.permanent_by_id(permanent_id)
             if bound is None:
                 continue
+            # Guardian Beast at the seam's own question: Magus of the Unseen
+            # untaps and borrows an *artifact*, which is exactly what the Beast
+            # protects. `change_control` is reached directly here (there is no
+            # source permanent to key the contribution on), so the prohibition
+            # is asked rather than inherited from `take_control`.
+            if game.cant_gain_control(bound, context.caster):
+                game.log.append(
+                    f"{context.card.name}: {bound.card.name} can't change controllers"
+                )
+                continue
             change_control(bound, seat, source=context.card, until_eot=True)
             if instruction.payload.get("tap_when_lost"):
                 bound.metadata[TAP_WHEN_CONTROL_LOST] = True
@@ -102,6 +120,11 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     if target is None:
         game.log.append(f"{context.card.name}: no valid permanent to gain control of")
         return True, "resolved"
+    if game.cant_gain_control(target, context.caster):
+        game.log.append(
+            f"{context.card.name}: {target.card.name} can't change controllers"
+        )
+        return True, "resolved"
     seat = game.players.index(context.caster)
     change_control(target, seat, source=context.card, until_eot=True)
     game._sync_control()
@@ -116,43 +139,6 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     game.log.append(
         f"{context.caster.name} gains control of {target.card.name} until end of turn"
     )
-    return True, "resolved"
-
-
-@effect_handler("steal_target_permanent_linked_to_self")
-def steal_target_permanent_linked_to_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Aladdin: "Gain control of target artifact for as long as you control
-    this creature." The control change is a CR 613 layer-2 contribution keyed
-    on Aladdin itself (not on an Aura), so ON_LEAVE_BATTLEFIELD["Aladdin"] ends
-    it with end_control_changes_from when Aladdin leaves the battlefield."""
-    caster = context.caster
-    card = context.card
-    source_permanent = context.source_permanent
-    if source_permanent is None:
-        return False, "ability not implemented"
-    # Guardian Beast: "other players can't gain control of" the artifacts it
-    # protects.
-    target_perm = resolve_target_permanent(
-        game,
-        context,
-        predicate=lambda p: p.has_type("artifact") and not game._untapped_artifact_protector_active(p),
-    )
-    if target_perm is None:
-        game.log.append(f"{card.name}: no valid artifact target")
-        return True, "resolved"
-    from ..control import LINKED_CONTROL_CONDITIONS
-
-    # "…for as long as **you control** this creature" is a condition, not just
-    # a leave-the-battlefield event: Control Magic on Aladdin ends the steal
-    # with Aladdin still on the battlefield (CR 611.2b). The state-based sweep
-    # reads this record; the ON_LEAVE hook still ends the change at the moment
-    # of leaving, and the sweep finds nothing left to do.
-    if not game.take_control(
-        target_perm, caster, source=source_permanent,
-        extra_meta={LINKED_CONTROL_CONDITIONS: ("you_control_source",)},
-    ):
-        return True, "resolved"
-    game.log.append(f"{card.name} gains control of {target_perm.card.name}")
     return True, "resolved"
 
 
@@ -254,7 +240,15 @@ def steal_target_linked_to_source(game: Game, instruction: OracleInstruction, co
         filters = (instruction.payload.get("targets") or {}).get("filter") or {}
         target_perm = resolve_target_permanent(
             game, context,
-            predicate=lambda p: permanent_matches_filter(p, filters),
+            predicate=lambda p: (
+                permanent_matches_filter(p, filters)
+                # Guardian Beast, asked here as well as at the seam
+                # (`Game.cant_gain_control`, which `take_control` also asks):
+                # the two answer different moments. This one keeps the
+                # resolution from choosing a permanent it would then decline;
+                # the seam is the backstop for every other way control moves.
+                and not game.cant_gain_control(p, caster)
+            ),
             fallback_on_invalid_choice=False,
         )
     if target_perm is None:
@@ -267,6 +261,14 @@ def steal_target_linked_to_source(game: Game, instruction: OracleInstruction, co
         extra_meta={LINKED_CONTROL_CONDITIONS: conditions},
     ):
         return True, "resolved"
+    # **The rescope ``gain_control_until_eot`` makes, and for its reason.** The
+    # sentence after this one is about the creature this one just moved — "When
+    # Merieke Ri Berit leaves the battlefield or becomes untapped, destroy
+    # **that creature**" — and it resolves the announced id against
+    # `context.target`'s board. Left pointing at the seat the creature has now
+    # *left*, the delayed ability found nothing to bind and armed nothing at
+    # all, logging "had no creature to watch" while the card compiled clean.
+    context.target = caster
     game.log.append(f"{context.card.name} gains control of {target_perm.card.name}")
     return True, "resolved"
 
@@ -363,6 +365,15 @@ def exchange_control_of_targets(game: Game, instruction: OracleInstruction, cont
         if controller == "you" and not controlled_by_caster:
             break
         if controller in ("opponent", "not_you") and controlled_by_caster:
+            break
+        # Guardian Beast: an exchange hands each permanent to the *other* seat,
+        # so a protected artifact on either side means no part of the exchange
+        # happens (CR 701.12a's atomicity, CR 614.17's prohibition).
+        other = chosen[1 - index] if index < 2 else None
+        other_seat = (
+            game.controller_index_of(other) if other is not None else None
+        )
+        if other_seat is not None and game.cant_gain_control(permanent, other_seat):
             break
         legal.append(permanent)
 
@@ -467,6 +478,15 @@ def exchange_control_of_bound(game: Game, instruction: OracleInstruction, contex
     if seat_of_first is None or seat_of_second is None or seat_of_first == seat_of_second:
         game.log.append(
             f"{card.name}: both permanents have one controller, so nothing happens"
+        )
+        return True, "resolved"
+    # Guardian Beast on the bound spelling too: Juxtapose's second exchange is
+    # over *artifacts*, which is precisely what the Beast protects.
+    if game.cant_gain_control(first, seat_of_second) or game.cant_gain_control(
+        second, seat_of_first
+    ):
+        game.log.append(
+            f"{card.name}: a permanent can't change controllers, so nothing happens"
         )
         return True, "resolved"
     change_control(first, seat_of_second, source=instruction)

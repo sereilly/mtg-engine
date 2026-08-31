@@ -70,6 +70,19 @@ DELAYED_EVENTS: dict[str, str] = {
     # leaves-the-battlefield is any move off the battlefield, so a bounce, a
     # tuck and an exile all announce it while only one of them is a death.
     "bound_permanent_leaves_battlefield": "the leaves-the-battlefield transition",
+    # "When Merieke Ri Berit leaves the battlefield **or becomes untapped**,
+    # destroy that creature." One delayed ability with two trigger events
+    # (CR 603.7), which is why it is one key announced from two sites rather
+    # than two entries: the ability fires the first time *either* happens and,
+    # having no stated duration, is done (CR 603.7b). Two entries would each be
+    # one-shot on their own and the second would still be waiting.
+    #
+    # Tawnos's Coffin prints the identical clause, so the pairing is a template
+    # rather than a card — it reaches its return through
+    # ``engine/linked_exile.py`` instead, which is that file's registry doing
+    # for an exile what this event does for an effect the grammar lowers.
+    "bound_permanent_leaves_or_untaps":
+        "the leaves-the-battlefield transition and become_untapped",
     # "Whenever that creature is dealt damage by an attacking creature this
     # turn, …" (Glyph of Life). Repeating: CR 603.7b's "unless it
     # has a stated duration", and "this turn" is that duration.
@@ -96,6 +109,13 @@ DELAYED_EVENTS: dict[str, str] = {
     # cantrip that drew a turn late would be the wrong card. So it is announced
     # unseated, exactly as `next_end_step` is and for the same reason.
     "next_turns_upkeep": "the upkeep step",
+    # "Until end of turn, whenever **you cast a black spell**, put a +1/+1
+    # counter on this creature." (Mountain Titan.) The one event in this table
+    # whose subject is a **card** rather than a permanent — a spell on the stack
+    # has no battlefield object — which is why :meth:`DelayedTrigger.matches`
+    # asks the card matcher for it. Repeating, with "until end of turn" as
+    # CR 603.7b's stated duration.
+    "you_cast_spell": "the cast announcement in mixins/oracle_instructions.py",
 }
 
 
@@ -219,6 +239,7 @@ class DelayedTrigger:
         asked of the firing event rather than answered by a flag on the entry —
         a flag has a default, and its safe value differs per card.
         """
+        from .handlers._common import _card_matches_filter
         from .subject_filters import subject_matches
 
         if self.event != event:
@@ -231,10 +252,24 @@ class DelayedTrigger:
         # printed noun re-states what the id already names, and the two arrive
         # together. Asking it of an event that names no object would make an
         # ability bound to "that creature" wait for a step it can never match.
-        if subject is not None and self.subject_filter and not subject_matches(
-            game, subject, self.subject_filter, observer=self.controller_index
-        ):
-            return False
+        if subject is not None and self.subject_filter:
+            # A **card** subject (a spell being cast) has no computed
+            # characteristics at all (CR 613.1), so the battlefield matcher
+            # cannot answer about it — the card matcher can, and the lowering
+            # that armed the entry gated its filter on exactly the keys that one
+            # reads. Told apart by what the object *is* rather than by the event
+            # name, because a list of which events carry a card goes stale the
+            # way every list of fire sites in this engine has.
+            answers = (
+                subject_matches(
+                    game, subject, self.subject_filter,
+                    observer=self.controller_index,
+                )
+                if hasattr(subject, "has_type")
+                else _card_matches_filter(subject, self.subject_filter)
+            )
+            if not answers:
+                return False
         if self.agent_filter and not subject_matches(
             game, agent, self.agent_filter, observer=self.controller_index
         ):

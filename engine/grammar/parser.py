@@ -538,6 +538,56 @@ def _looks_static(statement: ast.Statement) -> bool:
     return False
 
 
+def _parse_turn_scoped_static_line(
+    stream: TokenStream,
+) -> ast.StaticAbilityNode | None:
+    """``During your turn, <continuous effect>.`` / ``During turns other than
+    yours, <continuous effect>.`` (Vibrating Sphere, CR 613 layer 7c.)
+
+    The same shape :func:`_parse_static_condition_line` reads with the condition
+    printed *last*, and it lands on the same node — so the two word orders
+    cannot mean different things. What it is **not** is a duration: nothing
+    resolves here, and the bonus is gone at the next untap step with nothing to
+    undo (the distinction that function's docstring draws for "as long as").
+
+    Deliberately narrowed to a **distributive** subject, and that narrowing is
+    the ordering rule rather than a convenience: "During your turn, this
+    creature has first strike" (Radha, Heart of Keld) is read by
+    ``engine/static_bonuses.conditional_static_for``, a derivation table the
+    grammar reaches only where every production refuses the line *in full*
+    (``engine/grammar/derived.py``). A production that parsed that sentence and
+    then refused in lowering would take the table's line away — parsed-but-
+    unlowered is still parsed — so the refusal happens here, in the parse.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("during"):
+        return None
+    if stream.accept_phrase("your", "turn"):
+        negated = False
+    elif stream.accept_phrase("turns", "other", "than", "yours"):
+        negated = True
+    else:
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    try:
+        statement = parse_statement(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    if (
+        not stream.exhausted
+        or not _looks_static(statement)
+        or _distributive_subject(statement) is None
+    ):
+        stream.reset(mark)
+        return None
+    return ast.StaticAbilityNode(statement, ast.TurnIsYours(negated=negated))
+
+
 def _parse_static_condition_line(stream: TokenStream) -> ast.StaticAbilityNode | None:
     """``<continuous effect> as long as <condition>.`` (CR 613, Sedge Troll,
     Kird Ape, Giant Tortoise.)
@@ -833,6 +883,15 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
     static_condition = _parse_static_condition_line(stream)
     if static_condition is not None:
         return static_condition
+
+    # The same whole-line shape with the condition printed *first* as a timing
+    # clause ("During your turn, …"). Tried here, beside its mirror, for the
+    # same reason: the sentence loop would read "during" as the start of an
+    # effect and fail the line on a subject it never finds.
+    turn_scoped = _parse_turn_scoped_static_line(stream)
+    if turn_scoped is not None:
+        return turn_scoped
+    stream.reset(0)
 
     statement = _statements_from_sentences(stream)
     if _looks_static(statement):

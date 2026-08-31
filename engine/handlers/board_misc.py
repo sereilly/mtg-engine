@@ -848,10 +848,29 @@ def add_named_counter_to_target(game: Game, instruction: OracleInstruction, cont
     from ..subject_filters import subject_matches
     from ._common import resolve_role_permanent, roles_still_legal
 
+    from ._common import permanent_matches_filter
+
     observer = game.players.index(context.caster)
     source = context.source_permanent
     subject_role = instruction.payload.get("subject_role")
-    if subject_role is not None:
+    if instruction.payload.get("on_event_subject"):
+        # "Whenever a permanent becomes tapped, put a wind counter on **it**."
+        # (Freyalise's Winds.) Nothing was chosen: the object is the one the
+        # event was about, read by the id the announcement froze (CR 603.10) —
+        # by resolution the permanent may have moved, and a board search would
+        # find a look-alike. Kudzu's destroy reads the same key.
+        subject_id = (context.trigger_context or {}).get(
+            "event_subject_permanent_id"
+        )
+        target = (
+            game.permanent_by_id(subject_id) if subject_id is not None else None
+        )
+        wanted = instruction.payload.get("filter") or {}
+        if target is not None and wanted and not permanent_matches_filter(
+            target, wanted
+        ):
+            target = None
+    elif subject_role is not None:
         # "Put X glyph counters on target creature that target Wall blocked
         # this turn" (Glyph of Delusion). Two targets of different kinds, so
         # which one takes the counters is the *role* the lowering named rather

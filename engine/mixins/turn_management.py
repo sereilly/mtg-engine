@@ -269,6 +269,26 @@ class TurnManagementMixin:
             player.creatures_died_under_your_control_this_turn = 0
             player.spells_cast_this_turn = []
             player.attacked_this_turn = False
+        # A static ability whose condition is *whose turn it is* changes truth
+        # value here and nowhere else (CR 611.3a: the effect is not locked in;
+        # it applies at any given moment to whatever its text indicates).
+        # "During your turn, creatures you control get +2/+0" (Vibrating
+        # Sphere), "During your turn, Radha has first strike" and Angry Mob's
+        # swamp-scaled P/T all reach the board through channels
+        # `_recalculate_lord_buffs` / `_refresh_dynamic_creatures` clear and
+        # rebuild — a *snapshot*, and every other recompute is driven by a board
+        # change, which a turn passing is not.
+        #
+        # **What this actually buys**, stated precisely because the obvious
+        # reading is too strong: the untap step recomputes too, so the headless
+        # `start_turn` flow was already right by the time anyone had priority.
+        # What was stale is the window *between* this bookkeeping and that
+        # recompute — and `web/turn_steps._begin_turn` returns to the client
+        # inside it, three ways: Time Vault's skip prompt, Winter Orb's
+        # untap-land selection and Old Man of the Sea's keep-tapped choice. A
+        # player answering any of those saw last turn's P/T and keywords.
+        self._recalculate_lord_buffs()
+        self._refresh_dynamic_creatures()
 
     def start_turn(self, player_index: int) -> None:
         self.begin_turn_bookkeeping(player_index)

@@ -15,6 +15,7 @@ from .ai_valuation import (
     returns_creature_to_hand,
     several_target_slot_sides,
 )
+from .auras import controller_cast_ban
 from .cast_restrictions import check_cast_timing
 from .cost_modifiers import cost_reduction_for_cast, reduce_cost, spell_cost_tax
 from .classifier import classify_card
@@ -858,6 +859,14 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
         # targeting question, but the same failure: the cast path refuses and
         # the AI offers the card again next turn. Asked for every card, not
         # only a spell, because the lockout bans *playing* a land too.
+        return False
+
+    if controller_cast_ban(game, caster_index, card) is not None:
+        # "Enchanted creature's controller can't cast creature spells."
+        # (Brand of Ill Omen.) The same reason as the lockout above: the cast
+        # path refuses, nothing is spent, and a seat that re-proposes the card
+        # every turn does nothing for the rest of the game — which is exactly
+        # what `simulate_ai_games.py`'s `refused_casts` counts.
         return False
 
     if card.primary_type not in SPELL_TYPES:

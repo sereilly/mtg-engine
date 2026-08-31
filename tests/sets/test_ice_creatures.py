@@ -1916,3 +1916,318 @@ def test_marton_stromgald_pumps_the_blockers_on_his_side(set_pool):
             "2/2 plus +2/+2, one for each other blocker"
         )
 # --- end W1G2 ---
+# --- W1G5: statics, continuous effects, control changes ---
+def _w1g5_squatters_game(set_pool, catalog_by_name):
+    """Orcish Squatters attacking, with a land of its **own** controller's on
+    the board beside the defender's two.
+
+    That third land is the point: "target land **defending player controls**"
+    must never offer it, and the seat is a fact about the combat rather than
+    about the seat choosing.
+    """
+    squatters = Permanent(card=set_pool("ICE")["Orcish Squatters"])
+    p1 = PlayerState(name="P1", battlefield=[
+        squatters, Permanent(card=catalog_by_name["Mountain"]),
+    ])
+    p2 = PlayerState(name="P2", battlefield=[
+        Permanent(card=catalog_by_name["Forest"]),
+        Permanent(card=catalog_by_name["Island"]),
+    ])
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {0}
+    return game, p1, p2, squatters
+
+
+def _w1g5_attack_unblocked(game):
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    ok, msg = game.declare_attackers(0, [0])
+    assert ok, msg
+    game._settle()
+    game.advance_combat_phase()   # declare blockers
+    ok, msg = game.declare_blockers(1, {})
+    assert ok, msg
+    game._settle()
+    game.advance_combat_phase()   # blocks lock: the trigger fires here
+    return game.pending_choices_of("trigger_target")
+
+
+def _w1g5_finish_combat(game):
+    game._settle()
+    for _ in range(len(list(game._phase_steps("combat"))) + 1):
+        if game.current_turn_phase != "combat":
+            break
+        before = (game.current_turn_phase, game.current_step)
+        game.advance_combat_phase()
+        game._settle()
+        if (game.current_turn_phase, game.current_step) == before:
+            break
+
+
+def test_orcish_squatters_offers_only_the_defending_players_lands(
+    set_pool, catalog_by_name
+):
+    """The printed noun phrase is "target land defending player controls", and
+    the picker is what enforces the seat — ``subject_matches`` deliberately
+    refuses that key, because the seat belongs to the combat and not to the
+    permanent."""
+    game, _, p2, _ = _w1g5_squatters_game(set_pool, catalog_by_name)
+
+    pending = list(_w1g5_attack_unblocked(game))
+
+    assert len(pending) == 1, game.log
+    offered = pending[0].data["targets"]
+    assert {t["name"] for t in offered} == {"Forest", "Island"}, game.log
+    assert {t["permanent_id"] for t in offered} == {
+        p.permanent_id for p in p2.battlefield
+    }
+
+
+def test_orcish_squatters_steals_the_land_and_then_deals_no_combat_damage(
+    set_pool, catalog_by_name
+):
+    """The whole sentence: the land changes hands, and "if you do, this creature
+    assigns no combat damage this turn" is read by the damage step — so the
+    defender's life is what this asserts, not a flag."""
+    game, p1, p2, _ = _w1g5_squatters_game(set_pool, catalog_by_name)
+
+    pending = list(_w1g5_attack_unblocked(game))
+    chosen = next(t for t in pending[0].data["targets"] if t["name"] == "Forest")
+    assert game.confirm_trigger_target(0, chosen["permanent_id"])
+    game._settle()
+    assert game.confirm_optional_pay(0, "Orcish Squatters", accept=True)
+    _w1g5_finish_combat(game)
+
+    assert "Forest" in [p.card.name for p in p1.battlefield], game.log
+    assert [p.card.name for p in p2.battlefield] == ["Island"], game.log
+    assert p2.life == 20, game.log
+
+
+def test_orcish_squatters_gives_the_land_back_when_it_leaves(
+    set_pool, catalog_by_name
+):
+    """"…for as long as you control this creature" (CR 611.2b). The contribution
+    is keyed on the Squatters and the state-based sweep re-checks the condition,
+    so the land reverts to the seat it entered under — never to whoever happened
+    to hold it last."""
+    game, p1, p2, squatters = _w1g5_squatters_game(set_pool, catalog_by_name)
+
+    pending = list(_w1g5_attack_unblocked(game))
+    chosen = next(t for t in pending[0].data["targets"] if t["name"] == "Forest")
+    assert game.confirm_trigger_target(0, chosen["permanent_id"])
+    game._settle()
+    assert game.confirm_optional_pay(0, "Orcish Squatters", accept=True)
+    stolen = game.permanent_by_id(chosen["permanent_id"])
+    assert game.controller_index_of(stolen) == 0, game.log
+
+    game.remove_from_battlefield(squatters)
+    game.check_state_based_actions()
+
+    assert game.controller_index_of(stolen) == 1, game.log
+    assert {p.card.name for p in p2.battlefield} == {"Forest", "Island"}, game.log
+
+
+def _w1g5_merieke_board(set_pool, catalog_by_name):
+    merieke = Permanent(card=set_pool("ICE")["Merieke Ri Berit"])
+    _nosick(merieke)
+    victim = Permanent(card=catalog_by_name["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[merieke]),
+        PlayerState(name="P2", battlefield=[victim]),
+    ])
+    game.enforce_mana_costs = False
+    return game, merieke, victim
+
+
+def _w1g5_merieke_steals(game):
+    result = game.activate_permanent_ability(
+        0, "Merieke Ri Berit", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game._settle()
+
+
+def test_merieke_ri_berit_compiles_its_own_name_as_a_self_reference(set_pool):
+    """The card's oracle text names the card — printed text, not a reason to key
+    on the name. The lexer collapses it to the same SELF token "this creature"
+    produces, so the ability lowers to the ordinary linked steal plus the
+    delayed ability the second sentence creates."""
+    program = compile_card_oracle(set_pool("ICE")["Merieke Ri Berit"])
+
+    assert program.supported
+    ability = program.activated_abilities[0]
+    steps = ability.instruction.payload["steps"]
+    assert [i.kind for i in steps] == [
+        "steal_target_linked_to_source", "create_delayed_trigger",
+    ]
+    assert steps[0].payload["link_conditions"] == ["you_control_source"]
+    assert steps[1].payload["event"] == "bound_permanent_leaves_or_untaps"
+    assert steps[1].payload["instruction"].payload["bypass_regeneration"] is True
+
+
+def test_merieke_ri_berit_takes_the_creature_and_stays_tapped(
+    set_pool, catalog_by_name
+):
+    game, merieke, victim = _w1g5_merieke_board(set_pool, catalog_by_name)
+
+    _w1g5_merieke_steals(game)
+
+    assert game.controller_index_of(victim) == 0, game.log
+    assert merieke.tapped
+
+
+def test_merieke_ri_berit_destroys_the_creature_when_she_untaps(
+    set_pool, catalog_by_name
+):
+    """"When Merieke Ri Berit … becomes untapped, destroy that creature."
+    Announced from ``become_untapped``, which is the one place a permanent
+    untaps — an announcement wired into the untap step alone would miss every
+    Twiddle."""
+    game, merieke, victim = _w1g5_merieke_board(set_pool, catalog_by_name)
+    _w1g5_merieke_steals(game)
+
+    game.become_untapped(merieke)
+    game._settle()
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(victim), game.log
+    assert [c.name for c in game.players[1].graveyard] == ["Grizzly Bears"]
+
+
+def test_merieke_ri_berit_destroys_the_creature_when_she_leaves(
+    set_pool, catalog_by_name
+):
+    """The other half of the same delayed ability. It also proves the two ends
+    do not fight: the linked steal reverts control as the sweep runs, and the
+    delayed destroy still finds the creature by the id it bound."""
+    game, merieke, victim = _w1g5_merieke_board(set_pool, catalog_by_name)
+    _w1g5_merieke_steals(game)
+
+    game.remove_from_battlefield(merieke)
+    game._settle()
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(victim), game.log
+    assert [c.name for c in game.players[1].graveyard] == ["Grizzly Bears"]
+
+
+def test_merieke_ri_berit_leaves_an_untouched_board_alone(
+    set_pool, catalog_by_name
+):
+    """The delayed ability is armed only by the steal, and it watches Merieke by
+    id. Untapping some *other* permanent must not fire it — the guard against an
+    entry that answers to the first thing to untap."""
+    game, merieke, victim = _w1g5_merieke_board(set_pool, catalog_by_name)
+    other = Permanent(card=catalog_by_name["Mountain"], tapped=True)
+    game.players[0].battlefield.append(other)
+    _w1g5_merieke_steals(game)
+
+    game.become_untapped(other)
+    game._settle()
+    game.check_state_based_actions()
+
+    assert game.is_on_battlefield(victim), game.log
+    assert game.controller_index_of(victim) == 0
+
+
+def _w1g5_titan_board(set_pool, catalog_by_name):
+    titan = Permanent(card=set_pool("ICE")["Mountain Titan"])
+    _nosick(titan)
+    game = Game(players=[
+        PlayerState(
+            name="P1", battlefield=[titan],
+            hand=[
+                catalog_by_name["Dark Ritual"],
+                catalog_by_name["Lightning Bolt"],
+                catalog_by_name["Dark Ritual"],
+            ],
+        ),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    return game, titan
+
+
+def _w1g5_cast(game, name):
+    game.cast_from_hand(0, name)
+    game._settle()
+    while game.stack:
+        game.resolve_top_of_stack()
+
+
+def test_mountain_titan_arms_a_delayed_cast_trigger(set_pool):
+    """"Until end of turn, whenever you cast a black spell, …" is CR 603.7's
+    delayed triggered ability with a stated duration, not an ability the
+    permanent has — the same shape Subira prints over a combat event, with the
+    subject being a **spell** instead of a creature."""
+    program = compile_card_oracle(set_pool("ICE")["Mountain Titan"])
+
+    assert program.supported
+    payload = program.activated_abilities[0].instruction.payload
+    assert payload["event"] == "you_cast_spell"
+    assert payload["subject_filter"] == {"color_filter": "B"}
+    assert payload["once"] is False
+    assert payload["duration"] == "end_of_turn"
+
+
+def test_mountain_titan_grows_only_after_the_ability_and_only_on_black(
+    set_pool, catalog_by_name
+):
+    """Three assertions in one game, because each is the other's control: a
+    black spell before the activation does nothing, a red spell after it does
+    nothing, and a black spell after it grows the Titan."""
+    game, titan = _w1g5_titan_board(set_pool, catalog_by_name)
+
+    _w1g5_cast(game, "Dark Ritual")
+    assert titan.effective_power == 2, game.log
+
+    assert game.activate_permanent_ability(0, "Mountain Titan").supported
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    _w1g5_cast(game, "Lightning Bolt")
+    assert titan.effective_power == 2, game.log
+
+    _w1g5_cast(game, "Dark Ritual")
+    assert titan.effective_power == 3, game.log
+
+
+def test_mountain_titan_stops_growing_when_the_turn_ends(
+    set_pool, catalog_by_name
+):
+    """CR 603.7b: "until end of turn" is the stated duration, so the ability
+    that never stops triggering does stop existing."""
+    game, titan = _w1g5_titan_board(set_pool, catalog_by_name)
+    assert game.activate_permanent_ability(0, "Mountain Titan").supported
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    game.resolve_cleanup_step(0)
+
+    assert game.delayed_triggers == [], game.log
+    _w1g5_cast(game, "Dark Ritual")
+    assert titan.effective_power == 2, game.log
+
+
+def test_merieke_ri_berit_cannot_take_a_guardian_beast_artifact(
+    set_pool, catalog_by_name
+):
+    """The linked steal is the general one now, so the prohibition it used to
+    carry alone had to move somewhere every control change asks — and this is
+    the check that it still holds where it always did."""
+    beast = Permanent(card=catalog_by_name["Guardian Beast"])
+    lotus = Permanent(card=catalog_by_name["Black Lotus"])
+    merieke = Permanent(card=set_pool("ICE")["Merieke Ri Berit"])
+    _nosick(merieke)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[merieke]),
+        PlayerState(name="P2", battlefield=[beast, lotus]),
+    ])
+    game.enforce_mana_costs = False
+
+    assert game.cant_gain_control(lotus, 0)
+    assert not game.take_control(lotus, 0, source=merieke)
+    assert game.controller_index_of(lotus) == 1
+# --- end W1G5 ---

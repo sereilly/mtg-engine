@@ -1779,6 +1779,58 @@ def aura_continuous_claim(line: str) -> str | None:
         return "artifact animation (layers 4 and 7b) — auras.animating_auras"
     if aura_ability_cost_reduction(normalized):
         return "activation cost reduction — auras.attached_ability_cost_reduction"
+    if aura_controller_cast_ban(normalized) is not None:
+        return "cast restriction on the host's controller — auras.controller_cast_ban"
+    return None
+
+
+#: "Enchanted creature's **controller** can't cast creature spells."
+#: (Brand of Ill Omen.) A restriction on a *player*, which is what keeps it out
+#: of ``_RESTRICTIONS`` beside it: every row there is a fact about the attached
+#: permanent, asked of that permanent by the step that enforces it, and there is
+#: no permanent here to ask.
+#:
+#: The card **type** is payload for the reason every printed word in this file
+#: is one: "…can't cast artifact spells" is the same sentence and must need no
+#: second row. So is the seat word — CR 109.5 makes "enchanted creature's
+#: controller" the controller of the *creature*, not of the Aura, and that is
+#: read off the host at the gate rather than assumed to be the Aura's own.
+_ATTACHED_CONTROLLER_CAST_BAN = re.compile(
+    rf"^{_ATTACHED} {_NOUN}'s controller can't cast (?P<type>{_NOUN}) spells$"
+)
+
+
+def aura_controller_cast_ban(line: str) -> str | None:
+    """The card type the enchanted permanent's controller can't cast, or None.
+
+    One reader, two callers, which is this file's standing rule: the support
+    gate asks it through :func:`aura_continuous_claim` so the line is claimed,
+    and ``mixins/stack/casting.py`` asks it at CR 601.2 so the line is
+    *enforced*. A printed restriction is only done when something enforces it —
+    parsed and dropped, this one is an Aura that reports supported and lets the
+    creature spells through.
+    """
+    match = _ATTACHED_CONTROLLER_CAST_BAN.match(_line_text(line))
+    return match.group("type") if match is not None else None
+
+
+def controller_cast_ban(game, seat: int, card) -> str | None:
+    """The name of an Aura forbidding *seat* from casting *card*, or None.
+
+    Read off the **host**, not off the Aura: the sentence says "enchanted
+    creature's controller", and an Aura an opponent controls on your creature
+    stops *you* casting. Every Aura on the battlefield is asked, because that is
+    where the attachment record lives — an Aura that has left is no longer
+    attached and so no longer says anything, with nothing to clean up.
+    """
+    for host_seat, host in game.permanents_with_controller():
+        if host_seat != seat:
+            continue
+        for aura in auras_attached_to(host):
+            for raw_line in (aura.effective_card.oracle_text or "").splitlines():
+                banned = aura_controller_cast_ban(raw_line)
+                if banned is not None and card.primary_type == banned:
+                    return aura.card.name
     return None
 
 

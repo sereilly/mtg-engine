@@ -456,4 +456,16 @@ def _lower_condition(
             "who": condition.who.kind,
             "amount": condition.amount,
         }
+    if isinstance(condition, ast.TurnIsYours):
+        # "During your turn" / "During turns other than yours" (Vibrating
+        # Sphere). ``engine/static_bonuses.conditional_static_holds`` already
+        # answers ``your_turn`` for the derivation table's spelling of the same
+        # clause (Radha, Heart of Keld), so this is that payload with the
+        # printed negation carried beside it rather than a second kind — one
+        # evaluator, so the two front ends cannot disagree about whose turn it
+        # is.
+        payload: dict[str, object] = {"kind": "your_turn"}
+        if condition.negated:
+            payload["negated"] = True
+        return payload
     raise LoweringError(f"no lowering for condition {type(condition).__name__}", node=condition)

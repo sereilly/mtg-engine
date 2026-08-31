@@ -11,7 +11,7 @@ card with a *narrower* subject cannot silently take the same handler.
 import dataclasses
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ..phrases import PAIR_ORDINALS, is_pt_counter
@@ -20,6 +20,7 @@ from ._common import (
     _amount_payload,
     _describe_several_targets,
     _describe_targets,
+    _filter_payload,
     _is_enchanted,
     _is_source,
     _is_target,
@@ -29,6 +30,7 @@ from ._common import (
 )
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
+    _EVENT_SUBJECT_OBJECTS,
 )
 
 
@@ -117,6 +119,52 @@ def _lower_put_counter(
             "permanent its controller chooses",
             node=node,
         )
+    # "Whenever a permanent becomes tapped, put a wind counter on **it**."
+    # (Freyalise's Winds.) The pronoun was rebound to the *event's* subject by
+    # `rebinding.rebind_pronoun_to_event_subject`, so it is neither the source
+    # nor a target — nothing was chosen, and nothing may be: the object is the
+    # one the event was about, frozen into the announcement by
+    # `become_tapped` (CR 603.10).
+    #
+    # Gated on the event, exactly as the "that player" recipients one module
+    # over are: under any other trigger the same word names an object no fire
+    # site recorded, and the handler would put the counter on nothing while the
+    # card compiled clean.
+    if (
+        not is_pt_counter(node.counter)
+        and not node.up_to
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "it"
+        and not node.subject.filter.is_source
+    ):
+        if event not in _EVENT_SUBJECT_OBJECTS:
+            raise LoweringError(
+                "\"it\" names the object the event was about, and this event "
+                "records none",
+                node=node,
+            )
+        if not isinstance(node.count, ast.Fixed):
+            raise LoweringError(
+                "a named counter is placed a fixed number at a time", node=node
+            )
+        described = _filter_payload(node.subject.filter)
+        if object_only_filter(described) is None:
+            # The rebound filter re-states what the event's own narrowing
+            # already selected, so it is carried and re-checked rather than
+            # dropped — a word consumed and never read is a word that could be
+            # deleted with no change to what the card does.
+            raise LoweringError(
+                "the counter's subject carries a restriction the resolution "
+                "cannot test", node=node,
+            )
+        payload: dict[str, object] = {
+            "counter": node.counter,
+            "count": node.count.value,
+            "on_event_subject": True,
+        }
+        if described:
+            payload["filter"] = described
+        return (OracleInstruction("add_named_counter_to_target", "", payload),)
     # A **named** counter on the source ("put a soul counter on this Equipment",
     # Malefic Scythe). CR 122.1 counters with no rules meaning of their own:
     # engine/named_counters.py holds them, and what they mean is whatever the
