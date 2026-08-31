@@ -448,6 +448,29 @@ def test_mind_warp_for_zero_asks_nothing(set_pool):
 
     assert game.pending_choice_of("revealed_hand_pick", 0) is None
     assert len(p2.hand) == 3
+# --- end W1G4 ---
+
+
+# --- Misfiled from test_ice_creatures.py: the card this test names is a Sorcery ---
+def test_a_union_of_two_targeted_phrases_is_refused(set_pool):
+    """"Destroy target creature and target land." (Fumarole.)
+
+    The union reads it, and the *picker* cannot: a spell is asked for one
+    target (``targeting.derive_cast_spec`` answers with one kind), so admitting
+    this would compile a card that is supported and uncastable, its second
+    target chosen by nobody. It refuses naming that, and the two cards above are
+    unaffected because their first phrase is the source rather than a target.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Fumarole"])
+
+    assert not program.supported
+
+
+# --- W2G1: pay-or-consequence tolls ---
+# Forgotten Lore was begun on wave 1's G4 branch and interrupted; the
+# tests are that branch's, with the driver corrected (see the round's
+# commit) — kept in this wave's block because this wave is what landed
+# them.
 def _lore_game(set_pool, graveyard):
     pool = set_pool("ICE")
     p1 = PlayerState(
@@ -554,19 +577,4 @@ def test_forgotten_lore_on_an_empty_graveyard_chooses_nothing(set_pool):
 
     assert game.pending_choice_of("graveyard_pick_for_price", 1) is None
     assert p1.hand == []
-# --- end W1G4 ---
-
-
-# --- Misfiled from test_ice_creatures.py: the card this test names is a Sorcery ---
-def test_a_union_of_two_targeted_phrases_is_refused(set_pool):
-    """"Destroy target creature and target land." (Fumarole.)
-
-    The union reads it, and the *picker* cannot: a spell is asked for one
-    target (``targeting.derive_cast_spec`` answers with one kind), so admitting
-    this would compile a card that is supported and uncastable, its second
-    target chosen by nobody. It refuses naming that, and the two cards above are
-    unaffected because their first phrase is the source rather than a target.
-    """
-    program = compile_card_oracle(set_pool("ICE")["Fumarole"])
-
-    assert not program.supported
+# --- end W2G1 ---
