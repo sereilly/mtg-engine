@@ -921,3 +921,74 @@ def test_time_bomb_counts_the_counters_at_resolution(set_pool):
 
     assert (p0.life, p1.life) == (19, 19)
 # --- end W2G1 ---
+
+
+# --- W3G3: X spells, multiple targets, damage sources ---
+def test_infinite_hourglass_anthem_is_the_size_of_its_counters(set_pool):
+    """"All creatures get +1/+0 **for each time counter on this artifact**."
+
+    The sentence was unclaimed: ``lord_buffs``' P/T patterns are anchored at
+    both ends, so the trailing scale clause made the whole line refuse and the
+    artifact granted **nothing** while reporting supported — the card ticking a
+    counter onto itself every upkeep and buffing no one. The scale is now a
+    field on the derived buff, read off the source at every recompute (CR
+    613.4b), which is why zero counters is no contribution rather than a
+    remembered +1/+0.
+    """
+    from engine.named_counters import add_counters
+
+    pool = set_pool("ICE")
+    glass = Permanent(card=pool["Infinite Hourglass"])
+    bears = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", battlefield=[glass], life=20)
+    p1 = PlayerState(name="P1", battlefield=[bears], life=20)
+    game = Game(players=[p0, p1])
+    game._recompute_continuous_effects()
+
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2), \
+        "no counters, no anthem"
+
+    add_counters(glass, "time", 2)
+    game._recompute_continuous_effects()
+    assert (bears.effective_power, bears.effective_toughness) == (4, 2)
+
+    add_counters(glass, "time", 1)
+    game._recompute_continuous_effects()
+    assert (bears.effective_power, bears.effective_toughness) == (5, 2), \
+        "the anthem is recomputed, not frozen at the size it first had"
+
+
+def test_infinite_hourglass_reaches_every_creature_including_its_own_side(set_pool):
+    """"**All** creatures" — no controller narrowing, so both battlefields."""
+    from engine.named_counters import add_counters
+
+    pool = set_pool("ICE")
+    glass = Permanent(card=pool["Infinite Hourglass"])
+    add_counters(glass, "time", 1)
+    mine = Permanent(card=pool["Balduvian Bears"])
+    theirs = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", battlefield=[glass, mine], life=20)
+    p1 = PlayerState(name="P1", battlefield=[theirs], life=20)
+    game = Game(players=[p0, p1])
+    game._recompute_continuous_effects()
+
+    assert mine.effective_power == 3
+    assert theirs.effective_power == 3
+
+
+def test_a_scaled_anthem_with_a_keyword_refuses_rather_than_dropping_the_scale(set_pool):
+    """The multiplier applies to a P/T delta and nothing else.
+
+    An invented card carrying the shape ``lord_buffs`` cannot express must take
+    the whole line down: an anthem whose "for each" is ignored is a permanent
+    +1/+0 where the card prints one that starts at nothing, which is a strictly
+    larger card than the one printed.
+    """
+    from engine.lord_buffs import lord_buff_for
+
+    assert lord_buff_for("all creatures get +1/+0 for each time counter on this artifact")
+    assert lord_buff_for("all creatures have flying for each time counter on this artifact") is None
+    assert lord_buff_for(
+        "all creatures get +1/+0 and have flying for each time counter on this artifact"
+    ) is None
+# --- end W3G3 ---

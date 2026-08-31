@@ -304,7 +304,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"(?P<damager_self>this (?:creature|artifact|enchantment|land|permanent))"
      r"|(?P<damager_attached>enchanted (?:creature|artifact|enchantment|land|permanent))"
      r"|a source (?P<damager_controller>you) control"
-     r"|(?P<damager_subject>[^,]+?)"
+     # "…a red creature **or spell** deals damage" (Justice). One object, two
+     # nouns: English prints the adjective once and distributes it, so the
+     # subject group takes "a red creature" and the marker records that the
+     # same phrase also names a *spell*. Non-greedy, so the shorter subject
+     # plus the marker is preferred over the longer subject the noun parser
+     # would then refuse — which is what "a red creature or spell" used to do,
+     # taking the whole trigger down with it. Empty for every card that does
+     # not print the union, because an absent optional group is not in the
+     # match's groupdict.
+     r"|(?P<damager_subject>[^,]+?)(?P<damager_includes_spells> or spell)?"
      r")"
      r" deals(?: (?P<damage_combat>combat|noncombat))? damage"
      r"(?: to (?P<damage_recipient>a player or planeswalker|a player"
@@ -1435,6 +1444,17 @@ _PAIR_SUBJECT_GROUP_SUFFIX = "_pair_subject"
 # is how the two sides come apart.
 _PAIR_SUBJECT_FILTER_KEYS = ("blocked_filter", "blocker_filter")
 
+# What a ``<name>_includes_spells`` marker allows the accompanying noun phrase
+# to say. The union "a red creature or spell" describes one object under two
+# nouns, and only the words in front of the noun distribute over both — a spell
+# on the stack is the printed card (CR 109.5), which has no controller, no
+# layer-computed types and no board position to be asked about. ``type_filter``
+# is the creature half's own noun (dropped for the spell half) and
+# ``color_filter`` is the shared adjective; anything else refuses the condition,
+# because a restriction a spell cannot be tested for is one the dispatcher would
+# silently ignore on exactly half the sentence.
+_SPELL_UNION_FILTER_KEYS = frozenset({"type_filter", "color_filter"})
+
 
 def _match_trigger_patterns(
     text: str,
@@ -1515,6 +1535,18 @@ def _resolve_subject_groups(payload: dict) -> dict | None:
         if f"{stem}_includes_source" in payload:
             described = {k: v for k, v in described.items() if k != "exclude_self"}
             del resolved[f"{stem}_includes_source"]
+        if f"{stem}_includes_spells" in payload and (
+            set(described) - _SPELL_UNION_FILTER_KEYS or "color_filter" not in described
+        ):
+            # "…a red creature **or spell**". The noun is the half that does not
+            # distribute; every other word in the phrase does, and a spell is
+            # the printed card (CR 109.5) with no board, no controller and no
+            # layers — so a phrase saying anything a card cannot answer refuses
+            # the condition rather than firing on the creature half alone. The
+            # colour is required because it is the only thing left to test: a
+            # bare "a creature or spell" would fire on every point of damage in
+            # the game.
+            return None
         resolved[stem + "_filter"] = described
     return resolved
 

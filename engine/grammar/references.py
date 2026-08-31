@@ -137,6 +137,29 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         ):
             stream.advance()
             if stream.accept_word("'s"):
+                # "that **creature's or spell's** controller" (Justice). The
+                # event named *one* object — a red creature or a red spell —
+                # and English prints the possessive once per noun, so the
+                # alternation is two spellings of one referent rather than two
+                # referents. Whichever half the event was, the seat is the same
+                # one, which is why every branch below returns the same
+                # ``PlayerRef``. A loop rather than a second `or` clause: a
+                # third noun would be the same sentence again.
+                while stream.at_word("or"):
+                    alternative = stream.mark()
+                    stream.advance()
+                    other = stream.peek_word()
+                    if other is not None and (
+                        _singular(other) in CARD_TYPES
+                        or _singular(other) in _GENERIC_NOUNS
+                        or _singular(other) in ALL_SUBTYPES
+                        or _singular(other) == "ability"
+                    ):
+                        stream.advance()
+                        if stream.accept_word("'s"):
+                            continue
+                    stream.reset(alternative)
+                    break
                 if stream.accept_word("controller"):
                     return ast.PlayerRef("that_player")
                 # "…under the control of **that creature's owner**"

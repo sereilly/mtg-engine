@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 
 
 from ..enter_effects import (
@@ -28,6 +29,7 @@ from ..enter_effects import (
 from ..auras import aura_protection_colors, auras_attached_to
 from .. import copies
 from ..named_counters import add_counters as add_named_counters
+from ..named_counters import counters_on
 from ..tokens import make_token_card
 from ..keywords import (add_derived_grant, add_derived_removal,
                         clear_derived_grants)
@@ -2003,6 +2005,23 @@ class PermanentStateMixin:
                     ctrl_seat, source_perm, buff.condition
                 ):
                     continue
+                if buff.per_counter:
+                    # "All creatures get +1/+0 **for each time counter on this
+                    # artifact**." (Infinite Hourglass.) The delta is read off
+                    # the *source* at every recompute, which is what CR 613.4b
+                    # asks of a value that keeps changing — and why the counter
+                    # word travels on the buff rather than the size being
+                    # frozen when the sentence compiled. Zero counters is no
+                    # contribution at all, not a zero one: the buff carries only
+                    # a P/T delta (``lord_buffs.LordBuff.per_counter`` refuses
+                    # the combination with anything else), so there is nothing
+                    # else it could still be giving.
+                    scale = counters_on(source_perm, buff.per_counter)
+                    if scale <= 0:
+                        continue
+                    buff = replace(
+                        buff, power=buff.power * scale, toughness=buff.toughness * scale
+                    )
                 if buff.filter.controller == "you":
                     scope = [ctrl_player]
                 elif buff.filter.controller == "opponent":

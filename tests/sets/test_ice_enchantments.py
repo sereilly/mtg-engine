@@ -1462,3 +1462,99 @@ def test_aggression_cannot_be_put_on_a_wall(set_pool, catalog_by_name):
 
 
 # --- end W2G4 ---
+
+
+# --- W3G3: X spells, multiple targets, damage sources ---
+def _justice_board(set_pool, damager_name):
+    """Seat 0 holds Justice; seat 1 holds the permanent that will deal damage."""
+    pool = set_pool("ICE")
+    justice = Permanent(card=pool["Justice"])
+    damager = Permanent(card=pool[damager_name])
+    p0 = PlayerState(name="P0", battlefield=[justice], life=20)
+    p1 = PlayerState(name="P1", battlefield=[damager], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._recompute_continuous_effects()
+    return game, p0, p1, damager
+
+
+def test_justice_answers_a_red_creatures_damage(set_pool):
+    """"Whenever a red creature or spell deals damage, this enchantment deals
+    that much damage to that creature's or spell's controller."
+
+    The trigger's condition parsed and its *effect* did not, so the whole
+    ability was dropped and the card was supported on its upkeep line alone.
+    Two things were missing: the noun union ("creature **or spell**") in both
+    front ends, and the possessive alternation in the recipient phrase.
+    """
+    from engine.damage_events import deal_damage
+
+    game, p0, p1, damager = _justice_board(set_pool, "Goblin Mutant")
+    assert damager.card.colors == ("R",)
+
+    deal_damage(game, {"recipient": p0, "amount": 3, "source": damager, "combat": True})
+    game._settle()
+
+    assert p1.life == 17, "the damage comes back at the red creature's controller"
+
+
+def test_justice_answers_a_red_spells_damage(set_pool, catalog_by_name):
+    """"…or **spell**". A spell's source is the printed card (CR 109.5), which
+    the damage dispatcher had refused outright — a noun phrase describes
+    permanents. The union is the one shape that names the spell half, and the
+    colour is the only word that distributes onto it.
+    """
+    from engine.damage_events import deal_damage
+
+    pool = set_pool("ICE")
+    justice = Permanent(card=pool["Justice"])
+    p0 = PlayerState(name="P0", battlefield=[justice], life=20)
+    p1 = PlayerState(name="P1", life=20)
+    game = Game(players=[p0, p1])
+    bolt = catalog_by_name["Lightning Bolt"]
+    assert bolt.colors == ("R",)
+
+    game.resolving_seats.append(1)
+    deal_damage(game, {"recipient": p0, "amount": 3, "source": bolt})
+    game.resolving_seats.pop()
+    game._settle()
+
+    assert p1.life == 17, "CR 109.5: a spell's controller is whoever is resolving it"
+
+
+def test_justice_is_silent_for_a_creature_of_another_colour(set_pool):
+    """The colour is the whole narrowing, and an ignored one would make Justice
+    a symmetric Backfire on every point of damage in the game."""
+    from engine.damage_events import deal_damage
+
+    game, p0, p1, damager = _justice_board(set_pool, "Balduvian Bears")
+    assert "R" not in damager.card.colors
+
+    deal_damage(game, {"recipient": p0, "amount": 3, "source": damager, "combat": True})
+    game._settle()
+
+    assert p1.life == 20
+
+
+def test_a_colourless_creature_or_spell_union_refuses_the_condition():
+    """"a creature or spell" with no colour would fire on everything.
+
+    The union is admitted only where something is left to test the spell half
+    against, so an invented card printing the bare phrase loses the condition
+    rather than gaining a trigger on every damage event.
+    """
+    from engine.oracle import trigger_condition_of_line
+
+    good, _ = trigger_condition_of_line(
+        "whenever a red creature or spell deals damage, you gain 1 life"
+    )
+    assert good is not None and good.payload["damager_includes_spells"]
+    bare, _ = trigger_condition_of_line(
+        "whenever a creature or spell deals damage, you gain 1 life"
+    )
+    assert bare is None
+    untestable, _ = trigger_condition_of_line(
+        "whenever a red creature you control or spell deals damage, you gain 1 life"
+    )
+    assert untestable is None, "a spell has no controller a noun phrase can test"
+# --- end W3G3 ---
