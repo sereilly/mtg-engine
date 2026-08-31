@@ -322,6 +322,23 @@ def _during_declare_blockers(game: "Game", controller_index: int, source) -> boo
     return game.current_step == "declare_blockers"
 
 
+def _attached_permanent_state(
+    game: "Game", controller_index: int, source, match
+) -> bool:
+    """"Activate only if enchanted land is untapped." (Earthlore.)
+
+    Read off the attachment record, which is the only thing that can answer it:
+    "enchanted land" is not a description of any permanent, it is *this* Aura's
+    host. An Aura that is not attached to anything satisfies no state, so the
+    ability cannot be activated — which is also what CR 704.5m would already
+    have done to the Aura.
+    """
+    host = getattr(source, "metadata", {}).get("attached_to") if source else None
+    if host is None or not game.is_on_battlefield(host):
+        return False
+    return host.tapped if match.group("state") == "tapped" else not host.tapped
+
+
 def _during_end_of_combat(game: "Game", controller_index: int, source) -> bool:
     """Desert."""
     return game.current_step == "end_of_combat"
@@ -736,6 +753,25 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         re.compile(r"^activate only as a sorcery$"),
         _as_a_sorcery,
         "this ability is sorcery-speed",
+    ),
+    ActivationRestriction(
+        # "Activate only if **enchanted land is untapped**." (Earthlore.) The
+        # noun is payload for the reason every other noun in this file is: a
+        # card printing the clause about an enchanted creature or an equipped
+        # one is this rule, not a new one — and CR 301.5f makes "equipped" the
+        # same referent, so both words read the same attachment record.
+        #
+        # Redundant beside that card's own "Tap enchanted land" cost, and
+        # enforced anyway: a restriction the engine merely believes another
+        # rule covers is a restriction nothing checks the day the other rule
+        # changes.
+        re.compile(
+            r"^activate only if (?:enchanted|equipped) \w+ is "
+            r"(?P<state>untapped|tapped)$"
+        ),
+        _attached_permanent_state,
+        "the attached permanent is not in that state",
+        reads_payload=True,
     ),
     # --- the eight the shipped pool already printed --------------------------
     # These were a hand-written if-chain in `mixins/stack/activation.py`, each

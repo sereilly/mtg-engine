@@ -1092,6 +1092,30 @@ def _chargeable_tap_cost(cost_lower: str) -> tuple[int, dict] | None:
     return count, described
 
 
+#: "**Tap enchanted land**: Target blocking creature gets +1/+2 until end of
+#: turn." (Earthlore.) One comma-separated cost segment, whole — anchored for
+#: the reason every pattern in `activation_restrictions.py` is: a rule matching
+#: a prefix would charge a *narrower* cost than the card prints.
+_TAP_ATTACHED_COST_RE = re.compile(r"^tap (?:enchanted|equipped) \w+$")
+
+
+def _taps_the_attached_permanent(cost_lower: str) -> bool:
+    """Whether a cost clause taps the permanent this Aura or Equipment is on.
+
+    The payment is the *host*, which `{T}` cannot say: that symbol taps the
+    permanent the ability is printed on, and here the ability is printed on the
+    attachment. A pre-symbol templating of the same payment, so nothing else
+    can pay it — there is no picker and no filter, only the attachment record.
+
+    CR 301.5f puts "equipped" and "enchanted" on the same footing, so both
+    words are read: an Equipment printing the clause charges the same cost.
+    """
+    return any(
+        _TAP_ATTACHED_COST_RE.match(segment.strip())
+        for segment in cost_lower.split(",")
+    )
+
+
 def _life_payment_cost(cost_lower: str) -> int:
     """The life a "Pay N life" activation cost charges, or 0 for no such cost.
 
@@ -1311,6 +1335,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         remove_counter=remove_counter,
         remove_counter_count=remove_counter_count,
         pay_life=_life_payment_cost(cost_lower),
+        tap_attached=_taps_the_attached_permanent(cost_lower),
     )
 
 

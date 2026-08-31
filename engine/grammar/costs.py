@@ -28,6 +28,7 @@ from .nouns import parse_object_filter
 from .readers import accept_source_reference
 from .references import parse_target_spec
 from .stream import TokenStream
+from .vocabulary import CARD_TYPES, singular as _singular
 
 
 def _parse_cost_object(
@@ -269,6 +270,18 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # so this is only ever the spelled-out form naming other permanents.
             mark = stream.mark()
             stream.advance()
+            # "Tap **enchanted land**" (Earthlore). The host, read before the
+            # count below because there is none to read: nothing is picked and
+            # nothing is counted, the attachment record is the whole cost.
+            attached = stream.mark()
+            if stream.accept_word("enchanted", "equipped"):
+                noun = stream.peek_word()
+                if noun is not None and _singular(noun) in CARD_TYPES:
+                    stream.advance()
+                    costs.append(ast.TapAttachedCost())
+                    stream.accept_punct(",")
+                    continue
+            stream.reset(attached)
             number = parse_amount(stream)
             if not isinstance(number, ast.Fixed) or number.value <= 0:
                 stream.reset(mark)
