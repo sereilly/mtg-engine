@@ -157,27 +157,34 @@ def _lower_lord_effects(
     )
 
 
-def _lower_anthem_condition(condition: ast.Condition, node: ast.StaticAbilityNode) -> dict:
-    """The payload form of an "as long as" clause on a lord buff, or a refusal.
+def _lower_anthem_condition_payload(payload: dict, node: ast.StaticAbilityNode) -> dict:
+    """:func:`_lower_anthem_condition`'s gate, asked of an already-lowered
+    payload — which is what a conjunct is.
 
-    Lowered by the one condition lowering (so "an opponent controls a nontoken
-    red permanent" is the same payload here as on an intervening-if) and then
-    held to what ``conditional_static_holds`` actually evaluates for a
-    continuous buff: a ``controls`` presence test, yours or one opponent's,
-    over a filter ``subject_matches`` can answer. Everything outside that
-    refuses — a threshold or a relative key the consumer cannot test would make
-    the buff apply on a different board than the card prints, silently.
+    Split out so a conjunction is checked by the *same* rules as the clause it
+    would have been printed as on its own, rather than by a second, laxer copy
+    of them.
     """
-    payload = _lower_condition(condition)
-    if payload.get("kind") == "your_turn":
-        # "During your turn, creatures you control get +2/+0." (Vibrating
-        # Sphere.) A whose-turn-is-it condition carries no filter and no seat
-        # word, so none of the gates below apply to it — and
-        # ``conditional_static_holds`` answers it directly. It is admitted here
-        # rather than falling through them because every one of those gates is
-        # about a ``controls`` payload's parts, and asking them of a payload
-        # that has none would refuse a clause the evaluator implements in full.
+    # "During your turn" (Vibrating Sphere) and "it's blocking" (Snow Devil)
+    # carry no filter and no seat word, so none of the ``controls`` gates below
+    # apply to them — asking those of a payload that has no such parts would
+    # refuse a clause the evaluator implements in full.
+    if payload.get("kind") in ("your_turn", "is_state"):
         return payload
+    # "…as long as **it's blocking and you control a snow land**" (Snow Devil).
+    # CR 613 puts no limit on how many clauses a static's criteria have, so each
+    # conjunct is checked by *this same gate* rather than by a second, laxer
+    # copy — and the whole conjunction refuses if any part is one the evaluator
+    # cannot answer, because a conjunct silently dropped is a static holding on
+    # a board the card does not name.
+    if payload.get("kind") == "all_of":
+        return {
+            **payload,
+            "conditions": [
+                _lower_anthem_condition_payload(part, node)
+                for part in payload.get("conditions") or ()
+            ],
+        }
     if payload.get("kind") != "controls":
         raise LoweringError(
             "conditional_static_holds evaluates no such condition on a "
@@ -192,18 +199,11 @@ def _lower_anthem_condition(condition: ast.Condition, node: ast.StaticAbilityNod
             node=node,
         )
     if payload.get("shared_name"):
-        # The consumer counts matches on one battlefield; a same-name *relation*
-        # between them is not a count it takes, and a dropped relation is a
-        # condition weaker than printed.
         raise LoweringError(
             "conditional_static_holds counts matches, not same-name relations",
             node=node,
         )
     if "count" in payload and payload.get("op") not in SEARCH_COMPARISONS:
-        # "…as long as you control **no** nonartifact, nonwhite creatures"
-        # (Angelic Voices) is a threshold, and the evaluator now answers one —
-        # through the shared comparator, so a comparison that table cannot
-        # apply refuses here rather than being answered False forever.
         raise LoweringError(
             f"conditional_static_holds applies no {payload.get('op')!r} "
             "comparison to a buff condition",
@@ -218,11 +218,21 @@ def _lower_anthem_condition(condition: ast.Condition, node: ast.StaticAbilityNod
             node=node,
         )
     if who == "target_opponent":
-        # "**An** opponent controls…" parses as the player reference spells it;
-        # the stored payload says what the evaluator answers — any one living
-        # opponent — so the two front ends cannot drift apart on the word.
         payload = {**payload, "who": "opponent"}
     return payload
+
+
+def _lower_anthem_condition(condition: ast.Condition, node: ast.StaticAbilityNode) -> dict:
+    """The payload form of an "as long as" clause on a lord buff, or a refusal.
+
+    Lowered by the one condition lowering (so "an opponent controls a nontoken
+    red permanent" is the same payload here as on an intervening-if) and then
+    held to what ``conditional_static_holds`` actually evaluates for a
+    continuous buff. Everything outside that refuses — a threshold or a
+    relative key the consumer cannot test would make the buff apply on a
+    different board than the card prints, silently.
+    """
+    return _lower_anthem_condition_payload(_lower_condition(condition), node)
 
 
 def _lower_self_conditional_static(
@@ -288,7 +298,22 @@ def _lower_self_conditional_static(
                 node=node,
             )
     condition = _lower_anthem_condition(node.condition, node)
-    if condition.get("who") != "opponent":
+    attached = _is_enchanted(
+        getattr(effects[0], "subject", None) if effects else None
+    )
+    # **Where the split with ``engine/static_bonuses.py`` runs.** That table
+    # reads the sentence printed about "this creature" and every condition it
+    # knows is about *your* board or the creature itself, so a same-subject
+    # clause lowered here would be one sentence with two mechanisms and nothing
+    # to say which a printing goes through — which is what
+    # ``test_as_long_as_lines_stay_unlowered_and_unusable`` measures.
+    #
+    # An Aura's sentence is not in that table's territory at all: it matches on
+    # the literal subject ``"this creature "``, so "enchanted creature has first
+    # strike as long as …" (Snow Devil) is a line it cannot read and there is no
+    # second mechanism to collide with. So the refusal is asked of the
+    # same-subject case only.
+    if not attached and condition.get("who") != "opponent":
         raise LoweringError(
             "a conditional static bonus about your own board is derived by "
             "engine/static_bonuses.py",
@@ -300,21 +325,39 @@ def _lower_self_conditional_static(
         payload["toughness"] = toughness
     if keywords:
         payload["keywords"] = keywords
-    if _is_enchanted(getattr(effects[0], "subject", None) if effects else None):
-        # The bonus goes to the permanent this one is attached to, not to
-        # itself. Only the P/T half is carried across today: the keyword half
-        # of a conditional static is rebuilt by `_recalculate_lord_buffs` on
-        # the permanent that prints it, and pointing that at a host is a
-        # separate change — so a keyword grant on an attached subject refuses
-        # rather than being lowered onto a channel that would drop it.
-        if keywords:
-            raise LoweringError(
-                "the derived-grant channel rebuilds a conditional keyword on "
-                "the permanent that prints it, not on its host",
-                node=node,
-            )
+    if attached:
+        # The bonus goes to the permanent this one is attached to, and so does
+        # every "it" in the condition: "enchanted creature has first strike as
+        # long as **it's** blocking" is about the creature, not about the Aura,
+        # which never blocks. Both halves are read by ``permanent_state`` — the
+        # P/T by ``_refresh_dynamic_creatures`` and the keywords by
+        # ``_recalculate_lord_buffs``'s conditional-self-grant step — and both
+        # read this one key.
         payload["subject"] = "attached"
+        payload["condition"] = _condition_about_the_host(condition)
     return (OracleInstruction("conditional_static", "", payload),)
+
+
+def _condition_about_the_host(condition: dict) -> dict:
+    """*condition* with every "it" pointed at the attached permanent.
+
+    Only ``is_state`` carries such a pronoun; a ``controls`` clause names a
+    *seat*, and CR 109.5 makes that the ability's controller — the Aura's —
+    whichever permanent the effect lands on. So this rewrites one kind and
+    walks the conjunction, rather than stamping a subject over the whole tree
+    and quietly moving "you control a snow land" onto the host's controller.
+    """
+    if condition.get("kind") == "all_of":
+        return {
+            **condition,
+            "conditions": [
+                _condition_about_the_host(part)
+                for part in condition.get("conditions") or ()
+            ],
+        }
+    if condition.get("kind") == "is_state":
+        return {**condition, "subject": "attached"}
+    return condition
 
 
 def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstruction, ...]:

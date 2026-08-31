@@ -1037,7 +1037,11 @@ class PermanentStateMixin:
                 # these five cards are for.
                 recipient = permanent
                 if cs.payload.get("subject") == "attached":
-                    recipient = attached_host(self, permanent)
+                    # The **live** record: CR 611.3b, a continuous effect
+                    # applies only while it is attached, and an Equipment that
+                    # unattaches stays on the battlefield with the last-known
+                    # host still recorded on it.
+                    recipient = attached_host(self, permanent, last_known=False)
                     if recipient is None:
                         continue
                 _apply_conditional_bonus(
@@ -1879,8 +1883,34 @@ class PermanentStateMixin:
                     self, cs_seat, cs_perm, cs.payload.get("condition") or {}
                 ):
                     continue
+                # "Enchanted creature has first strike as long as it's blocking
+                # and you control a snow land." (Snow Devil.) The same
+                # instruction with the grant landing on the host, read off the
+                # same ``subject`` key ``_refresh_dynamic_creatures`` already
+                # reads for the P/T half — one sentence, one instruction, one
+                # answer about which permanent it is about.
+                #
+                # The seat stays the Aura's (CR 109.5), so "you control a snow
+                # land" is measured from whoever controls the Aura even when
+                # the creature belongs to somebody else.
+                #
+                # **Here rather than in ``layer_bridge``**, where the
+                # unconditional Aura keyword grants live and where the CR 613.7e
+                # attach timestamp is available. ``collect_ability_effects`` is
+                # deliberately game-free — the board half of this condition
+                # needs both the game and a seat, and giving a layer collector a
+                # game handle is the read `tests/engine/test_layer_reads.py`
+                # exists to keep out. The cost is the timestamp: this grant
+                # sorts with the derived channel rather than at the Aura's
+                # attach time. Nothing in the pool orders two contending
+                # keyword grants, and a keyword granted twice is granted once.
+                recipient = cs_perm
+                if cs.payload.get("subject") == "attached":
+                    recipient = attached_host(self, cs_perm, last_known=False)
+                    if recipient is None:
+                        continue
                 for keyword in cs_keywords:
-                    add_derived_grant(cs_perm, keyword)
+                    add_derived_grant(recipient, keyword)
 
     # Conditions a lord buff may hang on, keyed by what engine/lord_buffs.py
     # derives. A condition that table can name with no predicate here would be a

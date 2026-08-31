@@ -21,7 +21,9 @@ from ..models import Permanent, PlayerState
 from ..search_filters import card_has_type, name_key
 
 
-def attached_host(game: "Game", source: "Permanent | None") -> "Permanent | None":
+def attached_host(
+    game: "Game", source: "Permanent | None", *, last_known: bool = True
+) -> "Permanent | None":
     """The permanent *source* is attached to — or, when *source* has already
     left mid-resolution, the one it was last attached to (CR 603.10 last-known
     information) — provided that host is still on the battlefield.
@@ -30,10 +32,20 @@ def attached_host(game: "Game", source: "Permanent | None") -> "Permanent | None
     enchanted creature, and that creature gains flying" removes the Aura in
     the very resolution whose later steps name the enchanted creature, and
     ``detach_aura`` has already cleared the live record by then.
+
+    ``last_known=False`` drops that fallback, and a **continuous** effect must
+    pass it. CR 603.10 is about an ability that has already begun resolving;
+    CR 611.3b says a continuous effect applies only while its criteria are met,
+    and "the Aura is attached to it" is one of them. An Equipment that
+    unattaches stays on the battlefield (CR 704.5n) with the record still on
+    it, so a recompute reading last-known information would keep buffing the
+    creature it used to be on — forever, and with nothing to undo.
     """
     if source is None:
         return None
-    host = source.metadata.get("attached_to") or source.metadata.get("last_attached_to")
+    host = source.metadata.get("attached_to")
+    if host is None and last_known:
+        host = source.metadata.get("last_attached_to")
     if host is None or not game.is_on_battlefield(host):
         return None
     return host
@@ -702,6 +714,34 @@ _STATE_TESTS = {
     "blocked": lambda perm: bool(perm.blocked),
     "unblocked": lambda perm: not perm.blocked,
 }
+
+
+def permanent_state_holds(perm, state: str) -> bool:
+    """Whether the printed state word *state* is true of *perm* right now.
+
+    The one reader of :data:`_STATE_TESTS` for callers holding a **state name**
+    rather than a filter payload — a condition's "as long as it's blocking"
+    (Snow Devil) and an intervening-if's "if it's tapped". Those used to read
+    ``getattr(perm, state)``, which is right for ``tapped`` and ``attacking``
+    and silently False forever for ``blocking``: a permanent has no such field,
+    it has ``blocking_attacker_index``. A condition that can only be false is a
+    static that never applies and a card that reports supported.
+
+    ``attacked_this_turn`` is here too, and for the same reason — it is a mark
+    in metadata, not a field — routed to the reader beside the stamp so this
+    does not become a second place that knows the key.
+    """
+    from ..turn_state import attacked_this_turn
+
+    if state == "attacked_this_turn":
+        return attacked_this_turn(perm)
+    test = _STATE_TESTS.get(state)
+    # A word with no test behind it must not read as False: that is a condition
+    # nobody answered wearing the answer "no". Every producer of a state name is
+    # held to this table, so an unknown word is a bug, not a board state.
+    if test is None:
+        raise KeyError(f"no permanent-state test for {state!r}")
+    return bool(test(perm))
 
 
 def unblocked_attacker(perm) -> bool:

@@ -575,7 +575,8 @@ def aura_conditional_static_claim(normalized_line: str) -> str | None:
         return None
     return (
         "conditional static on the enchanted permanent — lowered by the "
-        "grammar, applied by _refresh_dynamic_creatures"
+        "grammar, applied by _refresh_dynamic_creatures (P/T) and "
+        "_recalculate_lord_buffs (keywords)"
     )
 
 

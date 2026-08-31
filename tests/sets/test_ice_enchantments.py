@@ -1886,4 +1886,122 @@ def test_a_detached_aggression_destroys_nothing(set_pool):
     assert not bear.has_keyword("first strike")
 
 
+def _snow_devil_board(set_pool, *, snow_land: bool):
+    """P1's Snow Devil on P1's bear, with or without a snow land under P1."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    devil = Permanent(card=pool["Snow Devil"])
+    mine = [bear, devil]
+    if snow_land:
+        mine.append(Permanent(card=pool["Snow-Covered Forest"]))
+    p1 = PlayerState(name="P1", battlefield=mine, life=20)
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=pool["Balduvian Bears"])], life=20)
+    game = Game(players=[p1, p2])
+    attach_aura(devil, bear)
+    game._settle()
+    _nosick(bear)
+    for perm in game.controlled_by(game.players[1]):
+        _nosick(perm)
+    return game, bear, devil
+
+
+def _block_with(game, blocker):
+    """Put *blocker* (P1's) in front of P2's attacker."""
+    game.active_player_index = 1
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(1, [0], defending_player_index=0)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    game.declare_blockers(0, {game.battlefield_index_of(blocker): [0]})
+    game._settle()
+
+
+def test_snow_devil_always_grants_flying(set_pool):
+    game, bear, _ = _snow_devil_board(set_pool, snow_land=True)
+
+    assert bear.has_keyword("flying")
+
+
+def test_snow_devil_grants_first_strike_only_while_blocking(set_pool):
+    """Both halves of the condition are asked, and a conjunct dropped would be
+    a permanent first-striker. Not blocking: no first strike."""
+    game, bear, _ = _snow_devil_board(set_pool, snow_land=True)
+    assert not bear.has_keyword("first strike")
+
+    _block_with(game, bear)
+
+    assert bear.blocking_attacker_index is not None
+    assert bear.has_keyword("first strike")
+
+
+def test_snow_devil_grants_nothing_without_a_snow_land(set_pool):
+    """The board half, with the combat half satisfied — so a test that only
+    blocked would pass on a card that had dropped this conjunct."""
+    game, bear, _ = _snow_devil_board(set_pool, snow_land=False)
+    _block_with(game, bear)
+
+    assert bear.blocking_attacker_index is not None
+    assert not bear.has_keyword("first strike")
+
+
+def test_snow_devil_asks_the_condition_on_every_recompute(set_pool):
+    """CR 611.3a. Removing the snow land takes first strike away mid-combat
+    with nothing to undo."""
+    game, bear, _ = _snow_devil_board(set_pool, snow_land=True)
+    _block_with(game, bear)
+    assert bear.has_keyword("first strike")
+
+    land = next(
+        perm for perm in game.controlled_by(game.players[0])
+        if perm.card.name == "Snow-Covered Forest"
+    )
+    game.remove_from_battlefield(land)
+    game._settle()
+
+    assert not bear.has_keyword("first strike")
+
+
+def test_a_detached_snow_devil_grants_neither_keyword(set_pool):
+    from engine.auras import detach_aura
+
+    game, bear, devil = _snow_devil_board(set_pool, snow_land=True)
+    _block_with(game, bear)
+    detach_aura(devil, bear)
+    game._settle()
+
+    assert not bear.has_keyword("flying")
+    assert not bear.has_keyword("first strike")
+
+
+def test_snow_devils_snow_land_is_counted_on_the_auras_controllers_board(set_pool):
+    """CR 109.5: "you" is the Aura's controller, so an Aura put on an
+    opponent's creature still reads its own controller's lands."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    devil = Permanent(card=pool["Snow Devil"])
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[devil, Permanent(card=pool["Snow-Covered Forest"])],
+        life=20,
+    )
+    p2 = PlayerState(name="P2", battlefield=[bear], life=20)
+    game = Game(players=[p1, p2])
+    attach_aura(devil, bear)
+    game._settle()
+    _nosick(bear)
+
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    attacker = next(iter(game.controlled_by(game.players[0])))
+    # P1 has no creature to attack with, so the block is staged directly: what
+    # is under test is which board the snow land is counted on.
+    bear.blocking_attacker_index = 0
+    game._settle()
+
+    assert bear.has_keyword("first strike")
+
+
 # --- end W2G4 ---

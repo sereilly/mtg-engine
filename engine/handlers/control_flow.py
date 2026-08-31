@@ -28,10 +28,10 @@ from ..oracle_types import PER_OBJECT_SEAT_RECORDS, OracleInstruction
 from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
-from ._common import attached_host, flip_coin, permanent_matches_filter
+from ._common import (attached_host, flip_coin, permanent_matches_filter,
+                      permanent_state_holds)
 from .registry import effect_handler
 from ..mana_payment import mana_cost_label
-from ..turn_state import attacked_this_turn
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -387,14 +387,13 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         if source is None:
             return False
         state = payload.get("state")
-        if state == "attacked_this_turn":
-            # A *record* of the turn rather than a field on the permanent, so
-            # `getattr` would answer False forever and Aggression would destroy
-            # a creature that attacked. One reader, beside the stamp
-            # (`engine/turn_state.py`).
-            value = attacked_this_turn(source)
-        else:
-            value = bool(getattr(source, state, False)) if state else False
+        if not state:
+            return False
+        # Through the one table that says what a printed state word asks of a
+        # permanent, never `getattr`: "blocking" is not a field (it is
+        # `blocking_attacker_index`) and "attacked this turn" is a mark in
+        # metadata, so a direct read answers False forever for both.
+        value = permanent_state_holds(source, state)
         return (not value) if payload.get("negated") else value
 
     if kind == "started_turn_state":

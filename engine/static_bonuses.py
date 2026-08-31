@@ -336,6 +336,32 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
     permanent's own state are all it reads).
     """
     kind = condition.get("kind")
+    # "…as long as **it's blocking and you control a snow land**" (Snow Devil).
+    # Every conjunct, through this same function — the lowering refused any part
+    # it does not answer, so a False here is a clause that is genuinely false
+    # rather than one nobody read.
+    if kind == "all_of":
+        return all(
+            conditional_static_holds(game, seat, source, part)
+            for part in condition.get("conditions") or ()
+        )
+    # "…as long as **it's** blocking / attacking / untapped". A state read off
+    # one permanent, and *which* permanent is payload: an Aura's "it" is the
+    # creature it enchants (an Aura never blocks), and a creature's own "it" is
+    # itself. The state word is the permanent's own field, the same reading
+    # `handlers/control_flow.evaluate_condition` gives an intervening-if — so
+    # the phrase means one thing in the engine.
+    if kind == "is_state":
+        from .handlers._common import attached_host, permanent_state_holds
+
+        subject = source
+        if condition.get("subject") == "attached":
+            subject = attached_host(game, source, last_known=False)
+        state = condition.get("state")
+        if subject is None or not state:
+            return False
+        value = permanent_state_holds(subject, state)
+        return (not value) if condition.get("negated") else value
     # "**During your turn**" (Radha). Whose turn it is, which is a fact about
     # the game rather than about the permanent — and the seat asked is the
     # ability's controller (CR 109.5), not the permanent's owner.
@@ -367,7 +393,9 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
         from .handlers._common import attached_host
         from .subject_filters import subject_matches
 
-        host = attached_host(game, source)
+        # The live record, not last-known information: this answers a
+        # continuous ability on every recompute (CR 611.3b).
+        host = attached_host(game, source, last_known=False)
         if host is None:
             return False
         return subject_matches(
