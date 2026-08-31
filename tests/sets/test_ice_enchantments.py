@@ -711,17 +711,22 @@ def test_fylgjas_counter_cost_is_what_the_claim_used_to_refuse(set_pool):
     assert aura_activated_ability_claim(line, "Fylgja") is not None
     assert compile_card_oracle(set_pool("ICE")["Fylgja"]).supported
 def test_a_mana_cost_alone_no_longer_claims_a_line_the_compiler_refuses(set_pool):
-    """The stand-in was wrong in both directions. Chromatic Armor's "{X}: Put a
-    sleight counter on this Aura and choose a color…" matched the shape and the
-    compiler cannot read it — a claim there is how an Aura reports supported
-    carrying an ability that does nothing."""
+    """The stand-in was wrong in both directions: a line matching the *shape* of
+    an activation was claimed whether or not the compiler could read it, which
+    is how an Aura reports supported carrying an ability that does nothing.
+
+    Chromatic Armor's "{X}: Put a sleight counter on this Aura and choose a
+    color…" was the example, and it has expired — the whole line reads now. So
+    the example is Earthlore's, whose tap-the-enchanted-land cost the compiler
+    still refuses; what the guard is about is the *claim reader*, not the card.
+    """
     from engine.auras import aura_activated_ability_claim
 
     line = (
-        "{x}: put a sleight counter on this aura and choose a color. x is the "
-        "number of sleight counters on this aura"
+        "tap enchanted land: target blocking creature gets +1/+2 until end of "
+        "turn. activate only if enchanted land is untapped"
     )
-    assert aura_activated_ability_claim(line, "Chromatic Armor") is None
+    assert aura_activated_ability_claim(line, "Earthlore") is None
 
 
 # --- Round 38: the board is the cap, and an end-step gate with no seat in it ---
@@ -1123,4 +1128,90 @@ def test_energy_storm_covers_the_table_not_its_controller(set_pool, catalog_by_n
     game._settle()
 
     assert p0.life == 20
+
+
+def test_chromatic_armor_enters_with_a_counter_and_a_colour(set_pool):
+    """Four printed lines and all four read: the enter-time colour, the sleight
+    counter it enters with, the shield keyed to that colour, and the {X}
+    ability that re-chooses."""
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    red = Permanent(card=pool["Balduvian Barbarians"])
+    p0 = PlayerState(
+        name="P0", battlefield=[bears], hand=[pool["Chromatic Armor"]], life=20
+    )
+    p1 = PlayerState(name="P1", battlefield=[red], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+
+    assert game.cast_from_hand(
+        0, "Chromatic Armor", target_player_index=0, target_permanent_index=0
+    ).supported
+    game._settle()
+
+    armor = next(p for p in p0.battlefield if p.card.name == "Chromatic Armor")
+    assert counters_on(armor, "sleight") == 1
+    assert armor.metadata["chosen_color"] == "R"
+
+    game._mark_damage_on_permanent(bears, 2, source=red)
+    assert bears.damage_marked == 0, "the last chosen colour is the one recorded"
+
+
+def test_chromatic_armors_x_is_the_counters_on_it(set_pool):
+    """"X is the number of sleight counters on this **Aura**." The cost is one
+    the board decides, not one the activator announces (CR 601.2b's exception)
+    — and the noun the card calls itself by is data: the reader listed the card
+    types and this printing reached nothing at all."""
+    from engine.auras import attach_aura
+    from engine.named_counters import add_counters
+
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    armor = Permanent(card=pool["Chromatic Armor"])
+    p0 = PlayerState(name="P0", battlefield=[bears, armor], life=20, mana_pool={"C": 1})
+    game = Game(players=[p0, PlayerState(name="P1", life=20)])
+    game.enforce_mana_costs = True
+    attach_aura(armor, bears)
+    add_counters(armor, "sleight", 3)
+
+    refused = game.activate_permanent_ability(0, "Chromatic Armor", permanent_index=1)
+    assert not refused.supported, "one mana cannot pay {X} where X is three"
+    assert counters_on(armor, "sleight") == 3
+
+    p0.mana_pool["C"] = 3
+    allowed = game.activate_permanent_ability(0, "Chromatic Armor", permanent_index=1)
+    game._settle()
+
+    assert allowed.supported, allowed.details
+    assert counters_on(armor, "sleight") == 4
+    assert p0.mana_pool["C"] == 0
+
+
+def test_chromatic_armors_ability_records_a_new_colour(set_pool):
+    """"…and choose a color." The re-choice writes the same metadata key the
+    entry state does — two keys would be a permanent with two chosen colours
+    and a shield reading whichever one its author remembered."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    armor = Permanent(card=pool["Chromatic Armor"])
+    green = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", battlefield=[bears, armor], life=20)
+    p1 = PlayerState(name="P1", battlefield=[green], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    attach_aura(armor, bears)
+    armor.metadata["chosen_color"] = "R"
+
+    assert game.activate_permanent_ability(
+        0, "Chromatic Armor", permanent_index=1
+    ).supported
+    game._settle()
+
+    assert armor.metadata["chosen_color"] == "G", (
+        "the default names the colour the opponents hold most of"
+    )
+    game._mark_damage_on_permanent(bears, 2, source=green)
+    assert bears.damage_marked == 0
 # --- end W1G1 ---

@@ -72,9 +72,14 @@ def _twice_target_spell_mana_value(
 #: which type the card happens to be is not part of the question.
 COST_X_DEFINITIONS: tuple[tuple[re.Pattern[str], Callable[..., int]], ...] = (
     (
+        # The noun a card calls itself by. An Aura is an enchantment and an
+        # Equipment an artifact (CR 205.3), but the printed word is the subtype
+        # — Chromatic Armor says "on this **Aura**" and reached nothing at all
+        # while this alternation listed only the card types, which is the same
+        # one-word gap `enter_effects.chooses_color_on_enter` had.
         re.compile(
-            r"^x is the number of ([a-z]+) counters on "
-            r"this (?:artifact|creature|enchantment|land|permanent)$"
+            r"^x is the number of ([a-z]+) counters on this "
+            r"(?:artifact|aura|creature|enchantment|equipment|land|permanent)$"
         ),
         _counters_on_source,
     ),

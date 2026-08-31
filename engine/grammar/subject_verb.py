@@ -40,7 +40,8 @@ from .effects import (
     _parse_becomes, _parse_cant_attack_or_block, _parse_change_base_pt,
     _parse_no_longer_supertype,
     _parse_change_target,
-    _parse_change_text, _parse_choose_cards_in_hand, _parse_choose_number,
+    _parse_change_text, _parse_choose_cards_in_hand, _parse_choose_color,
+    _parse_choose_number,
     _parse_choose_player_who_cast,
     _parse_counter, _parse_create_token,
     _parse_damage, _parse_damage_redirect, _parse_destroy, _parse_discard,
@@ -551,6 +552,13 @@ def parse_subject_verb(
         chosen_number = _parse_choose_number(stream)
         if chosen_number is not None:
             return chosen_number
+        # "Choose a color." (Chromatic Armor.) Beside the number above and
+        # non-consuming on refusal for the same reason — the word opens several
+        # unrelated sentences, and "choose a color **and an opponent**" is one
+        # of them.
+        chosen_color = _parse_choose_color(stream)
+        if chosen_color is not None:
+            return chosen_color
         # "Choose a player who cast one or more sorcery spells this turn."
         # (Backdraft.) Non-consuming on refusal for the reason every "choose"
         # production here is: the word opens several unrelated sentences, and a

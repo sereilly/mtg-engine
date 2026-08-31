@@ -1165,15 +1165,47 @@ def _applies_source_type_blanket(game, event: dict) -> bool:
     return _source_shield_matches(game, event.get("source"), event["recipient"], wanted)
 
 
+def _source_class_label(wanted: dict) -> str:
+    """The printed class a shield answers to, in words rather than as its dict.
+
+    The log line used to interpolate the payload itself, which put
+    ``{'card_type': 'artifact', 'combat_only': False}`` in front of a player.
+    Built from the same keys the matcher reads, so a narrowing added there and
+    forgotten here shows as the generic word instead of as a silently different
+    claim.
+    """
+    color = wanted.get("color")
+    if color:
+        # The symbol back to the printed word, through the grammar's own colour
+        # table rather than a second copy of it.
+        from .grammar.vocabulary import COLOR_WORDS
+
+        return next(
+            (word for word, symbol in COLOR_WORDS.items() if symbol == color),
+            str(color),
+        )
+    for key in ("subtype", "card_type"):
+        value = wanted.get(key)
+        if value:
+            return str(value).lower()
+    if wanted.get("enchanted"):
+        return "enchanted creature"
+    if wanted.get("blocked_by_recipient"):
+        return "blocked creature"
+    if wanted.get("spell_targets_recipient"):
+        return "targeting spell"
+    return "matching"
+
+
 @prevention_effect(SOURCE_TYPE_BLANKET, applies=_applies_source_type_blanket)
 def _prevent_all_from_source_type(game, event: dict) -> PreventionOutcome | None:
-    source_type = _source_type_shielded_by(game, event)
-    if source_type is None:
+    wanted = _source_type_shielded_by(game, event)
+    if wanted is None:
         return None
     recipient = event["recipient"]
     game.log.append(
         f"{recipient.card.name} prevented {event['amount']} damage "
-        f"from an {source_type} source"
+        f"from a {_source_class_label(wanted)} source"
     )
     return PreventionOutcome(prevented=event["amount"])
 

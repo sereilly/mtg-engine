@@ -79,6 +79,26 @@ def _parse_choose_number(stream: TokenStream) -> ast.Statement | None:
     return None
 
 
+def _parse_choose_color(stream: TokenStream) -> ast.Statement | None:
+    """``Choose a color.`` (Chromatic Armor's activated ability.)
+
+    Beside :func:`_parse_choose_number` and refusing the same way: None with the
+    cursor untouched for every other "choose" sentence, so the naming, modal and
+    player productions keep the ones they own.
+
+    Exactly three words and nothing after them. "Choose a color **and**…" and
+    "choose a color of your choice" are sentences this has not read, and a
+    reader that stopped at "color" would leave the rest to be dropped.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("choose", "a", "color") and (
+        stream.exhausted or stream.at_punct(".", ",")
+    ):
+        return ast.ChooseColor()
+    stream.reset(mark)
+    return None
+
+
 def _parse_choose_player_who_cast(stream: TokenStream) -> "ast.Statement | None":
     """``Choose a player who cast one or more sorcery spells this turn.``
     (Backdraft.)

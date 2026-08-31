@@ -577,6 +577,12 @@ def lower_statement(
             ),
         )
 
+    if isinstance(statement, ast.ChooseColor):
+        # Nothing to carry: the colour is not printed, the chooser is the
+        # ability's controller and the permanent it lands on is the ability's
+        # own source — see the node.
+        return (OracleInstruction("choose_color", "", {}),)
+
     if isinstance(statement, ast.ChoosePlayerWhoCast):
         # "Choose a player who cast one or more sorcery spells this turn."
         # (Backdraft.) The choice and nothing else: what the chosen player is

@@ -193,6 +193,22 @@ class ChooseNumber:
 
 
 @dataclass(frozen=True)
+class ChooseColor:
+    """``Choose a color.`` (Chromatic Armor's activated ability.)
+
+    Beside :class:`ChooseNumber` and for the same reason: the sentence produces
+    a *value* and no effect of its own, and what reads the value is a separate
+    sentence on the card — here the Aura's static shield, which answers to
+    "sources of the last chosen color".
+
+    Nothing rides the node. The colour is not printed, the chooser is the
+    ability's controller by CR 601.2b's default, and the permanent it is
+    recorded on is the ability's own source — the same place the CR 614.1c
+    entry-state version records it, which is what lets one reader answer both.
+    """
+
+
+@dataclass(frozen=True)
 class ChoosePlayerWhoCast:
     """``Choose a player who cast one or more sorcery spells this turn.``
     (Backdraft.)

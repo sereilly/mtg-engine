@@ -183,6 +183,12 @@ GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
         # category above is: with nothing underneath the grammar, a category
         # left off costs the card its support rather than routing it elsewhere.
         "chosen_numbers",
+        # Choosing a colour and recording it on the permanent, for a later
+        # sentence of the same card to read back (Chromatic Armor). Switched on
+        # with the production, for the reason every category above is: with
+        # nothing underneath the grammar, a category left off costs the card its
+        # support rather than routing its line elsewhere.
+        "chosen_colors",
         # "Choose a player who cast one or more sorcery spells this turn."
         # (Backdraft) and the pick of one of those spells behind it. Switched on
         # with the productions: with no fallback underneath, a category left off

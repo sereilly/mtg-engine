@@ -628,6 +628,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the reason the coin flip has one: the number is a *value* a player picks,
     # and what reads it back is a different sentence with a category of its own.
     "choose_number": "chosen_numbers",
+    # "Choose a color." (Chromatic Armor.) Its own category rather than
+    # sharing the number's: what is recorded and what reads it back are
+    # different questions, and one switch must not be able to gate half of
+    # either off.
+    "choose_color": "chosen_colors",
     # "Choose a player who cast one or more sorcery spells this turn."
     # (Backdraft.) Its own category for the reason the number above has one: the
     # choice is a *value* a player picks and the sentence that reads it back has

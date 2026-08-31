@@ -643,6 +643,56 @@ def choose_number(game: Game, instruction: OracleInstruction, context: OracleExe
     return True, "resolved"
 
 
+@effect_handler("choose_color")
+def choose_color(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose a color." (Chromatic Armor's activated ability.)
+
+    Beside ``choose_number`` above and for the same reason: the sentence
+    produces a *value* and no effect of its own, and what reads it back is a
+    separate sentence on the card — here the Aura's static shield, which
+    answers to "sources of the last chosen color". So the colour is recorded on
+    the permanent rather than in this resolution's scratchpad, and "last" is
+    what overwriting means.
+
+    The **same** prompt CR 614.1c's entry-state version arms, on the same
+    metadata key: a card may print both (this one does), and two prompts writing
+    two keys would be a permanent with two chosen colours and a shield reading
+    whichever one its author remembered.
+
+    A deterministic default is stamped first — the colour the controller's
+    opponents hold most of among nontoken permanents, the same policy the entry
+    state applies — so a headless or AI seat is never blocked and never left
+    with a colour nobody controls, which is a legal choice no player would make.
+    """
+    permanent = context.source_permanent
+    card_name = getattr(context.card, "name", "an effect")
+    if permanent is None:
+        game.log.append(f"{card_name}: no permanent to record a colour on")
+        return True, "resolved"
+    seat = game.controller_index_of(permanent)
+    if seat is None:
+        return True, "resolved"
+    counts: dict[str, int] = {}
+    for other in range(len(game.players)):
+        if other == seat or game.players[other].lost:
+            continue
+        for perm in game.controlled_by(other):
+            if perm.metadata.get("is_token"):
+                continue
+            for color in game._effective_colors(perm):
+                counts[color] = counts.get(color, 0) + 1
+    default_color = max(sorted(counts), key=lambda c: counts[c]) if counts else "W"
+    permanent.metadata["chosen_color"] = default_color
+    game.arm_pending_choice(
+        "enter_choice", seat,
+        card_name=permanent.card.name, permanent=permanent,
+        needs_color=True, opponents=[], default_seat=None,
+        default_color=default_color,
+    )
+    game.log.append(f"{card_name}: {game.players[seat].name} chooses a color")
+    return True, "resolved"
+
+
 @effect_handler("if_then")
 def if_then(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"If <condition>, <then>" — including CR 603.4 intervening-if conditions,
