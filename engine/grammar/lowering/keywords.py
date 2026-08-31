@@ -22,6 +22,7 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS, NUMERIC_ARGUMENT_KEYWORDS
+from ._events import _RECORDED_PERMANENTS
 from ._common import (
     _describe_several_targets,
     _describe_targets,
@@ -305,7 +306,9 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
 
 
 
-def _lower_gain_ability_text(node: ast.GainAbilityText) -> tuple[OracleInstruction, ...]:
+def _lower_gain_ability_text(
+    node: ast.GainAbilityText, produced: frozenset[str] = frozenset()
+) -> tuple[OracleInstruction, ...]:
     """"…gains "<ability>"." (Life Matrix.) CR 113.3 / CR 611.2c.
 
     The grant is the *text*: `engine/keywords.py`'s granted-ability-lines
@@ -366,6 +369,43 @@ def _lower_gain_ability_text(node: ast.GainAbilityText) -> tuple[OracleInstructi
         payload["only_if_absent"] = True
     if _is_source(node.subject):
         return (OracleInstruction("grant_self_ability_text", "", payload),)
+    # "Each of **those creatures** gains "{4}: Remove a paralyzation counter
+    # from this creature."" (Dread Wight.) The bound plural: the recipients are
+    # whatever an earlier step of this same effect recorded (CR 611.2c fixed
+    # the set when the effect began), so nothing is chosen and no ``targets``
+    # description is emitted. The same kind as the single-permanent grant,
+    # because the grant is identical and only its subject differs — and
+    # ``_grant_ability_texts`` is already the one place a quoted ability is
+    # recorded, so a set is a loop rather than a second channel.
+    #
+    # The gates are the ones every bound-plural reader here applies: no
+    # narrowing beyond the card type (a restated adjective would be dropped and
+    # the grant would reach permanents the phrase excludes), and a producer must
+    # have run — with nothing recorded the handler grants nothing while the card
+    # compiles clean.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "those"
+        and not node.subject.targeted
+    ):
+        if _restrictions_beyond(node.subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound plural carries no narrowing the grant could honour",
+                node=node,
+            )
+        recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+        if not recorded:
+            raise LoweringError(
+                "\"those creatures\" names objects nothing in this effect "
+                "recorded", node=node,
+            )
+        if len(recorded) != 1:
+            raise LoweringError(
+                "\"those creatures\" is ambiguous: several earlier steps "
+                "recorded objects", node=node,
+            )
+        payload["permanents_from"] = recorded[0]
+        return (OracleInstruction("grant_target_ability_text", "", payload),)
     # "Put a matrix counter on target creature and **that creature** gains …"
     # (Life Matrix.) The bound object the clause in front of it already
     # targeted, not a second choice — so no ``targets`` description is emitted

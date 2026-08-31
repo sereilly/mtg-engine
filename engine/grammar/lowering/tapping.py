@@ -34,19 +34,56 @@ from ._common import (
     _restrictions_beyond,
     _targets_payload,
 )
-from ._events import (_EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER,
-                      names_attached_permanent)
+from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
+                      EVENT_SUBJECT_PLAYER, names_attached_permanent)
 
 #: The scratchpad key a tap records what it chose under, so a later sentence
 #: ("**it** doesn't untap…") can name the same permanents.
 _TAPPED_PERMANENTS = "tapped_permanents"
 
 def _lower_tap(
-    node: ast.Tap | ast.Untap, event: str | None = None
+    node: ast.Tap | ast.Untap,
+    event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     if not isinstance(node.subject, ast.TargetSpec):
         raise LoweringError("tap/untap needs an object target", node=node)
     spec = node.subject
+    # "…and tap **those creatures**." (Dread Wight.) The bound plural: the set
+    # is whatever the sentence in front of this one acted on (CR 611.2c fixed
+    # it when the effect began), so nothing is chosen and nothing is swept —
+    # the handler reads the record. Asked first, because the branches below
+    # read a bound quantifier as nothing they know and would refuse by the
+    # wrong name.
+    if spec.quantifier == "those" and not spec.targeted:
+        if not isinstance(node, ast.Tap):
+            raise LoweringError("no handler untaps a bound set", node=node)
+        # "Those creatures" restates a set an earlier step chose, so there is
+        # nothing here for an adjective to narrow — a filter carrying one would
+        # be dropped, and the tap would reach permanents the printed phrase
+        # excludes. The same gate ``_lower_doesnt_untap_next_step`` applies to
+        # the identical noun phrase.
+        if _restrictions_beyond(spec.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound plural carries no narrowing the tap could honour",
+                node=node,
+            )
+        recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+        if not recorded:
+            raise LoweringError(
+                "\"those creatures\" names objects nothing in this effect "
+                "recorded", node=node,
+            )
+        if len(recorded) != 1:
+            raise LoweringError(
+                "\"those creatures\" is ambiguous: several earlier steps "
+                "recorded objects", node=node,
+            )
+        return (
+            OracleInstruction(
+                "tap_recorded_permanents", "", {"permanents_from": recorded[0]}
+            ),
+        )
     # "…and you tap **that creature**." (Mind Whip.) Under a trigger whose
     # condition already named the permanent the source is attached to, the
     # repeated noun is that permanent — the one reader for both spellings, so
@@ -328,6 +365,77 @@ def _lower_untap_chosen_by_paying(
             f"no untap toll is offered to the {node.payer.kind}", node=node
         )
     return (OracleInstruction("untap_up_to_matching", "", payload),)
+
+
+def _lower_untap_restriction(
+    node: "ast.DoesntUntapNextStep | ast.DoesntUntapWhileCounter",
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """The family entry point: one printed sentence saying a permanent will not
+    untap, in either of the two shapes whose subject an earlier step chose.
+
+    A dispatcher rather than two entries in ``lower.py``'s table because the
+    two nodes take the same arguments and answer the same question — *which*
+    permanents, and what ends the restriction — and because ``produced`` is the
+    gate for both.
+    """
+    if isinstance(node, ast.DoesntUntapWhileCounter):
+        return _lower_doesnt_untap_while_counter(node, produced)
+    return _lower_doesnt_untap_next_step(node, produced)
+
+
+def _lower_doesnt_untap_while_counter(
+    node: ast.DoesntUntapWhileCounter, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """"Each of those creatures doesn't untap during its controller's untap
+    step **for as long as it has a paralyzation counter on it**." (Dread
+    Wight.)
+
+    A continuous effect with no end date (CR 611.2b): it stops applying when
+    the permanent stops carrying the counter, which is a fact the untap step
+    re-asks every turn rather than a marker anything clears. So the counter's
+    name is the whole payload beside the set, and the very ability the same
+    card grants — "{4}: Remove a paralyzation counter from this creature" — is
+    what ends it.
+
+    The three refusals are ``_lower_doesnt_untap_next_step``'s, for its
+    reasons: the subject must be the **bound plural** (a chosen target would be
+    a second, independent choice the card never offered), it may carry no
+    narrowing beyond its card type (there is nothing left for an adjective to
+    narrow, and a dropped one would reach permanents the phrase excludes), and
+    a producer must have run in this same effect (the handler reads the set out
+    of the resolution scratchpad, and with nothing recorded it marks nothing
+    while the card compiles clean).
+    """
+    subject = node.subject
+    if not isinstance(subject, ast.TargetSpec) or subject.quantifier != "those":
+        raise LoweringError(
+            "this sentence acts on the objects an earlier one chose, and its "
+            "subject does not name them",
+            node=node,
+        )
+    if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+        raise LoweringError(
+            "a bound plural carries no narrowing the marker could honour",
+            node=node,
+        )
+    recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+    if not recorded:
+        raise LoweringError(
+            "\"those creatures\" names objects nothing in this effect recorded",
+            node=node,
+        )
+    if len(recorded) != 1:
+        raise LoweringError(
+            "\"those creatures\" is ambiguous: several earlier steps recorded "
+            "objects", node=node,
+        )
+    return (
+        OracleInstruction(
+            "restrict_untap_while_counter", "",
+            {"counter": node.counter, "permanents_from": recorded[0]},
+        ),
+    )
 
 
 def _lower_doesnt_untap_next_step(

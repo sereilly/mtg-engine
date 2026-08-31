@@ -644,6 +644,28 @@ class DoesntUntapWhileSourceTapped:
 
 
 @dataclass(frozen=True)
+class DoesntUntapWhileCounter:
+    """``<subject> doesn't untap during its controller's untap step **for as
+    long as it has a <name> counter on it**.`` (Dread Wight.)
+
+    The third member of the family :class:`DoesntUntapNextStep` and
+    :class:`DoesntUntapWhileSourceTapped` make, and a sibling rather than
+    either of them with a field, because what ends the restriction is the whole
+    difference: Frost Breath's expires by being spent at the *next* untap step,
+    Phyrexian Gremlins' when the source untaps, and this one when the marked
+    permanent no longer carries the counter — a condition about the restricted
+    permanent itself, which is what makes it removable by the very ability the
+    same card grants.
+
+    ``counter`` is the counter's printed name (CR 122.1), payload for the
+    reason every printed word in this family is one: a card saying "paralysis"
+    is the same restriction and must need no second node.
+    """
+    subject: Recipient
+    counter: str
+
+
+@dataclass(frozen=True)
 class DelayedSelfAction:
     """``Destroy this artifact at the beginning of the next end step.`` (Rocket
     Launcher.) ``Return this artifact to its owner's hand at the beginning of

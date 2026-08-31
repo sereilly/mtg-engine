@@ -1078,6 +1078,66 @@ def add_named_counter_to_target(game: Game, instruction: OracleInstruction, cont
     return True, "resolved"
 
 
+@effect_handler("add_named_counter_to_creatures_in_combat_with_source")
+def add_named_counter_to_creatures_in_combat_with_source(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put a paralyzation counter on each creature blocking or blocked by this
+    creature." (Dread Wight.)
+
+    The set is a combat relation to the ability's own source (CR 509), read
+    from the combat maps rather than from any characteristic of the candidates
+    — the same set ``destroy_creatures_in_combat_with_source`` (Abu Ja'far) and
+    ``grant_keyword_to_creatures_in_combat_with_source`` (Spitting Slug) act on.
+
+    It **records what it marked**, by id, because every sentence after it on
+    this card names that set and none of them can work it out again: the
+    trigger resolves during the end-of-combat step, and CR 511.2 removes every
+    creature from combat as that step ends — so a second reading of the combat
+    maps is a set that may already be empty.
+    """
+    from ..named_counters import add_counters
+    from ..grammar.lowering._events import _PERMANENTS_GIVEN_COUNTERS
+
+    # The relation as the fire site froze it (CR 603.10). Dread Wight's trigger
+    # resolves in the priority window at the end of the end-of-combat step, and
+    # CR 511.2 has taken every creature out of combat by then — so the combat
+    # maps are the wrong place to ask, and the capture is the only right one.
+    # The live read stays as the fallback for a source asked outside such a
+    # trigger, which is what Spitting Slug's keyword twin does all the time.
+    source = context.source_permanent
+    victims = (context.trigger_context or {}).get("combat_opponents")
+    if victims is None:
+        if source is None:
+            game.log.append(
+                f"{context.card.name}: no source to read the combat from"
+            )
+            context.results[_PERMANENTS_GIVEN_COUNTERS] = ()
+            return True, "resolved"
+        victims = game.creatures_in_combat_with(source)
+    counter = str(instruction.payload.get("counter", ""))
+    count = int(instruction.payload.get("count", 1))
+    marked = []
+    for perm in victims:
+        # A creature that died to combat damage in the same event is gone; a
+        # counter on it would be a counter on nothing, and it must not be
+        # recorded for the sentences behind this one either.
+        if not game.is_on_battlefield(perm):
+            continue
+        add_counters(perm, counter, count)
+        marked.append(perm)
+    # Written whether or not anything was marked: the record is what the
+    # sentences behind this one read, and an *absent* key is a back-reference
+    # with no producer, which is a different thing from a producer that found
+    # nobody.
+    context.results[_PERMANENTS_GIVEN_COUNTERS] = tuple(
+        perm.permanent_id for perm in marked
+    )
+    game.log.append(
+        f"{context.card.name}: {len(marked)} creature(s) in combat with it get "
+        f"a {counter} counter"
+    )
+    return True, "resolved"
+
+
 @effect_handler("add_named_counter_to_attached")
 def add_named_counter_to_attached(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…tap enchanted creature and put X sleep counters on **it**." (Venarian

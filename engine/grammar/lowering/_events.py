@@ -372,8 +372,18 @@ _TAPPED_PERMANENTS = "tapped_permanents"
 #: nothing else in the resolution can say which one it was.
 _UNBLOCKABLE_PERMANENTS = "unblockable_permanents"
 
+#: "…put a paralyzation counter on each creature blocking or blocked by this
+#: creature and tap **those creatures**." (Dread Wight.) The placement records
+#: which permanents it marked, because the three sentences behind it — the tap,
+#: the untap restriction and the granted ability — all name that set and none of
+#: them can be asked to work it out again: the relation is to a combat that ends
+#: in the same step the trigger resolves in (CR 511.2), so by the next sentence
+#: there may be no combat left to read.
+_PERMANENTS_GIVEN_COUNTERS = "permanents_given_counters"
+
 _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     _TAPPED_PERMANENTS, _UNTAPPED_PERMANENTS, _UNBLOCKABLE_PERMANENTS,
+    _PERMANENTS_GIVEN_COUNTERS,
 })
 
 

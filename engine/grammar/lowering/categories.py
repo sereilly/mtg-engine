@@ -64,6 +64,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # supertype — so the same category, with the land type as payload.
     "change_land_type_until": "characteristics",
     "restrict_untap_while_source_tapped": "tapping",
+    # Its counter-conditioned sibling: "…doesn't untap during its controller's
+    # untap step **for as long as it has a paralyzation counter on it**"
+    # (Dread Wight). The condition is a fact about the restricted permanent
+    # rather than about the source, so the two are different restrictions with
+    # the same category.
+    "restrict_untap_while_counter": "tapping",
     "arm_self_action_at_next_end_step": "destruction",
     "add_power_counters_to_self": "counters",
     # One pump per chosen slot, each with its own P/T delta (Rookie Mistake).
@@ -177,6 +183,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "add_pt_counters_to_attached": "counters",
     # Its named-counter twin ("…put X sleep counters on it", Venarian Gold).
     "add_named_counter_to_attached": "counters",
+    # The same marker on a set named by a combat relation to the source
+    # ("…on each creature blocking or blocked by this creature", Dread Wight).
+    "add_named_counter_to_creatures_in_combat_with_source": "counters",
     # Its removal ("remove a sleep counter from that creature", Venarian
     # Gold), fired by the upkeep registry.
     "remove_counter_from_attached": "counters",
@@ -255,6 +264,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "Tap all creatures blocking target attacking creature." (Feint.) A sweep
     # over a set named by a combat relation to the spell's own target.
     "tap_creatures_blocking_target": "tapping",
+    # "…and tap **those creatures**." (Dread Wight.) Neither a sweep nor a
+    # choice: the set is what an earlier step of the same effect recorded.
+    "tap_recorded_permanents": "tapping",
     "untap_all_matching": "tapping",
     "grant_prevention_shield": "prevention",
     # "…prevent half that damage, rounded down" (Dark Sphere) — a CR 615.8

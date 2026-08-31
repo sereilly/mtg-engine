@@ -13,8 +13,10 @@ and Mind Whip all print them in one sentence.
 
 from .. import ast
 from ..errors import GrammarError
+from ..lexer import PT
 from ..phrases import (
-    _parse_mana_payment, parse_bound_subject, parse_subject_filter_at,
+    _expect_counter_kind, _parse_mana_payment, parse_bound_subject,
+    parse_subject_filter_at,
 )
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
@@ -54,6 +56,29 @@ def _parse_doesnt_untap_next_step(
     # and gets a different node. Tried before requiring "next" so the two
     # spellings do not have to be told apart by their prefixes.
     linked = stream.mark()
+    # "…untap step **for as long as it has a paralyzation counter on it**"
+    # (Dread Wight). Also no "next", and also continuous — but what ends it is
+    # a fact about the restricted permanent rather than about the source, which
+    # is a third node. Tried before the source-tapped spelling only because
+    # both begin "for as long as" and one of them has to go first; each names
+    # its own pronoun on the next word, so neither can swallow the other.
+    if stream.accept_phrase(
+        "untap", "step", "for", "as", "long", "as", "it", "has"
+    ):
+        stream.expect_word("a", "an")
+        token = _expect_counter_kind(stream)
+        if token.kind == PT:
+            # A CR 122.1a P/T pair is not a marker a card removes one of to
+            # release a creature, and nothing in this family reads one. Refused
+            # rather than accepted, so the sentence fails by name.
+            raise stream.error(
+                "an untap restriction is conditioned on a named counter"
+            )
+        stream.expect_word("counter")
+        stream.expect_word("on")
+        stream.expect_word("it")
+        return ast.DoesntUntapWhileCounter(subject, token.text)
+    stream.reset(linked)
     if stream.accept_phrase("untap", "step", "for", "as", "long", "as", "this"):
         # The noun is required. Accepted-but-optional, it could be deleted with
         # no change to what was lowered — which is what the parse-coverage

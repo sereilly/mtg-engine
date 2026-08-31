@@ -26,7 +26,8 @@ from __future__ import annotations
 
 from ...oracle_types import HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
-                      CREATED_TOKEN, EXILED_THIS_WAY)
+                      CREATED_TOKEN, EXILED_THIS_WAY,
+                      _PERMANENTS_GIVEN_COUNTERS)
 
 
 _PRODUCES: dict[str, str | tuple[str, ...]] = {
@@ -183,6 +184,14 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # alone: the victims are still on the battlefield, unlike a destruction
     # sweep's, so there is nothing about them a later sentence could not ask
     # the board for.
+    # "Put a paralyzation counter on each creature blocking or blocked by this
+    # creature and tap **those creatures**." (Dread Wight.) The placement is
+    # the only step that can say which permanents the sentence is about: its
+    # set is named by a combat relation, and the three sentences that read it
+    # back run in the end-of-combat step, where the combat is on its way out
+    # (CR 511.2). So the counters record their recipients by id, and the tap,
+    # the untap restriction and the granted ability all read that record.
+    "add_named_counter_to_creatures_in_combat_with_source": _PERMANENTS_GIVEN_COUNTERS,
     "tap_all_matching": "tapped_this_way",
     "tap_target_permanent": "tapped_permanents",
     # "…tap the creature, **remove it** from combat" (Imprison). The Aura's tap

@@ -67,6 +67,7 @@ from .characteristics import (
 from .board import (
     DelayedSelfAction,
     DoesntUntapWhileSourceTapped,
+    DoesntUntapWhileCounter,
     SacrificeExpansionPermanents,
     ShuffleGraveyardIntoLibrary,
     ShuffleHandIntoLibrary,
@@ -195,7 +196,8 @@ Effect = Union[
     GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, Mill, PutHandCardsOnLibrary, Scry, Destroy, Sacrifice,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, ShuffleHandIntoLibrary, Exile,
     ExileUntilLeavesOrUntaps, PutSourceIntoZone, Tap, Untap,
-    TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped, UntapChosenByPaying,
+    TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped,
+    DoesntUntapWhileCounter, UntapChosenByPaying,
     DelayedSelfAction, Attach, ExchangeControl, ExchangeGreatestManaValue,
     Regenerate, ReanimateEnchantedCard, ChangeTarget, ChooseTarget, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
