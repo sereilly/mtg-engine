@@ -277,7 +277,17 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # was aimed at, read before the destroy for the reason the mana value is
     # (CR 608.2h, last-known information) — a condition asking what the land
     # *was* has nothing on the board left to look at.
-    "destroy_target_permanent": ("its_mana_value", "destroyed_target"),
+    # "Destroy X target Mountains. …deals damage … equal to the number of
+    # Mountains **put into a graveyard this way**." (Volcanic Eruption.) The
+    # third record is what actually died — CR 701.8c keeps a regenerated
+    # target out of it, where the two above are recorded before the destroy
+    # precisely because they describe the object rather than the outcome.
+    # Every branch of the handler writes it, because this table declares for
+    # the *kind*: a branch that skipped it would be a producer the lowering
+    # can cite and a record that reads as zero.
+    "destroy_target_permanent": (
+        "its_mana_value", "destroyed_target", "destroyed_this_way",
+    ),
     # "Prevent the next 3 damage … **for each 1 damage prevented this way**."
     # (Sacred Boon.) The shield object itself, because what it prevents is
     # not a number when it is armed — the total goes on accumulating for the

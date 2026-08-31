@@ -518,6 +518,38 @@ def _lower_damage_shape(
     if isinstance(node.amount, ast.ThatMuch):
         back_reference = _back_reference_payload(node.amount, produced, event)
         amount: int | str = 0
+    elif isinstance(node.amount, ast.CountOfDeathsThisWay):
+        # "…deals damage … equal to the number of Mountains **put into a
+        # graveyard this way**" (Volcanic Eruption). One earlier step's result,
+        # not a count of any zone, so it reads the record the destroy branches
+        # write — the same `amount_from` channel every scratchpad-read amount
+        # travels, and the same producer discipline: with nothing recorded in
+        # front of it the words name nothing, and a zero is a number the card
+        # never printed.
+        if "destroyed_this_way" not in produced:
+            raise LoweringError(
+                "back-reference to 'destroyed_this_way' with no producer in "
+                "this effect",
+                node=node,
+            )
+        # Only the bare noun is admitted — the printed restatement of what the
+        # step in front destroyed. The record is a *number*, so a narrowing
+        # beyond the noun ("black creatures put into a graveyard this way") is
+        # a question nothing can re-ask; it refuses rather than counting as
+        # though the narrowing were not there (`lower_where_x`'s rule for the
+        # identical node, one printed position over).
+        described = node.amount.filter.to_payload()
+        if (
+            set(described) - {"type_filter", "subtype_filter"}
+            or node.amount.filter.zone != "battlefield"
+        ):
+            raise LoweringError(
+                "'put into a graveyard this way' counts what the earlier step "
+                "destroyed and cannot be narrowed further",
+                node=node,
+            )
+        back_reference = {"amount_from": "destroyed_this_way"}
+        amount = 0
     elif isinstance(node.amount, ast.CountersOnSource):
         # "…deals damage equal to the number of doom counters on it…"
         # (Armageddon Clock). A read off the source at resolution rather than a
@@ -544,12 +576,13 @@ def _lower_damage_shape(
 
     sweep = _sweep_kind(node.recipients)
     if sweep is not None:
-        # The sweep handlers read a printed number, an announced X, or the
-        # counters on the ability's own source (`handlers/damage._sweep_amount`,
-        # the one reader all four share). Every *other* computed amount would be
-        # dropped here and dealt as zero — visible nowhere, since the card would
-        # still report supported — so it refuses instead.
-        if bonus or set(back_reference) - {"amount_from_named_counters"}:
+        # The sweep handlers read a printed number, an announced X, the
+        # counters on the ability's own source, or a scratchpad record
+        # (`handlers/damage._sweep_amount`, the one reader all four share).
+        # Every *other* computed amount would be dropped here and dealt as
+        # zero — visible nowhere, since the card would still report supported —
+        # so it refuses instead.
+        if bonus or set(back_reference) - {"amount_from_named_counters", "amount_from"}:
             raise LoweringError(
                 "a board sweep cannot carry a computed damage amount", node=node
             )

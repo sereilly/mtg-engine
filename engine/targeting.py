@@ -384,6 +384,24 @@ def _narrowing_flags(source: dict) -> dict:
         # against — and the enumerator's for the same reason: the seat choosing
         # is the one it is relative to.
         flags["attacking_you"] = True
+    # A printed subtype or supertype narrowing, carried whole under ``filter``
+    # — the spec form `spec_only_subtype` already reads and the enumerator
+    # already applies through ``subject_matches`` (legality's own loop), so the
+    # picker offers exactly what resolves. "X target **Mountains**" (Volcanic
+    # Eruption) and "X target **snow** lands" (Avalanche) both rode only the
+    # instruction's payload before this, which the per-candidate cast probe
+    # does not ask for a several-target description — so the picker offered a
+    # Forest for a spell that destroys Mountains. A Wall stays on ``wall_only``
+    # above, its established spelling, rather than being said twice.
+    narrowed: dict = {}
+    subtype = source.get("subtype_filter")
+    if isinstance(subtype, str) and subtype != "wall":
+        narrowed["subtype_filter"] = subtype
+    supertypes = source.get("supertypes")
+    if supertypes:
+        narrowed["supertypes"] = list(supertypes)
+    if narrowed:
+        flags["filter"] = narrowed
     return flags
 
 
@@ -444,10 +462,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "tap_target_player_lands_and_drain_mana": {"kind": "player"},
     "reorder_target_library_top": {"kind": "player"},
     "return_all_owned_artifacts_to_hand": {"kind": "player"},
-    # Volcanic Eruption: "Destroy X target Mountains", where X is how many the
-    # caster picks — so the divided picker runs over Mountains and skips its
-    # separate X prompt.
-    "volcanic_eruption": {"kind": "divided", "land_filter": "mountain", "x_equals_targets": True},
     # Word of Command looks at *target opponent's* hand: the caster's own seat is
     # not a legal choice (CR 115.4).
     "peek_hand_and_force_play": {"kind": "player", "opponents_only": True},
@@ -1663,6 +1677,19 @@ def _from_targets_payload(targets) -> dict | None:
         flags = {**flags, "unbounded_targets": True}
     type_filter = filt.get("type_filter")
     if not type_filter:
+        # "X target **Mountains**" (Volcanic Eruption) prints no card type at
+        # all — but CR 205.3i puts every land subtype on lands and nothing
+        # else, so a bare land-subtype filter is a land target and the picker
+        # should offer lands, not every permanent. The subtype itself is still
+        # enforced by the gate and the handler, exactly as Avalanche's snow
+        # supertype is: the spec is the picker's hint, and the engine re-checks
+        # the announcement against the whole filter either way.
+        subtype = filt.get("subtype_filter")
+        if isinstance(subtype, str):
+            from .grammar.vocabulary import LAND_TYPES
+
+            if subtype in LAND_TYPES:
+                return {"kind": "land", **flags}
         # A targeted object with no type restriction is any permanent.
         return {"kind": "permanent", **flags}
     derived = _kind_for_type_filter(type_filter)

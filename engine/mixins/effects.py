@@ -272,7 +272,14 @@ class EffectsMixin:
         subtype_filter: str | None = None,
         tapped_only: bool = False,
         attached_to_filter: dict | None = None,
-    ) -> CardDefinition | None:
+    ) -> "Permanent | None":
+        # The destroyed **Permanent**, not its card: the caller may owe a
+        # record of what died ("the number of Mountains put into a graveyard
+        # this way" is the same question whichever branch destroyed them), and
+        # a `CardDefinition` is the card as printed — shared by every copy, so
+        # it can neither carry last-known information nor be told apart from
+        # its twin. None when nothing was destroyed, including a destruction
+        # regeneration or a shield replaced (CR 701.8c: not a death).
         target_player_index = next(
             (i for i, p in enumerate(self.players) if p is target), None
         )
@@ -293,7 +300,7 @@ class EffectsMixin:
         def _is_legal_target(perm) -> bool:
             return permanent_matches_filter(perm, filter_payload)
 
-        def _do_destroy(perm: "Permanent", idx: int) -> "CardDefinition":
+        def _do_destroy(perm: "Permanent", idx: int) -> "Permanent":
             # Pyramids: a shielded land's destruction is replaced — remove all
             # damage marked on it instead.
             if self._consume_land_destruction_shield(perm):
@@ -308,15 +315,18 @@ class EffectsMixin:
             if not bypass_regeneration and regeneration_replaces_destruction(self, perm):
                 return None  # type: ignore[return-value]
             self.remove_from_battlefield(perm)
+            # `_permanent_to_graveyard` announces the land-dies triggers
+            # (Dingus Egg) along with everything else a death announces — the
+            # call this site used to make beside it fired only for this one
+            # destruction path, which is how Avalanche and Armageddon came to
+            # destroy lands no Dingus Egg ever saw.
             self._permanent_to_graveyard(target, perm)
             self._trigger_aura_death_effects(perm, target)
-            if perm.card.primary_type == "land" and target_player_index is not None:
-                self._process_land_dies(target_player_index)
             # 611.3b: a destroyed permanent's static buffs / dynamic P/T (Castle,
             # Gauntlet of Might, Lord of Atlantis, Nightmare's swamp count) must be
             # recomputed now that it has left the battlefield.
             self._recompute_continuous_effects()
-            return perm.card
+            return perm
 
         if target_permanent_index is not None:
             if 0 <= target_permanent_index < len(target.battlefield):

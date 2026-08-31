@@ -935,3 +935,84 @@ def test_drain_life_gains_nothing_from_a_target_that_is_already_gone(set_pool):
     assert p0.life == 20, "no damage dealt, so no life gained"
     assert p1.life == 20, "and the face is never the fallback for a gone target"
 # --- end W4G3 ---
+
+
+# --- Volcanic Eruption: the hook retired onto Avalanche's production ---------
+
+def test_volcanic_eruption_compiles_through_the_grammar(set_pool):
+    """The last name-keyed hook in ICE's era pool is retired: the destroy is
+    Avalanche's production one noun over, and the aftermath damage reads the
+    destroy step's own record ("put into a graveyard this way" is CR 700.4's
+    "died", spelled from the graveyard's side)."""
+    prog = compile_card_oracle(set_pool("LEA")["Volcanic Eruption"])
+    assert prog.supported
+    kinds = [step.kind for step in prog.instructions[0].payload["steps"]]
+    assert kinds == [
+        "destroy_target_permanent", "deal_damage_each_creature_and_player",
+    ]
+    sweep = prog.instructions[0].payload["steps"][1]
+    assert sweep.payload == {"amount_from": "destroyed_this_way"}
+
+
+def test_volcanic_eruption_damage_counts_the_graveyard_not_the_announcement(set_pool):
+    """"…equal to the number of Mountains **put into a graveyard** this way."
+
+    X = 2 was announced, but one chosen Mountain leaves before resolution — so
+    one is destroyed and the damage is 1, not the announced 2 (CR 608.2b drops
+    the departed slot; the amount reads the record the destroy step wrote, not
+    the X). The retired hook could not get this wrong in the same way because
+    it destroyed and counted in one body; the composed program is where the
+    two halves could drift, which is what this pins.
+    """
+    pool = set_pool("LEA")
+    m1, m2 = Permanent(card=pool["Mountain"]), Permanent(card=pool["Mountain"])
+    bear = Permanent(card=pool["Grizzly Bears"])
+    p0 = PlayerState(name="P0", hand=[pool["Volcanic Eruption"]], life=20)
+    p1 = PlayerState(name="P1", life=20, battlefield=[m1, m2, bear])
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert game.queue_from_hand(
+        0, "Volcanic Eruption", x_value=2,
+        target_player_index=1, target_permanent_index=[0, 1],
+        target_permanent_ids=[m1.permanent_id, m2.permanent_id],
+    ).supported
+    game.remove_from_battlefield(m2)
+    game._settle()
+
+    assert m1 not in p1.battlefield, "the surviving slot still resolves"
+    assert p0.life == 19 and p1.life == 19, "1 Mountain died, so 1 damage each"
+    assert bear in p1.battlefield and bear.damage_marked == 1
+
+
+def test_armageddon_land_deaths_reach_dingus_egg(set_pool):
+    """"Whenever a land is put into a graveyard from the battlefield…" fires
+    however the land got there. The announcement was a call inside the
+    single-target destroy path (plus a second inside Volcanic Eruption's
+    hook), so a board sweep's land deaths reached no Dingus Egg at all — it
+    now rides `_permanent_to_graveyard`, the seam every one of them already
+    passes through."""
+    pool = set_pool("LEA")
+    egg = Permanent(card=pool["Dingus Egg"])
+    p0 = PlayerState(
+        name="P0", hand=[pool["Armageddon"]], life=20,
+        battlefield=[egg, Permanent(card=pool["Plains"])],
+    )
+    p1 = PlayerState(
+        name="P1", life=20,
+        battlefield=[Permanent(card=pool["Mountain"]), Permanent(card=pool["Forest"])],
+    )
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert game.queue_from_hand(0, "Armageddon").supported
+    game._settle()
+
+    assert not any(p.card.primary_type == "land" for p in p0.battlefield)
+    assert not p1.battlefield
+    # One trigger per dead land, 2 damage each, aimed at that land's
+    # controller: P0 lost one land, P1 two.
+    assert p0.life == 18, "P0's Plains died under P0's control"
+    assert p1.life == 16, "P1's two lands each cost P1 2 life"

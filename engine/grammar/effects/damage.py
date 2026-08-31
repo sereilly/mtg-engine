@@ -138,18 +138,24 @@ def _ends_the_recipient_list(stream: TokenStream) -> bool:
     left for the statement layer to split on, and Mind Whip's tap lands in the
     branch the card prints it in instead of running unconditionally.
 
-    One printed word is the exception, and it is an exception to the premise
-    rather than to the rule: "…deals 2 damage to each creature and each player
-    **instead**." (Gangrenous Zombies) ends its clause on a word. "Instead" is
-    the conditional-instead rider's marker for the sentence it closes — it is
-    never the verb of a new predicate — so the conjunct in front of it really
-    was a recipient, and rewinding cost the card the second half of its
-    recipient list.
+    Two printed words are the exceptions, and each is an exception to the
+    premise rather than to the rule — a word that continues *this* sentence and
+    is never the verb of a new predicate, so the conjunct in front of it really
+    was a recipient and rewinding would cost the card the second half of its
+    recipient list:
+
+    - "…deals 2 damage to each creature and each player **instead**."
+      (Gangrenous Zombies) — the conditional-instead rider's marker for the
+      sentence it closes.
+    - "…deals damage to each creature and each player **equal to** the number
+      of Mountains put into a graveyard this way." (Volcanic Eruption) — the
+      deferred quantity of the same clause, in the word order that puts it
+      after the recipients. No statement in this grammar opens with "equal".
     """
     token = stream.peek()
     if token is None or token.kind != WORD:
         return True
-    return token.text == "instead"
+    return token.text in ("instead", "equal")
 
 
 def _parse_recipient_list(stream: TokenStream) -> list[ast.Recipient]:

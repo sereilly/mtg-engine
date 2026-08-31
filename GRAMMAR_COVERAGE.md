@@ -16,18 +16,18 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 83.8% | 82.5% | 46.1% | 163 |
-| LEB | 292 | 389 | 83.8% | 82.5% | 46.3% | 164 |
-| 2ED | 292 | 389 | 83.8% | 82.5% | 46.3% | 164 |
+| LEA | 290 | 388 | 84.0% | 82.7% | 46.4% | 164 |
+| LEB | 292 | 389 | 84.1% | 82.8% | 46.5% | 165 |
+| 2ED | 292 | 389 | 84.1% | 82.8% | 46.5% | 165 |
 | ARN | 78 | 108 | 76.9% | 73.1% | 50.9% | 46 |
 | ATQ | 85 | 120 | 90.0% | 90.0% | 62.5% | 68 |
-| 3ED | 296 | 389 | 86.1% | 84.3% | 48.8% | 171 |
+| 3ED | 296 | 389 | 86.4% | 84.6% | 49.1% | 172 |
 | LEG | 310 | 431 | 89.1% | 87.9% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
-| 4ED | 368 | 520 | 90.0% | 89.6% | 53.5% | 244 |
-| ICE | 373 | 601 | 89.4% | 88.7% | 63.4% | 301 |
-| M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| **All (shipped)** | **2788** | **4005** | **87.2%** | **86.2%** | **54.9%** | **1876** |
+| 4ED | 368 | 520 | 90.2% | 89.8% | 53.7% | 245 |
+| ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
+| M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
+| **All (shipped)** | **2788** | **4005** | **87.3%** | **86.4%** | **55.1%** | **1881** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -43,12 +43,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 16 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 10 | 2 | expected 'equal to' quantity for damage |  |
-| 8 | 3 | no lowering for RawEffect |  |
 | 8 | 2 | expected a keyword ability |  |
 | 7 | 2 | expected 'the number of' in a where-clause |  |
+| 6 | 1 | no lowering for RawEffect |  |
 | 6 | 6 | expected 'unless defending player controls' |  |
 | 5 | 1 | expected 'card' |  |
+| 5 | 1 | expected 'equal to' quantity for damage |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | this clause enumerates an opponent or any player, not 'you' |  |
 | 4 | 1 | expected 'that' |  |
@@ -65,7 +65,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-1876 cards, 2200 lines.
+1881 cards, 2205 lines.
 
 - **Abomination**
   - `Whenever this creature blocks or becomes blocked by a green or white creature, destroy that creature at end of combat.`
@@ -3191,6 +3191,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}{B}{B}: Creatures you control gain lifelink until end of turn.`
 - **Vodalian Arcanist**
   - `{T}: Add {C}. Spend this mana only to cast an instant or sorcery spell.`
+- **Volcanic Eruption**
+  - `Destroy X target Mountains. Volcanic Eruption deals damage to each creature and each player equal to the number of Mountains put into a graveyard this way.`
+  - `Destroy X target Mountains. Volcanic Eruption deals damage to each creature and each player equal to the number of Mountains put into a graveyard this way.`
+  - `Destroy X target Mountains. Volcanic Eruption deals damage to each creature and each player equal to the number of Mountains put into a graveyard this way.`
+  - `Destroy X target Mountains. Volcanic Eruption deals damage to each creature and each player equal to the number of Mountains put into a graveyard this way.`
+  - `Destroy X target Mountains. Volcanic Eruption deals damage to each creature and each player equal to the number of Mountains put into a graveyard this way.`
 - **Volcanic Geyser**
   - `Volcanic Geyser deals X damage to any target.`
 - **Volcanic Salvo**

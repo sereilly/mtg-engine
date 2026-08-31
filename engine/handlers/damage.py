@@ -645,8 +645,9 @@ def simulacrum_redirect(game: Game, instruction: OracleInstruction, context: Ora
 
 
 def _sweep_amount(instruction: OracleInstruction, context: OracleExecutionContext) -> int:
-    """How much a board sweep deals — a printed number, an announced X, or the
-    counters on the ability's own source.
+    """How much a board sweep deals — a printed number, an announced X, the
+    counters on the ability's own source, or a record an earlier step of the
+    same effect wrote.
 
     The third is Time Bomb's ("deals damage equal to the number of time
     counters on it to each creature and each player"), and it is here rather
@@ -654,7 +655,15 @@ def _sweep_amount(instruction: OracleInstruction, context: OracleExecutionContex
     and not the shape of the sweep. `deal_damage` reads the same key one
     function up; a sweep that could not read it refused the whole line, which
     is what left Time Bomb's only ability doing nothing.
+
+    The fourth is Volcanic Eruption's ("…equal to the number of Mountains put
+    into a graveyard this way"): ``amount_from`` names a scratchpad key exactly
+    as it does on `deal_damage`, and an absent record deals nothing rather than
+    an amount the card never printed.
     """
+    from_results = instruction.payload.get("amount_from")
+    if from_results is not None:
+        return max(0, int((context.results or {}).get(from_results, 0) or 0))
     named = instruction.payload.get("amount_from_named_counters")
     if named is not None:
         source = context.source_permanent

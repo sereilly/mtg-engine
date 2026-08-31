@@ -704,6 +704,18 @@ class GameHelpersMixin:
             owner_idx = self.owner_index_of(permanent)
             owner = self.players[owner_idx] if owner_idx is not None else player
             owner.graveyard.append(permanent.card)
+        # "Whenever a land is put into a graveyard from the battlefield…"
+        # (Dingus Egg). Announced here, on the one seam every land death
+        # already passes through, not from the destruction paths: it used to be
+        # a call inside `_destroy_target_permanent` plus a second inside a
+        # card hook, so a land destroyed by the several-targets branch
+        # (Avalanche), a board sweep (Armageddon) or a sacrifice fired nothing
+        # — the `become_tapped` shape, one fire site per path and every new
+        # path forgotten. Asked through `has_type` (CR 613 layer 4), the same
+        # reading `is_creature` below takes for the same reason: an animated
+        # or type-changed land is still a land when it dies.
+        if permanent.has_type("land"):
+            self._process_land_dies(self.players.index(player))
         # is_creature (not the printed type) so an animated land (Kormus Bell /
         # Living Lands) dying counts as a creature death (Scavenging Ghoul).
         if permanent.is_creature:

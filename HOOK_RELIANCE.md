@@ -12,26 +12,26 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**64 of 1508 supported cards (4.2%)** carry at least one name-keyed entry, across **70 entries** in 6 registries. The pool is 1508 cards, 100.0% supported.
+**63 of 1508 supported cards (4.2%)** carry at least one name-keyed entry, across **69 entries** in 6 registries. The pool is 1508 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **1,212 hand-written entries** covering **1,108 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **1,195 hand-written entries** covering **1,091 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
 | Set | Cards | Supported | Hooked cards | Rules lines | Hooked lines | Entries | Entries/100 supported |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 290 (100.0%) | 37 (12.8%) | 388 | 35 (9.0%) | 41 | 14.1 |
-| LEB | 292 | 292 (100.0%) | 37 (12.7%) | 389 | 35 (9.0%) | 41 | 14.0 |
-| 2ED | 292 | 292 (100.0%) | 37 (12.7%) | 389 | 35 (9.0%) | 41 | 14.0 |
+| LEA | 290 | 290 (100.0%) | 36 (12.4%) | 388 | 34 (8.8%) | 40 | 13.8 |
+| LEB | 292 | 292 (100.0%) | 36 (12.3%) | 389 | 34 (8.7%) | 40 | 13.7 |
+| 2ED | 292 | 292 (100.0%) | 36 (12.3%) | 389 | 34 (8.7%) | 40 | 13.7 |
 | ARN | 78 | 78 (100.0%) | 21 (26.9%) | 107 | 19 (17.8%) | 23 | 29.5 |
 | ATQ | 85 | 85 (100.0%) | 3 (3.5%) | 120 | 3 (2.5%) | 3 | 3.5 |
-| 3ED | 296 | 296 (100.0%) | 31 (10.5%) | 389 | 30 (7.7%) | 34 | 11.5 |
+| 3ED | 296 | 296 (100.0%) | 30 (10.1%) | 389 | 29 (7.5%) | 33 | 11.1 |
 | LEG | 310 | 310 (100.0%) | 2 (0.6%) | 430 | 2 (0.5%) | 2 | 0.6 |
 | DRK | 119 | 119 (100.0%) | 1 (0.8%) | 167 | 1 (0.6%) | 1 | 0.8 |
-| 4ED | 368 | 368 (100.0%) | 23 (6.2%) | 520 | 22 (4.2%) | 25 | 6.8 |
+| 4ED | 368 | 368 (100.0%) | 22 (6.0%) | 520 | 21 (4.0%) | 24 | 6.5 |
 | ICE | 373 | 373 (100.0%) | 1 (0.3%) | 601 | 0 (0.0%) | 1 | 0.3 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| **ALL (shipped, deduped)** | **1508** | **1508 (100.0%)** | **64 (4.2%)** | **2290** | **60 (2.6%)** | **70** | **4.6** |
+| **ALL (shipped, deduped)** | **1508** | **1508 (100.0%)** | **63 (4.2%)** | **2290** | **59 (2.6%)** | **69** | **4.6** |
 
 **Read the rows, not the average.** The base sets are near-identical reprint lists, so five of these rows (LEA, LEB, 2ED, 3ED, 4ED) are one data point wearing five hats — and the ALL row, deduped across reprints, is dominated by it. The independent comparison is between that block and the sets printed to a different brief.
 
@@ -39,7 +39,7 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 59 | 60 |
+| `CARD_LINE_INSTRUCTIONS` | 58 | 59 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ON_SELF_RESOLVED` | 1 | 1 |
@@ -108,7 +108,6 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 - **Sorrow's Path** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Stone Giant** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Timetwister** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Volcanic Eruption** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Wheel of Fortune** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Word of Command** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Ydwen Efreet** (`CARD_LINE_INSTRUCTIONS`) — 1 line

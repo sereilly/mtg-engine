@@ -555,12 +555,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'draws seven cards':
             _line('timetwister', 'spell_pattern'),
     },
-    'Volcanic Eruption': {
-        'destroy x target mountains. volcanic eruption deals damage to each '
-        'creature and each player equal to the number of mountains put into a '
-        'graveyard this way':
-            _line('volcanic_eruption', 'spell_pattern'),
-    },
     'Wheel of Fortune': {
         'each player discards their hand, then draws seven cards':
             _line('wheel_of_fortune', 'spell_pattern'),

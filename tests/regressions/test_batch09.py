@@ -1177,10 +1177,14 @@ class TestVolcanicEruption:
         forest = Permanent(card=cards["Forest"])
         p0 = PlayerState(name="P0", hand=[ve], battlefield=[m1, m2, forest], life=20)
         game = _game(p0, PlayerState(name="P1"))
+        # The spec is the grammar's now (the name-keyed hook is retired): an
+        # X-targets land picker whose ``filter`` carries the printed subtype.
+        # The claim this test guards is unchanged — the picker offers exactly
+        # the Mountains, and the number chosen is X.
         spec = game.cast_target_spec(0, ve)
-        assert spec["kind"] == "divided"
-        assert spec["land_filter"] == "mountain"
-        assert spec["x_equals_targets"] is True
+        assert spec["kind"] == "land"
+        assert spec["filter"] == {"subtype_filter": "mountain"}
+        assert spec["x_targets"] is True
         keys = {(t["seat"], t["index"]) for t in spec["valid_targets"]}
         assert keys == {(0, 0), (0, 1)}  # only the two Mountains (not the Forest)
 

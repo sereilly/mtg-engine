@@ -116,9 +116,14 @@ class TestVolcanicEruptionCrossSideMountains:
         p2 = PlayerState(name="P2", battlefield=[their_mountain, their_forest])
         game = _game(p1, p2)
 
+        # By stable ids — the wire shape the X-targets picker sends (an id
+        # needs no seat, which is exactly what lets the slots sit on two
+        # boards). ``divided_targets`` was the retired hook's picker shape.
         result = game.cast_from_hand(
             0, "Volcanic Eruption", x_value=2,
-            divided_targets=[(0, 0), (1, 0)],
+            target_permanent_ids=[
+                my_mountain.permanent_id, their_mountain.permanent_id,
+            ],
         )
         assert result.supported
         assert my_mountain not in p1.battlefield
@@ -526,8 +531,11 @@ class TestVolcanicEruptionTargetList:
         p2 = PlayerState(name="P2", battlefield=[their_mountain])
         game = _game(p1, p2)
         spec = game.cast_target_spec(0, cards["Volcanic Eruption"])
-        assert spec["kind"] == "divided"
-        assert spec["land_filter"] == "mountain"
+        # The hook's hand-written "divided" spec is retired; the grammar's
+        # derivation narrows the same way — a land picker whose ``filter``
+        # carries the printed subtype, applied by the enumeration itself.
+        assert spec["kind"] == "land"
+        assert spec["filter"] == {"subtype_filter": "mountain"}
         names = sorted(t.get("name", "player") for t in spec["valid_targets"])
         assert names == ["Mountain", "Mountain"]  # no creatures, no player faces
 

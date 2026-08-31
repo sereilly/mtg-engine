@@ -120,8 +120,14 @@ def test_an_aura_on_a_graveyard_card_is_not_a_battlefield_target(supported_cards
         ("Reconstruction", {
             "kind": "graveyard_creature", "own_graveyard_only": True, "card_type": "artifact",
         }),
+        # "Destroy X target Mountains." A bare land-subtype filter is a land
+        # target (CR 205.3i puts land subtypes on lands and nothing else), the
+        # count is the announced X, and the subtype rides ``filter`` so the
+        # enumeration offers exactly the Mountains. The hand-written "divided"
+        # spec retired with the card's hook.
         ("Volcanic Eruption", {
-            "kind": "divided", "land_filter": "mountain", "x_equals_targets": True,
+            "kind": "land", "filter": {"subtype_filter": "mountain"},
+            "x_targets": True,
         }),
         # "…divided **as you choose**" (Pyrotechnics) against Fireball's
         # "divided evenly" above: one printed sentence asks the caster for a

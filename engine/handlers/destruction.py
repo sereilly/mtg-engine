@@ -8,9 +8,8 @@ from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
 from ..oracle_types import PER_OBJECT_SEAT_RECORDS
 from ..resumption import run_resumable
-from ..divided_damage import DIVIDED_TARGETS, divided_entry
 from ._common import (
-    apply_damage_to_creature, frozen_that_player_seat,
+    frozen_that_player_seat,
     permanent_matches_filter, resolve_role_permanent,
     resolve_target_permanent, resolve_target_permanents,
 )
@@ -20,75 +19,6 @@ if TYPE_CHECKING:
     from ..game import Game
     from ..game_types import OracleExecutionContext
     from ..oracle import OracleInstruction
-
-
-@effect_handler("volcanic_eruption")
-def volcanic_eruption(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Destroy X target Mountains, then deal damage to each creature and each
-    player equal to the number of Mountains put into a graveyard this way."""
-    target = context.target
-    card = context.card
-    x_value = max(0, context.x_value or 0)
-
-    def _is_mountain(perm: Permanent) -> bool:
-        return perm.card.primary_type == "land" and perm.has_type("mountain")
-
-    # Resolve the chosen Mountains. The UI supplies either a cross-seat divided
-    # list (Mountains may be chosen on both battlefields at once) or explicit
-    # indices on the target player's battlefield; fall back to the first X
-    # Mountains anywhere for AI/no explicit choice.
-    chosen: list[tuple[PlayerState, Permanent]] = []
-    divided = context.choices.get(DIVIDED_TARGETS)
-    if divided:
-        # Through `divided_entry`, because an entry may carry an announced share
-        # (CR 601.2d) — Volcanic Eruption divides its damage among creatures and
-        # players *after* this, and this list is only the Mountains it chose.
-        for seat, index, _share in (divided_entry(entry) for entry in divided):
-            if index is None or not (0 <= seat < len(game.players)):
-                continue
-            player = game.players[seat]
-            if 0 <= index < len(player.battlefield) and _is_mountain(player.battlefield[index]):
-                chosen.append((player, player.battlefield[index]))
-    raw_idx = context.target_permanent_index
-    indices = raw_idx if isinstance(raw_idx, list) else ([raw_idx] if isinstance(raw_idx, int) else [])
-    if not chosen:
-        for idx in indices:
-            if isinstance(idx, int) and 0 <= idx < len(target.battlefield):
-                perm = target.battlefield[idx]
-                if _is_mountain(perm):
-                    chosen.append((target, perm))
-    if not chosen:
-        for seat, perm in game.permanents_with_controller():
-            if _is_mountain(perm) and len(chosen) < x_value:
-                chosen.append((game.players[seat], perm))
-
-    chosen = chosen[:x_value]
-    destroyed = 0
-    for owner, perm in chosen:
-        if game.controls(owner, perm) and not game._is_indestructible(perm):
-            # By identity. ``list.remove`` compares by value, and :class:`Permanent`
-            # is a dataclass with generated ``__eq__`` — two Mountains that entered
-            # on the same turn and are both untapped are ``==``, so ``remove``
-            # would take whichever comes first rather than the one that was
-            # chosen. (Same bug the control seam documents for ``in``.)
-            game.remove_from_battlefield(perm)
-            game._permanent_to_graveyard(owner, perm)
-            game._process_land_dies(game.players.index(owner))
-            destroyed += 1
-    game.log.append(f"{card.name} destroyed {destroyed} Mountain(s)")
-
-    if destroyed > 0:
-        for player in game.players:
-            game._deal_damage_to_player(player, destroyed, source=card)
-        for player in game.players:
-            for perm in list(player.battlefield):
-                if perm.is_creature:
-                    # See `_mass_damage_players_and_creatures`: marking is half
-                    # a damage event, and a sweep that stops there is damage
-                    # nothing can trigger on.
-                    apply_damage_to_creature(game, perm, destroyed, card)
-    game.log.append(f"{card.name} dealt {destroyed} damage to each creature and each player")
-    return True, "resolved"
 
 
 # "Destroy all <types>" — one sweep, parameterised by the types it names and
@@ -735,11 +665,22 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         tapped_only=instruction.payload.get("tapped_only", False),
         attached_to_filter=instruction.payload.get("attached_to_filter"),
     )
-    if destroyed:
+    # The record every other branch of this handler keeps, and this one did
+    # not: "the number of Mountains put into a graveyard this way" is the same
+    # question whichever branch destroyed them, and `_PRODUCES` declares the
+    # key for the *kind* — so a branch that skipped it was a producer the
+    # lowering could cite and a record the handler never wrote, which reads as
+    # zero with nothing failing. Derived from the list so the two records
+    # cannot disagree; a regenerated or indestructible target is in neither
+    # (CR 701.8c: a replaced destruction is not a death).
+    died = [destroyed] if destroyed is not None else []
+    context.results["destroyed_this_way_objects"] = died
+    context.results["destroyed_this_way"] = len(died)
+    if destroyed is not None:
         if source_permanent is not None:
-            game.log.append(f"{card.name} destroyed {destroyed.name}")
+            game.log.append(f"{card.name} destroyed {destroyed.card.name}")
         else:
-            game.log.append(f"Destroyed {destroyed.name}")
+            game.log.append(f"Destroyed {destroyed.card.name}")
     else:
         game.log.append("No valid target permanent found")
     return True, "resolved"

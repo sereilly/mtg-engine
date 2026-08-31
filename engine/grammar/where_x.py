@@ -318,19 +318,9 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
     if counters is not None:
         return counters
     filt = parse_object_filter(stream)
-    # "…the number of creatures **that died this way**" (Hellfire). Neither the
-    # board nor the turn's history: the objects one earlier step of this same
-    # effect destroyed. Read before the turn-history spelling below because the
-    # two share their first two words and differ only in what follows them.
-    if stream.accept_phrase("that", "died", "this", "way"):
-        return ast.CountOfDeathsThisWay(filt)
-    # "…the number of Islands **tapped this way**" (Monsoon). The same
-    # back-reference one verb over, and read here rather than as an adjective on
-    # the noun phrase because "this way" is about the effect, not about the
-    # permanent. No leading "that": the participle attaches straight to the
-    # noun, which is how the card prints it.
-    if stream.accept_phrase("tapped", "this", "way"):
-        return ast.CountOfTapsThisWay(filt)
+    this_way = accept_this_way_count(stream, filt)
+    if this_way is not None:
+        return this_way
     # "…the number of creatures **that died under your control this turn**"
     # (Liliana's Standard Bearer). A history, and the opposite set from the one
     # the bare filter names: these are exactly the creatures the battlefield no
@@ -339,3 +329,34 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
         _parse_duration(stream)
         return ast.CountOfDeaths(filt)
     return ast.CountOf(filt)
+
+
+def accept_this_way_count(stream: TokenStream, filt) -> "ast.Amount | None":
+    """The trailing participle that turns a counted noun into a back-reference.
+
+    "This way" says the set is one *earlier step of this same effect* produced,
+    so a count wearing it is not a count of any zone — read as the plain filter
+    it would count the survivors. One reader for both front ends (the
+    ", where X is …" trailer here and `amounts.parse_equal_to`), because the
+    two print the same phrases about the same records and a row each is how
+    they come to read them differently.
+
+    - "…the number of creatures **that died this way**" (Hellfire) and
+      "…the number of Mountains **put into a graveyard this way**" (Volcanic
+      Eruption) are one record: CR 700.4 defines "dies" as "put into a
+      graveyard from the battlefield", so the two spellings name the same set
+      and a regenerated or exiled-instead permanent is in neither.
+    - "…the number of Islands **tapped this way**" (Monsoon) is the same
+      back-reference one verb over. No leading "that": the participle attaches
+      straight to the noun, which is how the card prints it.
+
+    Consumes nothing and returns None when no participle follows, so the plain
+    :class:`ast.CountOf` reading is untouched.
+    """
+    if stream.accept_phrase("that", "died", "this", "way"):
+        return ast.CountOfDeathsThisWay(filt)
+    if stream.accept_phrase("put", "into", "a", "graveyard", "this", "way"):
+        return ast.CountOfDeathsThisWay(filt)
+    if stream.accept_phrase("tapped", "this", "way"):
+        return ast.CountOfTapsThisWay(filt)
+    return None

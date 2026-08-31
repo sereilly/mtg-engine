@@ -465,10 +465,6 @@ HANDLER_CLAIMS: dict[str, tuple[str, ...]] = {
     ),
     # handlers/pump grant_flying_and_delayed_destruction arms destroy_at_next_end_step.
     "grant_flying_and_delayed_destruction": ("destroy that creature at the beginning of the next end step",),
-    # handlers/destruction.volcanic_eruption deals the aftermath damage itself.
-    "volcanic_eruption": (
-        "volcanic eruption deals damage to each creature and each player equal to the number of mountains put into a graveyard this way",
-    ),
     # handlers/pump add_variable_power_counters_to_self enforces the seven cap.
     "add_variable_power_counters_to_self": (
         "this ability can't cause the total number of +1/+0 counters on this creature to be greater than seven",

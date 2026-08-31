@@ -230,8 +230,16 @@ def _parse_counted_amount(
         # Late import for the reason `parse_equal_to` gives: nouns depends on
         # this module for comparisons, so the cycle is broken at call time.
         from .nouns import parse_object_filter
+        from .where_x import accept_this_way_count
 
-        return ast.CountOf(parse_object_filter(stream))
+        filt = parse_object_filter(stream)
+        # "…this way" turns the count into a back-reference — see
+        # `parse_equal_to`, which reads the identical trailer through the
+        # identical shared reader.
+        this_way = accept_this_way_count(stream, filt)
+        if this_way is not None:
+            return this_way
+        return ast.CountOf(filt)
     stream.reset(mark)
     # "half **the sacrificed creature's power**, rounded down" (Freyalise
     # Supplicant). A characteristic of what the ability's own cost ate, read
@@ -302,8 +310,19 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
         # Late import: nouns depends on this module for comparisons, so the
         # cycle is broken at call time rather than import time.
         from .nouns import parse_object_filter
+        from .where_x import accept_this_way_count
 
         filt = parse_object_filter(stream)
+        # "equal to the number of Mountains **put into a graveyard this way**"
+        # (Volcanic Eruption). The trailing participle makes the count a
+        # back-reference to an earlier step of this same effect, and it is read
+        # through the reader the ", where X is …" trailer already uses — the
+        # two front ends print the same phrases about the same records, so they
+        # ask one function rather than keeping a row each (the same argument
+        # `accept_board_count` above states for the named counts).
+        this_way = accept_this_way_count(stream, filt)
+        if this_way is not None:
+            return this_way
         return ast.CountOf(filt)
 
     # "equal to **the sacrificed creature's toughness**" (Life Chisel, Diamond
