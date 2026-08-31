@@ -1215,3 +1215,75 @@ def test_the_entry_exile_template_reads_its_parameters_off_the_line():
     # And a counter kind with no P/T meaning behind it.
     assert exile_cards_on_enter(printed.replace(
         "a +1/+1 counter", "a soul counter")) is None
+
+# --- FixB: a departed target is a fizzle, not the next permanent along ---
+
+
+def test_whippoorwill_locks_nothing_when_its_target_has_left(set_pool):
+    """"{G}{G}, {T}: Target creature can't be regenerated this turn. Damage that
+    would be dealt to that creature this turn can't be prevented or dealt
+    instead to another permanent or player. When the creature dies this turn,
+    exile the creature."
+
+    Three sentences about one creature, and all three followed the vacated
+    index together: the bystander lost its regeneration and its damage
+    protections, and was marked for exile on death. CR 608.2b says an ability
+    whose target has left affects nothing; the CR-level statement of it is in
+    ``tests/rules/test_targets_and_costs.py``.
+    """
+    bird = _nosick(Permanent(card=set_pool("DRK")["Whippoorwill"]))
+    chosen = _nosick(Permanent(card=_mk_creature_card("Quarry", 2, 2)))
+    decoy = _nosick(Permanent(card=_mk_creature_card("Bystander", 1, 1)))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bird], life=20),
+        PlayerState(name="P2", battlefield=[chosen, decoy], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+
+    game.queue_permanent_ability(
+        0, "Whippoorwill", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    game.remove_from_battlefield(chosen)
+    game.check_state_based_actions()
+    game.pass_priority(0)
+    game.pass_priority(1)
+    game._settle()
+
+    assert not decoy.metadata.get("cant_be_regenerated_this_turn"), game.log
+    assert not decoy.metadata.get(
+        "damage_cant_be_prevented_or_redirected_until_eot"), game.log
+    assert game.delayed_triggers == [], game.log
+
+
+def test_whippoorwill_still_locks_a_target_that_is_still_there(set_pool):
+    """The other direction: a fizzle that fires too eagerly is the same bug
+    pointing the other way, so the surviving-target case is asserted beside
+    it."""
+    bird = _nosick(Permanent(card=set_pool("DRK")["Whippoorwill"]))
+    chosen = _nosick(Permanent(card=_mk_creature_card("Quarry", 2, 2)))
+    decoy = _nosick(Permanent(card=_mk_creature_card("Bystander", 1, 1)))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bird], life=20),
+        PlayerState(name="P2", battlefield=[chosen, decoy], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+
+    game.queue_permanent_ability(
+        0, "Whippoorwill", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    game.pass_priority(0)
+    game.pass_priority(1)
+    game._settle()
+
+    assert chosen.metadata.get("cant_be_regenerated_this_turn"), game.log
+    assert not decoy.metadata.get("cant_be_regenerated_this_turn"), game.log
+    assert [entry.bound_permanent_id for entry in game.delayed_triggers] == [
+        chosen.permanent_id
+    ], game.log
+# --- end FixB ---

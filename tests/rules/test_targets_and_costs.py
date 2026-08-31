@@ -831,3 +831,117 @@ def test_601_2d_an_unannounced_division_falls_back_to_the_even_split():
     assert divide(5, entries, division=CHOSEN) == [(1, 0, 2), (1, 1, 2)], \
         "rounded down, so the remainder simply disappears"
 # --- end W3G3 ---
+
+
+# --- FixB: a departed target is a fizzle, not the next permanent along ---
+#
+# CR 608.2b at the *resolver*. The rule is enforced above the instructions for
+# a spell (``legality.illegal_targets_refusal``, instants and sorceries only),
+# and an activated ability has no such gate — so the only place its target can
+# be found to be gone is where the handler asks for it.
+
+
+def _fixb_boards(catalog_by_name, source_name, *, decoy="Balduvian Barbarians"):
+    """Seat 0 with *source*, a chosen creature, and a decoy **behind it**.
+
+    The decoy's position is the whole experiment: when the chosen creature
+    leaves, every later slot renumbers (CR 400.7), so the index the resolution
+    recorded comes to mean the decoy.
+    """
+    source = _perm(catalog_by_name[source_name])
+    chosen = _perm(catalog_by_name["Grizzly Bears"])
+    bystander = _perm(catalog_by_name[decoy])
+    p1 = PlayerState(name="P1", battlefield=[source, chosen, bystander], life=20)
+    game = _two_player_game(p1, PlayerState(name="P2", life=20))
+    game.start_turn(0)
+    return game, source, chosen, bystander
+
+
+def _fixb_resolve(game):
+    game.pass_priority(0)
+    game.pass_priority(1)
+    game._settle()
+
+
+@pytest.mark.cr("608.2b", "400.7", "115.1c")
+def test_608_2b_an_activated_abilitys_departed_target_is_not_the_next_permanent(
+    catalog_by_name,
+):
+    """"Target creature gains islandwalk until end of turn." The creature dies
+    with the ability on the stack.
+
+    CR 400.7 makes the permanent that left a different object, so the recorded
+    id can no longer name anything — and the *index* beside it now names the
+    permanent that slid into the vacated slot. Resolving against that index is
+    an ability affecting a permanent nobody targeted, which is the failure this
+    asserts is gone. Both halves of the ability are checked: the printed
+    effect and the delayed ability behind it.
+    """
+    game, _sandals, chosen, bystander = _fixb_boards(
+        catalog_by_name, "Sandals of Abdallah"
+    )
+    game.queue_permanent_ability(
+        0, "Sandals of Abdallah", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+
+    game.remove_from_battlefield(chosen)
+    game.check_state_based_actions()
+    _fixb_resolve(game)
+
+    assert not game._has_keyword(bystander, "islandwalk"), game.log
+    assert game.delayed_triggers == [], game.log
+
+
+@pytest.mark.cr("608.2b", "115.1c")
+def test_608_2b_an_activated_abilitys_surviving_target_is_still_affected(
+    catalog_by_name,
+):
+    """The other direction, and the reason the fizzle is narrowed to an id that
+    resolves to *nothing*: a target still on the battlefield must still be hit.
+    A fizzle that fires too eagerly is the same bug pointing the other way."""
+    game, _sandals, chosen, bystander = _fixb_boards(
+        catalog_by_name, "Sandals of Abdallah"
+    )
+    game.queue_permanent_ability(
+        0, "Sandals of Abdallah", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+
+    _fixb_resolve(game)
+
+    assert game._has_keyword(chosen, "islandwalk"), game.log
+    assert not game._has_keyword(bystander, "islandwalk"), game.log
+    assert [entry.bound_permanent_id for entry in game.delayed_triggers] == [
+        chosen.permanent_id
+    ], game.log
+
+
+@pytest.mark.cr("602.2b", "603.7d")
+def test_602_2b_an_activation_that_named_no_target_still_means_its_own_source(
+    catalog_by_name,
+):
+    """The distinction the fizzle rests on, asserted from the other side.
+
+    "This creature gets +2/+0 and gains flying. Its controller sacrifices it at
+    the beginning of the next end step" (Goblin Ski Patrol) names no target, so
+    no id is recorded and there is nothing to find gone — the pronoun is the
+    ability's own source (CR 603.7d) and must keep resolving to it. An id that
+    was never recorded is not a departed one.
+    """
+    patrol = _perm(catalog_by_name["Goblin Ski Patrol"])
+    # "…only if you control a snow Mountain", the ability's own permission.
+    mountain = _perm(catalog_by_name["Snow-Covered Mountain"])
+    p1 = PlayerState(name="P1", battlefield=[patrol, mountain], life=20)
+    p2 = PlayerState(
+        name="P2", battlefield=[_perm(catalog_by_name["Grizzly Bears"])], life=20,
+    )
+    game = _two_player_game(p1, p2)
+    game.start_turn(0)
+
+    game.queue_permanent_ability(0, "Goblin Ski Patrol", permanent_index=0)
+    _fixb_resolve(game)
+
+    assert patrol.metadata.get("sacrifice_at_next_end_step") is True, game.log
+    assert not p2.battlefield[0].metadata.get("sacrifice_at_next_end_step"), game.log
+# --- end FixB ---
