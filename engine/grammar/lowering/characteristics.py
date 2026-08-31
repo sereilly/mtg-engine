@@ -19,6 +19,7 @@ from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._events import binds_block_pair
+from ._amounts import count_spec
 from ._common import (
     _amount_payload,
     _describe_several_targets,
@@ -31,7 +32,6 @@ from ._common import (
     _names_several_targets,
     _restrictions_beyond,
     _signed,
-    count_spec,
 )
 
 
@@ -135,6 +135,35 @@ _TARGET_PUMP_DURATIONS: dict[str, str] = {
 }
 
 
+def _per_each_offset(node: ast.Pump) -> int:
+    """"…beyond the first" as the count spec's offset."""
+    return -1 if node.per_each_beyond_first else 0
+
+
+def _resolve_per_each_pronoun(node: ast.Pump) -> ast.Pump:
+    """"**It** gets -2/-1 … for each creature blocking **it**" (Johtull Wurm).
+
+    One sentence, one pronoun. The noun parser reads "blocking it" as a
+    relation to whatever the sentence *bound* — which is right for Feint, whose
+    earlier sentence chose a target — but this branch has already required the
+    pump's own subject to be the ability's source, and the two "it"s cannot
+    name different objects. So the relation is rewritten onto the source here,
+    where that is known, rather than in the parser, where it is not.
+
+    A rewrite rather than a second parse rule, because the printed words are
+    identical: what decides the referent is the rest of the sentence.
+    """
+    filt = node.per_each
+    if filt is None or not filt.blocking_bound_target:
+        return node
+    return dataclasses.replace(
+        node,
+        per_each=dataclasses.replace(
+            filt, blocking_bound_target=False, blocking_source=True
+        ),
+    )
+
+
 def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
     if node.per_each_tapped_this_way:
         # "…for each creature tapped **this way**" reaching here means no fuser
@@ -160,6 +189,7 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
                 'a "for each" pump is only a continuous bonus on its own source',
                 node=node,
             )
+        node = _resolve_per_each_pronoun(node)
         if node.duration.kind is not None:
             # "…**it gets +1/+0 until end of turn** for each other attacking
             # Aurochs." A duration makes it a one-shot pump rather than a
@@ -176,14 +206,22 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
                     "no pump handler ends at this duration", node=node
                 )
             return (
+                # The sign is already inside `times_x`, which is what
+                # `dynamic_pt_bonus` below relies on — so the negation flags
+                # `pump_self` reads must *not* be emitted here as well. They
+                # were, and the handler negated a second time: "it gets -2/-1
+                # until end of turn for each creature blocking it beyond the
+                # first" (Johtull Wurm) would have *grown* the wurm. Latent
+                # until this round, because every earlier card reaching this
+                # branch printed a plus.
                 OracleInstruction("pump_self", "", {
                     "power": _per_each_amount(node.power, node.power_negative, node),
                     "toughness": _per_each_amount(
                         node.toughness, node.toughness_negative, node
                     ),
-                    "power_negative": node.power_negative,
-                    "toughness_negative": node.toughness_negative,
-                    "x_from_count": count_spec(node.per_each, node),
+                    "x_from_count": count_spec(
+                        node.per_each, node, offset=_per_each_offset(node)
+                    ),
                 }),
             )
         return (
@@ -195,7 +233,9 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
                 "toughness": _per_each_amount(
                     node.toughness, node.toughness_negative, node
                 ),
-                "x_from_count": count_spec(node.per_each, node),
+                "x_from_count": count_spec(
+                    node.per_each, node, offset=_per_each_offset(node)
+                ),
             }),
         )
     if node.duration.kind is None:

@@ -1413,9 +1413,12 @@ def test_a_condition_on_a_kind_nothing_asks_about_refuses_the_line(set_pool):
 
 # --- W1G2: combat relations and end of combat ---
 def _w1g2_combat(
-    game: Game, attackers: list[int], blocks: dict[int, list[int]] | None = None
+    game: Game, attackers: list[int], blocks: dict[int, int | list[int]] | None = None
 ) -> None:
-    """Put seat 0's attackers and seat 1's blockers in, without a turn."""
+    """Put seat 0's attackers and seat 1's blockers in, without a turn.
+
+    *blocks* is keyed by the **blocker's** slot, as `declare_blockers` takes it.
+    """
     game.active_player_index = 0
     game._set_phase_and_step("combat", "declare_attackers")
     ok, msg = game.declare_attackers(0, attackers, 1)
@@ -1554,4 +1557,66 @@ def test_sibilant_spirit_refuses_the_phrase_under_an_event_with_no_defender(set_
     )
     assert not upkeep.lowered
     assert "defending player" in (upkeep.lowering_error or ""), upkeep.lowering_error
+
+
+def test_johtull_wurm_shrinks_per_blocker_beyond_the_first(set_pool):
+    """"Whenever this creature becomes blocked, it gets -2/-1 until end of turn
+    for each creature blocking it beyond the first." Negative rampage, and the
+    count is CR 702.23a's: the *first* blocker is free."""
+    pool = set_pool("ICE")
+    wurm = _nosick(Permanent(card=pool["Johtull Wurm"]))
+    blockers = [_nosick(Permanent(card=pool["Glacial Wall"])) for _ in range(3)]
+    p1 = PlayerState(name="P1", battlefield=[wurm], life=20)
+    p2 = PlayerState(name="P2", battlefield=blockers, life=20)
+    game = Game(players=[p1, p2])
+    base_power, base_toughness = wurm.effective_power, wurm.effective_toughness
+
+    _w1g2_combat(game, [0], {0: 0, 1: 0, 2: 0})
+    game._settle()
+
+    assert wurm.effective_power == base_power - 4, "two blockers beyond the first"
+    assert wurm.effective_toughness == base_toughness - 2
+
+
+def test_johtull_wurm_is_unchanged_by_a_single_blocker(set_pool):
+    """One blocker is none beyond the first, so the count is zero rather than
+    negative — the offset is floored, not subtracted blindly."""
+    pool = set_pool("ICE")
+    wurm = _nosick(Permanent(card=pool["Johtull Wurm"]))
+    wall = _nosick(Permanent(card=pool["Glacial Wall"]))
+    p1 = PlayerState(name="P1", battlefield=[wurm], life=20)
+    p2 = PlayerState(name="P2", battlefield=[wall], life=20)
+    game = Game(players=[p1, p2])
+    base_power, base_toughness = wurm.effective_power, wurm.effective_toughness
+
+    _w1g2_combat(game, [0], {0: [0]})
+    game._settle()
+
+    assert (wurm.effective_power, wurm.effective_toughness) == (
+        base_power, base_toughness
+    )
+
+
+def test_a_for_each_count_refuses_a_relation_it_cannot_take(set_pool):
+    """The bug this round found on the way past.
+
+    ``count_spec`` built its payload straight off ``to_payload``, which emits
+    nothing for a relative narrowing — so "for each creature blocking it"
+    reduced to "for each creature" and counted the whole of its owner's
+    battlefield. A count that is too large is a pump that is too big, so a
+    relation with no payload form and no evaluator now refuses the sentence."""
+    from engine.grammar import compile_line
+
+    reads = compile_line(
+        "This creature gets -1/-1 until end of turn for each creature blocking it."
+    )
+    assert reads.lowered
+    assert reads.instructions[0].payload["x_from_count"]["blocking_source"] is True
+
+    refuses = compile_line(
+        "This creature gets -1/-1 until end of turn for each creature that "
+        "dealt damage to it this turn."
+    )
+    assert not refuses.lowered
+    assert "count cannot test" in (refuses.lowering_error or ""), refuses.lowering_error
 # --- end W1G2 ---

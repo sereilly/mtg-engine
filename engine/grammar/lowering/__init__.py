@@ -63,7 +63,6 @@ from ._common import (
     _mentions_x,
     _refuse_unfused_distinctness,
     _stamp_x_from_count,
-    count_spec,
 )
 from ._amounts import (
     _SWAMPS_THEY_CONTROL,
@@ -71,6 +70,8 @@ from ._amounts import (
     _damaged_player_is,
     _lower_counted_damage,
     _lower_board_count_damage,
+    count_spec,
+    halved_count_spec,
 )
 from .damage import (
     _lower_upkeep_damage_unless_cost,
@@ -455,4 +456,5 @@ __all__ = [
     "_lower_lose_life",
     "_lower_pay_life",
     "count_spec",
+    "halved_count_spec",
 ]

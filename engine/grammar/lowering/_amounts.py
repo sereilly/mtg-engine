@@ -29,7 +29,7 @@ from ...oracle_types import (
 )
 from .. import ast
 from ..errors import LoweringError
-from ._common import _describe_targets, _is_target, count_spec
+from ._common import _describe_targets, _is_target, dropped_narrowings
 from ._events import CHOSEN_CAST_DAMAGE, CHOSEN_PLAYER
 
 
@@ -341,3 +341,161 @@ def _lower_chosen_cast_damage(
             {"amount": "x", X_FROM_COUNT: spec, "recipient": CHOSEN_PLAYER},
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# The count itself — the spec a resolution or a continuous recompute evaluates.
+#
+# Here rather than in `_common` for this module's own reason, and it is the
+# reason the module exists: a printed quantity that is *counted* is CR
+# 107.2/107.3's subject, and `_common` reached the thousand-line guard holding
+# it. Every family that spends a count imports it from the floor that reads
+# one.
+# ---------------------------------------------------------------------------
+# The zones a count can be taken over, and what may narrow it there. On the
+# battlefield the ordinary object filter applies, because the counter asks
+# `permanent_matches_filter` — the same question every target of the same words
+# asks. In any other zone the objects are *cards*, which have no computed
+# characteristics at all, so only the printed type union and a card's name are
+# testable and anything else refuses rather than being counted as if it were
+# not there.
+# "the number of cards in their library" (Peer into the Abyss). The evaluator
+# reads the zone off the owner by name, so the library needed no counting code —
+# only saying so here. It is listed last because it is the one zone whose count a
+# player cannot see, which changes nothing about the arithmetic and everything
+# about what a *picker* built on the same spec could offer.
+_COUNTABLE_ZONES = ("battlefield", "graveyard", "hand", "exile", "library")
+# What a *card* in a hidden or public non-battlefield zone can be tested for.
+# Held to `subject_filters.CARD_ONLY_FILTER_KEYS`, which is what the matcher
+# behind the count actually answers: a key admitted here and unanswered there is
+# a narrowing dropped on the floor, and a count that ignores its adjective is
+# larger than the card printed.
+_CARD_ZONE_KEYS = frozenset({"type_filter", "named", "color_filter"})
+
+
+def count_spec(
+    filt: "ast.ObjectFilter", node, *, aggregate: str = "count", multiplier: int = 1,
+    offset: int = 0,
+) -> dict:
+    """What ``count_from_payload`` needs to take this count at resolution.
+
+    One reader for both callers — the where-clause that *defines* an X and the
+    amount that *is* one ("draw cards equal to the number of …"). They ask the
+    same question of the same noun phrase, so a restriction one of them refused
+    and the other silently dropped would be the same count meaning two things.
+    """
+    if filt.zone not in _COUNTABLE_ZONES:
+        raise LoweringError(f"no count reads the {filt.zone}", node=node)
+    payload = dict(filt.to_payload())
+    # The same gate `_filter_payload` puts in front of every other consumer of a
+    # noun phrase, and it was missing here: `to_payload` emits nothing for a
+    # *relative* narrowing, so "for each creature **blocking it**" reduced to
+    # "for each creature" and the count read the whole of its owner's
+    # battlefield. A count that is too large is a pump that is too big — the
+    # dropped-rider bug with an arithmetic face — so a narrowing with no payload
+    # form refuses the sentence rather than widening it.
+    #
+    # `blocking_source` is the one such field a count *can* answer, carried
+    # separately below the way `attached_to` is: it is a relation to one named
+    # permanent, which the matcher cannot test and the evaluator resolves.
+    dropped = tuple(
+        field for field in dropped_narrowings(filt, payload)
+        if field != "blocking_source"
+    )
+    if dropped:
+        raise LoweringError(
+            f"a count cannot test {', '.join(dropped)}", node=node
+        )
+    if filt.zone != "battlefield" and set(payload) - _CARD_ZONE_KEYS:
+        raise LoweringError(
+            f"a {filt.zone} count cannot test {sorted(set(payload) - _CARD_ZONE_KEYS)}",
+            node=node,
+        )
+    # Whose objects are counted is the *zone owner*, and the counter reads it
+    # off there. A filter narrowing by controller as well ("the number of
+    # Mountains **they** control") is asking a question the count cannot answer
+    # — `permanent_matches_filter` does not test a controller, so the key would
+    # be handed over and silently ignored, and the count taken on the wrong
+    # player's battlefield. Refused rather than dropped.
+    controller = payload.pop("controller", None)
+    if controller not in (None, "you"):
+        raise LoweringError(
+            f"a count cannot be narrowed to the {controller}'s permanents", node=node
+        )
+    spec: dict = {
+        "zone": filt.zone,
+        "owner": (filt.zone_owner.kind if filt.zone_owner else "you"),
+        "filter": payload,
+    }
+    # "the number of Auras **attached to it**" (Rabid Wombat). A relation to one
+    # named permanent, not a property of each object, so it rides the spec
+    # rather than the filter — ``permanent_matches_filter`` cannot test it, and
+    # a key handed to that matcher is a key silently ignored. It also settles
+    # *which pile* is counted: what is attached to a permanent is recorded on
+    # that permanent, so the count is not a battlefield scan and does not
+    # inherit the owner scope above (an opponent's Aura on your creature is
+    # attached to your creature).
+    if filt.attached_to is not None:
+        if filt.attached_to != "source":
+            raise LoweringError(
+                f"no count resolves an attachment to the {filt.attached_to}",
+                node=node,
+            )
+        spec["attached_to"] = filt.attached_to
+    # "…for each creature **blocking it** beyond the first" (Johtull Wurm).
+    # A relation to the ability's own source (CR 509.1a), not a property of
+    # each creature counted — so it rides the spec beside `attached_to` for
+    # that key's reason exactly, and it also settles which pile is counted: a
+    # blocker is on the *defending* player's battlefield, which the owner scope
+    # above would have read as the source controller's.
+    if filt.blocking_source:
+        spec["blocking_source"] = True
+    # Omitted when it is the default, so every spec written before aggregates
+    # existed is byte-identical.
+    if aggregate != "count":
+        spec["aggregate"] = aggregate
+    # "**Twice** the number of white creatures that player controls" (Jovial
+    # Evil). Carried on the spec rather than folded into whatever reads it,
+    # because the same spec is read by the resolution-time evaluator and by the
+    # continuous recompute — a factor applied in one of them would make the
+    # same printed count mean two numbers. Omitted at 1, for the reason the
+    # aggregate is: an untouched spec stays byte-identical.
+    if multiplier != 1:
+        spec["multiplier"] = multiplier
+    # "…for each creature blocking it **beyond the first**" (Johtull Wurm).
+    # Applied where the multiplier is, and for its reason: one place scales
+    # every aggregate, and an offset honoured at one of the evaluator's return
+    # sites and forgotten at the rest is the dropped-rider bug with an
+    # arithmetic face. Omitted at 0 so an untouched spec stays byte-identical.
+    if offset:
+        spec["offset"] = offset
+    return spec
+
+
+def halved_count_spec(amount: "ast.Amount", node) -> dict | None:
+    """The spec for a computed amount that may be halved, or None if it is not one.
+
+    "Half the number of cards in their library" and "half their life" (Peer into
+    the Abyss) are the same shape: something the resolution computes, divided,
+    and rounded. So the halving rides on the *spec* rather than becoming a second
+    amount vocabulary — one evaluator still answers, which is the rule round 64
+    wrote down when the pump handler was found carrying its own counter.
+
+    A player's life total is not a pile to scan, so it arrives as a *named* board
+    count rather than a filter: ``evaluate_count`` maps the name onto the one
+    thing that computes it and answers 0 for a name it has no computation for,
+    which is why the name is minted here and nowhere else.
+    """
+    rounding = None
+    if isinstance(amount, ast.Half):
+        rounding = amount.rounding
+        amount = amount.of
+    if isinstance(amount, ast.CountOf):
+        spec = count_spec(amount.filter, node)
+    elif isinstance(amount, ast.BoardCount) and amount.name == "their_life":
+        spec = {"board_count": "their_life", "owner": "target"}
+    else:
+        return None
+    if rounding is not None:
+        spec["half"] = rounding
+    return spec

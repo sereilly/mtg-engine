@@ -10,13 +10,12 @@ from ...oracle_types import (PER_OBJECT_SEAT_RECORDS, X_FROM_COUNT,
                              OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
+from ._amounts import count_spec, halved_count_spec
 from ._common import (
     chargeable_card_filter,
     _amount_payload,
-    halved_count_spec,
     _describe_targets,
     _is_you,
-    count_spec,
 )
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,

@@ -140,6 +140,12 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # costs that path nothing and buys the same refuse-by-name everywhere
     # else.
     "blocking_source": "blocking_source",
+    # "…that **blocked or were blocked by** it this turn" (Venomous Breath).
+    # A history relative to the object a delayed ability was bound to, so it
+    # has no ``to_payload`` form for its one-way sibling's reason — listed here
+    # so every lowering but the destroy sweep written for it refuses the phrase
+    # by name instead of sweeping the board.
+    "in_combat_with_bound_object": "in_combat_with_bound_object",
     # "target **instant or Aura** spell" and "…**that targets a permanent you
     # control**" (Avoid Fate, Ring of Immortals). Neither has a ``to_payload``
     # form: a cross-axis class union has no field pair that means it, and a
@@ -690,122 +696,6 @@ def _full_mana_payload(cost: ast.ManaCost) -> dict[str, int]:
 # in the cleanup step — so these two wordings are the same effect, and any other
 # duration (or none) is not.
 _REST_OF_TURN = ("this_turn", "until_end_of_turn")
-
-
-# The zones a count can be taken over, and what may narrow it there. On the
-# battlefield the ordinary object filter applies, because the counter asks
-# `permanent_matches_filter` — the same question every target of the same words
-# asks. In any other zone the objects are *cards*, which have no computed
-# characteristics at all, so only the printed type union and a card's name are
-# testable and anything else refuses rather than being counted as if it were
-# not there.
-# "the number of cards in their library" (Peer into the Abyss). The evaluator
-# reads the zone off the owner by name, so the library needed no counting code —
-# only saying so here. It is listed last because it is the one zone whose count a
-# player cannot see, which changes nothing about the arithmetic and everything
-# about what a *picker* built on the same spec could offer.
-_COUNTABLE_ZONES = ("battlefield", "graveyard", "hand", "exile", "library")
-# What a *card* in a hidden or public non-battlefield zone can be tested for.
-# Held to `subject_filters.CARD_ONLY_FILTER_KEYS`, which is what the matcher
-# behind the count actually answers: a key admitted here and unanswered there is
-# a narrowing dropped on the floor, and a count that ignores its adjective is
-# larger than the card printed.
-_CARD_ZONE_KEYS = frozenset({"type_filter", "named", "color_filter"})
-
-
-def halved_count_spec(amount: "ast.Amount", node) -> dict | None:
-    """The spec for a computed amount that may be halved, or None if it is not one.
-
-    "Half the number of cards in their library" and "half their life" (Peer into
-    the Abyss) are the same shape: something the resolution computes, divided,
-    and rounded. So the halving rides on the *spec* rather than becoming a second
-    amount vocabulary — one evaluator still answers, which is the rule round 64
-    wrote down when the pump handler was found carrying its own counter.
-
-    A player's life total is not a pile to scan, so it arrives as a *named* board
-    count rather than a filter: ``evaluate_count`` maps the name onto the one
-    thing that computes it and answers 0 for a name it has no computation for,
-    which is why the name is minted here and nowhere else.
-    """
-    rounding = None
-    if isinstance(amount, ast.Half):
-        rounding = amount.rounding
-        amount = amount.of
-    if isinstance(amount, ast.CountOf):
-        spec = count_spec(amount.filter, node)
-    elif isinstance(amount, ast.BoardCount) and amount.name == "their_life":
-        spec = {"board_count": "their_life", "owner": "target"}
-    else:
-        return None
-    if rounding is not None:
-        spec["half"] = rounding
-    return spec
-
-
-def count_spec(
-    filt: "ast.ObjectFilter", node, *, aggregate: str = "count", multiplier: int = 1
-) -> dict:
-    """What ``count_from_payload`` needs to take this count at resolution.
-
-    One reader for both callers — the where-clause that *defines* an X and the
-    amount that *is* one ("draw cards equal to the number of …"). They ask the
-    same question of the same noun phrase, so a restriction one of them refused
-    and the other silently dropped would be the same count meaning two things.
-    """
-    if filt.zone not in _COUNTABLE_ZONES:
-        raise LoweringError(f"no count reads the {filt.zone}", node=node)
-    payload = dict(filt.to_payload())
-    if filt.zone != "battlefield" and set(payload) - _CARD_ZONE_KEYS:
-        raise LoweringError(
-            f"a {filt.zone} count cannot test {sorted(set(payload) - _CARD_ZONE_KEYS)}",
-            node=node,
-        )
-    # Whose objects are counted is the *zone owner*, and the counter reads it
-    # off there. A filter narrowing by controller as well ("the number of
-    # Mountains **they** control") is asking a question the count cannot answer
-    # — `permanent_matches_filter` does not test a controller, so the key would
-    # be handed over and silently ignored, and the count taken on the wrong
-    # player's battlefield. Refused rather than dropped.
-    controller = payload.pop("controller", None)
-    if controller not in (None, "you"):
-        raise LoweringError(
-            f"a count cannot be narrowed to the {controller}'s permanents", node=node
-        )
-    spec: dict = {
-        "zone": filt.zone,
-        "owner": (filt.zone_owner.kind if filt.zone_owner else "you"),
-        "filter": payload,
-    }
-    # "the number of Auras **attached to it**" (Rabid Wombat). A relation to one
-    # named permanent, not a property of each object, so it rides the spec
-    # rather than the filter — ``permanent_matches_filter`` cannot test it, and
-    # a key handed to that matcher is a key silently ignored. It also settles
-    # *which pile* is counted: what is attached to a permanent is recorded on
-    # that permanent, so the count is not a battlefield scan and does not
-    # inherit the owner scope above (an opponent's Aura on your creature is
-    # attached to your creature).
-    if filt.attached_to is not None:
-        if filt.attached_to != "source":
-            raise LoweringError(
-                f"no count resolves an attachment to the {filt.attached_to}",
-                node=node,
-            )
-        spec["attached_to"] = filt.attached_to
-    # Omitted when it is the default, so every spec written before aggregates
-    # existed is byte-identical.
-    if aggregate != "count":
-        spec["aggregate"] = aggregate
-    # "**Twice** the number of white creatures that player controls" (Jovial
-    # Evil). Carried on the spec rather than folded into whatever reads it,
-    # because the same spec is read by the resolution-time evaluator and by the
-    # continuous recompute — a factor applied in one of them would make the
-    # same printed count mean two numbers. Omitted at 1, for the reason the
-    # aggregate is: an untouched spec stays byte-identical.
-    if multiplier != 1:
-        spec["multiplier"] = multiplier
-    return spec
-
-
 
 
 def chargeable_tap_filter(filt: "ast.ObjectFilter") -> dict | None:

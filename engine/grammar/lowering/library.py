@@ -15,6 +15,7 @@ from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
 from ...subject_filters import card_only_filter
 from .. import ast
 from ..errors import LoweringError
+from ._amounts import count_spec
 from ._common import (
     chargeable_card_filter,
     _filter_payload,
@@ -23,7 +24,6 @@ from ._common import (
     _is_target,
     _restrictions_beyond,
     _targets_only,
-    count_spec,
 )
 from ._events import (
     _back_reference_payload,

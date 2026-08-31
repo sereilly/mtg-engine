@@ -13,10 +13,9 @@ from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
+from ._amounts import count_spec, halved_count_spec
 from ._common import (
     _amount_payload,
-    count_spec,
-    halved_count_spec,
     _describe_targets,
     _filter_payload,
     _restrictions_beyond,
