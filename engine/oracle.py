@@ -3787,7 +3787,16 @@ def _compile_card_oracle(
         #
         # Only the derivations a *land* can print are read here, one table at a
         # time, rather than the whole creature chain: a land has no P/T for a
-        # static bonus to change and no combat to restrict.
+        # static bonus to change.
+        #
+        # It *can* restrict combat, which is what Glacial Chasm showed —
+        # "Creatures you control can't attack." The comment here used to say a
+        # land had no combat to restrict, and the gate above already asked
+        # `combat_restriction_for` through `_is_supported_static_creature_line`,
+        # so a land printing one would have been admitted with the restriction
+        # nowhere: `declare_attackers_step.can_attack` scans every permanent's
+        # compiled *instructions*, and this loop is the only place a land's
+        # static line becomes one.
         land_statics: list[OracleInstruction] = []
         land_static_lines: list[str] = []
         for raw_line in (oracle_text or "").splitlines():
@@ -3799,6 +3808,15 @@ def _compile_card_oracle(
             if lord is not None:
                 land_statics.append(
                     OracleInstruction(LORD_BUFF_KIND, "", lord_buff_payload(lord))
+                )
+                land_static_lines.append(normalized)
+                continue
+            restriction = combat_restriction_for(
+                _restriction_line(line, name), name
+            )
+            if restriction is not None:
+                land_statics.append(
+                    OracleInstruction(restriction.kind, "", dict(restriction.payload))
                 )
                 land_static_lines.append(normalized)
 

@@ -21,6 +21,7 @@ from .errors import GrammarError
 from .lexer import SELF, WORD
 from .paragraphs import (
     _parse_coin_flip_damage_loop,
+    _parse_pay_mana_to_prevent_upkeep_damage,
     _parse_upkeep_damage_unless_cost,
     _parse_force_chosen_creature_to_attack,
     _parse_exchange_greatest_mana_value, _parse_exile_graveyard_until_leaves,
@@ -40,7 +41,8 @@ from .effects import (
     _parse_becomes, _parse_cant_attack_or_block, _parse_change_base_pt,
     _parse_no_longer_supertype,
     _parse_change_target,
-    _parse_change_text, _parse_choose_cards_in_hand, _parse_choose_number,
+    _parse_change_text, _parse_choose_cards_in_hand, _parse_choose_color,
+    _parse_choose_number,
     _parse_choose_player_who_cast,
     _parse_counter, _parse_create_token,
     _parse_damage, _parse_damage_redirect, _parse_destroy, _parse_discard,
@@ -264,6 +266,14 @@ def parse_subject_verb(
     upkeep_toll = _parse_upkeep_damage_unless_cost(stream)
     if upkeep_toll is not None:
         return upkeep_toll
+    # "That player may pay any amount of mana. <source> deals N damage to that
+    # player. Prevent X of that damage, where X is the amount of mana that
+    # player paid this way." (Power Leak, Errant Minion.) Three sentences and
+    # one effect, so it is tried before the offer below reads the first alone
+    # and strands the other two. Refuses without consuming.
+    paid_off = _parse_pay_mana_to_prevent_upkeep_damage(stream)
+    if paid_off is not None:
+        return paid_off
     # Tempest Efreet's whole ability, which opens "Target opponent may pay …"
     # — a subject the noun parser reads and then a "may" no production of its
     # own would finish. Refuses without consuming.
@@ -552,6 +562,13 @@ def parse_subject_verb(
         chosen_number = _parse_choose_number(stream)
         if chosen_number is not None:
             return chosen_number
+        # "Choose a color." (Chromatic Armor.) Beside the number above and
+        # non-consuming on refusal for the same reason — the word opens several
+        # unrelated sentences, and "choose a color **and an opponent**" is one
+        # of them.
+        chosen_color = _parse_choose_color(stream)
+        if chosen_color is not None:
+            return chosen_color
         # "Choose a player who cast one or more sorcery spells this turn."
         # (Backdraft.) Non-consuming on refusal for the reason every "choose"
         # production here is: the word opens several unrelated sentences, and a
@@ -689,6 +706,16 @@ def parse_subject_verb(
             return _parse_discard(stream, source_spec)
         if token.text in ("mills", "mill") and isinstance(source_spec, ast.PlayerRef):
             return _parse_mill(stream, source_spec)
+        # "…and **you tap** that creature." (Mind Whip.) Tapping has no actor in
+        # the rules — CR 701.20a turns a permanent sideways and says nothing
+        # about who does it — so the printed subject is read and then dropped
+        # rather than carried: the same instruction results whoever the sentence
+        # names. Read here because only the bare imperative had a production, so
+        # a printed subject came back as an unrecognized verb.
+        if token.text in ("taps", "tap", "untaps", "untap") and isinstance(
+            source_spec, ast.PlayerRef
+        ):
+            return _parse_tap_untap(stream)
         # "**Target player** reveals their hand." (Inquisition.) "Target player
         # **reveals their hand** and discards all nonland cards." (Amnesia.)
         # Dispatched on the verb like every other player action; the Duress

@@ -19,6 +19,7 @@ from ..amounts import parse_amount, parse_equal_to
 from ..errors import GrammarError
 from ..readers import accept_source_reference
 from ..references import parse_player_ref, parse_recipient
+from ..lexer import WORD
 from ..stream import TokenStream
 from ..where_x import _parse_where_x_is
 from ..phrases import (
@@ -116,6 +117,30 @@ def _parse_fight(stream: TokenStream, subject: ast.Recipient) -> ast.Fight:
     return ast.Fight(subject, opponent)
 
 
+def _ends_the_recipient_list(stream: TokenStream) -> bool:
+    """Whether the noun phrase just read really was another recipient.
+
+    "…deals 2 damage to that player **and you tap that creature**." (Mind
+    Whip.) The conjunct loop reads "you" as a second recipient perfectly
+    happily, and the verb after it then belongs to nothing — which is the
+    greedy half of a genuine ambiguity: "and <noun phrase>" is a further
+    recipient when the clause ends there, and the *subject of the next clause*
+    when a predicate follows.
+
+    A recipient list ends the clause it is in. Everything a damage sentence
+    prints after one — a rider, a duration, a second sentence — opens with
+    punctuation or ends the line, so a bare word at the cursor is the verb of a
+    new predicate and the conjunct is its subject.
+
+    Refusing here rather than in the sentence loop is what keeps the reading
+    honest in both directions: the whole conjunct is rewound, so the "and" is
+    left for the statement layer to split on, and Mind Whip's tap lands in the
+    branch the card prints it in instead of running unconditionally.
+    """
+    token = stream.peek()
+    return token is None or token.kind != WORD
+
+
 def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Statement:
     """``<source> deals <amount> damage to <recipients> [riders]``.
 
@@ -187,7 +212,7 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
             if not stream.accept_word("and"):
                 break
             extra = parse_recipient(stream)
-            if extra is None:
+            if extra is None or not _ends_the_recipient_list(stream):
                 stream.reset(mark)
                 break
             recipients.append(extra)

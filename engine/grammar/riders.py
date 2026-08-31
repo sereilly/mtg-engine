@@ -351,6 +351,14 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         chooser_person = True
     elif stream.accept_word("they"):
         third_person = True
+        # Anaphoric like "the player" and never distributive: "they" points at
+        # the seat the sentence in front of it named, so the referent test below
+        # is the definite one. Without this flag the pronoun was refused over an
+        # offer made to "that player" — Mind Whip prints exactly that pair ("…
+        # **that player** may pay {3}. **If they don't**, …") and the sentence
+        # failed at the pronoun, which reads as a missing production rather than
+        # as the referent rule it was.
+        definite = True
         chooser_person = True
     else:
         stream.reset(mark)

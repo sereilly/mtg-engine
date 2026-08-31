@@ -60,6 +60,37 @@ def _lower_prevent_half(node: ast.PreventDamage) -> tuple[OracleInstruction, ...
     )
 
 
+def _alternate_amount(node: ast.PreventDamage) -> dict | None:
+    """The second size Elvish Healer's rider gives its shield, or None.
+
+    ``{"filter": …, "amount": N}`` — the printed noun phrase the recipient is
+    tested against and how much the shield holds when it answers. Both halves
+    or neither: a filter with no amount is a sentence that prevents nothing and
+    an amount with no filter is one that always applies, and either alone would
+    be a shield of the wrong size rather than a refusal.
+
+    The filter is held to what ``subject_matches`` can test, like every other
+    printed noun phrase that reaches a handler: a narrowing the matcher would
+    drop is a shield that takes the *larger* size for every recipient.
+    """
+    if node.alternate_amount is None and node.alternate_subject is None:
+        return None
+    if node.alternate_amount is None or node.alternate_subject is None:
+        raise LoweringError(
+            "a second shield size needs both the condition and the amount",
+            node=node,
+        )
+    larger = _amount_payload(node.alternate_amount)
+    if not isinstance(larger, int) or larger <= 0:
+        raise LoweringError("a second shield size is a printed number", node=node)
+    described = _filter_payload(node.alternate_subject)
+    if not described or set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+        raise LoweringError(
+            "the shield cannot test the noun phrase that sizes it", node=node
+        )
+    return {"filter": described, "amount": larger}
+
+
 def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]:
     """"Prevent the next N damage …" and the Circle-of-Protection shield.
 
@@ -78,6 +109,22 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
     if node.dealt_by_others and not isinstance(node.amount, ast.AllOf):
         raise LoweringError(
             "no counted shield covers more than one source", node=node
+        )
+    # "…**If it's a green creature, prevent the next 2 damage instead.**"
+    # (Elvish Healer.) Refused for every shape but the counted shield below,
+    # and refused here rather than in each branch, because the failure it
+    # guards is the silent one: every branch was written before the rider
+    # existed and reads none of it, so a Circle or a blanket printed with a
+    # second size would arm at the smaller one and report the card supported.
+    alternate = _alternate_amount(node)
+    if alternate is not None and (
+        not isinstance(node.amount, ast.Fixed)
+        or node.combat_only
+        or node.from_filter is not None
+        or node.dealt_by is not None
+    ):
+        raise LoweringError(
+            "only a counted shield takes a second size", node=node
         )
     # "…prevent **half** that damage, rounded down." (Dark Sphere.) Read before
     # the source-scoped branch below, which counts a shield in whole instances
@@ -99,6 +146,16 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
         # colourless Circle of Protection.
         colours = node.from_filter.colors
         card_types = node.from_filter.card_types
+        if node.from_filter.is_source:
+            # "The next time **this creature** would deal damage to you this
+            # turn, prevent that damage." (Mercenaries.) The source is the
+            # permanent the ability is on, so nothing is chosen and nothing is
+            # rechecked as a property — which is why it is a payload flag on the
+            # whole-instance shield rather than a Circle keyed on "creature".
+            # Read **before** the axis check below, which would see the printed
+            # noun as a card type and arm a shield against every creature on the
+            # board.
+            return _lower_named_source_shield(node)
         # "…a source of your choice…", with no property recorded at all
         # (Pentagram of the Ages). CR 615.8's plain sentence, and the one every
         # other branch here is a narrowing of — the pool printed the colour, the
@@ -162,6 +219,8 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
         "to_self": bool(_is_you(recipient)),
         "to_source": bool(_is_source(recipient)),
     }
+    if alternate is not None:
+        payload["amount_if"] = alternate
     # "…dealt to **enchanted creature** this turn." (Fylgja.) A fourth
     # recipient, in the same shape as the three booleans above rather than as a
     # kind of its own, because CR 615.1's shield goes around one object either
@@ -201,6 +260,67 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
         raise LoweringError("no handler for this prevention recipient", node=node)
     _describe_targets(payload, recipient)
     return (OracleInstruction("grant_prevention_shield", "", payload),)
+
+
+def _lower_named_source_shield(
+    node: ast.PreventDamage,
+) -> tuple[OracleInstruction, ...]:
+    """Mercenaries: "{3}: The next time this creature would deal damage to you
+    this turn, prevent that damage."
+
+    ``grant_whole_prevention_shield`` with one payload key rather than a kind of
+    its own: CR 615.8's whole-instance shield is what it arms either way, and
+    the only difference is where the source comes from — a chosen object for
+    Pentagram of the Ages, and the ability's own permanent here.
+
+    "You" is the **activator**, not the permanent's controller, and on this card
+    that is the whole point: the ability is printed beside "Any player may
+    activate this ability", so the seat that pays is the seat that is shielded
+    (CR 109.5). The handler arms on ``context.caster``, which is that seat.
+
+    Four refusals, each a way the sentence could otherwise mean more:
+
+    * the recipient must be the ability's controller. There is no handler that
+      arms this shield on a chosen object, and a shield armed on the wrong
+      recipient absorbs damage the card never covered.
+    * exactly one instance. "Prevent the next N damage … " from a named source
+      is a point pool, and this handler spends the shield on the event whatever
+      its size.
+    * the source must carry no narrowing beyond naming itself. A restated
+      adjective has nothing left to narrow and would be dropped.
+    * the duration must be this turn, because that is what the sweep gives it.
+    """
+    if not _is_you(node.to):
+        raise LoweringError(
+            "a named-source shield only protects the seat that activated it",
+            node=node,
+        )
+    if not isinstance(node.amount, ast.Fixed) or node.amount.value != 1:
+        raise LoweringError(
+            "a named-source shield prevents the whole instance, not a counted "
+            "amount",
+            node=node,
+        )
+    if _restrictions_beyond(
+        node.from_filter, frozenset({"card_types", "is_source"})
+    ):
+        raise LoweringError(
+            "the ability's own source carries no narrowing the shield could "
+            "honour",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "the named-source shield lasts exactly this turn", node=node
+        )
+    if node.combat_only or node.dealt_by is not None or node.dealt_by_others:
+        raise LoweringError(
+            "no named-source shield is scoped to combat or to a second source",
+            node=node,
+        )
+    return (
+        OracleInstruction("grant_whole_prevention_shield", "", {"from_source": True}),
+    )
 
 
 def _lower_prevent_from_subject(

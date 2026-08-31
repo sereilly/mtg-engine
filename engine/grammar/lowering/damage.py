@@ -746,6 +746,32 @@ def _lower_damage_dealt_riders(
     return (OracleInstruction("grant_damage_riders_until_eot", "", payload),)
 
 
+def _lower_damage_reduced_by_paid_mana(
+    node: ast.DamageReducedByPaidMana,
+) -> tuple[OracleInstruction, ...]:
+    """Power Leak / Errant Minion's three sentences, with the number as payload.
+
+    The ordinary ``deal_damage`` kind plus one key, not a kind of its own: the
+    ``(upkeep_enchanted_controller, deal_damage)`` handler in
+    ``engine/phases/upkeep_effects.py`` is what implements the whole clause, and
+    a second kind would be a second pair in that registry doing the same thing.
+
+    ``prevent_up_to_paid_mana`` is what that handler used to read as a substring
+    of the permanent's oracle text — the gate and the dispatch agreeing by
+    coincidence rather than by construction. It is payload now, so a card whose
+    clause this production has *not* read cannot be reduced by a payment nobody
+    offered.
+    """
+    if node.amount <= 0:
+        raise LoweringError("the upkeep damage takes a fixed amount", node=node)
+    return (
+        OracleInstruction(
+            "deal_damage", "",
+            {"amount": node.amount, "prevent_up_to_paid_mana": True},
+        ),
+    )
+
+
 def _lower_upkeep_damage_unless_cost(
     node: ast.UpkeepDamageUnlessCost,
 ) -> tuple[OracleInstruction, ...]:

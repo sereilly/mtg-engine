@@ -78,6 +78,19 @@ class DamageRedirect:
     #: and the chooser is ``new_recipient``'s seat — the player whose card this
     #: is, not the one whose creature was about to be damaged.
     optional: bool = False
+    #: The printed noun phrase naming the **sources** whose damage moves, as a
+    #: filter payload — "…by **unblocked creatures** this turn" (Kjeldoran Royal
+    #: Guard). ``source`` above is one chosen object matched by identity; this
+    #: is a class, re-asked of each source when the damage would be dealt, so a
+    #: creature that becomes unblocked after the ability resolved is covered and
+    #: one that becomes blocked is not (CR 614.9 fixes nothing at arming time).
+    #: ``None`` is every other record, which answers to ``source`` alone.
+    sources: dict | None = None
+    #: "All **combat** damage that would be dealt to you…". The printed word is
+    #: a property of the *event* rather than of either end of it, which is why
+    #: it is a flag here and a parameter of :func:`applicable_redirect` rather
+    #: than something either matcher above could answer.
+    combat_only: bool = False
     #: True while this record is being applied. A redirect deals the damage on
     #: to its new recipient as a fresh event, and that event runs the whole
     #: contention set again — so a pair of records pointing at each other would
@@ -257,7 +270,31 @@ def class_redirects(game, recipient) -> list[DamageRedirect]:
     return found
 
 
-def applicable_redirect(game, recipient, source) -> DamageRedirect | None:
+def source_class_matches(game, redirect: DamageRedirect, source) -> bool:
+    """Whether an incoming damage *source* is in the class this record watches.
+
+    ``sources`` None is every source, exactly as :func:`source_matches`'s None
+    is — a record that names no class narrows by nothing.
+
+    Only a permanent can answer a printed noun phrase: a spell's source is its
+    ``CardDefinition`` (CR 109.5), which has no battlefield state for the filter
+    to read, and handing one to the matcher would answer True for every key it
+    could not test. So a non-permanent source is outside every class-scoped
+    record rather than inside all of them — the narrow direction, and the one a
+    dropped narrowing would get wrong.
+    """
+    if redirect.sources is None:
+        return True
+    if not _is_permanent(source):
+        return False
+    from .subject_filters import subject_matches
+
+    return subject_matches(game, source, redirect.sources)
+
+
+def applicable_redirect(
+    game, recipient, source, combat: bool = False
+) -> DamageRedirect | None:
     """The record that would move this damage, or None. Pure.
 
     Oldest first, which is the order they were armed in: with two records
@@ -266,6 +303,10 @@ def applicable_redirect(game, recipient, source) -> DamageRedirect | None:
     redirect on one recipient does not occur in this pool; when one does, it
     wants an order of its own in ``engine/replacements.py`` rather than a
     second reading here.
+
+    *combat* is the event's own CR 510.2 flag, and the one fact about a damage
+    event neither matcher above can be asked for — a record printed "all combat
+    damage" declines every other kind rather than having the word dropped.
     """
     own = [r for r in redirects_on(recipient) if r.recipients is None]
     for redirect in (
@@ -273,7 +314,11 @@ def applicable_redirect(game, recipient, source) -> DamageRedirect | None:
     ):
         if redirect.spent or redirect.applying:
             continue
+        if redirect.combat_only and not combat:
+            continue
         if not source_matches(redirect.source, source):
+            continue
+        if not source_class_matches(game, redirect, source):
             continue
         if live_recipient(game, redirect) is None:
             continue

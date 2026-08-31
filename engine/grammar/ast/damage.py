@@ -180,6 +180,33 @@ class RedirectDamage:
     one_shot: bool = False
     chooser: PlayerRef | None = None
     optional: bool = False
+    #: "All **combat** damage that would be dealt to you by unblocked creatures
+    #: this turn is dealt to this creature instead." (Kjeldoran Royal Guard.)
+    #: The printed word is the whole difference between a redirect that catches
+    #: an unblocked attacker's ping ability and one that does not, so it is read
+    #: rather than skipped — exactly as :class:`PreventDamage` reads its own.
+    combat_only: bool = False
+
+
+@dataclass(frozen=True)
+class DamageReducedByPaidMana:
+    """"That player may pay any amount of mana. <source> deals N damage to that
+    player. Prevent X of that damage, where X is the amount of mana that player
+    paid this way." (Power Leak, Errant Minion.)
+
+    Three printed sentences and one effect, which is why it is a node rather
+    than a sequence: the offer has no bound, the damage is what it is measured
+    against, and the prevention reads the payment back — none of the three says
+    anything on its own, and a decomposed reading would deal the damage before
+    the offer had a number to subtract.
+
+    Only the *amount* is carried. Who is offered and who is damaged are the same
+    seat by construction — the sentence names "that player" three times, and the
+    trigger condition in front of it is what says which seat that is — so
+    recording either would be recording the condition twice.
+    """
+
+    amount: int
 
 
 @dataclass(frozen=True)
@@ -243,6 +270,15 @@ class PreventDamage:
     # cannot be hurt is not the card that also cannot hurt anything, and the
     # half that goes missing is silent either way.
     to_and_by: bool = False
+    # "…dealt to any target this turn. **If it's a green creature, prevent the
+    # next 2 damage instead.**" (Elvish Healer.) A second size the shield takes
+    # when the recipient answers a printed noun phrase, which is a property of
+    # *this* shield rather than a second effect: the two sentences arm one
+    # shield of one size, chosen when the target is known. Two fields rather
+    # than a nested node, because either alone is meaningless — the lowering
+    # refuses unless both are present.
+    alternate_amount: "Amount | None" = None
+    alternate_subject: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)

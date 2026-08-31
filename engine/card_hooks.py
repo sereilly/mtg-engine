@@ -445,13 +445,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "when this creature dies, its owner loses half their life, rounded up":
             _line("owner_loses_half_life", "triggered_loss"),
     },
-    'Power Leak': {
-        "at the beginning of the upkeep of enchanted enchantment's controller, "
-        'that player may pay any amount of mana. this aura deals 2 damage to '
-        'that player. prevent x of that damage, where x is the amount of mana '
-        'that player paid this way':
-            _line('deal_damage', 'spell_pattern', amount=2),
-    },
     # One bullet of a two-bullet modal activated ability. The destroy half used
     # to be hooked beside it, because "Aura attached to a land" was a
     # restriction the filter had no field for; ``attached_to_filter`` gave it one

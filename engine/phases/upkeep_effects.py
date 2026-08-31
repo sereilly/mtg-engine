@@ -408,11 +408,20 @@ class UpkeepEffectsMixin:
             return
         amount = int(trig.instruction.payload.get("amount", 1))
         victim = self.players[player_index]
-        # Power Leak: "that player may pay any amount of mana. ...
-        # Prevent X of that damage, where X is the amount of mana
-        # that player paid this way." The controller may pay up to
-        # `amount` mana to prevent that much damage.
-        if "prevent x of that damage" in permanent.effective_card.oracle_text.lower():
+        # Power Leak / Errant Minion: "that player may pay any amount of mana.
+        # … Prevent X of that damage, where X is the amount of mana that player
+        # paid this way." The damaged player may pay up to `amount` mana to
+        # prevent that much damage.
+        #
+        # Read off the *payload*, not off a substring of the permanent's text.
+        # The substring was the gate and the dispatch agreeing by coincidence:
+        # the clause reached this handler only because a card hook keyed on
+        # Power Leak's whole printed line produced the instruction, so Errant
+        # Minion — the same sentence one noun over — got the substring's "yes"
+        # and no instruction at all. One production reads the clause now
+        # (`paragraphs._parse_pay_mana_to_prevent_upkeep_damage`) and stamps
+        # this key, so what is offered is exactly what was read.
+        if trig.instruction.payload.get("prevent_up_to_paid_mana"):
             requested = 0
             if mana_prevention is not None and permanent.card.name in mana_prevention:
                 requested = max(0, int(mana_prevention[permanent.card.name]))

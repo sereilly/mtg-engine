@@ -434,6 +434,17 @@ class ObjectFilter:
             payload["dealt_damage_this_turn"] = True
         if self.blocking:
             payload["blocking_only"] = True
+        # "…by **unblocked** creatures" (Kjeldoran Royal Guard, Veteran
+        # Bodyguard) / "**blocked** creature" (Sorrow's Path). CR 509.1h makes
+        # both a state of the attacking permanent itself, so both are payload
+        # keys like ``attacking_only`` beside them. Until they were, the field
+        # had **no** payload form at all: every lowering that built a filter
+        # payload dropped it silently, which is a sweep over every creature
+        # where the card printed one word of narrowing.
+        if self.blocked is True:
+            payload["blocked_only"] = True
+        elif self.blocked is False:
+            payload["unblocked_only"] = True
         if self.any_states:
             payload["any_states"] = list(self.any_states)
         if self.other_than_source:

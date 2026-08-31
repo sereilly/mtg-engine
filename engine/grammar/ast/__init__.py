@@ -131,6 +131,7 @@ from .damage import (
     PreventDamage,
     RedirectDamage,
     DamageCantBePreventedOrRedirected,
+    DamageReducedByPaidMana,
     UpkeepDamageUnlessCost,
 )
 from .characteristics import (
@@ -257,6 +258,7 @@ from .game import (
     CreateToken,
     EndTheTurn,
     ExtraTurn,
+    ChooseColor,
     ChooseNumber,
     ChoosePlayerWhoCast,
     FlipCoin,
@@ -386,6 +388,7 @@ __all__ = [
     "PreventDamage",
     "RedirectDamage",
     "DamageCantBePreventedOrRedirected",
+    "DamageReducedByPaidMana",
     # characteristics
     "Pump",
     "SetBasePT",
@@ -498,6 +501,7 @@ __all__ = [
     "CreateToken",
     "EndTheTurn",
     "ExtraTurn",
+    "ChooseColor",
     "ChooseNumber",
     "ChoosePlayerWhoCast",
     "FlipCoin",

@@ -624,15 +624,16 @@ def _source_answers_class(game, source, source_class: str) -> bool:
 
 
 def _unblocked_attacker(source) -> bool:
-    """Whether *source* is an unblocked attacking creature.
+    """Whether *source* is an unblocked attacking creature (CR 509.1h).
 
-    CR 509.1h: an attacker with a blocker declared for it *is* a blocked
-    creature, and stays one even if every blocker leaves combat. So a trampler's
-    excess damage to the player is not dealt "by an unblocked creature" — read
-    off the permanent's own combat state rather than off which loop the combat
-    step happens to be in.
+    Delegated to ``handlers/_common.unblocked_attacker``, which is the same word
+    the ``unblocked_only`` filter key answers to — Kjeldoran Royal Guard prints
+    Veteran Bodyguard's source class with a duration on it, so the static read
+    here and the recorded redirect's filter must not be two readings.
     """
-    return bool(getattr(source, "attacking", False)) and not getattr(source, "blocked", False)
+    from .handlers._common import unblocked_attacker
+
+    return unblocked_attacker(source)
 
 
 def _protecting_bodyguard(game, payload: dict):
@@ -760,7 +761,10 @@ def _recorded_redirect(game, payload: dict):
     see ``engine/damage_redirects.py`` for why the predicate may not spend one."""
     if payload["amount"] <= 0:
         return None
-    return applicable_redirect(game, payload["recipient"], payload.get("source"))
+    return applicable_redirect(
+        game, payload["recipient"], payload.get("source"),
+        combat=bool(payload.get("combat")),
+    )
 
 
 def _applies_recorded_redirect(game, payload: dict) -> bool:

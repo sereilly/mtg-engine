@@ -704,6 +704,23 @@ _STATE_TESTS = {
 }
 
 
+def unblocked_attacker(perm) -> bool:
+    """CR 509.1h — *perm* is an attacking creature nothing was declared to block.
+
+    The one reading of the printed word, shared by the filter key below and by
+    ``engine/replacements.py``'s source classes. An attacker with a blocker
+    declared for it **is** a blocked creature and stays one even if every
+    blocker leaves combat, so a trampler's excess damage to the player is not
+    dealt "by an unblocked creature" — which is why this reads the permanent's
+    own combat state rather than which loop the combat step is in. A creature
+    not attacking at all is neither blocked nor unblocked, so it answers False
+    here and to ``blocked_only`` alike.
+    """
+    return bool(getattr(perm, "attacking", False)) and not bool(
+        getattr(perm, "blocked", False)
+    )
+
+
 def state_holds(perm: Permanent, word: str) -> bool:
     """Whether the printed state adjective *word* is true of *perm*.
 
@@ -782,6 +799,16 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # filter: ``subject_matches`` dropped it, so a role's re-check at CR 608.2b
     # and the picker both admitted a creature that is not blocking at all.
     if payload.get("blocking_only") and not state_holds(perm, "blocking"):
+        return False
+
+    # "…by **unblocked** creatures" / "**blocked** creature". CR 509.1h's pair,
+    # asked through the one reading above so a redirect's source class, a
+    # target restriction and the picker cannot disagree about the word.
+    if payload.get("unblocked_only") and not unblocked_attacker(perm):
+        return False
+    if payload.get("blocked_only") and not (
+        getattr(perm, "attacking", False) and getattr(perm, "blocked", False)
+    ):
         return False
 
     # "a creature **that has been dealt damage this turn**" (Giant Shark). A

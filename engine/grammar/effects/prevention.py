@@ -21,6 +21,8 @@ printed", and the name is the half of it the pool mostly prints.
 from .. import ast
 from ..amounts import parse_amount
 from ..references import parse_recipient
+from ..errors import GrammarError
+from ..nouns import parse_object_filter
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
 from ..phrases import _parse_duration, _parse_opponents_choice, parse_bound_subject
@@ -47,7 +49,64 @@ def _parse_prevent(stream: TokenStream) -> ast.PreventDamage:
     if recipient is None:
         raise stream.error("expected something to shield")
     duration = _parse_duration(stream)
-    return ast.PreventDamage(amount, to=recipient, duration=duration)
+    alternate = _parse_instead_rider(stream)
+    if alternate is None:
+        return ast.PreventDamage(amount, to=recipient, duration=duration)
+    described, larger = alternate
+    return ast.PreventDamage(
+        amount, to=recipient, duration=duration,
+        alternate_amount=larger, alternate_subject=described,
+    )
+
+
+def _parse_instead_rider(
+    stream: TokenStream,
+) -> "tuple[ast.ObjectFilter, ast.Amount] | None":
+    """``. If it's <noun phrase>, prevent the next N damage instead.`` (Elvish
+    Healer.)
+
+    A rider on the shield in front of it rather than a sentence of its own: it
+    prevents nothing by itself, and "instead" says so — the two sentences arm
+    **one** shield whose size depends on what the first one's target turns out
+    to be. Read here for the same reason the upkeep toll's trailing sentence is
+    read inside its own production: a statement layer that split them would arm
+    two shields and prevent three.
+
+    Every part is required. The pronoun must be "it" (the target the sentence
+    in front of it chose), the noun phrase is what decides which size applies,
+    and the printed "instead" is the difference between a larger shield and a
+    second one.
+
+    Refuses with the cursor untouched, so a prevention sentence followed by any
+    other sentence keeps the reading it has.
+    """
+    mark = stream.mark()
+    if not stream.accept_punct("."):
+        return None
+    if not stream.accept_phrase("if", "it", "'s"):
+        stream.reset(mark)
+        return None
+    stream.accept_word("a", "an")
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("prevent", "the", "next"):
+        stream.reset(mark)
+        return None
+    try:
+        larger = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("damage", "instead"):
+        stream.reset(mark)
+        return None
+    return described, larger
 
 
 def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
@@ -148,6 +207,35 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
     )
 
 
+def _finish_named_source_shield(
+    stream: TokenStream, source_filter: "ast.ObjectFilter", mark
+) -> "ast.PreventDamage | None":
+    """The tail of "The next time <named source> would deal damage to
+    <recipient> <duration>, prevent that damage." (Mercenaries.)
+
+    Split out because the sibling branch reads seven more words before reaching
+    the same clause; keeping the tail in one function is what stops the two from
+    drifting into two readings of one sentence.
+
+    Only "prevent that damage" — the halving and the redirect the chosen-source
+    branch also reads have no printing with a *named* source, and refusing here
+    names that rather than lowering one of them onto a shield that answers to
+    the wrong object.
+    """
+    recipient = parse_recipient(stream)
+    if recipient is None:
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    stream.accept_punct(",")
+    if not stream.accept_phrase("prevent", "that", "damage"):
+        stream.reset(mark)
+        return None
+    return ast.PreventDamage(
+        ast.Fixed(1), to=recipient, from_filter=source_filter, duration=duration
+    )
+
+
 def _parse_source_of_choice_effect(
     stream: TokenStream,
 ) -> "ast.PreventDamage | ast.RedirectDamage | None":
@@ -172,11 +260,24 @@ def _parse_source_of_choice_effect(
     if not stream.accept_phrase("the", "next", "time"):
         stream.reset(mark)
         return None
-    if not (stream.accept_word("a") or stream.accept_word("an")):
-        stream.reset(mark)
-        return None
     colours: list[str] = []
     card_type = None
+    if not (stream.accept_word("a") or stream.accept_word("an")):
+        # "The next time **this creature** would deal damage to you this turn,
+        # prevent that damage." (Mercenaries.) The same CR 615.8 sentence with
+        # the source *named* instead of chosen — a branch of this production
+        # rather than one of its own, because everything from "would deal
+        # damage to" onward is the identical clause and two productions racing
+        # on "the next time" would differ only in how the second rewinds.
+        named = parse_recipient(stream)
+        if (
+            not isinstance(named, ast.TargetSpec)
+            or not named.filter.is_source
+            or not stream.accept_phrase("would", "deal", "damage", "to")
+        ):
+            stream.reset(mark)
+            return None
+        return _finish_named_source_shield(stream, named.filter, mark)
     token = stream.peek()
     word = str(token.text).lower() if token is not None else ""
     if word in COLOR_WORDS:
@@ -321,7 +422,17 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
     sentence is a redirect and nothing else, so from there it raises.
     """
     mark = stream.mark()
-    if not stream.accept_phrase("all", "damage", "that", "would", "be", "dealt"):
+    if not stream.accept_word("all"):
+        stream.reset(mark)
+        return None
+    # "All **combat** damage that would be dealt to you by unblocked creatures
+    # this turn is dealt to this creature instead." (Kjeldoran Royal Guard.)
+    # Read rather than skipped, for the reason the blanket shield above reads
+    # the same word: with it the redirect catches only the combat damage step,
+    # without it an unblocked attacker's ping ability moves too — a strictly
+    # larger effect, and one no lowering below would have been told about.
+    combat_only = bool(stream.accept_word("combat"))
+    if not stream.accept_phrase("damage", "that", "would", "be", "dealt"):
         stream.reset(mark)
         return None
     to: ast.Recipient | None = None
@@ -359,6 +470,7 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
         dealt_by=dealt_by,
         duration=duration,
         chooser=chooser,
+        combat_only=combat_only,
     )
 
 

@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **1160**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **77**
+- With deletion-probe findings (ignored words): **78**
 
 ## Measured sets — reported, not gated
 
@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**40 unclaimed sentence(s) across 28 supported card(s).**
+**39 unclaimed sentence(s) across 27 supported card(s).**
 
 - **Battle Cry**
   - `whenever a creature blocks this turn, it gets +0/+1 until end of turn`
@@ -43,8 +43,6 @@ anything anyone did, and every ingest would arrive red.
   - `activated abilities cost an additional "sacrifice a swamp" to activate for each black mana symbol in their activation costs`
 - **Earthlink**
   - `whenever a creature dies, that creature's controller sacrifices a land of their choice`
-- **Energy Storm**
-  - `prevent all damage that would be dealt by instant and sorcery spells`
 - **Fire Covenant**
   - `as an additional cost to cast this spell, pay x life`
 - **Freyalise's Charm**
@@ -160,6 +158,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Nevinyrral's Disk | `destroy all artifacts, creatures, and enchantments` | all |
 | Orc General | `other orc creatures get +1/+1 until end of turn` | creatures |
 | Pestilent Haze | `all creatures get -2/-2 until end of turn` | all |
+| Power Leak | `that player may pay any amount of mana. this aura deals 2 damage to th` | aura |
 | Remove Enchantments | `return to your hand all enchantments you both own and control, all aur` | all all all all all all |
 | Reset | `untap all lands you control` | all |
 | Riddleform | `you may have this enchantment become a 3/3 sphinx creature with flying` | have |
@@ -201,7 +200,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | trigger table | 339 |
 | static-line table | 234 |
 | keyword table | 222 |
-| card_hooks bespoke (name-keyed) | 107 |
+| card_hooks bespoke (name-keyed) | 105 |
 | aura enchant noun (oracle_instructions attach) | 87 |
 | activation_restrictions.py | 37 |
 | aura static (oracle_instructions/permanent_state) | 37 |

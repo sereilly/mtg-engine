@@ -335,6 +335,13 @@
   ]
  },
  {
+  "card": "Power Leak",
+  "clause": "that player may pay any amount of mana. this aura deals 2 damage to that player. prevent x of that damage, where x is the amount of mana that player paid this way",
+  "ignored": [
+   "aura"
+  ]
+ },
+ {
   "card": "Remove Enchantments",
   "clause": "return to your hand all enchantments you both own and control, all auras you own attached to permanents you control, and all auras you own attached to attacking creatures your opponents control. then destroy all other enchantments you control, all other auras attached to permanents you control, and all other auras attached to attacking creatures your opponents control",
   "ignored": [

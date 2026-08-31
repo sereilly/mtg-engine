@@ -79,6 +79,11 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # declare-blockers step, so it is answerable from the object alone exactly
     # as ``attacking_only`` is.
     "blocking_only",
+    # "damage dealt to you by **unblocked** creatures" (Kjeldoran Royal Guard),
+    # "target **blocked** creature" (General Jarkeld). CR 509.1h makes both a
+    # state of the attacking permanent, recorded on it by the declare-blockers
+    # step, so both are answerable from the object alone.
+    "blocked_only", "unblocked_only",
     # "a creature **that has been dealt damage this turn**" (Giant Shark).
     # A history the damage seam stamps on the creature itself, so it is
     # answerable from the object alone like every other state word here.

@@ -711,17 +711,23 @@ def test_fylgjas_counter_cost_is_what_the_claim_used_to_refuse(set_pool):
     assert aura_activated_ability_claim(line, "Fylgja") is not None
     assert compile_card_oracle(set_pool("ICE")["Fylgja"]).supported
 def test_a_mana_cost_alone_no_longer_claims_a_line_the_compiler_refuses(set_pool):
-    """The stand-in was wrong in both directions. Chromatic Armor's "{X}: Put a
-    sleight counter on this Aura and choose a color…" matched the shape and the
-    compiler cannot read it — a claim there is how an Aura reports supported
-    carrying an ability that does nothing."""
+    """The stand-in was wrong in both directions: a line matching the *shape* of
+    an activation was claimed whether or not the compiler could read it, which
+    is how an Aura reports supported carrying an ability that does nothing.
+
+    The example expires every time the compiler learns the line it names, and
+    it has now done so twice in one wave: Chromatic Armor's "{X}: Put a sleight
+    counter on this Aura…" first, then Earthlore's tap-the-enchanted-land cost,
+    implemented by a *parallel branch* in the same round. So it is re-pointed,
+    not deleted — what the guard is about is the *claim reader*, not the card,
+    and it needs some line the compiler genuinely still refuses to stay honest.
+    Caribou Range's is the current one: a sacrifice cost naming a token.
+    """
     from engine.auras import aura_activated_ability_claim
 
-    line = (
-        "{x}: put a sleight counter on this aura and choose a color. x is the "
-        "number of sleight counters on this aura"
-    )
-    assert aura_activated_ability_claim(line, "Chromatic Armor") is None
+    line = "sacrifice a caribou token: you gain 1 life"
+    assert aura_activated_ability_claim(line, "Caribou Range") is None
+    assert not compile_card_oracle(set_pool("ICE")["Caribou Range"]).supported
 
 
 # --- Round 38: the board is the cap, and an end-step gate with no seat in it ---
@@ -1153,3 +1159,315 @@ def test_freyalises_winds_claims_both_of_its_lines(set_pool):
     assert counters_instead_of_untap(replacement_line) == "wind"
     assert replacement_claims_line(replacement_line)
 # --- end W1G5 ---
+# --- W1G1: prevention and damage shields ---
+def _w1g1_attach(set_pool, aura_name: str):
+    """A game with *aura_name* on seat 1 attached to seat 0's creature."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    aura = Permanent(card=pool[aura_name])
+    p0 = PlayerState(name="P0", battlefield=[bears], life=20)
+    p1 = PlayerState(name="P1", battlefield=[aura], life=20)
+    game = Game(players=[p0, p1])
+    attach_aura(aura, bears)
+    return game, p0, p1, bears, aura
+
+
+def test_mind_whip_damages_and_taps_when_the_toll_is_not_paid(set_pool):
+    """"At the beginning of the upkeep of enchanted creature's controller, that
+    player may pay {3}. If they don't, this Aura deals 2 damage to that player
+    and you tap that creature."
+
+    Both halves of the penalty, in the branch the card prints them in: the
+    conjunct reader used to take "and you" for a second damage recipient, which
+    left the tap outside the offer and firing whether the toll was paid or not.
+    """
+    game, p0, _p1, bears, _whip = _w1g1_attach(set_pool, "Mind Whip")
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert p0.life == 18
+    assert bears.tapped
+
+
+def test_mind_whip_offers_the_toll_to_the_creatures_controller(set_pool):
+    """"That player" is the enchanted creature's controller, not the Aura's — so
+    the decision, and the mana, are theirs."""
+    game, p0, _p1, bears, _whip = _w1g1_attach(set_pool, "Mind Whip")
+    p0.mana_pool["C"] = 5
+
+    game.resolve_upkeep(0)
+
+    owed = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert len(owed) == 1
+    assert owed[0].player_index == 0
+    assert owed[0].data["cost"] == {"generic": 3}
+
+
+def test_errant_minion_reduces_its_damage_by_the_mana_paid(set_pool):
+    """"That player may pay any amount of mana. This Aura deals 2 damage to that
+    player. Prevent X of that damage, where X is the amount of mana that player
+    paid this way."
+
+    Power Leak's sentence one noun over. It was a card hook keyed on Power
+    Leak's whole printed line, so this card compiled *supported* with nothing at
+    all behind its only ability.
+    """
+    game, p0, _p1, _bears, _minion = _w1g1_attach(set_pool, "Errant Minion")
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert p0.life == 18, "nothing paid, so nothing prevented"
+
+
+def test_errant_minions_payment_is_capped_at_the_damage(set_pool):
+    """"Prevent X of that damage" — X is the mana paid, and there are only two
+    points to prevent, so a larger offer spends only what it can use."""
+    game, p0, _p1, _bears, _minion = _w1g1_attach(set_pool, "Errant Minion")
+    p0.mana_pool["C"] = 5
+
+    game.resolve_upkeep(0, mana_prevention={"Errant Minion": 5})
+    game._settle()
+
+    assert p0.life == 20
+    assert any("paid 2 mana to prevent 2 damage" in line for line in game.log), (
+        "the offer is unbounded, the damage is not — only what it can use is spent"
+    )
+
+
+def test_power_leak_still_reduces_its_damage_after_losing_its_hook(
+    set_pool, catalog_by_name
+):
+    """The card the hook was written for, reading the same production now. Its
+    condition names an enchantment rather than a creature, which is the only
+    difference between the two printings."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    host = Permanent(card=pool["Errant Minion"])
+    leak = Permanent(card=catalog_by_name["Power Leak"])
+    p0 = PlayerState(name="P0", battlefield=[host], life=20, mana_pool={"C": 2})
+    p1 = PlayerState(name="P1", battlefield=[leak], life=20)
+    game = Game(players=[p0, p1])
+    attach_aura(leak, host)
+
+    game.resolve_upkeep(0, mana_prevention={"Power Leak": 1})
+    game._settle()
+
+    assert p0.life == 19, "one of the two points paid off"
+
+
+def test_prismatic_ward_prevents_only_the_chosen_colour(set_pool):
+    """"As this Aura enters, choose a color. Prevent all damage that would be
+    dealt to enchanted creature by sources of the chosen color." (CR 615.9 —
+    the recorded property is rechecked when the damage would be dealt.)
+
+    The colour is the **Aura's**, recorded as it entered; the enchanted creature
+    has none of its own.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    ward = Permanent(card=pool["Prismatic Ward"])
+    red = Permanent(card=pool["Balduvian Barbarians"])
+    green = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", battlefield=[bears, ward], life=20)
+    p1 = PlayerState(name="P1", battlefield=[red, green], life=20)
+    game = Game(players=[p0, p1])
+    attach_aura(ward, bears)
+    ward.metadata["chosen_color"] = "R"
+
+    game._mark_damage_on_permanent(bears, 3, source=red)
+    assert bears.damage_marked == 0
+
+    game._mark_damage_on_permanent(bears, 2, source=green)
+    assert bears.damage_marked == 2, "a source of another colour goes through"
+
+
+def test_prismatic_ward_records_a_colour_as_it_enters(set_pool):
+    """"As this **Aura** enters" is the same sentence Psychic Allergy prints
+    about an enchantment — the noun is the card's own type word, so the reader
+    holds it as data. Spelled out as a literal it read "enchantment" and
+    nothing else, and this card reached nothing at all."""
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    red = Permanent(card=pool["Balduvian Barbarians"])
+    p0 = PlayerState(
+        name="P0", battlefield=[bears], hand=[pool["Prismatic Ward"]], life=20
+    )
+    p1 = PlayerState(name="P1", battlefield=[red], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+
+    result = game.cast_from_hand(
+        0, "Prismatic Ward", target_player_index=0, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    ward = next(p for p in p0.battlefield if p.card.name == "Prismatic Ward")
+    assert ward.metadata["chosen_color"] == "R", (
+        "the default names the colour the opponents hold most of"
+    )
+    assert ward.metadata["attached_to"] is bears
+
+
+def test_a_ward_that_recorded_no_colour_shields_nothing(set_pool):
+    """A property nobody recorded is not a property CR 615.9 can recheck, so the
+    shield names no source — the opposite of the widest reading, which would
+    stop every point of damage in the game."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    ward = Permanent(card=pool["Prismatic Ward"])
+    red = Permanent(card=pool["Balduvian Barbarians"])
+    p0 = PlayerState(name="P0", battlefield=[bears, ward], life=20)
+    p1 = PlayerState(name="P1", battlefield=[red], life=20)
+    game = Game(players=[p0, p1])
+    attach_aura(ward, bears)
+    ward.metadata.pop("chosen_color", None)
+
+    game._mark_damage_on_permanent(bears, 3, source=red)
+
+    assert bears.damage_marked == 3
+
+
+def test_energy_storm_stops_a_burn_spell_but_not_a_creature(set_pool, catalog_by_name):
+    """"Prevent all damage that would be dealt by instant and sorcery spells."
+
+    A silent mis-play until now: the card reported *supported* on its cumulative
+    upkeep and its untap restriction while this line did nothing at all — the
+    census cannot see it, because a card is supported when any of its lines is.
+
+    A permanent is not a spell however it is dealing the damage (CR 111.1), so
+    the second half is the half that says the shield reads the source's kind
+    rather than shielding everything.
+    """
+    pool = set_pool("ICE")
+    storm = Permanent(card=pool["Energy Storm"])
+    bears = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(
+        name="P0", battlefield=[storm, bears], life=20,
+        hand=[catalog_by_name["Lightning Bolt"]],
+    )
+    p1 = PlayerState(name="P1", life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+
+    assert game.cast_from_hand(0, "Lightning Bolt", target_player_index=1).supported
+    game._settle()
+    assert p1.life == 20
+
+    game._deal_damage_to_player(p1, 2, source=bears)
+    assert p1.life == 18
+
+
+def test_energy_storm_covers_the_table_not_its_controller(set_pool, catalog_by_name):
+    """The sentence names no recipient, so an opponent's Energy Storm shields
+    this damage exactly as your own would — the scan is over every battlefield
+    rather than the recipient's."""
+    pool = set_pool("ICE")
+    storm = Permanent(card=pool["Energy Storm"])
+    p0 = PlayerState(
+        name="P0", life=20, hand=[catalog_by_name["Lightning Bolt"]]
+    )
+    p1 = PlayerState(name="P1", battlefield=[storm], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+
+    assert game.cast_from_hand(0, "Lightning Bolt", target_player_index=0).supported
+    game._settle()
+
+    assert p0.life == 20
+
+
+def test_chromatic_armor_enters_with_a_counter_and_a_colour(set_pool):
+    """Four printed lines and all four read: the enter-time colour, the sleight
+    counter it enters with, the shield keyed to that colour, and the {X}
+    ability that re-chooses."""
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    red = Permanent(card=pool["Balduvian Barbarians"])
+    p0 = PlayerState(
+        name="P0", battlefield=[bears], hand=[pool["Chromatic Armor"]], life=20
+    )
+    p1 = PlayerState(name="P1", battlefield=[red], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+
+    assert game.cast_from_hand(
+        0, "Chromatic Armor", target_player_index=0, target_permanent_index=0
+    ).supported
+    game._settle()
+
+    armor = next(p for p in p0.battlefield if p.card.name == "Chromatic Armor")
+    assert counters_on(armor, "sleight") == 1
+    assert armor.metadata["chosen_color"] == "R"
+
+    game._mark_damage_on_permanent(bears, 2, source=red)
+    assert bears.damage_marked == 0, "the last chosen colour is the one recorded"
+
+
+def test_chromatic_armors_x_is_the_counters_on_it(set_pool):
+    """"X is the number of sleight counters on this **Aura**." The cost is one
+    the board decides, not one the activator announces (CR 601.2b's exception)
+    — and the noun the card calls itself by is data: the reader listed the card
+    types and this printing reached nothing at all."""
+    from engine.auras import attach_aura
+    from engine.named_counters import add_counters
+
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    armor = Permanent(card=pool["Chromatic Armor"])
+    p0 = PlayerState(name="P0", battlefield=[bears, armor], life=20, mana_pool={"C": 1})
+    game = Game(players=[p0, PlayerState(name="P1", life=20)])
+    game.enforce_mana_costs = True
+    attach_aura(armor, bears)
+    add_counters(armor, "sleight", 3)
+
+    refused = game.activate_permanent_ability(0, "Chromatic Armor", permanent_index=1)
+    assert not refused.supported, "one mana cannot pay {X} where X is three"
+    assert counters_on(armor, "sleight") == 3
+
+    p0.mana_pool["C"] = 3
+    allowed = game.activate_permanent_ability(0, "Chromatic Armor", permanent_index=1)
+    game._settle()
+
+    assert allowed.supported, allowed.details
+    assert counters_on(armor, "sleight") == 4
+    assert p0.mana_pool["C"] == 0
+
+
+def test_chromatic_armors_ability_records_a_new_colour(set_pool):
+    """"…and choose a color." The re-choice writes the same metadata key the
+    entry state does — two keys would be a permanent with two chosen colours
+    and a shield reading whichever one its author remembered."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    armor = Permanent(card=pool["Chromatic Armor"])
+    green = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", battlefield=[bears, armor], life=20)
+    p1 = PlayerState(name="P1", battlefield=[green], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    attach_aura(armor, bears)
+    armor.metadata["chosen_color"] = "R"
+
+    assert game.activate_permanent_ability(
+        0, "Chromatic Armor", permanent_index=1
+    ).supported
+    game._settle()
+
+    assert armor.metadata["chosen_color"] == "G", (
+        "the default names the colour the opponents hold most of"
+    )
+    game._mark_damage_on_permanent(bears, 2, source=green)
+    assert bears.damage_marked == 0
+# --- end W1G1 ---
