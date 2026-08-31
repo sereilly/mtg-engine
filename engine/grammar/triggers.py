@@ -393,14 +393,10 @@ def _parse_damage_dealt_event(
             stream.reset(mark)
             return None
         # "…a red creature **or spell** deals damage" (Justice). One object
-        # under two nouns: the noun parser stops at "creature", and the union
-        # is the *condition's* narrowing rather than this node's — the same
-        # division of labour the graveyard clause below states, where
-        # `engine/oracle.py`'s table supplies the condition and this front end
-        # supplies the effect. What is required here is that the words be
-        # **consumed**: left on the stream the line fails full-token
-        # consumption and the card loses the ability entirely, which is what it
-        # did.
+        # under two nouns; the union narrows the *condition* rather than this
+        # node (the division of labour the graveyard clause below states), so
+        # all that is owed here is consuming the words — left on the stream the
+        # line fails full-token consumption and the card loses the ability.
         spell_union = stream.mark()
         if not (stream.accept_word("or") and stream.accept_word("spell")):
             stream.reset(spell_union)
