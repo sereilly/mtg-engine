@@ -1593,10 +1593,18 @@ function pendingAutoTapCost(pending) {
   return (pending.card && pending.card.mana_cost) || "";
 }
 
+// Whether paying this activation cost needs the insufficient-mana prompt.
+//
+// **Mana symbols, not "is there any text at all"**. It used to ask whether the
+// cost string was non-empty and not exactly "{T}", which was the same question
+// while the ability reader only ever produced all-brace costs. Now that a prose
+// cost reaches here ("Remove a healing counter from this Aura", "{T}, Discard a
+// card"), a string test would open an auto-tap prompt demanding zero mana —
+// `parseManaCostSymbols` finds no braces in it — for an ability that costs no
+// mana at all. Unchanged for every all-brace cost.
 function shouldPromptForActivationCost(costText) {
-  const cleaned = (costText || "").replace(/[()\s]/g, "").toUpperCase();
-  if (!cleaned) return false;
-  return cleaned !== "{T}";
+  const tokens = (costText || "").toUpperCase().match(/\{([^}]+)\}/g) || [];
+  return tokens.some((token) => token.slice(1, -1).trim() !== "T");
 }
 
 function parseManaCostSymbols(costText) {
@@ -8457,6 +8465,35 @@ function loyaltyCostOfChosenAbility(card) {
   return options.length === 1 ? (options[0].loyalty || null) : null;
 }
 
+// The colon separating an activated ability's cost from its effect, or -1.
+//
+// Mirror of `activation_colon_index` in engine/oracle.py, deliberately sharing
+// its name so the two front ends are greppable as one rule: **a colon inside
+// quotation marks is not one**, because an ability granted as quoted text
+// (Equinox's "Enchanted land has \"{T}: Counter target spell ...\"") carries a
+// colon belonging to the granted ability rather than to any ability of the card.
+//
+// This replaced a pattern that required the cost half to be nothing but
+// `{...}` tokens, which is not what a cost is: CR 118.3 lets an activation cost
+// be anything a player is able to pay, and 107 shipped cards print one that is
+// not mana. "Remove a healing counter from this Aura:" (Fylgja), "{W}, Sacrifice
+// an enchantment:" (Arenson's Aura), Diamond Valley, Hell's Caretaker and the
+// Mana Batteries all matched nothing — and a line that matched nothing was
+// *dropped*, so every later ability of that card moved up a slot while
+// `option.index` is exactly what the client sends back as `ability_index`.
+// Balduvian Hydra's menu offered its {R}{R}{R} pump at index 0 while the engine
+// ran the free counter-removal prevention that really sits there, and with one
+// option left the menu never opened for anyone to see the mismatch.
+function activationColonIndex(line) {
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const character = line[i];
+    if (character === '"') inQuotes = !inQuotes;
+    else if (character === ":" && !inQuotes) return i;
+  }
+  return -1;
+}
+
 // Parse the activated-ability lines ("{cost}: effect") of a card's oracle text,
 // plus a planeswalker's loyalty lines ("+1: effect").
 // Index matches the engine's order of supported activated abilities, so it can be
@@ -8471,19 +8508,29 @@ function getActivatedAbilityOptions(card) {
     // An equip keyword line is the activated ability CR 702.6a says it is;
     // read it in its expanded form so it takes its place in the index.
     const line = expandEquipLine(lines[li]) || lines[li];
-    const m = line.match(/^\s*((?:\{[^}]+\}[,\s]*)+):\s*(.+)$/);
-    if (!m) {
-      // A loyalty cost is counters rather than mana, so its half of the line
-      // carries no symbols and the brace pattern above never matches it.
-      const lm = planeswalker ? line.trim().match(LOYALTY_COST_RE) : null;
-      if (!lm) continue;
-      const cost = lm[1].replace(/\s+/g, "");
+    const trimmed = line.trim();
+    // A loyalty cost is counters rather than mana, so it is recognised by its
+    // own pattern *before* the generic split below — which would otherwise read
+    // "+1" as a cost and take the line.
+    const lm = planeswalker ? trimmed.match(LOYALTY_COST_RE) : null;
+    if (lm) {
+      const loyalty = lm[1].replace(/\s+/g, "");
       options.push({
-        index, cost, text: lm[2].trim(), line: line.trim(), loyalty: loyaltyCostOf(cost),
+        index, cost: loyalty, text: lm[2].trim(), line: trimmed,
+        loyalty: loyaltyCostOf(loyalty),
       });
       index += 1;
       continue;
     }
+    // Reminder text is not an ability. CR 305.6's basic-land line
+    // "({T}: Add {W}.)" carries a colon, and the whole line being
+    // parenthesised is what says it restates a rule rather than printing an
+    // ability. Twenty basic and dual lands read as {T} abilities without this.
+    const ci = trimmed.startsWith("(") ? -1 : activationColonIndex(trimmed);
+    const costHalf = ci < 0 ? "" : trimmed.slice(0, ci).trim();
+    const effectHalf = ci < 0 ? "" : trimmed.slice(ci + 1).trim();
+    if (!costHalf || !effectHalf) continue;
+    const m = [null, costHalf, effectHalf];
     // Modal activated ability (Pyramids: "{2}: Choose one —" + bullets):
     // one option per bullet, sharing the cost — matching the engine, which
     // compiles each bullet as its own activated ability.

@@ -12,13 +12,19 @@ mana to pay a {1} equip. The engine, which rewrites the line to its CR 702.6a
 text first, charged {1}.
 
 So this runs the JS reader over the whole shipped pool in bare ``node`` and
-holds it to the compiled program: wherever both sides list an ability at the
-same position, its mana and {T} cost must match. Where the client lists
-*fewer* abilities than the engine, it is a prose-cost line ("Sacrifice this
-artifact: …", "{T}, Discard a card: …") the menu parser has never read; that
-gap is pre-existing and reported, not asserted — except for Equipment, whose
-equip ability the client must list, because a dropped line there is the bug
-above wearing a different face.
+holds it to the compiled program: the two must list the **same number** of
+abilities, and each one's mana and {T} cost must match.
+
+The count used to be exempt. "Where the client lists fewer abilities than the
+engine, it is a prose-cost line the menu parser has never read; that gap is
+pre-existing and reported, not asserted" — 107 cards were in it, and the
+exemption was hiding the same defect this file was written for rather than a
+cosmetic shortfall. ``option.index`` is the ``ability_index`` the client sends
+back, so a dropped line renumbers every ability after it: Balduvian Hydra's
+menu asked for {R}{R}{R} and the engine ran the free counter-removal
+prevention that really sits at index 0. The cost comparison could not see it,
+because it walked the two lists with ``zip`` and both sides agreed about the
+one option that survived.
 
 Skipped when node is not on PATH (``tests/rules/test_equipment.py`` keeps the
 engine's side pinned regardless).
@@ -59,8 +65,9 @@ function grab(name) {
   const end = src.indexOf("\n}\n", i);
   return src.slice(i, end + 2);
 }
-const pieces = ["activatedAbilityText", "expandEquipLine", "getActivatedAbilityCost",
-  "getActivatedAbilityOptions", "isPlaneswalkerCard", "loyaltyCostOf"].map(grab).join("\n");
+const pieces = ["activatedAbilityText", "activationColonIndex", "expandEquipLine",
+  "getActivatedAbilityCost", "getActivatedAbilityOptions", "isPlaneswalkerCard",
+  "loyaltyCostOf"].map(grab).join("\n");
 const re = src.slice(src.indexOf("const EQUIP_LINE_RE"), src.indexOf("function expandEquipLine"));
 const lo = src.slice(src.indexOf("const LOYALTY_COST_RE"), src.indexOf("function isPlaneswalkerCard"));
 eval(re + lo + pieces + ";globalThis.T={getActivatedAbilityCost,getActivatedAbilityOptions}");
@@ -119,6 +126,36 @@ def js_readings(tmp_path_factory):
         capture_output=True, text=True, encoding="utf-8", check=True,
     ).stdout
     return cards, json.loads(raw)
+
+
+def test_the_client_lists_the_same_abilities_the_compiler_does(js_readings):
+    """Same *count*, pool-wide — the half a positional comparison cannot see.
+
+    ``option.index`` is what the client sends back as ``ability_index``, and the
+    server indexes ``usable_activated_abilities`` with it. So a line the client
+    drops does not merely go unlisted: every later ability of that card moves up
+    a slot, and the menu and the engine are then talking about different
+    abilities under one number. City of Shadows was living that way — the client
+    offered its storage-counter mana ability where the engine had "{T}, Exile a
+    creature you control" — and the cost comparison below was blind to it,
+    because both spell ``{T}`` and it walked the two lists with ``zip``.
+
+    Asserted here rather than left as a reported gap: 107 cards printed a cost
+    the menu parser refused, and "the client lists fewer" was the shape of all
+    107.
+    """
+    cards, js = js_readings
+    dropped = [
+        (card.name, [a.source_line for a in compile_card_oracle(card).activated_abilities],
+         js[card.name]["options"])
+        for card in cards
+        if len(compile_card_oracle(card).activated_abilities) != len(js[card.name]["options"])
+    ]
+    assert not dropped, (
+        "the client's ability list is a different length from the compiler's, "
+        "so every index after the difference names a different ability "
+        f"(card, compiled lines, client costs):\n" + "\n".join(f"  {d}" for d in dropped)
+    )
 
 
 def test_every_ability_both_sides_list_has_the_same_cost(js_readings):

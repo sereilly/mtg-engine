@@ -43,6 +43,28 @@ def _sanctum_upkeep_session(set_pool, seed=5150):
     return sid, session
 
 
+def _only_findable_shrine(player, shrine):
+    """Put *shrine* on top of *player*'s library and take every other Shrine out.
+
+    Sanctum of All searches the **whole** library, so what it finds is decided by
+    the random deal and not by what a test planted: at seed 6060 the AI's deck
+    happened to hold four Sanctum of Calm Waters, `ai_policy.choose_search_card`
+    preferred one of them, and it carries a first-main-phase trigger of its own
+    that then sat on the stack. Promoting Ice Age is what dealt those copies —
+    the deck is drawn from the shipped pool, so widening the pool changes what a
+    seed deals — which makes "no other Shrine is in the deck" a fact these tests
+    were relying on without saying so.
+
+    The sibling helper above already replaces the library outright, which is why
+    the four tests built on it were never exposed. This is the same guarantee for
+    the two that need the rest of a real deck behind the planted card.
+    """
+    player.library = [
+        shrine,
+        *[card for card in player.library if "Shrine" not in (card.type_line or "")],
+    ]
+
+
 def _state(sid, seat):
     response = client.get(f"/api/sessions/{sid}/state", params={"seat": seat})
     assert response.status_code == 200, response.text
@@ -117,7 +139,7 @@ def test_the_turn_stops_at_the_upkeep_the_trigger_fired_in(set_pool):
     client.post(f"/api/sessions/{sid}/join", json={"guest_name": "Joiner"})
     game = store.get(sid).game
     game.players[0].battlefield = [Permanent(card=pool["Sanctum of All"])]
-    game.players[0].library = [pool["Sanctum of Tranquil Light"], *game.players[0].library]
+    _only_findable_shrine(game.players[0], pool["Sanctum of Tranquil Light"])
 
     # Seat 0's turn ends, seat 1's runs, and seat 0's next upkeep is the trigger.
     client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "end_turn"})
@@ -180,7 +202,7 @@ def test_an_ai_seats_own_upkeep_prompt_does_not_stall_the_turn(set_pool):
     game = session.game
     # Seat 1 is the AI; give it the Shrine and hand it the turn.
     game.players[1].battlefield = [Permanent(card=pool["Sanctum of All"])]
-    game.players[1].library = [pool["Sanctum of Tranquil Light"], *game.players[1].library]
+    _only_findable_shrine(game.players[1], pool["Sanctum of Tranquil Light"])
 
     client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "end_turn"})
 
@@ -189,8 +211,20 @@ def test_an_ai_seats_own_upkeep_prompt_does_not_stall_the_turn(set_pool):
     assert state["optional_pay"] is None
     assert state["search_library"] is None
     assert store.get(sid).paused_beginning_phase is None
+    # Nothing is owed at all, which is what "did not stall" means — the three
+    # payload fields above are how a *viewer* sees that, and these two are the
+    # game's own answer, so a prompt the payload has no field for still fails.
+    game = store.get(sid).game
+    assert game.waiting_prompt() is None
+    assert not game.pending_choices
     # The AI took its own default, and its turn is under way.
     assert state["current_turn"] == 1
+    # And the default was actually *taken*. Without this the test passes just as
+    # well when the trigger never fires — which is the shape it had while the
+    # search was finding a Shrine out of the random deal instead of this one.
+    assert "Sanctum of Tranquil Light" in [
+        p.card.name for p in game.players[1].battlefield
+    ]
 
 
 def test_the_ability_leaves_the_stack_when_the_search_is_answered(set_pool):
