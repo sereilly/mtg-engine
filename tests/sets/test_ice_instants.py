@@ -15,6 +15,8 @@ text do what the card says.
 
 from __future__ import annotations
 
+import pytest
+
 from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
@@ -1358,3 +1360,152 @@ def test_touch_of_vitae_takes_both_halves_away_at_end_of_turn(set_pool):
     assert not bear.has_keyword("haste")
     assert '{0}: Untap this creature' not in bear.effective_card.oracle_text
 # --- end W3G1 ---
+
+
+# --- W4G2: blocker control ---
+def _melee_board(pool, defender_creatures=("Brown Ouphe",)):
+    """Seat 0 with two attackers and Melee in hand; seat 1 with blockers."""
+    attackers = [
+        _nosick(Permanent(card=pool["Balduvian Bears"])),
+        _nosick(Permanent(card=pool["Tor Giant"])),
+    ]
+    blockers = [_nosick(Permanent(card=pool[name])) for name in defender_creatures]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=list(attackers), life=20,
+                    hand=[pool["Melee"]]),
+        PlayerState(name="P2", battlefield=list(blockers), life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.active_player_index = 0
+    return game, attackers, blockers
+
+
+def _cast_melee(game):
+    game._set_phase_and_step("combat", "beginning_of_combat")
+    result = game.cast_from_hand(0, "Melee")
+    assert result.supported, result.details
+    game.resolve_stack()
+
+
+def test_melee_compiles_all_three_of_its_lines(set_pool):
+    """Its cast restriction is a table row, its second line the block-chooser
+    substitution and its third a delayed triggered ability scoped to the
+    combat. A card supported on one of the three would be the hollow line the
+    promotion gate counts."""
+    program = compile_card_oracle(set_pool("ICE")["Melee"])
+
+    assert program.supported
+    kinds = [instruction.kind for instruction in program.instructions]
+    assert "choose_blocks_for_defenders" in kinds
+    delayed = next(
+        i for i in program.instructions if i.kind == "create_delayed_trigger"
+    )
+    assert delayed.payload["event"] == "creature_attacks_unblocked"
+    # CR 603.7b: "this combat" is a stated duration, and a shorter one than the
+    # "this turn" every other delayed attack trigger in the pool prints.
+    assert delayed.payload["duration"] == "end_of_combat"
+    assert delayed.payload["once"] is False
+
+
+def test_melee_can_only_be_cast_in_your_own_combat_before_blockers(set_pool):
+    """"…during combat **on your turn** before blockers are declared." The
+    seat is the whole difference from Blaze of Glory's row, which the table
+    already had."""
+    pool = set_pool("ICE")
+    game, _attackers, _blockers = _melee_board(pool)
+    game.players[1].hand.append(pool["Melee"])
+    game.enforce_mana_costs = False
+
+    game._set_phase_and_step("combat", "beginning_of_combat")
+    # The defending player's own combat window is somebody else's turn.
+    refused = game.cast_from_hand(1, "Melee")
+    assert not refused.supported
+    assert "on your turn" in refused.details
+
+    game._set_phase_and_step("combat", "declare_blockers")
+    too_late = game.cast_from_hand(0, "Melee")
+    assert not too_late.supported
+
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.cast_from_hand(0, "Melee").supported
+
+
+def test_melee_moves_the_block_declaration_to_its_caster(set_pool):
+    """CR 509.1a's chooser, substituted. The declaration is still the defending
+    player's — their creature blocks — but they may no longer make it, and the
+    caster may."""
+    pool = set_pool("ICE")
+    game, attackers, blockers = _melee_board(pool)
+    _cast_melee(game)
+
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0, 1], 1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+
+    refused, message = game.declare_blockers(1, {0: 0})
+    assert not refused
+    assert "P1 chooses which creatures block" in message
+
+    ok, _ = game.declare_blockers(1, {0: 0}, acting_index=0)
+    assert ok
+    # The defender's creature is the one blocking, on the defender's own entry.
+    assert game.combat_blockers[1] == {0: [0]}
+    assert attackers[0].blocked
+    assert blockers[0].blocking_attacker_index == 0
+
+
+def test_melee_untaps_and_removes_each_unblocked_attacker(set_pool):
+    """The third line, a delayed ability the spell creates (CR 603.7): it fires
+    per unblocked attacker once blocks are known (CR 509.1h)."""
+    pool = set_pool("ICE")
+    game, attackers, _blockers = _melee_board(pool)
+    _cast_melee(game)
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0, 1], 1)[0]
+    assert attackers[1].tapped
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert game.declare_blockers(1, {0: 0}, acting_index=0)[0]
+
+    game.advance_combat_phase()
+    game.resolve_stack()
+
+    # The blocked attacker is untouched; the unblocked one is untapped and out
+    # of combat, which is what makes Melee a fog rather than a removal spell.
+    assert attackers[0].attacking and attackers[0].tapped
+    assert not attackers[1].attacking
+    assert not attackers[1].tapped
+    assert 1 not in game.combat_attackers
+
+
+def test_melees_delayed_ability_does_not_survive_its_combat(set_pool):
+    """CR 603.7b's stated duration is "this combat", not the turn: a second
+    combat phase in the same turn is a declaration the card never saw."""
+    pool = set_pool("ICE")
+    game, _attackers, _blockers = _melee_board(pool)
+    _cast_melee(game)
+    assert len(game.delayed_triggers) == 1
+
+    game._set_phase_and_step("combat", "end_of_combat")
+    game.end_combat(step_already_started=True)
+
+    assert game.delayed_triggers == []
+    # The substitution is combat-scoped too, and ends in the same sweep.
+    assert game.block_chooser_index(1) == 1
+
+
+def test_melee_refuses_the_turn_scoped_printing_of_its_sentence(set_pool):
+    """Master Warcraft prints "this turn". The substitution is combat-scoped
+    state, so a turn-scoped one would stop applying at the second combat of a
+    turn while the card still read as if it applied — the lowering refuses
+    rather than working for one combat out of two."""
+    from engine.grammar import parse_line
+    from engine.grammar.lower import lower_ability
+    from engine.grammar.errors import LoweringError
+
+    node = parse_line(
+        "You choose which creatures block this turn and how those creatures block."
+    )
+    with pytest.raises(LoweringError):
+        lower_ability(node)
+# --- end W4G2 ---

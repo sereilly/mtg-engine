@@ -984,3 +984,129 @@ def test_w3g2_a_permanent_records_the_turn_it_entered(set_pool):
 
     assert not game.entered_this_turn(arriving)
 # --- end W3G2 ---
+
+
+# --- W4G2: blocker control ---
+def _jarkeld_board(pool, second_attacker="Tor Giant", second_blocker="Brown Ouphe",
+                   blocks=None):
+    """Seat 0 attacks with two creatures; seat 1 blocks and controls Jarkeld.
+
+    ``blocks`` is keyed by the **blocker's** slot, as ``declare_blockers``
+    takes it; the default puts one blocker on each attacker, which is the board
+    General Jarkeld's sentence is about.
+    """
+    attackers = [
+        _nosick(Permanent(card=pool["Balduvian Bears"])),
+        _nosick(Permanent(card=pool[second_attacker])),
+    ]
+    blockers = [
+        _nosick(Permanent(card=pool["Balduvian Barbarians"])),
+        _nosick(Permanent(card=pool[second_blocker])),
+    ]
+    jarkeld = _nosick(Permanent(card=pool["General Jarkeld"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=list(attackers), life=20),
+        PlayerState(name="P2", battlefield=[*blockers, jarkeld], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0, 1], 1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    ok, msg = game.declare_blockers(1, {0: 0, 1: 1} if blocks is None else blocks)
+    assert ok, msg
+    return game, attackers, blockers, jarkeld
+
+
+def _swap(game, attackers, targets=(0, 1)):
+    return game.activate_permanent_ability(
+        1, "General Jarkeld", permanent_index=2,
+        target_player_index=0,
+        target_permanent_index=list(targets),
+        target_permanent_ids=[attackers[i].permanent_id for i in targets],
+    )
+
+
+def test_general_jarkeld_compiles_as_one_paragraph(set_pool):
+    """Two printed sentences and one effect: "those creatures" and "the other"
+    are only supplied by the first, and the first on its own would announce two
+    targets and do nothing with them."""
+    program = compile_card_oracle(set_pool("ICE")["General Jarkeld"])
+
+    assert program.supported
+    ability = program.activated_abilities[0]
+    assert ability.instruction.kind == "reassign_blockers_between_attackers"
+    targets = ability.instruction.payload["targets"]
+    assert targets["count"] == 2
+    # Both printed narrowings survive to the payload. A phrase that parsed and
+    # was dropped would let the ability move blockers off a creature the
+    # sentence never named.
+    assert targets["filter"]["attacking_only"] is True
+    assert targets["filter"]["blocked_only"] is True
+
+
+def test_general_jarkeld_trades_the_blockers_of_two_attackers(set_pool):
+    """The mirror of Sorrow's Path: that card swaps what two blockers block,
+    this one swaps who blocks two attackers."""
+    pool = set_pool("ICE")
+    game, attackers, blockers, _jarkeld = _jarkeld_board(pool)
+    assert game.combat_blockers[1] == {0: [0], 1: [1]}
+
+    result = _swap(game, attackers)
+
+    assert result.supported, result.details
+    assert game.combat_blockers[1] == {0: [1], 1: [0]}
+    assert blockers[0].blocking_attacker_index == 1
+    assert blockers[1].blocking_attacker_index == 0
+    # CR 509.1h: nothing was removed from combat, so neither attacker ever
+    # stopped being blocked.
+    assert attackers[0].blocked and attackers[1].blocked
+
+
+def test_general_jarkeld_refuses_a_trade_neither_blocker_could_have_made(set_pool):
+    """"If each of those creatures could be blocked by all creatures that the
+    other is blocked by" — one condition over the pair, asked of the same gate a
+    real declaration passes. A ground creature cannot block the flier, so
+    nothing moves."""
+    pool = set_pool("ICE")
+    game, attackers, blockers, _jarkeld = _jarkeld_board(
+        pool, second_attacker="Silver Erne", second_blocker="Silver Erne",
+    )
+    before = {slot: list(atks) for slot, atks in game.combat_blockers[1].items()}
+
+    result = _swap(game, attackers)
+
+    assert result.supported, result.details
+    assert game.combat_blockers[1] == before
+    assert any("could not be blocked by each other's blockers" in line
+               for line in game.log)
+
+
+def test_general_jarkeld_cannot_name_an_unblocked_attacker(set_pool):
+    """CR 602.2b/601.2c: "target **blocked** attacking creature" is checked
+    before the cost is paid, so an unblocked attacker is not a legal choice and
+    the tap is never spent."""
+    pool = set_pool("ICE")
+    game, attackers, _blockers, jarkeld = _jarkeld_board(pool, blocks={0: 0})
+    assert not attackers[1].blocked
+
+    result = _swap(game, attackers)
+
+    assert not result.supported
+    assert "no valid target" in result.details
+    assert not jarkeld.tapped
+
+
+def test_general_jarkeld_activates_only_in_the_declare_blockers_step(set_pool):
+    """CR 602.5's printed restriction, read by the same table every other
+    "Activate only during …" clause is."""
+    pool = set_pool("ICE")
+    game, attackers, _blockers, _jarkeld = _jarkeld_board(pool)
+    game._set_phase_and_step("combat", "combat_damage")
+
+    result = _swap(game, attackers)
+
+    assert not result.supported
+    assert "declare blockers step" in result.details
+# --- end W4G2 ---
