@@ -1923,4 +1923,39 @@ def test_freyalise_charm_ignores_a_spell_of_another_colour(set_pool):
 
     assert p0.hand == []
     assert p0.mana_pool.get("G", 0) == 2, "nothing was offered, so nothing was paid"
+
+
+def test_icy_prison_gives_the_exiled_creature_back_when_it_leaves(set_pool):
+    """"When this enchantment leaves the battlefield, return the exiled card to
+    the battlefield under its owner's control."
+
+    CR 610.3's linked pair, printed as two abilities: "the exiled card" is the
+    one *this* permanent's other ability exiled, which is the pile
+    ``engine/linked_exile.py`` already records — the same one Safe Haven drains
+    with its own wording of the sentence.
+    """
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", hand=[pool["Icy Prison"]], life=20)
+    p1 = PlayerState(name="P1", battlefield=[bears], life=20)
+    game = Game(players=[p0, p1])
+
+    result = game.cast_from_hand(
+        0, "Icy Prison", target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game._settle()
+    assert [c.name for c in p1.exile] == ["Balduvian Bears"]
+
+    prison = p0.battlefield[0]
+    game.active_player_index = 0
+    game.resolve_upkeep(0)
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+
+    assert not game.is_on_battlefield(prison), "nobody paid the {3}"
+    assert p1.exile == []
+    assert [p.card.name for p in p1.battlefield] == ["Balduvian Bears"], (
+        "back under its owner's control, not the Prison controller's"
+    )
 # --- end W2G1 ---

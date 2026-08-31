@@ -444,13 +444,17 @@ def _lower_damage_shape(
 
     sweep = _sweep_kind(node.recipients)
     if sweep is not None:
-        # The sweep handlers take a plain number. A back-reference reaching one
-        # would be dropped here and dealt as zero — visible nowhere, since the
-        # card would still report supported — so it refuses instead.
-        if back_reference or bonus:
+        # The sweep handlers read a printed number, an announced X, or the
+        # counters on the ability's own source (`handlers/damage._sweep_amount`,
+        # the one reader all four share). Every *other* computed amount would be
+        # dropped here and dealt as zero — visible nowhere, since the card would
+        # still report supported — so it refuses instead.
+        if bonus or set(back_reference) - {"amount_from_named_counters"}:
             raise LoweringError(
                 "a board sweep cannot carry a computed damage amount", node=node
             )
+        if back_reference:
+            return (OracleInstruction(sweep, "", dict(back_reference)),)
         return (OracleInstruction(sweep, "", {"amount": amount}),)
 
     if len(node.recipients) != 1:

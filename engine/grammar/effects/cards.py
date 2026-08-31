@@ -373,14 +373,27 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
     # its owner's control". Same linked pile (CR 610.3), same drain, same
     # handler — the difference is which zone the cards are going to and the
     # preposition English wants in front of it.
+    names_source = True
     if stream.accept_phrase("put", "all", "cards", "exiled", "with"):
         preposition = "into"
     elif stream.accept_phrase("return", "each", "card", "exiled", "with"):
         preposition = "to"
+    elif stream.accept_phrase("return", "the", "exiled", "card"):
+        # "…**the exiled card**…" (Icy Prison). The same linked pile with no
+        # possessive on it: CR 610.3 makes the two abilities linked, so "the
+        # exiled card" is the one *this* permanent's other ability exiled and
+        # can be nothing else. The definite article is doing the work the
+        # phrase "exiled with this enchantment" does above, which is why the
+        # self-reference below is not required here rather than optional —
+        # there is no wording of this spelling that could name another pile.
+        preposition = "to"
+        names_source = False
     else:
         stream.reset(mark)
         return None
-    if not (stream.accept_word("it") or _accept_self_reference(stream)):
+    if names_source and not (
+        stream.accept_word("it") or _accept_self_reference(stream)
+    ):
         stream.reset(mark)
         return None
     stream.expect_word(preposition)

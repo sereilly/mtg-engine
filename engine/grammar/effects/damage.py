@@ -141,6 +141,33 @@ def _ends_the_recipient_list(stream: TokenStream) -> bool:
     return token is None or token.kind != WORD
 
 
+def _parse_recipient_list(stream: TokenStream) -> list[ast.Recipient]:
+    """The recipients of one damage clause, with the "and" conjuncts it prints.
+
+    "each creature with flying **and each player**" is one recipient list, not
+    a second damage event — and `_ends_the_recipient_list` is what keeps the
+    conjunct loop from swallowing the subject of the next sentence.
+
+    The first recipient goes through `_parse_damage_recipient` rather than
+    `parse_recipient`, because only damage prints the "or planeswalker" union
+    and the "who attacked this turn" narrowing.
+    """
+    recipient = _parse_damage_recipient(stream)
+    if recipient is None:
+        raise stream.error("expected a damage recipient")
+    recipients = [recipient]
+    while True:
+        mark = stream.mark()
+        if not stream.accept_word("and"):
+            break
+        extra = parse_recipient(stream)
+        if extra is None or not _ends_the_recipient_list(stream):
+            stream.reset(mark)
+            break
+        recipients.append(extra)
+    return recipients
+
+
 def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Statement:
     """``<source> deals <amount> damage to <recipients> [riders]``.
 
@@ -201,21 +228,7 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
         history = _accept_damaged_this_game(stream)
         if history is not None:
             return ast.DamageThoseDamagedThisGame(source, amount, history)
-        recipient = _parse_damage_recipient(stream)
-        if recipient is None:
-            raise stream.error("expected a damage recipient")
-        recipients.append(recipient)
-        # "each creature with flying and each player" is one recipient list,
-        # not a second damage event.
-        while True:
-            mark = stream.mark()
-            if not stream.accept_word("and"):
-                break
-            extra = parse_recipient(stream)
-            if extra is None or not _ends_the_recipient_list(stream):
-                stream.reset(mark)
-                break
-            recipients.append(extra)
+        recipients.extend(_parse_recipient_list(stream))
 
     if deferred_amount:
         found = parse_equal_to(stream)
@@ -226,14 +239,13 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
         # (Garruk, Savage Herald's −2) — this word order puts the recipient
         # after the amount clause rather than before it.
         if not recipients and stream.accept_word("to"):
-            # Through `_parse_damage_recipient`, not `parse_recipient`: this
-            # word order missed the "or planeswalker" union, so "deals damage
-            # equal to its power to target player **or planeswalker**" failed on
-            # the two words the other word order reads.
-            recipient = _parse_damage_recipient(stream)
-            if recipient is None:
-                raise stream.error("expected a damage recipient")
-            recipients.append(recipient)
+            # The **same** list reader the other word order uses, and that is
+            # the point: this branch read one recipient and stopped, so "deals
+            # damage equal to the number of time counters on it to each
+            # creature **and each player**" (Time Bomb) stranded half its
+            # recipients and failed the line. A recipient list is a property of
+            # the clause, not of which side of it the quantity was printed on.
+            recipients.extend(_parse_recipient_list(stream))
 
     # "deals X damage to that player, where X is <count>" — the trailer *is* the
     # quantity, so it replaces the variable rather than riding alongside it.

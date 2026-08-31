@@ -846,3 +846,51 @@ def test_urzas_bauble_shows_one_card_and_draws_next_upkeep(set_pool):
 
     assert [card.name for card in p1.hand] == ["Scaled Wurm"]
 # --- end W1G4 ---
+
+
+# --- W2G1: pay-or-consequence tolls ---
+def test_time_bomb_deals_its_time_counters_to_everything(set_pool):
+    """"{1}, {T}, Sacrifice this artifact: This artifact deals damage equal to
+    the number of time counters on it to each creature and each player."
+
+    Two halves failed independently. The recipient list was read on one side of
+    the quantity only, so "and each player" stranded the line; and the sweep
+    lowering refused every computed amount, where the counters on the ability's
+    own source are one the sweep handlers can now read.
+    """
+    from engine.named_counters import add_counters
+
+    pool = set_pool("ICE")
+    bomb = Permanent(card=pool["Time Bomb"])
+    add_counters(bomb, "time", 3)
+    bears = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", battlefield=[bomb], life=20, mana_pool={"C": 1})
+    p1 = PlayerState(name="P1", battlefield=[bears], life=20)
+    game = Game(players=[p0, p1])
+
+    result = game.activate_permanent_ability(0, "Time Bomb")
+    assert result.supported, result.details
+    game._settle()
+
+    assert (p0.life, p1.life) == (17, 17)
+    assert not game.is_on_battlefield(bears), "a 2/2 dies to 3"
+
+
+def test_time_bomb_counts_the_counters_at_resolution(set_pool):
+    """The artifact is sacrificed to pay for its own ability, so the count is
+    read off the ``Permanent`` the resolution is still holding (CR 400.7) — a
+    bomb with one counter deals one."""
+    from engine.named_counters import add_counters
+
+    pool = set_pool("ICE")
+    bomb = Permanent(card=pool["Time Bomb"])
+    add_counters(bomb, "time", 1)
+    p0 = PlayerState(name="P0", battlefield=[bomb], life=20, mana_pool={"C": 1})
+    p1 = PlayerState(name="P1", life=20)
+    game = Game(players=[p0, p1])
+
+    game.activate_permanent_ability(0, "Time Bomb")
+    game._settle()
+
+    assert (p0.life, p1.life) == (19, 19)
+# --- end W2G1 ---
