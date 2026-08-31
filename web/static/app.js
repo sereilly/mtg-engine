@@ -1602,9 +1602,16 @@ function pendingAutoTapCost(pending) {
 // card"), a string test would open an auto-tap prompt demanding zero mana —
 // `parseManaCostSymbols` finds no braces in it — for an ability that costs no
 // mana at all. Unchanged for every all-brace cost.
+//
+// Asked of `parseManaCostSymbols` — the function that will actually collect the
+// payment — rather than by scanning the string a second time, so the gate and
+// the payer cannot disagree about what a cost is worth. That disagreement was
+// live for the ten cards printing a free ability as "{0}:" (Blinking Spirit,
+// Eater of the Dead, Instill Energy, Knowledge Vault, ...): the string was
+// non-empty and not "{T}", so the prompt opened and then asked for nothing.
 function shouldPromptForActivationCost(costText) {
-  const tokens = (costText || "").toUpperCase().match(/\{([^}]+)\}/g) || [];
-  return tokens.some((token) => token.slice(1, -1).trim() !== "T");
+  const required = parseManaCostSymbols(costText);
+  return Object.values(required).some((count) => count > 0);
 }
 
 function parseManaCostSymbols(costText) {
