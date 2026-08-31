@@ -498,4 +498,42 @@ def test_a_delayed_mana_opener_refuses_an_effect_the_seam_cannot_resolve(set_poo
         "that player draws a card."
     )
     assert not compiled.usable, compiled
+
+
+@pytest.mark.cr("611.2c", "603.7")
+def test_chaos_moons_two_halves_treat_a_latecomer_differently(set_pool):
+    """One printed "and", two CR rules, and they disagree on purpose.
+
+    The anthem is a continuous effect from a resolution, so CR 611.2c fixes its
+    set of objects when it begins -- a red creature that enters afterwards gets
+    nothing. The delayed ability is not a continuous effect at all: it answers
+    to an *event*, so a Mountain that enters afterwards produces the extra {R}
+    like any other.
+
+    Reading either half as the other is the failure this asserts against, and
+    the two are one sentence on the card.
+    """
+    lea = set_pool("LEA")
+    game, p0, p1, _mine, goblin = _odd_board(set_pool)
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    latecomer = Permanent(card=lea["Mountain"])
+    p0.battlefield.append(latecomer)
+    game._initialize_permanent_state(latecomer, 0, 0)
+    late_goblin = Permanent(card=lea["Mons's Goblin Raiders"])
+    p1.battlefield.append(late_goblin)
+    game._initialize_permanent_state(late_goblin, 1, 1)
+    game._sync_control()
+
+    assert game.tap_land_for_mana(
+        0, "Mountain", permanent_index=p0.battlefield.index(latecomer)
+    ), game.log
+    assert p0.mana_pool["R"] == 2, "the ability answers to the event, not to a set"
+
+    assert (goblin.effective_power, goblin.effective_toughness) == (2, 2)
+    assert (late_goblin.effective_power, late_goblin.effective_toughness) == (1, 1), (
+        "CR 611.2c: the anthem's set was fixed when the effect began"
+    )
 # --- end ChaosMoon ---
