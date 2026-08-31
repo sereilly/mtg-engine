@@ -39,7 +39,11 @@ def untap_self(game: Game, instruction: OracleInstruction, context: OracleExecut
     if not source_permanent.tapped:
         return False, f"{card.name} is already untapped"
     game.become_untapped(source_permanent)
-    game.log.append(f"{card.name} untapped itself")
+    # The permanent, not the card: a delayed ability created by a spell
+    # (Melee's "untap it") carries the *spell* as its card and the creature it
+    # is about as its source, and "Melee untapped itself" names the wrong
+    # object in the one place a player reads what happened.
+    game.log.append(f"{source_permanent.card.name} untapped")
     return True, "resolved"
 
 
