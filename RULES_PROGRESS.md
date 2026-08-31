@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**340 / 612 tracked rules covered (55%)** — 1682 tests, 0 unannotated.
+**340 / 612 tracked rules covered (55%)** — 1687 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -172,7 +172,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **107.1** The only numbers the Magic game uses are integers. *(1 tests, subrules a)*
 - [x] **107.2** If anything needs to use a number that can’t be determined, either as a result or in a calculatio... *(1 tests)*
-- [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(1 tests, subrules b)*
+- [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(3 tests, subrules ab)*
 - [x] **107.4** The mana symbols are {W}, {U}, {B}, {R}, {G}, and {C}; the numerical symbols {0}, {1}, {2}, {3}, ... *(4 tests)*
 - [x] **107.5** The tap symbol is {T}. The tap symbol in an activation cost means “Tap this permanent.” A permane... *(2 tests)*
 - [ ] **107.6** The untap symbol is {Q}. The untap symbol in an activation cost means “Untap this permanent.” A p...
@@ -296,7 +296,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
 - [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(3 tests, subrules a)*
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
-- [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(5 tests, subrules abc)*
+- [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(6 tests, subrules abc)*
 - [x] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s... *(5 tests)*
 - [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(1 tests)*
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
@@ -322,7 +322,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **120.1** Objects can deal damage to battles, creatures, planeswalkers, and players. This is generally detr...
 - [ ] **120.2** Any object can deal damage.
-- [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(5 tests, subrules acf)*
+- [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(6 tests, subrules acf)*
 - [x] **120.4** Damage is processed in a four-part sequence. *(11 tests, subrules bc)*
 - [ ] **120.5** Damage dealt to a creature, planeswalker, or battle doesn’t destroy it. Likewise, the source of t...
 - [ ] **120.6** Damage marked on a creature remains until the cleanup step, even if that permanent stops being a ...
@@ -461,7 +461,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **306.2** When a planeswalker spell resolves, its controller puts it onto the battlefield under their control. *(1 tests)*
 - [x] **306.3** Planeswalker subtypes are always a single word and are listed after a long dash: “Planeswalker — ... *(1 tests)*
 - [x] **306.4** Previously, planeswalkers were subject to a “planeswalker uniqueness rule” that stopped a player ... *(2 tests)*
-- [x] **306.5** Loyalty is a characteristic only planeswalkers have. *(5 tests, subrules abcd)*
+- [x] **306.5** Loyalty is a characteristic only planeswalkers have. *(6 tests, subrules abcd)*
 - [x] **306.6** Planeswalkers can be attacked. (See rule 508, “Declare Attackers Step.”) *(1 tests)*
 - [x] **306.7** Previously, planeswalkers were subject to a redirection effect that allowed a player to have nonc... *(1 tests)*
 - [x] **306.8** Damage dealt to a planeswalker results in that many loyalty counters being removed from it. *(1 tests)*
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(109 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(113 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(6 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*

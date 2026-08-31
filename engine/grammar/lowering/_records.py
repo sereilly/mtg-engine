@@ -26,11 +26,18 @@ from __future__ import annotations
 
 from ...oracle_types import HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
-                      CREATED_TOKEN, EXILED_THIS_WAY)
+                      CREATED_TOKEN, DAMAGE_RECIPIENT, EXILED_THIS_WAY)
 
 
 _PRODUCES: dict[str, str | tuple[str, ...]] = {
-    "deal_damage": "damage_dealt",
+    # Two records, because the sentence after a damage step may ask two
+    # different questions about it. How much was dealt is the first and the
+    # primary; who or what took it — and what it could absorb *before* the
+    # damage — is the second, and the only place "…but not more life than the
+    # player's life total before the damage was dealt" (Drain Life, Soul Burn)
+    # has to read from. Reading the board instead would read the life total the
+    # damage just changed, which is the number the words exclude.
+    "deal_damage": ("damage_dealt", DAMAGE_RECIPIENT),
     # "This creature deals damage equal to its power to target creature.
     # **That creature** deals damage equal to its power to this creature."
     # (Tracker.) The bite records which permanent it chose, because that is the

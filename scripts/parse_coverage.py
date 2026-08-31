@@ -54,7 +54,8 @@ sys.path.insert(0, str(REPO_ROOT))
 from engine import card_hooks, load_cards  # noqa: E402
 from engine.card_loader import manifest_set_paths  # noqa: E402
 from engine.grammar import compile_line as compile_grammar_line  # noqa: E402
-from engine.oracle_types import OracleInstruction  # noqa: E402
+from engine.oracle_types import (OracleInstruction,  # noqa: E402
+                                 x_spend_colors_from_text)
 from engine.cast_costs import cast_cost_claims_line  # noqa: E402
 from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_condition_line)
@@ -384,7 +385,13 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("activation gate (stack/activation)", lambda s: any(g in s for g in _ACTIVATION_GATES)),
     ("mixin text scan", lambda s: _matches_any(s, _MIXIN_TEXT_SCANS)),
     ("modal machinery", lambda s: s.startswith("choose one")),
-    ("x spend color (stack/activation)", lambda s: bool(re.match(r"^spend only (?:white|blue|black|red|green) mana on x$", s))),
+    # Anchored at both ends here and delegating the colour vocabulary to the
+    # engine's own reader, so "black **and/or red**" (Soul Burn) is claimed by
+    # the same function the payment path enforces rather than by a second
+    # spelling of the template that would go stale the next time one moves.
+    ("x spend color (stack/activation)",
+     lambda s: s.startswith("spend only") and s.endswith("mana on x")
+     and bool(x_spend_colors_from_text(s))),
     ("ante boilerplate (deck construction, not gameplay)", lambda s: s.startswith("remove this card from your deck before playing")),
 )
 

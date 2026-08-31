@@ -27,7 +27,7 @@ from .target_restrictions import forbidden_target
 from .auras import aura_restriction_active
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
-from .oracle_types import x_spend_color_from_text
+from .oracle_types import x_spend_colors_from_text
 from .search_filters import search_matches, searched_seat
 from .subject_filters import subject_matches
 from .targeting import (bounce_subject_filter, derive_activation_spec,
@@ -1463,12 +1463,19 @@ def _cost_for(
     seat = next((i for i, seated in enumerate(game.players) if seated is player), 0)
     tax, _names = spell_cost_tax(game, seat, card)
     reduction, _reducers = cost_reduction_for_cast(game, seat, card)
+    # The best split of X among the colours the card allows, which is the one
+    # the cast path will try first (`casting._x_color_allocations`). The AI is
+    # sizing the cost, so it wants the payment that will actually be attempted;
+    # a split the cast would not choose prices a different spell.
+    allocation = game._x_color_allocations(
+        x_spend_colors_from_text(card.oracle_text), max(0, x_value or 0)
+    )[0]
     return reduce_cost(
         game._parse_mana_cost(
             card.mana_cost,
             x_value=x_value,
             extra_generic=tax,
-            x_color=x_spend_color_from_text(card.oracle_text),
+            x_allocation=allocation,
         ),
         reduction,
     )

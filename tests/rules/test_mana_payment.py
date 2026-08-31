@@ -105,3 +105,144 @@ def test_the_cost_reads_the_way_the_card_prints_it():
     assert mana_cost_label({"generic": 1, "B": 1}) == "{1}{B}"
     assert mana_cost_label(generic_cost(2)) == "{2}"
     assert total_pips({"generic": 1, "B": 1}) == 2
+
+
+# --- W4G3: X spent by colour, and the life-gain cap ---
+def _soul_burn_seat(pool, mana, *, victim_life=20, battlefield=()):
+    """Soul Burn in hand, *mana* in the pool, costs enforced."""
+    from engine.game import Game
+    from engine.models import PlayerState
+
+    p0 = PlayerState(name="P0", hand=[pool["Soul Burn"]], life=20)
+    p1 = PlayerState(name="P1", life=victim_life, battlefield=list(battlefield))
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = True
+    game._sync_control()
+    p0.mana_pool = dict(mana)
+    return game, p0, p1
+
+
+@pytest.mark.cr("601.2h", "107.3a")
+def test_601_2h_a_restricted_x_is_paid_by_whichever_split_the_pool_can_cover(pool):
+    """"Spend only black and/or red mana on X." on a {X}{2}{B} spell.
+
+    CR 107.3a: the caster announces X. CR 601.2h: they then pay the total cost,
+    and which unit of mana covers which part of it is theirs to decide. The two
+    interact here: the printed {B} pip and X compete for the same black mana, so
+    a payment that spent black on X first would leave the pip unpayable and
+    report a castable spell as uncastable.
+
+    Two black and three red against X=3: the pip takes one black, X takes the
+    other plus two red, and the {2} comes out of what is left.
+    """
+    game, p0, _p1 = _soul_burn_seat(pool, {"B": 2, "R": 3, "C": 2})
+
+    result = game.cast_from_hand(0, "Soul Burn", x_value=3, target_player_index=1)
+
+    assert result.supported, result.details
+    assert sum(p0.mana_pool.values()) == 1, "six of the seven units paid {3}{2}{B}"
+
+
+@pytest.mark.cr("601.2h")
+def test_601_2h_an_unpayable_restricted_x_costs_the_caster_nothing(pool):
+    """"Unpayable costs can't be paid." Green pays the generic {2} and nothing
+    else on this card, so X=3 is unreachable — and the refusal happens before
+    any mana leaves the pool, under **every** split rather than the first one
+    tried."""
+    game, p0, _p1 = _soul_burn_seat(pool, {"B": 1, "G": 6})
+
+    result = game.cast_from_hand(0, "Soul Burn", x_value=3, target_player_index=1)
+
+    assert not result.supported
+    assert p0.mana_pool == {"B": 1, "G": 6}
+
+
+@pytest.mark.cr("107.3a", "601.2h")
+def test_107_3a_x_is_inferred_from_every_colour_the_card_allows(pool):
+    """With no announced X the engine works out the largest affordable one, and
+    that has to pool *both* allowed colours: asking about black alone
+    under-reported the affordable X by every red mana on the board.
+
+    {B} pip + {2} generic leaves five of the seven units for X.
+    """
+    game, p0, p1 = _soul_burn_seat(pool, {"B": 4, "R": 4})
+
+    result = game.cast_from_hand(0, "Soul Burn", target_player_index=1)
+
+    assert result.supported, result.details
+    assert p1.life == 15, "X inferred as 5"
+
+
+@pytest.mark.cr("120.3c", "306.5c")
+def test_120_3c_the_life_gain_is_capped_by_the_planeswalkers_loyalty(pool):
+    """"…but not more than … the planeswalker's loyalty before the damage was
+    dealt…"
+
+    The third of the cap's three recipient kinds, and the one no card in the
+    pool can be pointed at without inventing a planeswalker: damage to a
+    planeswalker removes that many loyalty counters (CR 120.3c), so the number
+    the card measures against is the loyalty *before* the removal (CR 306.5c:
+    a planeswalker's loyalty on the battlefield is its counters).
+    """
+    from engine.models import Permanent
+    from tests.rules.test_planeswalkers import _mk_walker
+
+    walker = Permanent(card=_mk_walker(), metadata={"loyalty_counters": 2})
+    game, p0, _p1 = _soul_burn_seat(pool, {"B": 8}, battlefield=[walker])
+
+    result = game.cast_from_hand(
+        0, "Soul Burn", x_value=4,
+        target_player_index=1, target_permanent_index=0,
+    )
+
+    assert result.supported, result.details
+    game._settle()
+    assert p0.life == 22, "four damage at two loyalty gains two"
+
+
+@pytest.mark.cr("118.7b", "601.2h")
+def test_118_7b_a_coloured_reduction_never_inflates_the_mana_noted_as_spent_on_x(pool):
+    """"This spell costs {B} less to cast" against Soul Burn's {X}{2}{B}.
+
+    A reduction comes off a flat symbol dict in which the printed {B} pip and a
+    black mana put on X are the same entry, so CR 118.7 does not say which half
+    it takes. The caster would take it off the pip, keeping as much black on X
+    as possible — but the *record* of what X consumed has to be clamped to what
+    the reduced cost actually charged, because an over-reported symbol is life
+    gained for mana nobody spent, and "not more than the amount of {B} spent on
+    X" is a limit that must never err upward.
+
+    No card in the pool prints a coloured reduction yet; the reader that would
+    build one does, so this pins the arithmetic before the card arrives.
+    """
+    from engine.cost_modifiers import CostReduction
+
+    game, p0, _p1 = _soul_burn_seat(pool, {"B": 6})
+    card = pool["Soul Burn"]
+
+    # Unreduced: the pip plus three black on X.
+    spent = game._pay_cast_cost(
+        p0, card, 3, ("B", "R"), extra_generic=0, reduction=None,
+    )
+    assert spent == {"B": 3}
+    assert sum(p0.mana_pool.values()) == 0, "{3}{2}{B} out of six black"
+
+    # Reduced by {B}: five black leave the pool, and X is still worth three of
+    # them — the reduction came off the pip, which is the caster's reading.
+    game, p0, _p1 = _soul_burn_seat(pool, {"B": 6})
+    spent = game._pay_cast_cost(
+        p0, card, 3, ("B", "R"),
+        extra_generic=0, reduction=CostReduction(0, (("B", 1),)),
+    )
+    assert spent == {"B": 3}
+    assert sum(p0.mana_pool.values()) == 1
+
+    # Reduced by {B}{B}{B}{B}: the pip and three of X's black are gone, so only
+    # two black could have reached X however the caster reads it.
+    game, p0, _p1 = _soul_burn_seat(pool, {"B": 6})
+    spent = game._pay_cast_cost(
+        p0, card, 3, ("B", "R"),
+        extra_generic=0, reduction=CostReduction(0, (("B", 2),)),
+    )
+    assert spent == {"B": 2}
+# --- end W4G3 ---

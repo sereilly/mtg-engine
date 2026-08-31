@@ -208,13 +208,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "beginning of the next end step":
             _line("pump_self_with_sacrifice_condition", "activated_pump"),
     },
-    'Drain Life': {
-        'drain life deals x damage to any target. you gain life equal to the '
-        "damage dealt, but not more life than the player's life total before "
-        "the damage was dealt, the planeswalker's loyalty before the damage was "
-        "dealt, or the creature's toughness":
-            _line('deal_damage_and_gain_life', 'spell_pattern', amount='x'),
-    },
     'Drain Power': {
         'target player activates a mana ability of each land they control. then '
         'that player loses all unspent mana and you add the mana lost this way':

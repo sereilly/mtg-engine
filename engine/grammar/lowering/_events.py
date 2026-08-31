@@ -366,6 +366,16 @@ _PRODUCED_QUANTITIES: frozenset[str] = frozenset({
 #: handler read an empty record.
 _TAPPED_PERMANENTS = "tapped_permanents"
 
+#: What ``deal_damage`` recorded about the object or player it damaged: which
+#: kind of thing it was, and how much it could absorb *before* the damage
+#: landed. The only place "…but not more life than the player's life total
+#: before the damage was dealt" (Drain Life, Soul Burn) can be read from — by
+#: the time the gain runs, the life total is the one the damage left behind.
+#: Named here rather than spelled in both files for ``_TAPPED_PERMANENTS``'
+#: reason: a second spelling makes the producer gate vacuous while the handler
+#: reads an empty record.
+DAMAGE_RECIPIENT = "damage_recipient"
+
 #: "Target creature you control can't be blocked this turn. **Destroy it** …"
 #: (Goblin Sappers.) The grant records which creature it chose, for the reason
 #: the tap and untap pair do: the sentence after it names that creature and

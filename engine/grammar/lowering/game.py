@@ -24,6 +24,7 @@ from ._common import (
 from ._events import (
     _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
+    DAMAGE_RECIPIENT,
     EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
 )
@@ -34,12 +35,69 @@ from ._events import (
 # ---------------------------------------------------------------------------
 
 
+def _life_gain_cap_payload(
+    node: ast.GainLife, produced: frozenset[str]
+) -> dict[str, object]:
+    """"…but not more than A, B, C, or D" as payload, or ``{}``.
+
+    The three recipient terms fold into one entry carrying *which kinds of
+    recipient* they named, because the engine answers them with one number —
+    what the damaged object could absorb before the damage — and which of the
+    three that number means is a fact about the target, not about the sentence.
+    The kinds are kept so a card printing only "the creature's toughness" does
+    not cap a gain from damaging a player.
+
+    Refused rather than dropped when nothing in this effect recorded the
+    recipient: a cap the handler cannot read would gain the uncapped amount,
+    which is the failure this whole clause exists to prevent.
+    """
+    if not node.capped_by:
+        return {}
+    if not isinstance(node.amount, ast.ThatMuch):
+        raise LoweringError(
+            "a capped life gain reads back what an earlier step dealt", node=node,
+        )
+    terms: list[dict[str, object]] = []
+    recipients = tuple(
+        cap.recipient for cap in node.capped_by
+        if cap.kind == "recipient_capacity" and cap.recipient
+    )
+    if recipients:
+        if DAMAGE_RECIPIENT not in produced:
+            raise LoweringError(
+                "a cap on the damaged object's life, loyalty or toughness needs "
+                "a step of this effect that damaged one",
+                node=node,
+            )
+        terms.append({"kind": "recipient_capacity", "recipients": list(recipients)})
+    for cap in node.capped_by:
+        if cap.kind == "mana_spent_on_x":
+            # "the amount of {B} spent on X" — a fact about the *cast*, carried
+            # on the stack item by the payment that chose the split, not about
+            # anything an earlier instruction did. So there is no producer to
+            # gate on here; a resolution with no such record caps the gain at
+            # zero, which is the safe direction.
+            terms.append({"kind": "mana_spent_on_x", "symbol": cap.symbol})
+    unknown = {cap.kind for cap in node.capped_by} - {
+        "recipient_capacity", "mana_spent_on_x",
+    }
+    if unknown:
+        raise LoweringError(
+            f"no reader for life-gain cap {sorted(unknown)!r}", node=node,
+        )
+    return {"capped_by": terms}
+
+
 def _lower_gain_life(
     node: ast.GainLife,
     produced: frozenset[str] = frozenset(),
     event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     recipient = "caster" if node.player.kind == "you" else "target"
+    # Read here so every branch below is held to it: the only branch that can
+    # carry a cap is the back-reference one, and a branch that silently dropped
+    # one would gain the uncapped amount.
+    cap_payload = _life_gain_cap_payload(node, produced)
     # "…**they** gain 1 life" under "at the beginning of each player's upkeep"
     # (Spiritual Sanctuary). The seat varies per firing, so it is frozen by the
     # fire site and named here; left as the ordinary "target" the gain went to
@@ -58,6 +116,10 @@ def _lower_gain_life(
         and node.amount.source == "its_power"
         and event == "dies"
         and node.player.kind == "you"
+        # This shortcut returns before the back-reference branch below, which
+        # is the only one that carries a cap, so it declines a capped gain
+        # rather than dropping the cap on the way past.
+        and not node.capped_by
     ):
         return (
             OracleInstruction(
@@ -110,6 +172,7 @@ def _lower_gain_life(
                 {
                     **_back_reference_payload(node.amount, produced, event),
                     "recipient": recipient,
+                    **cap_payload,
                 },
             ),
         )

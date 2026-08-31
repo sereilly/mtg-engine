@@ -334,7 +334,6 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "counter_top_stack_spell": {"kind": "stack"},
     "berserk_pump": {"kind": "creature"},
     "grant_unlimited_blocking": {"kind": "creature"},
-    "deal_damage_and_gain_life": {"kind": "any"},
     "target_gains_life": {"kind": "any"},
     "remove_creature_from_combat": {"kind": "creature"},
     "grant_target_flying_until_eot": {"kind": "creature"},

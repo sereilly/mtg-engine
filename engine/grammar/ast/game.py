@@ -20,12 +20,36 @@ from ._core import (
 
 
 @dataclass(frozen=True)
+class LifeGainCap:
+    """One term of "…but not more than A, B, C, or D" (Drain Life, Soul Burn).
+
+    The printed terms are kept apart here even where the engine answers several
+    of them with one number, because they are not one question: "the player's
+    life total" and "the creature's toughness" each apply to a *different kind*
+    of damage recipient, and a card printing only one of them caps only that
+    kind. Folding them in the AST would let a narrower card's cap bind against a
+    recipient the card never mentioned — smaller than printed, which is the same
+    class of silent error as gaining more than printed.
+
+    ``recipient`` is which kind the term is about ("player", "planeswalker",
+    "creature"); ``symbol`` is the mana symbol of "the amount of {B} spent on
+    X". Exactly one of the two is set, decided by ``kind``.
+    """
+    kind: str
+    recipient: str | None = None
+    symbol: str | None = None
+
+
+@dataclass(frozen=True)
 class GainLife:
     player: PlayerRef
     amount: Amount
     # "…for each creature you control with flying" (Aven Gagglemaster) — a
     # battlefield-count multiplier, mirroring LoseLife's graveyard one.
     per_each: object | None = None
+    # "…, but not more life than the player's life total before the damage was
+    # dealt, …" (Drain Life, Soul Burn). Empty for the ordinary gain.
+    capped_by: tuple[LifeGainCap, ...] = ()
 
 
 @dataclass(frozen=True)

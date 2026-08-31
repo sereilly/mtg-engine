@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from engine import Game, PlayerState, classify_card, load_cards
 from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle  # W4G3
 import json
 from web.app import app, store
 from tests.helpers import (
@@ -864,3 +865,73 @@ def test_drain_life_still_gains_the_whole_amount_when_nothing_caps_it(set_pool):
 
     assert p0.life == 26
 # --- end W3G3 ---
+
+
+# --- W4G3: Drain Life's sentence is a production, not a name ---
+def test_drain_life_no_longer_needs_a_name_keyed_hook(set_pool):
+    """"Drain Life deals X damage to any target. You gain life equal to the
+    damage dealt, but not more life than the player's life total before the
+    damage was dealt, the planeswalker's loyalty before the damage was dealt, or
+    the creature's toughness."
+
+    Soul Burn (ICE) prints the same sentence with one term more, which is the
+    proof the shape is a template and not a card — the entry bar `card_hooks`
+    states. So the sentence became a production, the hook went, and the fused
+    ``deal_damage_and_gain_life`` kind it was the only producer of went with it.
+
+    The compiled program is **not** byte-identical, and could not be: the hook
+    minted one fused instruction where the production composes two — a
+    ``deal_damage`` that records what it dealt and a ``target_gains_life`` that
+    reads the record back and caps it. That is the composition
+    ``handlers/control_flow`` exists for, and it is what lets the cap limit the
+    life gained while leaving the damage dealt whole. The behaviour is pinned by
+    the four tests above this block, which predate the change and still pass.
+    """
+    from engine import card_hooks
+
+    assert "Drain Life" not in card_hooks.CARD_LINE_INSTRUCTIONS
+    assert not any(
+        "drain life" in line
+        for lines in card_hooks.CARD_LINE_INSTRUCTIONS.values()
+        for line in lines
+    )
+
+    program = compile_card_oracle(set_pool("LEA")["Drain Life"])
+    assert program.supported
+    (effect,) = [i for i in program.instructions if i.kind != "spell_pattern"]
+    assert effect.kind == "sequence"
+    damage, gain = effect.payload["steps"]
+    assert (damage.kind, gain.kind) == ("deal_damage", "target_gains_life")
+    # One term fewer than Soul Burn's, because Drain Life prints one fewer.
+    assert gain.payload["capped_by"] == [
+        {"kind": "recipient_capacity",
+         "recipients": ["player", "planeswalker", "creature"]},
+    ]
+
+
+def test_drain_life_gains_nothing_from_a_target_that_is_already_gone(set_pool):
+    """CR 608.2b: the only target is illegal by resolution, so nothing happens
+    — and "you gain life equal to the damage dealt" is part of that nothing.
+
+    The composed program is where this could have gone wrong: the gain is its
+    own instruction now, so it runs whether or not the damage did. It reads a
+    record the fizzled damage never wrote, and an absent record is zero.
+    """
+    pool = set_pool("LEA")
+    victim = Permanent(card=pool["Grizzly Bears"])
+    p0 = PlayerState(name="P0", hand=[pool["Drain Life"]], life=20)
+    p1 = PlayerState(name="P1", life=20, battlefield=[victim])
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert game.queue_from_hand(
+        0, "Drain Life", x_value=6,
+        target_player_index=1, target_permanent_index=0,
+    ).supported
+    game.remove_from_battlefield(victim)
+    game._settle()
+
+    assert p0.life == 20, "no damage dealt, so no life gained"
+    assert p1.life == 20, "and the face is never the fallback for a gone target"
+# --- end W4G3 ---

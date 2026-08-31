@@ -62,14 +62,36 @@ _COLOR_WORD_TO_SYMBOL: dict[str, str] = {
     "green": "G",
 }
 
-_X_SPEND_COLOR_RE = re.compile(r"spend only (white|blue|black|red|green) mana on x")
+_COLOR_WORD = "white|blue|black|red|green"
+_X_SPEND_COLOR_RE = re.compile(
+    rf"spend only ({_COLOR_WORD})(?: and/or ({_COLOR_WORD}))? mana on x"
+)
 
 
-def x_spend_color_from_text(text: str) -> str | None:
-    """The single color that may be spent on X ("Spend only black mana on X."
-    — Drain Life), as a mana symbol, or None when X is unrestricted."""
+def x_spend_colors_from_text(text: str) -> tuple[str, ...]:
+    """The colours that may be spent on X, **in the order the card prints
+    them**, or an empty tuple when X is unrestricted.
+
+    A tuple rather than the single symbol this used to return: "Spend only
+    black **and/or red** mana on X." (Soul Burn) names two, and a reader that
+    can hold only one answered ``None`` — which is the answer for a card with
+    no restriction at all, so the restriction was silently unenforced rather
+    than refused.
+
+    The order is load-bearing, not cosmetic. With more than one colour allowed
+    the split of X between them is the caster's (CR 601.2h), and the engine has
+    no channel to ask; ``casting._x_color_allocations`` spends the printed order
+    as its preference, taking as much of the first-named colour as the pool
+    allows. That is the caster-favourable reading for the one card in the pool
+    that can tell the difference — Soul Burn gains life capped by the {B} spent
+    on X, and black is the colour it names first.
+    """
     match = _X_SPEND_COLOR_RE.search(text.lower())
-    return _COLOR_WORD_TO_SYMBOL[match.group(1)] if match else None
+    if match is None:
+        return ()
+    return tuple(
+        _COLOR_WORD_TO_SYMBOL[word] for word in match.groups() if word is not None
+    )
 
 
 @dataclass(frozen=True)

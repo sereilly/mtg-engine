@@ -7,6 +7,9 @@ spell, so every "do X and also Y" card needed its own kind —
 ``grant_target_keyword_until_eot`` fused with a linked destroy, and 25 more,
 which is combinatorial in
 the number of base effects and was the single largest driver of kind growth.
+The first of those is gone as of Soul Burn: Drain Life's whole sentence,
+life-gain cap and all, is now a ``deal_damage`` and a ``target_gains_life`` in
+a ``sequence``, and the kind it used to need has no producer left.
 
 With ``sequence`` in the IR, "X and Y" is two ordinary instructions and no new
 kind at all. ``if_then`` / ``may`` / ``for_each`` wrap nested sequences the same
