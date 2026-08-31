@@ -38,7 +38,7 @@ from ...game_types import SimulationResult, StackItem
 from ...handlers._common import graveyard_card_matches, permanent_matches_filter
 from ...models import CardDefinition, Permanent, PlayerState
 from ...oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle
-from ...oracle_types import x_spend_color_from_text
+from ...oracle_types import x_spend_colors_from_text
 from ...restricted_mana import CAST, PaymentPurpose
 from ...target_restrictions import forbidden_target
 from ...targeting import bounce_subject_filter, graveyard_target_spec
@@ -642,7 +642,11 @@ class SpellCastingMixin:
                 num_targets = 1
             extra_generic_tax += max(0, num_targets - 1)
 
-        x_color = x_spend_color_from_text(card.oracle_text)
+        x_colors = x_spend_colors_from_text(card.oracle_text)
+        # What the payment below actually put on X, per colour. Empty until
+        # then, and legitimately empty afterwards for a waived cast (CR
+        # 107.3b locks a waived X to 0) or a game not enforcing costs.
+        x_mana_spent: dict[str, int] = {}
         resolved_x_value = x_value
         # CR 107.3c: some spells define X themselves, and then the caster does
         # not announce it — the definition wins over anything the wire sent, the
@@ -670,7 +674,7 @@ class SpellCastingMixin:
             )
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():
             resolved_x_value = self._infer_x_value(
-                caster, card.mana_cost, extra_generic_tax, x_color=x_color,
+                caster, card.mana_cost, extra_generic_tax, x_colors=x_colors,
                 reduction=cost_reduction,
             )
 
@@ -761,19 +765,18 @@ class SpellCastingMixin:
                 details = f"{card.name} has no mana cost; the cost is unpayable (CR 118.6)"
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
-            cost = reduce_cost(
-                self._parse_mana_cost(
-                    card.mana_cost, x_value=resolved_x_value,
-                    extra_generic=extra_generic_tax, x_color=x_color,
-                ),
-                cost_reduction,
+            x_mana_spent = self._pay_cast_cost(
+                caster, card, resolved_x_value, x_colors,
+                extra_generic=extra_generic_tax, reduction=cost_reduction,
             )
-            if not self._pay_mana_cost(
-                caster, cost, purpose=PaymentPurpose(CAST, card=card)
-            ):
+            if x_mana_spent is None:
                 details = f"insufficient mana for {card.name}"
-                if x_color is not None:
-                    details = f"insufficient mana for {card.name} (X can be paid only with {x_color} mana)"
+                if x_colors:
+                    spelling = " and/or ".join(f"{{{sym}}}" for sym in x_colors)
+                    details = (
+                        f"insufficient mana for {card.name} "
+                        f"(X can be paid only with {spelling} mana)"
+                    )
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 
@@ -840,6 +843,14 @@ class SpellCastingMixin:
                         # (CR 608.2h) held on the stack item rather than a
                         # second lookup that could not succeed.
                         "sacrificed_for_cost": sacrificed_for_cost,
+                        # CR 601.2g's answer to "the amount of {B} spent on X"
+                        # (Soul Burn). Decided as the cost was built rather than
+                        # measured as a pool delta afterwards: this card costs
+                        # {X}{2}{B}, so a black unit missing from the pool may
+                        # have paid the mandatory pip, the generic {2} or X, and
+                        # a delta cannot tell those apart. The allocation is the
+                        # cost, so the number is exact.
+                        "x_mana_spent": x_mana_spent,
                     },
             )
             self._stack_push(spell_item)
@@ -1625,7 +1636,7 @@ class SpellCastingMixin:
         return True, "valid"
     def _infer_x_value(
         self, player: PlayerState, mana_cost: str, extra_generic: int = 0,
-        x_color: str | None = None, reduction: CostReduction | None = None,
+        x_colors: tuple[str, ...] = (), reduction: CostReduction | None = None,
     ) -> int:
         # The reduction is applied before X is inferred, because X is whatever
         # is left after the rest of the cost is paid — inferring it from the
@@ -1674,36 +1685,119 @@ class SpellCastingMixin:
         if available_generic < required["generic"]:
             return 0
 
-        if x_color in {"W", "U", "B", "R", "G", "C"}:
-            # X may only be paid in one color: reserve it by covering the generic
-            # part from the other colors first.
-            other_available = available_generic - max(0, temp.get(x_color, 0))
-            generic_from_x_color = max(0, required["generic"] - other_available)
-            return max(0, temp.get(x_color, 0) - generic_from_x_color)
+        restricted = tuple(sym for sym in x_colors if sym in _POOL_SYMBOLS)
+        if restricted:
+            # X may be paid only in these colours (CR 601.2g): reserve them by
+            # covering the generic part from every *other* symbol first. A tuple
+            # rather than one symbol -- "black and/or red" pools both, and asking
+            # about black alone under-reported the affordable X by every red
+            # mana the pool held.
+            reserved = sum(max(0, temp.get(sym, 0)) for sym in restricted)
+            other_available = available_generic - reserved
+            generic_from_reserved = max(0, required["generic"] - other_available)
+            return max(0, reserved - generic_from_reserved)
 
         return available_generic - required["generic"]
     def _parse_mana_cost(
-        self, mana_cost: str, x_value: int | None, extra_generic: int = 0, x_color: str | None = None
+        self, mana_cost: str, x_value: int | None, extra_generic: int = 0,
+        x_allocation: dict[str, int] | None = None,
     ) -> dict[str, int]:
+        """*mana_cost* as a symbol dict, with X worth *x_value*.
+
+        *x_allocation* is how much of X is being paid in each colour -- the
+        caster's CR 601.2g choice, already made. "Spend only black mana on X"
+        (Drain Life) allocates all of X to {B}; "black and/or red" (Soul Burn)
+        splits it, and ``_x_color_allocations`` below is what picks the split.
+        Whatever X is not allocated stays generic, which is the unrestricted
+        case with an empty allocation.
+
+        A dict rather than the single ``x_color`` symbol this used to take: one
+        symbol cannot describe a two-colour restriction, and it also cannot
+        answer the question the split exists for -- how much {B} paid X, as
+        opposed to the mandatory {B} pip or the {2} beside it.
+        """
         required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": max(0, extra_generic)}
         if not mana_cost:
             return required
 
+        allocation = {
+            sym: max(0, int(count))
+            for sym, count in (x_allocation or {}).items()
+            if sym in _POOL_SYMBOLS
+        }
         for token in re.findall(r"\{([^}]+)\}", mana_cost.upper()):
             if token.isdigit():
                 required["generic"] += int(token)
                 continue
             if token == "X":
-                # "Spend only black mana on X" (Drain Life): the X portion is a
-                # colored requirement, not generic payable from anything.
-                if x_color in {"W", "U", "B", "R", "G", "C"}:
-                    required[x_color] += max(0, x_value or 0)
-                else:
-                    required["generic"] += max(0, x_value or 0)
+                remaining = max(0, x_value or 0)
+                for sym, count in allocation.items():
+                    spent = min(remaining, count)
+                    required[sym] += spent
+                    remaining -= spent
+                required["generic"] += remaining
                 continue
-            if token in {"W", "U", "B", "R", "G", "C"}:
+            if token in _POOL_SYMBOLS:
                 required[token] += 1
         return required
+
+    @staticmethod
+    def _x_color_allocations(
+        x_colors: tuple[str, ...], x_value: int
+    ) -> tuple[dict[str, int], ...]:
+        """Every way to split *x_value* among *x_colors*, best split first.
+
+        "Best" is as much as possible on the colour the card names first, then
+        as much as possible on the next -- the caster's CR 601.2g choice, which
+        this engine has no channel to ask for. The printed order is the
+        preference because it is the only thing about the split the card itself
+        says, and for the one card that can tell the difference it is also the
+        caster-favourable reading: Soul Burn's life gain is capped by the {B}
+        spent on X, and {B} is what it names first.
+
+        Every split is returned, not just the best one, because the best one may
+        not be payable -- X wholly in black cannot also leave a black for the
+        mandatory {B} pip -- and the caller walks the list until the pool pays.
+        Costing the whole cost each time is what makes that exact: the printed
+        pips and the generic remainder are in the same question as the split.
+        """
+        if not x_colors:
+            return ({},)
+        wanted = max(0, x_value)
+        if len(x_colors) == 1:
+            return ({x_colors[0]: wanted},)
+        head, tail = x_colors[0], x_colors[1:]
+        return tuple(
+            {head: taken, **rest}
+            for taken in range(wanted, -1, -1)
+            for rest in SpellCastingMixin._x_color_allocations(tail, wanted - taken)
+        )
+
+    def _pay_cast_cost(
+        self, caster: PlayerState, card, x_value: int | None,
+        x_colors: tuple[str, ...], *, extra_generic: int,
+        reduction: CostReduction | None,
+    ) -> dict[str, int] | None:
+        """Pay *card*'s mana cost, and report what X was paid with.
+
+        None when the pool cannot pay it under **any** split of X, and then
+        nothing has been spent: ``_pay_mana_cost`` leaves the pool untouched on
+        failure, so walking the candidate splits costs the caster nothing and
+        the first one that pays is the payment that happened.
+        """
+        for allocation in self._x_color_allocations(x_colors, max(0, x_value or 0)):
+            cost = reduce_cost(
+                self._parse_mana_cost(
+                    card.mana_cost, x_value=x_value,
+                    extra_generic=extra_generic, x_allocation=allocation,
+                ),
+                reduction,
+            )
+            if self._pay_mana_cost(
+                caster, cost, purpose=PaymentPurpose(CAST, card=card)
+            ):
+                return {sym: count for sym, count in allocation.items() if count}
+        return None
     def _pay_mana_cost(
         self, player: PlayerState, required: dict[str, int], *, purpose=None
     ) -> bool:
