@@ -1420,3 +1420,159 @@ def test_w3g2_the_gaze_watches_only_its_casters_creatures(set_pool):
     assert not entry.matches(game, "creature_attacks_unblocked", victim)
     assert entry.matches(game, "creature_attacks_unblocked", attacker)
 # --- end W3G2 ---
+
+
+# --- W4G3: X spent by colour, and the life-gain cap ---
+def _soul_burn_game(set_pool, pool_mana, *, victim_life=20, creature=None):
+    """Soul Burn in hand, mana in the pool, and costs **enforced**.
+
+    Enforced deliberately, and it is the whole of what these tests measure:
+    "the amount of {B} spent on X" is a fact about the payment, so a game that
+    charges nothing gains nothing here — correctly, and uselessly. The mana in
+    the pool is the experiment.
+    """
+    ice = set_pool("ICE")
+    p0 = PlayerState(name="P0", hand=[ice["Soul Burn"]], life=20)
+    p1 = PlayerState(
+        name="P1", life=victim_life,
+        battlefield=[Permanent(card=ice[creature])] if creature else [],
+    )
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = True
+    game._sync_control()
+    p0.mana_pool = dict(pool_mana)
+    return game, p0, p1
+
+
+def _cast_soul_burn(game, x_value, *, at_creature=False):
+    result = game.cast_from_hand(
+        0, "Soul Burn", x_value=x_value, target_player_index=1,
+        **({"target_permanent_index": 0} if at_creature else {}),
+    )
+    assert result.supported, result.details
+    game._settle()
+    return result
+
+
+def test_soul_burn_is_supported_and_composes_rather_than_fusing(set_pool):
+    """"Spend only black and/or red mana on X." / "Soul Burn deals X damage to
+    any target. You gain life equal to the damage dealt, but not more than the
+    amount of {B} spent on X, the player's life total before the damage was
+    dealt, the planeswalker's loyalty before the damage was dealt, or the
+    creature's toughness."
+
+    Declined twice before this. What was actually missing, freshly counted:
+
+    * the colour reader held **one** symbol, so "black and/or red" came back as
+      the same answer as "no restriction at all" and the restriction went
+      unenforced rather than refusing;
+    * "the amount of {B} spent on X" is an *allocation*, not a record — this
+      card costs {X}{2}{B}, so a black unit missing from the pool may have paid
+      the mandatory pip, the generic {2} or X, and a pool delta cannot tell
+      those apart;
+    * the cap sentence had no production, and Drain Life — which prints it with
+      one term fewer — was riding a name-keyed hook for it.
+
+    The pre-damage snapshots (items 3 and 4 of the original scoping) were
+    already built by the round that fixed Drain Life's uncapped life.
+
+    Two instructions, not a fused kind: the damage records what it dealt and
+    the gain reads it back, which is what lets the cap be part of the gain
+    while the damage dealt stays whole (lifelink and every damage trigger read
+    the latter).
+    """
+    program = compile_card_oracle(set_pool("ICE")["Soul Burn"])
+    assert program.supported
+
+    (effect,) = [i for i in program.instructions if i.kind != "spell_pattern"]
+    assert effect.kind == "sequence"
+    damage, gain = effect.payload["steps"]
+    assert damage.kind == "deal_damage"
+    assert damage.payload["targets"]["quantifier"] == "any_target"
+    assert gain.kind == "target_gains_life"
+    assert gain.payload["amount_from"] == "damage_dealt"
+    assert gain.payload["capped_by"] == [
+        {"kind": "recipient_capacity",
+         "recipients": ["player", "planeswalker", "creature"]},
+        {"kind": "mana_spent_on_x", "symbol": "B"},
+    ]
+
+
+def test_soul_burn_x_may_be_paid_with_either_colour(set_pool):
+    """"Spend only black and/or red mana on X."
+
+    Both halves of the restriction in one board: the pool holds no black beyond
+    the mandatory {B} pip, so every point of X is red — which the card allows,
+    and which the old single-symbol reader could not express at all.
+    """
+    game, p0, p1 = _soul_burn_game(set_pool, {"B": 1, "R": 3, "G": 2})
+
+    _cast_soul_burn(game, 3)
+
+    assert p1.life == 17, "three damage, paid for with red"
+    assert p0.life == 20, "no {B} on X, so no life"
+
+
+def test_soul_burn_x_cannot_be_paid_with_a_colour_the_card_excludes(set_pool):
+    """The other end of it: green is in the pool and green is not on the list,
+    so the {2} is payable and X is not. Refused with nothing spent (CR 601.2h:
+    an unpayable cost can't be paid), rather than cast for a cheaper X."""
+    game, p0, _p1 = _soul_burn_game(set_pool, {"B": 1, "G": 5})
+
+    result = game.cast_from_hand(0, "Soul Burn", x_value=3, target_player_index=1)
+
+    assert not result.supported
+    assert "X can be paid only with" in result.details
+    assert p0.mana_pool == {"B": 1, "G": 5}, "a refused cast spends nothing"
+
+
+def test_soul_burn_gains_no_more_than_the_black_mana_spent_on_x(set_pool):
+    """"…but not more than the amount of {B} spent on X…"
+
+    The term the whole round is about, at its boundary. Two black in the pool:
+    one pays the mandatory {B} of {X}{2}{B} and exactly one is left for X, so
+    three damage gains one life. A cast that measured the black *missing from
+    the pool* instead would say two and gain twice what the card allows.
+    """
+    game, p0, p1 = _soul_burn_game(set_pool, {"B": 2, "R": 5})
+
+    _cast_soul_burn(game, 3)
+
+    assert p1.life == 17, "three damage either way"
+    assert p0.life == 21, "one black reached X, so one life"
+
+
+def test_soul_burn_gains_no_more_than_the_targets_life_total(set_pool):
+    """"…the player's life total **before the damage was dealt**…"
+
+    Read before, because the damage is exactly what changes the number the card
+    measures against: an opponent on 2 taking 3 is on -1, and reading the life
+    total afterwards would gain nothing at all.
+    """
+    game, p0, _p1 = _soul_burn_game(set_pool, {"B": 6}, victim_life=2)
+
+    _cast_soul_burn(game, 3)
+
+    assert p0.life == 22, "three black on X, but the opponent had only two life"
+
+
+def test_soul_burn_gains_no_more_than_the_creatures_toughness(set_pool):
+    """"…or the creature's toughness." Three damage at a 2/2 gains two, with
+    three black spent on X and nothing else binding."""
+    game, p0, _p1 = _soul_burn_game(set_pool, {"B": 6}, creature="Balduvian Bears")
+
+    _cast_soul_burn(game, 3, at_creature=True)
+
+    assert p0.life == 22
+
+
+def test_soul_burn_gains_the_whole_amount_when_nothing_caps_it(set_pool):
+    """The baseline the four tests above are measured against: a cap only
+    proves itself where the uncapped answer would have differed."""
+    game, p0, p1 = _soul_burn_game(set_pool, {"B": 6, "R": 2})
+
+    _cast_soul_burn(game, 3)
+
+    assert p1.life == 17
+    assert p0.life == 23, "three black on X, an opponent on 20 — nothing binds"
+# --- end W4G3 ---

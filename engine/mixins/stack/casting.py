@@ -843,7 +843,7 @@ class SpellCastingMixin:
                         # (CR 608.2h) held on the stack item rather than a
                         # second lookup that could not succeed.
                         "sacrificed_for_cost": sacrificed_for_cost,
-                        # CR 601.2g's answer to "the amount of {B} spent on X"
+                        # CR 601.2h's answer to "the amount of {B} spent on X"
                         # (Soul Burn). Decided as the cost was built rather than
                         # measured as a pool delta afterwards: this card costs
                         # {X}{2}{B}, so a black unit missing from the pool may
@@ -1687,7 +1687,7 @@ class SpellCastingMixin:
 
         restricted = tuple(sym for sym in x_colors if sym in _POOL_SYMBOLS)
         if restricted:
-            # X may be paid only in these colours (CR 601.2g): reserve them by
+            # X may be paid only in these colours (CR 601.2h): reserve them by
             # covering the generic part from every *other* symbol first. A tuple
             # rather than one symbol -- "black and/or red" pools both, and asking
             # about black alone under-reported the affordable X by every red
@@ -1705,7 +1705,7 @@ class SpellCastingMixin:
         """*mana_cost* as a symbol dict, with X worth *x_value*.
 
         *x_allocation* is how much of X is being paid in each colour -- the
-        caster's CR 601.2g choice, already made. "Spend only black mana on X"
+        caster's CR 601.2h choice, already made. "Spend only black mana on X"
         (Drain Life) allocates all of X to {B}; "black and/or red" (Soul Burn)
         splits it, and ``_x_color_allocations`` below is what picks the split.
         Whatever X is not allocated stays generic, which is the unrestricted
@@ -1748,7 +1748,7 @@ class SpellCastingMixin:
         """Every way to split *x_value* among *x_colors*, best split first.
 
         "Best" is as much as possible on the colour the card names first, then
-        as much as possible on the next -- the caster's CR 601.2g choice, which
+        as much as possible on the next -- the caster's CR 601.2h choice, which
         this engine has no channel to ask for. The printed order is the
         preference because it is the only thing about the split the card itself
         says, and for the one card that can tell the difference it is also the

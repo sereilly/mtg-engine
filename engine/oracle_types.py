@@ -79,7 +79,7 @@ def x_spend_colors_from_text(text: str) -> tuple[str, ...]:
     than refused.
 
     The order is load-bearing, not cosmetic. With more than one colour allowed
-    the split of X between them is the caster's (CR 601.2g), and the engine has
+    the split of X between them is the caster's (CR 601.2h), and the engine has
     no channel to ask; ``casting._x_color_allocations`` spends the printed order
     as its preference, taking as much of the first-named colour as the pool
     allows. That is the caster-favourable reading for the one card in the pool

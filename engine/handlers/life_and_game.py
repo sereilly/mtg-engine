@@ -427,7 +427,7 @@ def _capped_life_gain(context, instruction, life_gain: int) -> int:
             life_gain = min(life_gain, max(0, int(recorded.get("capacity", 0))))
         elif kind == "mana_spent_on_x":
             # "the amount of {B} spent on X" (Soul Burn) — the split the cast
-            # chose (CR 601.2g), carried on the stack item because the pool it
+            # chose (CR 601.2h), carried on the stack item because the pool it
             # came out of is emptied at the end of the step (CR 500.4).
             spent = (context.choices or {}).get("x_mana_spent") or {}
             life_gain = min(life_gain, max(0, int(spent.get(term.get("symbol"), 0))))
