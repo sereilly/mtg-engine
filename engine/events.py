@@ -612,6 +612,24 @@ def _self_becomes_target_filter(
 # the permanent that tapped, or the one whose ability was activated — and the
 # printed narrowing ("an artifact", "an artifact an opponent controls") is the
 # same question about it either way.
+#: The printed noun that names **every** object on the battlefield (CR 110.1).
+#: ``has_type`` answers card types and "permanent" is not one, so a narrowing
+#: spelled with this word is no narrowing at all — and testing it with
+#: ``has_type`` does not widen the trigger, it silences it. Freyalise's Winds
+#: ("Whenever **a permanent** becomes tapped") is the first card in the pool to
+#: print it, and the trigger fired on nothing at all.
+_UNIVERSAL_NOUN = "permanent"
+
+
+def _noun_matches(obj, noun: str) -> bool:
+    """Whether *obj* answers to a printed head noun, universal word included.
+
+    One reader for the two filters below that read a captured noun, so the word
+    cannot mean everything in one of them and nothing in the other.
+    """
+    return noun == _UNIVERSAL_NOUN or obj.has_type(noun)
+
+
 @event_filter("permanent_tapped_or_ability_activated")
 @event_filter("permanent_becomes_tapped")
 def _becomes_tapped_filter(
@@ -642,7 +660,7 @@ def _becomes_tapped_filter(
     if trig.condition.payload.get("tapped_self"):
         return tapped is permanent
     subtype = trig.condition.payload.get("tapped_subtype")
-    if subtype and not tapped.has_type(str(subtype)):
+    if subtype and not _noun_matches(tapped, str(subtype)):
         return False
     scope = _TAPPED_CONTROLLER_SCOPES.get(trig.condition.payload.get("tapped_controller"))
     if scope is None:
@@ -681,7 +699,7 @@ def _nonmana_ability_activated_filter(
     if noun:
         if permanent.metadata.get("attached_to") is not subject:
             return False
-        if not subject.has_type(str(noun)):
+        if not _noun_matches(subject, str(noun)):
             return False
     # "**with** {T} in its activation cost" — the printed word, tested rather
     # than assumed. A card printing "without" is the opposite half of the same

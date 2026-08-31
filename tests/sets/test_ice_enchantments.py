@@ -983,4 +983,84 @@ def test_brand_of_ill_omen_does_not_touch_the_auras_own_controller(
     game.players[1].hand.append(catalog_by_name["Grizzly Bears"])
 
     assert game.cast_from_hand(1, "Grizzly Bears").supported, game.log
+
+
+def _w1g5_winds_board(set_pool, catalog_by_name):
+    """Freyalise's Winds under P1, with a permanent on each side."""
+    winds = Permanent(card=set_pool("ICE")["Freyalise's Winds"])
+    mine = Permanent(card=catalog_by_name["Grizzly Bears"])
+    theirs = Permanent(card=catalog_by_name["Mountain"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[winds, mine]),
+        PlayerState(name="P2", battlefield=[theirs]),
+    ])
+    game.enforce_mana_costs = False
+    return game, mine, theirs
+
+
+def _w1g5_tap(game, permanent):
+    game.become_tapped(permanent)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+
+def test_freyalises_winds_counters_every_permanent_that_taps(
+    set_pool, catalog_by_name
+):
+    """"Whenever **a permanent** becomes tapped" — every one, on either
+    battlefield. The trigger read "permanent" as a card type and `has_type`
+    answers False for it, so the ability fired on nothing at all."""
+    game, mine, theirs = _w1g5_winds_board(set_pool, catalog_by_name)
+
+    _w1g5_tap(game, mine)
+    _w1g5_tap(game, theirs)
+
+    assert counters_on(mine, "wind") == 1, game.log
+    assert counters_on(theirs, "wind") == 1, game.log
+
+
+def test_freyalises_winds_spends_a_counter_instead_of_untapping(
+    set_pool, catalog_by_name
+):
+    """CR 614: the second line is a *replacement*, not an untap restriction —
+    the permanent stays tapped and the counters go away, so it is free one turn
+    later. A row in ``untap_restrictions`` would have locked it forever."""
+    game, mine, _ = _w1g5_winds_board(set_pool, catalog_by_name)
+    _w1g5_tap(game, mine)
+
+    game.resolve_untap_step(0)
+    assert mine.tapped, game.log
+    assert counters_on(mine, "wind") == 0, game.log
+
+    game.resolve_untap_step(0)
+    assert not mine.tapped, game.log
+
+
+def test_freyalises_winds_leaves_an_uncountered_permanent_alone(
+    set_pool, catalog_by_name
+):
+    """The replacement's applicability is a *pure* predicate over the counters
+    the permanent actually holds, so a permanent that tapped before the Winds
+    arrived untaps normally."""
+    game, mine, _ = _w1g5_winds_board(set_pool, catalog_by_name)
+    mine.tapped = True
+
+    game.resolve_untap_step(0)
+
+    assert not mine.tapped, game.log
+
+
+def test_freyalises_winds_claims_both_of_its_lines(set_pool):
+    """The card compiles supported off its trigger alone, which is exactly the
+    shape ``--hollow-lines`` exists to catch: the replacement is claimed by the
+    file that implements it, so the second line is not a rider dropped in
+    silence."""
+    from engine.replacements import counters_instead_of_untap, replacement_claims_line
+
+    winds = set_pool("ICE")["Freyalise's Winds"]
+    replacement_line = winds.oracle_text.splitlines()[1]
+
+    assert compile_card_oracle(winds).supported
+    assert counters_instead_of_untap(replacement_line) == "wind"
+    assert replacement_claims_line(replacement_line)
 # --- end W1G5 ---

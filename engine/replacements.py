@@ -192,6 +192,7 @@ UNPAYABLE_ENTRY_COST = 15  # Frankenstein's Monster
 # enters, and a rider hung on an entry that did not happen is a sacrifice for
 # nothing.
 SACRIFICE_AFTER_ENTERING = 20  # Land Equilibrium
+COUNTERS_REMOVED_INSTEAD_OF_UNTAPPING = 10  # Freyalise's Winds
 
 # Set on the event once an interceptor consumes it. It lives on the payload
 # because the payload is the one piece of state the 616.1 loop threads through
@@ -1297,6 +1298,103 @@ def _graveyard_instead_of_entering(game, payload: dict) -> ReplacementOutcome | 
     return ReplacementOutcome(replaced=True)
 
 
+
+# ---------------------------------------------------------------------------
+# The untap step (CR 502, CR 614)
+# ---------------------------------------------------------------------------
+
+#: "If a permanent with a wind counter on it would untap during its controller's
+#: untap step, remove all wind counters from it instead." (Freyalise's Winds.)
+#:
+#: Matched by **shape**, like the redirect and the damage cap below
+#: :func:`replacement_claims_line`, because the counter's word is payload: a
+#: card printing "frost counter" is the same sentence and must need no second
+#: constant. The word is repeated in the pattern with a backreference, so a line
+#: that puts one counter on and removes a *different* one stays unclaimed rather
+#: than being read as this effect.
+_COUNTERS_INSTEAD_OF_UNTAP = re.compile(
+    r"^if a permanent with an? (?P<counter>[a-z][a-z' -]*) counter on it would "
+    r"untap during its controller's untap step, remove all (?P=counter) "
+    r"counters from it instead$"
+)
+
+
+def counters_instead_of_untap(line: str) -> str | None:
+    """The counter word *line* removes in place of an untap, or None.
+
+    One reader, three callers: the support gate through
+    :func:`replacement_claims_line`, the applicability predicate below, and the
+    interceptor. A second reader of the phrase is how a card ends up claimed by
+    a gate and replaced by nobody.
+    """
+    normalized = " ".join((line or "").split()).strip().lower().rstrip(".")
+    match = _COUNTERS_INSTEAD_OF_UNTAP.match(normalized)
+    return match.group("counter") if match is not None else None
+
+
+def _untap_counter_kinds(game) -> list[str]:
+    """Every counter word a permanent on the battlefield says to remove instead
+    of untapping.
+
+    Every battlefield, because the sentence names no seat: "a permanent" is any
+    permanent and "its controller's untap step" is whichever step that is. Read
+    off ``effective_card`` so a text change (CR 612) and a granted line both
+    count.
+    """
+    kinds: list[str] = []
+    for permanent in game.all_permanents():
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            counter = counters_instead_of_untap(line)
+            if counter is not None and counter not in kinds:
+                kinds.append(counter)
+    return kinds
+
+
+def _applies_counters_instead_of_untap(game, payload: dict) -> bool:
+    from .named_counters import counters_on
+
+    permanent = payload.get("permanent")
+    if permanent is None:
+        return False
+    return any(
+        counters_on(permanent, kind) > 0 for kind in _untap_counter_kinds(game)
+    )
+
+
+@replacement_effect(
+    "would_untap", COUNTERS_REMOVED_INSTEAD_OF_UNTAPPING,
+    applies=_applies_counters_instead_of_untap,
+)
+def _remove_counters_instead_of_untapping(
+    game, payload: dict
+) -> ReplacementOutcome | None:
+    """Freyalise's Winds: "If a permanent with a wind counter on it would untap
+    during its controller's untap step, remove all wind counters from it
+    instead."
+
+    A genuine CR 614 replacement rather than an entry in
+    ``engine/untap_restrictions.py``: that table says which permanents *do not
+    untap*, and a row there would keep the permanent tapped and leave the
+    counters on it forever — the card is a soft lock, not a hard one, and the
+    difference is one turn per counter.
+    """
+    from .named_counters import counters_on, remove_counters
+
+    permanent = payload["permanent"]
+    removed = 0
+    for kind in _untap_counter_kinds(game):
+        held = counters_on(permanent, kind)
+        if held:
+            remove_counters(permanent, kind, held)
+            removed += held
+    if not removed:
+        return None
+    game.log.append(
+        f"{permanent.card.name} does not untap; {removed} counter(s) removed instead"
+    )
+    return ReplacementOutcome(replaced=True)
+
+
 # ---------------------------------------------------------------------------
 # Interactive replacements (CR 614 + engine/replacement_choices.py)
 #
@@ -1887,6 +1985,11 @@ def replacement_claims_line(line: str) -> bool:
     # it cannot answer leaves the line unclaimed rather than admitted with the
     # redirect silently not firing.
     if redirect_to_self_source_class(normalized) is not None:
+        return True
+    # "If a permanent with a wind counter on it would untap during its
+    # controller's untap step, remove all wind counters from it instead."
+    # (Freyalise's Winds), matched by shape because the counter word is payload.
+    if counters_instead_of_untap(normalized) is not None:
         return True
     # "If an instant or sorcery source would deal 3 or more damage to you…"
     # (Forethought Amulet), the same arrangement for the same reason.

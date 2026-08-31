@@ -70,6 +70,25 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
 })
 
 
+#: Trigger conditions whose fire site freezes the **object** the event was about
+#: (``event_subject_permanent_id``), so a bare "it" in the effect names that
+#: permanent rather than the ability's own source.
+#:
+#: A third table beside the two above rather than more entries in either,
+#: because the three answer different questions off different frozen keys: the
+#: seat that controlled the subject, the seat that *was* the subject, and the
+#: subject itself. Reading one from another's key is how a phrase resolves
+#: against whatever an empty context defaults to.
+#:
+#: Membership is a claim about the fire site, and the site is what makes it
+#: true: ``become_tapped`` stamps the id (CR 400.7 — an index is not an
+#: identity, and by resolution the permanent may have moved). Kudzu's "destroy
+#: it" already reads the same key from its own handler.
+_EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
+    "permanent_becomes_tapped",         # Freyalise's Winds, Kudzu
+})
+
+
 #: Trigger conditions whose subject **is a player** rather than an object, so
 #: "that player" (and its pronoun "they") names the seat the event was about
 #: directly — there is no object in between to take a controller from.

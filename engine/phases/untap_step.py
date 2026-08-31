@@ -10,6 +10,7 @@ aggregates and enforces them, so new restriction cards never touch it.
 """
 
 from ..auras import aura_restriction_active
+from ..replacements import apply_replacements
 from ..subject_filters import subject_matches
 from ..handlers.tapping import UNTAP_LOCK_WHILE_TAPPED_KEY
 from ..control import LINKED_CONTROL_CONDITIONS
@@ -368,6 +369,24 @@ class UntapStepMixin:
                 continue
             for card_type in applicable:
                 untapped_by_type[card_type] = untapped_by_type.get(card_type, 0) + 1
+
+            # CR 614: "If a permanent with a wind counter on it **would
+            # untap** during its controller's untap step, remove all wind
+            # counters from it instead." (Freyalise's Winds.) The last gate,
+            # and a replacement rather than one more skip condition above:
+            # every test before this one says the permanent does not untap and
+            # leaves it at that, while this one *does something else instead*.
+            #
+            # No `restart` thunk: the untap step gives nobody priority
+            # (CR 502.4), so there is no moment at which a CR 616.1e choice
+            # could be answered. With one effect in contention that costs
+            # nothing, and a second would take the documented default.
+            consumed, _ = apply_replacements(
+                self, "would_untap",
+                {"permanent": permanent, "player": player},
+            )
+            if consumed:
+                continue
 
             self.become_untapped(permanent)
             untapped += 1
