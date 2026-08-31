@@ -59,13 +59,29 @@ class PaymentPurpose:
     source: object = None
 
 
+#: What separates a restriction's name from the parameter its bucket carries.
+#: "Spend this mana only to cast **the last card exiled with this artifact**"
+#: (Ice Cauldron) is the first clause in the pool whose subject is one *object*
+#: rather than a class of them, and a bucket is keyed by a string — so the
+#: object is named in the key, after this. One spelling, because the writer
+#: (``handlers/mana``) and the reader (:func:`restriction_admits`) have to agree.
+PARAMETER = ":"
+
+
 @dataclass(frozen=True)
 class ManaRestriction:
     """One "spend this mana only to…" clause."""
 
     key: str
-    #: Whether *purpose* is something this mana may pay for.
-    admits: Callable[["PaymentPurpose"], bool]
+    #: Whether *purpose* is something this mana may pay for. A restriction that
+    #: reads a parameter takes it as a second argument.
+    admits: Callable[..., bool]
+    #: Whether this clause's bucket key carries a parameter after
+    #: :data:`PARAMETER`, and ``admits`` therefore takes it. Declared rather
+    #: than sniffed, the way ``ActivationRestriction.reads_payload`` is: a
+    #: signature guessed by introspection is a signature that silently stops
+    #: being guessed right.
+    reads_parameter: bool = False
 
 
 def _type_line(obj) -> str:
@@ -93,6 +109,29 @@ def _paying_cumulative_upkeep(purpose: "PaymentPurpose") -> bool:
     "cumulative upkeep costs" with no possessive.
     """
     return purpose.kind == CUMULATIVE_UPKEEP
+
+
+def _casting_the_named_card(purpose: "PaymentPurpose", card_name: str) -> bool:
+    """"Spend this mana only to cast **the last card exiled with this
+    artifact**." (Ice Cauldron.)
+
+    The permitted object is not a class this predicate could test — it is one
+    card, chosen when the mana was made — so the bucket's key carries its name
+    and this compares against that. A name rather than an identity because the
+    two are the same question here and only one of them survives a string key:
+    a deck repeats one immutable ``CardDefinition`` per copy
+    (``web/deck_builder``), so every copy of a card in a hand *is* the same
+    object, and no comparison can tell two of them apart.
+
+    An empty parameter admits nothing, which is the direction every refusal in
+    this file goes: mana whose restriction cannot be tested must not be
+    spendable.
+    """
+    return bool(
+        card_name
+        and purpose.kind == CAST
+        and str(getattr(purpose.card, "name", "")) == card_name
+    )
 
 
 def _activating_an_artifact_ability(purpose: "PaymentPurpose") -> bool:
@@ -146,6 +185,23 @@ _PATTERNS: tuple[tuple[re.Pattern[str], ManaRestriction], ...] = (
         re.compile(r"^spend this mana only to activate abilities of artifacts\.?$"),
         ManaRestriction("artifact_ability", _activating_an_artifact_ability),
     ),
+    (
+        # Ice Cauldron. The first clause whose subject is one *object* rather
+        # than a class of them: which card it is was decided when the mana was
+        # made, so the bucket's key carries it and the predicate reads it back.
+        # The noun is captured and not required to be "artifact" for the reason
+        # every other parameter here is data — a card printing the same sentence
+        # about an enchantment needs no row.
+        re.compile(
+            r"^spend this mana only to cast the last card exiled with this "
+            r"[a-z]+\.?$"
+        ),
+        ManaRestriction(
+            "last_card_exiled_with_source",
+            _casting_the_named_card,
+            reads_parameter=True,
+        ),
+    ),
 )
 
 #: The keys above, for a reader that needs the set rather than a lookup.
@@ -171,9 +227,16 @@ def restriction_admits(key: str, purpose: "PaymentPurpose | None") -> bool:
     """
     if purpose is None:
         return False
+    name, _, parameter = key.partition(PARAMETER)
     for _pattern, restriction in _PATTERNS:
-        if restriction.key == key:
-            return bool(restriction.admits(purpose))
+        if restriction.key != name:
+            continue
+        if restriction.reads_parameter:
+            return bool(restriction.admits(purpose, parameter))
+        # A parameter on a restriction that reads none is a key nobody wrote and
+        # nothing can test, so it admits nothing — the same direction the
+        # unknown key below goes.
+        return not parameter and bool(restriction.admits(purpose))
     return False
 
 
@@ -226,6 +289,7 @@ __all__ = [
     "ACTIVATE",
     "CAST",
     "CUMULATIVE_UPKEEP",
+    "PARAMETER",
     "ManaRestriction",
     "PaymentPurpose",
     "RESTRICTION_KEYS",

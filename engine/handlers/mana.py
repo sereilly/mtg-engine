@@ -45,6 +45,31 @@ def drain_target_lands_mana(game: Game, instruction: OracleInstruction, context:
 _COLOR_WORDS = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
 
 
+def _resolved_spend_only(context, spend_only):
+    """*spend_only* with the object it names filled in, or unchanged.
+
+    "Spend this mana only to cast **the last card exiled with this artifact**"
+    (Ice Cauldron) restricts the mana to one card rather than to a class of
+    them, and a restricted bucket is keyed by a string — so the card is named in
+    the key, and the naming has to happen *here*, when the mana is made: that is
+    the only moment anything knows which card the words point at.
+
+    The record is the linked exile (CR 610.3), read off the permanent the phrase
+    names. A source with nothing exiled leaves the key parameterless, which
+    ``restriction_admits`` refuses outright — mana nobody can spend, which is
+    the honest reading of a Cauldron that noted mana and exiled nothing.
+    """
+    from ..restricted_mana import PARAMETER
+
+    if spend_only != "last_card_exiled_with_source":
+        return spend_only
+    from ..linked_exile import linked_entries
+
+    entries = linked_entries(context.source_permanent)
+    last = entries[-1]["card"] if entries else None
+    return f"{spend_only}{PARAMETER}{getattr(last, 'name', '')}"
+
+
 def _mana_bucket(caster, spend_only) -> dict:
     """Where a produced mana lands: the pool, or a restricted bucket.
 
@@ -296,7 +321,9 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         from ..noted_mana import noted_mana
 
         record = noted_mana(context.source_permanent)
-        spend_only = instruction.payload.get("spend_only")
+        spend_only = _resolved_spend_only(
+            context, instruction.payload.get("spend_only")
+        )
         bucket = _mana_bucket(caster, spend_only)
         added = []
         for symbol, count in sorted(record.items()):

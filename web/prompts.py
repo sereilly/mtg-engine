@@ -871,6 +871,26 @@ def _face_down_cast(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("exile_from_hand_choice")
+def _exile_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
+    """Ice Cauldron: which card in this seat's hand is exiled under the artifact.
+
+    The candidates come from the engine's own rule, for the reason the pick
+    below it gives. There is no ``optional`` key: the sentence that arms this
+    prompt says "you **may**", so declining is always an answer.
+    """
+    choice = choices[0]
+    owner = ctx.game.players[choice.player_index]
+    live = ctx.game.live_exile_from_hand_choices(choice)
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "choices": [
+            {"hand_index": index, "name": owner.hand[index].name} for index in live
+        ],
+    }
+
+
 @prompt_renderer("put_from_hand_choice")
 def _put_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
     """Eureka: which card in this seat's hand goes onto the battlefield.

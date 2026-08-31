@@ -607,6 +607,14 @@ class CastPermission:
     #: exiled card away at this turn's cleanup, and no-duration leaves it
     #: playable for the rest of the game.
     until_your_next_upkeep: bool = False
+    #: "You may cast that card **for as long as it remains exiled**." (Ice
+    #: Cauldron.) A fourth stated duration, and its own field for the reason the
+    #: third has one: reading it as any of the others is wrong in a stated
+    #: direction. It ends on a *zone change* rather than at a moment in the
+    #: turn — which is the one duration the permission's own membership check
+    #: already enforces, so what it costs the runtime is nothing and what it
+    #: costs to leave unstated is a grant that outlives the card.
+    while_exiled: bool = False
     free: bool = False
     # "If that spell would be put into your graveyard, exile it instead." —
     # attached by the rider parser, so a wording carrying it cannot shed it.

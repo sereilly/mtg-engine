@@ -400,6 +400,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # grant over it. All zone work — the permission is about which zone a card
     # may be cast from — so no new category and GRAMMAR_CATEGORIES is unchanged.
     "exile_top_of_library": "zones",
+    "exile_chosen_card_from_hand": "zones",
     "put_exiled_with_source": "zones",
     "exile_graveyard_until_leaves": "zones",
     "exile_until_leaves_or_untaps": "zones",
@@ -827,6 +828,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # Both exiles record what they exiled, which is what "you may play cards
     # exiled this way" / "you may cast them this turn" read.
     "exile_top_of_library": "exiled_cards",
+    # …and the hand exile (Ice Cauldron), whose "you may cast **that card**"
+    # reads the same key — written when its prompt is answered, which is why
+    # that prompt suspends the resolution.
+    "exile_chosen_card_from_hand": "exiled_cards",
     "search_and_exile_matching": "exiled_cards",
     # And the graveyard exile, which is what "If **it** was a creature card"
     # reads (Scavenging Ooze) — the same key, because the question the

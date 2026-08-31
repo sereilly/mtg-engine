@@ -482,9 +482,19 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         return None
 
     regrant = False
+    while_exiled = False
 
     def _trailing_duration() -> bool:
-        nonlocal until_eot, regrant
+        nonlocal until_eot, regrant, while_exiled
+        # "…**for as long as it remains exiled**." (Ice Cauldron.) A duration
+        # stated as a zone rather than as a moment in the turn, which is why it
+        # is not in the shared duration table: that table is read by every
+        # effect family and none of the others can end on where a card is.
+        if stream.accept_phrase(
+            "for", "as", "long", "as", "it", "remains", "exiled"
+        ):
+            while_exiled = True
+            return True
         if stream.accept_phrase("this", "turn"):
             until_eot = True
         # "until you exile another card with this <permanent type>" (Furious
@@ -520,6 +530,7 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
             mode=mode, what="exiled_this_way", until_end_of_turn=until_eot,
             until_source_grants_again=regrant,
             until_your_next_upkeep=next_upkeep,
+            while_exiled=while_exiled,
         )
     # "spells from your hand without paying their mana costs" — a cost waiver.
     # The waiver clause is required: a bare "you may cast spells from your

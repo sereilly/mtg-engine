@@ -389,47 +389,48 @@ def test_w1g3_a_jeweled_amulet_that_noted_nothing_adds_nothing(set_pool):
     assert dict(game.players[0].mana_pool) == before
 
 
-def test_w1g3_ice_cauldron_is_declined_and_says_which_pieces_are_missing(set_pool):
-    """Ice Cauldron shares Jeweled Amulet's note-the-mana machinery. What it
-    still needs is three pieces, each checked here so the next round has
-    something to build against rather than the word "complex":
+def test_ice_cauldron_needed_three_pieces_and_now_has_all_three(set_pool):
+    """Ice Cauldron shares Jeweled Amulet's note-the-mana machinery. Wave 1
+    declined the rest of it and listed exactly what was missing; this is the
+    same list, asserted from the other side, because a decline that names its
+    gaps is a mechanism and this is what closing one looks like.
 
     1. "**You may exile a nonland card from your hand**" — an *optional* exile
-       out of a hand; the exile lowering refuses with "only a single chosen
-       permanent or card is exiled".
-    2. "**You may cast that card for as long as it remains exiled**" — no
-       production at all: a casting permission scoped to one exiled *card
-       object*, with a lifetime nothing sweeps. ``cast_permissions`` keys its
-       grants by printed text and by zone, never by object.
+       out of a hand. The exile lowering refused with "only a single chosen
+       permanent or card is exiled"; it now reaches a prompt, because a card
+       chosen out of a hidden zone on resolution *is* the effect.
+    2. "**You may cast that card for as long as it remains exiled**" — a
+       casting permission with a lifetime nothing sweeps. The decline said
+       ``cast_permissions`` "keys its grants by printed text and by zone, never
+       by object", and that was already wrong: ``_covers`` has matched by
+       identity all along. What was actually missing was the *duration*, and
+       nothing sweeps it because the membership check ``_covers`` already makes
+       is the duration.
     3. "**Spend this mana only to cast the last card exiled with this
-       artifact**" — a ``restricted_mana`` row whose predicate names one card
-       object. The buckets are keyed by a *string* and the predicate reads a
-       ``PaymentPurpose``, so a per-object restriction has no representation.
-
-    Declined rather than half-built: the two halves that do work are real, and
-    admitting the card on them would give it "add this artifact's last noted
-    type and amount of mana" with the restriction dropped — mana more freely
-    spendable than the card allows.
+       artifact**" — a restriction naming one card object where the buckets are
+       keyed by a string. The key carries the object now, after a separator, and
+       the predicate declares that it reads it.
     """
     from engine.grammar import compile_line
     from engine.restricted_mana import mana_restriction_for
 
     program = compile_card_oracle(set_pool("ICE")["Ice Cauldron"])
-    assert not program.supported
+    assert program.supported
+    assert all(
+        ability.instruction is not None for ability in program.activated_abilities
+    ), "both printed abilities must do something"
 
     optional_exile = compile_line("{X}, {T}: You may exile a nonland card from your hand.")
-    assert not optional_exile.lowered
-    assert "exiled" in (optional_exile.lowering_error or "")
+    assert optional_exile.lowered
 
     permission = compile_line("You may cast that card for as long as it remains exiled.")
-    assert not permission.parsed
+    assert permission.parsed
 
     assert mana_restriction_for(
         "Spend this mana only to cast the last card exiled with this artifact."
-    ) is None
+    ) is not None
 
-    # …and the two halves this round did buy, so a later round can see which
-    # parts it does not have to rebuild.
+    # …and the two halves wave 1 did buy, unchanged.
     noted = compile_line(
         "{X}, {T}: Put a charge counter on this artifact and note the type and "
         "amount of mana spent to pay this activation cost. Activate only if "
@@ -1155,4 +1156,173 @@ def test_the_amulet_is_an_ante_card_and_stays_out_of_an_ordinary_deck(set_pool):
         "remove this card from your deck before playing if you're not "
         "playing for ante."
     )
+def _cauldron_board(set_pool, catalog_by_name, hand=("Lightning Bolt", "Shatter", "Mountain")):
+    """Ice Cauldron out, {R}{R}{R} floating, and a hand to exile from.
+
+    Costs enforced, which the default rig turns off: what the artifact records
+    is *what the payment spent*, so an unpaid {X} is a note of nothing and every
+    test below would pass on a handler that noted nothing at all.
+    """
+    cauldron = _nosick(Permanent(card=set_pool("ICE")["Ice Cauldron"]))
+    p0 = PlayerState(
+        name="P0", life=20, battlefield=[cauldron], mana_pool={"R": 3},
+        hand=[catalog_by_name[name] for name in hand],
+    )
+    game = Game(players=[p0, PlayerState(name="P1", life=20)])
+    game.enforce_mana_costs = True
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    game.interactive_seats = {0}
+    game._settle()
+    return game, p0, cauldron
+
+
+def _charge_the_cauldron(game, hand_index=0, x_value=1):
+    """Activate the first ability, take the offer, and pick a card to exile."""
+    game.activate_permanent_ability(0, "Ice Cauldron", permanent_index=0, x_value=x_value)
+    game._settle()
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
+    answered = game.confirm_exile_from_hand_choice(0, hand_index)
+    game._settle()
+    return answered
+
+
+def test_ice_cauldron_exiles_a_chosen_card_and_lets_you_cast_it(set_pool, catalog_by_name):
+    """"{X}, {T}: You may exile a nonland card from your hand. You may cast that
+    card for as long as it remains exiled. Put a charge counter on this artifact
+    and note the type and amount of mana spent…"
+
+    The exile is a *prompt* because the card is chosen out of a hidden zone on
+    resolution, and the permission is granted over exactly what it chose — which
+    is why answering the prompt suspends the resolution: the sentence behind it
+    reads what this one exiled.
+    """
+    from engine.linked_exile import linked_entries
+    from engine.named_counters import counters_on
+    from engine.noted_mana import noted_mana
+
+    game, p0, cauldron = _cauldron_board(set_pool, catalog_by_name)
+
+    game.activate_permanent_ability(0, "Ice Cauldron", permanent_index=0, x_value=1)
+    game._settle()
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
+
+    pick = game.pending_choice_of("exile_from_hand_choice", 0)
+    assert pick is not None
+    # The Mountain is not offered: "a **nonland** card".
+    assert game.live_exile_from_hand_choices(pick) == [0, 1]
+
+    assert game.confirm_exile_from_hand_choice(0, 0)
+    game._settle()
+
+    assert [c.name for c in p0.exile] == ["Lightning Bolt"]
+    assert [c.name for c in p0.hand] == ["Shatter", "Mountain"]
+    assert [e["card"].name for e in linked_entries(cauldron)] == ["Lightning Bolt"]
+    assert counters_on(cauldron, "charge") == 1
+    assert noted_mana(cauldron) == {"R": 1}
+    assert [
+        (grant.zone, grant.duration, [c.name for c in (grant.cards or [])])
+        for grant in game.cast_permissions
+    ] == [("exile", "while_exiled", ["Lightning Bolt"])]
+
+
+def test_the_cauldrons_mana_pays_only_for_the_card_it_exiled(
+    set_pool, catalog_by_name
+):
+    """"Add this artifact's last noted type and amount of mana. **Spend this
+    mana only to cast the last card exiled with this artifact.**"
+
+    A restriction naming one object where the buckets are keyed by a string —
+    so the key carries the object, after a separator, and the predicate declares
+    that it reads it. Both directions are asserted: the wrong card cannot be
+    paid for, and the right one can.
+    """
+    game, p0, cauldron = _cauldron_board(set_pool, catalog_by_name)
+    _charge_the_cauldron(game)
+
+    cauldron.tapped = False
+    p0.mana_pool = {sym: 0 for sym in ("W", "U", "B", "R", "G", "C")}
+    game.activate_permanent_ability(0, "Ice Cauldron", permanent_index=0, ability_index=1)
+    game._settle()
+
+    assert p0.mana_pool["R"] == 0, "the mana is restricted, not in the pool"
+    assert p0.restricted_mana == {"last_card_exiled_with_source:Lightning Bolt": {"R": 1}}
+
+    # Shatter is in hand and costs {1}{R}; the restricted {R} may not pay for it.
+    assert not game.cast_from_hand(0, "Shatter").supported
+
+    result = game.cast_from_hand(
+        0, "Lightning Bolt", from_zone="exile", target_player_index=1
+    )
+    game._settle()
+    assert result.supported
+    assert game.players[1].life == 17
+    assert p0.restricted_mana["last_card_exiled_with_source:Lightning Bolt"]["R"] == 0
+
+
+def test_a_cauldron_that_exiled_nothing_makes_mana_nobody_can_spend(
+    set_pool, catalog_by_name
+):
+    """The empty record is a real answer, the same one Jeweled Amulet's is. A
+    key with no card named in it admits nothing (``restriction_admits``), which
+    is the honest reading of a Cauldron whose offer was declined: the mana
+    exists and there is no card it may be spent on."""
+    game, p0, cauldron = _cauldron_board(set_pool, catalog_by_name)
+
+    game.activate_permanent_ability(0, "Ice Cauldron", permanent_index=0, x_value=1)
+    game._settle()
+    game.confirm_optional_pay(0, accept=True)
+    game._settle()
+    assert game.confirm_exile_from_hand_choice(0, None)
+    game._settle()
+
+    assert p0.exile == []
+    assert [c.name for c in p0.hand] == ["Lightning Bolt", "Shatter", "Mountain"]
+
+    cauldron.tapped = False
+    p0.mana_pool = {sym: 0 for sym in ("W", "U", "B", "R", "G", "C")}
+    game.activate_permanent_ability(0, "Ice Cauldron", permanent_index=0, ability_index=1)
+    game._settle()
+
+    assert p0.restricted_mana == {"last_card_exiled_with_source:": {"R": 1}}
+    assert not game.cast_from_hand(0, "Shatter").supported
+
+
+def test_the_cauldron_may_not_be_charged_twice(set_pool, catalog_by_name):
+    """"Activate only if there are no charge counters on this artifact." The
+    restriction is enforced, not parsed and dropped — an unenforced one is an
+    ability that works more often than the card allows."""
+    game, _p0, cauldron = _cauldron_board(set_pool, catalog_by_name)
+    _charge_the_cauldron(game)
+    cauldron.tapped = False
+
+    refused = game.activate_permanent_ability(
+        0, "Ice Cauldron", permanent_index=0, x_value=1
+    )
+
+    assert not refused.supported
+    assert "counters" in refused.details
+
+
+def test_a_headless_seat_declines_the_cauldrons_offer(set_pool, catalog_by_name):
+    """The stated default, and the opposite of the put-onto-the-battlefield pick
+    it is modelled on. Taking this offer buries a card in exile for a permission
+    only worth something to a seat that then spends the noted mana on it, so a
+    seat with no policy declines — and the rest of the activation still
+    finishes, which is what ``default_at_arm`` buys."""
+    from engine.named_counters import counters_on
+
+    game, p0, cauldron = _cauldron_board(set_pool, catalog_by_name)
+    game.interactive_seats = set()
+
+    game.activate_permanent_ability(0, "Ice Cauldron", permanent_index=0, x_value=1)
+    game._settle()
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert p0.exile == []
+    assert counters_on(cauldron, "charge") == 1
+    assert game.pending_choices == []
 # --- end W3G4 ---

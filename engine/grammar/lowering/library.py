@@ -719,10 +719,17 @@ def _lower_cast_from_exiled_with(
 #: absent: a sentence stating two durations is one this cannot honour, and
 #: picking either would be a permission that ends at a moment the card does not
 #: name.
-_EXILED_PERMISSION_DURATIONS: dict[tuple[bool, bool, bool], str] = {
-    (True, False, False): "end_of_turn",
-    (False, True, False): "until_source_grants_again",
-    (False, False, True): "your_next_upkeep",
+_EXILED_PERMISSION_DURATIONS: dict[tuple[bool, bool, bool, bool], str] = {
+    (True, False, False, False): "end_of_turn",
+    (False, True, False, False): "until_source_grants_again",
+    (False, False, True, False): "your_next_upkeep",
+    # "…for as long as it remains exiled" (Ice Cauldron). Nothing sweeps this
+    # one: ``cast_permissions._covers`` re-checks on every read that the card is
+    # still in the granted zone, which *is* the printed duration. Stated anyway
+    # rather than lowered as "no duration", because the two mean different
+    # things — an unstated grant would also be the answer for a card that said
+    # nothing, and this card says something.
+    (False, False, False, True): "while_exiled",
 }
 
 
@@ -761,6 +768,7 @@ def _lower_cast_permission(
                 node.until_end_of_turn,
                 node.until_source_grants_again,
                 node.until_your_next_upkeep,
+                node.while_exiled,
             )
         )
         if stated is None:
