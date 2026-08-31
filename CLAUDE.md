@@ -10,11 +10,13 @@ JSON per set, registered in `cards/manifest.json` (the single source of truth
 for which sets ship): Limited Edition Alpha (290 cards), Limited Edition Beta
 (292), Unlimited Edition (292 — same list as Beta), Arabian Nights (78),
 Antiquities (85), Revised Edition (296), Legends (310), The Dark (119),
-Fourth Edition (368) and Core Set 2021 (285), 1,162 unique cards, all
-classified as supported. **Ten sets, and the unique count did not move when the
-tenth arrived**: 4ED is a pure reprint set, every one of its cards already in
-the pool, so it is the one set that ships without implementing a card. Which
-is why the per-set totals sum to far more than 1,162 — they are printings. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
+Fourth Edition (368), Ice Age (373) and Core Set 2021 (285), 1,508 unique
+cards, all classified as supported. **Eleven sets, and the two most recent
+arrivals sit at opposite extremes**: 4ED is a pure reprint set, every one of
+its cards already in the pool, so it is the one set that ships without
+implementing a card — while Ice Age is the largest ever ingested and brought
+**346 new cards**, more than any set since Alpha. Which is why the per-set
+totals sum to far more than 1,508 — they are printings. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
 the engine and web layer read; `scripts/ingest_set.py` produces them. The
 engine is **registry-based**: card support grows by adding small isolated
 entries, never by editing core control flow.
@@ -27,7 +29,8 @@ can be read *before* the work of supporting it is done: the coverage instruments
 load it (`manifest_set_paths(include_measured=True)`), `load_catalog` does not,
 and no player can put one of its cards in a deck. **It is empty today** — M21
 went in under it at 58% supported, Antiquities at 56.5%, Legends at 32.9%, The
-Dark at 47.9% and Fourth Edition at 100%, and all five were promoted to `sets`
+Dark at 47.9%, Fourth Edition at 100% and Ice Age at 49.3%, and all six were
+promoted to `sets`
 once every card was, which is the role working as designed rather than a role
 nobody uses. 4ED is the degenerate case that shows what the role is *for*
 rather than an exception to it: it entered `measured` fully supported and left
@@ -832,15 +835,17 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (roughly 443 of the 1,162 catalog cards passing —
-383 checked in-game and 60 auto-passed — with more reported `equivalent`; the
-rest — almost all of M21, Antiquities, Legends and The Dark, all four promoted
-before their in-game pass — have no recorded result yet, which SET_PLAYBOOK.md Phase 5
-owns and deliberately does not gate promotion on; the summary at the top of the
-markdown is the current number). Fourth Edition is the one promotion that did
-not add to that backlog, because it added no card to verify — the tracker is
-keyed to the deduped catalog, so a reprint set inherits every result its cards
-already have. A card can also be recorded **failing**: that
+manually validated in-game (468 of the 1,508 catalog cards passing — 383
+checked in-game and 85 auto-passed — with 18 more reported `equivalent`; the
+rest — almost all of M21, Antiquities, Legends, The Dark and Ice Age, all five
+promoted before their in-game pass — have no recorded result yet, which
+SET_PLAYBOOK.md Phase 5 owns and deliberately does not gate promotion on; the
+summary at the top of the markdown is the current number). Fourth Edition is
+the one promotion that did not add to that backlog, because it added no card to
+verify — the tracker is keyed to the deduped catalog, so a reprint set inherits
+every result its cards already have. **Ice Age is the opposite pole**: 346 new
+cards, the largest single addition to the untested count since the tracker
+existed, which took it from 708 to 1,020. A card can also be recorded **failing**: that
 is an in-game bug report with a card name on it, and it stays in the tracker
 until the card is fixed and re-checked. **Generated automatically** — results
 are edited via the in-game Debug Menu, not by hand.

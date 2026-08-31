@@ -686,79 +686,125 @@ Third, **alternative costs (CR 118.9) do not exist** — `cast_costs.py` impleme
 *additional* costs well, and "alternative cost" appears once in the engine, in a
 comment — which blocks the buyback/flashback/evoke/madness family wholesale.
 
-## Ice Age (ICE) — in progress
+## Ice Age (ICE) — shipped
 
-The set's journal, kept here while it runs so the "next set" section above stays
-a *forecast* and this stays the record. Numbers live here; the process is
-`SET_PLAYBOOK.md`.
+The set's journal. Numbers live here; the process is `SET_PLAYBOOK.md`.
 
-**Where it stands: Phase 3, forty-two rounds in. 184 → 284 of 373 supported
-(76.1%), hollow lines 10 cards, and 42 unclaimed sentences across 29 of those
-284 — the third number is new, and the warning below says what it means.** The
-count is now the *compiler's*: round 39 removed a gate that widened it, so the
-census and the refusal list inside `support_report.py` agree for the first time. The set is still under `measured`, which is the
-state the role is designed for: nothing is broken, every gate is green, and no
-player can deck a card the engine cannot play. Phase 4 needs 373/373 and hollow
-lines at zero.
+**Final: 373/373 supported, hollow lines 0, unclaimed parse sentences 0, and
+the manifest entry moved from `measured` to `sets` at printing-order index 9.**
+The pool went from 1,162 unique cards to **1,508** — 346 of ICE's 373 were new,
+the largest single addition since Alpha. Ingest census was 184/373 (49.3%).
 
-**The supported count is overstated, and the instrument that says so now runs here.**
-`scripts/parse_coverage.py` — the instrument that fails when a *supported* card
-carries text nothing implements — read `manifest_set_paths()`, the **shipped**
-pool, so a measured set was outside it. Round 30 widened it: it reads shipped
-and measured, gates on the shipped half, and gives the rest their own section in
-`PARSE_COVERAGE.md`. The backlog it publishes is **44 unclaimed sentences across
-29 supported cards** — Snowfall counted done on the strength of its cumulative
-upkeep alone with a whole printed paragraph compiling to nothing, Fire Covenant's
-"pay X life" additional cost doing nothing, Iceberg entering with no counters.
+**Forty-two serial rounds took it to 284; four parallel waves took it the rest
+of the way.** The waves ran five agents each in their own `git worktree`, with
+integration serial in the main checkout: full suite, duplicate-definition scan
+and every `--check` between merges.
 
-Only 10 of those show in `--hollow-lines`, because a line that produces no
-*ability part* leaves nothing for that probe to find hollow. So the honest
-reading of "279 supported" is "279 compile, 251 of them with every printed line
-accounted for". **One round is still scheduled**: the support gate admits an
-artifact or enchantment when *any* ability of it is implemented — round 1's
-second finding ("a widened gate hid a static line") for a card type the round-1
-fix did not reach — and tightening it takes the number down to the true one.
-This paragraph used to add "measured before changing anything: no shipped card
-is affected". **That measurement was of the wrong check** — see round 32, which
-re-measured the one the round is really about and found 15 shipped cards, every
-one of them legitimately implemented through a reader the claim chain does not
-consult. The round is larger than this note made it sound; read round 32's
-entry before starting it.
+**What the parallel shape actually cost and bought.** Authorship parallelised
+cleanly; *integration* was the constraint, exactly as the playbook predicts.
+The recurring integration failure was not a merge conflict but a **cap breach
+no single branch caused** — `lowering/board.py`, `statements.py`, `phrases.py`,
+`effects/board.py`, `triggers.py` and two per-set test files all crossed their
+guard because two groups' additions *summed*. That is the guard working: the
+family boundary was already there, and the collision is what made it visible.
+Every split reused a name the other side already carried — `destruction`,
+`keywords`, `tapping`, `types`, `trigger_tables`, `sentence_clauses`, `upkeep`.
 
-**The remaining 94 are a long tail, and the shape is Legends' rather than
-M21's.** Most of them refuse **exactly one line**, and those lines sit across
-**40+ distinct refusal sites with one card each**. The clusters are spent: the
-last multi-card ones were the three CDAs (round 9), the four self-bouncers
-(round 8) and the Scarab cycle (round 2). Rank what is left by cheapest-per-card
-rather than by biggest mechanism — the playbook's own advice for exactly this
-point — and expect 1–3 cards a round.
+**Three merges would have passed green while losing work**, and each is a
+distinct shape worth naming:
 
-**What the rounds actually bought is not only cards.** Most of them turned up a
-live defect in shipped code, every one of them silent and every one in the same
-direction (a card doing *more* than it prints, or a gate reporting a card as
-done): the keyword rewrite reaching one of two front ends, a widened land gate
-hiding an unread static, an Aura's conditional bonus applied unconditionally, a
-filter draft dropping a restriction it had no field for, the Aura keyword
-vocabulary drifting from the registry both ways, a substring scan granting plain
-forestwalk from "snow forestwalk", a lowering emitting an amount key nothing
-read, and four damage branches dropping a printed rider. None had a failing test
-and none would have been found by reading the census.
+* **One fact, two names.** `ast.GainControl` gained the same field twice in one
+  wave — `gained_by` (Infernal Denizen) and `gainer` (Chaos Lord). Unified.
+* **One rule, two mechanisms.** "Activate only once" was implemented as a
+  per-line tally (CR 602.5c) and as a per-permanent counter. Kept the
+  line-keyed one: a per-permanent count cannot follow an ability *granted* onto
+  another creature, which is exactly Touch of Vitae.
+* **A semantic collision no textual merge can see.** One branch split "an
+  opponent" from "target opponent" into two parsed kinds; another branch's
+  offered-steal table was written when one kind covered both. The merge was
+  clean and three tests failed at runtime.
 
-Round 26's is the first that points the *other* way and is worth keeping for
-that: two callers spelling one sentence differently, so a printed clause was
-readable from the raw text and not from the grammar's token rebuild. The
-direction is over-restriction — a card refused for a sentence the engine does in
-fact implement — which is the failure this journal had not yet seen, and it was
-hidden by a second refusal three sentences earlier on the only shipped card
-printing it.
+Add a fourth, which is about *my own* recipe: reconstructing a test file as
+"ours + the branch's delimited block" silently drops imports the branch added
+at the **file header**. It cost one `NameError` before I started diffing
+branch-minus-block against the base every time.
 
-Round 27's is a third kind: not a defect at all yet. Nine call sites read a
-supertype off the printed type line, which was **correct** while no card in the
-pool could change one — every reader agreed with every other, and with reality.
-It is the `become_tapped` shape without the bug: a question with nine askers,
-found on the day the first card makes them disagree rather than after. A set
-ingest is where that day arrives, and it is worth looking for the question with
-many askers before looking for the answer that is wrong.
+**The declines compounded, which is the thing to keep.** Ten cards were
+declined across waves 1–3, every one with its missing pieces enumerated
+individually rather than as "too complex" — and other groups then finished
+those pieces as a side effect of their own work. Chaos Moon's parity condition
+was built by *Chaos Lord's* group; Ice Cauldron's two hard halves by the
+noted-mana round; Winter's Chill's cast-time X plumbing by Spoils of War's.
+Fumarole turned out to need **one** piece rather than four, because the
+multi-target machinery had existed since Glyph of Delusion. Every one of those
+ten cards eventually landed.
+
+**Twenty-four silent defects in already-supported cards**, found by reading
+compiled programs rather than the census — the single highest-yield activity of
+the set, and none of them had a failing test. A sample, all in *shipped* cards:
+
+* **Control Magic** returned to its controller's hand left the creature stolen
+  for the rest of the game — an Aura's effects were removed when it reached the
+  graveyard rather than when it *left the battlefield*. Steal Artifact,
+  Conquer, Binding Grasp, Enthralling Hold and Evil Presence shared it.
+* **Triskelion** was a free repeatable pinger: the activation-cost parser
+  matched counter kinds with `[a-z]+` and a `+1/+1` counter is spelled in
+  symbols, so its cost matched *nothing* — and a cost that matches nothing is
+  not a refused ability, it is a free one.
+* **Drain Life** ignored "but not more life than", so ten damage at a 2/2
+  gained ten life.
+* **Guardian Beast**'s "other players can't gain control of them" was enforced
+  inside a single artifact-only handler, so Gauntlets of Chaos exchanged a
+  protected permanent away with the Beast untapped.
+* **Massacre Wurm** drained only when the death came through the lethal-damage
+  sweep — the path its own tests take.
+* **Kudzu** reached a graveyard with a raw `append`, the last destruction
+  outside the seam: the land it destroyed fired no trigger and passed no
+  replacement.
+* **Four cards** were played as an even damage split where the card says the
+  caster chooses.
+* **107 cards** printing a non-mana activation cost had that option *dropped*
+  from the browser's ability menu, index-shifting City of Shadows onto the
+  wrong ability.
+
+**The promotion rehearsal turned twelve guards red and was worth every one.**
+The split between "the card is wrong" and "the guard is wrong" was again the
+opposite of intuition in both directions. Three cards were at fault — Barbarian
+Guides was **wholly inert**, logging "no valid creature target" on every
+activation — while the mandatory-target sweep and Gaze of Pain were stale
+guards. And the **4ED proxy trap repeated exactly**: a guard proved parse
+coverage reads measured sets by finding a card that is not shipped, and an
+empty `measured` role is legitimate, so it read "the instrument stopped
+watching" when the truth was "there is nothing to watch". It now asserts the
+invariant.
+
+**A sweep over what the target pickers *offer*** — rather than over what the
+compiler accepts — found three more, and it is the angle no card-level
+instrument has: all three compile supported, carry no hollow line and claim
+every printed sentence. **Goblin Ski Patrol** sacrificed the *opponent's* first
+permanent instead of itself and kept its pump for good; **Aggression** and
+**Faith's Fetters** were uncastable in the app, because their enchant clauses
+derived `kind: "none"` and the client tests exactly that value to decide
+whether to ask for a target.
+
+**Hook reliance fell while the pool grew by a third**: 6.0% → 4.2% of supported
+cards name-keyed. Nine hooks were retired and **none added** across four waves
+— Abu Ja'far, Power Leak, Magnetic Mountain, Animate Dead, Lord of the Pit,
+Drain Life among them. Grammar coverage rose to 87.2% parsed / 54.9% executed.
+
+**Two findings deliberately left for their own round**, both engine-wide rather
+than one card's:
+
+1. `create_delayed_trigger`'s `binds_target` resolves a departed target **by
+   index**, so it binds whichever creature slid into the slot. Fourteen
+   supported cards arm one, and the handler's own fizzle branch is unreachable.
+   Reproduced with Reincarnation arming a death-watch on the wrong permanent.
+2. **The Abyss**'s "of their choice" arms no prompt at all — the affected
+   player never chooses, and the creature destroyed is whichever sits in
+   battlefield slot 0.
+
+Also open: 39 supported cards arm a free `optional_pay` whose headless default
+accepts every one, which nobody chose — it falls out of the affordability check.
 
 **Phase 1 (ingest and measure).** 383 printings, 373 unique cards, **346 new to
 the pool** — the largest set ingested and the first since M21 that is mostly new

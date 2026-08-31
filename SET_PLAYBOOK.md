@@ -46,7 +46,7 @@ refused it; that refusal was an agent *sandbox* reading the worktree's
 property of the harness's managed isolation, not of git. Create worktrees
 with plain `git worktree add <dir> -b <branch>` and point agents at them.
 
-**Two merge hazards where taking either side passes the suite.** Resolving a
+**Four merge hazards where taking either side passes the suite.** Resolving a
 conflict by picking a side is safe only when one side is the whole truth, and
 Legends produced two rounds where it was not. Two branches **deleted a
 different entry at the same spot** in a registry, so git presented each side as
@@ -57,6 +57,42 @@ it to iterate a recorded set) — taking either silently drops the other's fix.
 Read both sides for what each *adds*, and union unless they genuinely
 contradict. Same reason the duplicate-helper scan exists: a clean textual merge
 is not a clean merge.
+
+Ice Age's four waves added two more, both from groups **inventing the same
+thing twice**. Two branches gave one AST node the same new field under two
+names (`gained_by` and `gainer`) for two different cards — one fact, two
+spellings, and either side alone loses a card. And two branches implemented one
+printed clause ("Activate only once") as two whole mechanisms, a per-line tally
+and a per-permanent counter; keeping both is the second-copy-of-one-fact this
+repo forbids, and the choice between them is a *rules* question rather than a
+merge one (a per-permanent count cannot follow an ability granted onto another
+creature). **After every wave, grep the merged diff for two names that mean one
+thing** — the duplicate-definition guard catches a repeated *name*, not a
+repeated *idea*.
+
+And one hazard that is not a merge at all: a **semantic** collision. One branch
+split "an opponent" from "target opponent" into two parsed kinds; another
+branch's table had been written when a single kind covered both. Every file
+merged cleanly and three tests failed at runtime. Nothing textual can find
+this; what finds it is running the suite between merges rather than at the end.
+
+**Reconstructing a test file from its delimited block drops header imports.**
+The block convention below makes per-set test merges mechanical, and the
+mechanical move is "take `ours`, append the branch's block". That silently
+loses any `import` the branch added at the *top* of the file. Diff
+branch-minus-block against the merge base before trusting the reconstruction;
+it fails loudly as a `NameError` at collection, but only after you have
+committed it.
+
+**Expect cap breaches that no single branch caused.** The 1,000-line grammar
+guard and the 2,600-line per-set test guard both fired at *integration* seven
+times across Ice Age's four waves, on files where two groups' additions merely
+summed. This is the guard working rather than failing: the family boundary was
+already there and the collision is what surfaced it. Take the split then and
+there, and **reuse a family name the other side already carries** —
+`destruction`, `keywords`, `tapping`, `types`, `trigger_tables`,
+`sentence_clauses` and `upkeep` all re-formed that way rather than forking a
+new vocabulary. Never raise a cap.
 Where worktrees are unavailable, fan out **design** instead:
 each agent verifies its group against the live compiler and returns an
 exact spec — file, function, current code, replacement code, tests — and
@@ -80,10 +116,40 @@ that one agent died mid-task with committed work plus an unverified working
 tree: check a dead agent's branch before writing its work off, and finish its
 verification yourself rather than merging what nobody watched run.
 
+**Ice Age held that shape at scale: 21 group agents over four waves of five,
+and every one finished.** The budget is not the constraint. Integration is,
+and the ratio was roughly one integrator-hour per wave-hour — spent on cap
+splits and on the four merge hazards below, not on cards. Two operational
+notes the waves earned: **`git stash` is shared across sibling worktrees** (two
+agents popped another group's WIP into their own tree; brief every group never
+to use it, and commit instead), and a **shared scratch directory collides**
+— give each group a private subdirectory or they overwrite each other's probes.
+
+**Write each decline as a list of parts, and the next wave finishes them for
+free.** This is the highest-leverage instruction in the whole process. Ice Age
+declined ten cards across three waves, every one with its missing pieces
+enumerated individually rather than as "too complex" — and other groups then
+built those pieces as a side effect of unrelated work. Chaos Moon's parity
+condition was built by *Chaos Lord's* group; Winter's Chill's cast-time X
+plumbing by Spoils of War's. All ten eventually landed. **State in each brief
+which pieces other groups have already finished**, or the wave rebuilds them.
+
+**Ask every group what the brief got wrong, and expect a third of it to be.**
+Every report across four waves corrected roughly a third of its own brief, and
+that section was consistently the most valuable part. The corrections were not
+quibbles: one brief called a card "the hardest in the set" when it was the
+cheapest, another scoped a subsystem migration that turned out to be the wrong
+file entirely, and a third counted 89 call sites for a change that touched
+seven functions. **A refusal site is a work-list entry, not a diagnosis**, and
+an inherited estimate is a lead to correct rather than a fact to trust.
+
 **Brief every group to make a name-keyed hook the last resort, explicitly.**
 Twelve independent agents under that instruction produced *one* new hook in 119
 cards and retired another, so the hooked share of the pool fell while the pool
-grew. The brief is doing the work there, not the reviewer.
+grew. The brief is doing the work there, not the reviewer. Ice Age went
+further under the same instruction and the direction compounds: **nine hooks
+retired, none added**, across a set that grew the pool by a third — reliance
+6.0% → 4.2%. Say it in every brief, every wave.
 
 **Give each group a delimited block in the shared per-set test files.** Groups
 split by grammar family still collide in `tests/sets/test_<set>_*.py`, because
@@ -414,6 +480,29 @@ an earlier printing satisfies from *any* position, so the whole suite stayed
 green with 4ED four places out of order and nothing said so. The fix in both
 cases was to assert the invariant rather than a symptom of it — printings rather
 than names, `released` dates rather than origins.
+
+**Ice Age collected on it a third time, and this one fires on every promotion
+from here.** A guard proved `parse_coverage.py` reads *measured* sets by
+looking for a card that is not shipped — and promoting the only measured set
+empties that role, which is a legitimate state (it was empty before the ingest
+and is empty again after). The guard read "the instrument stopped watching"
+when the truth was "there is nothing to watch". Assert the invariant —
+`CARD_PATHS` is built over both manifest roles — which is checkable whatever
+the roles contain, and let the per-card assertions range over an empty set.
+
+**Sweep what the target pickers *offer*, not just what the compiler accepts.**
+This is a Phase 4 step with no guard behind it and it found three defects Ice
+Age's every other instrument was blind to, because all three cards compile
+supported, carry no hollow line and claim every printed sentence. Two shipped
+Auras were **uncastable in the app** — their `Enchant <noun>` clauses derived
+`kind: "none"`, which is the exact value the client tests to decide whether to
+ask for a target, so it sent a bare cast and the engine refused it. And a
+creature sacrificed the *opponent's* first permanent instead of itself, because
+resolving a bound subject that named nothing falls through to a battlefield
+scan over `context.target`. For every supported card ask: does the picker offer
+what the printed line says, and does an unchosen target fall back to the right
+object? Both answers are behavioural; neither is visible from a compiled
+program.
 
 **And expect the trackers' aggregates to move on membership alone.** Promoting
 4ED raised `GRAMMAR_COVERAGE.md`'s All row from 85.2% to 85.7% parsed with no
@@ -789,3 +878,45 @@ simulator step gained a note that `--set` is unrunnable for most sets, since the
 simulator's one fixed deck needs cards those pools lack; `--all` across the
 promotion commit is the comparison that would catch something, and it was
 byte-identical. 9,110 → 9,117 tests.
+
+**ICE — 2026-08-31 (Phases 3–6; the set shipped).** 184/373 at ingest, 284
+after forty-two serial rounds, then **four parallel waves of five worktree
+agents** to 373/373. 21 agents, all finished. Pool 1,162 → 1,508 unique cards.
+
+*Drained:* nothing — the Known-gaps list was already empty. *Added to the phase
+text, all in place:* two more merge hazards (two branches inventing **one fact
+under two names**, and two branches implementing **one rule as two
+mechanisms**) plus the observation that a *semantic* collision — one branch
+splitting a parsed kind another branch's table assumed was single — merges
+clean and fails only at runtime, which is why the suite runs *between* merges;
+the warning that reconstructing a test file from its delimited block drops
+header imports; and the finding that cap breaches at integration, from two
+groups' additions merely summing, are routine (seven across four waves) and
+should be split along a family name the other side already carries.
+
+*The instruction that paid most:* **write each decline as an enumerated list of
+missing pieces.** Ten cards were declined that way across waves 1–3 and every
+one eventually landed, several because a *different* group built their pieces
+as a side effect. Say in each brief which pieces are already done.
+
+*Also added:* ask every group what its brief got wrong — a third of each was,
+including a card called "the hardest in the set" that was the cheapest and a
+scoped subsystem migration aimed at the wrong file; and two operational notes,
+that `git stash` and a shared scratch directory are both **shared across
+worktrees** and cost two agents their tree.
+
+*Phase 4 gained two steps.* The proxy trap collected a third time and now fires
+on every promotion: a guard that finds "a card in a measured set" breaks when
+promoting the last measured set empties the role, which is legitimate — assert
+that `CARD_PATHS` reads both roles instead. And **sweep what the target pickers
+offer**, which has no guard behind it and found three defects every card-level
+instrument was blind to, including two shipped Auras that were uncastable in
+the app because their enchant clause derived `kind: "none"`.
+
+*The numbers that matter:* 24 silent defects fixed in already-supported cards,
+found by reading compiled programs rather than the census — none had a failing
+test. Nine name-keyed hooks retired and **none added**, so reliance fell 6.0% →
+4.2% while the pool grew by a third. Grammar coverage 87.2% parsed / 54.9%
+executed. Two engine-wide findings left for their own rounds, recorded in
+ROADMAP: a delayed trigger binding a departed target *by index*, and The Abyss
+arming no prompt for "of their choice".
