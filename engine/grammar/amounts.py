@@ -9,6 +9,7 @@ place here and an unknown quantity word is an error, not a zero.
 from __future__ import annotations
 
 from . import ast
+from .errors import GrammarError
 from .lexer import NUMBER, PT, SELF, WORD
 from .stream import TokenStream
 from .vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS, singular as _singular
@@ -102,6 +103,20 @@ def _accept_fraction(
     the number-word reading it has everywhere else.
     """
     mark = stream.mark()
+    divisor = _accept_ordinal_head(stream)
+    if divisor is None:
+        return None
+    try:
+        inner = _parse_counted_amount(stream, back_reference=back_reference)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    return ast.Half(inner, _accept_rounding(stream), divisor)
+
+
+def _accept_ordinal_head(stream: TokenStream) -> int | None:
+    """``a <ordinal> of`` — the denominator, or None with nothing consumed."""
+    mark = stream.mark()
     if not stream.accept_word("a"):
         return None
     ordinal = stream.peek_word()
@@ -113,12 +128,7 @@ def _accept_fraction(
     if not stream.accept_word("of"):
         stream.reset(mark)
         return None
-    try:
-        inner = _parse_counted_amount(stream, back_reference=back_reference)
-    except Exception:
-        stream.reset(mark)
-        return None
-    return ast.Half(inner, _accept_rounding(stream), divisor)
+    return divisor
 
 
 def accept_fraction_head(stream: TokenStream) -> int | None:
@@ -127,21 +137,14 @@ def accept_fraction_head(stream: TokenStream) -> int | None:
 
     For the positions where the thing being divided is the production's own
     noun rather than a quantity it can hand to :func:`parse_amount`: "loses
-    **half their life**", "discards **a third of the cards in their hand**".
-    One reader, because the two spellings of a fraction are one printed idea
-    and a production that knew only "half" is a production Pox refuses.
+    **half their life**", "discards **a third of the cards in their hand**",
+    "sacrifices **a third of the creatures they control**". One reader, because
+    the two spellings of a fraction are one printed idea and a production that
+    knew only "half" is a production Pox refuses.
     """
     if stream.accept_word("half"):
         return 2
-    mark = stream.mark()
-    if not stream.accept_word("a"):
-        return None
-    ordinal = stream.peek_word()
-    divisor = _FRACTION_WORDS.get(ordinal) if ordinal is not None else None
-    if divisor is None or not (stream.advance() or True) or not stream.accept_word("of"):
-        stream.reset(mark)
-        return None
-    return divisor
+    return _accept_ordinal_head(stream)
 
 
 def accept_rounding(stream: TokenStream) -> str:
