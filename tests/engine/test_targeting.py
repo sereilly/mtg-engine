@@ -452,3 +452,102 @@ def test_the_control_and_the_defect_now_answer_the_same_way(supported_cards):
     assert derive_cast_target(wrath, compile_card_oracle(wrath)) is None
     assert derive_cast_target(cleanse, compile_card_oracle(cleanse)) is None
 # --- end FixC ---
+
+
+# --- LeadA: "a graveyard" means any graveyard ---
+def _graveyard_reads(program):
+    """Every ``any_graveyard`` answer the program's instructions carry.
+
+    Walked rather than read off the top instruction: the flag rides the
+    ``reanimate_creature`` step, which a printed second sentence ("…It gains
+    haste") would wrap in a ``sequence``. A reader that stopped at the top
+    would call such a card own-graveyard-only and be wrong the same way the
+    derivation was.
+    """
+    reads: list[bool] = []
+
+    def walk(instruction):
+        payload = getattr(instruction, "payload", None) or {}
+        if instruction.kind in ("reanimate_creature", "reanimate_creature_to_battlefield"):
+            reads.append(bool(payload.get("any_graveyard")))
+        for key in ("steps", "then", "else", "action", "otherwise"):
+            for step in payload.get(key) or ():
+                if hasattr(step, "payload"):
+                    walk(step)
+
+    for instruction in program.instructions:
+        walk(instruction)
+    return reads
+
+
+def test_whose_graveyard_a_reanimation_offers_is_the_programs_answer(supported_cards):
+    """The ratchet for the defect, in both directions at once.
+
+    ``own_graveyard_only`` was a constant in ``_reanimation_spec`` — the
+    derivation asserting something about the pool that only the *payload* can
+    know. Hymn of Rebirth ("from **a** graveyard") is the card that made the two
+    disagree, and the disagreement cost it every target it had; the mirror
+    failure would be a "from **your** graveyard" card offering an opponent's
+    pile, which is the same bug pointing the other way and would let a player
+    reanimate a creature the card never reaches.
+
+    So the assertion is the agreement itself rather than a list of card names:
+    a spec is own-graveyard-only exactly when its program does not say
+    ``any_graveyard``.
+    """
+    from engine.targeting import _ENCHANT_GRAVEYARD_LINE
+
+    disagreements = []
+    for card in supported_cards:
+        program = compile_card_oracle(card)
+        spec = derive_cast_spec(card, program)
+        if (spec or {}).get("kind") != "graveyard_creature":
+            continue
+        if _ENCHANT_GRAVEYARD_LINE.search(program.normalized_text or ""):
+            # Animate Dead and Dance of the Dead settle their spec one step
+            # earlier, off the printed ``Enchant creature card in a graveyard``
+            # line (CR 115.1b) — the Aura's own evidence, read before any
+            # instruction is. Their reanimation step carries no determiner at
+            # all, so the payload cannot be asked; what can be asked is that
+            # the earlier branch reaches the same answer the line prints.
+            assert not spec.get("own_graveyard_only"), card.name
+            continue
+        reads = _graveyard_reads(program)
+        if not reads:
+            continue        # a return-to-hand or an exile, not a reanimation
+        own_only = bool(spec.get("own_graveyard_only"))
+        if own_only is any(reads):
+            disagreements.append(f"{card.name}: spec={spec}, any_graveyard={reads}")
+
+    assert disagreements == [], (
+        "these reanimations derive a graveyard the program does not name: "
+        + "; ".join(sorted(disagreements))
+    )
+
+
+def test_the_agreement_ratchet_still_examines_the_card_that_broke_it(supported_cards):
+    """A ratchet over an empty set passes forever. Hymn of Rebirth is the only
+    card in the pool whose printed phrase reads "from a graveyard" — verified
+    by the walk above rather than asserted — so it is also the only evidence
+    the test above is looking at anything."""
+    widened = {
+        card.name for card in supported_cards
+        if any(_graveyard_reads(compile_card_oracle(card)))
+    }
+
+    assert widened == {"Hymn of Rebirth"}
+
+
+def test_a_reanimation_printed_your_graveyard_still_offers_only_yours(supported_cards):
+    """The control, as a card rather than as a rule: Resurrection prints the
+    same effect with the other determiner and keeps the flag."""
+    by_name = {card.name: card for card in supported_cards}
+    hymn, resurrection = by_name["Hymn of Rebirth"], by_name["Resurrection"]
+
+    assert derive_cast_spec(hymn, compile_card_oracle(hymn)) == {
+        "kind": "graveyard_creature",
+    }
+    assert derive_cast_spec(resurrection, compile_card_oracle(resurrection)) == {
+        "kind": "graveyard_creature", "own_graveyard_only": True,
+    }
+# --- end LeadA ---

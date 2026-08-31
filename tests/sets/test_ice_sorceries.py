@@ -1697,3 +1697,137 @@ def test_pox_hits_each_player_and_lets_none_of_them_be_picked(set_pool):
     assert result.supported, result.details
     assert (p1.life, p2.life) == (13, 13)   # both, symmetrically
 # --- end FixC ---
+
+
+# --- LeadA: "a graveyard" means any graveyard ---
+def _hymn_board(set_pool, my_graveyard=(), their_graveyard=()):
+    """A caster holding Hymn of Rebirth, with the two graveyards stocked.
+
+    The seats are stocked separately because the whole question this card asks
+    is *whose* pile a target may come out of, and a fixture that filled one of
+    them would answer it by construction.
+    """
+    pool = set_pool("ICE")
+    catalog = {**pool}
+    for name in (*my_graveyard, *their_graveyard):
+        if name not in catalog:
+            catalog[name] = set_pool("LEA")[name]
+    p1 = PlayerState(
+        name="P1", hand=[pool["Hymn of Rebirth"]],
+        graveyard=[catalog[name] for name in my_graveyard],
+    )
+    p2 = PlayerState(
+        name="P2", graveyard=[catalog[name] for name in their_graveyard],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, p1, p2
+
+
+def test_hymn_of_rebirth_reanimates_out_of_an_opponents_graveyard(set_pool):
+    """"Put target creature card from **a** graveyard onto the battlefield
+    under your control."
+
+    "A graveyard" is any graveyard (CR 601.2c: the legal targets are the ones
+    the printed phrase describes), and the compiled program said so all along —
+    ``reanimate_creature`` carries ``any_graveyard`` and its handler reads the
+    named seat's pile. The *derivation* answered ``own_graveyard_only``, so
+    ``_enumerate_targets`` offered nothing and the cast was refused outright
+    with the only creature card in an opponent's graveyard: a spec narrower
+    than the program is a card the player cannot cast.
+    """
+    game, p1, p2 = _hymn_board(set_pool, their_graveyard=["Serra Angel"])
+
+    spec = game.cast_target_spec(0, set_pool("ICE")["Hymn of Rebirth"])
+    assert spec["valid_targets"] == [
+        {"kind": "graveyard", "seat": 1, "index": 0, "name": "Serra Angel"}
+    ]
+
+    result = game.cast_from_hand(
+        0, "Hymn of Rebirth", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    # "…under **your** control": the reanimator's battlefield, not the owner's.
+    revived = next(p for p in game.controlled_by(p1) if p.card.name == "Serra Angel")
+    assert game.controller_index_of(revived) == 0
+    assert p2.graveyard == []
+    assert list(game.controlled_by(p2)) == []
+
+
+def test_hymn_of_rebirth_offers_both_graveyards_and_takes_the_one_named(set_pool):
+    """Both piles are offered, and the announced one is the pile the resolution
+    reads — the picker's list and the effect are one answer (idiom #9).
+
+    The decoy is what makes this a test rather than a coincidence: with a
+    creature card of the caster's own sitting at the *same index*, an effect
+    that ignored the named seat would still have put a creature onto the
+    battlefield and looked right.
+    """
+    game, p1, p2 = _hymn_board(
+        set_pool, my_graveyard=["Grizzly Bears"], their_graveyard=["Serra Angel"],
+    )
+
+    spec = game.cast_target_spec(0, set_pool("ICE")["Hymn of Rebirth"])
+    assert [(t["seat"], t["name"]) for t in spec["valid_targets"]] == [
+        (0, "Grizzly Bears"), (1, "Serra Angel"),
+    ]
+
+    result = game.cast_from_hand(
+        0, "Hymn of Rebirth", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in game.controlled_by(p1)] == ["Serra Angel"]
+    assert [c.name for c in p1.graveyard] == ["Grizzly Bears", "Hymn of Rebirth"]
+
+
+def test_hymn_of_rebirth_leaves_the_card_its_owners(set_pool):
+    """CR 108.3/400.3: "under your control" moves control, never ownership, so
+    the creature dies into the graveyard it came out of.
+
+    The spell-side reanimation had no reason to record an owner while every
+    card it could reach was the caster's own; widening the target is what makes
+    the two differ, and without the record the reanimated creature would die
+    into the *reanimator's* graveyard — ready to be reanimated again by the
+    player who never owned it. The Aura printing of the same effect (Animate
+    Dead) has recorded it all along.
+    """
+    game, p1, p2 = _hymn_board(set_pool, their_graveyard=["Serra Angel"])
+    game.cast_from_hand(
+        0, "Hymn of Rebirth", target_player_index=1, target_permanent_index=0
+    )
+    game._settle()
+    revived = next(p for p in game.controlled_by(p1) if p.card.name == "Serra Angel")
+
+    assert game.owner_index_of(revived) == 1
+
+    game._permanent_to_graveyard(p1, revived)
+    game.remove_from_battlefield(revived)
+
+    assert [c.name for c in p2.graveyard] == ["Serra Angel"]
+    assert [c.name for c in p1.graveyard] == ["Hymn of Rebirth"]
+
+
+def test_hymn_of_rebirth_still_only_takes_a_creature_card(set_pool):
+    """The widening is about *whose* graveyard, not about what may come out of
+    one. A non-creature card in the opponent's pile is no more a legal target
+    than it was in the caster's own, and the refusal costs nothing (CR 601.2c
+    is asked before the mana is spent)."""
+    game, p1, p2 = _hymn_board(set_pool, their_graveyard=["Black Lotus"])
+
+    assert game.cast_target_spec(0, set_pool("ICE")["Hymn of Rebirth"])[
+        "valid_targets"
+    ] == []
+
+    result = game.cast_from_hand(
+        0, "Hymn of Rebirth", target_player_index=1, target_permanent_index=0
+    )
+
+    assert not result.supported
+    assert result.details == "no valid target for Hymn of Rebirth"
+    assert [c.name for c in p2.graveyard] == ["Black Lotus"]
+# --- end LeadA ---
