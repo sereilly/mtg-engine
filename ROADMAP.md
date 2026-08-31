@@ -836,9 +836,17 @@ a warning about carrying a finding between rounds without re-probing it.
 
 **Still open, with reproductions:**
 
-* **Preacher** (DRK) never asks the opponent for the choice the card gives
-  them: `derive_activation_spec` answers None, so the picker offers nothing and
-  the engine takes the opponent's slot-0 creature.
+* ~~**Preacher** (DRK) never asks the opponent for the choice the card gives
+  them.~~ **Withdrawn 2026-08-31 — a false positive, and instructive.** Run
+  with both seats interactive, Preacher arms a `permanent_choice` owed by the
+  *opponent*, offers both their creatures, and honours the answer: choosing the
+  Serra Angel steals the Angel, not the slot-0 Bears. What the reporting sweep
+  saw was the **non-interactive default**, which takes the first candidate
+  because that is what a headless seat's default is specified to do. That is
+  the second "silent mis-play" this month that was the AI default behaving as
+  documented, and the lesson is that a headless probe cannot tell "nobody was
+  asked" from "nobody was there to ask" — arm the prompt with
+  `interactive_seats` set before believing either.
 * ~~**Hymn of Rebirth** compiles `any_graveyard` while its derived spec says
   own-graveyard-only, so the cast is refused outright.~~ *Fixed 2026-08-31.*
   **ICE, not LEG** — and it did not belong with the "graveyard target" item
