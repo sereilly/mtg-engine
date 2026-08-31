@@ -74,7 +74,10 @@ from engine.activation_restrictions import (  # noqa: E402
 from engine.activation_permissions import (  # noqa: E402
     permission_clause_readable,
 )
-from engine.cost_x_definitions import cost_x_definition_readable  # noqa: E402
+from engine.cost_x_definitions import (  # noqa: E402
+    cast_x_definition_line,
+    cost_x_definition_readable,
+)
 from engine.revealed_hands import revealed_hands_line  # noqa: E402
 from engine.enter_effects import enter_effect_line  # noqa: E402
 from engine.extra_triggers import extra_trigger_line  # noqa: E402
@@ -310,6 +313,13 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # -- the same table the grammar refuses an unimplemented definition with. Not
     # an instruction: a cost is not an effect.
     ("cost_x_definitions.py", cost_x_definition_readable),
+    # The **cast** half of the same rule: "X is the number of artifact and/or
+    # creature cards in an opponent's graveyard as you cast this spell."
+    # (Spoils of War, CR 107.3c.) The casting path computes the number off the
+    # card's own line before the caster is asked for one, so there is no
+    # instruction — and the claim asks that module rather than a phrase list,
+    # for the reason every entry above does.
+    ("cost_x_definitions.py (cast)", cast_x_definition_line),
     # "Players play with their hands revealed." (Revelation.) CR 701.20a, whose
     # whole effect is who may see what -- so the consumer is the per-seat
     # serialization in web/serialization.py, reading engine/revealed_hands.py's

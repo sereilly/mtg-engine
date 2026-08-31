@@ -3605,6 +3605,7 @@ def _derived_static_claims(
     """
     from .card_hooks import DRAW_STEP_MODIFIERS
     from .cost_modifiers import cost_modifier_claims_line
+    from .cost_x_definitions import cast_x_definition_line
     from .damage_source_colors import CLAIM as DAMAGE_SOURCE_COLORS_CLAIM
     from .damage_source_colors import colorless_source_line
     from .draw_step_modifiers import (draw_step_bonus_for, draw_step_skip_for,
@@ -3669,6 +3670,14 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(DAMAGE_SOURCE_COLORS_CLAIM)
+    # "X is the number of … as you cast this spell." (Spoils of War, CR 107.3c.)
+    # The cast path computes it before the caster is asked, so there is no
+    # instruction — and a definition no row reads must make the card unsupported
+    # rather than leave the caster announcing X freely.
+    if any(
+        cast_x_definition_line(line) for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("cast_x_definitions")
     if draw_step_bonus_for(oracle_text) is not None:
         claims.append("draw_step_modifiers")
     # "Skip your draw step." (Necropotence.) The draw step reads the

@@ -60,6 +60,45 @@ def _lower_put_counter(
     event: str | None = None,
     produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
+    if node.distributed:
+        # "Distribute X +1/+1 counters among any number of target creatures."
+        # (Spoils of War.) CR 601.2d's other half — the caster announces the
+        # division as part of casting, exactly as a divided damage spell's
+        # caster does, so the shares travel on the same ``divided_targets`` list
+        # and this carries the same ``divided`` target description. Ahead of
+        # every branch below, all of which describe one permanent.
+        if node.up_to or node.then_double or node.cap is not None:
+            raise LoweringError(
+                "a distributed placement carries no rider", node=node
+            )
+        filt = node.subject.filter
+        if _restrictions_beyond(filt, frozenset({"card_types"})) or (
+            filt.card_types != ("creature",)
+        ):
+            raise LoweringError(
+                "the distributed counters land on creatures", node=node
+            )
+        if isinstance(node.count, ast.Fixed):
+            placed: int | str = node.count.value
+        elif isinstance(node.count, ast.Var):
+            placed = node.count.name
+        else:
+            raise LoweringError(
+                "a distributed placement counts a fixed or variable number",
+                node=node,
+            )
+        return (
+            OracleInstruction("add_counter_to_target", "", {
+                "counter": node.counter,
+                "count": placed,
+                "targets": {
+                    "quantifier": "divided",
+                    "kind": "divided",
+                    "division": "chosen",
+                    "filter": {"type_filter": "creature"},
+                },
+            }),
+        )
     # "Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.) The source's
     # own loyalty lives on the permanent (metadata["loyalty_counters"],
     # CR 306.5c); a *chosen* permanent's is the same key reached through the

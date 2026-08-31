@@ -63,6 +63,7 @@ from .effects import (
     _parse_exile_cost_sacrifices,
     _parse_mill, _parse_modal_head, _parse_player_adds_mana,
     _parse_prevent, _parse_put_iterated_card_on_library,
+    _parse_distribute_counters,
     _parse_put_counter, _parse_put_exiled_with_source,
     _parse_put_hand_cards_on_library,
     _parse_player_puts_hand_cards_on_library,
@@ -342,6 +343,14 @@ def parse_subject_verb(
         if stream.peek_word(1) == "life":
             return _parse_exchange_life_totals(stream)
         return _parse_exchange_control(stream)
+    # "Distribute X +1/+1 counters among any number of target creatures."
+    # (Spoils of War.) Its own bare imperative, beside "put" rather than inside
+    # it: the verb differs and so does every noun after it — "among" names the
+    # set the shares are split across where "on" names the one permanent.
+    if stream.at_word("distribute"):
+        distributed = _parse_distribute_counters(stream)
+        if distributed is not None:
+            return distributed
     if stream.at_word("put"):
         # "Put all cards exiled with this artifact into their owner's hand."
         # (Knowledge Vault.) Tried first and non-consuming on refusal: the

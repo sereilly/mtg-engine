@@ -51,6 +51,7 @@ from .tapping import (
 )
 from .counters import (
     _expect_counter_kind,
+    _parse_distribute_counters,
     _parse_put_counter,
     _parse_remove_counter,
 )
@@ -183,6 +184,7 @@ __all__ = [
     "_parse_has_base_pt",
     "_expect_counter_kind",
     "_parse_for_each",
+    "_parse_distribute_counters",
     "_parse_put_counter",
     "_parse_remove_counter",
     "_TEXT_CHANGE_MODES",

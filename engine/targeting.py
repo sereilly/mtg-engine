@@ -1086,7 +1086,14 @@ def _from_instruction(instruction) -> dict | None:
             # rather than copied into the `targets` description at lowering: the
             # amount is the instruction's own field, and a second copy beside
             # the target description is a second thing to keep in step.
-            amount = instruction.payload.get("amount", 0)
+            # ``amount`` for damage and ``count`` for a distributed counter
+            # placement — CR 601.2d covers both with one sentence, and each
+            # instruction family spells its quantity with the word its own
+            # handler reads. A variable ("x") is no total yet: the picker learns
+            # it once the caster announces X, or the card defines one.
+            amount = instruction.payload.get(
+                "amount", instruction.payload.get("count", 0)
+            )
             if isinstance(amount, int):
                 described["division_total"] = amount
             described["division_x_bonus"] = int(

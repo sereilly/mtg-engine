@@ -1,4 +1,4 @@
-"""What the X in an activated ability's **cost** is, when the card defines it.
+"""What the X of a **cost** is, when the card defines it instead of the player.
 
 CR 601.2b: the activating player announces the value of X. A handful of cards
 take that choice away by printing a definition instead -- Voodoo Doll's
@@ -90,6 +90,108 @@ COST_X_DEFINITIONS: tuple[tuple[re.Pattern[str], Callable[..., int]], ...] = (
 )
 
 
+# ---------------------------------------------------------------------------
+# The cast half (CR 601.2b / CR 107.3c)
+# ---------------------------------------------------------------------------
+#
+# The same rule about a spell rather than an activated ability. It is a second
+# table rather than a second row, because the two readers are handed different
+# things: an ability's definition is answered from its *source permanent* and a
+# spell's from its *caster* — a spell on the stack has no permanent at all, and
+# giving the rows above an optional source would let a definition that needs one
+# be matched by a caller that has none, and answer from nothing.
+
+
+def _opponent_graveyard_count(game, caster_index: int, match: re.Match) -> int | None:
+    """"X is the number of artifact and/or creature cards in **an opponent's**
+    graveyard as you cast this spell." (Spoils of War.)
+
+    "An opponent's" is a choice the caster makes as the spell is cast, and this
+    engine has no channel for one: the cast wire names targets, not the
+    non-target choices of CR 601.2b. With a single opponent there is nothing to
+    choose and the answer is theirs; with several, ``None`` refuses the cast
+    rather than picking a graveyard for the caster — an engine that quietly
+    chose the largest would be playing a better card than the one printed, and
+    one that chose the first would be playing a worse one.
+    """
+    wanted = tuple(word.strip() for word in match.group(1).split(" and/or "))
+    opponents = [
+        player for seat, player in enumerate(game.players) if seat != caster_index
+    ]
+    if len(opponents) != 1:
+        return None
+    return sum(
+        1
+        for card in opponents[0].graveyard
+        if any(kind in (card.type_line or "").lower() for kind in wanted)
+    )
+
+
+#: ``(pattern, reader)`` for a **spell's** X, read off the card's own line. The
+#: reader takes ``(game, caster seat, match)``.
+CAST_X_DEFINITIONS: tuple[tuple[re.Pattern[str], Callable[..., int | None]], ...] = (
+    (
+        re.compile(
+            r"^x is the number of ([a-z]+(?: and/or [a-z]+)*) cards? in an "
+            r"opponent's graveyard as you cast this spell$"
+        ),
+        _opponent_graveyard_count,
+    ),
+)
+
+
+def cast_x_definition_line(line: str) -> bool:
+    """Whether one printed *line* is a cast-time X definition this file reads.
+
+    The grammar's claim and the support gate's, so a definition nothing computes
+    leaves the card unsupported rather than admitted with the caster free to
+    announce X — which on a spell whose X is its whole effect is any number they
+    like.
+    """
+    return _match_cast(line) is not None
+
+
+def defines_cast_x(oracle_text: str) -> bool:
+    """Whether any line of *oracle_text* defines the spell's X (CR 107.3c).
+
+    Separate from :func:`cast_x_value` for :func:`cost_x_is_defined`'s reason,
+    one table up: "the card defines no X" and "it defines one this cast cannot
+    compute" are different answers, and folding them into one ``None`` makes the
+    second look like the first — which on an {X} spell hands the caster the
+    choice the card took away.
+    """
+    return any(_match_cast(line) is not None for line in (oracle_text or "").splitlines())
+
+
+def cast_x_value(game, caster_index: int, oracle_text: str) -> int | None:
+    """The X a spell's own text defines, or None.
+
+    ``None`` covers both "the card defines no X" and "it defines one this cast
+    cannot compute", and the caller tells them apart with
+    :func:`cast_x_definition_line` — the same split :func:`cost_x_is_defined`
+    makes one table up, and for the same reason: folding them together makes the
+    uncomputable case look like the ordinary one, which on an {X} spell means
+    the caster picks.
+    """
+    for line in (oracle_text or "").splitlines():
+        matched = _match_cast(line)
+        if matched is not None:
+            pattern_match, reader = matched
+            return reader(game, caster_index, pattern_match)
+    return None
+
+
+def _match_cast(line: str) -> tuple[re.Match, Callable[..., int | None]] | None:
+    cleaned = " ".join(line.lower().split()).strip(" .")
+    if not cleaned.startswith("x is "):
+        return None
+    for pattern, reader in CAST_X_DEFINITIONS:
+        found = pattern.match(cleaned)
+        if found is not None:
+            return found, reader
+    return None
+
+
 def cost_x_definition_readable(sentence: str) -> bool:
     """Whether a row implements this printed "X is ..." sentence.
 
@@ -146,7 +248,11 @@ def _match(sentence: str) -> tuple[re.Match, Callable[..., int]] | None:
 
 
 __all__ = [
+    "CAST_X_DEFINITIONS",
     "COST_X_DEFINITIONS",
+    "cast_x_definition_line",
+    "defines_cast_x",
+    "cast_x_value",
     "cost_x_definition_readable",
     "cost_x_is_defined",
     "cost_x_value",

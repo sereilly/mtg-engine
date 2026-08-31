@@ -154,6 +154,49 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     return dataclasses.replace(placement, count=counted)
 
 
+def _parse_distribute_counters(stream: TokenStream) -> ast.PutCounter | None:
+    """``Distribute <amount> <counter> counters among any number of target
+    <objects>.`` (Spoils of War.)
+
+    The counter twin of "deals N damage divided as you choose among any number
+    of targets", and deliberately the same shape: CR 601.2d covers both with one
+    sentence ("divide or distribute an effect (such as damage **or counters**)
+    among one or more targets"), the caster announces the division as part of
+    casting, and the shares ride the chosen targets. So it lowers onto the same
+    ``divided`` target description and the same ``divided_targets`` list, rather
+    than inventing a second way to say the same thing.
+
+    Its own production rather than a branch of :func:`_parse_put_counter`: the
+    printed verb is different, and every noun after it means something else —
+    "among" names the set the shares are split across where "on" names the one
+    permanent that gets them all.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("distribute"):
+        return None
+    count = parse_amount(stream)
+    if count is None:
+        stream.reset(mark)
+        return None
+    counter = _expect_counter_kind(stream)
+    if not stream.accept_word("counter", "counters"):
+        stream.reset(mark)
+        return None
+    # "among **any number of** target creatures". The quantifier is required:
+    # "among two target creatures" is a fixed count this shape does not carry,
+    # and reading it as unbounded would let the caster name three.
+    if not stream.accept_phrase("among", "any", "number", "of"):
+        stream.reset(mark)
+        return None
+    subject = parse_recipient(stream)
+    if not isinstance(subject, ast.TargetSpec):
+        stream.reset(mark)
+        return None
+    return ast.PutCounter(
+        subject, counter.text, count, distributed=True,
+    )
+
+
 def _parse_remove_counter(stream: TokenStream) -> ast.RemoveCounter | None:
     """``Remove [a|N] <kind> counter(s) from <subject>`` as an *effect*.
 

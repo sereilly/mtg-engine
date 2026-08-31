@@ -9525,7 +9525,10 @@ function confirmDividedTargets() {
   const xEqualsTargets = !!targetSpecOf(card)?.x_equals_targets;
   // "…divided **as you choose**" with a printed amount (Pyrotechnics, Fiery
   // Justice): the total is known already, so the division is asked now.
-  const fixedTotal = (card.mana_cost || "").includes("{X}")
+  // A printed amount, or an X the *card* defines (CR 107.3c) — either way the
+  // total is known already and the caster is never asked for X.
+  const definedX = targetSpecOf(card)?.defined_x;
+  const fixedTotal = (card.mana_cost || "").includes("{X}") && !Number.isInteger(definedX)
     ? null
     : dividedDivisionTotal(card, null);
   pendingCastTarget = null;
@@ -9551,8 +9554,8 @@ function confirmDividedTargets() {
   }
   if (Number.isInteger(fixedTotal)) {
     startCastDivisionPrompt(
-      card, cardName, dividedPayload, fixedTotal, castAction || "cast", null,
-      chosenValidTargets,
+      card, cardName, dividedPayload, fixedTotal, castAction || "cast",
+      Number.isInteger(definedX) ? definedX : null, chosenValidTargets,
     );
     return;
   }
@@ -9569,6 +9572,10 @@ function dividedDivisionTotal(card, xValue) {
   if (spec.division !== "chosen") return null;
   const bonus = Number(spec.division_x_bonus || 0);
   if (Number.isInteger(spec.division_total)) return spec.division_total + bonus;
+  // CR 107.3c: a spell that defines its own X (Spoils of War) took the
+  // announcement away from the caster, so the total is the game's number and
+  // not one this browser asked for.
+  if (Number.isInteger(spec.defined_x)) return spec.defined_x + bonus;
   return Number(xValue || 0) + bonus;
 }
 

@@ -1096,4 +1096,93 @@ def test_a_union_mixing_targets_and_a_sweep_is_refused():
     mixed = compile_line("Destroy target creature, target land, and all artifacts.")
     assert not mixed.parsed
     assert "one announcement" in (mixed.parse_error or "")
+
+
+def _spoils_board(set_pool, *, graveyard, mine=("Balduvian Bears", "Tor Giant")):
+    pool = set_pool("ICE")
+    lea = set_pool("LEA")
+    creatures = [Permanent(card=pool[name]) for name in mine]
+    p0 = PlayerState(
+        name="P0", hand=[pool["Spoils of War"]], battlefield=creatures, life=20,
+    )
+    p1 = PlayerState(
+        name="P1", life=20,
+        graveyard=[(pool.get(n) or lea[n]) for n in graveyard],
+    )
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, creatures
+
+
+def test_spoils_of_war_defines_its_own_x_off_the_opponents_graveyard(set_pool):
+    """"X is the number of artifact and/or creature cards in an opponent's
+    graveyard as you cast this spell." (CR 107.3c.)
+
+    The caster never announces it — the cast path computes it, the same way an
+    activated ability's printed "X is …" is computed one table over. The picker
+    is told the number too (``defined_x``), because a divided spell's caster
+    needs it *before* announcing the division (CR 601.2d) and a browser that
+    asked for X would have got a different one.
+    """
+    from engine.oracle import compile_card_oracle
+
+    game, _mine = _spoils_board(
+        set_pool,
+        graveyard=("Balduvian Bears", "Black Lotus", "Mountain", "Tor Giant"),
+    )
+    spoils = set_pool("ICE")["Spoils of War"]
+    assert compile_card_oracle(spoils).supported
+
+    spec = game.cast_target_spec(0, spoils)
+    assert spec["defined_x"] == 3, "the Mountain is neither an artifact nor a creature"
+
+
+def test_spoils_of_war_distributes_the_counters_as_announced(set_pool):
+    """"Distribute X +1/+1 counters among any number of target creatures."
+
+    CR 601.2d's counter half, travelling on the same ``divided_targets`` list a
+    divided damage spell's shares do.
+    """
+    game, (bears, giant) = _spoils_board(
+        set_pool,
+        graveyard=("Balduvian Bears", "Black Lotus", "Mountain", "Tor Giant"),
+    )
+
+    result = game.cast_from_hand(
+        0, "Spoils of War", divided_targets=[(0, 0, 1), (0, 1, 2)],
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert (bears.effective_power, bears.effective_toughness) == (3, 3)
+    assert (giant.effective_power, giant.effective_toughness) == (5, 5)
+
+
+def test_an_even_distribution_would_have_answered_differently(set_pool):
+    """The boundary. Three counters over two creatures, unannounced, is one
+    each and one lost to the rounding — so the 1/2 split above is not what an
+    engine ignoring the announcement would have done."""
+    game, (bears, giant) = _spoils_board(
+        set_pool,
+        graveyard=("Balduvian Bears", "Black Lotus", "Mountain", "Tor Giant"),
+    )
+
+    game.cast_from_hand(0, "Spoils of War", divided_targets=[(0, 0), (0, 1)])
+    game._settle()
+
+    assert (bears.effective_power, giant.effective_power) == (3, 4)
+
+
+def test_the_distribution_must_total_the_defined_x(set_pool):
+    """CR 601.2d against a number the *card* fixed: the caster cannot announce
+    a division of the X they would have liked."""
+    game, _mine = _spoils_board(
+        set_pool, graveyard=("Balduvian Bears", "Black Lotus", "Tor Giant"),
+    )
+
+    refused = game.cast_from_hand(
+        0, "Spoils of War", divided_targets=[(0, 0, 1), (0, 1, 1)],
+    )
+    assert not refused.supported and "total 3" in refused.details
 # --- end W3G3 ---

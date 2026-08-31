@@ -746,6 +746,50 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
         game.log.append(f"{creature.card.name} gets a {kind} counter ({card.name})")
         return True, "resolved"
 
+    if isinstance(targets, dict) and targets.get("kind") == "divided":
+        # "Distribute X +1/+1 counters among any number of target creatures."
+        # (Spoils of War.) CR 601.2d's counter half: the caster announced how
+        # many go where as part of casting, and the shares travel on the same
+        # `divided_targets` list a divided damage spell's do — so the division
+        # is `engine/divided_damage.py`'s answer here exactly as it is there.
+        #
+        # A target that has left keeps its share out of the effect (CR 608.2b);
+        # nothing redistributes it, which is why the surviving entries are
+        # filtered before the division is read rather than after.
+        from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
+
+        # Each entry is turned into a permanent once, through the seam, and
+        # carried as the object from there — an index held across the placement
+        # loop would address the wrong creature the moment anything left.
+        chosen_entries = [
+            (entry, creature)
+            for entry in (context.choices or {}).get(DIVIDED_TARGETS) or ()
+            for seat, index, _share in (divided_entry(entry),)
+            for creature in (game.permanent_at(seat, index),)
+            if creature is not None
+        ]
+        if not chosen_entries:
+            game.log.append(f"{card.name}: no creatures were given counters")
+            return True, "resolved"
+        creatures = [creature for _entry, creature in chosen_entries]
+        shares = divide(
+            how_many,
+            [entry for entry, _creature in chosen_entries],
+            division=targets.get("division", EVENLY),
+        )
+        placed_total = 0
+        for creature, (_seat, _index, share) in zip(creatures, shares):
+            if share <= 0:
+                continue
+            game.place_pt_counters(creature, kind, share)
+            placed_total += share
+            game.log.append(
+                f"{creature.card.name} gets {share} {kind} counter(s) ({card.name})"
+            )
+        if placed_total == 0:
+            game.log.append(f"{card.name}: no creatures were given counters")
+        return True, "resolved"
+
     if isinstance(maximum, int) and maximum > 1:
         filters = targets.get("filter") or {}
         # The filter decides which permanents qualify, including "you control" —
