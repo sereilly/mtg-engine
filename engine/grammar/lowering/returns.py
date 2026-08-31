@@ -562,7 +562,16 @@ def _lower_return_to_zone(
         if node.entering_tapped or node.under_control_of or node.repetitions:
             raise LoweringError("the sweep bounce reads no rider", node=node)
         filt = subject.filter
-        unread = _restrictions_beyond(filt, _PAYLOAD_HONOURED_FILTER_FIELDS)
+        attached_referent: str | None = None
+        # "…all white Auras you own **attached to it**" (Word of Undoing). A
+        # relation rather than a characteristic, so it rides beside the filter
+        # the way the sweep *destroy* already carries it (Turn to Slag) — and
+        # it is honoured here rather than left in the unread set, because a
+        # dropped attachment relation on a sweep returns every white Aura on
+        # the board rather than the ones on the creature.
+        unread = _restrictions_beyond(
+            filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {"attached_to"}
+        )
         if unread:
             raise LoweringError(
                 "the sweep bounce cannot read " + ", ".join(sorted(unread)), node=node
@@ -574,6 +583,25 @@ def _lower_return_to_zone(
                 "the sweep bounce cannot test " + ", ".join(sorted(untestable)),
                 node=node,
             )
+        if filt.attached_to is not None:
+            # Added **after** the testability check, because it is not a key
+            # ``subject_matches`` answers: no read of the Aura alone can say
+            # what it is attached to, so the handler resolves the referent and
+            # compares hosts by identity — the same split ``exclude_self``
+            # makes, and the same one the sweep destroy already makes for this
+            # very key.
+            #
+            # Only the referent the resolution can name. "source" is a
+            # permanent's own attachments (Rabid Wombat's count clause);
+            # `rebinding` points the pronoun at the sentence's target where one
+            # was chosen, so what arrives here is "target" — and anything else
+            # refuses rather than sweeping the board.
+            if filt.attached_to != "target":
+                raise LoweringError(
+                    "the sweep bounce resolves an attachment to the spell's "
+                    f"target, not to the {filt.attached_to}", node=node,
+                )
+            attached_referent = filt.attached_to
         # Every permanent goes to *its owner's* hand (CR 400.3), which is what
         # the handler does whatever the card printed. "…to your hand" is
         # therefore only the same sentence when the noun phrase says you own
@@ -588,7 +616,13 @@ def _lower_return_to_zone(
                 "\"to your hand\" is not \"to its owner's hand\" unless the "
                 "phrase says you own it", node=node,
             )
-        return (OracleInstruction("return_all_matching", "", {"filter": swept}),)
+        bounce_payload: dict[str, object] = {"filter": swept}
+        if attached_referent is not None:
+            # Beside the filter, never inside it: the handler resolves the
+            # referent and compares hosts by identity, and a key inside the
+            # filter would reach ``subject_matches``, which has no answer for it.
+            bounce_payload["attached_to"] = attached_referent
+        return (OracleInstruction("return_all_matching", "", bounce_payload),)
     # "**Each player** returns all creature cards from their graveyard to the
     # battlefield." (All Hallow's Eve.) A sweep *reanimation*: every card a
     # noun phrase names, out of a graveyard and onto the battlefield, with

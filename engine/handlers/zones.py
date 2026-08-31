@@ -1439,6 +1439,21 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+def _was_attached_to(perm, host_id: int) -> bool:
+    """Whether *perm* is — or was, this resolution — attached to *host_id*.
+
+    Both records, because a sweep that names an attachment can run after the
+    host has moved: "Return target creature **and all white Auras you own
+    attached to it**" (Word of Undoing) bounces the creature in the step before
+    this one, and ``detach_aura`` has already cleared the live pointer by then.
+    That is CR 603.10's reading — the spell chose its target while it was on the
+    battlefield — and the id is what keeps it from matching a look-alike
+    (CR 400.7).
+    """
+    host = perm.metadata.get("attached_to") or perm.metadata.get("last_attached_to")
+    return host is not None and getattr(host, "permanent_id", None) == host_id
+
+
 @effect_handler("return_all_matching")
 def return_all_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Return to your hand all enchantments you both own and control…"
@@ -1454,10 +1469,20 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
     you control" are all seat comparisons, and the lowering admitted the line
     only because this is where they are answered.
 
+    ``attached_to`` narrows the sweep to what is on one named permanent —
+    "…and all white Auras you own **attached to it**" (Word of Undoing), where
+    "it" is the creature the same spell targeted. Beside the filter rather than
+    inside it, because it is a relation no read of the Aura alone can answer:
+    the referent is resolved here and the hosts are compared by identity, the
+    same split ``destroy_all_matching`` makes for the same key.
+
     The matched list is taken **before** anything moves. A permanent leaving
     detaches its Auras, so a sweep that re-read the board between removals
     would stop matching Auras it had already named — and "attached to" is
-    exactly what half of this card's phrases ask about.
+    exactly what half of this card's phrases ask about. Word of Undoing makes
+    that load-bearing rather than careful: the creature is bounced by the step
+    in front of this one, so by the time the sweep runs every Aura it names has
+    already fallen off.
     """
     from ..subject_filters import subject_matches
 
@@ -1465,11 +1490,28 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
     observer = (
         game.players.index(context.caster) if context.caster in game.players else None
     )
+    host_id = None
+    attached_to = instruction.payload.get("attached_to")
+    if attached_to is not None:
+        # By **id**, not by object, and that is what makes Word of Undoing work
+        # at all: the step in front of this one has already bounced the
+        # creature, so ``permanent_by_id`` no longer finds it while every Aura
+        # still holds the record of what it was on. CR 400.7 makes the id
+        # unique to that object, so a look-alike cannot answer to it.
+        host_id = context.target_permanent_id if attached_to == "target" else None
+        if host_id is None:
+            # The relation is the whole narrowing, so a referent this cannot
+            # resolve ends the sweep rather than widening it to the board.
+            game.log.append(
+                f"{context.card.name}: nothing is attached to a permanent that is gone"
+            )
+            return True, "resolved"
     matched = [
         perm for perm in game.all_permanents()
         if subject_matches(
             game, perm, swept, observer=observer, source=context.source_permanent,
         )
+        and (host_id is None or _was_attached_to(perm, host_id))
     ]
     returned: list[str] = []
     for perm in matched:
