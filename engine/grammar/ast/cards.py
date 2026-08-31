@@ -344,6 +344,16 @@ class RevealHandAndChoose:
     player: PlayerRef
     filter: ObjectFilter
     fate: str = "discard"
+    #: "…and choose **X** cards from it" (Mind Warp). How many are chosen, which
+    #: the family varies as freely as it varies the fate. One rather than none
+    #: is the default because that is what every printing before this one says.
+    count: Amount = field(default_factory=lambda: Fixed(1))
+    #: Whether the hand was **revealed** (Duress) or only **looked at** (Mind
+    #: Warp). CR 701.20 makes a reveal public and CR 701.16 makes a look
+    #: private, so the two sentences give different information to everyone who
+    #: is not the chooser — the same choice, made from a zone the rest of the
+    #: table can or cannot see.
+    revealed: bool = True
 
 
 @dataclass(frozen=True)

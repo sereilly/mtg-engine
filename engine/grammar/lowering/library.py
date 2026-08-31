@@ -180,6 +180,13 @@ def _lower_reveal_hand_and_choose(
     payload: dict[str, object] = {"fate": node.fate}
     if node.filter.excluded_types:
         payload["exclude_types"] = list(node.filter.excluded_types)
+    # Both keys are emitted only when the card carries them, so Duress's payload
+    # stays byte-identical and no behaviour signature moves.
+    amount = _amount_payload(node.count)
+    if amount != 1:
+        payload["count"] = amount
+    if not node.revealed:
+        payload["looked_at"] = True
     _describe_targets(payload, node.player)
     return (OracleInstruction("reveal_hand_and_choose", "", payload),)
 

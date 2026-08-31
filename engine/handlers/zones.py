@@ -1913,17 +1913,41 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         for index, held in enumerate(victim.hand)
         if search_matches(held, {"exclude_types": exclude_types})
     ]
+    # CR 701.20 makes a reveal public where CR 701.16's look shows the chooser
+    # alone, so the line says which happened rather than saying "revealed" for
+    # both.
+    looked_at = bool(instruction.payload.get("looked_at"))
     game.log.append(
-        f"{victim.name} revealed their hand ({len(victim.hand)} card(s)) to {card.name}"
+        f"{victim.name}"
+        + (
+            f" showed their hand ({len(victim.hand)} card(s)) to {context.caster.name}"
+            if looked_at
+            else f" revealed their hand ({len(victim.hand)} card(s))"
+        )
+        + f" to {card.name}"
     )
     if not legal:
         game.log.append(f"{card.name}: no card in that hand can be chosen")
+        return True, "resolved"
+    # "…choose **X** cards from it" (Mind Warp). Capped at what the hand holds:
+    # CR 608.2 does as much as it can, and a prompt asking for a card that is
+    # not there would never be answerable.
+    wanted = min(
+        resolve_amount(instruction.payload.get("count", 1), context.x_value),
+        len(legal),
+    )
+    if wanted <= 0:
+        game.log.append(f"{card.name}: no cards are chosen")
         return True, "resolved"
     game.arm_pending_choice(
         "revealed_hand_pick", caster_index,
         card_name=card.name,
         victim_index=victim_index,
         legal_indices=legal,
+        remaining=wanted,
+        # Carried so the picks after the first can recompute what is legal
+        # against the hand as it then stands.
+        exclude_types=exclude_types,
         fate=str(instruction.payload.get("fate", "discard")),
         # "…until **this creature** leaves the battlefield" (Kitesail
         # Freebooter): the source holds the exiled card, so which permanent it

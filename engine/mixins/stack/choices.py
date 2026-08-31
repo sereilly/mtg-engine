@@ -1393,6 +1393,7 @@ class PendingChoicesMixin:
         if not self._apply_revealed_hand_fate(choice, victim_index, hand_index):
             return False
         self.discard_pending_choice(choice)
+        self._rearm_revealed_hand_pick(choice, victim_index)
         return True
 
     def _default_revealed_hand_pick(self, choice: PendingChoice) -> None:
@@ -1404,11 +1405,50 @@ class PendingChoicesMixin:
         """
         legal = list(choice.data.get("legal_indices") or [])
         victim_index = int(choice.data["victim_index"])
+        taken = False
         if legal and 0 <= victim_index < len(self.players):
             hand = self.players[victim_index].hand
             legal.sort(key=lambda i: (-(hand[i].cmc if i < len(hand) else 0), i))
-            self._apply_revealed_hand_fate(choice, victim_index, legal[0])
+            taken = self._apply_revealed_hand_fate(choice, victim_index, legal[0])
         self.discard_pending_choice(choice)
+        if taken:
+            self._rearm_revealed_hand_pick(choice, victim_index)
+
+    def _rearm_revealed_hand_pick(self, choice: PendingChoice, victim_index: int) -> None:
+        """"…choose **X** cards from it" (Mind Warp) — the picks after the first.
+
+        A chain of one-card prompts rather than one multi-select, because
+        taking a card renumbers the hand behind it: the legal indices have to be
+        recomputed against the hand as it now stands, and a set answered all at
+        once against stale indices is the bug the counted search's atomic answer
+        exists to avoid. The pending-choice queue is built for this — a prompt
+        armed by *answering* an earlier one keeps the same resolution open.
+
+        The chooser sees the whole hand each time, so nothing is decided with
+        less information than the printed simultaneous choice gives.
+        """
+        remaining = int(choice.data.get("remaining", 1)) - 1
+        if remaining <= 0 or not 0 <= victim_index < len(self.players):
+            return
+        exclude_types = list(choice.data.get("exclude_types") or ())
+        victim = self.players[victim_index]
+        legal = [
+            index
+            for index, held in enumerate(victim.hand)
+            if search_matches(held, {"exclude_types": exclude_types})
+        ]
+        if not legal:
+            return
+        self.arm_pending_choice(
+            "revealed_hand_pick", choice.player_index,
+            card_name=choice.data.get("card_name", ""),
+            victim_index=victim_index,
+            legal_indices=legal,
+            remaining=min(remaining, len(legal)),
+            fate=str(choice.data.get("fate", "discard")),
+            exclude_types=exclude_types,
+            source_id=choice.data.get("source_id"),
+        )
 
     def _apply_revealed_hand_fate(
         self, choice: PendingChoice, victim_index: int, hand_index: int

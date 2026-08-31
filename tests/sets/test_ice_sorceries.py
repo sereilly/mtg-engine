@@ -287,3 +287,74 @@ def test_a_several_target_destroy_used_to_describe_no_targets_at_all(set_pool):
 
     assert instruction.kind == "destroy_target_permanent"
     assert instruction.payload["targets"]["count"] == 2
+
+
+# --- W1G4: library, hand and graveyard ---
+def _mind_warp_game(set_pool, x_value):
+    pool = set_pool("ICE")
+    p1 = PlayerState(name="P1", hand=[pool["Mind Warp"]], life=20)
+    p2 = PlayerState(
+        name="P2",
+        hand=[pool["Balduvian Bears"], pool["Brown Ouphe"], pool["Tor Giant"]],
+        life=20,
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    result = game.cast_from_hand(
+        0, "Mind Warp", target_player_index=1, x_value=x_value
+    )
+    assert result.supported, result.details
+    game._settle()
+    return pool, p1, p2, game
+
+
+def test_mind_warp_discards_x_chosen_cards(set_pool):
+    """"Look at target player\'s hand and choose X cards from it. That player
+    discards those cards."
+
+    X is the announced value, and the caster does the choosing out of somebody
+    else\'s hidden zone — which is Duress\'s template with two things changed,
+    so it is Duress\'s node.
+    """
+    pool, p1, p2, game = _mind_warp_game(set_pool, 2)
+
+    first = game.pending_choice_of("revealed_hand_pick", 0)
+    assert first is not None, "the caster chooses, not the victim"
+    assert first.data["remaining"] == 2
+
+    assert game.confirm_revealed_hand_pick(0, 0)
+    second = game.pending_choice_of("revealed_hand_pick", 0)
+    assert second is not None, "the second pick is asked against the hand as it now is"
+    assert game.confirm_revealed_hand_pick(0, 0)
+
+    assert game.pending_choice_of("revealed_hand_pick", 0) is None
+    assert [card.name for card in p2.hand] == ["Tor Giant"]
+    assert sorted(card.name for card in p2.graveyard) == [
+        "Balduvian Bears", "Brown Ouphe",
+    ]
+
+
+def test_mind_warp_for_more_than_the_hand_takes_the_hand(set_pool):
+    """CR 608.2 does as much as it can: X of 5 against three cards discards
+    three and does not leave a prompt nobody can answer."""
+    pool, p1, p2, game = _mind_warp_game(set_pool, 5)
+
+    for _ in range(3):
+        prompt = game.pending_choice_of("revealed_hand_pick", 0)
+        assert prompt is not None
+        assert game.confirm_revealed_hand_pick(0, prompt.data["legal_indices"][0])
+
+    assert game.pending_choice_of("revealed_hand_pick", 0) is None
+    assert p2.hand == []
+    assert len(p2.graveyard) == 3
+
+
+def test_mind_warp_for_zero_asks_nothing(set_pool):
+    """X of 0 chooses no cards, so no prompt is armed at all — an offer with
+    nothing to choose is not a choice."""
+    pool, p1, p2, game = _mind_warp_game(set_pool, 0)
+
+    assert game.pending_choice_of("revealed_hand_pick", 0) is None
+    assert len(p2.hand) == 3
+# --- end W1G4 ---

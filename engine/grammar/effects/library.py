@@ -301,7 +301,56 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
     # be consumed or the line fails full-token consumption.
     stream.expect_word("'s")
     stream.expect_word("hand")
+    # "Look at target player's hand **and choose X cards from it. That player
+    # discards those cards.**" (Mind Warp.) Duress's template with the hand
+    # looked at instead of revealed, so it is that node rather than a second
+    # one — and read here, from the sentence it actually opens, because the
+    # choice is over the hand *this* clause opened and a statement after it
+    # would be a pick from a zone nobody had looked in.
+    picked = _accept_look_and_choose(stream, player)
+    if picked is not None:
+        return picked
     return ast.LookAtHand(player)
+
+
+def _accept_look_and_choose(
+    stream: TokenStream, player: ast.PlayerRef
+) -> "ast.RevealHandAndChoose | None":
+    """The tail of ``Look at <player>'s hand **and choose <N> cards from it.
+    That player discards those cards.**`` (Mind Warp.)
+
+    Refuses without consuming, so "Look at target player's hand." on its own
+    (Glasses of Urza) keeps the reading it has. Every word of the discard
+    sentence is required: a line that looks and chooses but never says what
+    becomes of the cards is a card that does nothing, and dropping the sentence
+    would make the two indistinguishable.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("and", "choose"):
+        return None
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("cards", "card"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("from", "it"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "that", "player", "discards", "those", "cards"
+    ) and not stream.accept_phrase("that", "player", "discards", "that", "card"):
+        stream.reset(mark)
+        return None
+    return ast.RevealHandAndChoose(
+        player, ast.ObjectFilter(is_card=True), fate="discard",
+        count=count, revealed=False,
+    )
 
 
 def _parse_search_library(stream: TokenStream) -> ast.Statement:
