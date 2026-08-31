@@ -1869,4 +1869,100 @@ def test_blizzard_reads_snow_through_the_layers(set_pool):
     result = game.cast_from_hand(0, "Blizzard")
 
     assert not result.supported, result.details
+
+def _terrain_game(set_pool, opponent_lands, interactive=False):
+    """Illusionary Terrain in hand over an opponent's *opponent_lands*."""
+    ice, lea = set_pool("ICE"), set_pool("LEA")
+    p1 = PlayerState(name="P1", hand=[ice["Illusionary Terrain"]])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=lea[name]) for name in opponent_lands],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    if interactive:
+        game.interactive_seats = {0}
+    game.start_turn(0)
+    return game, p1, p2
+
+
+def test_illusionary_terrain_changes_the_chosen_basic_type(set_pool):
+    """"As this enchantment enters, choose two basic land types." / "Basic
+    lands of the first chosen type are the second chosen type."
+
+    CR 614.1c's entry choice feeding a CR 613 layer-4 static: the sentence
+    names no land type at all, so the derivation reads the ordered pair off the
+    permanent. Proved by tapping the land, because a type change nothing
+    produces mana from is one only the metadata can see.
+    """
+    game, p1, p2 = _terrain_game(set_pool, ["Forest", "Forest"])
+
+    assert game.cast_from_hand(0, "Illusionary Terrain").supported
+    game._settle()
+
+    terrain = p1.battlefield[-1]
+    assert terrain.metadata["chosen_land_types"] == ("forest", "plains"), (
+        "the default is the hoser's choice: the type the opponents hold most "
+        "of becomes the one they hold least"
+    )
+    forest = p2.battlefield[0]
+    assert forest.basic_land_types == ("plains",)
+
+    p2.mana_pool = {symbol: 0 for symbol in ("W", "U", "B", "R", "G", "C")}
+    assert game.tap_land_for_mana(1, "Forest", permanent_index=0)
+    assert p2.mana_pool["W"] == 1
+    assert p2.mana_pool["G"] == 0
+
+
+def test_illusionary_terrain_leaves_a_nonbasic_alone(set_pool):
+    """"**Basic** lands of the first chosen type" — a Taiga is a Forest and is
+    not basic, so the static does not reach it. Asked of ``has_supertype``,
+    which computes the word rather than reading the printed line."""
+    game, _p1, p2 = _terrain_game(set_pool, ["Forest", "Taiga"])
+    assert game.cast_from_hand(0, "Illusionary Terrain").supported
+    game._settle()
+
+    assert p2.battlefield[0].basic_land_types == ("plains",)
+    assert p2.battlefield[1].basic_land_types == ("mountain", "forest")
+
+
+def test_illusionary_terrain_asks_its_controller_and_takes_the_answer(set_pool):
+    """The default is stamped before the prompt so a headless seat never
+    blocks; an interactive controller's answer overwrites it, and the static
+    recomputes from the new pair."""
+    game, p1, p2 = _terrain_game(set_pool, ["Forest"], interactive=True)
+    assert game.cast_from_hand(0, "Illusionary Terrain").supported
+    game._settle()
+    assert game.pending_enter_choice["needs_land_types"]
+
+    assert game.confirm_enter_choice(0, land_types=["forest", "island"])
+
+    assert p1.battlefield[-1].metadata["chosen_land_types"] == ("forest", "island")
+    assert p2.battlefield[0].basic_land_types == ("island",)
+
+
+def test_illusionary_terrain_refuses_a_pair_that_is_not_two_types(set_pool):
+    """An answer naming one type twice is refused rather than repaired:
+    quietly keeping the default would tell the player they had chosen
+    something they had not."""
+    game, _p1, _p2 = _terrain_game(set_pool, ["Forest"], interactive=True)
+    assert game.cast_from_hand(0, "Illusionary Terrain").supported
+    game._settle()
+
+    assert not game.confirm_enter_choice(0, land_types=["forest", "forest"])
+    assert not game.confirm_enter_choice(0, land_types=["forest", "wastes"])
+
+
+def test_illusionary_terrain_reverts_when_it_leaves(set_pool):
+    """A derived static, recomputed from the board — so the land is a Forest
+    again the moment the enchantment is gone (CR 611.3a/b)."""
+    game, p1, p2 = _terrain_game(set_pool, ["Forest"])
+    assert game.cast_from_hand(0, "Illusionary Terrain").supported
+    game._settle()
+    assert p2.battlefield[0].basic_land_types == ("plains",)
+
+    game.remove_from_battlefield(p1.battlefield[-1])
+    game._refresh_dynamic_creatures()
+
+    assert p2.battlefield[0].basic_land_types == ("forest",)
 # --- end W2G2 ---

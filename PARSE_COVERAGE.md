@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**34 unclaimed sentence(s) across 22 supported card(s).**
+**32 unclaimed sentence(s) across 21 supported card(s).**
 
 - **Battle Cry**
   - `whenever a creature blocks this turn, it gets +0/+1 until end of turn`
@@ -53,9 +53,6 @@ anything anyone did, and every ingest would arrive red.
 - **Icy Prison**
   - `at the beginning of your upkeep, sacrifice this enchantment unless any player pays {3}`
   - `when this enchantment leaves the battlefield, return the exiled card to the battlefield under its owner's control`
-- **Illusionary Terrain**
-  - `as this enchantment enters, choose two basic land types`
-  - `basic lands of the first chosen type are the second chosen type`
 - **Infinite Hourglass**
   - `all creatures get +1/+0 for each time counter on this artifact`
 - **Justice**

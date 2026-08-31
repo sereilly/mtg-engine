@@ -8,6 +8,7 @@ from ..enter_effects import (
     sacrifice_any_number_on_enter,
     CHOOSE_COLOR_AND_OPPONENT_ON_ENTER,
     chooses_color_on_enter,
+    chooses_two_land_types_on_enter,
     CHOOSE_CARD_NAME_ON_ENTER,
     CHOOSE_OPPONENT_ON_ENTER,
     COPY_ARTIFACT_ON_ENTER,
@@ -40,9 +41,11 @@ from ..land_animation import (
     land_animation_from_payload,
 )
 from ..land_types import (
+    CHOSEN_LAND_TYPES,
     STATIC_SUPERTYPE_REMOVAL_KIND,
     add_derived_land_type,
     clear_derived_land_types,
+    resolve_static_land_type_change,
     static_land_type_change_applies,
     static_source_timestamp,
     static_supertype_removal_applies,
@@ -388,6 +391,32 @@ class PermanentStateMixin:
                 card_name=permanent.card.name, permanent=permanent,
                 needs_color=True, opponents=[], default_seat=None,
                 default_color=default_color,
+            )
+
+        # "As this enchantment enters, choose two basic land types."
+        # (Illusionary Terrain.) An **ordered pair**: the static beside it names
+        # "the first chosen type" and "the second chosen type", so the record is
+        # a tuple and the order is the whole of what it carries.
+        #
+        # The default is the hoser's choice a player would make — the basic type
+        # this permanent's controller's opponents hold most of becomes the one
+        # they hold least — because a pair naming a type nobody controls makes
+        # the enchantment inert, which is legal and is not a choice any player
+        # would make (idiom 8). Stamped before the prompt so an AI or headless
+        # seat never blocks, exactly as Black Vise's opponent is.
+        if chooses_two_land_types_on_enter(text):
+            first, second = self._default_terrain_land_types(caster_index)
+            permanent.metadata[CHOSEN_LAND_TYPES] = (first, second)
+            # The static reads the record, and the record did not exist when
+            # the entry recalculation ran — recompute, the way Jihad's anthem
+            # does one branch up.
+            self._refresh_dynamic_creatures()
+            self.arm_pending_choice(
+                "enter_choice", caster_index,
+                card_name=permanent.card.name, permanent=permanent,
+                needs_color=False, opponents=[], default_seat=None,
+                default_color=None, needs_land_types=True,
+                default_land_types=[first, second],
             )
 
         # "As this enchantment enters, choose a card name." (Runed Halo.) The
@@ -802,6 +831,17 @@ class PermanentStateMixin:
             # missing supertype, and a second reading of either here would be
             # the gate/dispatch split this engine keeps finding.
             for payload, source in changes:
+                # "Basic lands of **the first chosen type** are **the second
+                # chosen type**." (Illusionary Terrain.) The sentence names no
+                # land type at all: both come from the ordered pair its
+                # controller chose as it entered. Resolved once, against the
+                # source, and then read like any other payload — a source that
+                # has not chosen yet resolves to None and contributes nothing,
+                # which is the honest answer rather than a static over every
+                # land or none.
+                payload = resolve_static_land_type_change(payload, source)
+                if payload is None:
+                    continue
                 if static_land_type_change_applies(payload, perm):
                     add_derived_land_type(
                         perm,
@@ -1394,6 +1434,35 @@ class PermanentStateMixin:
         if not counts:
             return "W"
         return max(sorted(counts), key=lambda c: counts[c])
+
+    def _default_terrain_land_types(self, caster_index: int) -> tuple[str, str]:
+        """The ordered pair Illusionary Terrain takes when nobody chooses.
+
+        The type *caster_index*'s opponents control most of, turned into the one
+        they control least — the choice a player would make with the card, and
+        the reason a default is stated rather than left to the first two words
+        of a list (idiom 8): a pair naming a type nobody has makes the
+        enchantment inert, which is legal and pointless.
+
+        Counted through ``basic_land_types`` (layer 4), so a land some earlier
+        effect already changed is counted as what it is now.
+        """
+        from ..grammar.phrases import BASIC_LAND_WORDS
+
+        counts = {word: 0 for word in BASIC_LAND_WORDS}
+        for seat, player in enumerate(self.players):
+            if seat == caster_index or player.lost:
+                continue
+            for perm in self.controlled_by(seat):
+                for land_type in perm.basic_land_types:
+                    if land_type in counts:
+                        counts[land_type] += 1
+        first = max(BASIC_LAND_WORDS, key=lambda word: (counts[word], -BASIC_LAND_WORDS.index(word)))
+        second = min(
+            (word for word in BASIC_LAND_WORDS if word != first),
+            key=lambda word: (counts[word], BASIC_LAND_WORDS.index(word)),
+        )
+        return first, second
 
     def _chosen_color_permanent_condition(self, source_perm: Permanent) -> bool:
         """Jihad: whether "the chosen player controls a nontoken permanent of

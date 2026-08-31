@@ -274,6 +274,17 @@ class StaticLandTypeChange:
     from_type: str | None
     to_type: str
     from_nonbasic: bool = False
+    #: "**Basic** lands of the first chosen type are the second chosen type."
+    #: (Illusionary Terrain.) A supertype the subjects must *have*, where
+    #: ``from_nonbasic`` above is one they must lack — so it is a third field
+    #: rather than a value on that one: a card printing "Basic Mountains are
+    #: Plains" would set both this and ``from_type``.
+    basic_only: bool = False
+    #: Both types come from the source's entry choice rather than from the
+    #: sentence ("the first chosen type" / "the second chosen type"). The words
+    #: name no land type at all, so ``from_type``/``to_type`` are empty until
+    #: :func:`resolve_static_land_type_change` fills them in from the permanent.
+    from_chosen: bool = False
 
 
 @lru_cache(maxsize=1)
@@ -313,6 +324,45 @@ _STATIC_TYPE_RE = re.compile(r"^all (?P<from>[a-z'-]+) are (?P<to>[a-z'-]+)$")
 _STATIC_NONBASIC_RE = re.compile(r"^nonbasic lands are (?P<to>[a-z'-]+)$")
 
 
+#: "Basic lands of the first chosen type are the second chosen type."
+#: (Illusionary Terrain.) The one entry here with no word to extract: both
+#: types are the ordered pair the permanent's controller chose as it entered
+#: (CR 614.1c, ``engine/enter_effects.py``), so the sentence is a template with
+#: its parameters somewhere else rather than a literal about one card. A second
+#: card printing it — with any two types, chosen by anyone — works.
+#:
+#: Where the permanent's own record lives. A tuple ``(first, second)``, stamped
+#: as the permanent enters and read back here, so the static and the choice
+#: cannot disagree about which is which.
+CHOSEN_LAND_TYPES = "chosen_land_types"
+
+_STATIC_CHOSEN_RE = re.compile(
+    r"^basic lands of the first chosen type are the second chosen type$"
+)
+
+
+def resolve_static_land_type_change(
+    payload: dict, source: Any
+) -> dict | None:
+    """*payload* with the chosen types filled in from *source*, or None.
+
+    None when the sentence names its types by a choice the permanent has not
+    made — a static that would otherwise reach every land, or none, depending
+    on which empty string won. The refresh skips it, which is the honest answer
+    for a permanent that has not chosen yet.
+
+    A pass-through for every payload that names its types outright, so the
+    refresh asks once and never branches on which kind it has.
+    """
+    if not payload.get("from_chosen"):
+        return payload
+    chosen = getattr(source, "metadata", {}).get(CHOSEN_LAND_TYPES) or ()
+    if len(chosen) != 2 or not all(chosen):
+        return None
+    first, second = str(chosen[0]).lower(), str(chosen[1]).lower()
+    return {**payload, "from_type": first, "to_type": second}
+
+
 def static_land_type_change_for(normalized_line: str) -> StaticLandTypeChange | None:
     """The static land-type change *normalized_line* imposes, or None.
 
@@ -320,6 +370,10 @@ def static_land_type_change_for(normalized_line: str) -> StaticLandTypeChange | 
     or without its trailing period.
     """
     line = normalized_line.strip().lower().rstrip(".")
+    if _STATIC_CHOSEN_RE.match(line) is not None:
+        return StaticLandTypeChange(
+            from_type=None, to_type="", basic_only=True, from_chosen=True
+        )
     nonbasic = _STATIC_NONBASIC_RE.match(line)
     if nonbasic is not None:
         to_type = _land_subtype(nonbasic.group("to"))
@@ -349,6 +403,12 @@ def static_land_type_change_payload(change: StaticLandTypeChange) -> dict[str, o
         payload["from_nonbasic"] = True
     else:
         payload["from_type"] = change.from_type
+    # Both emitted only when set, so every payload written before these keys
+    # existed is byte-identical.
+    if change.basic_only:
+        payload["basic_only"] = True
+    if change.from_chosen:
+        payload["from_chosen"] = True
     return payload
 
 
@@ -445,6 +505,11 @@ def static_land_type_change_applies(payload: dict, permanent) -> bool:
     is gone.
     """
     type_line = permanent.effective_card.type_line
+    # "**Basic** lands of …" (Illusionary Terrain). Asked of `has_supertype`,
+    # which computes the word through layer 4 — a nonbasic dual is a Plains and
+    # is not one of the "basic lands" the sentence names.
+    if payload.get("basic_only") and not permanent.has_supertype("basic"):
+        return False
     if payload.get("from_nonbasic"):
         # CR 205.4a: "basic" is a supertype, and a land without it is nonbasic.
         # Asked of ``has_supertype`` rather than by searching the line for the
@@ -459,9 +524,10 @@ def static_land_type_change_applies(payload: dict, permanent) -> bool:
 __all__ = [
     "DERIVED_LAND_TYPES", "LAND_TYPE_EFFECTS", "MIRE_COUNTER",
     "STATIC_LAND_TYPE_KIND", "STATIC_SOURCE_TIMESTAMP", "StaticLandTypeChange",
-    "add_derived_land_type", "change_land_type", "clear_derived_land_types",
+    "CHOSEN_LAND_TYPES", "add_derived_land_type", "change_land_type",
+    "clear_derived_land_types",
     "end_land_type_change", "end_land_type_changes_from", "land_type_changes",
     "static_land_type_change_applies",
     "static_land_type_change_for", "static_land_type_change_payload",
-    "static_source_timestamp",
+    "static_source_timestamp", "resolve_static_land_type_change",
 ]
