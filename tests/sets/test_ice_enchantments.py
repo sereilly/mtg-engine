@@ -1462,3 +1462,219 @@ def test_aggression_cannot_be_put_on_a_wall(set_pool, catalog_by_name):
 
 
 # --- end W2G4 ---
+
+
+# --- W3G5: death triggers, control, computed characteristics ---
+def _w3g5_settle(game):
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+
+# Monsoon — "At the beginning of each player's end step, tap all untapped
+# Islands that player controls and this enchantment deals X damage to the
+# player, where X is the number of Islands tapped this way."
+
+
+def _w3g5_monsoon(set_pool):
+    pool = set_pool("ICE")
+    monsoon = Permanent(card=pool["Monsoon"])
+    already_tapped = Permanent(card=pool["Island"])
+    already_tapped.tapped = True
+    p0 = PlayerState(name="P0", battlefield=[monsoon, Permanent(card=pool["Island"])])
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[
+            Permanent(card=pool["Island"]),
+            Permanent(card=pool["Island"]),
+            already_tapped,
+            Permanent(card=pool["Plains"]),
+        ],
+    )
+    return Game(players=[p0, p1]), monsoon, p0, p1
+
+
+def test_monsoon_taps_the_end_steps_own_player_and_damages_them(set_pool):
+    """CR 603.10: which player's end step this is, frozen when the trigger
+    fires. Read off the source's controller it would be the wrong seat on every
+    end step but their own."""
+    game, _monsoon, p0, p1 = _w3g5_monsoon(set_pool)
+    game.active_player_index = 1
+
+    game.resolve_end_step(1)
+    _w3g5_settle(game)
+
+    assert p1.life == 18, "two untapped Islands, two damage"
+    assert p0.life == 20, "it is not their end step"
+    assert all(
+        perm.tapped for perm in game.controlled_by(1) if perm.card.name == "Island"
+    )
+    assert not any(
+        perm.tapped for perm in game.controlled_by(0) if perm.card.name == "Island"
+    )
+
+
+def test_monsoon_counts_only_the_islands_it_tapped(set_pool):
+    """"…where X is the number of Islands tapped **this way**." An Island that
+    was already tapped is not one this effect turned, so the board's count of
+    tapped Islands is the wrong number — three of them are tapped afterwards and
+    the damage is two."""
+    game, _monsoon, _p0, p1 = _w3g5_monsoon(set_pool)
+    game.active_player_index = 1
+
+    game.resolve_end_step(1)
+    _w3g5_settle(game)
+
+    tapped = [
+        perm for perm in game.controlled_by(1)
+        if perm.card.name == "Island" and perm.tapped
+    ]
+    assert len(tapped) == 3
+    assert p1.life == 18
+
+
+def test_monsoon_deals_nothing_to_a_player_with_no_untapped_islands(set_pool):
+    """The Plains is not an Island and the third Island was already tapped, so a
+    seat holding only those takes nothing."""
+    pool = set_pool("ICE")
+    monsoon = Permanent(card=pool["Monsoon"])
+    p0 = PlayerState(name="P0", battlefield=[monsoon])
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pool["Plains"])])
+    game = Game(players=[p0, p1])
+    game.active_player_index = 1
+
+    game.resolve_end_step(1)
+    _w3g5_settle(game)
+
+    assert p1.life == 20
+
+
+# Call to Arms — Jihad's template with a census in place of "controls a".
+
+
+def _w3g5_call_to_arms(set_pool, opponent_colors, chosen="B"):
+    pool = set_pool("ICE")
+    enchantment = Permanent(card=pool["Call to Arms"])
+    knight = Permanent(card=pool["Blinking Spirit"])
+    p0 = PlayerState(name="P0", battlefield=[enchantment, knight])
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[Permanent(card=pool[name]) for name in opponent_colors],
+    )
+    game = Game(players=[p0, p1])
+    enchantment.metadata["chosen_player_index"] = 1
+    enchantment.metadata["chosen_color"] = chosen
+    game._recalculate_lord_buffs()
+    game._settle()
+    return game, enchantment, knight
+
+
+def test_call_to_arms_buffs_while_the_chosen_color_is_strictly_most_common(set_pool):
+    game, enchantment, knight = _w3g5_call_to_arms(
+        set_pool, ["Abyssal Specter", "Brine Shaman", "Balduvian Bears"]
+    )
+
+    assert enchantment in list(game.controlled_by(0))
+    assert (knight.effective_power, knight.effective_toughness) == (3, 3)
+
+
+def test_call_to_arms_is_sacrificed_on_a_tie(set_pool):
+    """"…but isn't tied for most common" is half the printed clause and the
+    whole of the difference: a superlative alone would buff on a tie, and the
+    state trigger beside it is that same question negated."""
+    game, enchantment, knight = _w3g5_call_to_arms(
+        set_pool, ["Abyssal Specter", "Balduvian Bears"]
+    )
+
+    assert enchantment not in list(game.controlled_by(0))
+    assert (knight.effective_power, knight.effective_toughness) == (2, 2)
+
+
+def test_call_to_arms_is_sacrificed_when_the_chosen_color_is_absent(set_pool):
+    """A colourless board has no most common colour at all — every colour is
+    tied at nothing, which is not "most common"."""
+    game, enchantment, _knight = _w3g5_call_to_arms(set_pool, ["Balduvian Bears"])
+
+    assert enchantment not in list(game.controlled_by(0))
+
+
+# Zur's Weirding — "If a player would draw a card, they reveal it instead. Then
+# any other player may pay 2 life. If a player does, put that card into its
+# owner's graveyard. Otherwise, that player draws a card."
+
+
+def _w3g5_zur(set_pool, interactive=()):
+    pool = set_pool("ICE")
+    weirding = Permanent(card=pool["Zur's Weirding"])
+    p0 = PlayerState(
+        name="P0",
+        battlefield=[weirding],
+        library=[pool["Balduvian Bears"], pool["Tor Giant"], pool["Scaled Wurm"]],
+    )
+    p1 = PlayerState(name="P1", library=[pool["Balduvian Bears"]] * 4)
+    game = Game(players=[p0, p1])
+    game.active_player_index = 0
+    game.interactive_seats = set(interactive)
+    return game, p0, p1
+
+
+def test_zurs_weirding_reveals_the_card_and_offers_it_to_the_other_seat(set_pool):
+    game, p0, _p1 = _w3g5_zur(set_pool, interactive=(1,))
+
+    game._draw_with_replacements(p0, 1)
+
+    assert [c.kind for c in game.pending_choices] == ["revealed_draw_buyout"]
+    offer = game.pending_choices[0]
+    assert offer.player_index == 1, "the offer goes to the other player"
+    assert offer.data["revealed_name"] == "Balduvian Bears"
+    assert not p0.hand, "the draw is replaced until the offer is answered"
+    assert game.reveal_events[-1]["cards"] == ["Balduvian Bears"]
+
+
+def test_zurs_weirding_pays_two_life_to_bin_the_revealed_card(set_pool):
+    game, p0, p1 = _w3g5_zur(set_pool, interactive=(1,))
+    game._draw_with_replacements(p0, 1)
+
+    assert game.confirm_revealed_draw_buyout(1, True)
+    game._settle()
+
+    assert not p0.hand
+    assert [card.name for card in p0.graveyard] == ["Balduvian Bears"]
+    assert p1.life == 18
+
+
+def test_zurs_weirding_lets_the_draw_happen_when_nobody_pays(set_pool):
+    """The "otherwise" branch is a **new** draw, made through the seam with this
+    source excluded — CR 614.5 gives a replacement one opportunity per event, so
+    it must not replace the draw it just created."""
+    game, p0, p1 = _w3g5_zur(set_pool, interactive=(1,))
+    game._draw_with_replacements(p0, 1)
+
+    assert game.confirm_revealed_draw_buyout(1, False)
+    game._settle()
+
+    assert [card.name for card in p0.hand] == ["Balduvian Bears"]
+    assert p1.life == 20
+
+
+def test_zurs_weirding_asks_once_per_card_of_a_multi_card_draw(set_pool):
+    """CR 121.2: an N-card draw is N draws, and each one is replaced."""
+    game, p0, p1 = _w3g5_zur(set_pool)
+
+    game._draw_with_replacements(p0, 2)
+    game._settle()
+
+    assert [card.name for card in p0.hand] == ["Balduvian Bears", "Tor Giant"]
+    assert p1.life == 20, "a non-interactive seat declines"
+
+
+def test_zurs_weirding_over_an_empty_library_reveals_nothing(set_pool):
+    """CR 704.5b fires on an *attempted* draw, and the attempt was replaced."""
+    game, p0, _p1 = _w3g5_zur(set_pool)
+    p0.library.clear()
+
+    game._draw_with_replacements(p0, 1)
+
+    assert not p0.drew_from_empty
+    assert not p0.hand
+# --- end W3G5 ---
