@@ -120,7 +120,7 @@ def _fused_conditional_counter(
 #: once because the step that writes it and the step that reads it are two
 #: instructions, and a literal in each is how they come to disagree — the same
 #: reason ``lowering/redirection._REDIRECT_RECIPIENT_KEY`` is named once.
-_NEW_TARGET_SEAT_KEY = "retarget_new_target_seat"
+_NEW_TARGET_KEY = "retarget_new_target"
 
 #: The retarget honours exactly one narrowing of its spell: CR 115.9a's count
 #: of what that spell chose. Everything else about the noun phrase is refused
@@ -128,10 +128,21 @@ _NEW_TARGET_SEAT_KEY = "retarget_new_target_seat"
 #: and would ignore anything it was not told to check.
 _CHANGE_TARGET_HONOURED_FILTER_FIELDS = frozenset({"target_count"})
 
-#: The bounds on the new target the resolution can actually offer. One row, and
-#: it is a table for the reason every other one here is: a bound consumed by the
-#: parser and unknown to the handler is a retarget free to aim anywhere.
+#: The bounds on the new target the resolution can actually offer, **beside**
+#: the unbounded reading. ``None`` — the card prints no "the new target must
+#: be…" sentence at all (Deflection, Divert) — is not a missing bound to be
+#: filled in: it is the printed one, "any legal target this spell could have
+#: chosen instead", and the resolution offers exactly the list the cast gate
+#: would have. A *named* bound is a table row for the reason every other one
+#: here is: a bound consumed by the parser and unknown to the handler is a
+#: retarget free to aim anywhere.
 _CHANGE_TARGET_NEW_TARGETS = frozenset({"player"})
+
+#: The same, for "if that target is <player>". ``None`` is again the printed
+#: reading — Deflection asks nothing about who the spell points at now — and
+#: "you" is Reflecting Mirror's question. Anything else refuses: there is no
+#: other player the picker could name before the effect is on the stack.
+_CHANGE_TARGET_CURRENT_TARGETS = frozenset({"you"})
 
 
 def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...]:
@@ -156,15 +167,21 @@ def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...
     * the noun phrase must carry CR 115.9a's ``target_count``, and it must be
       **one**. Without it the phrase reads "target spell", which is every spell
       on the stack — a strictly larger card than any that prints this.
-    * the spell's current target must be **you**. There is no reading of the
-      other player's name that the picker could ask about, so anything else
-      refuses rather than being dropped into a card that redirects spells aimed
-      anywhere.
-    * the new target must be bounded, and bounded to something the resolution
-      can offer. Deflection prints no such sentence — its new target may be
-      anything the spell could legally have chosen — and that is a *different*
-      card, so it refuses here rather than quietly gaining Reflecting Mirror's
-      bound.
+    * where the sentence *does* say what the spell's current target has to be,
+      it must be **you**. There is no reading of another player's name that the
+      picker could ask about, so anything else refuses rather than being
+      dropped into a card that redirects spells aimed anywhere.
+    * where it *does* bound the new target, the bound must be one the
+      resolution can offer.
+
+    Both of those are printed clauses rather than required ones, and a card
+    printing neither is not a card missing them. Deflection is "Change the
+    target of target spell with a single target." — every restriction it has is
+    in the noun phrase, its new target may be anything that spell could legally
+    have chosen, and the two ``None``s below are what say so. This used to
+    refuse them, on the reading that an absent clause was an unimplementable
+    one; what was actually absent was a candidate list that could hold a
+    permanent, and that is in ``handlers/stack.py``, not here.
     """
     spec = node.subject
     if not isinstance(spec, ast.TargetSpec) or spec.quantifier != "target":
@@ -186,23 +203,23 @@ def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...
             node=node,
         )
     current = node.current_target
-    if current is None or current.kind != "you":
+    if current is not None and current.kind not in _CHANGE_TARGET_CURRENT_TARGETS:
         raise LoweringError(
-            "a retarget is offered only for a spell aimed at its controller; "
-            "no picker asks about another player's",
+            "a retarget asking about another player's target is offered by no "
+            "picker",
             node=node,
         )
-    if node.new_target not in _CHANGE_TARGET_NEW_TARGETS:
+    if node.new_target is not None and node.new_target not in _CHANGE_TARGET_NEW_TARGETS:
         raise LoweringError(
             "no handler bounds this retarget's new target", node=node
         )
     payload: dict[str, object] = {
-        "result_key": _NEW_TARGET_SEAT_KEY,
-        "current_target": current.kind,
+        "result_key": _NEW_TARGET_KEY,
+        "current_target": None if current is None else current.kind,
         "new_target": node.new_target,
     }
     return (
-        OracleInstruction("choose_new_target_player", "", dict(payload)),
+        OracleInstruction("choose_new_spell_target", "", dict(payload)),
         # The ``targets`` description rides the step that actually names the
         # spell. It is what ``legality._ability_target_quantifiers`` reads to
         # decide the target is **mandatory** (CR 602.2b): without it the

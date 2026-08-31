@@ -774,6 +774,18 @@ def _action_cast_choice_confirm(session, req, seat_type):
     if not session.game.confirm_cast_choice(req.seat, req.cast_index):
         raise HTTPException(status_code=400, detail="invalid spell choice")
 
+@action_handler("retarget_choice_confirm")
+def _action_retarget_choice_confirm(session, req, seat_type):
+    # Deflection: which legal target replaces the one the spell announced, by
+    # its position in the offered list. The engine re-checks that position
+    # against the candidates that are *still* legal (CR 115.7a), so an answer
+    # naming a creature that has since died is refused rather than applied to
+    # whatever slid into its place.
+    if req.target_index is None:
+        raise HTTPException(status_code=400, detail="target_index is required")
+    if not session.game.confirm_retarget_choice(req.seat, req.target_index):
+        raise HTTPException(status_code=400, detail="invalid target choice")
+
 @action_handler("word_of_command_confirm")
 def _action_word_of_command_confirm(session, req, seat_type):
     # Word of Command: the caster records the card the target must play

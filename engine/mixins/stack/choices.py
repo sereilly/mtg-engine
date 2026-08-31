@@ -2615,6 +2615,97 @@ class PendingChoicesMixin:
         if not options or not self._resolve_cast_choice(choice, options[0]):
             self._record_cast_choice(choice, 0)
 
+    # -- The new target of a spell being re-aimed (CR 115.7a) ----------------
+
+    def arm_retarget_choice(
+        self,
+        player_index: int,
+        *,
+        card_name: str,
+        prompt: str,
+        result_key: str,
+        options,
+        context,
+    ) -> PendingChoice | None:
+        """Queue "choose the new target" for *player_index* (Deflection).
+
+        Its own kind rather than ``player_choice`` because the candidates are
+        **heterogeneous**: "Change the target of target spell with a single
+        target" offers whatever that spell could legally have chosen, which for
+        a Lightning Bolt is every creature *and* every face. A seat-shaped
+        prompt cannot say "that Grizzly Bears", and one that could only say a
+        seat would silently drop half the card.
+
+        Answered by **position in the offered list**, the shape ``cast_choice``
+        uses, because a target descriptor is not a JSON scalar and the list is
+        the one thing both ends already agree on. Each option carries its
+        ``permanent_id`` rather than a slot: the prompt suspends the resolution
+        but the id is what survives a board that moved anyway (CR 400.7).
+        """
+        offered = [dict(option) for option in options]
+        return self.arm_pending_choice(
+            "retarget_choice", player_index,
+            card_name=card_name,
+            prompt=prompt,
+            result_key=result_key,
+            options=offered,
+            names=[str(option.get("name", "")) for option in offered],
+            _context=context,
+        )
+
+    def live_retarget_choices(self, choice: PendingChoice) -> list[int]:
+        """The offered positions still legal to answer with (CR 800.4a).
+
+        A face drops out when its player has left the game; an object drops out
+        when it has left the battlefield. Both are re-asked here rather than
+        remembered, because the whole reason this prompt exists is that the
+        answer arrives later than the question.
+        """
+        live: list[int] = []
+        for position, option in enumerate(choice.data.get("options") or ()):
+            if option.get("kind") == "player":
+                seat = option.get("seat")
+                if isinstance(seat, int) and 0 <= seat < len(self.players) and not self.players[seat].lost:
+                    live.append(position)
+            elif self.permanent_by_id(option.get("permanent_id")) is not None:
+                live.append(position)
+        return live
+
+    def _record_retarget_choice(self, choice: PendingChoice, value) -> None:
+        choice.data["_context"].results[choice.data["result_key"]] = value
+        self.discard_pending_choice(choice)
+
+    def confirm_retarget_choice(self, player_index: int, target_index) -> bool:
+        return self.resolve_pending_choice(
+            "retarget_choice", player_index, target_index=target_index
+        )
+
+    def _resolve_retarget_choice(self, choice: PendingChoice, target_index) -> bool:
+        live = self.live_retarget_choices(choice)
+        if not live:
+            # Everything the effect offered has gone. CR 115.7a: the original
+            # target is then unchanged, which the step behind this reads off a
+            # ``None`` rather than staying owed a prompt nobody can answer.
+            self._record_retarget_choice(choice, None)
+            return True
+        if not isinstance(target_index, int) or target_index not in live:
+            return False
+        option = dict((choice.data.get("options") or ())[target_index])
+        self._record_retarget_choice(choice, option)
+        self.log.append(
+            f"{choice.data.get('card_name', 'Effect')}: chose "
+            f"{option.get('name', 'a new target')}"
+        )
+        return True
+
+    def _default_retarget_choice(self, choice: PendingChoice) -> None:
+        """The stated policy: the **first** live candidate offered, in board
+        order. Deterministic rather than clever, for ``_default_player_choice``'s
+        reason."""
+        live = self.live_retarget_choices(choice)
+        if not live or not self._resolve_retarget_choice(choice, live[0]):
+            self._record_retarget_choice(choice, None)
+
     # -- Whether a coin flip happens again, and at what stake ----------------
 
     def confirm_flip_again(self, player_index: int, accept: bool = True) -> bool:
@@ -4984,6 +5075,28 @@ register_choice(
     # step behind it - the chain of decisions that stays one resolution.
     suspends=True,
     default_at_arm=True,
+    spectator_visible=True,
+)
+
+register_choice(
+    "retarget_choice",
+    resolve=lambda game, choice, r: game._resolve_retarget_choice(
+        choice, r.get("target_index")
+    ),
+    default=lambda game, choice: game._default_retarget_choice(choice),
+    action="retarget_choice_confirm",
+    prompt_key="retarget_choice",
+    blocked_detail="choose the spell's new target before other actions",
+    # The step behind this one in the same sentence writes the answer onto the
+    # stack item, so Deflection's resolution is not over until it exists
+    # (CR 608.2).
+    suspends=True,
+    # A non-interactive seat never queues it, for ``player_choice``'s reason:
+    # the resolution has to finish, and the stated default is taken where the
+    # effect stands.
+    default_at_arm=True,
+    # What a spell on the stack targets is public (CR 601.2c is announced in
+    # the open), so a seatless viewer may see the question.
     spectator_visible=True,
 )
 

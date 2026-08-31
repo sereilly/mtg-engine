@@ -316,6 +316,10 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # both are steps a later step of the same resolution reads.
         "player_choice",
         "cast_choice",
+        # "Change the target of target spell with a single target."
+        # (Deflection.) The answer *is* the new target, and the step behind it
+        # in the same sentence is what writes it onto the stack item.
+        "retarget_choice",
         # "For each land, destroy that land unless any player pays 1 life."
         # (Cleansing.) The answer decides whether the next step of the same
         # resolution destroys that land — and, one step earlier than that,

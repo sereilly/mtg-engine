@@ -838,26 +838,32 @@ def _graveyard_to_library_spec(payload: dict) -> dict:
 
 
 def _retarget_spec(payload: dict) -> dict:
-    """Reflecting Mirror: "target spell with a single target if that target is
-    you" (CR 115.7a, CR 115.9a).
+    """"Target spell with a single target [if that target is you]"
+    (Deflection, Reflecting Mirror — CR 115.7a, CR 115.9a).
 
     The same "stack" picker a counterspell raises — the object is chosen from
-    the same zone — narrowed by the one question this card asks about it. The
-    count and the "is you" are **one** key rather than two because they are one
-    question in the end: ``single_player_target`` answers "does this spell have
-    exactly one target, and which player is it" or refuses, and splitting them
-    would let a picker enforce half of a restriction whose halves are only
-    meaningful together.
+    the same zone — narrowed by what the card asks about it. **Two keys, and
+    the first is not optional:** ``stack_single_target`` is CR 115.9a's count,
+    which every card printing this sentence carries, while
+    ``stack_single_target_is`` is Reflecting Mirror's extra question about
+    *whose* face it is. They were one key while only one card printed the
+    sentence, and that made the count vanish for the card that prints no "if":
+    Deflection would have been offered every spell on the stack, including ones
+    that target nothing.
 
     Handed over in the shape the handler tests it in, so the spells offered and
-    the spells the ability could actually re-aim are the same set — an offer the
-    handler then refuses is {X} and a tap paid for nothing.
+    the spells the effect could actually re-aim are the same set — an offer the
+    handler then refuses is mana paid for nothing.
     """
-    return {"kind": "stack", "stack_single_target_is": payload.get("current_target")}
+    return {
+        "kind": "stack",
+        "stack_single_target": True,
+        "stack_single_target_is": payload.get("current_target"),
+    }
 
 
 _KIND_TO_SPEC_FROM_PAYLOAD = {
-    "choose_new_target_player": _retarget_spec,
+    "choose_new_spell_target": _retarget_spec,
     "change_target_spell_target": _retarget_spec,
     "put_graveyard_cards_on_library_top": _graveyard_to_library_spec,
     "sacrifice_matching_permanent": _forced_sacrifice_spec,
@@ -1615,13 +1621,64 @@ def stack_object_mana_value(item) -> int:
     return base + x_symbols * int(getattr(item, "x_value", 0) or 0)
 
 
-def single_player_target(game, item) -> int | None:
-    """The one player a spell on the stack chose as its **only** target
-    (CR 115.9a / CR 115.9c), or None when it did not or the engine cannot say.
+#: The cast-spec kinds whose announced target is an **object on the
+#: battlefield**. Derived from the table that turns a printed type filter into
+#: a picker rather than listed a second time, so a new noun phrase reaches this
+#: reader for free; "any target" and "player or planeswalker" join it because
+#: either may have been aimed at an object rather than at a face.
+_PERMANENT_TARGET_SPEC_KINDS = frozenset(_TYPE_FILTER_TO_KIND.values()) | {
+    "any", "player_or_planeswalker",
+}
 
-    Reflecting Mirror's "target spell with a single target if that target is
-    you" is the question, and it is asked twice — by the picker in front of the
-    activation and by the handler at resolution — so it is one function.
+
+def _lone_permanent_target(game, item) -> int | None:
+    """The single battlefield object *item* announced, **by identity**, or None.
+
+    Identity rather than slot for CR 400.7's reason: the index recorded at cast
+    time is a position in a battlefield list, and anything leaving in between
+    renumbers every later slot. The id is preferred and the index is only the
+    fallback for an item nothing stamped.
+
+    A target that has since **left** still answers with its id. CR 115.9a counts
+    what was chosen as the object was put on the stack, not what is still legal
+    — and CR 115.7a is explicit that a target may be changed "even if the
+    original target is itself illegal by then", so a spell whose creature died
+    is exactly the spell a retarget is for.
+    """
+    ids = getattr(item, "target_permanent_id", None)
+    if ids is not None:
+        chosen = list(ids) if isinstance(ids, (list, tuple)) else [ids]
+        if len(chosen) != 1 or not isinstance(chosen[0], int):
+            return None
+        return int(chosen[0])
+    idxs = getattr(item, "target_permanent_index", None)
+    if idxs is None:
+        return None
+    chosen = list(idxs) if isinstance(idxs, (list, tuple)) else [idxs]
+    if len(chosen) != 1 or not isinstance(chosen[0], int):
+        return None
+    seat = getattr(item, "target_player_index", None)
+    if seat is None or not (0 <= seat < len(game.players)):
+        return None
+    # The one sanctioned direction for an index: through the seam's bridge,
+    # once, and carried as an id from here on.
+    found = game.permanent_at(seat, chosen[0])
+    return None if found is None else game.permanent_id_of(found)
+
+
+def single_spell_target(game, item) -> dict | None:
+    """What a spell on the stack chose as its **only** target (CR 115.9a /
+    CR 115.9c), or None when it chose several, chose something this engine
+    cannot re-aim, or the count cannot be established.
+
+    ``{"kind": "player", "seat": n}`` or ``{"kind": "permanent",
+    "permanent_id": n}`` — a descriptor rather than a bare seat, because the two
+    answers are the same question ("what is this spell's one target?") and a
+    reader that could only say "player" is a reader Deflection cannot use.
+
+    "Target spell with a single target" is asked twice of every card that
+    prints it — by the picker in front of the cast and by the handler at
+    resolution — so it is one function.
 
     **None is a refusal, not "no".** CR 115.9a counts what was chosen as the
     object was put on the stack, and this engine's stack item cannot always
@@ -1637,16 +1694,19 @@ def single_player_target(game, item) -> int | None:
     then is the seat believed:
 
     * an **ability** on the stack has no card and is not a spell (CR 113.7a);
-    * anything the item recorded that is not a player — a permanent, a
-      graveyard card, another stack object — rules the question out at once,
-      because ``target_player_index`` beside one of those is the battlefield or
-      pile it names rather than a target;
+    * a **graveyard** card or another **stack object** rules the question out at
+      once: neither is a target this engine's retarget can offer a replacement
+      for, and an under-offer is a narrower card while an over-offer is a card
+      re-aiming spells it was never allowed to;
     * a **modal** spell announces its targets per mode (CR 115.8, CR 700.2), and
       ``derive_cast_spec`` answers about mode 0 alone;
     * a **divided** spell records every target it chose in ``divided_targets``,
       so the count is read there and a face is the only single answer;
-    * and the card itself has to be one that *can* target a player, asked of
-      the compiled program rather than inferred from the field being filled in.
+    * and the card itself has to be one that *can* target the kind of thing its
+      stack item is filled in with, asked of the compiled program rather than
+      inferred from the field being set — a seat and a chosen player reach the
+      item through the same ``target_player_index``, and beside a permanent
+      index that field is a *battlefield* rather than a target.
     """
     if getattr(item, "ability_instruction", None) is not None:
         return None
@@ -1654,8 +1714,6 @@ def single_player_target(game, item) -> int | None:
     if card is None:
         return None
     if getattr(item, "chosen_modes", ()) or getattr(item, "chosen_mode_index", None) is not None:
-        return None
-    if item.target_permanent_index is not None or item.target_permanent_id is not None:
         return None
     if getattr(item, "target_graveyard_card", None) is not None:
         return None
@@ -1669,14 +1727,29 @@ def single_player_target(game, item) -> int | None:
             return None
         seat, permanent_index, _share = divided_entry(divided[0])
         if permanent_index is not None:
+            # A divided *object* target. CR 115.7f keeps the division, so the
+            # share would have to travel to the new permanent — and the entry
+            # records a battlefield slot rather than an id, which is the one
+            # shape ``_lone_permanent_target`` cannot answer by identity.
             return None
-        return int(seat) if int(seat) in seats else None
+        return {"kind": "player", "seat": int(seat)} if int(seat) in seats else None
+
+    from .oracle import compile_card_oracle
+
+    if item.target_permanent_index is not None or item.target_permanent_id is not None:
+        permanent_id = _lone_permanent_target(game, item)
+        if permanent_id is None:
+            return None
+        spec = derive_cast_spec(card, compile_card_oracle(card))
+        if spec is None or spec.get("kind") not in _PERMANENT_TARGET_SPEC_KINDS:
+            return None
+        if spec.get("unbounded_targets") or spec.get("max_targets") not in (None, 1):
+            return None
+        return {"kind": "permanent", "permanent_id": permanent_id}
 
     seat = item.target_player_index
     if seat is None or seat not in seats:
         return None
-
-    from .oracle import compile_card_oracle
 
     spec = derive_cast_spec(card, compile_card_oracle(card))
     if spec is None or spec.get("kind") not in _PLAYER_TARGET_SPEC_KINDS:
@@ -1687,4 +1760,18 @@ def single_player_target(game, item) -> int | None:
         return None
     if spec.get("max_targets") not in (None, 1):
         return None
-    return int(seat)
+    return {"kind": "player", "seat": int(seat)}
+
+
+def single_player_target(game, item) -> int | None:
+    """The one **player** a spell on the stack chose as its only target, or
+    None (CR 115.9a / CR 115.9c).
+
+    Reflecting Mirror's half of :func:`single_spell_target`: "if that target is
+    you" is a question only a face can answer, so an object target is not "no"
+    with a seat beside it — it is simply not this question's answer.
+    """
+    chosen = single_spell_target(game, item)
+    if chosen is None or chosen.get("kind") != "player":
+        return None
+    return int(chosen["seat"])

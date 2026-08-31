@@ -1115,7 +1115,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2435,6 +2435,16 @@ function getCastChoiceInfo(state = currentState) {
   return info;
 }
 
+// Deflection: "Change the target of target spell with a single target." The
+// candidates are heterogeneous -- whatever that spell could legally have
+// chosen -- so the label says which kind each one is.
+function getRetargetChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.retarget_choice;
+  if (!info || !Array.isArray(info.options) || info.options.length === 0) return null;
+  return info;
+}
+
 // Liliana's Scrounger: which planeswalker receives the loyalty counter.
 function getLoyaltyRecipientInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -3246,7 +3256,7 @@ function isAnyPromptActive(state = currentState) {
   if (getLandTypeChoiceInfo(state)) return true;
   if (getBodyChoiceInfo(state)) return true;
   if (getEntryExileInfo(state)) return true;
-  if (getPlayerChoiceInfo(state) || getCastChoiceInfo(state)) return true;
+  if (getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state)) return true;
   if (getManaPaymentInfo(state)) return true;
   if (getBandBlockerInfo(state)) return true;
   if (getMultiblockInfo(state)) return true;
@@ -3273,7 +3283,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getExileFromHandInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -4764,6 +4774,19 @@ function applyPlayerChoicePrompt(info) {
     action: "player_choice_confirm",
     field: "chosen_seat",
     labelOf: (option) => option.name,
+  });
+}
+
+function applyRetargetChoicePrompt(info) {
+  applyChoiceButtonPrompt(info, {
+    title: "Choose a new target",
+    action: "retarget_choice_confirm",
+    field: "target_index",
+    // A face and a permanent can share a name in this game (a player called
+    // after their commander), so the kind is on the button rather than left to
+    // be inferred.
+    labelOf: (option) =>
+      option.kind === "player" ? `${option.name} (player)` : option.name,
   });
 }
 
@@ -7517,6 +7540,12 @@ function renderActivationPrompt() {
   const castChoiceInfo = getCastChoiceInfo();
   if (castChoiceInfo) {
     applyCastChoicePrompt(castChoiceInfo);
+    return;
+  }
+
+  const retargetChoiceInfo = getRetargetChoiceInfo();
+  if (retargetChoiceInfo) {
+    applyRetargetChoicePrompt(retargetChoiceInfo);
     return;
   }
 
