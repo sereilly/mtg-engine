@@ -690,6 +690,21 @@ class DeclareAttackersStepMixin:
                         observer=source_seat, source=source_perm,
                     ):
                         return False
+                elif instr.kind == "creatures_that_attacked_last_turn_cant_attack":
+                    # "Creatures that attacked during their controller's last
+                    # turn can't attack." (Halls of Mist.) Giant Turtle's
+                    # question asked of the board rather than of one creature,
+                    # so it is read here in the scan rather than off the
+                    # attacker's own program — and asked of the **attacker's**
+                    # seat, not the Halls' controller's, because "their
+                    # controller" is whose creature it is. One reader with the
+                    # self form (`turn_state.attacked_during_seats_last_turn`),
+                    # so a creature that attacked under a thief is answered the
+                    # same way both cards ask it.
+                    if attacker_seat is not None and attacked_during_seats_last_turn(
+                        self, attacker, attacker_seat
+                    ):
+                        return False
                 elif instr.kind == "cant_attack_unless_defender_acted":
                     if attacking_planeswalker:
                         # "…can't attack **a player**": a planeswalker is not

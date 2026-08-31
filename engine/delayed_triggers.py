@@ -58,6 +58,17 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 DELAYED_EVENTS: dict[str, str] = {
     # Basri Ket's −2 / Basri, Devoted Paladin's −1, and Subira's attack half.
     "creatures_attack": "the declare attackers step",
+    # "Whenever a creature blocks **this turn**, …" (Battle Cry). The blocking
+    # half of the row above, and a separate event for the reason the two
+    # declaration steps are two steps: a block is announced by the defending
+    # player at CR 509.1g and an attack by the active player at CR 508.1f, and
+    # an entry armed for one must not be woken by the other.
+    #
+    # Announced **per blocking creature**, so the fire site names that creature
+    # as the ability's source: "…, <do something to **it**>" is the shape every
+    # card printing this opener has, and CR 603.7d's own-source default would
+    # point the effect at a spell that is already in a graveyard.
+    "creature_blocks": "the declare blockers step",
     # Subira, Tulzidi Caravanner.
     "creature_deals_combat_damage_to_player": "the combat damage step",
     # "When that creature dies this turn, …" (Reincarnation). The dying

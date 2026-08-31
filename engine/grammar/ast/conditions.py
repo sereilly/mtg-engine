@@ -228,6 +228,25 @@ class DealtDamageThisTurn:
 
 
 @dataclass(frozen=True)
+class InABlockSinceLastUpkeep:
+    """"if **it has blocked or been blocked since your last upkeep**" (Wiitigo).
+
+    A history like :class:`DealtDamageThisTurn`, asked of the ability's own
+    source and over a window no board read can answer: the combat it asks about
+    may have been an opponent's, two turns of blockers ago, and every
+    battlefield record of it is swept at cleanup. So the declare-blockers step
+    stamps a seat-turn ordinal (``turn_state.record_block_involvement``) and
+    this reads it.
+
+    Both halves of CR 509.1a's relation are one condition, not two: the sentence
+    joins them with "or" and the stamp is written for both sides of every
+    declared block, so a node with a "which side" field would have a value no
+    printed sentence distinguishes.
+    """
+    subject: "TargetSpec"
+
+
+@dataclass(frozen=True)
 class PaidCost:
     cost: Cost | None = None
 

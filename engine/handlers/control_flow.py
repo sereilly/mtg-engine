@@ -550,6 +550,24 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         seat = game.players.index(context.caster)
         return int(game.permanents_to_hand_this_turn.get(seat, 0)) > 0
 
+    if kind == "in_a_block_since_your_last_upkeep":
+        # "…if it has blocked or been blocked since your last upkeep" (Wiitigo).
+        # A window that outlives every per-turn combat record, so the
+        # declare-blockers step stamps a seat-turn ordinal on both sides of each
+        # declared block and `turn_state` does the arithmetic.
+        #
+        # "Your" is the ability's controller (CR 109.5), which is also the seat
+        # the stamp has to name: a creature that blocked under a thief blocked
+        # during the thief's turn, and its own controller's window is empty.
+        from ..turn_state import in_a_block_since_seats_last_upkeep
+
+        source = context.source_permanent
+        if source is None or context.caster not in game.players:
+            return False
+        return in_a_block_since_seats_last_upkeep(
+            game, source, game.players.index(context.caster)
+        )
+
     if kind == "dealt_damage_this_turn":
         # "if this creature dealt damage to an opponent this turn" (Whirling
         # Dervish). Answered from the record the damage seam keeps on the

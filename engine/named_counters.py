@@ -156,17 +156,29 @@ def remove_counters(permanent, kind: str, count: int = 1) -> int:
     are there takes what is there (CR 608.2b: do as much as possible).
 
     Through ``pt.pt_counter_key``, the same reader :func:`counters_on` uses, so
-    "how many are on it" and "take one off" address the same store. Callers with
-    a +1/+1 or -1/-1 counter in hand still want ``pt.remove_plus1_counters``:
-    those have rules meaning (layer 7d) and a persistent P/T channel beside the
-    record, which this function does not touch.
+    "how many are on it" and "take one off" address the same store.
+
+    **A counter with rules meaning takes its P/T with it** (CR 122.1a, layer
+    7d). This used to say the opposite — that a caller holding a +1/+1 counter
+    wanted ``pt.remove_plus1_counters`` instead — and the two callers that could
+    be handed one did not know: Triskelion's "Remove a +1/+1 counter from this
+    creature:" cost and Wiitigo's "Otherwise, remove a +1/+1 counter from it"
+    both decremented the record and left the creature its size. A rule stated in
+    a docstring is a rule two call sites can each be unaware of; stated here it
+    is one. ``pt.add_pt_counters`` already made the placing half symmetric for
+    exactly this reason.
     """
-    from .pt import pt_counter_key
+    from .pt import add_pt_modifier, pt_counter_deltas, pt_counter_key
 
     current = counters_on(permanent, kind)
     if count <= 0 or current <= 0:
         return current
-    total = max(0, current - count)
+    taken = min(count, current)
+    total = current - taken
+    deltas = pt_counter_deltas(kind)
+    if deltas is not None:
+        power, toughness = deltas
+        add_pt_modifier(permanent, -power * taken, -toughness * taken)
     permanent.metadata[pt_counter_key(kind)] = total
     if total == 0:
         emptied = set(permanent.metadata.get(EMPTIED_KINDS_MARK) or ())

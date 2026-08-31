@@ -102,6 +102,55 @@ def record_attack(permanent, seat: int, seat_turn: int) -> None:
     }
 
 
+#: The metadata key holding ``{"seat": ..., "seat_turn": ...}`` for the most
+#: recent combat *block* this permanent was on either side of. Beside the attack
+#: stamp above because it is the same shape answering the same kind of question
+#: — "since your last upkeep" is one seat-turn ordinal back, exactly as "during
+#: your last turn" is — and beside it rather than folded into it because a
+#: creature that attacked and a creature that blocked are two different facts
+#: about the same combat.
+#:
+#: Also deliberately not in ``mixins/_constants._EOT_METADATA_KEYS``: the window
+#: this answers spans the opponents' turns in between, so a sweep at cleanup
+#: would erase the record a turn before it is read. It dies with the permanent,
+#: which CR 400.7 gives for free.
+IN_A_BLOCK_ON_SEAT_TURN_KEY = "in_a_block_on_seat_turn"
+
+
+def record_block_involvement(permanent, seat: int, seat_turn: int) -> None:
+    """Stamp that *permanent* blocked or was blocked on *seat*'s turn number
+    *seat_turn* (CR 509.1a, either side of the relation)."""
+    permanent.metadata[IN_A_BLOCK_ON_SEAT_TURN_KEY] = {
+        "seat": seat,
+        "seat_turn": seat_turn,
+    }
+
+
+def in_a_block_since_seats_last_upkeep(game, permanent, seat: int) -> bool:
+    """Whether *permanent* has blocked or been blocked since *seat*'s previous
+    upkeep (Wiitigo).
+
+    The same ordinal arithmetic :func:`attacked_during_seats_last_turn` does,
+    and it lands on the same comparison for a reason worth writing down: a
+    seat's own turn counter does not move while its opponents take their turns,
+    so every moment between the beginning of that seat's turn N-1 and the
+    beginning of its turn N stamps ``N-1``. The window "since your last upkeep"
+    is exactly that span — an upkeep is the first thing in a turn, and combat
+    comes after it, so a block on turn N cannot precede turn N's upkeep.
+
+    The stamp's *seat* is part of the comparison for
+    :func:`attacked_during_seats_last_turn`'s reason: a creature that blocked
+    while a thief controlled it blocked during the thief's turn.
+    """
+    stamp = permanent.metadata.get(IN_A_BLOCK_ON_SEAT_TURN_KEY)
+    if not isinstance(stamp, dict):
+        return False
+    return (
+        stamp.get("seat") == seat
+        and stamp.get("seat_turn") == game.seat_turn_counts.get(seat, 0) - 1
+    )
+
+
 def attacked_during_seats_last_turn(game, permanent, seat: int) -> bool:
     """Whether *permanent* attacked during *seat*'s previous turn.
 

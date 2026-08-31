@@ -299,8 +299,14 @@ _PRODUCED_QUANTITIES: frozenset[str] = frozenset({
 #: handler read an empty record.
 _TAPPED_PERMANENTS = "tapped_permanents"
 
+#: "Target creature you control can't be blocked this turn. **Destroy it** …"
+#: (Goblin Sappers.) The grant records which creature it chose, for the reason
+#: the tap and untap pair do: the sentence after it names that creature and
+#: nothing else in the resolution can say which one it was.
+_UNBLOCKABLE_PERMANENTS = "unblockable_permanents"
+
 _RECORDED_PERMANENTS: frozenset[str] = frozenset({
-    _TAPPED_PERMANENTS, _UNTAPPED_PERMANENTS,
+    _TAPPED_PERMANENTS, _UNTAPPED_PERMANENTS, _UNBLOCKABLE_PERMANENTS,
 })
 
 

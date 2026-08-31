@@ -8,7 +8,8 @@ precisely so this stays true. Independence is the point: it is what makes
 
     damage           dealing it, and preventing it
     characteristics  P/T, keywords, colour, printed text, counters
-    board            destruction, bouncing, tapping, control
+    board            destruction, bouncing, sacrificing, attaching
+    tapping          tapping, and not untapping
     cards            drawing, discarding, milling, searching, revealing
     mana             producing it, and changing what a permanent produces
     stack            countering, choosing modes, and declining a cost
@@ -41,6 +42,10 @@ from .prevention import (
     _parse_optional_damage_redirect,
     _parse_damage_cant_be_prevented,
     _parse_bound_targeting_prevention,
+)
+from .tapping import (
+    _parse_doesnt_untap_next_step,
+    _parse_tap_untap,
 )
 from .counters import (
     _expect_counter_kind,
@@ -76,8 +81,6 @@ from .board import (
     _parse_destroy,
     _parse_further_subjects,
     _parse_that_object,
-    _parse_doesnt_untap_next_step,
-    _parse_tap_untap,
     _parse_attach,
 )
 from .control_changes import (

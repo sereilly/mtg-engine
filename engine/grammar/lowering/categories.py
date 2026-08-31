@@ -814,6 +814,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # the sentence after it reads that record rather than re-resolving the slots
     # — by then a target may have left, and CR 611.2c fixed the set when the
     # effect began.
+    # "Target creature you control can't be blocked this turn. **Destroy it**
+    # and this creature at end of combat." (Goblin Sappers.) The grant records
+    # the creature it chose, so the delayed destroy behind it has a producer to
+    # gate on — without one the pronoun would name the ability's own source and
+    # the Sappers would destroy themselves twice.
+    "grant_unblockable_to_target": "unblockable_permanents",
     "tap_target_permanent": "tapped_permanents",
     # "…tap the creature, **remove it** from combat" (Imprison). The Aura's tap
     # names its own attachment rather than a target, so it is a different

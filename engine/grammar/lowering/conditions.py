@@ -439,6 +439,11 @@ def _lower_condition(
             "count": condition.count,
             "comparison": condition.comparison,
         }
+    if isinstance(condition, ast.InABlockSinceLastUpkeep):
+        # No payload: the sentence names no seat, no side of the block and no
+        # other window. "Your" is the ability's controller, which the evaluator
+        # has, and the source is the object the condition is about.
+        return {"kind": "in_a_block_since_your_last_upkeep"}
     if isinstance(condition, ast.DealtDamageThisTurn):
         # The recipient rides the payload, exactly as the seat does on the life
         # clause below: "…to a player" is the same question asked of a wider

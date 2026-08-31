@@ -21,11 +21,15 @@ text do what the card says.
 
 from __future__ import annotations
 
+import pytest
+
 from engine import Game
+from engine.auras import attach_aura
 from engine.cumulative_upkeep import cumulative_upkeep_cost
 from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
+from engine.pt import add_pt_modifier
 from tests.helpers import _nosick
 
 # --- W1G3: mana, additional costs, cost restrictions ---
@@ -1281,3 +1285,429 @@ def test_balduvian_conjurer_refuses_a_land_that_is_not_snow(set_pool):
     assert not conjurer.tapped, "nothing was paid"
     assert not lands[0].is_creature
 # --- end W2G2 ---
+
+
+# --- W2G3: combat restrictions and requirements ---
+def _w2g3_block_board(set_pool, attacker_name, *defender_lands, blocker="Hipparion"):
+    """Seat 0 attacking with *attacker_name*; seat 1 holding *blocker* and lands.
+
+    Returns ``(game, attacker, blocker, lands)``. The declaration is left to the
+    test: whether the block is *legal* and whether it is *paid for* are the two
+    halves this section is about, and one helper that declared both would hide
+    which one failed.
+    """
+    pool = set_pool("ICE")
+    attacker = _nosick(Permanent(card=pool[attacker_name]))
+    defender = _nosick(Permanent(card=pool[blocker]))
+    lands = [Permanent(card=pool[name]) for name in defender_lands]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker], life=20),
+        PlayerState(name="P2", battlefield=[defender, *lands], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, msg = game.declare_attackers(0, [0], 1)
+    assert ok, msg
+    game._set_phase_and_step("combat", "declare_blockers")
+    return game, attacker, defender, lands
+
+
+def test_hipparion_compiles_its_block_cost_as_payload(set_pool):
+    """"This creature can't block creatures with power 3 or greater unless you
+    pay {1}." (CR 509.1b with CR 509.1d's cost.)
+
+    Its own kind rather than a flag on the unconditional row beside it: that
+    one forbids the block outright, and a payload key meaning "and there is a
+    way out" would make every unread cost an unconditional ban.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Hipparion"])
+
+    assert program.supported
+    (instruction,) = program.instructions
+    assert instruction.kind == "cant_block_power_n_or_greater_unless_pay"
+    assert instruction.payload["power"] == 3
+    assert instruction.payload["mana"] == {"generic": 1}
+
+
+def test_hipparion_blocks_a_small_creature_for_nothing(set_pool):
+    """Below the threshold the restriction says nothing, and no mana moves — a
+    cost charged on every block would be the same bug in the other direction."""
+    game, _attacker, _hipparion, (land,) = _w2g3_block_board(
+        set_pool, "Balduvian Bears", "Snow-Covered Plains"
+    )
+
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert ok, msg
+    assert game.combat_blockers[1] == {0: [0]}
+    assert not land.tapped
+
+
+def test_hipparion_cannot_block_a_big_creature_with_no_mana(set_pool):
+    """The gate half: a defender who cannot pay cannot make the block, and the
+    declaration is refused before anything is committed."""
+    game, attacker, _hipparion, _lands = _w2g3_block_board(set_pool, "Tor Giant")
+    assert attacker.effective_power >= 3
+
+    ok, msg = game.declare_blockers(1, {0: 0})
+
+    assert not ok
+    assert "cannot block" in msg
+    assert 1 not in game.combat_blockers
+
+
+def test_hipparion_pays_to_block_a_big_creature(set_pool):
+    """The charge half: with a land to tap the block is legal, and the land is
+    actually tapped. A restriction whose cost nobody collects is the failure
+    this table exists to prevent."""
+    game, _attacker, _hipparion, (land,) = _w2g3_block_board(
+        set_pool, "Tor Giant", "Snow-Covered Plains"
+    )
+
+    ok, msg = game.declare_blockers(1, {0: 0})
+
+    assert ok, msg
+    assert game.combat_blockers[1] == {0: [0]}
+    assert land.tapped
+
+
+def test_hipparion_reads_the_attackers_effective_power(set_pool):
+    """"Power 3 or greater" is CR 613 layer 7, not the printed number: a pumped
+    2/2 is what the Horse suddenly cannot block for free."""
+    game, attacker, _hipparion, _lands = _w2g3_block_board(
+        set_pool, "Balduvian Bears"
+    )
+    assert game.declare_blockers(1, {0: 0})[0]
+
+    game.combat_blockers.clear()
+    game.combat_blockers_declared_by.clear()
+    game.combat_blockers_locked = False
+    game._set_phase_and_step("combat", "declare_blockers")
+    add_pt_modifier(attacker, 1, 0)
+    assert attacker.effective_power == 3
+
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert not ok
+    assert "cannot block" in msg
+
+
+def test_two_hipparions_each_owe_their_own_block_cost(set_pool):
+    """CR 509.1d totals the declaration's costs. One land pays for one blocker;
+    the second is what a per-pair gate alone would let through free."""
+    pool = set_pool("ICE")
+    giants = [_nosick(Permanent(card=pool["Tor Giant"])) for _ in range(2)]
+    horses = [_nosick(Permanent(card=pool["Hipparion"])) for _ in range(2)]
+    land = Permanent(card=pool["Snow-Covered Plains"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=list(giants), life=20),
+        PlayerState(name="P2", battlefield=[*horses, land], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0, 1], 1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+
+    ok, msg = game.declare_blockers(1, {0: 0, 1: 1})
+
+    assert not ok
+    assert "declare those blockers" in msg
+    assert not land.tapped
+
+    # One of them alone is affordable, and the land pays for exactly that one.
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert ok, msg
+    assert land.tapped
+
+
+def test_hipparion_is_never_compelled_to_block_by_lure(set_pool):
+    """CR 509.1c's last clause: "If a creature can't block unless a player pays
+    a cost, that player is not required to pay that cost, even if blocking with
+    that creature would increase the number of requirements being obeyed."
+
+    So a Lure on a 3-power attacker does not drag the Horse in, even with the
+    mana to pay — while the Bears beside it are still compelled.
+    """
+    pool = set_pool("ICE")
+    giant = _nosick(Permanent(card=pool["Tor Giant"]))
+    lure = Permanent(card=pool["Lure"])
+    hipparion = _nosick(Permanent(card=pool["Hipparion"]))
+    bears = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    land = Permanent(card=pool["Snow-Covered Plains"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[giant, lure], life=20),
+        PlayerState(name="P2", battlefield=[hipparion, bears, land], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    attach_aura(lure, giant)
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], 1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+
+    # Leaving both home is illegal: the Bears owe nothing and are compelled.
+    ok, msg = game.declare_blockers(1, {})
+    assert not ok
+    assert "Lure" in msg
+
+    # The Bears alone satisfy it; the Horse stays home and nothing is spent.
+    game.combat_blockers.clear()
+    game.combat_blockers_declared_by.clear()
+    game.combat_blockers_locked = False
+    game._set_phase_and_step("combat", "declare_blockers")
+    ok, msg = game.declare_blockers(1, {1: 0})
+
+    assert ok, msg
+    assert not land.tapped
+
+
+def _w2g3_wiitigo(set_pool):
+    """Wiitigo cast onto seat 0's battlefield, with a bear for seat 1.
+
+    Cast rather than placed: the card is a printed 0/0 and its six +1/+1
+    counters arrive as it enters (CR 614.1c), so a Permanent dropped straight
+    onto a battlefield dies to CR 704.5f before the entry effect runs.
+    """
+    pool = set_pool("ICE")
+    bears = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", hand=[pool["Wiitigo"]], life=20)
+    p2 = PlayerState(name="P2", battlefield=[bears], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.cast_from_hand(0, "Wiitigo")
+    game._settle()
+    wiitigo = p1.battlefield[0]
+    _nosick(wiitigo)
+    return game, wiitigo, bears
+
+
+def test_wiitigo_compiles_its_upkeep_choice(set_pool):
+    """"At the beginning of your upkeep, put a +1/+1 counter on this creature if
+    it has blocked or been blocked since your last upkeep. Otherwise, remove a
+    +1/+1 counter from it."
+
+    The whole shape was already there — a trailing "if", an "Otherwise" arm, a
+    counter on the source. What was missing was the *condition*: a window that
+    spans the opponents' turns, which no per-turn combat record can answer.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Wiitigo"])
+
+    assert program.supported
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "upkeep_self"
+    assert trigger.instruction.kind == "if_then"
+    assert trigger.instruction.payload["condition"] == {
+        "kind": "in_a_block_since_your_last_upkeep"
+    }
+
+
+def test_wiitigo_shrinks_when_it_has_been_in_no_block(set_pool):
+    """The "Otherwise" arm, and both channels of it: the counter comes off the
+    record *and* the creature gets smaller. A removal that moved only the record
+    left a 6/6 with five counters on it."""
+    game, wiitigo, _bears = _w2g3_wiitigo(set_pool)
+    assert (wiitigo.effective_power, wiitigo.effective_toughness) == (6, 6)
+
+    game.start_turn(0)
+    game._settle()
+
+    assert (wiitigo.effective_power, wiitigo.effective_toughness) == (5, 5)
+    assert counters_on(wiitigo, "+1/+1") == 5
+
+
+def test_wiitigo_grows_after_a_block_on_an_opponents_turn(set_pool):
+    """"Since your last upkeep" spans the turns in between, which is the whole
+    difficulty: the block happens on the opponent's turn and every per-turn
+    combat record of it is swept before the upkeep that reads it."""
+    game, wiitigo, _bears = _w2g3_wiitigo(set_pool)
+    game.start_turn(0)
+    game._settle()
+    assert wiitigo.effective_power == 5
+
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    assert game.declare_attackers(1, [0], 0)[0]
+    game.advance_combat_phase()  # declare_blockers
+    assert game.declare_blockers(0, {0: 0})[0]
+    game._settle()
+
+    game.start_turn(0)
+    game._settle()
+
+    assert (wiitigo.effective_power, wiitigo.effective_toughness) == (6, 6)
+
+
+def test_wiitigo_stops_growing_the_upkeep_after_that(set_pool):
+    """"**Your last** upkeep" is one seat-turn ordinal back, not "ever": the
+    same block does not feed it twice."""
+    game, wiitigo, _bears = _w2g3_wiitigo(set_pool)
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(1, [0], 0)[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(0, {0: 0})[0]
+    game._settle()
+
+    game.start_turn(0)
+    game._settle()
+    assert wiitigo.effective_power == 7
+
+    game.start_turn(1)
+    game._settle()
+    game.start_turn(0)
+    game._settle()
+
+    assert wiitigo.effective_power == 6
+
+
+def _w2g3_sappers(set_pool):
+    """Seat 0 with the Sappers and a bear; seat 1 with a bear to block with."""
+    pool = set_pool("ICE")
+    sappers = _nosick(Permanent(card=pool["Goblin Sappers"]))
+    bears = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    blocker = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[sappers, bears], life=20),
+        PlayerState(name="P2", battlefield=[blocker], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.active_player_index = 0
+    game._set_phase_and_step("precombat_main", None)
+    return game, sappers, bears
+
+
+def _w2g3_sappers_combat(game):
+    """Attack with the creature in slot 1 and run combat to its end."""
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [1], 1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    refusal = game.declare_blockers(1, {0: 1})
+    assert game.declare_blockers(1, {})[0]
+    game.end_combat(step_already_started=True)
+    game._settle()
+    return refusal
+
+
+def test_goblin_sappers_compiles_both_of_its_abilities(set_pool):
+    """Neither ability buys the card on its own: a creature is supported only
+    when every line is claimed, and the two lines differ by four words.
+
+    "Destroy **it** and this creature at end of combat" is two delayed abilities
+    (CR 603.7), and they are two *different* ones: "it" is the creature the
+    step in front chose and "this creature" is the ability's own source, which
+    CR 603.7d freezes into the entry. One instruction with a flag could only
+    have spelled one of them.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Goblin Sappers"])
+
+    assert program.supported
+    cheap, dear = program.activated_abilities
+    assert [step.kind for step in cheap.instruction.payload["steps"]] == [
+        "grant_unblockable_to_target",
+        "create_delayed_trigger",
+        "create_delayed_trigger",
+    ]
+    inner = [
+        step.payload["instruction"].kind
+        for step in cheap.instruction.payload["steps"][1:]
+    ]
+    assert inner == ["destroy_bound_permanent", "destroy_self"]
+    assert [step.kind for step in dear.instruction.payload["steps"]] == [
+        "grant_unblockable_to_target",
+        "create_delayed_trigger",
+    ]
+
+
+def test_goblin_sappers_cheap_ability_takes_its_own_source_with_it(set_pool):
+    """{R}{R}: the target is unblockable, and at end of combat both it and the
+    Sappers are destroyed."""
+    game, sappers, bears = _w2g3_sappers(set_pool)
+
+    result = game.activate_permanent_ability(
+        0, "Goblin Sappers", permanent_index=0, ability_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    game._settle()
+    assert result.supported, result.details
+    assert bears.metadata.get("cant_be_blocked_until_eot")
+
+    refusal = _w2g3_sappers_combat(game)
+
+    assert refusal[0] is False
+    assert [p.card.name for p in game.controlled_by(0)] == []
+    assert sorted(c.name for c in game.players[0].graveyard) == [
+        "Balduvian Bears", "Goblin Sappers",
+    ]
+
+
+def test_goblin_sappers_expensive_ability_spares_the_sappers(set_pool):
+    """{R}{R}{R}{R}: the same sentence with "and this creature" deleted, which
+    is the whole difference between the two abilities."""
+    game, sappers, bears = _w2g3_sappers(set_pool)
+
+    result = game.activate_permanent_ability(
+        0, "Goblin Sappers", permanent_index=0, ability_index=1,
+        target_player_index=0, target_permanent_index=1,
+    )
+    game._settle()
+    assert result.supported, result.details
+
+    _w2g3_sappers_combat(game)
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Goblin Sappers"]
+    assert [c.name for c in game.players[0].graveyard] == ["Balduvian Bears"]
+
+
+def test_a_delayed_destroy_of_it_refuses_when_nothing_chose_a_permanent(set_pool):
+    """The gate that makes the card correct rather than merely compiling.
+
+    ``parse_recipient`` reads a bare "it" as the ability's own source, so
+    without a producer in front of it "Destroy it at end of combat" would arm a
+    destruction of the *Sappers* and never touch the creature the card is
+    about — compiling, resolving, logging, and doing the wrong thing.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    node = parse_line(
+        "{R}: Destroy it at end of combat.", card_name="Probe"
+    )
+    with pytest.raises(LoweringError):
+        lower_ability(node)
+
+
+def test_and_this_creature_only_joins_a_union_that_ends_the_sentence(set_pool):
+    """The refusal test for the widened union.
+
+    "…and this <type>" is a second *object* on Goblin Sappers and the *subject
+    of a second clause* on Monsoon, Earthbind and Vexing Arcanix — a permanent
+    naming itself is the commonest subject on a card. So the union takes the
+    phrase only where nothing follows it but a terminator or the delay.
+    """
+    from engine.grammar import ast
+    from engine.grammar import parse_line
+
+    node = parse_line(
+        "Destroy target land and this creature deals 2 damage to you.",
+        card_name="Probe",
+    )
+
+    # Two clauses, not one destroy with two victims: the land dies and the
+    # source deals the damage. Read as a union, this line would have destroyed
+    # the permanent printing it and dropped the damage entirely.
+    assert isinstance(node.statement, ast.Sequence)
+    first, second = node.statement.steps
+    assert isinstance(first, ast.Destroy)
+    assert first.subject.filter.card_types == ("land",)
+    assert isinstance(second, ast.DealDamage)
+# --- end W2G3 ---

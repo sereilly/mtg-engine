@@ -250,10 +250,16 @@ def remove_plus1_counters(perm: Permanent, count: int = 1) -> int:
     five off a creature holding two removes two, and the caller deals the
     difference.
     """
+    from .named_counters import remove_counters
+
     have = int(perm.metadata.get("plus_counters", 0))
     removed = min(max(count, 0), have)
     if removed <= 0:
         return 0
-    add_pt_modifier(perm, -removed, -removed)
-    perm.metadata["plus_counters"] = have - removed
+    # Through the one removal seam, which moves both channels. It used to write
+    # them here as well, which was two implementations of one rule — and the
+    # seam's was the incomplete one, so a caller that reached it with a +1/+1
+    # counter (Triskelion's cost) took the counter off the record and left the
+    # creature 4/4.
+    remove_counters(perm, "+1/+1", removed)
     return removed

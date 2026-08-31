@@ -178,6 +178,29 @@ def destroy_creatures_in_combat_with_source(game: Game, instruction: OracleInstr
     return True, "resolved"
 
 
+def _was_blocked_by(candidate: Permanent, blocker_id: int) -> bool:
+    """Was *candidate* blocked by ``blocker_id`` this turn?
+
+    CR 509.1a's relation read **off the candidate**, not off the blocker. The
+    two directions of the pair are written together by
+    ``declare_blockers_step._record_block_history``, so either end answers — but
+    only this end survives the blocker leaving the battlefield, and the blocker
+    leaving is the ordinary way Glyph of Doom is played: the Wall blocks, the
+    delayed ability waits for the end of combat, and combat damage kills the
+    Wall in between. Reading the record off the Wall answered "the creature
+    whose blocks it names is gone" and destroyed nothing, on the card's own main
+    line.
+
+    ``blocked_ids`` beside it stays as it is: Glyph of Reincarnation names a
+    Wall it *targets*, so CR 608.2b has already required that Wall to still be
+    there, and that branch reads a second record (which seat controlled each
+    attacker) that has no mirror.
+    """
+    return blocker_id in set(
+        candidate.metadata.get("blocked_by_blocker_ids_this_turn") or ()
+    )
+
+
 def _stood_opposite(candidate: Permanent, other_id: int) -> bool:
     """Was *candidate* on the other side of a block from ``other_id`` this turn?
 
@@ -232,19 +255,20 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
     # through — a dropped relation here is not a sweep that does less, it is a
     # sweep that destroys every creature on the battlefield.
     blocked_ids: set[int] | None = None
+    blocked_by_blocker_id: int | None = None
     if instruction.payload.get("blocked_by_bound_object"):
-        bound = game.permanent_by_id(
-            (context.trigger_context or {}).get("bound_permanent_id")
+        blocked_by_blocker_id = (context.trigger_context or {}).get(
+            "bound_permanent_id"
         )
-        if bound is None:
-            # CR 603.7c: the creature is no longer where the ability expects
-            # it. Its block record went with it, so nothing was blocked by it
-            # that this effect can name.
+        if blocked_by_blocker_id is None:
+            # No binding at all — no creature was named, so no block can be
+            # named either. Ending here rather than falling through, for the
+            # reason the branches below end: a dropped relation is not a sweep
+            # that does less, it is one that takes the board.
             game.log.append(
                 f"{context.card.name}: the creature whose blocks it names is gone"
             )
             return True, "resolved"
-        blocked_ids = set(bound.metadata.get("blocked_attacker_ids_this_turn") or ())
     # "…all creatures that **blocked or were blocked by** it this turn."
     # (Venomous Breath.) The two-way reading of the same relation, and unlike
     # the one-way branch above it does not need the bound creature to still be
@@ -339,6 +363,10 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
         )
         and (host is None or perm.metadata.get("attached_to") is host)
         and (blocked_ids is None or perm.permanent_id in blocked_ids)
+        and (
+            blocked_by_blocker_id is None
+            or _was_blocked_by(perm, blocked_by_blocker_id)
+        )
         and (
             in_combat_with_id is None
             or _stood_opposite(perm, in_combat_with_id)

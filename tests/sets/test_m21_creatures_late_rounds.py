@@ -2208,6 +2208,39 @@ def test_the_tokens_static_grants_its_controllers_creatures_a_requirement(set_po
     ) is not None
 
 
+# --- W2G3: combat restrictions and requirements ---
+def test_the_token_is_compelled_by_its_own_static(set_pool):
+    """"Creatures you control attack each combat if able" says nothing about
+    "other", and the token is a creature its controller controls.
+
+    The refresh pass skipped a static's own source outright, which exempted
+    exactly the permanent the sentence is printed on - half the drawback the
+    Whale's controller is paid for, silently absent. The other two templates
+    are an enchantment and a land granting to artifacts and creatures, so each
+    is excluded on its own merits and none of them showed it.
+    """
+    game, _, _, _, pool = _whale_board(set_pool)
+    theirs = Permanent(card=pool["Alpine Watchdog"])
+    game._put_permanent_onto_battlefield(1, theirs, None)
+    game._recompute_continuous_effects()
+    token = next(p for p in game.controlled_by(1) if p.card.name == "Pirate Token")
+    _nosick(token)
+    _nosick(theirs)
+
+    assert "attacks each combat if able" in token.effective_card.oracle_text.lower()
+
+    game.active_player_index = 1
+    game._set_phase_and_step("combat", "declare_attackers")
+    # Slot 0 is the token and slot 1 the Watchdog: attacking with the Watchdog
+    # alone leaves the token home, which is the creature the static is printed
+    # on and the one that used to be exempt.
+    ok, message = game.declare_attackers(1, [1], 0)
+    assert not ok
+    assert "Pirate Token" in message
+    assert game.declare_attackers(1, [0, 1], 0)[0]
+# --- end W2G3 ---
+
+
 def test_the_tax_applies_only_to_an_opponents_spell_aimed_at_the_whale(set_pool):
     """The mana twin of round 107's life tax, sharing its scope: a fact about
     the spell's *chosen targets*, answered at CR 601.2f when the cost is
