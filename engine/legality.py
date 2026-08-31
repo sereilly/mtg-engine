@@ -1686,24 +1686,31 @@ class LegalityMixin:
                     source=targets_source,
                 ):
                     continue
-            # "…**with a single target if that target is you**" (Reflecting
-            # Mirror, CR 115.7a / CR 115.9a). Asked through the one reader the
-            # retarget handler asks at resolution, against the same seat every
-            # other narrowing here is measured against (CR 109.5) — so a spell
-            # this ability could not actually re-aim is never offered, and the
-            # {X} it would cost is never paid for nothing.
+            # "…**with a single target** [if that target is you]" (Deflection,
+            # Reflecting Mirror — CR 115.7a / CR 115.9a). Asked through the one
+            # reader the retarget handler asks at resolution, against the same
+            # seat every other narrowing here is measured against (CR 109.5) —
+            # so a spell the effect could not actually re-aim is never offered,
+            # and the mana it would cost is never paid for nothing.
             #
             # A spell whose target set the engine cannot establish answers None
             # and is simply not offered: under-offering is a narrower card,
             # over-offering is a card redirecting spells it was never allowed to.
-            single_target_is = spec.get("stack_single_target_is")
-            if single_target_is is not None:
-                from .targeting import single_player_target
+            #
+            # The count and the "is you" are **two** gates because two cards
+            # print them separately: Deflection carries only the first.
+            if spec.get("stack_single_target"):
+                from .targeting import single_spell_target
 
-                targeted_seat = single_player_target(self, item)
-                if targeted_seat is None:
+                chosen = single_spell_target(self, item)
+                if chosen is None:
                     continue
-                if single_target_is != "you" or targeted_seat != caster_index:
+                single_target_is = spec.get("stack_single_target_is")
+                if single_target_is is not None and not (
+                    single_target_is == "you"
+                    and chosen.get("kind") == "player"
+                    and chosen.get("seat") == caster_index
+                ):
                     continue
             if color_filter and color_filter not in self._stack_item_colors(item):
                 continue

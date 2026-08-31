@@ -18,7 +18,7 @@ from __future__ import annotations
 from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick
+from tests.helpers import _mk_creature_card, _nosick
 
 
 # --- Round 10: sweeps and grants over a set the sentence names ---
@@ -1358,3 +1358,144 @@ def test_touch_of_vitae_takes_both_halves_away_at_end_of_turn(set_pool):
     assert not bear.has_keyword("haste")
     assert '{0}: Untap this creature' not in bear.effective_card.oracle_text
 # --- end W3G1 ---
+
+
+# --- W4G5: retargeting, and a turn-scoped board mood ---
+
+
+def _deflection_board(set_pool, spell_name, spell_set="LEA"):
+    """Deflection in seat 0's hand and *spell_name* in seat 1's."""
+    players = [PlayerState(name="P1", life=20), PlayerState(name="P2", life=20)]
+    players[0].hand = [set_pool("ICE")["Deflection"]]
+    players[1].hand = [set_pool(spell_set)[spell_name]]
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, players
+
+
+def test_deflection_sends_a_spell_aimed_at_you_back_at_its_caster(set_pool):
+    """The whole card. CR 115.7a changes what the spell points at and nothing
+    else, so the Bolt still deals its own damage from its own source — and with
+    only one other legal target the choice is forced and nobody is asked."""
+    game, players = _deflection_board(set_pool, "Lightning Bolt")
+    game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+
+    result = game.queue_from_hand(0, "Deflection", target_stack_index=0)
+    game._settle()
+
+    assert result.supported, result.details
+    assert players[0].life == 20, game.log
+    assert players[1].life == 17, game.log
+
+
+def test_deflection_moves_a_spell_from_one_permanent_to_another(set_pool):
+    """The half Reflecting Mirror cannot do. Deflection prints no "the new
+    target must be a player", so the replacement is whatever that spell could
+    legally have chosen — for Terror, another creature."""
+    game, players = _deflection_board(set_pool, "Terror")
+    mine = _nosick(Permanent(card=_mk_creature_card("Mine", 2, 2)))
+    theirs = _nosick(Permanent(card=_mk_creature_card("Theirs", 3, 3)))
+    players[0].battlefield = [mine]
+    players[1].battlefield = [theirs]
+    game._sync_control()
+    game.queue_from_hand(
+        1, "Terror", target_player_index=0, target_permanent_index=0
+    )
+
+    game.queue_from_hand(0, "Deflection", target_stack_index=0)
+    game._settle()
+
+    assert [perm.card.name for perm in players[0].battlefield] == ["Mine"], game.log
+    assert players[1].battlefield == [], game.log
+
+
+def test_deflection_leaves_a_spell_with_nowhere_else_to_go_alone(set_pool):
+    """CR 115.7a: "if a target can't be changed to another legal target, the
+    original target is unchanged". Terror is the only creature's only threat —
+    with nothing else on either battlefield the spell keeps what it named, and
+    Deflection resolves having done nothing."""
+    game, players = _deflection_board(set_pool, "Terror")
+    only = _nosick(Permanent(card=_mk_creature_card("Only", 2, 2)))
+    players[0].battlefield = [only]
+    game._sync_control()
+    game.queue_from_hand(
+        1, "Terror", target_player_index=0, target_permanent_index=0
+    )
+
+    game.queue_from_hand(0, "Deflection", target_stack_index=0)
+    game.resolve_top_of_stack()
+
+    assert game.stack[0].target_permanent_id == only.permanent_id, game.log
+    assert any("no other legal target" in line for line in game.log), game.log
+
+
+def test_deflection_counts_the_targets_a_spell_chose_before_offering_it(set_pool):
+    """CR 115.9a: "target spell with **a single target**". A sweeper chose
+    none and a divided Fireball chose two, so neither is offered — the count is
+    the whole of what this card's noun phrase narrows, and a picker that
+    skipped it would offer every spell on the stack."""
+    deflection = set_pool("ICE")["Deflection"]
+
+    game, _players = _deflection_board(set_pool, "Wrath of God")
+    game.queue_from_hand(1, "Wrath of God")
+    assert game.cast_target_spec(0, deflection)["valid_targets"] == [], game.log
+
+    game, _players = _deflection_board(set_pool, "Fireball")
+    game.queue_from_hand(
+        1, "Fireball", x_value=4, divided_targets=[(0, None), (1, None)]
+    )
+    assert game.cast_target_spec(0, deflection)["valid_targets"] == [], game.log
+
+    game, _players = _deflection_board(set_pool, "Lightning Bolt")
+    game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+    assert len(game.cast_target_spec(0, deflection)["valid_targets"]) == 1, game.log
+
+
+def test_deflection_asks_nothing_about_who_the_spell_points_at_now(set_pool):
+    """Reflecting Mirror prints "if that target is you" and Deflection does
+    not, so a spell its caster aimed at their **own** creature is offered all
+    the same — the clause is a printed narrowing, not a property of retargets."""
+    game, players = _deflection_board(set_pool, "Terror")
+    theirs = _nosick(Permanent(card=_mk_creature_card("Theirs", 3, 3)))
+    mine = _nosick(Permanent(card=_mk_creature_card("Mine", 2, 2)))
+    players[1].battlefield = [theirs]
+    players[0].battlefield = [mine]
+    game._sync_control()
+    game.queue_from_hand(
+        1, "Terror", target_player_index=1, target_permanent_index=0
+    )
+
+    game.queue_from_hand(0, "Deflection", target_stack_index=0)
+    game.resolve_top_of_stack()
+
+    assert game.stack[0].target_permanent_id == mine.permanent_id, game.log
+
+
+def test_deflection_asks_its_caster_which_of_several_targets(set_pool):
+    """A Bolt is "any target", so re-aiming it offers both faces and every
+    creature. More than one candidate is a decision, and an interactive seat is
+    asked for it — the resolution waiting on the answer (CR 608.2)."""
+    game, players = _deflection_board(set_pool, "Lightning Bolt")
+    mine = _nosick(Permanent(card=_mk_creature_card("Mine", 2, 2)))
+    theirs = _nosick(Permanent(card=_mk_creature_card("Theirs", 3, 3)))
+    players[0].battlefield = [mine]
+    players[1].battlefield = [theirs]
+    game.interactive_seats = {0}
+    game._sync_control()
+    game.queue_from_hand(
+        1, "Lightning Bolt", target_player_index=0, target_permanent_index=0
+    )
+
+    game.queue_from_hand(0, "Deflection", target_stack_index=0)
+    game.resolve_top_of_stack()
+    pending = game.pending_choice_of("retarget_choice")
+
+    assert pending is not None, game.log
+    offered = [option["name"] for option in pending.data["options"]]
+    assert offered == ["P1", "P2", "Theirs"], offered
+    assert game.confirm_retarget_choice(0, offered.index("Theirs")) is True
+    game._settle()
+    assert players[1].battlefield == [], game.log
+    assert (players[0].life, players[1].life) == (20, 20), game.log
+# --- end W4G5 ---

@@ -96,6 +96,7 @@ ActionKind = Literal[
     "least_power_choice_confirm",
     "player_choice_confirm",
     "cast_choice_confirm",
+    "retarget_choice_confirm",
     "loyalty_recipient_confirm",
     "mode_choice_confirm",
     "lamp_draw_confirm",
@@ -437,6 +438,13 @@ class GameActionRequest(BaseModel):
     # Backdraft: which of the offered spells "one of those sorcery spells" names,
     # as a position in the turn's cast ledger, sent with `cast_choice_confirm`.
     cast_index: int | None = Field(default=None, ge=0)
+    # Deflection: which of the offered targets replaces the one the spell
+    # announced, as a position in the list the prompt offered, sent with
+    # `retarget_choice_confirm`. A position rather than a seat or an id
+    # because the candidates are heterogeneous -- "Change the target of target
+    # spell with a single target" offers faces and permanents in one list, and
+    # the list is the one thing both ends already agree on.
+    target_index: int | None = Field(default=None, ge=0)
     # Shapeshifter: the number its controller chose, sent with
     # `number_choice_confirm`. Bounded by the card's printed range, which the
     # engine re-checks -- an out-of-range answer is refused rather than clamped.

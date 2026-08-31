@@ -1256,6 +1256,31 @@ def _cast_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("retarget_choice")
+def _retarget_choice(ctx: PromptContext, choices: list) -> dict:
+    """Deflection: "Change the target of target spell with a single target."
+
+    The candidates are re-derived through the engine's own liveness test, so a
+    creature that has died or a player who has left since the prompt was armed
+    is not offered — and the position each option carries is its position in the
+    armed list, which is what the answer names."""
+    choice = choices[0]
+    data = choice.data
+    options = list(data.get("options") or ())
+    return {
+        "card_name": data.get("card_name", ""),
+        "prompt": data.get("prompt", "Choose a new target."),
+        "options": [
+            {
+                "index": position,
+                "name": options[position].get("name", ""),
+                "kind": options[position].get("kind", ""),
+            }
+            for position in ctx.game.live_retarget_choices(choice)
+        ],
+    }
+
+
 @prompt_renderer("lamp_draw")
 def _lamp_draw(ctx: PromptContext, choices: list) -> dict:
     """Aladdin's Lamp: the looked-at cards are still on top of the library until

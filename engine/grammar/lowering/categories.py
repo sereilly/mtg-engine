@@ -558,7 +558,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # would let the report say a card countered something it did not touch.
     # Both steps of the pair carry it — the choice of who replaces you is not a
     # separate effect, it is the retarget deciding what it will do.
-    "choose_new_target_player": "retargeting",
+    "choose_new_spell_target": "retargeting",
     "change_target_spell_target": "retargeting",
     # "Choose target creature." — a sentence whose whole content is CR 601.2c's
     # choosing of targets, printed by a spell whose *next* sentence says what

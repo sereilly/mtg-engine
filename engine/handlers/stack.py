@@ -617,20 +617,26 @@ def copy_this_spell(game: Game, instruction: OracleInstruction, context: OracleE
 
 
 def _retarget_subject(game: Game, context: OracleExecutionContext, instruction):
-    """The spell this retarget may still change, or None with the reason logged.
+    """``(spell, its one current target)`` for a retarget that may still be
+    made, or None with the reason logged.
 
-    CR 608.2b asked at the moment the rule asks it. The ability chose its target
-    when it was activated, and the whole point of the stack is that time passes:
-    the spell can be countered, can resolve, or can have its own target changed
-    by something else in between. So every condition the picker checked is
-    checked again here, against the object as it stands now.
+    CR 608.2b asked at the moment the rule asks it. The effect chose its target
+    when it was put on the stack, and the whole point of the stack is that time
+    passes: the spell can be countered, can resolve, or can have its own target
+    changed by something else in between. So every condition the picker checked
+    is checked again here, against the object as it stands now.
+
+    The current target comes back beside the spell because both callers need it
+    and neither should ask twice: the choosing step excludes it from the
+    candidates (CR 115.7a's "**another** legal target") and the changing step
+    would otherwise have to re-derive what it is replacing.
 
     Located by **identity**, never by ``in``: ``StackItem`` compares by value, so
     two copies of one spell aimed at one player are equal and ``in`` would find
     the wrong one — the look-alike bug that ``permanent_id`` solves on the
     battlefield.
     """
-    from ..targeting import single_player_target
+    from ..targeting import single_spell_target
 
     card_name = getattr(context.card, "name", "")
     item = context.stack_target
@@ -639,21 +645,39 @@ def _retarget_subject(game: Game, context: OracleExecutionContext, instruction):
             f"{card_name}: the spell it would retarget is no longer on the stack"
         )
         return None
-    if instruction.payload.get("current_target") != "you":
-        # Lowering admits no other value; a payload that carried one would be a
-        # restriction nothing here can test.
+    chosen = single_spell_target(game, item)
+    if chosen is None:
+        game.log.append(
+            f"{card_name}: {item.card.name} no longer has a single target"
+        )
         return None
-    seat = single_player_target(game, item)
-    if seat is None or seat != game.players.index(context.caster):
+    required = instruction.payload.get("current_target")
+    # None is Deflection: the sentence asks nothing about who the spell points
+    # at now. Lowering admits no value but "you" beside it, so a payload
+    # carrying another would be a restriction nothing here can test.
+    if required is not None and not (
+        required == "you"
+        and chosen.get("kind") == "player"
+        and chosen.get("seat") == game.seat_index(context.caster)
+    ):
         game.log.append(
             f"{card_name}: {item.card.name} no longer has a single target that is you"
         )
         return None
-    return item
+    return item, chosen
 
 
-def _legal_new_player_targets(game: Game, item: StackItem) -> list[int]:
-    """The players *item* could legally have been aimed at instead (CR 115.7a).
+def _same_target(left: dict, right: dict) -> bool:
+    """Whether two target descriptors name the same object or face."""
+    if left.get("kind") != right.get("kind"):
+        return False
+    if left.get("kind") == "player":
+        return left.get("seat") == right.get("seat")
+    return left.get("permanent_id") == right.get("permanent_id")
+
+
+def _legal_new_targets(game: Game, item: StackItem, bound) -> list[dict]:
+    """The targets *item* could legally have been aimed at instead (CR 115.7a).
 
     Read through ``_enumerate_targets`` — the one list the picker and the cast
     gate already share — so "another legal target" means for this spell exactly
@@ -662,9 +686,17 @@ def _legal_new_player_targets(game: Game, item: StackItem) -> list[int]:
     aimed at you by the player it may not aim at themselves simply cannot be
     moved.
 
-    The kind is forced to ``player``: the question is which *faces* are legal,
-    and asking a wider spec would walk both battlefields probing every
-    permanent for an answer this never uses.
+    *bound* is the retargeting card's own "The new target must be a …"
+    sentence, or None where it prints none. ``"player"`` forces the kind, which
+    is both the restriction and an economy: the question is which *faces* are
+    legal and a wider spec would walk both battlefields for an answer that card
+    never uses. None asks the spell's **own** spec, so Deflection offers exactly
+    what that spell could have chosen — a creature for a Lightning Bolt, a face
+    for a Mind Twist.
+
+    Each permanent is carried by ``permanent_id``, never by the slot the
+    enumeration named it in: a prompt sits between this list and the write, and
+    an index is what renumbers underneath one.
     """
     from ..oracle import compile_card_oracle
     from ..targeting import derive_cast_spec
@@ -672,18 +704,40 @@ def _legal_new_player_targets(game: Game, item: StackItem) -> list[int]:
     spec = derive_cast_spec(item.card, compile_card_oracle(item.card))
     if spec is None:
         return []
+    if bound == "player":
+        spec = {**spec, "kind": "player"}
     entries = game._enumerate_targets(
-        item.caster_index, item.card, {**spec, "kind": "player"}, for_cast=True
+        item.caster_index, item.card, spec, for_cast=True
     )
-    return [
-        entry["seat"] for entry in entries
-        if entry.get("kind") == "player" and not game.players[entry["seat"]].lost
-    ]
+    candidates: list[dict] = []
+    for entry in entries:
+        if entry.get("kind") == "player":
+            seat = entry.get("seat")
+            if not isinstance(seat, int) or game.players[seat].lost:
+                continue
+            candidates.append(
+                {"kind": "player", "seat": seat, "name": game.players[seat].name}
+            )
+            continue
+        if entry.get("kind") != "permanent" or bound is not None:
+            continue
+        # The enumeration names a battlefield slot; the seam's bridge turns it
+        # into a permanent once, here, and everything downstream carries the id.
+        found = game.permanent_at(entry.get("seat"), entry.get("index"))
+        permanent_id = None if found is None else game.permanent_id_of(found)
+        if permanent_id is None:
+            continue
+        candidates.append({
+            "kind": "permanent",
+            "permanent_id": permanent_id,
+            "name": entry.get("name", ""),
+        })
+    return candidates
 
 
-@effect_handler("choose_new_target_player")
-def choose_new_target_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """"The new target must be a player." — who replaces you (CR 115.7a).
+@effect_handler("choose_new_spell_target")
+def choose_new_spell_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Which legal target replaces the one the spell announced (CR 115.7a).
 
     The first of the retarget's two steps. It is its own step for the reason
     Backdraft's player choice is one (``handlers/player_choices.py``): the
@@ -696,7 +750,7 @@ def choose_new_target_player(game: Game, instruction: OracleInstruction, context
     new target" is an outcome CR 115.7a names ("the original target is
     unchanged"), not a failure.
 
-    **Another** legal target, which is what the rule says: the player the spell
+    **Another** legal target, which is what the rule says: the target the spell
     already points at is not among the candidates, so a retarget with nowhere
     else to go leaves the spell exactly as it was. A single candidate is taken
     without asking, the shortcut ``choose_player_who_cast`` states — the card
@@ -705,25 +759,35 @@ def choose_new_target_player(game: Game, instruction: OracleInstruction, context
     key = str(instruction.payload["result_key"])
     context.results[key] = None
     card_name = getattr(context.card, "name", "")
-    item = _retarget_subject(game, context, instruction)
-    if item is None:
+    subject = _retarget_subject(game, context, instruction)
+    if subject is None:
         return True, "resolved"
-    current = game.players.index(context.caster)
-    seats = [seat for seat in _legal_new_player_targets(game, item) if seat != current]
-    if not seats:
+    item, current = subject
+    candidates = [
+        candidate
+        for candidate in _legal_new_targets(
+            game, item, instruction.payload.get("new_target")
+        )
+        if not _same_target(candidate, current)
+    ]
+    if not candidates:
+        # Named by the bound the card printed, because that is what the seat is
+        # being told: Reflecting Mirror could only ever have offered a player,
+        # so "no other legal target" would read as a wider search than it made.
+        bounded = "player" if instruction.payload.get("new_target") == "player" else "target"
         game.log.append(
-            f"{card_name}: {item.card.name} has no other legal player to target"
+            f"{card_name}: {item.card.name} has no other legal {bounded}"
         )
         return True, "resolved"
-    if len(seats) == 1:
-        context.results[key] = seats[0]
+    if len(candidates) == 1:
+        context.results[key] = candidates[0]
         return True, "resolved"
-    game.arm_player_choice(
-        current,
+    game.arm_retarget_choice(
+        game.seat_index(context.caster),
         card_name=card_name,
         prompt=f"Choose the new target for {item.card.name}.",
         result_key=key,
-        seats=seats,
+        options=candidates,
         context=context,
     )
     return True, "resolved"
@@ -731,12 +795,18 @@ def choose_new_target_player(game: Game, instruction: OracleInstruction, context
 
 @effect_handler("change_target_spell_target")
 def change_target_spell_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """"Change the target of target spell …" (Reflecting Mirror, CR 115.7a).
+    """"Change the target of target spell …" (Deflection, Reflecting Mirror —
+    CR 115.7a).
 
     The spell keeps everything else it announced — its controller, its X, its
     modes — and only what it points at moves. That is why this writes the item's
     target fields rather than re-announcing the spell: CR 115.7a changes a
     choice, it does not re-cast anything.
+
+    **All three target fields are written together**, whichever way the new
+    target points. A spell re-aimed from a creature onto a face that kept its
+    stale ``target_permanent_id`` would be resolved against the creature by
+    every handler that prefers the id, and the log would say otherwise.
 
     ``divided_targets`` is rewritten alongside, because for a spell that
     recorded one it is the list that decides (CR 601.2d's division travels with
@@ -746,16 +816,37 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
     """
     key = str(instruction.payload["result_key"])
     card_name = getattr(context.card, "name", "")
-    seat = context.results.get(key)
-    item = _retarget_subject(game, context, instruction)
-    if item is None:
+    chosen = context.results.get(key)
+    subject = _retarget_subject(game, context, instruction)
+    if subject is None:
         return True, "resolved"
-    if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+    item, _current = subject
+    unchanged = f"{card_name}: {item.card.name}'s target is unchanged"
+    if not isinstance(chosen, dict):
+        game.log.append(unchanged)
+        return True, "resolved"
+    if chosen.get("kind") == "permanent":
+        found = game.find_permanent_by_id(chosen.get("permanent_id"))
+        if found is None:
+            # It left between the choice and this step. CR 115.7a: a target
+            # that can't be changed to another legal target stays as it was.
+            game.log.append(unchanged)
+            return True, "resolved"
+        seat, permanent = found
+        item.target_player_index = seat
+        item.target_permanent_id = game.permanent_id_of(permanent)
+        item.target_permanent_index = game.battlefield_index_of(permanent)
         game.log.append(
-            f"{card_name}: {item.card.name}'s target is unchanged"
+            f"{card_name}: {item.card.name} now targets {permanent.card.name}"
         )
         return True, "resolved"
+    seat = chosen.get("seat")
+    if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+        game.log.append(unchanged)
+        return True, "resolved"
     item.target_player_index = seat
+    item.target_permanent_id = None
+    item.target_permanent_index = None
     divided = (item.choices or {}).get(DIVIDED_TARGETS)
     if divided:
         # CR 115.7f keeps the division unchanged, so the one surviving target
