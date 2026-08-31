@@ -43,6 +43,7 @@ from .lowering.where_x import lower_where_x
 from .statics import _lower_static_ability
 from .lowering.control_flow import (
     _lower_for_each_life_lost,
+    _lower_for_each_player,
     _lower_may, _lower_one_of, _lower_steps, _lower_unless_player_pays,
 )
 from .lowering import (
@@ -718,56 +719,32 @@ def lower_statement(
         )
 
     if isinstance(statement, ast.ForEach):
-        # Two iterators, two lowerings, and the split is the *set* rather than
-        # the effect: "that died this turn" is a tally the engine keeps and the
-        # counter lowering reads as a multiplier, while "that died this way" is
-        # the objects an earlier step of this same effect destroyed and has to
-        # be walked one at a time. The inner statement is lowered here, as
-        # `ast.WhereX`'s is — the lowering below only repeats it.
+        # Five iterators, five lowerings, and the split is the *set* rather
+        # than the effect. Three of them name a set an earlier step of this
+        # same effect produced and are refused without that producer; one is a
+        # count off the firing event and is refused without the event; one is
+        # the seats. The tally form ("that died this **turn**") reads no inner
+        # instructions at all — the counter lowering turns it into a
+        # multiplier — which is why the body is lowered lazily here.
+        def repeated() -> tuple[OracleInstruction, ...]:
+            return lower_statement(
+                statement.effect, produced,
+                event=event, event_subject=event_subject, whole_effect=False,
+            )
+
         if isinstance(statement.iterator, ast.DiedThisWay):
-            return _lower_for_each_destroyed(
-                statement,
-                lower_statement(
-                    statement.effect, produced,
-                    event=event, event_subject=event_subject, whole_effect=False,
-                ),
-                produced,
-            )
-        # "For each creature **exiled this way**" — the exile family's set,
-        # walked the same way and refused the same way when nothing exiled one.
+            return _lower_for_each_destroyed(statement, repeated(), produced)
         if isinstance(statement.iterator, ast.ExiledThisWay):
-            return _lower_for_each_exiled(
-                statement,
-                lower_statement(
-                    statement.effect, produced,
-                    event=event, event_subject=event_subject, whole_effect=False,
-                ),
-                produced,
-            )
-        # "For each of **those cards**" — the third iterator, and the same
-        # split: a set an earlier step of this effect chose, walked one at a
-        # time, and refused when nothing chose one.
+            return _lower_for_each_exiled(statement, repeated(), produced)
         if isinstance(statement.iterator, ast.ChosenThisWay):
-            return _lower_for_each_chosen(
-                statement,
-                lower_statement(
-                    statement.effect, produced,
-                    event=event, event_subject=event_subject, whole_effect=False,
-                ),
-                produced,
-            )
-        # "For each **1 life you lost**" (Oath of Lim-Dûl) — an iterator that
-        # is a count rather than a set, refused for want of an *event* where
-        # the three above are refused for want of a producer.
+            return _lower_for_each_chosen(statement, repeated(), produced)
+        # "For each **1 life you lost**" (Oath of Lim-Dûl).
         if isinstance(statement.iterator, ast.EachLifeLost):
-            return _lower_for_each_life_lost(
-                statement,
-                lower_statement(
-                    statement.effect, produced,
-                    event=event, event_subject=event_subject, whole_effect=False,
-                ),
-                event,
-            )
+            return _lower_for_each_life_lost(statement, repeated(), event)
+        # "**For each player,** …" (Lim-Dûl's Hex) — a loop over seats, whose
+        # iteration binds "that player" the way an object loop binds "it".
+        if isinstance(statement.iterator, ast.PlayerRef):
+            return _lower_for_each_player(statement, repeated())
         return _lower_for_each(statement)
 
     # The offer-round loop takes the recursion back as an argument: its lowering

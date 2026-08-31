@@ -23,6 +23,7 @@ from ..lexer import WORD
 from ..stream import TokenStream
 from ..where_x import _parse_where_x_is
 from ..phrases import (
+    _accept_mana_alternatives,
     _parse_duration, _parse_mana_payment, _parse_opponents_choice,
     _parse_that_object,
 )
@@ -391,7 +392,24 @@ def _parse_damage_unless_pay(
     if not stream.accept_word("pays", "pay"):
         stream.reset(mark)
         return None
-    return ast.DamageUnlessPay(damage, payer, _parse_mana_payment(stream))
+    cost = _parse_mana_payment(stream)
+    # "…unless they pay {B} **or {3}**" (Lim-Dûl's Hex). CR 118.8's alternative,
+    # which the fused node cannot carry — it holds one cost, and both engine
+    # flows behind it charge one number. So the clause decomposes into the
+    # ``May`` an "unless" already is, exactly as the sacrifice alternative above
+    # does and for the same reason: the offer, the penalty and the "they can
+    # afford neither" case all come from machinery that already works.
+    #
+    # Only when an alternative is printed, so Force of Nature and Hasran Ogress
+    # keep the fused node the upkeep dispatcher and the optional-pay prompt
+    # implement whole.
+    alternatives = _accept_mana_alternatives(stream)
+    if alternatives:
+        return ast.May(
+            actor=payer, cost=cost, cost_alternatives=alternatives,
+            otherwise=damage,
+        )
+    return ast.DamageUnlessPay(damage, payer, cost)
 
 
 def _parse_damage_rider_sentence(stream: TokenStream) -> ast.DamageRiders | None:

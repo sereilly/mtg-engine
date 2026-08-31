@@ -212,7 +212,8 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
 
 def _parse_leading_for_each(
     stream: TokenStream,
-) -> "ast.DiedThisWay | ast.ExiledThisWay | ast.ChosenThisWay | ast.EachLifeLost | None":
+) -> ("ast.DiedThisWay | ast.ExiledThisWay | ast.ChosenThisWay "
+     "| ast.EachLifeLost | ast.PlayerRef | None"):
     """``For each <objects> that died this way,`` — the set a later clause
     repeats over, in the leading printed position.
 
@@ -244,6 +245,24 @@ def _parse_leading_for_each(
             return None
         return ast.EachLifeLost(per=number)
     stream.reset(life_lost)
+    # "**For each player,** this enchantment deals 1 damage to that player …"
+    # (Lim-Dûl's Hex.) The players as a set, in the leading printed position.
+    # Read before the noun phrase below, which has no reading for a bare
+    # "player" and would fail the line on a word this clause understands.
+    players = stream.mark()
+    # The bare head noun, because "for each" is already consumed and
+    # `parse_player_ref` reads the quantifier with it. The two spellings the
+    # pool prints, mapped onto the two references every consumer downstream
+    # knows — a third name for the same set would be one card's private
+    # address for something the engine has.
+    noun = stream.peek_word()
+    if noun in ("player", "opponent"):
+        stream.advance()
+        if stream.accept_punct(","):
+            return ast.PlayerRef(
+                "each_player" if noun == "player" else "each_opponent"
+            )
+    stream.reset(players)
     # "For each of **those cards**, …" (Sylvan Library) — the set an earlier
     # sentence of this same effect chose. Read before the noun phrase, because
     # "those cards" is a back-reference and not a filter: read as one it would

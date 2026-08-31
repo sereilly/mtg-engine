@@ -2126,4 +2126,56 @@ def test_oath_of_lim_dul_stays_silent_on_an_opponents_loss(set_pool):
 
     assert p0.graveyard == []
     assert len(p0.battlefield) == 4
+
+
+def test_lim_duls_hex_asks_every_player_in_turn(set_pool):
+    """"At the beginning of your upkeep, for each player, this enchantment
+    deals 1 damage to that player unless they pay {B} or {3}."
+
+    Three pieces at once: a loop over *seats* (the printed "for each player"),
+    a "that player" that means a different seat each time round, and CR 118.8's
+    alternative cost in its mana spelling.
+    """
+    pool = set_pool("ICE")
+    hex_enchantment = Permanent(card=pool["Lim-Dûl's Hex"])
+    swamp = Permanent(card=pool["Snow-Covered Swamp"])
+    forests = [Permanent(card=pool["Snow-Covered Forest"]) for _ in range(3)]
+    p0 = PlayerState(name="P0", battlefield=[hex_enchantment, swamp], life=20)
+    p1 = PlayerState(name="P1", battlefield=forests, life=20)
+    game = Game(players=[p0, p1])
+    game.active_player_index = 0
+
+    game.resolve_upkeep(0)
+    owed = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert [c.player_index for c in owed] == [0, 1], "one offer per seat"
+    assert owed[0].data["cost"] == {"B": 1}
+    assert owed[0].data["cost_alternatives"] == [{"generic": 3}]
+
+    assert game.confirm_optional_pay(0, accept=True)
+    assert game.confirm_optional_pay(1, accept=True)
+    game._settle()
+
+    assert (p0.life, p1.life) == (20, 20)
+    assert swamp.tapped, "the {B} half"
+    assert all(forest.tapped for forest in forests), "the {3} half"
+
+
+def test_lim_duls_hex_damages_a_player_who_cannot_pay_either_cost(set_pool):
+    """An offer nobody can afford is never made, and its decline branch is the
+    damage — so a board with neither a Swamp nor three lands takes the 1."""
+    pool = set_pool("ICE")
+    hex_enchantment = Permanent(card=pool["Lim-Dûl's Hex"])
+    p0 = PlayerState(name="P0", battlefield=[hex_enchantment], life=20)
+    p1 = PlayerState(
+        name="P1", life=20,
+        battlefield=[Permanent(card=pool["Snow-Covered Forest"])],
+    )
+    game = Game(players=[p0, p1])
+    game.active_player_index = 0
+
+    game.resolve_upkeep(0)
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+
+    assert (p0.life, p1.life) == (19, 19)
 # --- end W2G1 ---

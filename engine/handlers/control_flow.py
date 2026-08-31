@@ -1012,8 +1012,16 @@ def _offer_to_seat(
     # evaluator every other resolution-time count goes through, so "its
     # toughness" means here what it means anywhere else.
     life_cost = _resolved_life_cost(game, instruction.payload.get("life_cost"), context)
+    # "…unless they pay {B} **or {3}**" (Lim-Dûl's Hex). Resolved like the cost
+    # itself, so a printed {X} in an alternative means what it means in the
+    # first one.
+    alternatives = [
+        _resolved_cost(alternative, context)
+        for alternative in (instruction.payload.get("cost_alternatives") or ())
+    ]
     if (cost or life_cost) and not game._player_can_pay_optional(player, {
         "cost": cost,
+        "cost_alternatives": alternatives,
         "life_cost": life_cost,
         "life_alternative": int(instruction.payload.get("life_alternative", 0) or 0),
     }):
@@ -1041,6 +1049,7 @@ def _offer_to_seat(
     entry = {
         "card_name": context.card.name,
         "cost": cost,
+        "cost_alternatives": alternatives,
         "life_cost": life_cost,
         "life": 0,
         "_source_permanent": context.source_permanent,
@@ -1058,10 +1067,13 @@ def _offer_to_seat(
     if life_alternative:
         entry["life_alternative"] = life_alternative
     if cost:
+        printed = " or ".join(
+            mana_cost_label(option) for option in (cost, *alternatives)
+        )
         entry["prompt"] = (
-            f"Pay {mana_cost_label(cost)} or {life_alternative} life?"
+            f"Pay {printed} or {life_alternative} life?"
             if life_alternative
-            else f"Pay {mana_cost_label(cost)}?"
+            else f"Pay {printed}?"
         )
     elif life_cost:
         entry["prompt"] = f"Pay {life_cost} life?"
@@ -1257,6 +1269,15 @@ def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecut
     return True, "resolved"
 
 
+@dataclasses.dataclass(frozen=True)
+class _Seat:
+    """One turn of a loop over *players* — "for each player, …" (Lim-Dûl's
+    Hex). A wrapper rather than a bare index, so the loop body can tell a seat
+    from a permanent without asking what type it is."""
+
+    index: int
+
+
 #: One turn of a **counted** loop — "for each 1 life you lost" (Oath of
 #: Lim-Dûl). A sentinel rather than None, because None is a legitimate absent
 #: object elsewhere in this file and the two must not collapse: one is "run the
@@ -1304,9 +1325,21 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
     # event froze. Read first, because the two branches below both build a list
     # of permanents and this one has none to build.
     repeat_key = filters.get("repeat_from_trigger")
+    # "**For each player,** …" (Lim-Dûl's Hex) — a loop over *seats*. Read
+    # beside the counted form and before the two object branches for the same
+    # reason: neither of them has a board to scan for this.
+    seat_set = filters.get("players")
     if repeat_key is not None:
         times = int((context.trigger_context or {}).get(repeat_key, 0) or 0)
         matched = [_A_REPETITION] * max(0, times)
+    elif seat_set is not None:
+        # Through the same reader every multi-seat offer uses, so "each player"
+        # names the same seats in the same order here as it does there — CR
+        # 101.4's turn order from the active player, minus anyone who has left
+        # the game (CR 800.4a).
+        matched = [
+            _Seat(index) for index in _offered_seats(game, str(seat_set), context)
+        ]
     elif produced_by is not None:
         matched = list(context.results.get(produced_by) or ())
     else:
@@ -1330,6 +1363,19 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
             # A counted repetition names no object, so nothing rebinds: the
             # body means what it would mean written once, run again.
             _run(game, steps, context)
+            return
+        if isinstance(item, _Seat):
+            # The seat this iteration is about becomes "that player" for the
+            # length of it — the same rebinding ``_offer_to_seat`` makes for a
+            # multi-seat offer, and the only way one printed sentence can name
+            # a different player each time round. ``caster`` moves with it, for
+            # that function's stated reason: a bare imperative inside the loop
+            # means the seat the loop is on.
+            seated = game.players[item.index]
+            _run(
+                game, steps,
+                dataclasses.replace(context, target=seated, caster=seated),
+            )
             return
         context.iteration_target = item
         context.iteration_seats = {

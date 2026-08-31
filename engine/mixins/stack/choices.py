@@ -2928,12 +2928,20 @@ class PendingChoicesMixin:
         holds both halves of that question; asking it once here is what makes
         "can they pay?" and "pay it" the same answer.
         """
-        return plan_payment(
-            player.mana_pool,
-            untapped_mana_lands(self.controlled_by(player)),
-            entry.get("cost") or {},
-            produces=self._land_payment_colors,
-        )
+        # "…unless they pay {B} **or {3}**" (Lim-Dûl's Hex). CR 118.8's
+        # alternatives are readings of the *same* offer, so they are tried
+        # here rather than at a second prompt — in printed order, which is the
+        # stated policy the life alternative below already takes.
+        lands = untapped_mana_lands(self.controlled_by(player))
+        printed = entry.get("cost") or {}
+        for cost in (printed, *(entry.get("cost_alternatives") or ())):
+            plan = plan_payment(
+                player.mana_pool, lands, cost,
+                produces=self._land_payment_colors,
+            )
+            if plan is not None:
+                return plan
+        return None
 
     def _spend_payment_plan(self, player, plan) -> None:
         """Carry out a :func:`plan_payment` answer: spend the floating mana it
@@ -3571,7 +3579,18 @@ class PendingChoicesMixin:
         floating = (
             (True if player.life > life_cost else None)
             if life_cost
-            else plan_payment(player.mana_pool, (), entry.get("cost") or {})
+            else next(
+                (
+                    plan
+                    for cost in (
+                        entry.get("cost") or {},
+                        *(entry.get("cost_alternatives") or ()),
+                    )
+                    for plan in (plan_payment(player.mana_pool, (), cost),)
+                    if plan is not None
+                ),
+                None,
+            )
         )
         # The same policy for CR 118.8's alternative: floating mana first, and
         # the life only when there is none — and never down to zero, which is

@@ -193,6 +193,43 @@ def _lower_unless_player_pays(
 _SEAT_SET_ACTORS = frozenset({"each_player", "each_opponent", "defending_player"})
 
 
+def _lower_for_each_player(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each player,** this enchantment deals 1 damage to that player
+    unless they pay {B} or {3}." (Lim-Dûl's Hex.)
+
+    A loop over *seats* rather than over objects. The same ``for_each`` the
+    object loops lower onto, with the seat set as the iterator — and the
+    handler binds each seat as "that player" while its iteration runs, which is
+    what the printed back-reference means and the only way one sentence can
+    name a different player each time round.
+
+    Refused for any other player reference: "for each opponent" is a real set
+    and lowers here too, but a reference naming *one* seat is not a loop at all
+    and would repeat the sentence once against a seat nobody chose.
+    """
+    if node.iterator.kind not in _LOOPED_SEAT_SETS:
+        raise LoweringError(
+            f"no loop repeats an effect over the {node.iterator.kind}", node=node
+        )
+    if not inner:
+        raise LoweringError("a per-player loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {"iterator": {"players": node.iterator.kind}, "effect": inner},
+        ),
+    )
+
+
+#: The player references that name a *set* of seats a loop can walk. The same
+#: two ``handlers/control_flow._offered_seats`` enumerates, and deliberately no
+#: more: a reference naming one seat is not a loop.
+_LOOPED_SEAT_SETS = frozenset({"each_player", "each_opponent"})
+
+
 def _lower_for_each_life_lost(
     node: ast.ForEach,
     inner: tuple[OracleInstruction, ...],
@@ -340,6 +377,21 @@ def _lower_may(
         # a {B} had nothing to collect it with. `engine/mana_payment.py` is what
         # made the refusal unnecessary.
         payload["cost"] = _may_cost_payload(node)
+    if node.cost_alternatives:
+        # "…unless they pay {B} **or {3}**" (Lim-Dûl's Hex). CR 118.8's second
+        # way to cover the *same* offer, so it rides the one prompt rather than
+        # arming a second one — and it needs the first cost beside it, because
+        # a list of alternatives with nothing to be alternative *to* is just a
+        # cost written oddly.
+        if node.cost is None:
+            raise LoweringError(
+                "an alternative payment needs the cost it is an alternative to",
+                node=node,
+            )
+        payload["cost_alternatives"] = [
+            {symbol: count for symbol, count in alternative.pips}
+            for alternative in node.cost_alternatives
+        ]
     if node.life_cost is not None:
         # "… unless its controller **pays life equal to its toughness**."
         # (Essence Vortex.) Its own payload key rather than a reading of

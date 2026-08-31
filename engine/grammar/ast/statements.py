@@ -307,6 +307,12 @@ class May:
     #: other second cost should grow the field into a cost union rather than
     #: reuse this one for something it cannot say.
     life_alternative: int | None = None
+    #: "…unless they pay {B} **or {3}**." (Lim-Dûl's Hex.) CR 118.8's
+    #: alternative again, in the spelling where the second currency is also
+    #: mana — so whole costs rather than ``life_alternative``'s single number.
+    #: A tuple because the rule puts no limit on how many a card may print, and
+    #: the payer covers the offer with whichever of them they can.
+    cost_alternatives: tuple["ManaCost", ...] = ()
     #: "…unless its controller **pays life equal to its toughness**." (Essence
     #: Vortex.) A life cost with no mana alternative at all, which is a
     #: different field from ``life_alternative`` above for the reason
