@@ -244,7 +244,7 @@ def _parse_leading_for_each(
     # "For each land **destroyed this way**, …" (Stench of Evil.) The bare
     # participle spelling of the relative clause below, and the *same* set: what
     # a destroy sweep records is what actually died, because a regenerated or
-    # indestructible permanent was not destroyed (CR 701.7c). One node, so the
+    # indestructible permanent was not destroyed (CR 701.8c). One node, so the
     # two printings cannot come to mean two sets — the difference is Wizards'
     # templating and nothing else.
     if stream.accept_phrase("destroyed", "this", "way"):

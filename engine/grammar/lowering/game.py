@@ -426,9 +426,18 @@ def _lower_lose_life(
         # take *one* player's life total and subtract that share from everybody.
         # The per-recipient channel is the one the damage sweeps already use for
         # this exact reason. A single-seat recipient keeps the payload it had.
+        # …and only when the count is about the *losing* player. "Each opponent
+        # loses X life, where X is the number of Shrines **you** control"
+        # (Sanctum of Stone Fangs) is one number by construction, and the
+        # per-recipient evaluator is owner-blind — it counts against whichever
+        # seat it is handed — so routing that one through here would count each
+        # opponent's own Shrines instead.
         key = (
             X_FROM_COUNT_PER_RECIPIENT
-            if node.player.kind in _PER_SEAT_LIFE_RECIPIENTS
+            if (
+                node.player.kind in _PER_SEAT_LIFE_RECIPIENTS
+                and halved.get("owner") == "target"
+            )
             else X_FROM_COUNT
         )
         payload: dict[str, object] = {"amount": "x", key: halved}

@@ -847,4 +847,44 @@ def test_pox_over_an_empty_board_asks_nobody_to_sacrifice(set_pool):
     assert p1.life == 2 and p2.life == 2, "a third of 3 is 1"
     assert game.pending_choice_of("sacrifice", 0) is None
     assert game.pending_choice_of("discard", 0) is None
+
+def test_a_type_sweep_records_the_permanents_it_destroyed(set_pool):
+    """Not a card: the class Stench of Evil's fix belongs to.
+
+    "For each <noun> destroyed this way, …" reads the objects a sweep recorded,
+    and the lowering admits the clause on the strength of the *count* being
+    produced. So a sweep that recorded the count and not the objects compiled
+    such a card supported and then iterated an empty list. Five type sweeps did
+    (`destroy_all_creatures` and its four siblings) and the by-type land sweep
+    did not record even the count.
+
+    Checked against a live board rather than against the table, because the
+    table is the claim: the record has to be what actually died, and whose it
+    was.
+    """
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers.registry import EFFECT_HANDLERS
+    from engine.oracle_types import OracleInstruction, PER_OBJECT_SEAT_RECORDS
+
+    pool = set_pool("ICE")
+    mine = Permanent(card=pool["Balduvian Bears"])
+    theirs = Permanent(card=pool["Tor Giant"])
+    land = Permanent(card=pool["Forest"])
+    p1 = PlayerState(name="P1", battlefield=[mine, land], life=20)
+    p2 = PlayerState(name="P2", battlefield=[theirs], life=20)
+    game = Game(players=[p1, p2])
+    game._sync_control()
+    context = OracleExecutionContext(caster=p1, target=p2, card=pool["Pox"])
+
+    EFFECT_HANDLERS["destroy_all_creatures"](
+        game, OracleInstruction("destroy_all_creatures", "", {}), context
+    )
+
+    destroyed = context.results["destroyed_this_way_objects"]
+    assert context.results["destroyed_this_way"] == 2
+    assert {perm.card.name for perm in destroyed} == {"Balduvian Bears", "Tor Giant"}
+    seats = context.results[PER_OBJECT_SEAT_RECORDS["controller"]]
+    assert seats[mine.permanent_id] == 0
+    assert seats[theirs.permanent_id] == 1
+    assert land in game.controlled_by(0), "the land was not a creature"
 # --- end W2G5 ---
