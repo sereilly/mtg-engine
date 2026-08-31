@@ -2232,6 +2232,13 @@ class PendingChoicesMixin:
             if color is not None:
                 # Jihad's anthem is conditioned on the chosen color/player.
                 self._recalculate_lord_buffs()
+            # "…equal to 1 plus the number of creatures **the chosen player**
+            # controls." (Lost Order of Jarkeld.) A characteristic-defining P/T
+            # counting a board the answer just named, so the answer has to be
+            # what it counts: the default stamped at entry was a different seat,
+            # and the refresh that ran then measured that one. The land-types
+            # branch above already recomputes for the same reason.
+            self._refresh_dynamic_creatures()
         self.discard_pending_choice(choice)
         self.check_state_based_actions()
         return True

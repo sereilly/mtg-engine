@@ -10,7 +10,7 @@ from ..enter_effects import (
     chooses_color_on_enter,
     chooses_two_land_types_on_enter,
     CHOOSE_CARD_NAME_ON_ENTER,
-    CHOOSE_OPPONENT_ON_ENTER,
+    chooses_opponent_on_enter,
     COPY_ARTIFACT_ON_ENTER,
     COPY_CREATURE_ON_ENTER,
     ENTERS_TAPPED,
@@ -110,6 +110,26 @@ def _count_dynamic_pt(
         # Avenger). Whose battlefield is already payload, so this is one more
         # value for it rather than a second counter.
         battlefields = [p.battlefield for p in game.players if p is not player]
+    elif scope == "chosen_player":
+        # "…the number of creatures **the chosen player** controls" (Lost Order
+        # of Jarkeld). The seat this permanent chose as it entered (CR 614.1c),
+        # read off the permanent rather than off the game — the record belongs
+        # to one object, the way `chosen_number` two branches up does.
+        #
+        # Through the control seam, not `player.battlefield`: the sentence says
+        # "controls", and a creature the chosen player has *stolen* is one they
+        # control. The scopes beside this one predate the seam and are ratcheted
+        # where they are; a new one has no reason to join them.
+        #
+        # No record is a permanent still entering — the choice is part of
+        # arriving — and an empty board is the honest answer for it: the printed
+        # constant alone, which is what the card is worth until the seat exists.
+        seat = permanent.metadata.get("chosen_player_index")
+        battlefields = (
+            [list(game.controlled_by(seat))]
+            if isinstance(seat, int) and 0 <= seat < len(game.players)
+            else []
+        )
     elif (
         scope == "defender_when_attacking"
         and permanent.attacking
@@ -322,7 +342,8 @@ class PermanentStateMixin:
                     options=list(bodies),
                 )
 
-        # "As this artifact enters, choose an opponent." (Black Vise) /
+        # "As this artifact enters, choose an opponent." (Black Vise) / "As
+        # this creature enters, choose an opponent." (Lost Order of Jarkeld.) /
         # "As this enchantment enters, choose a color and an opponent." (Jihad)
         # Deterministic defaults are stamped immediately (the cast target, else
         # the first living opponent; the color the opponent controls most among
@@ -331,7 +352,7 @@ class PermanentStateMixin:
         # gets a prompt whose confirm_enter_choice overwrites the defaults
         # before anything consults them.
         needs_color = CHOOSE_COLOR_AND_OPPONENT_ON_ENTER in text
-        if needs_color or CHOOSE_OPPONENT_ON_ENTER in text:
+        if needs_color or chooses_opponent_on_enter(text):
             opponents = [
                 i for i, p in enumerate(self.players) if i != caster_index and not p.lost
             ]
