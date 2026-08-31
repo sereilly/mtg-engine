@@ -1625,4 +1625,83 @@ def test_merieke_ri_berit_leaves_an_untouched_board_alone(
 
     assert game.is_on_battlefield(victim), game.log
     assert game.controller_index_of(victim) == 0
+
+
+def _w1g5_titan_board(set_pool, catalog_by_name):
+    titan = Permanent(card=set_pool("ICE")["Mountain Titan"])
+    _nosick(titan)
+    game = Game(players=[
+        PlayerState(
+            name="P1", battlefield=[titan],
+            hand=[
+                catalog_by_name["Dark Ritual"],
+                catalog_by_name["Lightning Bolt"],
+                catalog_by_name["Dark Ritual"],
+            ],
+        ),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    return game, titan
+
+
+def _w1g5_cast(game, name):
+    game.cast_from_hand(0, name)
+    game._settle()
+    while game.stack:
+        game.resolve_top_of_stack()
+
+
+def test_mountain_titan_arms_a_delayed_cast_trigger(set_pool):
+    """"Until end of turn, whenever you cast a black spell, …" is CR 603.7's
+    delayed triggered ability with a stated duration, not an ability the
+    permanent has — the same shape Subira prints over a combat event, with the
+    subject being a **spell** instead of a creature."""
+    program = compile_card_oracle(set_pool("ICE")["Mountain Titan"])
+
+    assert program.supported
+    payload = program.activated_abilities[0].instruction.payload
+    assert payload["event"] == "you_cast_spell"
+    assert payload["subject_filter"] == {"color_filter": "B"}
+    assert payload["once"] is False
+    assert payload["duration"] == "end_of_turn"
+
+
+def test_mountain_titan_grows_only_after_the_ability_and_only_on_black(
+    set_pool, catalog_by_name
+):
+    """Three assertions in one game, because each is the other's control: a
+    black spell before the activation does nothing, a red spell after it does
+    nothing, and a black spell after it grows the Titan."""
+    game, titan = _w1g5_titan_board(set_pool, catalog_by_name)
+
+    _w1g5_cast(game, "Dark Ritual")
+    assert titan.effective_power == 2, game.log
+
+    assert game.activate_permanent_ability(0, "Mountain Titan").supported
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    _w1g5_cast(game, "Lightning Bolt")
+    assert titan.effective_power == 2, game.log
+
+    _w1g5_cast(game, "Dark Ritual")
+    assert titan.effective_power == 3, game.log
+
+
+def test_mountain_titan_stops_growing_when_the_turn_ends(
+    set_pool, catalog_by_name
+):
+    """CR 603.7b: "until end of turn" is the stated duration, so the ability
+    that never stops triggering does stop existing."""
+    game, titan = _w1g5_titan_board(set_pool, catalog_by_name)
+    assert game.activate_permanent_ability(0, "Mountain Titan").supported
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    game.resolve_cleanup_step(0)
+
+    assert game.delayed_triggers == [], game.log
+    _w1g5_cast(game, "Dark Ritual")
+    assert titan.effective_power == 2, game.log
 # --- end W1G5 ---

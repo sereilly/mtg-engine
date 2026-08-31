@@ -2260,6 +2260,22 @@ _DELAYED_ATTACK_UNTIL_RE = re.compile(
     r"(?P<event>attacks|deals combat damage to a player), (?P<effect>.+)$"
 )
 
+# The same delayed trigger over a **cast** rather than a combat event: "Until
+# end of turn, whenever you cast a black spell, put a +1/+1 counter on this
+# creature." (Mountain Titan.) Its own row rather than a widened alternation in
+# the one above, because the shape is different in the place that matters — the
+# noun phrase there describes the *attacking permanent* and here it describes
+# the **spell**, which is a card on the stack with no computed characteristics
+# at all (CR 613.1). Two objects, two matchers, so two rows.
+#
+# The phrase is delimited as a `_subject` group and read by the same noun parser
+# every other one is, so a card printed "an artifact spell" needs no code.
+_DELAYED_CAST_UNTIL_RE = re.compile(
+    r"^until end of turn, whenever you cast (?P<cast_subject>an? .+? spell), "
+    r"(?P<effect>.+)$"
+)
+
+
 #: Which delayed-trigger event each printed phrase names. A phrase whose event
 #: has no fire site has nowhere to be announced, so the clause refuses rather
 #: than arming a trigger nothing will ever look at — the dispatcher question
@@ -2280,6 +2296,34 @@ def _parse_delayed_attack_trigger(
     effect fails to parse, so the card refuses rather than arming a trigger
     that fires into nothing."""
     normalized = normalize_creature_line(effect_clause)
+    cast = _DELAYED_CAST_UNTIL_RE.match(normalized)
+    if cast is not None:
+        from .grammar import subject_filter_payload
+        from .subject_filters import card_only_filter
+
+        described = subject_filter_payload(cast.group("cast_subject"))
+        # A spell is a card on the stack, so only what is *printed* on it is
+        # testable — `card_only_filter` is the list of exactly which keys that
+        # comes to, and anything wider refuses rather than arming a trigger that
+        # fires on a strictly larger set than the card prints.
+        if described is None or card_only_filter(described) is None:
+            return None
+        inner = _line_instruction(cast.group("effect"), card_name, activated=True)
+        if inner is None:
+            return None
+        return OracleInstruction(
+            "create_delayed_trigger",
+            "",
+            {
+                "event": "you_cast_spell",
+                "subject_filter": described,
+                "instruction": inner[0],
+                # "Until end of turn, **whenever** …" — CR 603.7b's stated
+                # duration, so it fires every time for as long as it lasts.
+                "once": False,
+                "duration": "end_of_turn",
+            },
+        )
     narrowed = _DELAYED_ATTACK_UNTIL_RE.match(normalized)
     if narrowed is not None:
         from .grammar import subject_filter_payload

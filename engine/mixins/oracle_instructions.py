@@ -175,6 +175,17 @@ class OracleInstructionsMixin:
             caster_index=caster_index, cast_card=card,
         )
         emit(self, "you_cast_spell", subject=card, caster_index=caster_index)
+        # The same event for a *delayed* ability (CR 603.7): "Until end of turn,
+        # whenever you cast a black spell, …" (Mountain Titan). A delayed
+        # ability belongs to no permanent, so the battlefield scan `emit` runs
+        # cannot reach it — it waits in a list on `Game` and this is the site
+        # that announces it. Scoped to the entries whose controller is the
+        # caster, because the printed word is "**you**".
+        from ..delayed_triggers import fire_delayed_triggers
+
+        fire_delayed_triggers(
+            self, "you_cast_spell", subject=card, seat=caster_index,
+        )
         # The ordinal form (Double Vision) is the *same* event asked a different
         # question, so it is announced from the same place rather than given a
         # fire site of its own — the filter is where "is this the first one?"
