@@ -54,6 +54,12 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     "tapped_only", "untapped_only",
     "mana_value", "power", "toughness", "with_plus1_counter",
     "nontoken", "named", "supertypes",
+    # "Sacrifice a **Caribou token**" (Caribou Range). The positive twin of
+    # ``nontoken``, read off the same CR 111.1 fact the matcher already tests —
+    # and it must be here, not merely tested: the key set is what a compiler
+    # admits a narrowed line on, so with the word missing the cost was refused
+    # outright and the card was unsupported.
+    "token_only",
     # "target **nonsnow** land" (Hallowed Ground). The negative of
     # ``supertypes``, answered off the same effective type line — testable for
     # exactly the reason the positive is.

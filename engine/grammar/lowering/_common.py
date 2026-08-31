@@ -88,7 +88,12 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # sibling ``dealt_damage_to_source_this_turn`` is deliberately absent, being
     # a relation no payload key carries.
     "was_dealt_damage_this_turn",
-    "nontoken", "named", "their_choice", "mana_value", "power", "toughness",
+    # ``token_only`` beside ``nontoken``: ``to_payload`` emits both
+    # unconditionally and ``permanent_matches_filter`` tests both, so a phrase
+    # naming a token ("a Caribou token", Caribou Range) was refused as an
+    # unhonoured field while its negation went through.
+    "nontoken", "token_only",
+    "named", "their_choice", "mana_value", "power", "toughness",
     "colored", "with_plus1_counter", "supertypes", "excluded_supertypes",
     "not_enchanted",
     "enchanted_only",

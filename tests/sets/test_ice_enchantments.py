@@ -715,19 +715,38 @@ def test_a_mana_cost_alone_no_longer_claims_a_line_the_compiler_refuses(set_pool
     an activation was claimed whether or not the compiler could read it, which
     is how an Aura reports supported carrying an ability that does nothing.
 
-    The example expires every time the compiler learns the line it names, and
-    it has now done so twice in one wave: Chromatic Armor's "{X}: Put a sleight
-    counter on this Aura…" first, then Earthlore's tap-the-enchanted-land cost,
-    implemented by a *parallel branch* in the same round. So it is re-pointed,
-    not deleted — what the guard is about is the *claim reader*, not the card,
-    and it needs some line the compiler genuinely still refuses to stay honest.
-    Caribou Range's is the current one: a sacrifice cost naming a token.
+    The example expired every time the compiler learned the line it named, and
+    it did so three times: Chromatic Armor's "{X}: Put a sleight counter on this
+    Aura…", then Earthlore's tap-the-enchanted-land cost (implemented by a
+    *parallel branch* in the same round), then Caribou Range's sacrifice cost
+    naming a token. There is now no printed Aura or Equipment in the pool whose
+    activation line the compiler refuses, so a fourth card-backed example would
+    be a guard waiting to be re-pointed by whoever implements it.
+
+    So the negative half is an **invented** line instead, and that is the
+    stronger form: what this guard is about is the *claim reader*, not any card,
+    and an effect nothing in the engine performs cannot be implemented out from
+    under it by a parallel branch. Its cost is deliberately an ordinary run of
+    mana symbols, which is exactly the shape the retired stand-in matched on —
+    so a claim that went back to testing the shape would pass this line and
+    fail here. The card-backed *positive* pairing lives one test up
+    (``test_fylgjas_counter_cost_is_what_the_claim_used_to_refuse``).
     """
     from engine.auras import aura_activated_ability_claim
+    from engine.grammar import compile_line
 
-    line = "sacrifice a caribou token: you gain 1 life"
-    assert aura_activated_ability_claim(line, "Caribou Range") is None
-    assert not compile_card_oracle(set_pool("ICE")["Caribou Range"]).supported
+    line = "{2}{u}: enchanted creature glimmers uncontrollably until end of turn"
+    compiled = compile_line(line)
+    assert compiled.parse_error or compiled.lowering_error, (
+        "the example has to be a line the compiler genuinely refuses, or this "
+        "guard proves nothing"
+    )
+    assert aura_activated_ability_claim(line, "Glimmerward") is None
+    # …and the reader is not simply refusing everything: the same cost shape
+    # with an effect the compiler *can* read is claimed.
+    assert aura_activated_ability_claim(
+        "{2}{u}: enchanted creature gets +1/+1 until end of turn", "Glimmerward"
+    ) is not None
 
 
 # --- Round 38: the board is the cap, and an end-step gate with no seat in it ---
@@ -2002,6 +2021,77 @@ def test_snow_devils_snow_land_is_counted_on_the_auras_controllers_board(set_poo
     game._settle()
 
     assert bear.has_keyword("first strike")
+
+
+def _caribou_board(set_pool):
+    """A Plains wearing Caribou Range, with {W}{W} in P1's pool."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    plains = Permanent(card=pool["Snow-Covered Plains"])
+    aura = Permanent(card=pool["Caribou Range"])
+    p1 = PlayerState(name="P1", battlefield=[plains, aura], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    attach_aura(aura, plains)
+    game._settle()
+    return game, plains, aura
+
+
+def test_caribou_range_grants_its_land_the_token_maker(set_pool):
+    """The quoted ability reaches the host through ``effective_card``, so the
+    compiler builds it for the land as though the land had printed it."""
+    game, plains, aura = _caribou_board(set_pool)
+
+    program = compile_card_oracle(plains.effective_card)
+    (granted,) = [
+        ability for ability in program.activated_abilities
+        if ability.instruction is not None
+        and ability.instruction.kind == "create_token"
+    ]
+    assert granted.supported
+    assert granted.cost.mana["W"] == 2
+    assert granted.cost.requires_tap
+
+    from engine.auras import detach_aura
+
+    detach_aura(aura, plains)
+    game._settle()
+    assert not compile_card_oracle(plains.effective_card).activated_abilities
+
+
+def test_caribou_range_sacrifices_a_caribou_token_for_a_life(set_pool):
+    """The Aura's own ability, whose cost names a token by creature type — the
+    narrowing that has to survive to the charger, or the cost eats anything."""
+    game, plains, aura = _caribou_board(set_pool)
+    (ability,) = compile_card_oracle(aura.card).activated_abilities
+
+    assert ability.cost.sacrifice_filter == {
+        "type_filter": "creature",
+        "subtype_filter": "caribou",
+        "token_only": True,
+    }
+    assert ability.instruction.kind == "target_gains_life"
+    assert ability.instruction.payload == {"amount": 1, "recipient": "caster"}
+
+
+def test_the_caribou_sacrifice_spares_a_printed_caribou(set_pool):
+    """"A Caribou **token**" is not "a Caribou": the word is a fact about the
+    object (CR 111.1), and dropped it would let the cost eat a real creature."""
+    from engine.handlers._common import permanent_matches_filter
+    from engine.tokens import make_token_card
+
+    aura = Permanent(card=set_pool("ICE")["Caribou Range"])
+    (ability,) = compile_card_oracle(aura.card).activated_abilities
+    described = ability.cost.sacrifice_filter
+
+    caribou = make_token_card(
+        "Caribou", 0, 1, "Creature — Caribou", colors=("W",)
+    )
+    made = Permanent(card=caribou, metadata={"is_token": True})
+    printed = Permanent(card=caribou)  # the same characteristics, not a token
+
+    assert permanent_matches_filter(made, described)
+    assert not permanent_matches_filter(printed, described)
 
 
 # --- end W2G4 ---

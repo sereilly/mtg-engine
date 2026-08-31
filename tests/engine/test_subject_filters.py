@@ -141,6 +141,22 @@ def test_nontoken_rejects_a_token(pool):
     assert not subject_matches(game, token, {"nontoken": True})
 
 
+def test_token_only_rejects_a_nontoken(pool):
+    """The positive twin of ``nontoken`` (CR 111.1), and the narrowing Caribou
+    Range's sacrifice cost carries: a Caribou *token*, not a Caribou."""
+    token = Permanent(card=pool["Grizzly Bears"], metadata={"is_token": True})
+    printed = Permanent(card=pool["Grizzly Bears"])
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[token, printed]),
+            PlayerState(name="P2"),
+        ]
+    )
+
+    assert subject_matches(game, token, {"token_only": True})
+    assert not subject_matches(game, printed, {"token_only": True})
+
+
 def test_chosen_color_is_read_off_the_ability_s_source(pool):
     """"nontoken permanents **of the chosen color**" (Psychic Allergy).
 
@@ -326,6 +342,7 @@ def test_every_sacrifice_filter_in_the_pool_is_one_the_prompt_can_test():
 # a key can only be listed here by someone who wrote one.
 _COVERED_ELSEWHERE = {
     "nontoken": "test_nontoken_rejects_a_token",
+    "token_only": "test_token_only_rejects_a_nontoken",
     "untapped_only": "test_untapped_only_rejects_a_tapped_permanent",
     "controller": "test_the_relative_keys_refuse_without_the_context_they_need",
     "owner": "test_ownership_is_asked_separately_from_control",
