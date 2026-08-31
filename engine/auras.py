@@ -1196,7 +1196,17 @@ def aura_conditional_grant_holds(permanent, state: str) -> bool:
 # The same channel a board-wide static's granted ability already travels on
 # (`engine/global_statics.py`), for the same reason: nothing downstream of the
 # compiler knows a word for "counter target spell if …".
-_QUOTED_ABILITY_GRANT = re.compile(rf'^{_ATTACHED} {_NOUN} has "(?P<ability>[^"]+)"$')
+#: The optional P/T prefix is the same split ``_KEYWORD_GRANT`` and the untap
+#: restriction make, and it was missing here. Infernal Scarring prints
+#: "Enchanted creature gets +2/+0 and has "When this creature dies, draw a
+#: card."" — one line, two channels — and the anchored pattern matched neither
+#: the whole line nor its tail, so the card reported supported, applied the
+#: +2/+0, and granted **nothing**: the claim came from the P/T row of
+#: ``_TEMPLATES``, which is checked first and says "and optional granted
+#: keyword or ability" without asking whether anything grants one.
+_QUOTED_ABILITY_GRANT = re.compile(
+    rf'^{_ATTACHED} {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? has "(?P<ability>[^"]+)"$'
+)
 
 
 def aura_granted_ability_lines(oracle_text: str) -> tuple[str, ...]:
