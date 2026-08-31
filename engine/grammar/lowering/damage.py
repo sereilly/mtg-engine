@@ -18,7 +18,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
-from ...oracle_types import X_FROM_COUNT
+from ...oracle_types import PER_OBJECT_SEAT_RECORDS, X_FROM_COUNT
 from ._amounts import (
     _damaged_player_is,
     _lower_board_count_damage,
@@ -90,7 +90,9 @@ def _sweep_kind(recipients: tuple[ast.Recipient, ...]) -> str | None:
 
 
 def _lower_damage_unless_pay(
-    node: ast.DamageUnlessPay, event: str | None
+    node: ast.DamageUnlessPay,
+    event: str | None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"<source> deals N damage to you unless you pay <cost>."
 
@@ -130,6 +132,33 @@ def _lower_damage_unless_pay(
     if not isinstance(amount, int):
         raise LoweringError("a pay-or-else flow needs a fixed damage amount", node=node)
 
+    # "For each land destroyed this way, <source> deals 1 damage to **that
+    # land's controller** unless **they** pay {2}." (Stench of Evil.) The seat
+    # is neither the ability's controller nor a trigger's frozen event subject:
+    # it is a fact an earlier *step of this same spell* recorded about the
+    # object the loop is currently on, which is the third channel
+    # `PER_OBJECT_SEAT_RECORDS` exists for. Admitted only when a step really
+    # wrote that record, which is what `produced` is; without one the words
+    # name nobody and the clause keeps the refusal below.
+    #
+    # The printed possessive collapses to `that_player` in the AST — "that
+    # land's controller", "that player" and "they" are one referent to every
+    # consumer — so what distinguishes this reading is the record, not the
+    # spelling. A card printing a bare "that player" behind such a sweep would
+    # reach it too; the handler finds no seat for the loop it is not in, and
+    # does nothing, which is the safe direction.
+    controller_record = PER_OBJECT_SEAT_RECORDS["controller"]
+    if on_event_player and controller_record in produced:
+        return (
+            OracleInstruction(
+                "self_damage_unless_pay", "",
+                {
+                    "amount": amount,
+                    "cost": _generic_only(node.cost, node),
+                    "payer_seat_record": controller_record,
+                },
+            ),
+        )
     if event is None:
         raise LoweringError(
             "a pay-or-else damage prompt exists only as a trigger's own effect",
@@ -148,21 +177,32 @@ def _lower_damage_unless_pay(
             ),
         )
 
-    # `self_damage_unless_pay` puts a single generic number on the prompt, so a
-    # coloured cost would be silently charged as {0}.
-    pips = dict(node.cost.pips)
-    generic = int(pips.pop("generic", 0))
-    if pips:
-        raise LoweringError(
-            "the optional-pay prompt reads one generic cost, not coloured mana", node=node
-        )
-    payload: dict[str, object] = {"amount": amount, "cost": generic}
+    payload: dict[str, object] = {
+        "amount": amount, "cost": _generic_only(node.cost, node),
+    }
     if on_event_player:
         # Which seat is offered the cost, as payload rather than a second kind:
         # same prompt, same damage, same decline — only the player differs, and
         # the handler reads the seat off the trigger's frozen context.
         payload["payer"] = "event_subject_player"
     return (OracleInstruction("self_damage_unless_pay", "", payload),)
+
+
+def _generic_only(cost, node) -> int:
+    """The one generic number ``self_damage_unless_pay``'s prompt can charge.
+
+    Refuses a coloured pip rather than dropping it: the prompt puts a single
+    generic number on screen, so a coloured cost would be charged as {0} and the
+    card would be strictly easier to buy off than it is printed.
+    """
+    pips = dict(cost.pips)
+    generic = int(pips.pop("generic", 0))
+    if pips:
+        raise LoweringError(
+            "the optional-pay prompt reads one generic cost, not coloured mana",
+            node=node,
+        )
+    return generic
 
 
 def _lower_halved_damage(
@@ -262,7 +302,40 @@ def _lower_damage(
                 f"no damage handler carries the printed {key!r} rider here",
                 node=node,
             )
+    if node.riders.unpreventable_to_creature and not _lock_survives(lowered):
+        raise LoweringError(
+            "no damage handler carries the printed can't-be-prevented lock here",
+            node=node,
+        )
     return lowered
+
+
+def _lock_survives(lowered: tuple[OracleInstruction, ...]) -> bool:
+    """Whether Lava Burst's lock reaches a branch that actually applies it.
+
+    The same post-condition the two riders above get, spelled out separately
+    because it is stricter than "the key is present". ``deal_damage`` is one
+    handler with a dozen branches, and only the two that damage **one chosen
+    creature** hand the flag to the damage event — the sweeps, the divided
+    list, the several-targets loop and the player recipients each build their
+    own event and would carry the key without reading it. So the shapes refuse
+    here rather than compiling supported with a lock nothing arms; a card that
+    prints one of them is a card this needs widening for, and it will say so.
+    """
+    if len(lowered) != 1 or lowered[0].kind != "deal_damage":
+        return False
+    payload = lowered[0].payload
+    if not payload.get("unpreventable_to_creature"):
+        return False
+    # A named recipient is a player, the source, or a per-seat sweep — none of
+    # them the single chosen creature the flag is threaded to.
+    if payload.get("recipient") is not None:
+        return False
+    targets = payload.get("targets") or {}
+    if targets.get("kind") == "divided":
+        return False
+    count = targets.get("count")
+    return not (isinstance(count, int) and count > 1)
 
 
 def _lower_damage_shape(
@@ -465,6 +538,8 @@ def _lower_damage_shape(
         payload["no_regen"] = True
     if node.riders.exile_if_dies:
         payload["exile_if_dies"] = True
+    if node.riders.unpreventable_to_creature:
+        payload["unpreventable_to_creature"] = True
 
     # Divided damage (Fireball) picks its targets at cast time and carries them
     # on the stack item, so the noun phrase here is "any number of targets"

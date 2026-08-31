@@ -288,7 +288,12 @@ def _scaled(total: int, spec: dict) -> int:
     rounding = spec.get("half")
     if rounding is None:
         return total
-    return -(-total // 2) if rounding == "up" else total // 2
+    # "a third of their life" (Pox) is the same arithmetic with a different
+    # denominator, so it is the same key with a number beside it rather than a
+    # second rounding channel. Absent means 2, which keeps every spec written
+    # before fractions existed byte-identical.
+    divisor = max(1, int(spec.get("divide_by", 2) or 2))
+    return -(-total // divisor) if rounding == "up" else total // divisor
 
 
 def _resolve_chosen_color(filt: dict, source) -> dict:
@@ -606,6 +611,7 @@ def apply_damage_to_creature(
     log_message: Callable[[int], str] | None = None,
     then: Callable[[int], None] | None = None,
     asks: bool = False,
+    unpreventable: bool = False,
 ) -> int:
     """Mark non-combat damage on a single creature and fire its "dealt damage"
     triggers.
@@ -637,7 +643,10 @@ def apply_damage_to_creature(
         if then is not None:
             then(dealt)
 
-    return game._mark_damage_on_permanent(perm, amount, source=source, then=finish, asks=asks)
+    return game._mark_damage_on_permanent(
+        perm, amount, source=source, then=finish, asks=asks,
+        unpreventable=unpreventable,
+    )
 
 
 def permanent_effective_colors(perm: Permanent) -> set[str]:

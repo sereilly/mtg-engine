@@ -42,6 +42,14 @@ class Destroy:
 class Sacrifice:
     player: PlayerRef
     subject: Recipient
+    #: "…sacrifices **a third of** the creatures they control of their choice."
+    #: (Pox.) How many, when the number is *computed* rather than printed.
+    #: ``TargetSpec.count`` is an ``int`` and can only carry a printed one, and
+    #: a fraction of a board has a different answer for every seat asked — so
+    #: it rides here as an :class:`Amount` and the lowering turns it into the
+    #: per-seat count spec the prompt is sized from. None is every sentence
+    #: written before fractions existed: the subject's own count decides.
+    count: "Amount | None" = None
 
 
 @dataclass(frozen=True)

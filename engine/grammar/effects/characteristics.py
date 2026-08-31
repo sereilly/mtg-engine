@@ -10,7 +10,8 @@ change a characteristic; where it sits is incidental.
 """
 
 from .. import ast
-from ..amounts import expect_pt, parse_amount, parse_equal_to
+from ..amounts import (accept_fraction_head, accept_rounding, expect_pt,
+                       parse_amount, parse_equal_to)
 from ..errors import GrammarError
 from ..lexer import (GToken, PT, PUNCT, QUOTE, SELF, WORD, tokenize)
 from ..nouns import parse_object_filter
@@ -291,18 +292,20 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     # quantity parser that consumed it would leave every other printing of this
     # verb without its noun.
     half_mark = stream.mark()
-    if stream.accept_word("half") and stream.accept_word("their", "your", "his"):
+    # "half" and "a third of" are one printed idea with two spellings, so the
+    # head is read by one function (`accept_fraction_head`) and the denominator
+    # rides the node. Pox's "loses a third of their life" is this branch with a
+    # 3 in it.
+    divisor = accept_fraction_head(stream)
+    if divisor is not None and stream.accept_word("their", "your", "his"):
         stream.accept_phrase("or", "her")
         if stream.accept_word("life"):
             player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
-            rounding = "down"
-            round_mark = stream.mark()
-            if stream.accept_punct(",") and stream.accept_word("rounded"):
-                rounding = "up" if stream.accept_word("up") else "down"
-            else:
-                stream.reset(round_mark)
             return ast.LoseLife(
-                player, ast.Half(ast.BoardCount("their_life"), rounding)
+                player,
+                ast.Half(
+                    ast.BoardCount("their_life"), accept_rounding(stream), divisor
+                ),
             )
     stream.reset(half_mark)
     try:

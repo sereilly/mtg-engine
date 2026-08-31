@@ -15,7 +15,8 @@ from ...lord_buffs import (LORD_BUFF_KIND)
 from ...enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
 from ...land_animation import LAND_ANIMATION_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND
-from ...oracle_types import HAND_CARDS_TO_LIBRARY, OracleInstruction
+from ...oracle_types import (HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS,
+                             OracleInstruction)
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       CREATED_TOKEN, EXILED_THIS_WAY)
 INSTRUCTION_CATEGORIES: dict[str, str] = {
@@ -739,12 +740,27 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # then neither is anything the board can be asked for — the victim is in a
     # graveyard and the pair the trigger bound is long past.
     "delayed_destroy_blocked_or_blocker": "end_of_combat_destruction",
-    "destroy_all_creatures": "destroyed_this_way",
-    "destroy_all_artifacts": "destroyed_this_way",
-    "destroy_all_enchantments": "destroyed_this_way",
-    "destroy_all_lands": "destroyed_this_way",
-    "destroy_all_artifacts_creatures_enchantments": "destroyed_this_way",
+    # Each of these records the victims and their controllers beside the count,
+    # so "for each <noun> destroyed this way, its controller …" reaches a set
+    # rather than an empty list. Declared as two products because they are two
+    # questions: how many died, and whose each of them was.
+    "destroy_all_creatures": ("destroyed_this_way", PER_OBJECT_SEAT_RECORDS["controller"]),
+    "destroy_all_artifacts": ("destroyed_this_way", PER_OBJECT_SEAT_RECORDS["controller"]),
+    "destroy_all_enchantments": ("destroyed_this_way", PER_OBJECT_SEAT_RECORDS["controller"]),
+    "destroy_all_lands": ("destroyed_this_way", PER_OBJECT_SEAT_RECORDS["controller"]),
+    "destroy_all_artifacts_creatures_enchantments": (
+        "destroyed_this_way", PER_OBJECT_SEAT_RECORDS["controller"],
+    ),
     "destroy_all_matching": "destroyed_this_way",
+    # "Destroy all Plains. **For each land destroyed this way**, this spell
+    # deals 1 damage to **that land's controller** unless they pay {2}."
+    # (Stench of Evil.) Two records rather than one: the sweep beside it needs
+    # only the count, and this sentence asks a question about each victim
+    # individually — whose it was — which CR 400.7 makes unanswerable from any
+    # later read of the board.
+    "destroy_all_lands_of_type": (
+        "destroyed_this_way", PER_OBJECT_SEAT_RECORDS["controller"],
+    ),
     # "Exile all white creatures. **For each creature exiled this way**, …"
     # (Martyr's Cry.) The exile sweep's twin of the four rows above, and its own
     # marker rather than theirs: a sweep that exiles kills nothing, so "died

@@ -41,6 +41,7 @@ from .prevention import (
     _parse_damage_redirect,
     _parse_optional_damage_redirect,
     _parse_damage_cant_be_prevented,
+    parse_source_damage_lock,
     _parse_bound_targeting_prevention,
 )
 from .tapping import (
@@ -82,6 +83,7 @@ from .board import (
     _parse_further_subjects,
     _parse_that_object,
     _parse_attach,
+
 )
 from .control_changes import (
     _parse_exchange_control,
@@ -167,6 +169,7 @@ __all__ = [
     "_parse_damage_redirect",
     "_parse_optional_damage_redirect",
     "_parse_damage_cant_be_prevented",
+    "parse_source_damage_lock",
     "_parse_bound_targeting_prevention",
     "_parse_damage_dealt_riders",
     "_parse_gets",

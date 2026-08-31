@@ -54,6 +54,12 @@ class AdditionalCost:
     #: CR 118.4 makes an unpayable life cost an uncastable spell, checked with
     #: the rest of the costs before anything is spent.
     pay_life: int = 0
+    #: "As an additional cost to cast this spell, pay **X** life." (Fire
+    #: Covenant.) A life cost whose amount is the X the caster announces
+    #: (CR 601.2b, CR 107.3) rather than a printed number — a separate field
+    #: rather than a sentinel in ``pay_life``, because every reader of that
+    #: field is arithmetic and a string in it would be charged as garbage.
+    pay_life_x: bool = False
     #: The zone this cost applies to, when the sentence naming it also names a
     #: zone. Demonic Embrace costs {1}{B}{B} from the hand and {1}{B}{B} plus 3
     #: life plus a card from the graveyard — the *same card*, so the cost cannot
@@ -61,11 +67,26 @@ class AdditionalCost:
     #: an "as an additional cost to cast this spell" line means.
     from_zone: str | None = None
 
+    def life_charged(self, x_value: int | None) -> int:
+        """How much life this cost takes, given the announced X.
+
+        One reader for the gate and the payment, because they are the same
+        question asked twice — CR 601.2h refuses the cast when the answer is
+        more life than the caster has, and CR 601.2b's announcement is what
+        makes the answer knowable at all. A cost that spelled X and charged the
+        printed 0 is the shape this whole module exists to prevent.
+        """
+        if self.pay_life_x:
+            return max(0, int(x_value or 0))
+        return self.pay_life
+
     def describe(self) -> str:
         parts = []
         if self.sacrifice_filter is not None:
             parts.append(f"sacrifice a {filter_head_noun(self.sacrifice_filter)}")
-        if self.pay_life:
+        if self.pay_life_x:
+            parts.append("pay X life")
+        elif self.pay_life:
             parts.append(f"pay {self.pay_life} life")
         if self.discard_cards:
             parts.append(f"discard {self.discard_cards} card(s)")
@@ -108,11 +129,16 @@ _SELF_PERMISSION_COSTS = re.compile(
 #: two answers to "what can this engine charge", and the one that grew slower
 #: would decide which cards were free.
 #:
-#: "pay X life" (Fire Covenant) is deliberately absent. X is announced as the
-#: spell is cast (CR 601.2b) and this engine resolves it *after* the additional
-#: costs are charged, so a clause here would charge zero. It stays in the
-#: parse-coverage backlog, which is where an unimplemented cost belongs.
+#: "pay X life" (Fire Covenant) is here now, and the note that used to say why
+#: it was not is worth keeping: X is announced as the spell is cast (CR 601.2b)
+#: and this engine used to run the affordability gate *before* resolving it, so
+#: a clause here would have charged zero. That ordering was the bug, not the
+#: reason — the card was already `supported` on its damage line alone, so the
+#: cost was not being deferred, it was not being charged at all. The gate now
+#: runs after X is announced and before any mana is spent, which is where
+#: CR 601.2h puts it.
 _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"^(?:pay )?x life$"), "pay_life_x"),
     (re.compile(r"^(?:pay )?(\d+) life$"), "pay_life"),
     (re.compile(r"^(?:discard|discarding) (?:a|one) card$"), "discard_one"),
     (re.compile(r"^(?:sacrifice|sacrificing) a creature$"), "sacrifice_creature"),
@@ -128,7 +154,10 @@ def _read_cost_clauses(costs: str) -> dict | None:
     ``upkeep_costs.upkeep_cost_from_phrase`` states for CR 702.24a's cost, and
     it is here for the same reason.
     """
-    fields: dict = {"pay_life": 0, "discard_cards": 0, "sacrifice_filter": None}
+    fields: dict = {
+        "pay_life": 0, "pay_life_x": False, "discard_cards": 0,
+        "sacrifice_filter": None,
+    }
     for clause in re.split(r",\s*|\s+and\s+", costs):
         clause = clause.strip()
         if not clause:
@@ -137,7 +166,9 @@ def _read_cost_clauses(costs: str) -> dict | None:
             found = pattern.match(clause)
             if found is None:
                 continue
-            if field == "pay_life":
+            if field == "pay_life_x":
+                fields["pay_life_x"] = True
+            elif field == "pay_life":
                 fields["pay_life"] += int(found.group(1))
             elif field == "discard_one":
                 fields["discard_cards"] += 1

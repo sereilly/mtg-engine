@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**28 unclaimed sentence(s) across 18 supported card(s).**
+**27 unclaimed sentence(s) across 17 supported card(s).**
 
 - **Breath of Dreams**
   - `green creatures have "cumulative upkeep {1}."`
@@ -39,8 +39,6 @@ anything anyone did, and every ingest would arrive red.
   - `activated abilities cost an additional "sacrifice a swamp" to activate for each black mana symbol in their activation costs`
 - **Earthlink**
   - `whenever a creature dies, that creature's controller sacrifices a land of their choice`
-- **Fire Covenant**
-  - `as an additional cost to cast this spell, pay x life`
 - **Freyalise's Charm**
   - `whenever an opponent casts a black spell, you may pay {g}{g}`
   - `if you do, you draw a card`

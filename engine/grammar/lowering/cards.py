@@ -7,7 +7,7 @@ search/reveal/exile-linkage flows in `library.py`.
 """
 
 from ...oracle_types import (PER_OBJECT_SEAT_RECORDS, X_FROM_COUNT,
-                             OracleInstruction)
+                             X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec, halved_count_spec
@@ -117,9 +117,32 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
     # records which players could not, because the printed rider "Each opponent
     # who can't loses 3 life." reads that answer out of the same resolution.
     if node.player.kind == "each_player":
-        if not isinstance(node.count, ast.Fixed) or node.count.value != 1 or node.at_random:
+        if node.at_random or node.filter is not None or node.up_to:
+            raise LoweringError(
+                "the each-player discard is chosen, unnarrowed and exact",
+                node=node,
+            )
+        # "…discards **a third of the cards in their hand**" (Pox). One number
+        # per seat, so it cannot be an amount: it is a count taken over *that*
+        # player's hand, and the handler asks the evaluator once per seat
+        # through the channel the per-recipient damage already uses.
+        per_seat = (
+            halved_count_spec(node.count, node)
+            if isinstance(node.count, ast.Half) else None
+        )
+        if per_seat is not None:
+            return (
+                OracleInstruction(
+                    "each_player_discards_a_card", "",
+                    {X_FROM_COUNT_PER_RECIPIENT: per_seat},
+                ),
+            )
+        if not isinstance(node.count, ast.Fixed):
             raise LoweringError("each-player discards have a one-card handler", node=node)
-        return (OracleInstruction("each_player_discards_a_card", "", {}),)
+        # A printed 1 keeps the empty payload every card written before the
+        # count existed produced, so nothing that worked changes shape.
+        payload = {} if node.count.value == 1 else {"amount": node.count.value}
+        return (OracleInstruction("each_player_discards_a_card", "", payload),)
     # "You may draw a card. If you do, discard a card." (Jeskai Elder) — the
     # effect's own controller discards, choosing the cards through the same
     # pending choice the targeted form uses. Fixed counts only: the variable

@@ -215,7 +215,17 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # `zones` and `returns`: the parse side stays in `effects/characteristics.py`,
 # where every one of these is a branch of one `becomes` production reading
 # one shared duration clause.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "tapping", "redirection", "fighting", "where_x", "control_flow", "attachments", "types"]
+# `destruction` split out of `lowering/board.py` at the cap, and the cap is the
+# whole story of where the line is: neither parallel branch crossed it alone —
+# one added an activated ability's delayed destroy, the other a per-payer sweep
+# — and the sum did. The boundary was already there to be found. It is the CR's
+# own keyword action: destroying a permanent (CR 701.7) is not sacrificing one
+# (CR 701.17), regenerating one (CR 701.15), phasing one out (CR 702.26) or
+# exchanging control of it, which is what `board` keeps. The two halves share no
+# name in either direction, checked at the split. Asymmetric like `zones` and
+# `types`: the parse side stays in `effects/board.py`, where destroy is one
+# production reading the same noun phrase as the rest.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "attachments", "types", "destruction"]
 # The AST side has no `library`: what a search or a look-at *is* — the pile, the
 # filter, the fate of what was found — is a handful of nodes that sit perfectly
 # well beside the other card nodes, and the split that made `library` a family

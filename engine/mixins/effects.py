@@ -8,7 +8,7 @@ from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..handlers._common import permanent_matches_filter, pick_target_permanent
 from ..auras import aura_restriction_active
 from ..auras import aura_enchants
-from ..damage_events import damage_source_seat, deal_damage, lifelink_life_gained
+from ..damage_events import EVENT_LOCK, damage_source_seat, deal_damage, lifelink_life_gained
 from ..events import Event, collect, emit
 from ..land_play_allowance import (
     LandPlayAllowance, land_play_allowance_for, lands_cannot_be_played,
@@ -413,12 +413,17 @@ class EffectsMixin:
 
     def _mark_damage_on_permanent(
         self, permanent, amount: int, source=None, combat: bool = False, *, then=None,
-        restart=None, asks: bool = False,
+        restart=None, asks: bool = False, unpreventable: bool = False,
     ) -> int:
         """Mark *amount* damage on a creature after applying its prevention
         shields. Returns the damage actually marked (0 if fully prevented).
         *combat* marks the event as combat damage so the blanket combat shields
-        (Fog, Ebony Horse) can see it.
+        (Fog, Ebony Horse) can see it. *unpreventable* marks it as Lava Burst's
+        — "that damage can't be prevented or dealt instead to another permanent
+        or player" — which drops the shields and redirects for this event alone
+        (``engine/damage_events.EVENT_LOCK``). A flag on the event and not on
+        the creature, because the printed sentence is about the source's damage
+        and Whippoorwill's marker would outlive it by a turn.
 
         ``then`` is what the caller would otherwise do with the returned number
         — see ``_deal_damage_to_player`` for why it is a callback and not a
@@ -435,14 +440,17 @@ class EffectsMixin:
         if asks and restart is None:
             def restart():
                 self._mark_damage_on_permanent(
-                    permanent, amount, source=source, combat=combat, then=then, asks=True
+                    permanent, amount, source=source, combat=combat, then=then,
+                    asks=True, unpreventable=unpreventable,
                 )
 
-        outcome = deal_damage(
-            self,
-            {"recipient": permanent, "amount": amount, "source": source, "combat": combat},
-            restart=restart,
-        )
+        event = {
+            "recipient": permanent, "amount": amount, "source": source,
+            "combat": combat,
+        }
+        if unpreventable:
+            event[EVENT_LOCK] = True
+        outcome = deal_damage(self, event, restart=restart)
         if outcome.suspended:
             return 0
         if outcome.result > 0:

@@ -18,7 +18,8 @@ should own the other's vocabulary.
 import dataclasses
 
 from .. import ast
-from ..amounts import _parse_for_each_this_way, parse_amount
+from ..amounts import (_parse_for_each_this_way, accept_fraction_head,
+                       accept_rounding, parse_amount)
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..lexer import NUMBER
@@ -573,6 +574,31 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
     copy that would have had to grow the "another" reading and the unless-pay
     tail again.
     """
+    # "sacrifices **a third of the creatures they control** of their choice"
+    # (Pox). The fraction's noun is this production's own object phrase, so the
+    # head is read here and the count built beside the subject rather than
+    # handed to `parse_amount` — the same arrangement `_parse_loses` and
+    # `_parse_discard` make, and for their reason. The definite article is
+    # consumed here too: the noun parser reads "creatures they control" and not
+    # "the creatures they control", because everywhere else the article would be
+    # a different noun phrase.
+    fraction_mark = stream.mark()
+    divisor = accept_fraction_head(stream)
+    if divisor is not None:
+        stream.accept_word("the")
+        try:
+            counted_filter = parse_object_filter(stream)
+        except GrammarError:
+            counted_filter = None
+        if counted_filter is not None:
+            return ast.Sacrifice(
+                player,
+                ast.TargetSpec(quantifier="all", filter=counted_filter),
+                count=ast.Half(
+                    ast.CountOf(counted_filter), accept_rounding(stream), divisor
+                ),
+            )
+    stream.reset(fraction_mark)
     # "Sacrifice **another** creature" (Dire Fleet Warmonger) — the same
     # reading the cost parser gives the word: a restriction on what may be
     # sacrificed, carried on the filter's existing field.

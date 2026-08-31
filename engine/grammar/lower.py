@@ -366,7 +366,7 @@ def lower_statement(
     if isinstance(statement, ast.Fight):
         return _lower_fight(statement, whole_effect)
     if isinstance(statement, ast.DamageUnlessPay):
-        return _lower_damage_unless_pay(statement, dispatch_event)
+        return _lower_damage_unless_pay(statement, dispatch_event, produced)
     if isinstance(statement, ast.LoseKeyword):
         return _lower_lose_keyword(statement, dispatch_event)
     if isinstance(statement, ast.PutCounter):

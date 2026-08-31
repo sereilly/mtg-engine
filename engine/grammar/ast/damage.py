@@ -32,6 +32,15 @@ class DamageRiders:
     exile_if_dies: bool = False
     divided: bool = False
     divided_evenly: bool = False
+    #: "If <this source> would deal damage to a creature, that damage can't be
+    #: prevented or dealt instead to another permanent or player." (Lava Burst.)
+    #: Whippoorwill's lock (:class:`DamageCantBePreventedOrRedirected`) said
+    #: about *this* damage event rather than about a creature for the rest of
+    #: the turn — the sentence names the source, not a victim, and the two
+    #: differ the moment a second source aims at the same creature. A rider
+    #: rather than a node of its own for the same reason ``no_regen`` is one:
+    #: the sentence deals no damage and modifies the one that does.
+    unpreventable_to_creature: bool = False
 
 
 @dataclass(frozen=True)

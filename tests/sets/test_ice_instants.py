@@ -956,3 +956,56 @@ def test_battle_cry_stops_at_the_end_of_its_turn(set_pool):
 
     assert game.delayed_triggers == []
 # --- end W2G3 ---
+
+
+# --- W2G5: mass effects and X-spells ---
+def _w2g5_covenant_game(set_pool, *, life=20):
+    """Seat 0 holds Fire Covenant; seat 1 has two creatures out."""
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    giant = Permanent(card=pool["Tor Giant"])
+    p1 = PlayerState(name="P1", hand=[pool["Fire Covenant"]], life=life)
+    p2 = PlayerState(name="P2", battlefield=[bears, giant], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    return pool, p1, p2, bears, giant, game
+
+
+def test_w2g5_fire_covenant_charges_the_announced_x_in_life(set_pool):
+    """"As an additional cost to cast this spell, pay X life."
+
+    The clause was unread until this round: the card is `supported` on its
+    damage line alone, so the cost was not deferred, it was never charged at
+    all — X=2 dealt two damage and cost nothing. CR 601.2b announces X, CR
+    601.2h charges the cost, in that order.
+    """
+    pool, p1, p2, bears, giant, game = _w2g5_covenant_game(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Fire Covenant", x_value=2, divided_targets=[(1, 0), (1, 1)]
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert p1.life == 18, "X life, not the printed 0"
+    assert bears.damage_marked == 1
+    assert giant.damage_marked == 1
+
+
+def test_w2g5_fire_covenant_cannot_be_cast_for_more_life_than_you_have(set_pool):
+    """CR 118.4 with CR 601.2h: an unpayable cost is an uncastable spell, not a
+    free one. Nothing is spent finding out, and the card stays in hand."""
+    pool, p1, p2, bears, giant, game = _w2g5_covenant_game(set_pool, life=3)
+
+    result = game.cast_from_hand(
+        0, "Fire Covenant", x_value=5, divided_targets=[(1, 0)]
+    )
+    game._settle()
+
+    assert not result.supported
+    assert p1.life == 3
+    assert [card.name for card in p1.hand] == ["Fire Covenant"]
+    assert bears.damage_marked == 0
+# --- end W2G5 ---

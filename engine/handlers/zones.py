@@ -10,6 +10,7 @@ from ..keywords import grant_keyword
 from ..models import Permanent
 from ._common import (
     _card_matches_filter,
+    evaluate_count,
     graveyard_card_matches,
     permanent_matches_filter,
     resolve_amount,
@@ -19,7 +20,8 @@ from ._common import (
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
 from ..oracle_types import (DISCARDED_BY_SEAT, EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
-                            HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS)
+                            HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS,
+                            X_FROM_COUNT_PER_RECIPIENT)
 from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..resumption import run_resumable
 from ..search_filters import search_matches
@@ -2612,32 +2614,56 @@ def discard_hand(game: Game, instruction: OracleInstruction, context: OracleExec
 @effect_handler("each_player_discards_a_card")
 def each_player_discards_a_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Each player discards a card." (Liliana, Waker of the Dead's +1.)
+    ""…then discards a third of the cards in their hand…" (Pox.)
 
     Who could not is recorded in the resolution scratchpad, because the
     printed rider "Each opponent who can't loses 3 life." reads it. An
     interactive seat's choice goes through the discard prompt; a
-    non-interactive seat discards its first card, matching the existing
-    discard default."""
+    non-interactive seat discards its first cards, matching the existing
+    discard default.
+
+    **How many is per seat**, and that is why it is a count spec rather than an
+    amount: "a third of the cards in **their** hand" has one answer per player,
+    and a single number could only be one of them. Evaluated against each
+    player in turn through the same evaluator every other computed count uses,
+    so the fraction and its rounding are applied in one place (CR 107.2/107.3).
+    An absent spec and an absent amount are the printed one this handler was
+    written for.
+    """
+    per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
+    fixed = int(instruction.payload.get("amount", 1) or 0)
     could_not: list[int] = []
     for seat, player in enumerate(game.players):
         if player.lost:
             continue
-        if not player.hand:
-            could_not.append(seat)
-            game.log.append(f"{player.name} cannot discard (empty hand)")
+        count = (
+            evaluate_count(game, player, per_seat) if per_seat is not None else fixed
+        )
+        count = min(max(0, count), len(player.hand))
+        if count == 0:
+            # CR 608.2: as much as possible. A player asked for none discards
+            # none — and only an empty hand is what the printed rider means by
+            # "can't", so a computed zero over an empty hand is still recorded
+            # and a computed zero over a full one is not.
+            if not player.hand:
+                could_not.append(seat)
+                game.log.append(f"{player.name} cannot discard (empty hand)")
             continue
         if seat in game.interactive_seats:
             game.arm_pending_choice(
                 "discard", seat,
-                count=1,
+                count=count,
                 allow_top_of_library=game._controls_top_of_library_discard(player),
             )
-            game.log.append(f"{player.name} must choose a card to discard")
+            game.log.append(
+                f"{player.name} must choose {count} card(s) to discard"
+            )
         else:
-            card = player.hand[0]
-            game.take_card_from_hand(player, card)
-            game._discard_card(player, card)
-            game.log.append(f"{player.name} discarded {card.name}")
+            for _ in range(count):
+                card = player.hand[0]
+                game.take_card_from_hand(player, card)
+                game._discard_card(player, card)
+                game.log.append(f"{player.name} discarded {card.name}")
     context.results["players_who_could_not_discard"] = could_not
     return True, "resolved"
 

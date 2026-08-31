@@ -108,6 +108,15 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     if halving:
         damage = -(-damage // 2) if halving == "up" else damage // 2
 
+    # "If Lava Burst would deal damage to a creature, that damage can't be
+    # prevented or dealt instead to another permanent or player." A property of
+    # *this* damage event, so it rides the event rather than being stamped on
+    # the creature the way the two riders further down are: Whippoorwill's
+    # marker lasts the turn and would lock the next source's damage too.
+    # Emitted by the lowering only for a single-recipient clause, which is the
+    # single-target branch below and the object branch beside it.
+    unpreventable = bool(instruction.payload.get("unpreventable_to_creature"))
+
     # "…deals damage to each opponent equal to the number of Islands **that
     # player** controls" (Typhoon). One number per seat, so it cannot have been
     # folded into `context.x_value` — there is one of those and this phrase has
@@ -498,6 +507,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             # ("You gain life equal to the damage dealt").
             then=lambda dealt: context.results.__setitem__("damage_dealt", dealt),
             asks=True,
+            unpreventable=unpreventable,
         )
     elif several.get("kind") == "object":
         from ..subject_filters import subject_matches
@@ -524,6 +534,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             log_message=lambda dealt: f"{card.name} dealt {dealt} damage to {victim.card.name}",
             then=lambda dealt: context.results.__setitem__("damage_dealt", dealt),
             asks=True,
+            unpreventable=unpreventable,
         )
     else:
         def _report(damage: int) -> None:
@@ -946,6 +957,23 @@ def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: 
             game.log.append(f"{card.name}: no recorded player, nothing offered")
             return True, "resolved"
         seat = recorded
+    record = instruction.payload.get("payer_seat_record")
+    if record is not None:
+        # "For each land destroyed this way, <source> deals 1 damage to **that
+        # land's controller** unless they pay {2}." (Stench of Evil.) The seat
+        # an earlier step of this same resolution wrote down about the object
+        # the loop is currently on — `for_each` resolves the record to this
+        # iteration's entry before running the step, so the lookup is by the
+        # record's name and never by the object.
+        #
+        # No entry means the loop is not running or recorded nothing about this
+        # object, and nothing is offered: the same rule the frozen-event branch
+        # above follows, and the safe one.
+        found = context.iteration_seats.get(str(record))
+        if not isinstance(found, int) or not (0 <= found < len(game.players)):
+            game.log.append(f"{card.name}: no recorded controller, nothing offered")
+            return True, "resolved"
+        seat = found
     payer = game.players[seat]
     game.arm_pending_choice(
         "optional_pay", seat,

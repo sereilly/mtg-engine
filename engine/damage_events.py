@@ -177,6 +177,28 @@ def damage_locked(recipient) -> bool:
     return bool(metadata) and bool(metadata.get(DAMAGE_LOCK))
 
 
+#: "If <this source> would deal damage to a creature, that damage can't be
+#: prevented or dealt instead to another permanent or player." (Lava Burst.)
+#: The same lock as ``DAMAGE_LOCK`` above, said about **one damage event**
+#: rather than about a creature for the rest of the turn — so it travels on the
+#: event dict and dies with it. Marking the victim instead would have Lava Burst
+#: lock the next spell's damage to the same creature, which is a strictly larger
+#: card than the one printed.
+EVENT_LOCK = "unpreventable"
+
+
+def event_locked(event: dict) -> bool:
+    """Whether *event* itself carries Lava Burst's lock, for this recipient.
+
+    The printed clause says "damage to **a creature**", so the lock is asked of
+    the recipient rather than assumed: the same spell aimed at a player is
+    shielded exactly as any other spell is.
+    """
+    if not event.get(EVENT_LOCK):
+        return False
+    return isinstance(event.get("recipient"), Permanent)
+
+
 #: "If the creature deals damage to a creature this turn, the creature dealt
 #: damage can't be regenerated this turn. If a creature dealt damage by the
 #: targeted creature would die this turn, exile that creature instead."
@@ -214,7 +236,7 @@ def _apply_dealer_riders(game, source, recipient) -> None:
             recipient.metadata[on_victim] = True
 
 
-def damage_candidates(recipient) -> list[Candidate]:
+def damage_candidates(recipient, event: dict | None = None) -> list[Candidate]:
     """Every effect attempting to modify a damage event with this recipient
     before it is dealt (CR 120.4b) — shields and replacements together, in
     default order.
@@ -227,12 +249,18 @@ def damage_candidates(recipient) -> list[Candidate]:
     registrations goes stale silently, and the direction it goes stale in is a
     lock that stops locking.
 
+    A locked **event** (Lava Burst) drops exactly the same contenders. Two
+    sentences saying the same thing about different subjects — a creature for a
+    turn, one spell's own damage — so they meet here, at the one place a
+    contention set is assembled, rather than each teaching the registries about
+    itself.
+
     Filtered here rather than in each ``applies``: this is the one place a
     damage event's contention set is assembled, so a shield added tomorrow is
     covered without knowing the clause exists.
     """
     candidates = shield_candidates() + replacement_candidates(damage_kind(recipient))
-    if damage_locked(recipient):
+    if damage_locked(recipient) or (event is not None and event_locked(event)):
         candidates = [c for c in candidates if not c.prevents_or_redirects]
     return sorted(candidates, key=lambda candidate: candidate.order)
 
@@ -285,7 +313,7 @@ def deal_damage(game, event: dict, *, restart: Callable[[], Any] | None = None) 
     trace = apply_in_order(
         game,
         event,
-        damage_candidates(event["recipient"]),
+        damage_candidates(event["recipient"], event),
         chooser_index=affected_seat(game, event["recipient"]),
         stop=_settled,
         ask=None if restart is None else order_prompt_asker(kind, restart),

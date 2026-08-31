@@ -8,7 +8,7 @@ from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
 from ..land_types import MIRE_COUNTER, change_land_type
 from ..layer_bridge import GAINED_TYPES
 from ..models import CardDefinition, Permanent
-from ..oracle_types import OracleInstruction
+from ..oracle_types import X_FROM_COUNT_PER_RECIPIENT, OracleInstruction
 from ..exiled_records import source_object
 from ..named_counters import counters_on, remove_counters
 from ..pt import pt_counter_key, set_base_pt
@@ -16,7 +16,8 @@ from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
 from ..tokens import (CREATED_TOKEN_RESULT_KEY, CREATED_WITH_PERMANENT_ID,
                      make_token_card, tokens_created_with)
 from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
-                      block_pair_permanents, permanent_matches_filter,
+                      block_pair_permanents, evaluate_count,
+                      permanent_matches_filter,
                       resolve_amount, resolve_target_permanent,
                       resolve_target_permanents)
 from .registry import effect_handler
@@ -1241,6 +1242,14 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         payers = [caster_index]
     elif who == "each_opponent":
         payers = list(game.opponents_of(caster_index))
+    elif who == "each_player":
+        # "Each player sacrifices a third of the creatures they control of
+        # their choice." (Pox.) `each_opponent` plus the caster, in seat order
+        # so the AI simulation stays seed-reproducible — the same list the
+        # branch above builds, over one more seat.
+        payers = [
+            seat for seat, player in enumerate(game.players) if not player.lost
+        ]
     elif who in ("target_opponent", "target_player"):
         payers = [game.players.index(context.target)]
     elif who == "event_subject_player":
@@ -1257,10 +1266,24 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         payers = [seat]
     else:
         return False, f"unsupported sacrifice payer {who!r}"
+    # "…a third of the creatures **they** control" (Pox): one number per payer,
+    # so it cannot be the printed count — a fraction of a board has a different
+    # answer for every seat asked. Evaluated against each payer through the same
+    # evaluator every other computed count uses, so the fraction and its
+    # rounding are applied in one place (CR 107.2/107.3).
+    per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
     count = int(instruction.payload.get("count", 1))
     for seat in payers:
+        owed = (
+            evaluate_count(game, game.players[seat], per_seat)
+            if per_seat is not None else count
+        )
+        if owed <= 0:
+            # CR 608.2's "as much as possible": a seat that owes none is not
+            # asked, rather than being handed a prompt with no answer.
+            continue
         game.arm_forced_sacrifice(
-            seat, count,
+            seat, owed,
             filter=dict(instruction.payload.get("filter") or {}),
             exclude=exclude,
             reason=context.card.name,

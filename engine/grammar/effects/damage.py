@@ -136,9 +136,19 @@ def _ends_the_recipient_list(stream: TokenStream) -> bool:
     honest in both directions: the whole conjunct is rewound, so the "and" is
     left for the statement layer to split on, and Mind Whip's tap lands in the
     branch the card prints it in instead of running unconditionally.
+
+    One printed word is the exception, and it is an exception to the premise
+    rather than to the rule: "…deals 2 damage to each creature and each player
+    **instead**." (Gangrenous Zombies) ends its clause on a word. "Instead" is
+    the conditional-instead rider's marker for the sentence it closes — it is
+    never the verb of a new predicate — so the conjunct in front of it really
+    was a recipient, and rewinding cost the card the second half of its
+    recipient list.
     """
     token = stream.peek()
-    return token is None or token.kind != WORD
+    if token is None or token.kind != WORD:
+        return True
+    return token.text == "instead"
 
 
 def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Statement:

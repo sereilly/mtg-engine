@@ -1711,3 +1711,81 @@ def test_and_this_creature_only_joins_a_union_that_ends_the_sentence(set_pool):
     assert first.subject.filter.card_types == ("land",)
     assert isinstance(second, ast.DealDamage)
 # --- end W2G3 ---
+
+
+# --- W2G5: mass effects and X-spells ---
+def _w2g5_zombie_board(set_pool, *land_names):
+    """Gangrenous Zombies out for seat 0 with those lands, a creature each side.
+
+    Seat 1's Bears is the control: a sweep that damages "each creature" has to
+    reach the other side of the board too, and one that only reads its own
+    controller's battlefield passes every test built on one seat.
+    """
+    pool = set_pool("ICE")
+    mine = [Permanent(card=pool["Gangrenous Zombies"])]
+    mine += [Permanent(card=pool[name]) for name in land_names]
+    mine.append(Permanent(card=pool["Balduvian Bears"]))
+    theirs = [Permanent(card=pool["Tor Giant"])]
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=mine, life=20),
+            PlayerState(name="P2", battlefield=theirs, life=20),
+        ]
+    )
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    for perm in mine + theirs:
+        _nosick(perm)
+    return game, mine, theirs
+
+
+def test_w2g5_gangrenous_zombies_deals_one_without_a_snow_swamp(set_pool):
+    """"{T}, Sacrifice this creature: This creature deals 1 damage to each
+    creature and each player."
+
+    An ordinary Swamp is not a snow Swamp, so the base number stands. Both
+    sides of the board and both players — the sweep is symmetric.
+    """
+    game, mine, theirs = _w2g5_zombie_board(set_pool, "Swamp")
+
+    result = game.activate_permanent_ability(0, "Gangrenous Zombies")
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.players[0].life == 19
+    assert game.players[1].life == 19
+    assert mine[-1].damage_marked == 1, "my own Bears is a creature too"
+    assert theirs[0].damage_marked == 1
+
+
+def test_w2g5_gangrenous_zombies_deals_two_with_a_snow_swamp(set_pool):
+    """"If you control a snow Swamp, this creature deals 2 damage to each
+    creature and each player **instead**."
+
+    Two, not three: "instead" replaces the first sentence rather than adding to
+    it, which is the whole content of the word.
+    """
+    game, mine, theirs = _w2g5_zombie_board(set_pool, "Snow-Covered Swamp")
+
+    result = game.activate_permanent_ability(0, "Gangrenous Zombies")
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.players[0].life == 18
+    assert game.players[1].life == 18
+    assert mine[-1].damage_marked == 2
+    assert theirs[0].damage_marked == 2
+
+
+def test_w2g5_gangrenous_zombies_wants_a_swamp_not_any_snow_land(set_pool):
+    """A snow Forest is snow and is not a Swamp. The condition names both
+    words and both have to hold — dropping either is the sweep that hits
+    harder than the card says."""
+    game, _mine, _theirs = _w2g5_zombie_board(set_pool, "Snow-Covered Forest")
+
+    game.activate_permanent_ability(0, "Gangrenous Zombies")
+    game._settle()
+
+    assert game.players[1].life == 19
+# --- end W2G5 ---

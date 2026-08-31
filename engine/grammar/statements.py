@@ -135,7 +135,9 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
     undefined — "each opponent loses X life and you gain X life, where X is …"
     gave the definition to the gain, and the loss silently lost nothing.
     """
+    body_at = stream.pos
     statement = _parse_statement_body(stream)
+    statement = _accept_alternative_sweep(stream, statement, body_at)
     if not top_level:
         return statement
     # "…**at the beginning of your next upkeep**, where X is …" (Hazezon
@@ -239,6 +241,17 @@ def _parse_leading_for_each(
             stream.reset(mark)
             return None
         return ast.ExiledThisWay(filt)
+    # "For each land **destroyed this way**, …" (Stench of Evil.) The bare
+    # participle spelling of the relative clause below, and the *same* set: what
+    # a destroy sweep records is what actually died, because a regenerated or
+    # indestructible permanent was not destroyed (CR 701.8c). One node, so the
+    # two printings cannot come to mean two sets — the difference is Wizards'
+    # templating and nothing else.
+    if stream.accept_phrase("destroyed", "this", "way"):
+        if not stream.accept_punct(","):
+            stream.reset(mark)
+            return None
+        return ast.DiedThisWay(filt)
     if not stream.accept_phrase("that", "died", "this", "way"):
         stream.reset(mark)
         return None
@@ -782,6 +795,63 @@ def _round_every_half(node, rounding: str):
             new if new is not None else old for new, old in zip(rebuilt_items, node)
         )
     return None
+
+
+def _accept_alternative_sweep(
+    stream: TokenStream, statement: ast.Statement, body_at: int
+) -> ast.Statement:
+    """``Destroy all enchantments **or all nonwhite enchantments**.`` (Essence
+    Filter.) One verb, two object phrases, and the controller picks.
+
+    CR 608.2d, not CR 700.2: there is no bulleted list and nothing is announced
+    as the spell is cast, so this is a choice made *while applying the effect*.
+    That is the same question ``_parse_optional_action``'s "or" asks, so it is
+    the same :class:`ast.OneOf` and the same prompt — inventing a second
+    mechanism would mean two defaults and two places for an option to go
+    unoffered.
+
+    Read here, after the body, rather than inside the destroy production: the
+    shape is "the sentence again with a different object", which is a property
+    of the sentence and not of the verb. Every guard below is what keeps that
+    from over-claiming:
+
+    * only a **sweep** may be repeated. A targeted alternative would be two
+      target sets, one of them never chosen, and CR 601.2c picks targets as the
+      spell is cast — the picker has no way to announce a set that depends on a
+      choice made later. "Destroy target creature or target land" therefore
+      stays refused rather than becoming a choice nobody can make.
+    * the alternative must be a sweep too, and must **end the sentence**. A
+      near-miss rewinds whole, so "or" introducing anything else falls through
+      to the reading it already had.
+    """
+    subject = getattr(statement, "subject", None)
+    if (
+        not isinstance(statement, ast.Destroy)
+        or not isinstance(subject, ast.TargetSpec)
+        or subject.quantifier != "all"
+    ):
+        return statement
+    mark = stream.mark()
+    if not stream.accept_word("or"):
+        return statement
+    start = stream.pos
+    try:
+        alternative = parse_recipient(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return statement
+    if (
+        not isinstance(alternative, ast.TargetSpec)
+        or alternative.quantifier != "all"
+        or stream.peek() is not None and stream.peek().kind == WORD
+    ):
+        stream.reset(mark)
+        return statement
+    second = dataclasses.replace(statement, subject=alternative)
+    return ast.OneOf(
+        (statement, second),
+        (stream.text_between(body_at, mark), stream.text_between(start, stream.pos)),
+    )
 
 
 def _parse_where_x(stream: TokenStream) -> ast.Amount | None:

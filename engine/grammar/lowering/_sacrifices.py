@@ -46,4 +46,15 @@ def _forced_sacrifice_filter(filt: ast.ObjectFilter) -> dict | None:
         return None
     from ...subject_filters import object_only_filter
 
-    return object_only_filter(filt.to_payload(), carried_separately=_SACRIFICE_CARRIED)
+    payload = dict(filt.to_payload())
+    # "…sacrifices a third of the creatures **they control** of their choice."
+    # (Pox.) CR 701.21a: a player can only ever sacrifice a permanent they
+    # control, and the prompt offers exactly the payer's own board — so the
+    # printed possessive restates the rule rather than narrowing it, and
+    # dropping it here is reading the phrase rather than losing part of it.
+    # Only the two spellings that can name the payer: any other controller
+    # falls through to `object_only_filter`, which has no seat to test one
+    # against and refuses.
+    if payload.get("controller") in ("you", "that_player"):
+        payload.pop("controller")
+    return object_only_filter(payload, carried_separately=_SACRIFICE_CARRIED)

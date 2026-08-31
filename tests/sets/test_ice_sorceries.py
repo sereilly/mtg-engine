@@ -464,3 +464,427 @@ def test_a_union_of_two_targeted_phrases_is_refused(set_pool):
     program = compile_card_oracle(set_pool("ICE")["Fumarole"])
 
     assert not program.supported
+
+
+# --- W2G5: mass effects and X-spells ---
+def _w2g5_burst_game(set_pool, *, victim_name="Tor Giant"):
+    """Seat 0 holding Lava Burst; seat 1 with one creature out."""
+    pool = set_pool("ICE")
+    p1 = PlayerState(name="P1", hand=[pool["Lava Burst"]], life=20)
+    victim = Permanent(card=pool[victim_name])
+    p2 = PlayerState(name="P2", battlefield=[victim], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+    return pool, p1, p2, victim, game
+
+
+def test_lava_burst_damage_to_a_creature_ignores_a_shield(set_pool):
+    """"If Lava Burst would deal damage to a creature, that damage can't be
+    prevented or dealt instead to another permanent or player."
+
+    A three-point prevention shield on the creature absorbs nothing: the lock
+    drops the contenders that prevent or move the damage, and keeps every other
+    kind.
+    """
+    from engine.shields import Shield, add_shield, shields_on, PREVENT_NEXT_N
+
+    pool, p1, p2, victim, game = _w2g5_burst_game(set_pool)
+    add_shield(victim, Shield(kind=PREVENT_NEXT_N, amount=3, uses=None))
+
+    result = game.cast_from_hand(
+        0, "Lava Burst", target_player_index=1, target_permanent_index=0, x_value=3
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert victim.damage_marked == 3, "the shield had nothing to absorb"
+    assert shields_on(victim)[0].amount == 3, "and nothing was spent doing it"
+
+
+def test_lava_burst_shield_on_a_creature_still_works_against_another_source(set_pool):
+    """The control the assertion above needs: the shield is a real shield. The
+    same three points from an ordinary source are prevented in full — so what
+    the test above measured is the lock, not a shield that never worked."""
+    from engine.shields import Shield, add_shield, PREVENT_NEXT_N
+
+    pool, p1, p2, victim, game = _w2g5_burst_game(set_pool)
+    add_shield(victim, Shield(kind=PREVENT_NEXT_N, amount=3, uses=None))
+
+    game._mark_damage_on_permanent(victim, 3, source=pool["Balduvian Bears"])
+
+    assert victim.damage_marked == 0
+
+
+def test_lava_burst_damage_to_a_player_is_shielded_as_normal(set_pool):
+    """"…would deal damage to **a creature**" is the whole scope of the clause.
+    Aimed at a face, Lava Burst is an ordinary damage spell and a Circle-shaped
+    shield answers it — reading the lock as unconditional is the direction that
+    makes the card larger than printed."""
+    from engine.shields import Shield, add_shield, PREVENT_NEXT_N
+
+    pool, p1, p2, victim, game = _w2g5_burst_game(set_pool)
+    add_shield(p2, Shield(kind=PREVENT_NEXT_N, amount=3, uses=None))
+
+    result = game.cast_from_hand(0, "Lava Burst", target_player_index=1, x_value=3)
+    game._settle()
+
+    assert result.supported, result.details
+    assert p2.life == 20
+
+
+def test_lava_burst_lock_is_not_left_on_the_creature(set_pool):
+    """The clause is about this spell's damage, not about the creature. A
+    second source aiming at the same creature later in the turn is shielded
+    normally — which is the difference between this rider and Whippoorwill's
+    marker, and the reason it rides the event."""
+    from engine.shields import Shield, add_shield, PREVENT_NEXT_N
+
+    pool, p1, p2, victim, game = _w2g5_burst_game(set_pool)
+    game.cast_from_hand(
+        0, "Lava Burst", target_player_index=1, target_permanent_index=0, x_value=1
+    )
+    game._settle()
+    assert victim.damage_marked == 1
+
+    add_shield(victim, Shield(kind=PREVENT_NEXT_N, amount=2, uses=None))
+    game._mark_damage_on_permanent(victim, 2, source=pool["Balduvian Bears"])
+
+    assert victim.damage_marked == 1, "the later damage was prevented"
+
+
+def _w2g5_filter_game(set_pool, *, interactive):
+    """Essence Filter in seat 0's hand; a white and a blue enchantment out."""
+    pool = set_pool("ICE")
+    justice = Permanent(card=pool["Justice"])
+    snowfall = Permanent(card=pool["Snowfall"])
+    p1 = PlayerState(name="P1", hand=[pool["Essence Filter"]], battlefield=[justice], life=20)
+    p2 = PlayerState(name="P2", battlefield=[snowfall], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    if interactive:
+        game.interactive_seats = {0}
+    else:
+        game.interactive_seats = set()
+    game._sync_control()
+    return pool, p1, p2, justice, snowfall, game
+
+
+def test_essence_filter_offers_both_halves_of_its_or(set_pool):
+    """"Destroy all enchantments or all nonwhite enchantments."
+
+    Not CR 700.2's modes — no bulleted list, nothing announced as the spell is
+    cast — but CR 608.2d's choice made while the effect is applied. It reaches
+    the same prompt the printed "you may A or B" does, with both object phrases
+    offered.
+    """
+    pool, p1, p2, justice, snowfall, game = _w2g5_filter_game(set_pool, interactive=True)
+
+    result = game.cast_from_hand(0, "Essence Filter")
+    game._settle()
+
+    assert result.supported, result.details
+    prompt = game.pending_choice_of("mode_choice", 0)
+    assert prompt is not None, "the caster chooses at resolution"
+    assert len(prompt.data["labels"]) == 2
+
+
+def test_essence_filter_second_half_spares_the_white_enchantment(set_pool):
+    """The narrowing is the whole content of the second option, and it is the
+    half a sweep silently loses: taking it destroys the blue enchantment and
+    leaves the white one alone."""
+    pool, p1, p2, justice, snowfall, game = _w2g5_filter_game(set_pool, interactive=True)
+    game.cast_from_hand(0, "Essence Filter")
+    game._settle()
+
+    assert game.resolve_pending_choice("mode_choice", 0, mode_index=1)
+    game._settle()
+
+    assert justice in p1.battlefield, "white was excluded"
+    assert snowfall not in p2.battlefield
+
+
+def test_essence_filter_first_half_destroys_both(set_pool):
+    """And the other option really is the wider one — otherwise the choice is
+    a prompt with one answer wearing two labels."""
+    pool, p1, p2, justice, snowfall, game = _w2g5_filter_game(set_pool, interactive=True)
+    game.cast_from_hand(0, "Essence Filter")
+    game._settle()
+
+    assert game.resolve_pending_choice("mode_choice", 0, mode_index=0)
+    game._settle()
+
+    assert justice not in p1.battlefield
+    assert snowfall not in p2.battlefield
+
+
+def test_essence_filter_takes_the_first_option_headless(set_pool):
+    """A non-interactive seat answers where the prompt stands, so a headless or
+    AI game never stalls on the choice."""
+    pool, p1, p2, justice, snowfall, game = _w2g5_filter_game(set_pool, interactive=False)
+
+    game.cast_from_hand(0, "Essence Filter")
+    game._settle()
+
+    assert game.pending_choice_of("mode_choice", 0) is None
+    assert justice not in p1.battlefield
+    assert snowfall not in p2.battlefield
+
+def _w2g5_stench_game(set_pool, *, interactive):
+    """Seat 0 holds Stench of Evil; seat 1 has two Plains and a Forest out."""
+    pool = set_pool("ICE")
+    plains = Permanent(card=pool["Plains"])
+    snowy = Permanent(card=pool["Snow-Covered Plains"])
+    forest = Permanent(card=pool["Forest"])
+    p1 = PlayerState(name="P1", hand=[pool["Stench of Evil"]], life=20)
+    p2 = PlayerState(name="P2", battlefield=[plains, snowy, forest], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.interactive_seats = {0, 1} if interactive else set()
+    game._sync_control()
+    return pool, p1, p2, (plains, snowy, forest), game
+
+
+def test_stench_of_evil_destroys_every_plains_and_nothing_else(set_pool):
+    """"Destroy all Plains." A Snow-Covered Plains is a Plains (CR 305.6), and
+    a Forest is not — the sweep has to hit exactly the first two."""
+    pool, p1, p2, (plains, snowy, forest), game = _w2g5_stench_game(
+        set_pool, interactive=True
+    )
+
+    result = game.cast_from_hand(0, "Stench of Evil")
+    game._settle()
+
+    assert result.supported, result.details
+    assert plains not in p2.battlefield
+    assert snowy not in p2.battlefield
+    assert forest in p2.battlefield
+
+
+def test_stench_of_evil_offers_the_land_controller_one_choice_per_land(set_pool):
+    """"For each land destroyed this way, Stench of Evil deals 1 damage to that
+    land's controller unless they pay {2}."
+
+    The sweep records what it destroyed and whose it was — before this round it
+    recorded nothing at all, so the loop would have found an empty set and the
+    card would have reported itself supported having done half its text. Two
+    lands died, so two offers, both to their controller and not to the caster.
+    """
+    pool, p1, p2, _lands, game = _w2g5_stench_game(set_pool, interactive=True)
+
+    game.cast_from_hand(0, "Stench of Evil")
+    game._settle()
+
+    assert len(game.pending_choices_of("optional_pay", 1)) == 2
+    assert not game.pending_choices_of("optional_pay", 0), "the caster owes nothing"
+
+
+def test_stench_of_evil_deals_one_damage_per_declined_offer(set_pool):
+    """Declining both offers takes 2 damage — one point per land, not one for
+    the whole sweep and not one for every land on the board."""
+    pool, p1, p2, _lands, game = _w2g5_stench_game(set_pool, interactive=True)
+    game.cast_from_hand(0, "Stench of Evil")
+    game._settle()
+
+    while game.pending_choices_of("optional_pay", 1):
+        assert game.confirm_optional_pay(1, accept=False)
+    game._settle()
+
+    assert p2.life == 18
+    assert p1.life == 20, "the caster is not the land's controller"
+
+
+def test_stench_of_evil_spares_a_controller_who_pays(set_pool):
+    """And the offer is a real offer: paying the {2} once costs one point of
+    the two."""
+    pool, p1, p2, _lands, game = _w2g5_stench_game(set_pool, interactive=True)
+    p2.mana_pool["C"] = 2
+    game.cast_from_hand(0, "Stench of Evil")
+    game._settle()
+
+    assert game.confirm_optional_pay(1, accept=True)
+    assert game.confirm_optional_pay(1, accept=False)
+    game._settle()
+
+    assert p2.life == 19
+
+
+def test_stench_of_evil_over_a_board_with_no_plains_asks_nothing(set_pool):
+    """An empty sweep is an empty loop, not a loop over the whole board: the
+    Forest's controller is never offered anything."""
+    pool = set_pool("ICE")
+    forest = Permanent(card=pool["Forest"])
+    p1 = PlayerState(name="P1", hand=[pool["Stench of Evil"]], life=20)
+    p2 = PlayerState(name="P2", battlefield=[forest], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game._sync_control()
+
+    game.cast_from_hand(0, "Stench of Evil")
+    game._settle()
+
+    assert forest in p2.battlefield
+    assert not game.pending_choices_of("optional_pay", 1)
+    assert p2.life == 20
+
+def _w2g5_pox_game(set_pool, *, interactive=False):
+    """A board built so every one of Pox's four fractions rounds differently.
+
+    Seat 0: 20 life, 4 cards in hand, 3 creatures, 4 lands.
+    Seat 1:  7 life, 2 cards in hand, 1 creature, 2 lands.
+
+    Rounded up, that is 7/3 life, 2/1 cards, 1/1 creatures and 2/1 lands — four
+    boundaries, and 7 life is the one that separates "a third rounded up" (3)
+    from "a third rounded down" (2).
+    """
+    pool = set_pool("ICE")
+    mine = [Permanent(card=pool[n]) for n in (
+        "Balduvian Bears", "Tor Giant", "Brown Ouphe",
+        "Forest", "Swamp", "Mountain", "Plains",
+    )]
+    theirs = [Permanent(card=pool[n]) for n in ("Goblin Mutant", "Island", "Forest")]
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Pox"]] + [pool[n] for n in (
+            "Balduvian Bears", "Tor Giant", "Brown Ouphe", "Goblin Mutant",
+        )],
+        battlefield=mine, life=20,
+    )
+    p2 = PlayerState(
+        name="P2",
+        hand=[pool[n] for n in ("Balduvian Bears", "Tor Giant")],
+        battlefield=theirs, life=7,
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.interactive_seats = {0, 1} if interactive else set()
+    game._sync_control()
+    return pool, p1, p2, game
+
+
+def test_pox_takes_a_third_of_each_life_total_rounded_up(set_pool):
+    """"Each player loses a third of their life… Round up each time."
+
+    7 is the boundary: a third of it rounded up is 3 and rounded down is 2. And
+    the fraction is per seat — a single number computed off one player's life
+    and subtracted from everybody is the shape this had to avoid.
+    """
+    pool, p1, p2, game = _w2g5_pox_game(set_pool)
+
+    result = game.cast_from_hand(0, "Pox")
+    game._settle()
+
+    assert result.supported, result.details
+    assert p1.life == 13, "a third of 20, rounded up, is 7"
+    assert p2.life == 4, "a third of 7, rounded up, is 3"
+
+
+def test_pox_discards_a_third_of_each_hand_rounded_up(set_pool):
+    """The second clause. Counted after the spell has left the hand — Pox is
+    not one of the four cards its caster discards a third of."""
+    pool, p1, p2, game = _w2g5_pox_game(set_pool)
+
+    game.cast_from_hand(0, "Pox")
+    game._settle()
+
+    assert len(p1.hand) == 2, "a third of 4, rounded up, is 2"
+    assert len(p2.hand) == 1, "a third of 2, rounded up, is 1"
+
+
+def test_pox_sacrifices_a_third_of_the_creatures_and_a_third_of_the_lands(set_pool):
+    """The third and fourth clauses, and the two that prove the noun matters:
+    the creature sweep must not eat a land and the land sweep must not eat a
+    creature."""
+    pool, p1, p2, game = _w2g5_pox_game(set_pool)
+
+    game.cast_from_hand(0, "Pox")
+    game._settle()
+
+    mine = [perm.card.name for perm in game.controlled_by(0)]
+    theirs = [perm.card.name for perm in game.controlled_by(1)]
+    assert sum(1 for perm in game.controlled_by(0) if perm.is_creature) == 2, mine
+    assert sum(1 for perm in game.controlled_by(0) if perm.has_type("land")) == 2, mine
+    assert sum(1 for perm in game.controlled_by(1) if perm.is_creature) == 0, theirs
+    assert sum(1 for perm in game.controlled_by(1) if perm.has_type("land")) == 1, theirs
+
+
+def test_pox_asks_every_seat_and_not_only_the_caster(set_pool):
+    """CR 608.2e: each of the four actions is taken by every player. An
+    interactive seat is prompted for its own discard, so the opponent owes a
+    prompt too — a sweep that only asked its caster would pass every test built
+    on one seat."""
+    pool, p1, p2, game = _w2g5_pox_game(set_pool, interactive=True)
+
+    game.cast_from_hand(0, "Pox")
+    game._settle()
+
+    assert game.pending_choice_of("discard", 0) is not None
+    assert game.pending_choice_of("discard", 1) is not None
+    assert game.pending_choice_of("discard", 0).data["count"] == 2
+    assert game.pending_choice_of("discard", 1).data["count"] == 1
+
+
+def test_pox_over_an_empty_board_asks_nobody_to_sacrifice(set_pool):
+    """A third of nothing is nothing, and CR 608.2 does as much as it can: a
+    seat that owes no sacrifice is not handed a prompt it cannot answer."""
+    pool = set_pool("ICE")
+    p1 = PlayerState(name="P1", hand=[pool["Pox"]], life=3)
+    p2 = PlayerState(name="P2", life=3)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game._sync_control()
+
+    result = game.cast_from_hand(0, "Pox")
+    game._settle()
+
+    assert result.supported, result.details
+    assert p1.life == 2 and p2.life == 2, "a third of 3 is 1"
+    assert game.pending_choice_of("sacrifice", 0) is None
+    assert game.pending_choice_of("discard", 0) is None
+
+def test_a_type_sweep_records_the_permanents_it_destroyed(set_pool):
+    """Not a card: the class Stench of Evil's fix belongs to.
+
+    "For each <noun> destroyed this way, …" reads the objects a sweep recorded,
+    and the lowering admits the clause on the strength of the *count* being
+    produced. So a sweep that recorded the count and not the objects compiled
+    such a card supported and then iterated an empty list. Five type sweeps did
+    (`destroy_all_creatures` and its four siblings) and the by-type land sweep
+    did not record even the count.
+
+    Checked against a live board rather than against the table, because the
+    table is the claim: the record has to be what actually died, and whose it
+    was.
+    """
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers.registry import EFFECT_HANDLERS
+    from engine.oracle_types import OracleInstruction, PER_OBJECT_SEAT_RECORDS
+
+    pool = set_pool("ICE")
+    mine = Permanent(card=pool["Balduvian Bears"])
+    theirs = Permanent(card=pool["Tor Giant"])
+    land = Permanent(card=pool["Forest"])
+    p1 = PlayerState(name="P1", battlefield=[mine, land], life=20)
+    p2 = PlayerState(name="P2", battlefield=[theirs], life=20)
+    game = Game(players=[p1, p2])
+    game._sync_control()
+    context = OracleExecutionContext(caster=p1, target=p2, card=pool["Pox"])
+
+    EFFECT_HANDLERS["destroy_all_creatures"](
+        game, OracleInstruction("destroy_all_creatures", "", {}), context
+    )
+
+    destroyed = context.results["destroyed_this_way_objects"]
+    assert context.results["destroyed_this_way"] == 2
+    assert {perm.card.name for perm in destroyed} == {"Balduvian Bears", "Tor Giant"}
+    seats = context.results[PER_OBJECT_SEAT_RECORDS["controller"]]
+    assert seats[mine.permanent_id] == 0
+    assert seats[theirs.permanent_id] == 1
+    assert land in game.controlled_by(0), "the land was not a creature"
+# --- end W2G5 ---

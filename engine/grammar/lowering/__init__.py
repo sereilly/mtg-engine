@@ -160,18 +160,20 @@ from .attachments import (
 from .board import (
     _lower_phase_out,
     _lower_put_on_library_bottom,
+    _lower_delayed_self_action,
+    _lower_exchange_greatest_mana_value,
+    _lower_regenerate,
+    _lower_sacrifice_unless_pay,
+    _lower_sacrifice,
+    _lower_sacrifice_expansion_permanents,
+)
+from .destruction import (
     _DESTROY_ALL_KINDS,
     _BASIC_LAND_TYPES,
     _lower_destroy,
     _lower_for_each_destroyed,
     _lower_delayed_destroy,
-    _lower_delayed_self_action,
-    _lower_exchange_greatest_mana_value,
-    _lower_regenerate,
     _lower_destroy_unless_pay,
-    _lower_sacrifice_unless_pay,
-    _lower_sacrifice,
-    _lower_sacrifice_expansion_permanents,
     _lower_destroy_each_unless_paid,
 )
 from .control_changes import (

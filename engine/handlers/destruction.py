@@ -125,16 +125,41 @@ def _sweep_by_type(
             for name in types
         )
 
-    destroyed = 0
+    # Who controlled each victim, read **before** the sweep (CR 608.2h /
+    # CR 400.7): a later "for each … destroyed this way, its controller …"
+    # asks about a permanent that is a card in a graveyard by then.
+    controllers = {
+        perm.permanent_id: seat
+        for player in game.players
+        for perm in game.controlled_by(player)
+        if _matches(perm)
+        for seat in (game.controller_index_of(perm),)
+        if seat is not None
+    }
+    died: list[Permanent] = []
     for player in game.players:
-        destroyed += len(game._destroy_swept_permanents(
+        died.extend(game._destroy_swept_permanents(
             player, _matches, allow_regeneration=regeneration_allowed
         ))
     # "…where X is the number of creatures that **died this way**" (Hellfire).
     # What actually died, not what the sweep aimed at: a regenerated or
-    # indestructible permanent is still there, and CR 701.15a is explicit that
+    # indestructible permanent is still there, and CR 701.8c is explicit that
     # a replaced destruction is not a death.
-    context.results["destroyed_this_way"] = destroyed
+    #
+    # The **objects** ride beside the number, and did not until this round —
+    # these five sweeps recorded the count alone. `_lower_for_each_destroyed`
+    # gates on the count being produced, so "Destroy all creatures. For each
+    # creature that died this way, …" over one of them compiled *supported* and
+    # then iterated an empty list. `destroy_all_matching` beside them has
+    # recorded both since Glyph of Reincarnation; the difference was invisible
+    # because no printed card had asked yet.
+    context.results["destroyed_this_way_objects"] = died
+    context.results["destroyed_this_way"] = len(died)
+    context.results[PER_OBJECT_SEAT_RECORDS["controller"]] = {
+        perm.permanent_id: controllers[perm.permanent_id]
+        for perm in died
+        if perm.permanent_id in controllers
+    }
     game.log.append(f"All {', '.join(types)}s were destroyed")
     return True, "resolved"
 
@@ -426,8 +451,37 @@ def destroy_all_lands_of_type(game: Game, instruction: OracleInstruction, contex
         # only way every reader agrees about that.
         return perm.has_type(land_type)
 
+    # Who controlled each victim, read **before** the sweep (CR 608.2h / CR
+    # 400.7): "For each land destroyed this way, this spell deals 1 damage to
+    # that land's controller" (Stench of Evil) asks about a permanent that is a
+    # card in a graveyard by the time the loop runs, and no board read can
+    # answer for it.
+    controllers = {
+        perm.permanent_id: seat
+        for player in game.players
+        for perm in game.controlled_by(player)
+        if _matches(perm)
+        for seat in (game.controller_index_of(perm),)
+        if seat is not None
+    }
+    died: list[Permanent] = []
     for player in game.players:
-        game._destroy_swept_permanents(player, _matches, allow_regeneration=False)
+        died.extend(
+            game._destroy_swept_permanents(player, _matches, allow_regeneration=False)
+        )
+    # The record every other destroy sweep keeps, and this one did not: what a
+    # later sentence of the same spell counts or iterates. `destroy_all_lands`
+    # and `destroy_all_matching` have written it since Hellfire; the by-type
+    # sweep beside them was the sweep that recorded nothing, which is invisible
+    # until a card asks — the second sentence reads an empty set and the card
+    # reports itself supported having done half of what it says.
+    context.results["destroyed_this_way_objects"] = died
+    context.results["destroyed_this_way"] = len(died)
+    context.results[PER_OBJECT_SEAT_RECORDS["controller"]] = {
+        perm.permanent_id: controllers[perm.permanent_id]
+        for perm in died
+        if perm.permanent_id in controllers
+    }
     game.log.append(f"All {land_type}s were destroyed")
     return True, "resolved"
 

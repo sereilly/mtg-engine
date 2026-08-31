@@ -15,7 +15,8 @@ re-forms instead of forking.
 import dataclasses
 
 from .. import ast
-from ..amounts import parse_amount, parse_equal_to
+from ..amounts import (accept_fraction_head, accept_rounding, parse_amount,
+                       parse_equal_to)
 from ..errors import GrammarError
 from ..lexer import (MANA, render)
 from ..nouns import parse_object_filter
@@ -96,6 +97,34 @@ def _parse_discard(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     # was read before this function was called; the pronoun only repeats them.
     if stream.accept_phrase("your", "hand") or stream.accept_phrase("their", "hand"):
         return ast.Discard(player, ast.AllOf(), whole_hand=True)
+    # "discards **a third of the cards in their hand**" (Pox). The fraction's
+    # noun is this production's own, so the head is read here and the quantity
+    # built from the zone rather than handed to `parse_amount` — the same
+    # arrangement `_parse_loses` makes for "half their life", and for its
+    # reason: a quantity parser that swallowed "the cards in their hand" would
+    # leave this production without the noun every other printing of the verb
+    # ends on.
+    fraction_mark = stream.mark()
+    divisor = accept_fraction_head(stream)
+    if divisor is not None and stream.accept_word("the"):
+        if stream.accept_word("cards") and stream.accept_word("in"):
+            if stream.accept_word("their", "your", "his"):
+                stream.accept_phrase("or", "her")
+                if stream.accept_word("hand"):
+                    return ast.Discard(
+                        player,
+                        ast.Half(
+                            ast.CountOf(
+                                ast.ObjectFilter(
+                                    is_card=True, zone="hand",
+                                    zone_owner=ast.PlayerRef("target"),
+                                )
+                            ),
+                            accept_rounding(stream),
+                            divisor,
+                        ),
+                    )
+    stream.reset(fraction_mark)
     # "Discard **up to** two cards" (Kinetic Augur). Read before the amount, and
     # recorded rather than consumed: a ceiling read as an exact count is a card
     # that forces its controller to pitch two cards they were offered the choice

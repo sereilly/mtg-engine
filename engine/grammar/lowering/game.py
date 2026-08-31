@@ -8,7 +8,8 @@ Grouped as "the game and its players" rather than "the board": none of these
 changes what a permanent is, and all of them change the state a player is in.
 """
 
-from ...oracle_types import OracleInstruction, X_FROM_COUNT
+from ...oracle_types import (OracleInstruction, X_FROM_COUNT,
+                             X_FROM_COUNT_PER_RECIPIENT)
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from ...tokens import default_token_name
 from .. import ast
@@ -393,6 +394,13 @@ def _lower_win_game(node: ast.WinGame) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("player_wins_game", "", {}),)
 
 
+#: The recipients "loses <a fraction of> their life" has one answer per seat
+#: for. A count taken against one of them and applied to all of them is the
+#: dropped-rider bug with an arithmetic face, so the fraction travels on the
+#: per-recipient channel for these and on the ordinary one for the rest.
+_PER_SEAT_LIFE_RECIPIENTS = frozenset({"each_player", "each_opponent"})
+
+
 def _lower_lose_life(
     node: ast.LoseLife,
     event: str | None = None,
@@ -412,7 +420,27 @@ def _lower_lose_life(
         else None
     )
     if halved is not None:
-        payload: dict[str, object] = {"amount": "x", X_FROM_COUNT: halved}
+        # "**Each player** loses a third of their life" (Pox). One number per
+        # seat, and `X_FROM_COUNT` is resolved once at the dispatch point
+        # against `context.target` — so a multi-seat recipient carrying it would
+        # take *one* player's life total and subtract that share from everybody.
+        # The per-recipient channel is the one the damage sweeps already use for
+        # this exact reason. A single-seat recipient keeps the payload it had.
+        # …and only when the count is about the *losing* player. "Each opponent
+        # loses X life, where X is the number of Shrines **you** control"
+        # (Sanctum of Stone Fangs) is one number by construction, and the
+        # per-recipient evaluator is owner-blind — it counts against whichever
+        # seat it is handed — so routing that one through here would count each
+        # opponent's own Shrines instead.
+        key = (
+            X_FROM_COUNT_PER_RECIPIENT
+            if (
+                node.player.kind in _PER_SEAT_LIFE_RECIPIENTS
+                and halved.get("owner") == "target"
+            )
+            else X_FROM_COUNT
+        )
+        payload: dict[str, object] = {"amount": "x", key: halved}
     else:
         payload = (
             dict(_back_reference_payload(node.amount, produced, event))
