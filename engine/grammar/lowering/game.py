@@ -10,7 +10,7 @@ changes what a permanent is, and all of them change the state a player is in.
 
 from ...oracle_types import (OracleInstruction, X_FROM_COUNT,
                              X_FROM_COUNT_PER_RECIPIENT)
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS, card_only_filter
 from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
@@ -154,6 +154,33 @@ def _lower_gain_life(
         return (OracleInstruction("target_gains_life", "", payload),)
     if node.per_each is not None:
         filt = node.per_each
+        zone_owner = filt.zone_owner.kind if filt.zone_owner is not None else None
+        if node.player.kind == "you" and filt.zone == "graveyard" and (
+            zone_owner == "target_opponent"
+        ):
+            # "For each artifact or creature card in target opponent's
+            # graveyard, … you gain 1 life." (Spoils of Evil.) A count out of a
+            # chosen player's graveyard, evaluated by `count_from_payload` —
+            # the same reader the mana half of this very sentence uses one
+            # instruction over, because the two halves are one count and two
+            # readings of it are two answers.
+            #
+            # Held to what a *card* can be asked: a card in a graveyard has no
+            # computed characteristics at all (CR 613.1), which is what
+            # `card_only_filter` says.
+            carried = card_only_filter({
+                key: value
+                for key, value in filt.to_payload().items()
+                if key not in ("zone", "zone_owner", "is_card")
+            })
+            if carried is None:
+                raise LoweringError(
+                    "the per-each life gain cannot count this restriction", node=node
+                )
+            payload["per_each"] = {
+                "zone": "graveyard", "owner": "target_opponent", "filter": carried,
+            }
+            return (OracleInstruction("target_gains_life", "", payload),)
         if node.player.kind != "you" or filt.zone != "battlefield":
             raise LoweringError(
                 "the per-each life gain counts the gainer's own battlefield", node=node

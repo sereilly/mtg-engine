@@ -349,6 +349,13 @@ def _parse_postmodifiers(
             # same line — the cards are targets too.
             elif stream.accept_phrase("target", "player", "'s"):
                 owner = ast.PlayerRef("target_player")
+            # "in **target opponent's** graveyard" (Spoils of Evil). The same
+            # chosen seat with CR 115.4's own-seat exclusion, and its own kind
+            # rather than `target_player`, because that exclusion is the whole
+            # difference: read as "target player" the card would let its caster
+            # count their own graveyard.
+            elif stream.accept_phrase("target", "opponent", "'s"):
+                owner = ast.PlayerRef("target_opponent")
             else:
                 stream.accept_word("a", "an", "the")
             noun = stream.peek_word()

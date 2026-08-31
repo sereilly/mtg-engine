@@ -129,6 +129,7 @@ from .sentence_clauses import (
     _distribute_duration,
     _parse_unless_player_pays,
     _accept_trailing_toll,
+    _parse_leading_count_scale,
     _parse_leading_for_each,
     _parse_leading_linked_duration,
     _round_every_half,
@@ -319,6 +320,12 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     each_bought_off = _parse_for_each_destroy_unless_paid(stream)
     if each_bought_off is not None:
         return each_bought_off
+    # The *count* reading of the same leading words, tried first because it is
+    # the narrower one: it requires the phrase to name a zone other than the
+    # battlefield, which the loop's sentences never do.
+    per_count = _parse_leading_count_scale(_parse_statement_body, stream)
+    if per_count is not None:
+        return per_count
     per_death = _parse_leading_for_each(_parse_statement_body, stream)
     if per_death is not None:
         # The repeated act may be printed as a choice of two ("pay 4 life **or**

@@ -179,7 +179,15 @@ def _lower_add_mana(
             owner = node.per_each.controller if zone == "battlefield" else (
                 node.per_each.zone_owner.kind if node.per_each.zone_owner else None
             )
-            if owner != "you":
+            # "…in **target opponent's** graveyard" (Spoils of Evil). A chosen
+            # seat rather than the producer's own, which the evaluator already
+            # answers — `count_from_payload` reads any owner that is not "you"
+            # off the resolution's target. Only out of a *zone*: "you control"
+            # is a battlefield scope and a targeted one there would be a
+            # different sentence with a different reader.
+            if owner != "you" and not (
+                zone != "battlefield" and owner == "target_opponent"
+            ):
                 raise LoweringError(
                     "the mana multiplier counts the producer's own board", node=node
                 )
@@ -209,8 +217,15 @@ def _lower_add_mana(
                     "the mana multiplier cannot count this restriction", node=node
                 )
             payload["per_each"] = {
-                "zone": zone, "owner": "you", "filter": carried,
+                "zone": zone, "owner": owner, "filter": carried,
             }
+            if owner == "target_opponent":
+                # The seat is chosen when the spell is cast (CR 115.4 excludes
+                # the caster's own), so the *card* targets a player and the
+                # picker has to say so. Carried on this instruction because
+                # `derive_cast_spec` reads the first one that describes a
+                # target, and this is the first step of the sentence.
+                payload["targets"] = {"kind": "player", "opponents_only": True}
         return (OracleInstruction("add_mana_from_text", "", payload),)
     # The any-colour branch keeps its clause text for a *text-keyed* handler
     # probe, so a restriction folded onto it would be carried in the payload and

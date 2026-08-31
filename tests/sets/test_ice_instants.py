@@ -537,48 +537,92 @@ def test_w1g3_essence_vortex_offers_the_creature_as_a_cast_target(set_pool):
     assert derive_cast_spec(card, compile_card_oracle(card)) == {"kind": "creature"}
 
 
-# --- W1G3 (cont.): the one declined instant, with its pieces named ---
-def test_w1g3_spoils_of_evil_is_declined_and_says_which_pieces_are_missing(set_pool):
+# --- W1G3 (cont.): the declined instant, now landed ---
+def test_w1g3_spoils_of_evil_counts_a_chosen_graveyard(set_pool):
     """"For each artifact or creature card in target opponent's graveyard, add
-    {C} and you gain 1 life."
+    {C} and you gain 1 life." (W3G3 - the refusal this test used to pin.)
 
-    Five pieces. The refusal site says "expected a subject", which is the
-    generic no-production message and names none of them:
+    W1G3 named five pieces and W2 corrected the brief on the fourth: this is a
+    **count**, not a loop. Two mana and two life is one addition and one gain,
+    not two of each, and the pool already reads the multiplier in the trailing
+    position ("Add {G} for each Forest you control") - so the leading spelling
+    is a distribution onto the same ``per_each`` field rather than an
+    ``ast.ForEach`` nothing could walk.
 
-    1. There is no leading ``For each <noun phrase>, <effect>`` production at
-       all. The two that exist are a counter placement
-       (``effects/counters``) and the "for each creature that died this way"
-       back-reference (``statements``); a bare sentence opening with "for" has
-       no reading.
-    2. The *trailing* spelling that does exist ("Add {C} for each …") reads only
-       the caster's own zone: "in **target opponent's** graveyard" leaves
-       unconsumed text where "in your graveyard" parses.
-    3. ``lowering/mana._lower_add_mana``'s per-each branch refuses any owner but
-       "you" — "the mana multiplier counts the producer's own board".
-    4. The loop body is two effects joined by "and", and
-       ``handlers/control_flow.for_each`` iterates battlefield permanents or a
-       set an earlier step recorded. Cards in a graveyard are neither, so even a
-       parsed loop would have nothing to walk.
-    5. The spell targets a **player**, and with no instruction describing one
-       ``targeting.derive_cast_spec`` gives the picker nothing to ask for.
+    What was really missing: the noun parser's "in **target opponent's**
+    graveyard", a leading production that distributes the count, the two
+    lowerings' insistence on the caster's own zone, and a targets description so
+    the picker asks for the opponent.
     """
+    program = compile_card_oracle(set_pool("ICE")["Spoils of Evil"])
+    assert program.supported
+
+    (sequence,) = [i for i in program.instructions if i.kind == "sequence"]
+    add_mana, gain_life = sequence.payload["steps"]
+    counted = {"zone": "graveyard", "owner": "target_opponent",
+               "filter": {"type_filter": ["artifact", "creature"]}}
+    assert add_mana.payload["per_each"] == counted
+    assert gain_life.payload["per_each"] == counted,         "one sentence, one count - two readings of it would be two answers"
+
+
+def test_spoils_of_evil_pays_out_the_count_and_asks_for_an_opponent(set_pool):
+    """CR 115.4: "target opponent" never names the caster's own seat."""
+    from engine.targeting import derive_cast_spec
+
+    pool = set_pool("ICE")
+    lea = set_pool("LEA")
+    spoils = pool["Spoils of Evil"]
+    assert derive_cast_spec(spoils, compile_card_oracle(spoils)) == {
+        "kind": "player", "opponents_only": True,
+    }
+
+    p0 = PlayerState(name="P0", hand=[spoils], life=20)
+    p1 = PlayerState(name="P1", life=20, graveyard=[
+        pool["Balduvian Bears"], lea["Black Lotus"], lea["Mountain"],
+        pool["Tor Giant"],
+    ])
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.cast_from_hand(0, "Spoils of Evil", target_player_index=1)
+    assert result.supported, result.details
+    game._settle()
+
+    assert p0.life == 23, "three artifact-or-creature cards; the Mountain is neither"
+    assert p0.mana_pool["C"] == 3
+
+
+def test_an_empty_graveyard_is_a_real_answer(set_pool):
+    """"For each" of nothing is nothing - the spell resolves and pays out zero,
+    which is what makes the count above a count rather than a fixed 1."""
+    pool = set_pool("ICE")
+    p0 = PlayerState(name="P0", hand=[pool["Spoils of Evil"]], life=20)
+    p1 = PlayerState(name="P1", life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert game.cast_from_hand(0, "Spoils of Evil", target_player_index=1).supported
+    game._settle()
+
+    assert p0.life == 20 and p0.mana_pool["C"] == 0
+
+
+def test_a_leading_count_over_an_effect_that_cannot_carry_it_refuses():
+    """A count silently dropped is a card that adds one mana where it should add
+    five, so a statement with no ``per_each`` to fold it onto takes the line
+    down rather than resolving flat."""
     from engine.grammar import compile_line
 
-    assert not compile_card_oracle(set_pool("ICE")["Spoils of Evil"]).supported
-
-    # Piece 1: the leading form has no production.
-    leading = compile_line(
-        "For each artifact or creature card in target opponent's graveyard, "
-        "add {C} and you gain 1 life."
+    assert compile_line(
+        "For each artifact card in target opponent's graveyard, add {C}."
+    ).parsed
+    refused = compile_line(
+        "For each artifact card in target opponent's graveyard, draw a card."
     )
-    assert not leading.parsed
-
-    # Piece 2: the trailing form reads the caster's zone and only that one.
-    assert compile_line("Add {C} for each creature card in your graveyard.").lowered
-    theirs = compile_line(
-        "Add {C} for each artifact or creature card in target opponent's graveyard."
-    )
-    assert not theirs.parsed
+    assert not refused.parsed
+    assert "leading count" in (refused.parse_error or "")
 # --- end W1G3 ---
 # --- W1G2: combat relations and end of combat ---
 def _w1g2_venomous_board(set_pool, target_seat: int, target_index: int):

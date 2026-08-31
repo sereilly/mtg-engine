@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import evaluate_count, resolve_amount
+from ._common import count_from_payload, evaluate_count, resolve_amount
 from ..oracle_types import X_FROM_COUNT_PER_RECIPIENT
 from .registry import effect_handler
 from ..mana_payment import generic_cost
@@ -370,6 +370,14 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # every time an opponent's creature dies.
     if per_each is not None and per_each.get("history") == "creatures_died_this_turn":
         life_gain *= int(getattr(game, "creatures_died_this_turn", 0))
+    if per_each is not None and per_each.get("zone") not in (None, "battlefield"):
+        # "For each artifact or creature card in **target opponent's**
+        # graveyard, … you gain 1 life." (Spoils of Evil.) A count out of a zone
+        # rather than off a battlefield, answered by `count_from_payload` — the
+        # same reader `add_mana_from_text`'s per-each uses, and the same reader
+        # the mana half of this very sentence goes through one instruction over.
+        # Two readings of one count would be two answers on one card.
+        life_gain *= count_from_payload(game, context, per_each)
     if per_each is not None and per_each.get("zone") == "battlefield":
         wanted_types = tuple(per_each.get("card_types") or ())
         wanted_keywords = tuple(per_each.get("with_keywords") or ())
