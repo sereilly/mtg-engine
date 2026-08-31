@@ -56,14 +56,14 @@ Anything that weakens these is a regression regardless of what it enables:
    arithmetic's missing term. Do not "fix" a suspicious ratio by editing either
    number from a local timing; read the step's own output across several runs.
 
-   **The pair was set at 9,110 tests and the suite is now 10,821**, so the
-   headroom is worth re-reading at the next Phase 0 rather than assumed. One
-   local data point, offered as a ratio and not as a number to copy into
-   `ci.yml`: this machine measured 78–87s at 9,110 tests and **117s at 10,821**
-   — +19% tests for +40% wall time. That is the first non-proportional local
-   movement since the unit change, and it is a reason to read three runner runs
-   before the next ingest adds several hundred tests, not a reason to touch
-   either constant now.
+   **Re-read at Phase 0, 2026-08-31, from four runner runs**: 172s, 186s,
+   163s, 205s at 10,821 tests. `BASELINE` moved 110 → 180 as the record of
+   that growth; `BUDGET` stays 240, and the latest run is **85% of it** with an
+   ingest ahead. The shape matters more than the level: +19% tests took +64%
+   runner wall time (a local machine measured the same super-linearity, +40%),
+   so per-test cost rose during ICE's waves — read `--durations` on a runner
+   run before letting the next ingest force the budget decision, and remember
+   the `slow` marker exists if the AI-batch tests are the growth.
 3. **Determinism.** A given seed reproduces a run exactly. Parsing and lowering
    are pure functions of card text.
 4. **Ratchets only tighten.** Coverage floors, probe baselines, and accepted-diff
@@ -662,43 +662,39 @@ before citing it.**
 
 ## The next set, measured rather than guessed
 
-**The table below was censused 2026-08-28, before Ice Age shipped, and its
-middle columns have decayed in a known direction.** ICE's 42 rounds and four
-waves took the grammar from 85.8% to 87.2% parsed and 52.4% to 54.9% executed
-over the shipped pool, so every candidate's "new & unsupported" count is now an
-**over**-estimate by whatever those productions reach. The ratio columns are the
-ones that were load-bearing, and the ICE row is spent.
+**Re-censused 2026-08-31 against the post-ICE compiler**, five near-term
+candidates fetched to a scratch directory (never `cards/`), measured with
+`support_report.refusals_report` so "a refused line" means what the work lists
+mean by it:
 
 | Set | Cards | New to pool | New & unsupported | New per unit work | Lines/distinct | Blocked by exactly one line |
 | --- | --: | --: | --: | --: | --: | --: |
-| 6ED | 335 | 200 | 75 | 2.7 | **1.00** | 69 of 75 |
-| FEM | 102 | 102 | 39 | 2.6 | **1.00** | 32 of 39 |
-| HML | 115 | 115 | 48 | 2.4 | 1.02 | 39 of 48 |
-| 5ED | 434 | 147 | 66 | 2.2 | 1.01 | 55 of 66 |
-| TMP | 335 | 315 | 145 | 2.2 | — | — |
-| VIS | 167 | 167 | 96 | 1.7 | — | — |
-| MIR | 335 | 317 | 183 | 1.7 | — | — |
-| WTH | 167 | 167 | 99 | 1.7 | — | — |
-| ALL | 144 | 144 | 99 | 1.5 | — | — |
+| 5ED | 434 | 58 | 18 | 3.2 | **1.00** | 18 of 18 |
+| FEM | 102 | 102 | 33 | 2.6 | **1.00** | 28 of 33 |
+| 6ED | 335 | 169 | 62 | 2.5 | **1.00** | 57 of 62 |
+| HML | 115 | 115 | 41 | 2.5 | **1.00** | 36 of 41 |
+| ALL | 144 | 144 | 88 | 1.3 | 1.02 | 67 of 88 |
 
-**The leverage argument is the part that has not decayed.** 6ED and FEM measured
-exactly 1.00 — 81 refused lines over 81 distinct sentences, 45 over 45. Not
-"nearly a long tail": every single refused line in those sets is a different
-sentence, so 75 cards cost 75 separate pieces of work and no production is shared
-by even two of them. The best "new per unit work" ratio in the table belongs to
-the set with the least reusable work in it, which is the trap that ratio sets.
-ICE was the only candidate where a production bought more than one card, and its
-1.09 was one keyword (cumulative upkeep, 8x/6x/5x on its three most repeated
-sentences). **Nothing left on this list forces a subsystem**, so the next set is
-chosen on card count, block position and what the ingest teaches — not on
-leverage that is not there. Re-census at Phase 0 either way; a candidate fetched
-to a scratch directory is cheap and the counts above are stale by construction.
+(TMP/MIR/VIS/WTH were not re-fetched — none is a near-term candidate and their
+pre-ICE rows all read ~1.7–2.2 new-per-unit with no repeated sentence.)
 
-**Cumulative upkeep is done, and the sets that print it got cheaper.** It was
-counted at 63 cards over the Ice Age and Mirage blocks (ICE 30, ALL 9, MIR 5,
-VIS 5, WTH 14), of which 61 were unsupported; the keyword shipped with ICE, so
-the other 33 now cost whatever *else* they print. That is a reason to sequence
-those sets near, not a subsystem still owed.
+**The headline movement is 5ED, and it is Ice Age's doing**: its "new to pool"
+fell 147 → 58, because most of what 5ED still had to offer was ICE reprints. At
+58 new cards over 434, Fifth Edition is now closer to 4ED's shape than to a
+work set — 18 pieces of work, every one a card blocked by exactly one line —
+but it still reprints from FEM and HML, so the sequencing rule holds it behind
+them. Alliances got cheaper too (99 → 88 unsupported; cumulative upkeep
+shipped with ICE and its ALL 9 / MIR 5 / VIS 5 / WTH 14 printings now cost
+whatever *else* they print).
+
+**The leverage argument did not move.** Four of the five candidates measure
+exactly 1.00 lines per distinct sentence — every refused line a different
+sentence, no production shared by even two cards — and ALL's 1.02 is noise, not
+a subsystem. ICE was the last candidate that forced one. So the next set is
+chosen on card count, block position and what the ingest teaches, not on
+leverage that is not there — and on that reading **FEM is the pick**: smallest
+(102 cards, 33 unsupported), the only near-term insert (which rehearses the
+printing-order machinery), and the first of 5ED's two remaining sources.
 
 **FEM is the only near-term candidate that inserts rather than appends.**
 Fallen Empires released 1994-11-01, between DRK (index 7) and 4ED (index 8), and
@@ -784,15 +780,23 @@ asking, and the first defect was a fixed keyword list silently dropping
 a target" was recorded as a client annoyance over six cards and was a real
 engine misplay over 17.
 
-**The lead this set leaves:** Volcanic Eruption is the last name-keyed hook in
-ICE and its key is its whole printed line. Its first sentence — "Destroy X
-target Mountains" — is the production Avalanche's "Destroy X target snow lands"
-opened (ICE 42), one noun over; what still refuses is the second, "deals damage
-to each creature and each player equal to the number of Mountains put into a
-graveyard this way". So retiring the hook needs an amount that counts what the
-step in front of it destroyed, and the destroy already records
-`destroyed_this_way` under the key the sweep uses. One hook, one production, and
-the record is already there.
+**The lead this set left is taken (2026-08-31): Volcanic Eruption's hook is
+retired**, onto Avalanche's destroy production plus "equal to the number of
+<noun> put into a graveyard this way" — one spelling of the record Hellfire's
+where-clause already read (CR 700.4: "dies" *is* "put into a graveyard from the
+battlefield"), so both front ends now ask one `accept_this_way_count`. Hooked
+cards 64 → 63, entries 70 → 69, and the whole-pool program differential was
+this card alone. **The round's real finding is a fire-site class, not the
+card**: `land_dies` (Dingus Egg) was announced from inside the single-target
+destroy path plus a second call inside the hook — so a land destroyed by the
+several-targets branch (Avalanche), a board sweep (**Armageddon**) or a
+sacrifice fired no trigger at all, in the shipped pool, with every test green.
+It rides `_permanent_to_graveyard` now, idiom 5's seam, asked through
+`has_type` so a type-changed land still counts. The retirement also forced the
+spec derivation to carry a subtype/supertype narrowing under `filter` — the
+enumeration was offering a Forest for a spell that destroys Mountains, because
+the per-candidate cast probe never asks a several-target instruction's filter —
+which narrowed Avalanche's picker to snow lands as a side effect.
 
 ## Where the sets landed
 
@@ -824,9 +828,9 @@ remaining 89 in a fraction of the calendar time, with integration — not
 authorship — as the constraint throughout.
 
 **Where the pool stands** (regenerate rather than trust these): 1,508 unique
-cards over **11** sets, 100% supported. Grammar parses 87.2% of lines, lowers
-86.2% and executes 54.9% (`GRAMMAR_COVERAGE.md`). 4.2% of supported cards carry
-a name-keyed hook — 64 cards, **70** entries in 6 registries
+cards over **11** sets, 100% supported. Grammar parses 87.3% of lines, lowers
+86.4% and executes 55.1% (`GRAMMAR_COVERAGE.md`). 4.2% of supported cards carry
+a name-keyed hook — 63 cards, **69** entries in 6 registries
 (`HOOK_RELIANCE.md`) — the number that decides whether this architecture reaches
 26,113 cards. Parse coverage: 1,506 of 1,508 supported cards fully claimed, 2
 acknowledged, **0 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the

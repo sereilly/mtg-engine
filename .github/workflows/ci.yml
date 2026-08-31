@@ -67,10 +67,21 @@ jobs:
       # BASELINE is now a runner-measured number, so the creep warning compares
       # like with like; BUDGET sits at ~2x it, which is the headroom this gate
       # was always documented to want.
+      #
+      # BASELINE 110 -> 180 (2026-08-31, after the ICE promotion). Four runner
+      # readings at 10,821 tests: 172s, 186s, 163s, 205s. The move is a record
+      # of growth, per this gate's own rule — but note the shape: +19% tests
+      # took +64% wall time (a local machine measured the same super-linearity,
+      # +40%), so the growth is not proportional and per-test cost rose during
+      # ICE's waves. The latest run sits at 85% of BUDGET with an ingest ahead;
+      # raising BUDGET is a decision, not maintenance, and it has not been
+      # taken here. Two ways to avoid having to take it: read `--durations` on
+      # a runner run before assuming the ingest forces it, and remember `-m
+      # "not slow"` exists if the batch tests are the growth.
       - name: Enforce the suite-time budget
         env:
           BUDGET: 240
-          BASELINE: 110
+          BASELINE: 180
         run: |
           START=$(date +%s)
           python -m pytest -q > /dev/null
