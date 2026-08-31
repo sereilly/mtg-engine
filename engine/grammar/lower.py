@@ -42,6 +42,7 @@ from .lowering._events import CHOSEN_PLAYER
 from .lowering.where_x import lower_where_x
 from .statics import _lower_static_ability
 from .lowering.control_flow import (
+    _lower_for_each_life_lost,
     _lower_may, _lower_one_of, _lower_steps, _lower_unless_player_pays,
 )
 from .lowering import (
@@ -359,17 +360,15 @@ def lower_statement(
     if lowering is not None:
         return lowering(statement)
 
+    # Both act on a seat that can be the one the *firing event* froze — "look
+    # at **that player's** hand" (Leshrac's Sigil), "**that player** may
+    # choose … and pay" (Mudslide) — so they are in the chain rather than in
+    # the name-only table above. The raw `event`, not `dispatch_event`: both
+    # are printed inside an offer's branch, which is not the ability's whole
+    # effect and would see no event at all.
     if isinstance(statement, ast.UntapChosenByPaying):
-        # The raw `event`, for `_lower_reveal_hand_and_choose`'s reason one
-        # branch down: the payer can be the seat the firing event froze.
         return _lower_untap_chosen_by_paying(statement, event)
     if isinstance(statement, ast.RevealHandAndChoose):
-        # In the chain rather than in the table above because the seat it acts
-        # on can be the one the *firing event* froze — "look at **that
-        # player's** hand" (Leshrac's Sigil), where nothing was targeted and
-        # there is no choice to read. The raw `event`, not `dispatch_event`:
-        # this clause is printed inside an offer's "if you do" branch, which is
-        # not the ability's whole effect and would see no event at all.
         return _lower_reveal_hand_and_choose(statement, event)
     if isinstance(statement, ast.DealDamage):
         return _lower_damage(statement, event, produced)
@@ -757,6 +756,18 @@ def lower_statement(
                 ),
                 produced,
             )
+        # "For each **1 life you lost**" (Oath of Lim-Dûl) — an iterator that
+        # is a count rather than a set, refused for want of an *event* where
+        # the three above are refused for want of a producer.
+        if isinstance(statement.iterator, ast.EachLifeLost):
+            return _lower_for_each_life_lost(
+                statement,
+                lower_statement(
+                    statement.effect, produced,
+                    event=event, event_subject=event_subject, whole_effect=False,
+                ),
+                event,
+            )
         return _lower_for_each(statement)
 
     # The offer-round loop takes the recursion back as an argument: its lowering
@@ -848,18 +859,6 @@ def lower_statement(
         return (OracleInstruction("grant_team_assign_unblocked_until_eot", "", {}),)
 
     raise LoweringError(f"no lowering for {type(statement).__name__}", node=statement)
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 #: Which scratchpad key an activation **cost** writes when it is paid. The twin

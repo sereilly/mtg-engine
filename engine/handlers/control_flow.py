@@ -1257,6 +1257,12 @@ def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecut
     return True, "resolved"
 
 
+#: One turn of a **counted** loop — "for each 1 life you lost" (Oath of
+#: Lim-Dûl). A sentinel rather than None, because None is a legitimate absent
+#: object elsewhere in this file and the two must not collapse: one is "run the
+#: body again", the other is "there was nothing here".
+_A_REPETITION = object()
+
 #: The last item :func:`for_each` walks: not a permanent, the *end* of the loop.
 #: It exists because the restore of ``iteration_target`` has to be a step of the
 #: loop rather than a line after it — see the handler's docstring.
@@ -1293,7 +1299,15 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
     filters = instruction.payload.get("iterator") or {}
     steps = _steps(instruction, "effect")
     produced_by = filters.get("produced_by")
-    if produced_by is not None:
+    # "For each **1 life you lost**" (Oath of Lim-Dûl) — an iterator that is a
+    # *number*, not a set: the loop has no objects, only the count the firing
+    # event froze. Read first, because the two branches below both build a list
+    # of permanents and this one has none to build.
+    repeat_key = filters.get("repeat_from_trigger")
+    if repeat_key is not None:
+        times = int((context.trigger_context or {}).get(repeat_key, 0) or 0)
+        matched = [_A_REPETITION] * max(0, times)
+    elif produced_by is not None:
         matched = list(context.results.get(produced_by) or ())
     else:
         matched = [
@@ -1311,6 +1325,11 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
         if item is _END_OF_ITERATION:
             context.iteration_target = previous
             context.iteration_seats = previous_seats
+            return
+        if item is _A_REPETITION:
+            # A counted repetition names no object, so nothing rebinds: the
+            # body means what it would mean written once, run again.
+            _run(game, steps, context)
             return
         context.iteration_target = item
         context.iteration_seats = {

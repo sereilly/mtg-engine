@@ -2046,4 +2046,84 @@ def test_leshracs_sigil_looks_at_the_casters_hand_and_takes_a_card(set_pool):
     game.auto_resolve_pending_choices()
     game._settle()
     assert [c.name for c in p1.graveyard] == ["Icy Prison"]
+
+
+def _oath_board(set_pool, hand: list[str]):
+    """Oath of Lim-Dûl out, three bears beside it, and *hand* in hand."""
+    pool = set_pool("ICE")
+    oath = Permanent(card=pool["Oath of Lim-Dûl"])
+    bears = [Permanent(card=pool["Balduvian Bears"]) for _ in range(3)]
+    p0 = PlayerState(
+        name="P0", battlefield=[oath, *bears], life=20,
+        hand=[pool[name] for name in hand],
+    )
+    p1 = PlayerState(name="P1", life=20)
+    game = Game(players=[p0, p1])
+    # Seed the sweep's record of the life totals: a starting life total is not
+    # a loss, and the sweep announces only a *drop* from what it last saw.
+    game.check_state_based_actions()
+    return game, p0, oath
+
+
+def _settle_prompts(game) -> None:
+    for _ in range(3):
+        game._settle()
+        game.auto_resolve_pending_optional_pays()
+        game.auto_resolve_pending_choices()
+        game._settle()
+
+
+def test_oath_of_lim_dul_sacrifices_once_per_life_lost(set_pool):
+    """"Whenever you lose life, for each 1 life you lost, sacrifice a permanent
+    other than this enchantment unless you discard a card."
+
+    Two damage is two losses' worth of repetitions, and the enchantment itself
+    is never one of the permanents given up.
+    """
+    game, p0, oath = _oath_board(set_pool, hand=[])
+
+    game._deal_damage_to_player(p0, 2, source=None)
+    _settle_prompts(game)
+
+    assert [c.name for c in p0.graveyard] == ["Balduvian Bears"] * 2
+    assert game.is_on_battlefield(oath), "'other than this enchantment'"
+
+
+def test_oath_of_lim_dul_takes_a_discard_instead(set_pool):
+    """The toll, in its cost-is-not-mana spelling: a card in hand buys the
+    permanent back."""
+    game, p0, _oath = _oath_board(set_pool, hand=["Icy Prison"])
+
+    game._deal_damage_to_player(p0, 1, source=None)
+    _settle_prompts(game)
+
+    assert [c.name for c in p0.graveyard] == ["Icy Prison"]
+    assert len(p0.battlefield) == 4, "nothing was sacrificed"
+
+
+def test_oath_of_lim_dul_is_announced_by_a_life_total_that_dropped(set_pool):
+    """The condition has no single call site — damage, a cost, a "lose N life"
+    effect all take life — so it is announced by the state-based sweep off the
+    one thing every route writes. Paying life is a life loss (CR 118.8), and
+    the sweep sees it exactly as it sees damage.
+    """
+    game, p0, _oath = _oath_board(set_pool, hand=[])
+
+    p0.life -= 1
+    _settle_prompts(game)
+
+    assert [c.name for c in p0.graveyard] == ["Balduvian Bears"]
+
+
+def test_oath_of_lim_dul_stays_silent_on_an_opponents_loss(set_pool):
+    """"Whenever **you** lose life" — the seat-scoped reading the life *gain*
+    trigger beside it already takes."""
+    game, p0, _oath = _oath_board(set_pool, hand=[])
+    opponent = game.players[1]
+
+    game._deal_damage_to_player(opponent, 3, source=None)
+    _settle_prompts(game)
+
+    assert p0.graveyard == []
+    assert len(p0.battlefield) == 4
 # --- end W2G1 ---

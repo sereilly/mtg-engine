@@ -860,6 +860,10 @@ def _counters_put_on_filter(
 # coincidence, three is a rule that had been written down three times.
 _SEAT_SCOPED_EVENTS = frozenset({
     "you_gain_life",
+    # "Whenever **you** lose life" (Oath of Lim-Dûl). The mirror of the gain
+    # above and scoped the same way: an opponent's life leaving them is not
+    # this enchantment's controller losing any.
+    "you_lose_life",
     "draws_second_card",
     "you_sacrifice_permanent",
 })

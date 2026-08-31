@@ -214,6 +214,11 @@ EVENT_SUBJECT_CONTROLLER = "event_subject_controller"
 # empty context.
 _EVENT_QUANTITIES: dict[str, str] = {
     "you_gain_life": "life_gained",
+    # The mirror, from the state-based sweep that announces it: "for each 1
+    # life you lost" (Oath of Lim-Dûl) counts the drop the sweep measured, not
+    # the amount an effect set out to take — a life loss that a replacement
+    # reduced is the smaller number, exactly as the gain above is.
+    "you_lose_life": "life_lost",
     # "Whenever another creature you control enters, this creature deals damage
     # equal to **that creature's** power…" (Terror of the Peaks). The entering
     # creature's power, frozen by the fire site — by the time the trigger

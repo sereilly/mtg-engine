@@ -17,6 +17,7 @@ source, and "of their choice" is whose decision it is.
 from __future__ import annotations
 
 from .. import ast
+from ._common import _restrictions_beyond
 
 
 #: The keys a sacrifice cost carries *beside* its filter rather than inside
@@ -26,6 +27,12 @@ from .. import ast
 #: two families now charge a printed sacrifice (`board` and `damage`) and a
 #: fragment two families need does not live in one of them.
 _SACRIFICE_CARRIED = frozenset({"exclude_self", "their_choice"})
+
+#: The same two, spelled as the AST fields they come from. Two spellings
+#: because the two readers below ask at two moments — one about the payload
+#: that came out, one about the node that went in — and a field with no
+#: payload key is exactly what the second one is looking for.
+_SACRIFICE_CARRIED_FIELDS = frozenset({"other_than_source", "their_choice"})
 
 
 def _forced_sacrifice_filter(filt: ast.ObjectFilter) -> dict | None:
@@ -37,12 +44,24 @@ def _forced_sacrifice_filter(filt: ast.ObjectFilter) -> dict | None:
 
     - a self-referential or enchanted subject ("sacrifice **this** creature",
       Sea Serpent), which is a different instruction entirely and is read below;
-    - a phrase naming neither a card type nor a subtype, which would let the
-      prompt eat anything on the board. A *subtype* alone is a real set and
-      names it exactly — "two Swamps" (Mold Demon) is the whole cost, and it
-      says nothing about card types because on that card it does not need to.
+    - a phrase naming neither a card type nor a subtype **that said something
+      else the payload lost**, which would let the prompt eat anything on the
+      board. A *subtype* alone is a real set and names it exactly — "two
+      Swamps" (Mold Demon) is the whole cost, and it says nothing about card
+      types because on that card it does not need to.
+
+    The generic head noun is the one empty payload that is *right*: "sacrifice
+    **a permanent** other than this enchantment" (Oath of Lim-Dûl) names every
+    permanent, and a prompt listing every permanent is what the card says. It
+    is told apart from a lost narrowing by asking the node rather than the
+    payload — every non-default field must be one the cost carries beside the
+    filter, so a phrase whose restriction ``to_payload`` dropped keeps refusing.
     """
-    if filt.is_source or filt.is_enchanted or not (filt.card_types or filt.subtypes):
+    if filt.is_source or filt.is_enchanted:
+        return None
+    if not (filt.card_types or filt.subtypes) and _restrictions_beyond(
+        filt, _SACRIFICE_CARRIED_FIELDS
+    ):
         return None
     from ...subject_filters import object_only_filter
 

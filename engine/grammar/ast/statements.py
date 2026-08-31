@@ -23,7 +23,8 @@ from dataclasses import dataclass, field
 from typing import Union
 
 from .conditions import Condition
-from .conditions import ChosenThisWay, DiedThisTurn, DiedThisWay, ExiledThisWay
+from .conditions import (ChosenThisWay, DiedThisTurn, DiedThisWay,
+                         EachLifeLost, ExiledThisWay)
 from .costs import Cost
 from ._core import (
     Duration,
@@ -373,7 +374,7 @@ class ForEach:
     — a different number, and one that moves in the opposite direction.
     """
     iterator: (ObjectFilter | PlayerRef | DiedThisTurn | DiedThisWay
-                | ExiledThisWay | ChosenThisWay)
+                | ExiledThisWay | ChosenThisWay | EachLifeLost)
     effect: "Statement"
 
 

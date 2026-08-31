@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**38 unclaimed sentence(s) across 26 supported card(s).**
+**25 unclaimed sentence(s) across 17 supported card(s).**
 
 - **Battle Cry**
   - `whenever a creature blocks this turn, it gets +0/+1 until end of turn`
@@ -36,23 +36,13 @@ anything anyone did, and every ingest would arrive red.
 - **Call to Arms**
   - `white creatures get +1/+1 as long as the chosen color is the most common color among nontoken permanents the chosen player controls but isn't tied for most common`
   - `when the chosen color isn't the most common color among nontoken permanents the chosen player controls or is tied for most common, sacrifice this enchantment`
-- **Cold Snap**
-  - `at the beginning of each player's upkeep, this enchantment deals damage to that player equal to the number of snow lands they control`
 - **Drought**
   - `spells cost an additional "sacrifice a swamp" to cast for each black mana symbol in their mana costs`
   - `activated abilities cost an additional "sacrifice a swamp" to activate for each black mana symbol in their activation costs`
-- **Earthlink**
-  - `whenever a creature dies, that creature's controller sacrifices a land of their choice`
 - **Fire Covenant**
   - `as an additional cost to cast this spell, pay x life`
-- **Freyalise's Charm**
-  - `whenever an opponent casts a black spell, you may pay {g}{g}`
-  - `if you do, you draw a card`
 - **Iceberg**
   - `this enchantment enters with x ice counters on it`
-- **Icy Prison**
-  - `at the beginning of your upkeep, sacrifice this enchantment unless any player pays {3}`
-  - `when this enchantment leaves the battlefield, return the exiled card to the battlefield under its owner's control`
 - **Illusionary Terrain**
   - `as this enchantment enters, choose two basic land types`
   - `basic lands of the first chosen type are the second chosen type`
@@ -62,18 +52,8 @@ anything anyone did, and every ingest would arrive red.
   - `all creatures get +1/+0 for each time counter on this artifact`
 - **Justice**
   - `whenever a red creature or spell deals damage, this enchantment deals that much damage to that creature's or spell's controller`
-- **Leshrac's Sigil**
-  - `whenever an opponent casts a green spell, you may pay {b}{b}`
-  - `if you do, look at that player's hand and choose a card from it`
-  - `the player discards that card`
-- **Mudslide**
-  - `at the beginning of each player's upkeep, that player may choose any number of tapped creatures without flying they control and pay {2} for each creature chosen this way. if the player does, untap those creatures`
-- **Mystic Remora**
-  - `whenever an opponent casts a noncreature spell, you may draw a card unless that player pays {4}`
 - **Naked Singularity**
   - `if tapped for mana, plains produce {r}, islands produce {g}, swamps produce {w}, mountains produce {u}, and forests produce {b} instead of any other type`
-- **Oath of Lim-Dûl**
-  - `whenever you lose life, for each 1 life you lost, sacrifice a permanent other than this enchantment unless you discard a card`
 - **Reality Twist**
   - `if tapped for mana, plains produce {r}, swamps produce {g}, mountains produce {w}, and forests produce {b} instead of any other type`
 - **Ritual of Subdual**
@@ -81,8 +61,6 @@ anything anyone did, and every ingest would arrive red.
 - **Snowfall**
   - `if that island is snow, its controller may add an additional {u}{u} instead`
   - `spend this mana only to pay cumulative upkeep costs`
-- **Time Bomb**
-  - `{1}, {t}, sacrifice this artifact: this artifact deals damage equal to the number of time counters on it to each creature and each player`
 - **Touch of Vitae**
   - `until end of turn, target creature gains haste and "{0}: untap this creature`
   - `activate only once."`
@@ -193,12 +171,12 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 988 |
+| parse rule | 989 |
 | activation cost | 398 |
 | trigger table | 339 |
 | static-line table | 234 |
 | keyword table | 222 |
-| card_hooks bespoke (name-keyed) | 105 |
+| card_hooks bespoke (name-keyed) | 103 |
 | aura enchant noun (oracle_instructions attach) | 87 |
 | activation_restrictions.py | 37 |
 | aura static (oracle_instructions/permanent_state) | 37 |

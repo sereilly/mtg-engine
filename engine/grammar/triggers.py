@@ -134,6 +134,10 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # gained is the event's, and a "that much" in the effect reads it out of the
     # trigger's captured context rather than out of these words.
     ("you_gain_life", ("you", "gain", "life")),
+    # "Whenever you lose life …" (Oath of Lim-Dûl). Bare for the same reason:
+    # how much was lost is the event's, and "for each 1 life you lost" reads it
+    # out of the trigger's captured context rather than out of these words.
+    ("you_lose_life", ("you", "lose", "life")),
     # "Whenever you sacrifice a permanent …" (Havoc Jester). Announced from
     # ``Game.sacrifice_permanent``, the one place CR 701.21a happens. Bare, like
     # the life gain above: what was sacrificed is the event's, and no card in

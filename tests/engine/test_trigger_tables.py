@@ -159,6 +159,7 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     ),
     "draws_second_card": "whenever you draw your second card each turn",
     "you_gain_life": "whenever you gain life",
+    "you_lose_life": "whenever you lose life",
     "you_sacrifice_permanent": "whenever you sacrifice a permanent",
     # Two rows, one kind: the event is the attack declaration and what differs
     # is what the card asks about it.

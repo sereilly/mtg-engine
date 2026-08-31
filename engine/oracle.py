@@ -644,6 +644,12 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # replacements have had the amount, so what the trigger sees is the life
     # that actually arrived — the same reading `life_gained_this_turn` takes.
     ("you_gain_life",               r"whenever you gain life"),
+    # "Whenever you lose life …" (Oath of Lim-Dûl). Announced by the
+    # state-based sweep off each seat's life total rather than from a call
+    # site, because life leaves a player by half a dozen routes and a list of
+    # them is only ever as complete as the last card that touched it — the
+    # argument `draws_card` is dispatched with, one record over.
+    ("you_lose_life",               r"whenever you lose life"),
     # "Whenever you sacrifice a permanent …" (Havoc Jester). Emitted from
     # ``Game.sacrifice_permanent``, the one place CR 701.21a happens — which is
     # why this row could be added without hunting for a fire site: there are

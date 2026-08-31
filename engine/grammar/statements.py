@@ -13,7 +13,7 @@ import dataclasses
 
 from . import ast
 from .errors import GrammarError
-from .lexer import (SELF, WORD)
+from .lexer import (NUMBER, SELF, WORD)
 from .nouns import parse_object_filter
 from .paragraphs import (
     _parse_random_reveal_ownership_exchange,
@@ -39,6 +39,7 @@ from .where_x import parse_where_x_definition
 from .subject_verb import parse_subject_verb
 from .rebinding import rebind_pronoun_to_condition_target
 from .phrases import (
+    _accept_number,
     _accept_self_reference,
     parse_bound_subject,
     _parse_can_attack_as_though,
@@ -211,7 +212,7 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
 
 def _parse_leading_for_each(
     stream: TokenStream,
-) -> "ast.DiedThisWay | ast.ExiledThisWay | ast.ChosenThisWay | None":
+) -> "ast.DiedThisWay | ast.ExiledThisWay | ast.ChosenThisWay | ast.EachLifeLost | None":
     """``For each <objects> that died this way,`` — the set a later clause
     repeats over, in the leading printed position.
 
@@ -228,6 +229,21 @@ def _parse_leading_for_each(
     mark = stream.mark()
     if not stream.accept_phrase("for", "each"):
         return None
+    # "For each **1 life you lost**, …" (Oath of Lim-Dûl) — an iterator that is
+    # a count rather than a set. Read before the noun phrase below, which would
+    # take "1 life" as a quantified object and then fail the line on a verb it
+    # has no reading for.
+    life_lost = stream.mark()
+    # A printed digit, read off the token: the pool prints "for each **1** life
+    # you lost", and `_accept_number` reads only the spelled-out words.
+    digit = stream.accept_kind(NUMBER)
+    number = int(digit.text) if digit is not None else _accept_number(stream)
+    if number is not None and stream.accept_phrase("life", "you", "lost"):
+        if not stream.accept_punct(","):
+            stream.reset(mark)
+            return None
+        return ast.EachLifeLost(per=number)
+    stream.reset(life_lost)
     # "For each of **those cards**, …" (Sylvan Library) — the set an earlier
     # sentence of this same effect chose. Read before the noun phrase, because
     # "those cards" is a back-reference and not a filter: read as one it would
@@ -397,8 +413,12 @@ def _accept_trailing_toll(
     # sacrifice" tails take: the discard is the offer's *action*, so the
     # takeability check that already knows an empty hand cannot pay it applies
     # unchanged.
-    if stream.accept_word("discards", "discard"):
-        discard = _parse_discard(stream, payer)
+    if stream.at_word("discards", "discard"):
+        try:
+            discard = _parse_discard(stream, payer)
+        except GrammarError:
+            stream.reset(mark)
+            return None
         if discard is None or payer.kind in _ENUMERATED_PAYERS:
             stream.reset(mark)
             return None
@@ -527,7 +547,13 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         # alternatives reader "you may …" uses. One reader, so a statement-level
         # "or" means one thing wherever the pool prints it — and neither
         # position can quietly take the first half and drop the rest.
-        return ast.ForEach(per_death, _parse_optional_action(stream))
+        repeated = _parse_optional_action(stream)
+        # "…sacrifice a permanent other than this enchantment **unless you
+        # discard a card**" (Oath of Lim-Dûl). The toll belongs to the repeated
+        # sentence, not to the loop around it: the offer is made once per
+        # repetition, and read outside the loop it would be one offer buying
+        # off every repetition at once.
+        return ast.ForEach(per_death, _accept_trailing_toll(stream, repeated) or repeated)
     # "Each player shuffles the cards from their hand into their library, then
     # draws that many cards." (Winds of Change.) Same position and the same
     # reason: the subject-verb reader below has no "shuffles", and the sentence

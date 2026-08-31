@@ -193,6 +193,51 @@ def _lower_unless_player_pays(
 _SEAT_SET_ACTORS = frozenset({"each_player", "each_opponent", "defending_player"})
 
 
+def _lower_for_each_life_lost(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+    event: str | None,
+) -> tuple[OracleInstruction, ...]:
+    """"**For each 1 life you lost,** sacrifice a permanent other than this
+    enchantment unless you discard a card." (Oath of Lim-Dûl.)
+
+    A loop whose iterator is a *number*, not a set — so the same ``for_each``
+    the three "this way" sets lower onto, with the count coming off the firing
+    event's frozen context instead of off the resolution scratchpad.
+
+    Three refusals, each a way the sentence could otherwise mean more than it
+    says:
+
+    * the event must be one that freezes a life loss. Under any other trigger
+      the phrase names a number nobody recorded, and an unwritten quantity
+      reads as zero — a loop that runs no times on a card reporting supported.
+    * the unit must be the printed 1. "For each **2** life you lost" is half as
+      many repetitions, and the handler divides by nothing.
+    * the body must lower to something, for ``_lower_for_each_chosen``'s
+      reason: an empty loop is a sentence that reports supported and does not
+      run.
+    """
+    if event != "you_lose_life":
+        raise LoweringError(
+            f"no event named {event!r} records the life this loop counts",
+            node=node,
+        )
+    if node.iterator.per != 1:
+        raise LoweringError(
+            "this loop repeats once per 1 life lost, not per "
+            f"{node.iterator.per}",
+            node=node,
+        )
+    if not inner:
+        raise LoweringError("a per-life loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {"iterator": {"repeat_from_trigger": "life_lost"}, "effect": inner},
+        ),
+    )
+
+
 def _lower_may(
     node: ast.May, produced: frozenset[str], event: str | None = None,
     event_subject: object | None = None,

@@ -3510,7 +3510,11 @@ class PendingChoicesMixin:
         player_index = choice.player_index
         entry = choice.data
         self.discard_pending_choice(choice)
-        if accept and self._player_can_pay_optional(self.players[player_index], entry):
+        if (
+            accept
+            and self._player_can_pay_optional(self.players[player_index], entry)
+            and self._optional_action_still_takeable(player_index, entry)
+        ):
             self._pay_optional(player_index, entry)
         else:
             self._apply_optional_pay_decline(player_index, entry)
@@ -3522,6 +3526,32 @@ class PendingChoicesMixin:
         # answered too.
         self._release_stack_item(entry.get("_stack_item"))
         return True
+
+    def _optional_action_still_takeable(self, player_index: int, entry: dict) -> bool:
+        """Whether the accept branch's *action* can still be performed.
+
+        CR 601.2b: a player chooses among the alternatives they are **able** to
+        take, and able is measured when the choice is made rather than when the
+        prompt was armed. ``handlers/control_flow._offer_to_seat`` already asks
+        this before offering, and asking it once was enough while one offer was
+        armed at a time — Oath of Lim-Dûl arms one per point of life lost, all
+        of them before any is answered, so a hand with one card in it offered
+        two discards and the second accept discarded nothing and skipped the
+        sacrifice the card prints for not paying.
+
+        The same predicate the offer narrows through, so what may be accepted
+        and what may be offered cannot come apart.
+        """
+        from ...handlers.control_flow import _narrow_to_takeable_actions
+
+        context = entry.get("_context")
+        steps = tuple(entry.get("_on_accept") or ())
+        if context is None or not steps:
+            return True
+        _, offerable = _narrow_to_takeable_actions(
+            self, self.players[player_index], steps, context
+        )
+        return offerable
 
     def _default_optional_pay(self, choice: PendingChoice) -> None:
         """Pay when the floating mana is already there; an unpayable "unless you
@@ -3550,7 +3580,9 @@ class PendingChoicesMixin:
         if floating is None and alternative and player.life > alternative:
             floating = True
         self.discard_pending_choice(choice)
-        if floating is not None:
+        if floating is not None and self._optional_action_still_takeable(
+            choice.player_index, entry
+        ):
             self._pay_optional(choice.player_index, entry)
         elif int(entry.get("damage", 0) or 0) > 0 or entry.get("_on_decline"):
             # A decline is an *answer*, and an answer with a consequence has to
