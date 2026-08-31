@@ -25,7 +25,7 @@ from __future__ import annotations
 from . import ast
 from .amounts import expect_pt, parse_amount
 from .errors import GrammarError
-from .lexer import (MANA, SELF)
+from .lexer import (MANA, NUMBER, SELF)
 from .nouns import parse_object_filter
 from .readers import accept_source_reference
 from .references import parse_player_ref, parse_recipient
@@ -746,6 +746,75 @@ def _parse_force_chosen_creature_to_attack(stream: TokenStream) -> "ast.Statemen
     ):
         return None
     return ast.ForceChosenCreatureToAttack()
+
+
+def _parse_pay_mana_to_prevent_upkeep_damage(
+    stream: TokenStream,
+) -> "ast.DamageReducedByPaidMana | None":
+    """``That player may pay any amount of mana. <source> deals N damage to that
+    player. Prevent X of that damage, where X is the amount of mana that player
+    paid this way.`` (Power Leak, Errant Minion.)
+
+    Three sentences and one effect, for the reason
+    :func:`_parse_upkeep_damage_unless_cost` below reads two: the offer has no
+    printed bound, so the only thing that limits it is the damage the next
+    sentence names, and the third sentence spends the payment against it. Read
+    separately, the first would be an offer of nothing in particular and the
+    second would deal its damage before the payment existed.
+
+    **This was Power Leak's card hook**, keyed on its whole printed line with
+    "enchanted enchantment's controller" in it — so Errant Minion, which prints
+    the identical sentence about a creature, reached nothing and compiled
+    *supported* on a substring with no instruction behind its only ability. The
+    noun is the trigger condition's, not this clause's, which is exactly what
+    makes the clause a template.
+
+    Every part is required and none is dropped: the offer must be unbounded
+    ("any amount of mana" — a printed cost is a different card and a different
+    handler), the damage must be a printed number (the reduction is arithmetic
+    against it), and the third sentence must name the same payment back
+    ("the amount of mana that player paid **this way**").
+
+    Refuses without consuming, so every other sentence opening "that player may
+    …" keeps its own reading.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "that", "player", "may", "pay", "any", "amount", "of", "mana"
+    ):
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not accept_source_reference(stream):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("deals"):
+        stream.reset(mark)
+        return None
+    token = stream.peek()
+    if token is None or token.kind != NUMBER:
+        stream.reset(mark)
+        return None
+    amount = int(token.text)
+    stream.advance()
+    if not stream.accept_phrase("damage", "to", "that", "player"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("prevent", "x", "of", "that", "damage"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "where", "x", "is", "the", "amount", "of", "mana", "that", "player",
+        "paid", "this", "way",
+    ):
+        stream.reset(mark)
+        return None
+    return ast.DamageReducedByPaidMana(amount)
 
 
 def _parse_upkeep_damage_unless_cost(stream: TokenStream) -> "ast.Statement | None":

@@ -24,7 +24,8 @@ from ..phrases import (
     _accept_number, _accept_self_reference, _parse_counted_sacrifice,
     _parse_for_each_this_way, _parse_mana_payment, _parse_pay_life,
     _parse_that_object, _parse_zone,
-    parse_counted_subject, parse_pair_ordinal_subject, parse_subject_filter_at,
+    parse_bound_subject, parse_counted_subject, parse_pair_ordinal_subject,
+    parse_subject_filter_at,
 )
 
 
@@ -559,7 +560,10 @@ def _parse_tap_untap(stream: TokenStream) -> ast.Statement:
     it. Only "tap or untap" is a disjunction — "untap or tap" is not printed on
     any card, and inventing it would accept text no card carries.
     """
-    verb = stream.expect_word("tap", "untap").text
+    # The inflected spelling is the same verb with a printed subject in front
+    # of it ("…and **you tap** that creature", Mind Whip) — normalized here so
+    # every branch below reads one word.
+    verb = stream.expect_word("tap", "untap", "taps", "untaps").text.rstrip("s")
     either_way = False
     if verb == "tap":
         mark = stream.mark()
@@ -567,7 +571,12 @@ def _parse_tap_untap(stream: TokenStream) -> ast.Statement:
             either_way = True
         else:
             stream.reset(mark)
-    subject = parse_recipient(stream)
+    # "…and you tap **that creature**." (Mind Whip.) The object the sentence's
+    # own trigger condition named, read by the bound reader after the ordinary
+    # one so "the creature" keeps its existing reading as the source. Every
+    # lowering refuses a bound quantifier unless it says otherwise, so reading
+    # it here fails the line **by name** where it used to fail at the noun.
+    subject = parse_recipient(stream) or parse_bound_subject(stream)
     if subject is None:
         raise stream.error(f"expected something to {verb}")
     if either_way:

@@ -33,6 +33,7 @@ from ._core import (
 )
 from .damage import (
     DamageCantBePreventedOrRedirected,
+    DamageReducedByPaidMana,
     DamageRidersUntilEndOfTurn,
     DamageUnlessPay,
     Fight,
@@ -190,7 +191,8 @@ Effect = Union[
     ExileGraveyardUntilLeaves, CastFromExiledWith, ForceChosenCreatureToAttack,
     PhaseOut,
     AddManaForTappedLand, ProducesManaInstead, SpendManaAsThough, PreventDamage,
-    RedirectDamage, DamageCantBePreventedOrRedirected, UpkeepDamageUnlessCost,
+    RedirectDamage, DamageCantBePreventedOrRedirected, DamageReducedByPaidMana,
+    UpkeepDamageUnlessCost,
     SearchLibrary, SearchAndExile, TransmuteBySacrifice, OwnershipExchangeUnlessPaid,
     RandomRevealOwnershipExchange,
     ExileTopOfLibrary, PutExiledWithSource, ExileGraveyard, ExileCostSacrifices,

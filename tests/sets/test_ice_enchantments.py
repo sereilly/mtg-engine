@@ -896,3 +896,105 @@ def test_mudslide_reads_the_complement_of_the_same_phrase(set_pool):
     assert restriction.blocked == {
         "type_filter": "creature", "without_keywords": ["flying"],
     }
+
+
+# --- W1G1: prevention and damage shields ---
+def _w1g1_attach(set_pool, aura_name: str):
+    """A game with *aura_name* on seat 1 attached to seat 0's creature."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    aura = Permanent(card=pool[aura_name])
+    p0 = PlayerState(name="P0", battlefield=[bears], life=20)
+    p1 = PlayerState(name="P1", battlefield=[aura], life=20)
+    game = Game(players=[p0, p1])
+    attach_aura(aura, bears)
+    return game, p0, p1, bears, aura
+
+
+def test_mind_whip_damages_and_taps_when_the_toll_is_not_paid(set_pool):
+    """"At the beginning of the upkeep of enchanted creature's controller, that
+    player may pay {3}. If they don't, this Aura deals 2 damage to that player
+    and you tap that creature."
+
+    Both halves of the penalty, in the branch the card prints them in: the
+    conjunct reader used to take "and you" for a second damage recipient, which
+    left the tap outside the offer and firing whether the toll was paid or not.
+    """
+    game, p0, _p1, bears, _whip = _w1g1_attach(set_pool, "Mind Whip")
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert p0.life == 18
+    assert bears.tapped
+
+
+def test_mind_whip_offers_the_toll_to_the_creatures_controller(set_pool):
+    """"That player" is the enchanted creature's controller, not the Aura's — so
+    the decision, and the mana, are theirs."""
+    game, p0, _p1, bears, _whip = _w1g1_attach(set_pool, "Mind Whip")
+    p0.mana_pool["C"] = 5
+
+    game.resolve_upkeep(0)
+
+    owed = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert len(owed) == 1
+    assert owed[0].player_index == 0
+    assert owed[0].data["cost"] == {"generic": 3}
+
+
+def test_errant_minion_reduces_its_damage_by_the_mana_paid(set_pool):
+    """"That player may pay any amount of mana. This Aura deals 2 damage to that
+    player. Prevent X of that damage, where X is the amount of mana that player
+    paid this way."
+
+    Power Leak's sentence one noun over. It was a card hook keyed on Power
+    Leak's whole printed line, so this card compiled *supported* with nothing at
+    all behind its only ability.
+    """
+    game, p0, _p1, _bears, _minion = _w1g1_attach(set_pool, "Errant Minion")
+
+    game.resolve_upkeep(0)
+    game._settle()
+
+    assert p0.life == 18, "nothing paid, so nothing prevented"
+
+
+def test_errant_minions_payment_is_capped_at_the_damage(set_pool):
+    """"Prevent X of that damage" — X is the mana paid, and there are only two
+    points to prevent, so a larger offer spends only what it can use."""
+    game, p0, _p1, _bears, _minion = _w1g1_attach(set_pool, "Errant Minion")
+    p0.mana_pool["C"] = 5
+
+    game.resolve_upkeep(0, mana_prevention={"Errant Minion": 5})
+    game._settle()
+
+    assert p0.life == 20
+    assert any("paid 2 mana to prevent 2 damage" in line for line in game.log), (
+        "the offer is unbounded, the damage is not — only what it can use is spent"
+    )
+
+
+def test_power_leak_still_reduces_its_damage_after_losing_its_hook(
+    set_pool, catalog_by_name
+):
+    """The card the hook was written for, reading the same production now. Its
+    condition names an enchantment rather than a creature, which is the only
+    difference between the two printings."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    host = Permanent(card=pool["Errant Minion"])
+    leak = Permanent(card=catalog_by_name["Power Leak"])
+    p0 = PlayerState(name="P0", battlefield=[host], life=20, mana_pool={"C": 2})
+    p1 = PlayerState(name="P1", battlefield=[leak], life=20)
+    game = Game(players=[p0, p1])
+    attach_aura(leak, host)
+
+    game.resolve_upkeep(0, mana_prevention={"Power Leak": 1})
+    game._settle()
+
+    assert p0.life == 19, "one of the two points paid off"
+# --- end W1G1 ---

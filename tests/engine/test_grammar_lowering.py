@@ -1842,36 +1842,32 @@ def test_enchanted_land_upkeep_is_dispatched_like_its_peers():
     ]
 
 
-@pytest.mark.parametrize(
-    "card, line",
-    [
-        (
-            "Power Leak",
-            "At the beginning of the upkeep of enchanted enchantment's controller, "
-            "that player may pay any amount of mana. This Aura deals 2 damage to that "
-            "player. Prevent X of that damage, where X is the amount of mana that "
-            "player paid this way.",
-        ),
-    ],
-)
-def test_the_new_trigger_phrase_does_not_drag_in_effects_it_cannot_read(card, line):
-    """Adding a trigger phrase widens what reaches the effect productions, and
-    Power Leak is the card that reaches them and must still be refused: its
-    damage is scaled by a payment the grammar has no node for, so it falls back
-    to the legacy rules whole rather than compiling onto a nearby handler.
+def test_power_leaks_three_sentences_lower_to_one_reduced_damage():
+    """The last of the three cards that guard used to refuse, and its reason has
+    expired the same way Unstable Mutation's and Paralyze's did.
 
-    Unstable Mutation used to be one of three. Its "put a -1/-1 counter on
-    **that creature**" is now a production — the bound-object branch the removal
-    side already had, mirrored onto the placement — so the line lowers to
-    ``add_pt_counters_to_attached`` with the CR 122.1a pair as payload, and the
-    card-name hook that spelled out "-1/-1" is gone. It was the entry that kept
-    Takklemaggot's identical sentence, printed with -0/-1, out.
+    Its damage is scaled by a payment the grammar had no node for; it has one
+    now, because the sentence turned out to be a template rather than a card —
+    Errant Minion prints it with "creature" where this prints "enchantment", and
+    while the reading was a card-name hook that second card reached nothing.
 
-    Paralyze was the third, and the test below is what replaced it.
+    The three sentences are one node and one instruction: the offer has no
+    printed bound, so the damage is the only thing limiting it, and the
+    reduction rides as payload on the ``deal_damage`` kind the upkeep registry
+    is already keyed to.
     """
-    result = compile_line(line, card_name=card)
+    result = compile_line(
+        "At the beginning of the upkeep of enchanted enchantment's controller, "
+        "that player may pay any amount of mana. This Aura deals 2 damage to that "
+        "player. Prevent X of that damage, where X is the amount of mana that "
+        "player paid this way.",
+        card_name="Power Leak",
+    )
 
-    assert not result.parsed
+    assert result.parsed
+    assert [(i.kind, dict(i.payload)) for i in result.instructions] == [
+        ("deal_damage", {"amount": 2, "prevent_up_to_paid_mana": True})
+    ]
 
 
 def test_paralyzes_upkeep_offer_lowers_to_the_kind_its_handler_is_keyed_to():

@@ -34,15 +34,33 @@ from ._common import (
     _restrictions_beyond,
     _targets_payload,
 )
+from ._events import names_attached_permanent
 
 #: The scratchpad key a tap records what it chose under, so a later sentence
 #: ("**it** doesn't untap…") can name the same permanents.
 _TAPPED_PERMANENTS = "tapped_permanents"
 
-def _lower_tap(node: ast.Tap | ast.Untap) -> tuple[OracleInstruction, ...]:
+def _lower_tap(
+    node: ast.Tap | ast.Untap, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     if not isinstance(node.subject, ast.TargetSpec):
         raise LoweringError("tap/untap needs an object target", node=node)
     spec = node.subject
+    # "…and you tap **that creature**." (Mind Whip.) Under a trigger whose
+    # condition already named the permanent the source is attached to, the
+    # repeated noun is that permanent — the one reader for both spellings, so
+    # this and "tap enchanted creature" cannot come to mean different things.
+    # Asked before the branches below, which read a bound quantifier as nothing
+    # they know and would refuse a sentence the engine implements.
+    if names_attached_permanent(spec, event):
+        return (
+            OracleInstruction(
+                "untap_enchanted_creature" if isinstance(node, ast.Untap)
+                else "tap_enchanted_creature",
+                "",
+                {},
+            ),
+        )
 
     # "Untap this artifact" (Basalt Monolith), "untap enchanted creature" and
     # "Tap this creature" (Seasoned Hallowblade) name their subject without a

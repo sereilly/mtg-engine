@@ -129,6 +129,7 @@ from .damage import (
     PreventDamage,
     RedirectDamage,
     DamageCantBePreventedOrRedirected,
+    DamageReducedByPaidMana,
     UpkeepDamageUnlessCost,
 )
 from .characteristics import (
@@ -381,6 +382,7 @@ __all__ = [
     "PreventDamage",
     "RedirectDamage",
     "DamageCantBePreventedOrRedirected",
+    "DamageReducedByPaidMana",
     # characteristics
     "Pump",
     "SetBasePT",

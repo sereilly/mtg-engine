@@ -182,6 +182,7 @@ from .lowering import (
     _lower_set_base_pt,
     _lower_doesnt_untap_next_step,
     _lower_delayed_self_action,
+    _lower_damage_reduced_by_paid_mana,
     _lower_upkeep_damage_unless_cost,
     _lower_doesnt_untap_while_source_tapped,
     _lower_condition,
@@ -228,6 +229,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.SetLifeTotal: _lower_set_life_total,
     ast.PayLife: _lower_pay_life,
     ast.DelayedSelfAction: _lower_delayed_self_action,
+    ast.DamageReducedByPaidMana: _lower_damage_reduced_by_paid_mana,
     ast.UpkeepDamageUnlessCost: _lower_upkeep_damage_unless_cost,
     ast.DoesntUntapWhileSourceTapped: _lower_doesnt_untap_while_source_tapped,
     ast.TapOrUntap: _lower_tap_or_untap,
@@ -388,7 +390,11 @@ def lower_statement(
         # step of the same effect recorded, so it refuses when nothing did.
         return _lower_doesnt_untap_next_step(statement, produced)
     if isinstance(statement, (ast.Tap, ast.Untap)):
-        return _lower_tap(statement)
+        # The **unfiltered** event, for the same reason `_lower_destroy` takes
+        # one: whether a repeated "that <noun>" names the permanent the source
+        # is attached to is a fact about the trigger, true of every clause under
+        # it, and Mind Whip's tap sits inside a `may`'s otherwise branch.
+        return _lower_tap(statement, event)
     if isinstance(statement, ast.AddMana):
         return _lower_add_mana(statement, produced)
     if isinstance(statement, ast.AddManaForTappedLand):
