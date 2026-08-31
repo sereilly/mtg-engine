@@ -288,7 +288,12 @@ def _scaled(total: int, spec: dict) -> int:
     rounding = spec.get("half")
     if rounding is None:
         return total
-    return -(-total // 2) if rounding == "up" else total // 2
+    # "a third of their life" (Pox) is the same arithmetic with a different
+    # denominator, so it is the same key with a number beside it rather than a
+    # second rounding channel. Absent means 2, which keeps every spec written
+    # before fractions existed byte-identical.
+    divisor = max(1, int(spec.get("divide_by", 2) or 2))
+    return -(-total // divisor) if rounding == "up" else total // divisor
 
 
 def _resolve_chosen_color(filt: dict, source) -> dict:

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import resolve_amount
+from ._common import evaluate_count, resolve_amount
+from ..oracle_types import X_FROM_COUNT_PER_RECIPIENT
 from .registry import effect_handler
 from ..mana_payment import generic_cost
 
@@ -155,8 +156,13 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
     # "…for each creature card in their graveyard" (Liliana, Death Mage's −7):
     # the amount is per matching card in the victim's own graveyard.
     per_each = instruction.payload.get("per_each")
+    # "Each player loses **a third of their life**" (Pox). One number per seat,
+    # so it cannot be `context.x_value` — that is resolved once at the dispatch
+    # point, against one player, and applying that share to everybody is a
+    # different card. The channel the damage sweeps already use for this.
+    per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
     for victim in victims:
-        loss = amount
+        loss = evaluate_count(game, victim, per_seat) if per_seat is not None else amount
         if per_each is not None:
             wanted = tuple(per_each.get("card_types") or ())
             loss = amount * sum(

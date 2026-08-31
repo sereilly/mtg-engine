@@ -487,8 +487,10 @@ def halved_count_spec(amount: "ast.Amount", node) -> dict | None:
     which is why the name is minted here and nowhere else.
     """
     rounding = None
+    divisor = 2
     if isinstance(amount, ast.Half):
         rounding = amount.rounding
+        divisor = amount.divisor
         amount = amount.of
     if isinstance(amount, ast.CountOf):
         spec = count_spec(amount.filter, node)
@@ -498,6 +500,10 @@ def halved_count_spec(amount: "ast.Amount", node) -> dict | None:
         return None
     if rounding is not None:
         spec["half"] = rounding
+        # "a third of their life" (Pox). Omitted at 2 so every spec written
+        # before fractions existed stays byte-identical; see `ast.Half`.
+        if divisor != 2:
+            spec["divide_by"] = divisor
     return spec
 
 

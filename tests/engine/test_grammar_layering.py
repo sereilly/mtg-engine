@@ -146,7 +146,15 @@ LOWER_LAYERS = ["lowering", "statics", "lower"]
 # consequence rather than the counter itself. The one fragment the two families
 # shared, `_expect_counter_kind`, went down into `phrases` rather than staying
 # with either — a production two families need has no home inside one of them.
-EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "control_changes", "prevention", "counters"]
+# `tapping` joined the parse side when `effects/board.py` reached the size
+# guard, reusing the name `lowering/tapping.py` had carried since it left the
+# same family one package over — the mirror re-forming rather than forking,
+# which is what these notes keep asking for. The line is the CR's own and is the
+# one the lowering side already drew: the rest of `board` destroys, bounces or
+# takes control of a permanent, and these say whether it is turned sideways
+# (CR 701.20/701.26) and whether it may be turned back (CR 502). The two halves
+# shared no helper.
+EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "control_changes", "prevention", "counters", "tapping"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -196,7 +204,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # battlefield->owner's hand read three different kinds of index. Asymmetric
 # like `zones` itself and for the same reason: the parse side is one
 # production.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "tapping", "redirection", "fighting", "where_x", "control_flow", "attachments"]
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "attachments"]
 # The AST side has no `library`: what a search or a look-at *is* — the pile, the
 # filter, the fate of what was found — is a handful of nodes that sit perfectly
 # well beside the other card nodes, and the split that made `library` a family
@@ -221,9 +229,15 @@ LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", 
 # `PlayerGetsCounters` are three nodes beside the characteristics ones, and the
 # guards that made `counters` a family on the other two sides fired on the
 # lowerings and then, a set later, on the productions — never on the inventory.
+# `tapping` is the fifth, and the clearest: `Tap`, `Untap`, `TapOrUntap` and the
+# two untap-restriction nodes are five nodes beside the board ones they
+# describe, and the guards that made `tapping` a family on the other two sides
+# fired on the lowerings and then, several sets later, on the productions.
 AST_FAMILIES = [
     family for family in EFFECT_FAMILIES
-    if family not in ("library", "control_changes", "prevention", "counters")
+    if family not in (
+        "library", "control_changes", "prevention", "counters", "tapping",
+    )
 ]
 
 

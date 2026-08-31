@@ -77,9 +77,11 @@ from .board import (
     _parse_destroy,
     _parse_further_subjects,
     _parse_that_object,
+    _parse_attach,
+)
+from .tapping import (
     _parse_doesnt_untap_next_step,
     _parse_tap_untap,
-    _parse_attach,
 )
 from .control_changes import (
     _parse_exchange_control,

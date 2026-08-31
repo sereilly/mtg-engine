@@ -10,12 +10,13 @@ owner.
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import X_FROM_COUNT_PER_RECIPIENT, OracleInstruction
 from ...subject_filters import (
     TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter, untestable_filter_keys,
 )
 from .. import ast
 from ..errors import LoweringError
+from ._amounts import halved_count_spec
 from ._sacrifices import _SACRIFICE_CARRIED, _forced_sacrifice_filter
 from ._common import (
     _describe_several_targets,
@@ -573,8 +574,15 @@ def _lower_sacrifice_unless_pay(node: ast.SacrificeUnlessPay) -> tuple[OracleIns
 # ``that_player`` is the seat a trigger's own condition named ("at the beginning
 # of **each player's** upkeep, **that player** sacrifices …", Mana Vortex). It
 # is admitted only under an event that freezes one — see ``_lower_sacrifice``.
+#
+# ``each_player`` is Pox's, and it is `each_opponent` plus the caster: the prompt
+# is owed by every living seat rather than by every living opponent, which is
+# one more entry in the same list the handler already builds.
 _SACRIFICE_PAYERS: frozenset[str] = frozenset(
-    {"you", "each_opponent", "target_opponent", "target_player", "that_player"}
+    {
+        "you", "each_player", "each_opponent", "target_opponent",
+        "target_player", "that_player",
+    }
 )
 
 # Two keys the forced-sacrifice prompt performs rather than tests, so they are
@@ -622,6 +630,37 @@ def _lower_destroy_each_unless_paid(
     )
 
 
+def _per_payer_count(node: ast.Sacrifice) -> dict:
+    """How many *this payer* sacrifices, as a spec the evaluator answers per
+    seat. ("…sacrifices a third of the creatures they control", Pox.)
+
+    The two narrowings the printed phrase carries are stripped before the count
+    is built, and neither is a narrowing lost:
+
+    * **"they control"** is CR 701.21a restated — a player can only sacrifice
+      what they control — and the evaluator is already owner-scoped, so handing
+      it the key would make ``count_spec`` refuse a phrase that says nothing.
+    * **"of their choice"** is whose decision it is, not what may be chosen;
+      the prompt is the decision.
+    """
+    counted = node.count
+    if isinstance(counted, ast.Half) and isinstance(counted.of, ast.CountOf):
+        counted = dataclasses.replace(
+            counted,
+            of=ast.CountOf(
+                dataclasses.replace(
+                    counted.of.filter, controller=None, their_choice=False
+                )
+            ),
+        )
+    spec = halved_count_spec(counted, node)
+    if spec is None:
+        raise LoweringError(
+            "the sacrifice prompt sizes itself from a counted fraction", node=node
+        )
+    return spec
+
+
 def _lower_sacrifice(
     node: ast.Sacrifice, event: str | None = None
 ) -> tuple[OracleInstruction, ...]:
@@ -665,7 +704,14 @@ def _lower_sacrifice(
                 "the sacrifice prompt cannot test this restriction", node=node
             )
         payload: dict[str, object] = {"filter": described}
-        if node.subject.count != 1:
+        # "…sacrifices **a third of** the creatures they control of their
+        # choice." (Pox.) One number per seat, so it cannot be the printed
+        # count: it is a fraction of *that* player's board, and the handler
+        # asks the evaluator once per payer through the same channel the
+        # per-recipient damage and the each-player discard already use.
+        if node.count is not None:
+            payload[X_FROM_COUNT_PER_RECIPIENT] = _per_payer_count(node)
+        elif node.subject.count != 1:
             # "Sacrifice **two** Swamps" (Mold Demon). How many is payload on
             # the one prompt, never a second kind: the forced-sacrifice queue
             # has taken a count since it was written, and it was the lowering

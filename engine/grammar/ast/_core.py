@@ -187,9 +187,20 @@ class TotalPowerSacrificedThisWay:
 
 @dataclass(frozen=True)
 class Half:
-    """"half X, rounded up/down"."""
+    """"half X, rounded up/down" — and, with *divisor*, "a third of X" (Pox).
+
+    Named for the word the pool prints most, not for the arithmetic: dividing a
+    counted quantity and rounding it is one operation, and Magic has no rule
+    that treats a half differently from a third. So a fraction is this node with
+    a different denominator rather than a second node beside it — which is what
+    keeps `_round_every_half`, `halved_count_spec` and the `half` payload key
+    covering Pox's four clauses without knowing they exist.
+    """
     of: "Amount"
     rounding: str = "down"  # "down" | "up"
+    #: The denominator. 2 for every "half" in the pool, so an untouched node is
+    #: byte-identical to the ones written before fractions existed.
+    divisor: int = 2
 
 
 @dataclass(frozen=True)

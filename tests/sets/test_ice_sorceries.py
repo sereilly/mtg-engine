@@ -730,4 +730,121 @@ def test_stench_of_evil_over_a_board_with_no_plains_asks_nothing(set_pool):
     assert forest in p2.battlefield
     assert not game.pending_choices_of("optional_pay", 1)
     assert p2.life == 20
+
+def _w2g5_pox_game(set_pool, *, interactive=False):
+    """A board built so every one of Pox's four fractions rounds differently.
+
+    Seat 0: 20 life, 4 cards in hand, 3 creatures, 4 lands.
+    Seat 1:  7 life, 2 cards in hand, 1 creature, 2 lands.
+
+    Rounded up, that is 7/3 life, 2/1 cards, 1/1 creatures and 2/1 lands — four
+    boundaries, and 7 life is the one that separates "a third rounded up" (3)
+    from "a third rounded down" (2).
+    """
+    pool = set_pool("ICE")
+    mine = [Permanent(card=pool[n]) for n in (
+        "Balduvian Bears", "Tor Giant", "Brown Ouphe",
+        "Forest", "Swamp", "Mountain", "Plains",
+    )]
+    theirs = [Permanent(card=pool[n]) for n in ("Goblin Mutant", "Island", "Forest")]
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Pox"]] + [pool[n] for n in (
+            "Balduvian Bears", "Tor Giant", "Brown Ouphe", "Goblin Mutant",
+        )],
+        battlefield=mine, life=20,
+    )
+    p2 = PlayerState(
+        name="P2",
+        hand=[pool[n] for n in ("Balduvian Bears", "Tor Giant")],
+        battlefield=theirs, life=7,
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.interactive_seats = {0, 1} if interactive else set()
+    game._sync_control()
+    return pool, p1, p2, game
+
+
+def test_pox_takes_a_third_of_each_life_total_rounded_up(set_pool):
+    """"Each player loses a third of their life… Round up each time."
+
+    7 is the boundary: a third of it rounded up is 3 and rounded down is 2. And
+    the fraction is per seat — a single number computed off one player's life
+    and subtracted from everybody is the shape this had to avoid.
+    """
+    pool, p1, p2, game = _w2g5_pox_game(set_pool)
+
+    result = game.cast_from_hand(0, "Pox")
+    game._settle()
+
+    assert result.supported, result.details
+    assert p1.life == 13, "a third of 20, rounded up, is 7"
+    assert p2.life == 4, "a third of 7, rounded up, is 3"
+
+
+def test_pox_discards_a_third_of_each_hand_rounded_up(set_pool):
+    """The second clause. Counted after the spell has left the hand — Pox is
+    not one of the four cards its caster discards a third of."""
+    pool, p1, p2, game = _w2g5_pox_game(set_pool)
+
+    game.cast_from_hand(0, "Pox")
+    game._settle()
+
+    assert len(p1.hand) == 2, "a third of 4, rounded up, is 2"
+    assert len(p2.hand) == 1, "a third of 2, rounded up, is 1"
+
+
+def test_pox_sacrifices_a_third_of_the_creatures_and_a_third_of_the_lands(set_pool):
+    """The third and fourth clauses, and the two that prove the noun matters:
+    the creature sweep must not eat a land and the land sweep must not eat a
+    creature."""
+    pool, p1, p2, game = _w2g5_pox_game(set_pool)
+
+    game.cast_from_hand(0, "Pox")
+    game._settle()
+
+    mine = [perm.card.name for perm in game.controlled_by(0)]
+    theirs = [perm.card.name for perm in game.controlled_by(1)]
+    assert sum(1 for perm in game.controlled_by(0) if perm.is_creature) == 2, mine
+    assert sum(1 for perm in game.controlled_by(0) if perm.has_type("land")) == 2, mine
+    assert sum(1 for perm in game.controlled_by(1) if perm.is_creature) == 0, theirs
+    assert sum(1 for perm in game.controlled_by(1) if perm.has_type("land")) == 1, theirs
+
+
+def test_pox_asks_every_seat_and_not_only_the_caster(set_pool):
+    """CR 608.2e: each of the four actions is taken by every player. An
+    interactive seat is prompted for its own discard, so the opponent owes a
+    prompt too — a sweep that only asked its caster would pass every test built
+    on one seat."""
+    pool, p1, p2, game = _w2g5_pox_game(set_pool, interactive=True)
+
+    game.cast_from_hand(0, "Pox")
+    game._settle()
+
+    assert game.pending_choice_of("discard", 0) is not None
+    assert game.pending_choice_of("discard", 1) is not None
+    assert game.pending_choice_of("discard", 0).data["count"] == 2
+    assert game.pending_choice_of("discard", 1).data["count"] == 1
+
+
+def test_pox_over_an_empty_board_asks_nobody_to_sacrifice(set_pool):
+    """A third of nothing is nothing, and CR 608.2 does as much as it can: a
+    seat that owes no sacrifice is not handed a prompt it cannot answer."""
+    pool = set_pool("ICE")
+    p1 = PlayerState(name="P1", hand=[pool["Pox"]], life=3)
+    p2 = PlayerState(name="P2", life=3)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game._sync_control()
+
+    result = game.cast_from_hand(0, "Pox")
+    game._settle()
+
+    assert result.supported, result.details
+    assert p1.life == 2 and p2.life == 2, "a third of 3 is 1"
+    assert game.pending_choice_of("sacrifice", 0) is None
+    assert game.pending_choice_of("discard", 0) is None
 # --- end W2G5 ---

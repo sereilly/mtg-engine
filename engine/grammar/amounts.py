@@ -36,6 +36,12 @@ def parse_amount(stream: TokenStream, *, back_reference: str | None = None) -> a
         if word in ("x", "y"):
             stream.advance()
             return ast.Var(word)
+        # "a third of their life" (Pox). Read **before** the number-word table,
+        # which maps a bare "a" onto 1 — without this the fraction parses as the
+        # quantity one and the rest of the phrase is unconsumed text.
+        fraction = _accept_fraction(stream, back_reference=back_reference)
+        if fraction is not None:
+            return fraction
         if word in NUMBER_WORDS:
             stream.advance()
             return ast.Fixed(NUMBER_WORDS[word])
@@ -45,21 +51,10 @@ def parse_amount(stream: TokenStream, *, back_reference: str | None = None) -> a
         if word == "half":
             stream.advance()
             inner = _parse_counted_amount(stream, back_reference=back_reference)
-            rounding = "down"
             # "…, rounded down" (Backdraft) prints a comma in front of the
-            # rider; "half X rounded up" does not. One reader for both, and the
-            # comma is put back when what follows it is a different clause —
-            # eating it unconditionally would take the separator a later
-            # production needs.
-            comma = stream.mark()
-            had_comma = stream.accept_punct(",")
-            if stream.accept_word("rounded"):
-                rounding = "up" if stream.accept_word("up") else (
-                    "down" if stream.accept_word("down") else "down"
-                )
-            elif had_comma:
-                stream.reset(comma)
-            return ast.Half(inner, rounding)
+            # rider; "half X rounded up" does not. `_accept_rounding` reads both,
+            # and reads them for the "a <ordinal> of" spelling beside this one.
+            return ast.Half(inner, _accept_rounding(stream))
         if word == "that":
             mark = stream.mark()
             stream.advance()
@@ -82,6 +77,98 @@ def parse_amount(stream: TokenStream, *, back_reference: str | None = None) -> a
             stream.reset(mark)
 
     raise stream.error("expected a quantity")
+
+
+#: The denominators the pool spells out. "Half" has its own word and its own
+#: branch above; these are the ones printed as "a <ordinal> of". A closed table
+#: for the reason every table in this grammar is closed — an ordinal nobody
+#: listed would otherwise be read as some other number entirely.
+_FRACTION_WORDS: dict[str, int] = {"third": 3, "quarter": 4, "fourth": 4}
+
+
+def _accept_fraction(
+    stream: TokenStream, *, back_reference: str | None = None
+) -> "ast.Half | None":
+    """``a <ordinal> of <quantity>`` — "a third of their life" (Pox).
+
+    :class:`ast.Half` with a denominator, not a node of its own: see that
+    class's own note. The rounding rider is read here as well, in both the
+    printed shapes "half" already accepts, so a card printing "a third of their
+    life, rounded up" needs nothing further — Pox prints its rounding once at
+    the end of the paragraph instead, which ``statements._round_every_half``
+    already distributes.
+
+    Nothing is consumed unless the whole opening is there, so a bare "a" keeps
+    the number-word reading it has everywhere else.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("a"):
+        return None
+    ordinal = stream.peek_word()
+    divisor = _FRACTION_WORDS.get(ordinal) if ordinal is not None else None
+    if divisor is None:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_word("of"):
+        stream.reset(mark)
+        return None
+    try:
+        inner = _parse_counted_amount(stream, back_reference=back_reference)
+    except Exception:
+        stream.reset(mark)
+        return None
+    return ast.Half(inner, _accept_rounding(stream), divisor)
+
+
+def accept_fraction_head(stream: TokenStream) -> int | None:
+    """``half`` or ``a <ordinal> of`` — the denominator, or None (nothing
+    consumed).
+
+    For the positions where the thing being divided is the production's own
+    noun rather than a quantity it can hand to :func:`parse_amount`: "loses
+    **half their life**", "discards **a third of the cards in their hand**".
+    One reader, because the two spellings of a fraction are one printed idea
+    and a production that knew only "half" is a production Pox refuses.
+    """
+    if stream.accept_word("half"):
+        return 2
+    mark = stream.mark()
+    if not stream.accept_word("a"):
+        return None
+    ordinal = stream.peek_word()
+    divisor = _FRACTION_WORDS.get(ordinal) if ordinal is not None else None
+    if divisor is None or not (stream.advance() or True) or not stream.accept_word("of"):
+        stream.reset(mark)
+        return None
+    return divisor
+
+
+def accept_rounding(stream: TokenStream) -> str:
+    """Public name for :func:`_accept_rounding`, for the productions that read
+    a fraction's noun themselves."""
+    return _accept_rounding(stream)
+
+
+def _accept_rounding(stream: TokenStream) -> str:
+    """``[,] rounded up|down`` after a fraction, defaulting to down.
+
+    Shared by "half" and by the "a <ordinal> of" reader above, because it is one
+    printed rider and reading it twice is two places for the comma handling to
+    come apart. The comma is put back when what follows it is a different
+    clause: eating it unconditionally would take the separator a later
+    production needs.
+    """
+    comma = stream.mark()
+    had_comma = stream.accept_punct(",")
+    if stream.accept_word("rounded"):
+        if stream.accept_word("up"):
+            return "up"
+        stream.accept_word("down")
+        return "down"
+    if had_comma:
+        stream.reset(comma)
+    return "down"
 
 
 def accept_counters_on_source(stream: TokenStream) -> "ast.CountersOnSource | None":
