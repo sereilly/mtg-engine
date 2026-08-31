@@ -58,6 +58,13 @@ _DEFENDING_PLAYER_EVENTS: frozenset[str] = frozenset({"creature_attacks"})
 # side's `phrases.py` follows.
 _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     "creature_opponent_controls_dies",   # Massacre Wurm — the dead creature's
+    # Earthlink — the dead creature's, from the same stamp
+    # (`_fire_creature_dies_triggers` freezes one `died_context` for every
+    # death condition it announces). The unscoped spelling of the row above:
+    # "whenever **a** creature dies" watches every battlefield, and "that
+    # creature's controller" is still the seat that controlled the one that
+    # died — which under a control-change effect is not its owner.
+    "creature_dies",
     "creature_becomes_blocked",          # Gloom Sower — the blocker's
     # Backfire — the damager's. The subject of a damage event is whatever dealt
     # it, so "that creature's controller" is the seat `deal_damage` derives for
@@ -191,6 +198,12 @@ EVENT_SUBJECT_OWNER = "event_subject_owner"
 #: it and `evaluate_condition` reads it — three copies of a string is how they
 #: come apart.
 EVENT_SUBJECT_PLAYER = "event_subject_player"
+
+#: And the seat that *controlled* what the event was about, from
+#: `_EVENT_SUBJECT_CONTROLLERS` above. A constant for `EVENT_SUBJECT_PLAYER`'s
+#: reason, one table over: the fire site writes it, the damage lowering and the
+#: sacrifice lowering both emit it, and three handlers read it.
+EVENT_SUBJECT_CONTROLLER = "event_subject_controller"
 
 
 # What a bare "that much" names when the effect is a *triggered ability*: the

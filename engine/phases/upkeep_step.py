@@ -746,9 +746,18 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 kind = trig.instruction.kind
                 cond = trig.condition.kind
 
-                # "at the beginning of YOUR upkeep" only fires during the controller's own upkeep.
+                # "at the beginning of YOUR upkeep" only fires during the
+                # controller's own upkeep.
+                #
+                # `continue`, not `break` — CR 603.3, the same reading the
+                # ordinary branch below already states and this line still
+                # contradicted. A permanent printing "your upkeep" *before*
+                # "each player's upkeep" lost the second ability on every
+                # upkeep but its controller's: Cold Snap's cumulative upkeep is
+                # its first line, so on an opponent's turn the loop stopped
+                # there and the enchantment dealt nobody any damage.
                 if cond == "upkeep_self" and controller_seat != player_index:
-                    break
+                    continue
 
                 # "at the beginning of each **opponent's** upkeep" (Psychic
                 # Allergy) is `upkeep_each` narrowed by a printed noun, carried

@@ -1119,7 +1119,9 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
     opponent" and "target player" different spells, and only the picker cares.
     ``event_subject_player`` is the seat a trigger's own condition named
     (Mana Vortex's "each player's upkeep, **that player** sacrifices"), read
-    off the context the fire site froze.
+    off the context the fire site froze; ``event_subject_controller`` is the
+    seat that controlled the *object* the event was about (Earthlink's "that
+    creature's controller"), off the same context.
 
     An unrecognized ``who`` fails the instruction rather than defaulting to the
     controller: silently sacrificing the caster's own creature instead of the
@@ -1145,6 +1147,17 @@ def sacrifice_matching_permanent(game: Game, instruction: OracleInstruction, con
         seat = (context.trigger_context or {}).get("event_subject_player")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             return False, "no seat was frozen for 'that player'"
+        payers = [seat]
+    elif who == "event_subject_controller":
+        # "Whenever a creature dies, **that creature's controller** sacrifices
+        # a land of their choice." (Earthlink.) The branch above one question
+        # over: the seat that *controlled* what the event was about, frozen by
+        # the same fire site and read the same way — a graveyard card cannot
+        # say who controlled it, and under a control-change effect that is not
+        # its owner. An absent key fails for the reason it fails above.
+        seat = (context.trigger_context or {}).get("event_subject_controller")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return False, "no seat was frozen for 'that creature's controller'"
         payers = [seat]
     else:
         return False, f"unsupported sacrifice payer {who!r}"

@@ -38,6 +38,7 @@ from ._events import (CREATED_TOKEN,
     _DAMAGED_PLAYER_EVENTS,
     _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
+    EVENT_SUBJECT_CONTROLLER,
     EVENT_SUBJECT_PLAYER,
 )
 from ._common import (
@@ -292,6 +293,7 @@ __all__ = [
     "_is_created_token",
     "_EVENT_SUBJECT_CONTROLLERS",
     "_EVENT_SUBJECT_PLAYERS",
+    "EVENT_SUBJECT_CONTROLLER",
     "EVENT_SUBJECT_PLAYER",
     "_is_enchanted",
     "_is_target",

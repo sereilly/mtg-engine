@@ -44,6 +44,7 @@ from ._events import (
     _chosen_cast_amount,
     _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
+    EVENT_SUBJECT_CONTROLLER,
     EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
     _DAMAGED_PERMANENTS,
@@ -283,7 +284,7 @@ def _lower_damage_shape(
     if isinstance(node.amount, ast.Half):
         return _lower_halved_damage(node, event, produced)
     if isinstance(node.amount, ast.CountOf):
-        return _lower_counted_damage(node)
+        return _lower_counted_damage(node, event)
     if isinstance(node.amount, ast.BoardCount):
         return _lower_board_count_damage(node, produced)
     # "Target creature you control deals damage equal to its power to another
@@ -544,7 +545,7 @@ def _lower_damage_shape(
             # froze (CR 603.10), not whatever the resolution context is
             # carrying. The same reading `_lower_lose_life` takes of the same
             # words, from the same table.
-            payload["recipient"] = "event_subject_controller"
+            payload["recipient"] = EVENT_SUBJECT_CONTROLLER
         elif not recipient.or_planeswalker:
             payload["recipient"] = "target_player"
     elif isinstance(recipient, ast.PlayerRef):

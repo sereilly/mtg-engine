@@ -1689,3 +1689,238 @@ def test_necropotence_pays_life_and_returns_the_card_at_its_next_end_step(set_po
     assert [card.name for card in p1.hand] == ["Balduvian Bears"]
     assert p1.exile == []
 # --- end W1G4 ---
+
+
+# --- W2G1: pay-or-consequence tolls ---
+def test_cold_snap_damages_each_player_for_their_own_snow_lands(set_pool):
+    """"At the beginning of each player's upkeep, this enchantment deals damage
+    to that player equal to the number of snow lands they control."
+
+    Recipient and counted board are the *same* frozen seat (CR 603.10), which
+    is what separates this from Typhoon's per-seat loop: one number, taken on
+    the player whose upkeep it is.
+    """
+    pool = set_pool("ICE")
+    snap = Permanent(card=pool["Cold Snap"])
+    p0 = PlayerState(name="P0", battlefield=[snap], life=20)
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[
+            Permanent(card=pool["Snow-Covered Plains"]),
+            Permanent(card=pool["Snow-Covered Island"]),
+        ],
+        life=20,
+    )
+    game = Game(players=[p0, p1])
+    game.active_player_index = 1
+
+    game.resolve_upkeep(1)
+    game._settle()
+
+    assert p1.life == 18, "two snow lands, two damage"
+    assert p0.life == 20, "it is not their upkeep"
+
+
+def test_cold_snap_counts_only_snow_lands(set_pool):
+    """A plain land is not a snow land, so it is not counted."""
+    pool = set_pool("ICE")
+    snap = Permanent(card=pool["Cold Snap"])
+    p0 = PlayerState(
+        name="P0",
+        battlefield=[snap, Permanent(card=pool["Snow-Covered Swamp"])],
+        life=20,
+    )
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pool["Ice Floe"])], life=20)
+    game = Game(players=[p0, p1])
+    game.active_player_index = 1
+
+    game.resolve_upkeep(1)
+    game._settle()
+
+    assert p1.life == 20, "Ice Floe is a land, but not a snow one"
+    assert p0.life == 20
+
+
+def test_a_permanents_second_upkeep_trigger_survives_the_first(set_pool):
+    """CR 603.3: *every* ability that triggered goes on the stack.
+
+    Cold Snap prints cumulative upkeep first and "each player's upkeep" second.
+    The upkeep loop broke out of a permanent's ability list the moment it saw a
+    "your upkeep" condition on somebody else's turn, so the second ability was
+    never reached - the enchantment dealt nobody damage on any turn but its
+    controller's while reporting itself supported. Maddening Wind prints the
+    same pair and lost its damage the same way.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    wind = Permanent(card=pool["Maddening Wind"])
+    bears = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", battlefield=[wind], life=20)
+    p1 = PlayerState(name="P1", battlefield=[bears], life=20)
+    game = Game(players=[p0, p1])
+    attach_aura(wind, bears)
+    game.active_player_index = 1
+
+    game.resolve_upkeep(1)
+    game._settle()
+
+    assert p1.life == 18, "the Aura's second trigger fires on the host's upkeep"
+
+
+def test_icy_prison_offers_the_toll_to_every_seat(set_pool):
+    """"At the beginning of your upkeep, sacrifice this enchantment unless any
+    player pays {3}."
+
+    "Any player" is the whole table, the controller included - one offer the
+    first acceptance ends (CR 601.2b), not one prompt per seat.
+    """
+    pool = set_pool("ICE")
+    prison = Permanent(card=pool["Icy Prison"])
+    p0 = PlayerState(name="P0", battlefield=[prison], life=20)
+    p1 = PlayerState(name="P1", life=20)
+    game = Game(players=[p0, p1])
+    game.active_player_index = 0
+
+    game.resolve_upkeep(0)
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+
+    assert not game.is_on_battlefield(prison), "nobody paid, so it is sacrificed"
+
+
+def test_icy_prison_asks_the_next_seat_when_one_declines(set_pool):
+    """The chain, not a batch: the controller is asked first (CR 101.4), and a
+    decline moves the offer on rather than sacrificing the enchantment. Any one
+    payment keeps it, and nobody after the payer is asked (CR 601.2b)."""
+    pool = set_pool("ICE")
+    prison = Permanent(card=pool["Icy Prison"])
+    lands = [Permanent(card=pool["Snow-Covered Island"]) for _ in range(3)]
+    p0 = PlayerState(name="P0", battlefield=[prison], life=20)
+    p1 = PlayerState(name="P1", battlefield=lands, life=20)
+    game = Game(players=[p0, p1])
+    game.active_player_index = 0
+
+    game.resolve_upkeep(0)
+    owed = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert [c.player_index for c in owed] == [0], "the controller is asked first"
+
+    assert game.confirm_optional_pay(0, accept=False)
+    owed = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert [c.player_index for c in owed] == [1], "and the offer moves on"
+
+    assert game.confirm_optional_pay(1, accept=True)
+    game._settle()
+
+    assert game.is_on_battlefield(prison), "an opponent bought it off"
+    assert all(land.tapped for land in lands), "the {3} came off the board"
+
+
+def test_earthlink_makes_the_dead_creatures_controller_sacrifice_a_land(set_pool):
+    """"Whenever a creature dies, that creature's controller sacrifices a land
+    of their choice."
+
+    The seat is the one that controlled the creature that died - frozen by the
+    fire site, because a graveyard card cannot say whose battlefield it left.
+    """
+    pool = set_pool("ICE")
+    link = Permanent(card=pool["Earthlink"])
+    bears = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", battlefield=[link], life=20)
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[bears, Permanent(card=pool["Snow-Covered Forest"])],
+        life=20,
+    )
+    game = Game(players=[p0, p1])
+
+    game._destroy_target_permanent(p1, target_permanent_index=p1.battlefield.index(bears))
+    game._settle()
+
+    assert [c.name for c in p1.graveyard] == ["Balduvian Bears", "Snow-Covered Forest"]
+    assert p0.battlefield == [link], "the Earthlink controller gives up nothing"
+
+
+def test_mystic_remora_lets_the_caster_buy_off_the_draw(set_pool):
+    """"Whenever an opponent casts a noncreature spell, you may draw a card
+    unless that player pays {4}."
+
+    The decision belongs to the caster, not to Remora's controller: the offer
+    is theirs and the draw is the branch they decline into.
+    """
+    pool = set_pool("ICE")
+    remora = Permanent(card=pool["Mystic Remora"])
+    p0 = PlayerState(
+        name="P0", battlefield=[remora], life=20,
+        library=[pool["Balduvian Bears"], pool["Brown Ouphe"]],
+    )
+    p1 = PlayerState(name="P1", hand=[pool["Icy Prison"]], life=20)
+    game = Game(players=[p0, p1])
+
+    game.cast_from_hand(1, "Icy Prison")
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+
+    assert len(p0.hand) == 1, "the toll went unpaid, so the card is drawn"
+
+
+def test_mystic_remora_ignores_a_creature_spell(set_pool):
+    """"a **noncreature** spell" - the narrowing the opponent-scoped cast head
+    could not read at all until this round, which stranded the whole line."""
+    pool = set_pool("ICE")
+    remora = Permanent(card=pool["Mystic Remora"])
+    p0 = PlayerState(
+        name="P0", battlefield=[remora], life=20,
+        library=[pool["Balduvian Bears"]],
+    )
+    p1 = PlayerState(name="P1", hand=[pool["Balduvian Bears"]], life=20)
+    game = Game(players=[p0, p1])
+
+    game.cast_from_hand(1, "Balduvian Bears")
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+
+    assert p0.hand == []
+
+
+def test_freyalise_charm_draws_when_the_controller_pays(set_pool):
+    """"Whenever an opponent casts a black spell, you may pay {G}{G}. If you do,
+    you draw a card."
+
+    The colour narrowing was tested in one of the two cast dispatchers, so the
+    opponent-scoped spelling had no colour test at all.
+    """
+    pool = set_pool("ICE")
+    charm = Permanent(card=pool["Freyalise's Charm"])
+    p0 = PlayerState(
+        name="P0", battlefield=[charm], life=20, mana_pool={"G": 2},
+        library=[pool["Balduvian Bears"]],
+    )
+    p1 = PlayerState(name="P1", hand=[pool["Dark Ritual"]], life=20)
+    game = Game(players=[p0, p1])
+
+    game.cast_from_hand(1, "Dark Ritual")
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+
+    assert len(p0.hand) == 1
+    assert p0.mana_pool.get("G", 0) == 0
+
+
+def test_freyalise_charm_ignores_a_spell_of_another_colour(set_pool):
+    pool = set_pool("ICE")
+    charm = Permanent(card=pool["Freyalise's Charm"])
+    p0 = PlayerState(
+        name="P0", battlefield=[charm], life=20, mana_pool={"G": 2},
+        library=[pool["Balduvian Bears"]],
+    )
+    p1 = PlayerState(name="P1", hand=[pool["Icy Prison"]], life=20)   # blue
+    game = Game(players=[p0, p1])
+
+    game.cast_from_hand(1, "Icy Prison")
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+
+    assert p0.hand == []
+    assert p0.mana_pool.get("G", 0) == 2, "nothing was offered, so nothing was paid"
+# --- end W2G1 ---

@@ -679,7 +679,17 @@ class GameHelpersMixin:
             )
 
         if permanent.card.primary_type == "creature":
-            self._fire_creature_dies_triggers(permanent)
+            # The seat this move is being made for, handed down because the
+            # layer-2 read below cannot always answer: the destruction paths
+            # disagree about whether the permanent is removed from the
+            # battlefield before or after this call, and once it is off there is
+            # no battlefield to read a controller from. CR 603.10 wants the
+            # last-known one either way. `player` is what the two blocks above
+            # already treat as the controller (the loses-the-game check, and the
+            # `controller_index` every dies-trigger is enqueued under).
+            self._fire_creature_dies_triggers(
+                permanent, self.players.index(player)
+            )
         self._fire_permanent_dies_triggers(permanent)
         # "When that creature dies this turn, …" (Reincarnation). A delayed
         # ability (CR 603.7) belongs to no permanent, so neither of the scans
@@ -1868,7 +1878,9 @@ class GameHelpersMixin:
                 ))
         self._enqueue_triggered_batch(events)
 
-    def _fire_creature_dies_triggers(self, dead_permanent: Permanent) -> None:
+    def _fire_creature_dies_triggers(
+        self, dead_permanent: Permanent, last_known_seat: int | None = None
+    ) -> None:
         """Put "whenever a creature dies" triggers (e.g. Soul Net) onto the stack.
 
         Observers may be controlled by any player. Triggers are enqueued here (in
@@ -1884,6 +1896,15 @@ class GameHelpersMixin:
         # frozen here because nothing downstream can read it: by the time a
         # trigger resolves the permanent is in a graveyard with no counters.
         dead_seat = self.controller_index_of(dead_permanent)
+        if dead_seat is None:
+            # Already off the battlefield — which is the *ordinary* case on
+            # half the destruction paths, not an edge one. The seat the caller
+            # is making this move for is the last-known controller (CR 603.10),
+            # and without it every controller-scoped death condition silently
+            # went unannounced: the `if dead_seat is not None` guard below
+            # skipped Massacre Wurm's whole branch, and Earthlink's "that
+            # creature's controller" resolved against a frozen key holding None.
+            dead_seat = last_known_seat
         died_context = {
             "dead_name": dead_permanent.card.name,
             # The card itself, for "return **that card** to its owner's hand"
@@ -1964,14 +1985,6 @@ class GameHelpersMixin:
                 if trig.condition.kind != "creature_dies" or trig.instruction is None:
                     continue
                 instr = trig.instruction
-                if instr.kind == "may":
-                    # A grammar-lowered optional action carries its own cost
-                    # and consequence, so there is nothing to re-derive here.
-                    events.append(make_trigger_event(
-                        controller_index, observer, trig,
-                        trigger_context={"dead_name": dead_permanent.card.name},
-                    ))
-                    continue
                 if instr.kind == "target_gains_life":
                     # Legacy shape: the optional cost lives in the card's
                     # text rather than the instruction, so it has to be
@@ -1987,6 +2000,23 @@ class GameHelpersMixin:
                         effect_kind="triggered_target_gains_life",
                         trigger_context=ctx,
                     ))
+                    continue
+                # Every other "whenever a creature dies" ability, with the
+                # death's own frozen facts (CR 603.10) — the same context the
+                # two scoped death conditions above are announced with.
+                #
+                # This branch used to be two: ``may`` and ``target_gains_life``,
+                # and any other instruction kind was dropped without a word. It
+                # is the narrowing the Sengir Vampire comment above rejects for
+                # its own condition, made once more one branch down: what the
+                # ability *does* is the effect's business, and the condition is
+                # about a death. Earthlink's "that creature's controller
+                # sacrifices a land" is the second card in the pool to print
+                # this condition and would have been the first to be dropped.
+                events.append(make_trigger_event(
+                    controller_index, observer, trig,
+                    trigger_context=dict(died_context),
+                ))
         self._enqueue_triggered_batch(events)
 
     def _put_permanent_onto_battlefield(
