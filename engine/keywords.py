@@ -317,6 +317,14 @@ def grant_ability_line(
     second main phase and the whole of the opponent's turn.
     """
     _check_duration(duration, seat, GRANTED_ABILITY_DURATIONS)
+    # CR 602.5c: a restriction on an ability a permanent *acquires* applies only
+    # to that ability as acquired, so a fresh grant of a sentence carrying a
+    # use budget brings a fresh budget with it. Cleared here rather than at the
+    # sweep that ends the grant, because a line printed on the card itself is
+    # never granted and must keep the budget it has spent.
+    from .activation_restrictions import clear_once_only_tally
+
+    clear_once_only_tally(perm, line)
     lines = perm.metadata.setdefault(GRANTED_ABILITY_LINES, [])
     entry: dict = {"line": line, "duration": duration}
     if seat is not None:

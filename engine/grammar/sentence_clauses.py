@@ -255,6 +255,20 @@ def _distribute_duration(
                 _distribute_duration(step, duration, stream) for step in statement.steps
             ),
         )
+    # The same recursion one node over. "Until end of turn, target creature
+    # gains haste **and** "{0}: Untap this creature."" (Touch of Vitae) prints
+    # one duration over two effects joined inside a single sentence, where the
+    # sequence above joins whole sentences — and a conjunction has no duration
+    # field of its own, so without this the prefix had nothing to attach to and
+    # the line failed on the wrapper's name.
+    if isinstance(statement, ast.Conjunction):
+        return dataclasses.replace(
+            statement,
+            effects=tuple(
+                _distribute_duration(effect, duration, stream)
+                for effect in statement.effects
+            ),
+        )
     fields = {field.name for field in dataclasses.fields(statement)}
     if "duration" not in fields:
         raise stream.error(

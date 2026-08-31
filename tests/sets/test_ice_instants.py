@@ -1105,3 +1105,91 @@ def test_word_of_undoing_spares_an_aura_you_do_not_own(set_pool):
     assert [card.name for card in p2.hand] == []
     assert [card.name for card in p2.graveyard] == ["Armor of Faith"]
 # --- end W2G4 ---
+
+
+# --- W3G1: granted abilities in quotes ---
+def _vitae_game(pool):
+    """Seat 0 holding Touch of Vitae with a tapped Balduvian Bears in play."""
+    bear = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    bear.tapped = True
+    p1 = PlayerState(
+        name="P1", battlefield=[bear], life=20,
+        hand=[pool["Touch of Vitae"]],
+    )
+    p2 = PlayerState(name="P2", battlefield=[], life=20)
+    game = Game(players=[p1, p2])
+    game._settle()
+    return game, p1, bear
+
+
+def _cast_vitae(game, host):
+    game.players[0].mana_pool["G"] = 1
+    result = game.cast_from_hand(
+        0, "Touch of Vitae",
+        target_player_index=game.controller_index_of(host),
+        target_permanent_index=game.battlefield_index_of(host),
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+    return result
+
+
+def test_touch_of_vitae_grants_haste_and_the_quoted_untap_ability(set_pool):
+    """"Until end of turn, target creature gains haste and "{0}: Untap this
+    creature. Activate only once.""
+
+    One "gains" over two kinds of thing (CR 113.3): a word layer 6 holds, and a
+    whole printed ability the compiler has to read. The grant is only done when
+    the granted ability *fires*, so the assertion is the untap, not the text.
+    """
+    pool = set_pool("ICE")
+    game, _, bear = _vitae_game(pool)
+
+    assert _cast_vitae(game, bear).supported
+    assert bear.has_keyword("haste")
+    assert '{0}: Untap this creature' in bear.effective_card.oracle_text
+
+    result = game.activate_permanent_ability(0, "Balduvian Bears")
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert result.supported, result.details
+    assert not bear.tapped
+
+
+def test_touch_of_vitae_grants_an_ability_that_may_be_activated_only_once(set_pool):
+    """"Activate only once" is a restriction with no turn in it (CR 602.5b).
+
+    A parsed-and-dropped rider here would be an untapper the card never
+    printed, so the second activation has to be refused inside the same turn
+    the first one happened.
+    """
+    pool = set_pool("ICE")
+    game, _, bear = _vitae_game(pool)
+    _cast_vitae(game, bear)
+
+    game.activate_permanent_ability(0, "Balduvian Bears")
+    while game.stack:
+        game.resolve_top_of_stack()
+    bear.tapped = True
+
+    again = game.activate_permanent_ability(0, "Balduvian Bears")
+    assert not again.supported
+    assert bear.tapped
+
+
+def test_touch_of_vitae_takes_both_halves_away_at_end_of_turn(set_pool):
+    """The printed duration is one prefix over both effects. A leading
+    "Until end of turn," dropped on the quoted half would be a permanent
+    untap engine nobody printed."""
+    pool = set_pool("ICE")
+    game, _, bear = _vitae_game(pool)
+    _cast_vitae(game, bear)
+    assert bear.has_keyword("haste")
+
+    game.resolve_cleanup_step(0)
+    game._settle()
+
+    assert not bear.has_keyword("haste")
+    assert '{0}: Untap this creature' not in bear.effective_card.oracle_text
+# --- end W3G1 ---

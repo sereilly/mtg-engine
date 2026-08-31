@@ -20,6 +20,8 @@ from ...activation_restrictions import (
     at_activation_limit,
     printed_activation_caps,
     mark_activated_this_turn,
+    mark_once_only_activation,
+    prints_once_only_restriction,
 )
 from ...auras import attached_ability_cost_reduction, aura_restriction_active
 from ...cost_modifiers import ability_cost_tax, ability_self_reduction_amount
@@ -999,6 +1001,13 @@ class AbilityActivationMixin:
         # All guards/costs passed — tally an activation of a capped ability.
         if activation_caps:
             mark_activated_this_turn(self, permanent)
+        # The same stamp for the cap with no turn in it ("Activate only once",
+        # Touch of Vitae's granted ability). Beside the per-turn one and in the
+        # same position, because both are budgets spent by an activation the
+        # rules allowed — and asked of the table rather than of the words here,
+        # so the refusal and the stamp read one sentence the same way.
+        if prints_once_only_restriction(ability_lower):
+            mark_once_only_activation(permanent, ability_lower)
 
         # CR 606.4: a loyalty symbol is a cost to put on or remove that many
         # loyalty counters, paid as the ability is activated — so the walker's

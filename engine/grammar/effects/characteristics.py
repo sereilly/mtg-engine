@@ -191,6 +191,34 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
         raise stream.error("a choice of keywords needs more than one")
     grant = ast.GainKeyword(subject, keywords, duration, choose_one=choose_one)
 
+    # "…gains haste **and** "{0}: Untap this creature. Activate only once.""
+    # (Touch of Vitae.) One "gains" over two kinds of thing, which CR 113.3
+    # keeps apart: a word the layer system holds and a whole printed ability
+    # the compiler has to read. Two nodes, joined here, because every consumer
+    # below reads one or the other and a fused node would be a third thing.
+    #
+    # A duration printed after the quote governs both halves, the way the
+    # keyword-and-pump join below reads a trailing one — and the leading
+    # spelling this card prints is distributed over the conjunction by the
+    # sentence layer.
+    quoted_mark = stream.mark()
+    if stream.accept_word("and") and stream.at_kind(QUOTE):
+        abilities, self_name = _parse_quoted_abilities(stream)
+        text_duration = _parse_duration(stream)
+        if duration.kind is None and text_duration.kind is not None:
+            grant = ast.GainKeyword(
+                subject, keywords, text_duration, choose_one=choose_one
+            )
+        elif text_duration.kind is None:
+            text_duration = duration
+        return ast.Conjunction((
+            grant,
+            ast.GainAbilityText(
+                subject, abilities, text_duration, self_name=self_name
+            ),
+        ))
+    stream.reset(quoted_mark)
+
     mark = stream.mark()
     if stream.accept_word("and") and stream.at_word("gets", "get"):
         pump = _parse_gets(stream, subject)
