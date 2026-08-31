@@ -17,6 +17,7 @@ from ._common import (
     _describe_several_targets,
     _describe_targets,
     _filter_payload,
+    _is_enchanted,
     _is_source,
     _REST_OF_TURN,
     _is_target,
@@ -639,17 +640,27 @@ def _lower_assigns_no_combat_damage(
     the sweep does not end, refuses rather than lowering onto a record that
     would answer a different question.
     """
-    if not _is_source(node.subject):
+    # "…you may have **it** assign no combat damage this turn" on an Aura
+    # (Cloak of Confusion), where the pronoun was rebound to the permanent the
+    # Aura is attached to. The same mark on a different permanent, so the
+    # subject is payload rather than a second kind — and it is *which*
+    # permanent, not a filter: nothing here chooses.
+    if _is_enchanted(node.subject):
+        subject = "attached"
+    elif _is_source(node.subject):
+        subject = ""
+    else:
         raise LoweringError(
-            "only the effect's own source can be marked as assigning no "
-            "combat damage", node=node,
+            "only the effect's own source or the permanent it is attached to "
+            "can be marked as assigning no combat damage", node=node,
         )
     if node.duration.kind not in _REST_OF_TURN:
         raise LoweringError(
             "an assigns-no-combat-damage mark lasts the rest of the turn and "
             "nothing else ends it", node=node,
         )
-    return (OracleInstruction("assign_no_combat_damage_until_eot", "", {}),)
+    payload = {"subject": subject} if subject else {}
+    return (OracleInstruction("assign_no_combat_damage_until_eot", "", payload),)
 
 
 def _lower_force_chosen_creature_to_attack(

@@ -65,14 +65,32 @@ def _accept_ability_activated_tail(stream: TokenStream) -> bool:
 
 
 
+#: The combat events an Aura or Equipment watches its host for. Both are
+#: events ``_WHENEVER_EVENTS`` already holds for "this creature", read here
+#: about the attached permanent instead — one kind per event, because whose
+#: ability is watching is the narrowing and not a different event.
+#:
+#: "…attacks and isn't blocked" (Cloak of Confusion) sits above "…attacks or
+#: blocks" only for tidiness: the two diverge at the third word, so neither is
+#: a prefix of the other. Written as a table anyway, because the next attached
+#: combat event to be printed will be one, and a second `accept_phrase` chain
+#: is how the ordering rule stops being visible.
+_ATTACHED_COMBAT_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("attacks", "and", "isn't", "blocked"), "attacks_unblocked"),
+    (("attacks", "or", "blocks"), "creature_attacks_or_blocks"),
+)
+
+
 def _parse_attached_combat_event(
     stream: TokenStream, word: str
 ) -> ast.TriggerEvent | None:
-    """"Whenever **enchanted creature** attacks or blocks" (Imprison).
+    """"Whenever **enchanted creature** attacks or blocks" (Imprison), and
+    "…attacks and isn't blocked" (Cloak of Confusion).
 
-    The same event ``_WHENEVER_EVENTS`` holds for "this creature", watched by
-    an Aura or Equipment rather than by the creature itself — one kind, because
-    it is one event, and whose ability is watching is the narrowing.
+    The same events ``_WHENEVER_EVENTS`` holds for "this creature", watched by
+    an Aura or Equipment rather than by the creature itself — one kind per
+    event, because each is one event, and whose ability is watching is the
+    narrowing.
 
     A production rather than another row of that table, and the *subject* is
     why: a table row builds an event with none, and the effect behind this one
@@ -89,13 +107,17 @@ def _parse_attached_combat_event(
         stream.reset(mark)
         return None
     stream.advance()
-    if not stream.accept_phrase("attacks", "or", "blocks"):
-        stream.reset(mark)
-        return None
-    return ast.TriggerEvent(
-        "creature_attacks_or_blocks", word,
-        subject=ast.ObjectFilter(is_enchanted=True, card_types=(noun,)),
-    )
+    # Longest first, as in every table this file's productions stand beside:
+    # "attacks" opens both readings, so the joined attack-or-block sentence
+    # must be tried against the unblocked one rather than after it.
+    for phrase, kind in _ATTACHED_COMBAT_EVENTS:
+        if stream.accept_phrase(*phrase):
+            return ast.TriggerEvent(
+                kind, word,
+                subject=ast.ObjectFilter(is_enchanted=True, card_types=(noun,)),
+            )
+    stream.reset(mark)
+    return None
 
 
 

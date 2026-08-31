@@ -19,6 +19,7 @@ from ._common import (
 )
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
+    _DEFENDING_PLAYER_EVENTS,
 )
 
 
@@ -163,6 +164,30 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
             )
         return (
             OracleInstruction("each_opponent_discards_cards", "", {"amount": amount}),
+        )
+    # "**Defending player** discards a card at random." (Cloak of Confusion.)
+    # CR 506.2's seat, frozen into the trigger's context by the combat fire site
+    # — so the phrase names a player only under an event that stamped one, the
+    # same gate ``control_flow`` puts in front of an offer made to that seat.
+    # Under any other event nothing recorded the seat and the discard would
+    # empty whichever hand the resolution happened to be carrying.
+    if node.player.kind == "defending_player":
+        if event not in _DEFENDING_PLAYER_EVENTS:
+            raise LoweringError(
+                '"defending player" names a seat this event did not record',
+                node=node,
+            )
+        amount = _amount_payload(node.count)
+        if not node.at_random or amount != 1 or node.filter is not None:
+            raise LoweringError(
+                "the defending-player discard is one card, at random, from the "
+                "whole hand", node=node,
+            )
+        return (
+            OracleInstruction(
+                "discard_x_target_cards", "",
+                {"amount": 1, "who": "defending_player"},
+            ),
         )
     if node.player.kind not in ("target_player", "target_opponent", "that_player"):
         raise LoweringError(f"no discard handler for {node.player.kind!r}", node=node)

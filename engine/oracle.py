@@ -401,6 +401,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # blockers are (CR 509.1h), so it is announced at the combat damage step
     # (engine/phases/combat_damage_step._fire_unblocked_attack_triggers) rather
     # than at declare-attackers with the generic attack triggers.
+    # "Whenever **enchanted creature** attacks and isn't blocked" (Cloak of
+    # Confusion), above the source's own spelling for the same reason every
+    # attached row in this table sits above its unattached twin: one kind,
+    # because it is one event, and which permanent's ability is watching is the
+    # narrowing — payload, exactly as `combatant_attached` is on
+    # `creature_attacks_or_blocks`. The declare-blockers fire site reads the key
+    # and scans the attacker's attachments beside its own abilities.
+    ("attacks_unblocked",
+     r"whenever enchanted (?P<combatant_attached>[a-z]+) attacks and isn't blocked"),
     ("attacks_unblocked",           r"whenever this creature attacks and isn't blocked"),
     ("creature_attacks",            r"whenever this creature attacks"),
     # "…blocks **a creature with flying**" (Snarespinner) narrows the source's

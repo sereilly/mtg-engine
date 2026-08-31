@@ -1689,3 +1689,116 @@ def test_necropotence_pays_life_and_returns_the_card_at_its_next_end_step(set_po
     assert [card.name for card in p1.hand] == ["Balduvian Bears"]
     assert p1.exile == []
 # --- end W1G4 ---
+
+
+# --- W2G4: Auras and attachments ---
+
+
+def test_cloak_of_confusion_lets_its_controller_trade_damage_for_a_discard(set_pool):
+    """Ice Age's Cloak of Confusion: "Whenever enchanted creature attacks and
+    isn't blocked, you may have it assign no combat damage this turn. If you do,
+    defending player discards a card at random."
+
+    The Aura's trigger, not the creature's — CR 113.7a — so it fires from the
+    attacker's attachments rather than from its own compiled program.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Cloak of Confusion"])
+    assert program.supported, program.reason
+    trigger = next(
+        trig for trig in program.triggered_abilities
+        if trig.condition.kind == "attacks_unblocked"
+    )
+    # The noun the attached channel tests the host against (CR 613 layer 4: an
+    # Equipment on an unanimated artifact is not a creature).
+    assert trigger.condition.payload.get("combatant_attached") == "creature"
+    assert trigger.instruction.kind == "may"
+    (action,) = trigger.instruction.payload["action"]
+    # The pronoun names the enchanted creature, never the Aura — an Aura
+    # assigns no combat damage in any case, so a mark on the source is the
+    # card doing nothing at all.
+    assert action.kind == "assign_no_combat_damage_until_eot"
+    assert action.payload == {"subject": "attached"}
+    # "If you do" — the discard happens only behind the offer, and its seat is
+    # the one the fire site froze rather than one anybody targeted.
+    (rider,) = trigger.instruction.payload["then"]
+    assert rider.kind == "discard_x_target_cards"
+    assert rider.payload == {"amount": 1, "who": "defending_player"}
+
+
+def _cloak_board(set_pool):
+    """P1's bear wearing Cloak of Confusion, with a card in P2's hand."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])  # a vanilla 2/2, no text
+    cloak = Permanent(card=pool["Cloak of Confusion"])
+    p1 = PlayerState(name="P1", battlefield=[bear, cloak], life=20)
+    p2 = PlayerState(name="P2", life=20, hand=[pool["Balduvian Bears"]])
+    game = Game(players=[p1, p2])
+    attach_aura(cloak, bear)
+    game._settle()
+    _nosick(bear)
+    return game, bear, cloak
+
+
+def _attack_unblocked(game):
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    game._fire_unblocked_attack_triggers()
+
+
+def test_cloak_of_confusion_fires_from_the_aura_and_takes_a_card_at_random(set_pool):
+    """The whole effect in a real game: the trigger is announced off the
+    attacker's attachments, the offer marks the *creature*, and the seat the
+    combat froze loses a card.
+    """
+    game, bear, cloak = _cloak_board(set_pool)
+    _attack_unblocked(game)
+
+    item = game.stack[-1]
+    assert item.source_permanent is cloak
+    assert item.trigger_context["trigger_defending_player_index"] == 1
+    game.resolve_top_of_stack()
+    # The offer is a decision the controller owes (CR 117.3b) — accepted here,
+    # which is the half of the card the discard is behind.
+    game.confirm_optional_pay(0, "Cloak of Confusion", accept=True)
+
+    assert bear.metadata.get("assigns_no_combat_damage_until_eot") is True
+    assert cloak.metadata.get("assigns_no_combat_damage_until_eot") is None
+    assert game.players[1].hand == []
+    assert len(game.players[1].graveyard) == 1
+
+
+def test_cloak_of_confusion_stops_being_a_trigger_once_it_is_detached(set_pool):
+    """CR 611.3b — removal is the absence of a contribution. The Aura's trigger
+    is found by scanning the attacker's attachments, so detaching it is the
+    whole of taking the ability away.
+    """
+    from engine.auras import detach_aura
+
+    game, bear, cloak = _cloak_board(set_pool)
+    detach_aura(cloak, bear)
+    game._settle()
+    _attack_unblocked(game)
+
+    assert game.stack == []
+    assert bear.metadata.get("assigns_no_combat_damage_until_eot") is None
+
+
+def test_a_cloaked_attacker_assigns_no_combat_damage(set_pool):
+    """The mark is read by ``combat_assignment``, so the defending player takes
+    nothing — the half of the card that pays for the discard."""
+    from engine.combat_assignment import combat_damage_assigned_by
+
+    game, bear, _ = _cloak_board(set_pool)
+    assert combat_damage_assigned_by(bear) == 2
+    _attack_unblocked(game)
+    game.resolve_top_of_stack()
+    game.confirm_optional_pay(0, "Cloak of Confusion", accept=True)
+
+    assert combat_damage_assigned_by(bear) == 0
+
+
+# --- end W2G4 ---

@@ -1058,6 +1058,7 @@ class DeclareBlockersStepMixin:
         one that targets chooses its target as it is put on the stack
         (``_choose_trigger_targets``), from the list the picker offers.
         """
+        from ..auras import attached_subject_triggers
         from ..game_types import StackItem
 
         if self.combat_unblocked_triggers_fired:
@@ -1078,19 +1079,36 @@ class DeclareBlockersStepMixin:
             # resolves — the attacker can leave combat in response, and
             # "defending player" would then name nobody.
             defending_index = self.combat_attackers.get(idx)
-            for trig in matching_triggers(
-                permanent.effective_card, condition_kinds={"attacks_unblocked"}
-            ):
+            # The attacker's own ability, then the same sentence printed on
+            # something attached to it (Cloak of Confusion). One kind, two
+            # dispatch scopes — the mirror of the scan in
+            # `_fire_becomes_blocked_triggers`, and one body for the same
+            # reason: only the ability's source and its controlling seat
+            # differ. CR 113.7a: an Aura's ability is the Aura's, controlled by
+            # the Aura's controller, so the seat is read off the attachment and
+            # not borrowed from the attacker.
+            watchers = [
+                (permanent, controller_index, trig)
+                for trig in matching_triggers(
+                    permanent.effective_card, condition_kinds={"attacks_unblocked"}
+                )
+            ] + [
+                (attachment, aura_seat, trig)
+                for aura_seat, attachment, trig in attached_subject_triggers(
+                    self, permanent, {"attacks_unblocked"}, "combatant_attached",
+                )
+            ]
+            for source, source_seat, trig in watchers:
                 self._stack_push(
                     StackItem(
-                        card=permanent.card,
-                        caster_index=controller_index,
-                        target_player_index=controller_index,
+                        card=source.card,
+                        caster_index=source_seat,
+                        target_player_index=source_seat,
                         target_permanent_index=None,
                         x_value=None,
                         ability_instruction=trig.instruction,
                         ability_effect_kind=trig.effect_kind,
-                        source_permanent=permanent,
+                        source_permanent=source,
                         ability_text=trig.source_line,
                         trigger_context={
                             "trigger_defending_player_index": defending_index,
@@ -1098,7 +1116,7 @@ class DeclareBlockersStepMixin:
                     )
                 )
                 self.log.append(
-                    f"{permanent.card.name} triggered (attacked and wasn't blocked)"
+                    f"{source.card.name} triggered (attacked and wasn't blocked)"
                 )
 
     def _fire_becomes_blocked_triggers(

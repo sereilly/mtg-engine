@@ -294,12 +294,15 @@ def _lower_doesnt_untap_next_step(
     # "**It** doesn't untap during its controller's next two untap steps."
     # (Telekinesis.) The singular twin of "those creatures": the bare pronoun,
     # which after a sentence that tapped something names what was tapped. It is
-    # told apart from "this creature" by carrying no noun at all — the printed
-    # word for the source is a noun phrase, and reading them as one would point
-    # the marker at the ability's own permanent.
+    # told apart from "this creature" by the quantifier the pronoun carries —
+    # the printed word for the source is a noun phrase and reads as ``"this"``,
+    # and reading them as one would point the marker at the ability's own
+    # permanent. The empty filter is kept beside it because that is what makes
+    # the pronoun *bare*: "it" narrowed by anything is a phrase this production
+    # has not met.
     bare_pronoun = (
         isinstance(subject, ast.TargetSpec)
-        and subject.quantifier == "this"
+        and subject.quantifier == "it"
         and subject.filter.is_source
         and subject.filter.to_payload() == {}
     )

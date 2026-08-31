@@ -591,8 +591,21 @@ def discard_x_target_cards(game: Game, instruction: OracleInstruction, context: 
     make every other printed number a new kind with a new handler, which is the
     shape this codebase refuses everywhere else. The kind keeps its historical
     name; the X in it is where the count *used* to live.
+
+    ``who: "defending_player"`` names the seat the combat fire site froze into
+    the trigger's context (CR 506.2) rather than a seat anybody targeted — Cloak
+    of Confusion, whose discard has no target at all. Payload for the same
+    reason the count is: the sample and the move are identical, and only who
+    holds the hand differs.
     """
     target = context.target
+    if instruction.payload.get("who") == "defending_player":
+        seat = (context.trigger_context or {}).get("trigger_defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            # The attacker can leave combat before this resolves, and a seat
+            # nobody recorded is not a seat to empty a hand at random from.
+            return True, "resolved"
+        target = game.players[seat]
     amount = instruction.payload.get("amount")
     if not isinstance(amount, int):
         amount = context.x_value
