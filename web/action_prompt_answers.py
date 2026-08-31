@@ -429,7 +429,22 @@ def _action_resolve_optional_pay(session, req, seat_type):
         raise HTTPException(status_code=400, detail="no optional pay pending for you")
     if req.accept is None:
         raise HTTPException(status_code=400, detail="accept (true/false) is required")
-    session.game.confirm_optional_pay(req.seat, card_name=req.card_name, accept=bool(req.accept))
+    ok = session.game.confirm_optional_pay(
+        req.seat, card_name=req.card_name, accept=bool(req.accept),
+        # Which printed cost, for an offer whose options buy different things
+        # (Winter's Chill). None everywhere else, which is every other card:
+        # there the alternatives cover one consequence and the engine says which
+        # it spends.
+        option=req.pay_option,
+    )
+    if not ok:
+        # The offer is still owed -- the engine rejected the answer rather than
+        # consuming it (CR 601.2b: a player chooses among the options they are
+        # able to take). Saying so beats a silent no-op that leaves the same
+        # prompt on screen with no explanation.
+        raise HTTPException(
+            status_code=400, detail="that payment option can't be paid",
+        )
 
 @action_handler("pay_life_to_save_confirm")
 def _action_pay_life_to_save_confirm(session, req, seat_type):

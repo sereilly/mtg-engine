@@ -126,6 +126,7 @@ from .effects import (
 
 from .sentence_clauses import (
     _accept_alternative_sweep,
+    _accept_graded_toll_outcomes,
     _distribute_duration,
     _parse_unless_player_pays,
     _accept_trailing_toll,
@@ -170,6 +171,15 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
     if not top_level:
         return statement
     statement = _accept_trailing_toll(_parse_statement_body, stream, statement) or statement
+    # "…may pay {1} or {2}. **If that player doesn't**, … **If that player pays
+    # only {1}**, …" (Winter's Chill.) The sentences that say what each way of
+    # covering the offer buys. Read around the body for the toll's own reason —
+    # they modify a sentence already read and name nothing on their own — and
+    # top level only, because a nested body's offer is not the one the printed
+    # sentences behind this one are about.
+    statement = _accept_graded_toll_outcomes(
+        _parse_statement_body, stream, statement
+    ) or statement
     # "…**at the beginning of your next upkeep**, where X is …" (Hazezon
     # Tamar): the delay printed after its effect rather than in front of it.
     # Read before the where-clause and wrapped *around* it, because the delay

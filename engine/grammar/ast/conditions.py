@@ -227,7 +227,8 @@ class DestroyedThisWay:
 
 @dataclass(frozen=True)
 class ChosenThisWay:
-    """"for each of **those cards**" (Sylvan Library).
+    """"for each of **those cards**" (Sylvan Library) / "for each of **those
+    creatures**" (Winter's Chill).
 
     The third sibling of :class:`DiedThisTurn` and :class:`DiedThisWay`, and
     the same distinction one more time: this names exactly what an earlier
@@ -235,7 +236,17 @@ class ChosenThisWay:
     turn's history answers it. Like ``DiedThisWay`` the lowering refuses it
     without a producer — with no earlier "choose" step the words name nothing,
     and an empty loop is a sentence that reports supported and does not run.
+
+    *subject* is the printed noun where it names **permanents** ("those
+    creatures"), and None where it names cards in a hand ("those cards"). Two
+    readings of one clause and one node, because the question is identical —
+    what did an earlier sentence of this effect choose — and the difference is
+    only which record answers it. Carried rather than dropped: the noun
+    restates what the earlier sentence named, and a restatement checked is a
+    restatement, where one taken on trust is a loop over whatever that sentence
+    happened to record.
     """
+    subject: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)

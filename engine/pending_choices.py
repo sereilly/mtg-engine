@@ -190,6 +190,22 @@ def spec_for(kind: str) -> ChoiceSpec:
     return spec
 
 
+def optional_pay_options(entry: dict) -> list[dict]:
+    """The costs an ``optional_pay`` entry's payer may cover it with, in printed
+    order: the printed cost first, then CR 118.8's alternatives.
+
+    One reader, because three of them ask — "can they pay?", "pay it", and the
+    prompt that renders the choice — and a second spelling of "the printed one
+    and its alternatives" is a fourth answer waiting to disagree. Here rather
+    than in ``mixins/stack/choices.py`` because ``web/prompts.py`` asks too, and
+    this module already imports nothing from the engine.
+    """
+    return [
+        dict(entry.get("cost") or {}),
+        *(dict(alternative) for alternative in (entry.get("cost_alternatives") or ())),
+    ]
+
+
 def public_data(choice) -> dict:
     """A choice's payload with the engine-private keys removed.
 

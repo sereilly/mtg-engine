@@ -401,6 +401,32 @@ def _lower_may(
             {symbol: count for symbol, count in alternative.pips}
             for alternative in node.cost_alternatives
         ]
+    if node.option_effects:
+        # "…may pay {1} or {2}. If that player doesn't, … **If that player pays
+        # only {1}**, …" (Winter's Chill.) What each way of covering the offer
+        # buys, index-aligned with ``[cost] + cost_alternatives`` — so the prompt
+        # asks *which* option rather than finding the first the payer can
+        # afford, and the payment reports back which one was taken. Empty on
+        # every other card that prints alternatives, which is exactly CR 118.8's
+        # ordinary use: two ways to buy one consequence.
+        if len(node.option_effects) != 1 + len(node.cost_alternatives):
+            raise LoweringError(
+                "a graded offer needs one outcome slot per printed option",
+                node=node,
+            )
+        payload["option_effects"] = [
+            list(
+                lower_statement(
+                    outcome, produced, event=inner_event,
+                    event_subject=event_subject, whole_effect=False,
+                )
+            ) if outcome is not None else []
+            for outcome in node.option_effects
+        ]
+        if not any(payload["option_effects"]):
+            raise LoweringError(
+                "a graded offer whose options all buy nothing", node=node
+            )
     if node.life_cost is not None:
         # "… unless its controller **pays life equal to its toughness**."
         # (Essence Vortex.) Its own payload key rather than a reading of
@@ -436,7 +462,7 @@ def _lower_may(
     # payment creates it, and the ``then`` branch has none of its own to choose.
     if reflexive:
         payload["reflexive"] = reflexive
-    if not (action or then or otherwise or reflexive):
+    if not (action or then or otherwise or reflexive or payload.get("option_effects")):
         raise LoweringError("an optional action with no consequence", node=node)
     return (OracleInstruction("may", "", payload),)
 

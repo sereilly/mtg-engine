@@ -18,7 +18,8 @@ from ..shields import (
     make_whole_charge,
     make_whole_source,
 )
-from ._common import attached_host, resolve_amount, resolve_target_permanent
+from ._common import (attached_host, bound_permanent, resolve_amount,
+                      resolve_target_permanent)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -576,21 +577,35 @@ def prevent_damage_to_target_until_eot(game: Game, instruction: OracleInstructio
     # as well as unhurt, the other only unhurt.
     both_ends = bool(instruction.payload.get("to_and_by"))
     direction = COMBAT_SHIELD_BOTH if both_ends else COMBAT_SHIELD_TO
-    perm = resolve_target_permanent(
-        game, context,
-        predicate=lambda p: p.is_creature,
-        fallback_on_invalid_choice=False,
-    )
+    # Through the innermost binding, so a shield printed inside a loop is armed
+    # on the creature the iteration is on rather than on the first of the
+    # resolution's targets (Winter's Chill). Outside a loop `bound_permanent`
+    # *is* the target resolution this line has always done.
+    perm = bound_permanent(game, context, predicate=lambda p: p.is_creature)
     if perm is None:
         perm = context.source_permanent
     if perm is None:
         game.log.append(f"{context.card.name}: no permanent to shield")
         return True, "resolved"
-    add_directional_shield(perm, direction, combat_only=combat_only)
+    # "…this turn" (Maze of Ith) or "…**this combat**" (Winter's Chill). The
+    # window is payload, so the shield ends where the card says rather than
+    # where the only sweep that existed happened to run.
+    from ..shields import END_OF_COMBAT, END_OF_TURN
+
+    lifetime = (
+        END_OF_COMBAT
+        if instruction.payload.get("duration") == "end_of_combat"
+        else END_OF_TURN
+    )
+    add_directional_shield(
+        perm, direction, combat_only=combat_only, lifetime=lifetime,
+    )
     game.log.append(
         f"all {'combat ' if combat_only else ''}damage that would be dealt to "
         + ("and dealt by " if both_ends else "")
-        + f"{perm.card.name} this turn is prevented ({context.card.name})"
+        + f"{perm.card.name} "
+        + ("this combat" if lifetime == END_OF_COMBAT else "this turn")
+        + f" is prevented ({context.card.name})"
     )
     return True, "resolved"
 

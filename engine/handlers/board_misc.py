@@ -8,7 +8,8 @@ from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
 from ..land_types import MIRE_COUNTER, change_land_type
 from ..layer_bridge import GAINED_TYPES
 from ..models import CardDefinition, Permanent
-from ..oracle_types import X_FROM_COUNT_PER_RECIPIENT, OracleInstruction
+from ..oracle_types import (CHOSEN_TARGET_PERMANENTS,
+                            X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
 from ..exiled_records import source_object
 from ..named_counters import counters_on, remove_counters
 from ..pt import pt_counter_key, set_base_pt
@@ -16,7 +17,7 @@ from ..text_changes import LAND_TYPE_WORDS, change_color_word, change_land_word
 from ..tokens import (CREATED_TOKEN_RESULT_KEY, CREATED_WITH_PERMANENT_ID,
                      make_token_card, tokens_created_with)
 from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
-                      block_pair_permanents, evaluate_count,
+                      block_pair_permanents, bound_permanent, evaluate_count,
                       permanent_matches_filter,
                       resolve_amount, resolve_target_permanent,
                       resolve_target_permanents)
@@ -70,6 +71,38 @@ def choose_target_permanent(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
+@effect_handler("choose_target_permanents")
+def choose_target_permanents(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose X target attacking creatures." (Winter's Chill.)
+
+    The plural of :func:`choose_target_permanent`, and it records where that one
+    does not have to: the sentence behind a single choice reads the target off
+    the context the way every handler does, and a *set* has nowhere to be read
+    from — nothing about a board says which attacking creatures a spell named,
+    and by the time the loop runs one of them may no longer be attacking.
+
+    Each slot is re-checked against the printed noun phrase, which is CR 608.2b
+    at resolution: a creature that has left combat is no longer a legal target
+    and simply is not in the set. An empty set is a legal outcome (every target
+    illegal is refused above the instructions, in ``legality``), and the loop
+    behind this walks nothing.
+    """
+    described = dict((instruction.payload.get("targets") or {}).get("filter") or {})
+    chosen = resolve_target_permanents(
+        game, context,
+        predicate=lambda perm: permanent_matches_filter(perm, described),
+    )
+    context.results[CHOSEN_TARGET_PERMANENTS] = chosen
+    if not chosen:
+        game.log.append(f"{context.card.name} had no legal targets")
+        return True, "no target"
+    game.log.append(
+        f"{context.card.name} chose "
+        + ", ".join(perm.card.name for perm in chosen)
+    )
+    return True, "resolved"
+
+
 @effect_handler("create_delayed_trigger")
 def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """A resolving spell or ability creating a delayed triggered ability
@@ -112,7 +145,12 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
             )
             return True, "no object"
     if payload.get("binds_target"):
-        bound = resolve_target_permanent(game, context)
+        # The **innermost** binding, not the resolution's target list: inside
+        # "for each of those creatures, … destroy that creature at end of
+        # combat" (Winter's Chill) the ability is created once per creature and
+        # is about that one. Outside a loop this is the target the spell chose,
+        # which is every other card that arms one.
+        bound = bound_permanent(game, context)
         if bound is None:
             # The target is gone (CR 608.2b): there is nothing for the delayed
             # ability to be about, so none is created.

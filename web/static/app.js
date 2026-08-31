@@ -4225,22 +4225,38 @@ function applyOptionalPayPrompt(info) {
     // directly, so the prompt's own wording says what paying buys.
     setSymbolsHtml(body, `${cardName}: ${current?.prompt || `pay ${costText}?`}`);
   }
+  // "…may pay {1} **or {2}**. If that player doesn't, destroy that creature …
+  // If that player pays only {1}, prevent …" (Winter's Chill.) Each way of
+  // covering the offer buys something different, so the payer picks *which* and
+  // the index goes back with the answer. Every other offer sends no index at
+  // all: CR 118.8's alternatives are two ways to buy one consequence and the
+  // engine states which currency it spends.
+  const gradedOptions = Array.isArray(current?.graded_options) ? current.graded_options : [];
+  const payButtons = gradedOptions.length
+    ? gradedOptions.map(
+      (label, index) =>
+        `<button type="button" class="prompt-choice-btn" data-optional-pay="yes" ` +
+        `data-pay-option="${index}">Pay ${renderSymbolsInline(label)}</button>`,
+    )
+    : [`<button type="button" class="prompt-choice-btn" data-optional-pay="yes">${acceptLabel}</button>`];
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(cardName)}</div>`,
     `<div>Remaining decisions: ${pending.length}</div>`,
     `<div class="prompt-choice-row">` +
-      `<button type="button" class="prompt-choice-btn" data-optional-pay="yes">${acceptLabel}</button>` +
+      payButtons.join("") +
       `<button type="button" class="prompt-choice-btn" data-optional-pay="no">${declineLabel}</button>` +
       `</div>`,
   ].join("");
 
   steps.querySelectorAll("[data-optional-pay]").forEach((btn) => {
     btn.addEventListener("click", async () => {
+      const chosen = btn.dataset.payOption;
       await sendAction({
         seat,
         action: "resolve_optional_pay",
         card_name: cardName,
         accept: btn.dataset.optionalPay === "yes",
+        ...(chosen === undefined ? {} : { pay_option: Number(chosen) }),
       });
     });
   });
@@ -8096,7 +8112,10 @@ function renderActivationPrompt() {
     } else {
       if (pendingCastX.costString !== undefined) {
         const liveMax = getMaxAffordableX(me?.mana_pool, pendingCastX.costString, pendingCastX.costCard);
-        pendingCastX.maxX = Math.max(0, liveMax - Math.max(0, pendingCastX.extraTargetTax || 0));
+        pendingCastX.maxX = castXCeiling(
+          pendingCastX.card,
+          Math.max(0, liveMax - Math.max(0, pendingCastX.extraTargetTax || 0)),
+        );
       }
       const xColor = xSpendColorForCard(pendingCastX.card);
       const xColorName = xColor ? { W: "white", U: "blue", B: "black", R: "red", G: "green" }[xColor] : null;
@@ -10099,6 +10118,17 @@ function startActivationXPrompt(card, cardName, targetSeat, permanentIndex, abil
   renderActivationPrompt();
 }
 
+// CR 601.2b's printed bound: "X can't be greater than the number of snow lands
+// you control." (Winter's Chill.) The caster still announces X, so this narrows
+// the range of choices rather than removing the prompt the way `defined_x` does
+// — and the number is the *engine's*, reported on the target spec, because
+// counting a board is not something this browser can do. Returns the affordable
+// ceiling unchanged for every card that prints no bound.
+function castXCeiling(card, affordable) {
+  const bound = targetSpecOf(card)?.max_x;
+  return Number.isInteger(bound) ? Math.min(affordable, bound) : affordable;
+}
+
 function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAction = "cast", targetStackIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
@@ -10114,7 +10144,10 @@ function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAct
     manaRequirement: parseManaCostSymbols(card.mana_cost || ""),
     costString: card.mana_cost || "",
     costCard: card,
-    maxX: getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || "", card),
+    maxX: castXCeiling(
+      card,
+      getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || "", card),
+    ),
     awaitingCustomValue: false,
   };
   renderActivationPrompt();

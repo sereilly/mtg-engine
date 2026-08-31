@@ -473,6 +473,13 @@ class GameActionRequest(BaseModel):
     # Yes/No answer for an optional ("you may") trigger prompt, sent with the
     # `resolve_optional_trigger` action (true = let the trigger happen).
     accept: bool | None = None
+    # Which of a **graded** optional payment's printed costs is being paid, sent
+    # with `resolve_optional_pay` (Winter's Chill's "{1} or {2}", where the two
+    # buy different things). An index into the prompt's `graded_options`, in
+    # printed order. Omitted on every ordinary offer, where CR 118.8's
+    # alternatives are two ways to buy one consequence and the engine states
+    # which it spends.
+    pay_option: int | None = Field(default=None, ge=0)
     # Generic numeric amount for prompts that ask for one — e.g. how much mana to
     # pay with `pay_upkeep_prevention` (Power Leak: prevent that much damage).
     amount: int | None = Field(default=None, ge=0)

@@ -24,6 +24,7 @@ time -- which is the quiet failure this file exists to prevent.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
@@ -192,6 +193,106 @@ def _match_cast(line: str) -> tuple[re.Match, Callable[..., int | None]] | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# The cast **ceiling** (CR 601.2b)
+# ---------------------------------------------------------------------------
+#
+# A third table, and the third question. ``COST_X_DEFINITIONS`` and
+# ``CAST_X_DEFINITIONS`` both *take the announcement away* -- the card says what
+# X is and the player never picks. A ceiling does not: "X can't be greater than
+# the number of snow lands you control" (Winter's Chill) leaves CR 601.2b's
+# announcement exactly where it was and puts a **bound** on it. Folding the two
+# would be the difference between a spell whose X is fixed at the board's number
+# and one the caster may still cast for less, which on Winter's Chill is every
+# cast of it.
+#
+# The bound is enforced at the announcement, before any cost is paid, and it is
+# reported to the picker so the browser never offers an illegal number. A clause
+# parsed and dropped is a spell cast for more X than the board allows -- silent,
+# and in the caster's favour, which is the direction this file exists to stop.
+
+_X_CEILING_RE = re.compile(r"^x can't be greater than the number of (?P<board>.+)$")
+
+
+@lru_cache(maxsize=None)
+def cast_x_ceiling_line(line: str) -> "tuple[dict, str] | None":
+    """"X can't be greater than the number of snow lands you control."
+    (Winter's Chill.)
+
+    Returns ``(filter payload, the printed noun phrase)``, or None when the line
+    is not this bound or names a board the matcher cannot test.
+
+    The noun phrase goes through **the grammar's noun parser**, exactly as
+    ``cast_restrictions.cast_condition_line`` does one file over and for that
+    function's reason: ``subject_matches`` is what counts the board at every
+    cast, and a second reader of "snow lands you control" would be free to
+    disagree with it about what one is. A phrase carrying a key
+    ``subject_matches`` cannot test is refused rather than approximated -- a
+    dropped narrowing here *raises* the ceiling, which is the direction that
+    hands the caster a bigger spell than the card prints.
+    """
+    from .grammar.errors import GrammarError
+    from .grammar.lexer import tokenize
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+    from .subject_filters import untestable_filter_keys
+
+    match = _X_CEILING_RE.match(" ".join(line.lower().split()).strip(" ."))
+    if match is None:
+        return None
+    board = match.group("board")
+    stream = TokenStream(tokenize(board).tokens)
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    payload = described.to_payload()
+    if not payload or untestable_filter_keys(payload):
+        return None
+    return payload, board
+
+
+def caps_cast_x(oracle_text: str) -> bool:
+    """Whether any line of *oracle_text* bounds the X the caster may announce.
+
+    The gate's half of the question, split from :func:`cast_x_ceiling` for
+    :func:`defines_cast_x`'s reason: "this card prints no bound" and "it prints
+    one this cast cannot count" are different answers, and only the first of
+    them means the caster may announce whatever they like.
+    """
+    return any(
+        cast_x_ceiling_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    )
+
+
+def cast_x_ceiling(game, caster_index: int, oracle_text: str) -> "tuple[int, str] | None":
+    """The largest X *caster_index* may announce for this card, with the printed
+    noun phrase that bounds it -- or None when the card prints no bound.
+
+    CR 109.5's observer is the casting seat, so a "you" inside the noun phrase
+    means the same player the announcement does. Counted over the whole board
+    rather than over the caster's own permanents, because the seat is the
+    phrase's to state: a bound naming what an *opponent* controls is the same
+    sentence and must not be silently re-seated.
+    """
+    from .subject_filters import subject_matches
+
+    for line in (oracle_text or "").splitlines():
+        read = cast_x_ceiling_line(line)
+        if read is None:
+            continue
+        payload, board = read
+        return sum(
+            1
+            for perm in game.all_permanents()
+            if subject_matches(game, perm, payload, observer=caster_index)
+        ), board
+    return None
+
+
 def cost_x_definition_readable(sentence: str) -> bool:
     """Whether a row implements this printed "X is ..." sentence.
 
@@ -250,6 +351,9 @@ def _match(sentence: str) -> tuple[re.Match, Callable[..., int]] | None:
 __all__ = [
     "CAST_X_DEFINITIONS",
     "COST_X_DEFINITIONS",
+    "caps_cast_x",
+    "cast_x_ceiling",
+    "cast_x_ceiling_line",
     "cast_x_definition_line",
     "defines_cast_x",
     "cast_x_value",

@@ -1036,12 +1036,14 @@ def _offered_seats(
         # which for a spell that targets a creature is not a player at all.
         # With the target gone by resolution there is nobody to offer, and the
         # caller's ``otherwise`` branch has nothing left to destroy either.
-        from ._common import resolve_target_permanent
+        #
+        # The innermost binding, for `bound_permanent`'s stated reason: inside
+        # "for each of those creatures, **its controller** may pay {1} or {2}"
+        # (Winter's Chill) the possessive names the creature the iteration is
+        # on, and the resolution's own target list is all of them at once.
+        from ._common import bound_permanent
 
-        perm = resolve_target_permanent(
-            game, context, predicate=lambda p: True,
-            fallback_on_invalid_choice=False,
-        )
+        perm = bound_permanent(game, context, predicate=lambda p: True)
         if perm is None:
             return []
         seat = game.controller_index_of(perm)
@@ -1097,6 +1099,15 @@ def _offer_to_seat(
     (``grammar/lowering/control_flow._each_player_optional_discard``).
     """
     player = game.players[player_index]
+    # **The offer is about the board as it stands now**, and the entry outlives
+    # this call: an ``optional_pay`` does not suspend its loop, so "for each of
+    # those creatures, its controller may pay …" (Winter's Chill) arms every
+    # prompt before any is answered, and by then the loop has moved on and
+    # restored the iteration it was on. The context is a dataclass, so a replace
+    # freezes the per-iteration binding while leaving the resolution's
+    # scratchpad shared by reference — which is exactly CR 608.2h's split
+    # between what an offer was about and what the resolution knows.
+    context = dataclasses.replace(context)
     if rebind:
         # **Both ends of the sentence move to the offered seat.** ``target`` is
         # what a back-reference to a player reads ("that player's life total
@@ -1167,10 +1178,18 @@ def _offer_to_seat(
             _run(game, on_decline, context)
         return
 
+    # "…may pay {1} **or {2}**. If that player doesn't, … If that player pays
+    # only {1}, …" (Winter's Chill.) What each option buys, index-aligned with
+    # `[cost] + cost_alternatives`. Private, because the values are
+    # instructions; the prompt renders the *costs*, which are already public.
+    option_effects = [
+        tuple(steps) for steps in (instruction.payload.get("option_effects") or ())
+    ]
     entry = {
         "card_name": context.card.name,
         "cost": cost,
         "cost_alternatives": alternatives,
+        "_option_effects": option_effects,
         "life_cost": life_cost,
         "life": 0,
         "_source_permanent": context.source_permanent,
@@ -1187,6 +1206,16 @@ def _offer_to_seat(
     life_alternative = int(instruction.payload.get("life_alternative", 0) or 0)
     if life_alternative:
         entry["life_alternative"] = life_alternative
+    if option_effects:
+        # The payer is *choosing* between the printed costs rather than covering
+        # one offer whichever way they can, so the prompt has to offer them one
+        # by one and send back which. The labels are what the client shows; the
+        # index is the answer, and it means the same thing on both sides because
+        # `pending_choices.optional_pay_options` builds the list in printed order
+        # for every reader.
+        entry["graded_options"] = [
+            mana_cost_label(option) for option in (cost, *alternatives)
+        ]
     if cost:
         printed = " or ".join(
             mana_cost_label(option) for option in (cost, *alternatives)

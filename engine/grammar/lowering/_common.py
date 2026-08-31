@@ -747,6 +747,13 @@ def _full_mana_payload(cost: ast.ManaCost) -> dict[str, int]:
 # duration (or none) is not.
 _REST_OF_TURN = ("this_turn", "until_end_of_turn")
 
+#: The same pair one phase down: "this combat" and "until end of combat" are two
+#: printed spellings of CR 511's window, and a shield or a grant that reads one
+#: and refuses the other would be a card failing on its printing rather than on
+#: its effect. Beside ``_REST_OF_TURN`` and not inside the prevention family,
+#: for that constant's own stated reason.
+_REST_OF_COMBAT = ("this_combat", "until_end_of_combat")
+
 
 def chargeable_tap_filter(filt: "ast.ObjectFilter") -> dict | None:
     """The payload a "Tap N <noun phrase>" cost charges, or None to refuse it.

@@ -24,7 +24,8 @@ what a step of that kind always writes when it does.
 
 from __future__ import annotations
 
-from ...oracle_types import HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS
+from ...oracle_types import (CHOSEN_TARGET_PERMANENTS,
+                             HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS)
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       CREATED_TOKEN, DAMAGE_RECIPIENT, EXILED_THIS_WAY,
                       _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS)
@@ -133,6 +134,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # place the next sentence can read that set from: nothing about a hand
     # says which of its cards an earlier step named.
     "choose_cards_in_hand": "chosen_hand_cards",
+    # "Choose X target attacking creatures. **For each of those creatures**, …"
+    # (Winter's Chill.) The same shape one zone over: the choice records the set
+    # it named, which is the only place the loop behind it can read it from —
+    # nothing about a board says which attacking creatures a spell targeted, and
+    # by the time the loop runs one of them may have left combat.
+    "choose_target_permanents": CHOSEN_TARGET_PERMANENTS,
     # "Remove any number of +1/+1 counters … create **that many** … tokens"
     # (Tetravus). The removal records how many it took, under the key the token
     # maker's "that many" already reads.

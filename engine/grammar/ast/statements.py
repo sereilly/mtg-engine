@@ -320,6 +320,22 @@ class May:
     #: A tuple because the rule puts no limit on how many a card may print, and
     #: the payer covers the offer with whichever of them they can.
     cost_alternatives: tuple["ManaCost", ...] = ()
+    #: What each way of covering the offer *buys*, index-aligned with
+    #: ``(cost, *cost_alternatives)``. Empty — every card but one — means the
+    #: alternatives are readings of one offer with one consequence, which is
+    #: what CR 118.8 is normally used for.
+    #:
+    #: "…may pay {1} or {2}. **If that player doesn't**, destroy that creature
+    #: at end of combat. **If that player pays only {1}**, prevent all combat
+    #: damage …" (Winter's Chill.) Three outcomes, so the payer is choosing
+    #: between the options and not merely finding one they can afford — and the
+    #: engine has to report *which* was taken. A second ``May`` per option would
+    #: be a second prompt and a second decline branch, and declining the first
+    #: would destroy the creature before the second was ever offered.
+    #:
+    #: An entry may be None, which is the option that buys nothing but the
+    #: absence of ``otherwise``.
+    option_effects: tuple["Statement | None", ...] = ()
     #: "…unless its controller **pays life equal to its toughness**." (Essence
     #: Vortex.) A life cost with no mana alternative at all, which is a
     #: different field from ``life_alternative`` above for the reason

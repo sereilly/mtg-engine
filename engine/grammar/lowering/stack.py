@@ -16,8 +16,10 @@ from ..errors import LoweringError
 from .conditions import _lower_condition
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
+    _describe_several_targets,
     _describe_targets,
     _filter_payload,
+    _names_several_targets,
     _restrictions_beyond,
     is_mana_value_x,
 )
@@ -556,6 +558,16 @@ def _lower_choose_target(node: ast.ChooseTarget) -> tuple[OracleInstruction, ...
     picker comes from — the alternative is a second reading of the oracle text.
     """
     payload: dict[str, object] = {}
+    if _names_several_targets(node.subject):
+        # "Choose **X target attacking creatures**." (Winter's Chill.) A *set*,
+        # and a different instruction rather than the same one with a count:
+        # the singular handler resolves one permanent and the loop behind this
+        # sentence has to walk every one of them, so the several-target form
+        # records what it chose. Recording is the whole of what it does — the
+        # targets were chosen as the spell was cast (CR 601.2c) — but nothing
+        # else in the resolution can say which attacking creatures those were.
+        _describe_several_targets(payload, node.subject)
+        return (OracleInstruction("choose_target_permanents", "", payload),)
     _describe_targets(payload, node.subject)
     if "targets" not in payload:
         raise LoweringError("this 'choose' names no target", node=node)

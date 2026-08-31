@@ -69,6 +69,8 @@ from .models import PlayerState
 from .named_counters import add_counters, counters_on, remove_counters
 from .pt import remove_plus1_counters
 from .shields import (
+    END_OF_COMBAT as SHIELD_END_OF_COMBAT,
+    END_OF_TURN as SHIELD_END_OF_TURN,
     PREVENT_ALL_BUT,
     PREVENT_AND_GAIN_LIFE,
     PREVENT_HALF,
@@ -296,18 +298,58 @@ COMBAT_SHIELD_BOTH = "to_and_by"
 _COMBAT_SHIELD_DIRECTION_KEY = "prevent_combat_damage_direction_until_eot"
 
 
-def add_directional_shield(perm, direction: str, *, combat_only: bool) -> None:
-    """Shield *perm* in *direction* for the rest of the turn (CR 615.1).
+def add_directional_shield(
+    perm, direction: str, *, combat_only: bool, lifetime: str = SHIELD_END_OF_TURN,
+) -> None:
+    """Shield *perm* in *direction* until *lifetime* ends (CR 615.1).
 
     *combat_only* is the printed word "combat": True covers combat damage
     alone, False covers damage of every kind. Duplicate records are folded, so
     two resolutions of the same effect leave one entry.
+
+    *lifetime* is the printed window, and it is a third element of the entry for
+    the reason ``combat_only`` is the second: **how long the shield lasts is
+    payload**. "…dealt to and dealt by that creature **this turn**" (Ebony
+    Horse, Maze of Ith) and "…**this combat**" (Winter's Chill) are the same
+    sentence four characters apart, and a card whose shield outlived its combat
+    would go on preventing through a second combat phase the card never
+    mentions. It takes the same two words ``engine/shields.py`` gives every
+    other shield, so the two sweeps that already run — end of combat, and
+    cleanup — are the two that end these.
     """
     record = [list(entry) for entry in (perm.metadata.get(_COMBAT_SHIELD_DIRECTION_KEY) or ())]
-    entry = [str(direction), bool(combat_only)]
+    entry = [str(direction), bool(combat_only), str(lifetime)]
     if entry not in record:
         record.append(entry)
     perm.metadata[_COMBAT_SHIELD_DIRECTION_KEY] = record
+
+
+def clear_directional_shields(perm, lifetime: str) -> None:
+    """Drop *perm*'s directional shields whose window is *lifetime*.
+
+    The twin of ``shields.clear_shields`` for the marker form, called from the
+    same end-of-combat sweep — so "this combat" is implemented by *having a
+    sweep* rather than by the phrase being read and then forgotten. The
+    end-of-turn entries are left to ``_EOT_METADATA_KEYS``, which has always
+    cleared the whole key at cleanup.
+    """
+    metadata = getattr(perm, "metadata", None)
+    if not metadata:
+        return
+    kept = [
+        list(entry) for entry in (metadata.get(_COMBAT_SHIELD_DIRECTION_KEY) or ())
+        if _shield_lifetime(entry) != lifetime
+    ]
+    if kept:
+        metadata[_COMBAT_SHIELD_DIRECTION_KEY] = kept
+    else:
+        metadata.pop(_COMBAT_SHIELD_DIRECTION_KEY, None)
+
+
+def _shield_lifetime(entry) -> str:
+    """One directional record's window. Entries written before the window was
+    payload carry two elements and mean the rest of the turn."""
+    return str(entry[2]) if len(entry) > 2 else SHIELD_END_OF_TURN
 
 #: The Aura form (Gaseous Form, Demonic Torment). Not a marker at all - it is
 #: read off the attached Aura's own text at the moment damage would be dealt,
@@ -365,7 +407,7 @@ def _shield_directions(perm, *, combat: bool) -> frozenset[str]:
         return frozenset()
     directions: set[str] = set()
     for entry in metadata.get(_COMBAT_SHIELD_DIRECTION_KEY) or ():
-        direction, combat_only = entry
+        direction, combat_only = entry[0], entry[1]
         if combat_only and not combat:
             # "Prevent all **combat** damage …": a shield that ignored the word
             # would stop the creature's ping ability as well, which is a
