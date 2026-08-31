@@ -146,7 +146,16 @@ LOWER_LAYERS = ["lowering", "statics", "lower"]
 # consequence rather than the counter itself. The one fragment the two families
 # shared, `_expect_counter_kind`, went down into `phrases` rather than staying
 # with either — a production two families need has no home inside one of them.
-EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "control_changes", "prevention", "counters"]
+# `tapping` joined the parse side when `effects/board.py` reached the size
+# guard, reusing the name `lowering/tapping.py` had carried since it left the
+# same family one package over — the third time the mirror has re-formed rather
+# than forked, after `prevention` and `counters`. The line is the one the
+# lowering side already drew: tapping is a keyword action on one permanent
+# (CR 701.20) and "doesn't untap during its controller's next untap step" is
+# what a card prints beside it, where the rest of `board` destroys, bounces,
+# sacrifices or attaches. The two families share no fragment — `parse_recipient`
+# and `parse_bound_subject` are `references` and `phrases`, one level down.
+EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "control_changes", "prevention", "counters", "tapping"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -221,9 +230,16 @@ LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", 
 # `PlayerGetsCounters` are three nodes beside the characteristics ones, and the
 # guards that made `counters` a family on the other two sides fired on the
 # lowerings and then, a set later, on the productions — never on the inventory.
+# `tapping` is the fifth, and the same reason a fifth time: `Tap`, `Untap`,
+# `TapOrUntap`, `DoesntUntapNextStep` and `DoesntUntapWhileSourceTapped` are
+# five nodes that sit perfectly well beside the board ones, and the guard that
+# made `tapping` a family on the other two sides fired on the lowerings and
+# then, four sets later, on the productions - never on the inventory.
 AST_FAMILIES = [
     family for family in EFFECT_FAMILIES
-    if family not in ("library", "control_changes", "prevention", "counters")
+    if family not in (
+        "library", "control_changes", "prevention", "counters", "tapping",
+    )
 ]
 
 
