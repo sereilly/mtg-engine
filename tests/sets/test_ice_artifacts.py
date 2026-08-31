@@ -372,27 +372,55 @@ def test_w1g3_a_jeweled_amulet_that_noted_nothing_adds_nothing(set_pool):
 
 
 def test_w1g3_ice_cauldron_is_declined_and_says_which_pieces_are_missing(set_pool):
-    """Ice Cauldron shares Jeweled Amulet's note-the-mana machinery and two
-    pieces neither this round nor the engine has:
+    """Ice Cauldron shares Jeweled Amulet's note-the-mana machinery. What it
+    still needs is three pieces, each checked here so the next round has
+    something to build against rather than the word "complex":
 
-    * "You may cast that card for as long as it remains exiled" — a casting
-      permission scoped to one exiled *card object*, with a lifetime nothing
-      sweeps;
-    * "Spend this mana only to cast the last card exiled with this artifact" —
-      a ``restricted_mana`` predicate over one object rather than over a card
-      type, which the bucket key (a string) cannot name.
+    1. "**You may exile a nonland card from your hand**" — an *optional* exile
+       out of a hand; the exile lowering refuses with "only a single chosen
+       permanent or card is exiled".
+    2. "**You may cast that card for as long as it remains exiled**" — no
+       production at all: a casting permission scoped to one exiled *card
+       object*, with a lifetime nothing sweeps. ``cast_permissions`` keys its
+       grants by printed text and by zone, never by object.
+    3. "**Spend this mana only to cast the last card exiled with this
+       artifact**" — a ``restricted_mana`` row whose predicate names one card
+       object. The buckets are keyed by a *string* and the predicate reads a
+       ``PaymentPurpose``, so a per-object restriction has no representation.
 
-    Declined rather than half-built: the note and the counter restriction are
-    real, and admitting the card on them would give it an "add this artifact's
-    last noted type and amount of mana" with the restriction dropped — mana more
-    freely spendable than the card allows.
+    Declined rather than half-built: the two halves that do work are real, and
+    admitting the card on them would give it "add this artifact's last noted
+    type and amount of mana" with the restriction dropped — mana more freely
+    spendable than the card allows.
     """
-    program = compile_card_oracle(set_pool("ICE")["Ice Cauldron"])
-
-    assert not program.supported
+    from engine.grammar import compile_line
     from engine.restricted_mana import mana_restriction_for
+
+    program = compile_card_oracle(set_pool("ICE")["Ice Cauldron"])
+    assert not program.supported
+
+    optional_exile = compile_line("{X}, {T}: You may exile a nonland card from your hand.")
+    assert not optional_exile.lowered
+    assert "exiled" in (optional_exile.lowering_error or "")
+
+    permission = compile_line("You may cast that card for as long as it remains exiled.")
+    assert not permission.parsed
 
     assert mana_restriction_for(
         "Spend this mana only to cast the last card exiled with this artifact."
     ) is None
+
+    # …and the two halves this round did buy, so a later round can see which
+    # parts it does not have to rebuild.
+    noted = compile_line(
+        "{X}, {T}: Put a charge counter on this artifact and note the type and "
+        "amount of mana spent to pay this activation cost. Activate only if "
+        "there are no charge counters on this artifact."
+    )
+    assert noted.lowered
+    added = compile_line(
+        "{T}, Remove a charge counter from this artifact: Add this artifact's "
+        "last noted type and amount of mana."
+    )
+    assert added.lowered
 # --- end W1G3 ---

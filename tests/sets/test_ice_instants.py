@@ -535,4 +535,48 @@ def test_w1g3_essence_vortex_offers_the_creature_as_a_cast_target(set_pool):
     card = pool["Essence Vortex"]
 
     assert derive_cast_spec(card, compile_card_oracle(card)) == {"kind": "creature"}
+
+
+# --- W1G3 (cont.): the one declined instant, with its pieces named ---
+def test_w1g3_spoils_of_evil_is_declined_and_says_which_pieces_are_missing(set_pool):
+    """"For each artifact or creature card in target opponent's graveyard, add
+    {C} and you gain 1 life."
+
+    Five pieces. The refusal site says "expected a subject", which is the
+    generic no-production message and names none of them:
+
+    1. There is no leading ``For each <noun phrase>, <effect>`` production at
+       all. The two that exist are a counter placement
+       (``effects/counters``) and the "for each creature that died this way"
+       back-reference (``statements``); a bare sentence opening with "for" has
+       no reading.
+    2. The *trailing* spelling that does exist ("Add {C} for each …") reads only
+       the caster's own zone: "in **target opponent's** graveyard" leaves
+       unconsumed text where "in your graveyard" parses.
+    3. ``lowering/mana._lower_add_mana``'s per-each branch refuses any owner but
+       "you" — "the mana multiplier counts the producer's own board".
+    4. The loop body is two effects joined by "and", and
+       ``handlers/control_flow.for_each`` iterates battlefield permanents or a
+       set an earlier step recorded. Cards in a graveyard are neither, so even a
+       parsed loop would have nothing to walk.
+    5. The spell targets a **player**, and with no instruction describing one
+       ``targeting.derive_cast_spec`` gives the picker nothing to ask for.
+    """
+    from engine.grammar import compile_line
+
+    assert not compile_card_oracle(set_pool("ICE")["Spoils of Evil"]).supported
+
+    # Piece 1: the leading form has no production.
+    leading = compile_line(
+        "For each artifact or creature card in target opponent's graveyard, "
+        "add {C} and you gain 1 life."
+    )
+    assert not leading.parsed
+
+    # Piece 2: the trailing form reads the caster's zone and only that one.
+    assert compile_line("Add {C} for each creature card in your graveyard.").lowered
+    theirs = compile_line(
+        "Add {C} for each artifact or creature card in target opponent's graveyard."
+    )
+    assert not theirs.parsed
 # --- end W1G3 ---

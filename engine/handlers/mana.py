@@ -117,14 +117,20 @@ def _split_mana_combination(
         return {}
     named = (context.choices or {}).get("mana_combination")
     if isinstance(named, dict):
+        try:
+            wanted = {symbol: int(amount) for symbol, amount in named.items()}
+        except (TypeError, ValueError):
+            wanted = {}
         split = {
-            symbol: int(amount)
-            for symbol, amount in named.items()
-            if symbol in symbols and int(amount) >= 0
+            symbol: amount
+            for symbol, amount in wanted.items()
+            if symbol in symbols and amount >= 0
         }
-        if sum(split.values()) == total and len(split) == len(
-            [1 for amount in named.values() if int(amount) >= 0]
-        ):
+        # Accepted whole or not at all: the same keys, no negative unit, and the
+        # printed total exactly. A split naming a symbol the clause does not
+        # list, or adding up to something else, is a split that was never
+        # offered — part-applying it would make mana out of a malformed answer.
+        if split == wanted and sum(split.values()) == total:
             return split
     return {chosen if chosen in symbols else symbols[0]: total}
 

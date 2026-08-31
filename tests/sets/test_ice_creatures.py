@@ -1603,4 +1603,46 @@ def test_w1g3_krovikan_sorcerer_discards_one_of_the_two_it_drew(set_pool):
     hand = game.players[0].hand
     eligible = game.live_discard_candidates(choice)
     assert [hand[i].name for i in eligible] == ["Glacial Wall", "Arnjlot's Ascent"]
+
+
+def test_w1g3_a_single_symbol_choice_also_lands_in_the_restricted_bucket(set_pool):
+    """The sibling branch Adarkar Unicorn's shape exposed.
+
+    "Add {B} or {R}" lowers to ``pips_choice``, and its lowering has always
+    carried ``spend_only`` beside it — but the handler branch wrote straight
+    into ``mana_pool`` and never asked. No card in the pool prints the pair
+    today, which is exactly why the miss was invisible: had the Unicorn been
+    printed "Add {U} or {C}" instead of "{U} or {C}{U}", it would have gone down
+    that branch and made unrestricted mana while reporting itself supported.
+
+    Named through the Unicorn's own restriction key so the two branches are held
+    to one answer.
+    """
+    from engine.game_types import OracleExecutionContext
+    from engine.grammar import compile_line
+    from engine.handlers.registry import EFFECT_HANDLERS
+
+    unicorn = set_pool("ICE")["Adarkar Unicorn"]
+    key = compile_card_oracle(unicorn).activated_abilities[0].instruction.payload[
+        "spend_only"
+    ]
+
+    line = compile_line(
+        "{T}: Add {B} or {R}. Spend this mana only to pay cumulative upkeep costs."
+    )
+    instruction = line.instructions[0]
+    assert instruction.payload["pips_choice"] == (("B", 1), ("R", 1))
+    assert instruction.payload["spend_only"] == key
+
+    game, _ = _w1g3_board(set_pool, "Adarkar Unicorn")
+    EFFECT_HANDLERS[instruction.kind](
+        game, instruction,
+        OracleExecutionContext(
+            caster=game.players[0], target=game.players[1], card=unicorn,
+        ),
+    )
+
+    assert game.players[0].mana_pool["B"] == 0
+    assert game.players[0].restricted_mana[key] == {"B": 1}
+
 # --- end W1G3 ---
