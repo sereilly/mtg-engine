@@ -146,6 +146,19 @@ DELAYED_EVENTS: dict[str, str] = {
     # asks the card matcher for it. Repeating, with "until end of turn" as
     # CR 603.7b's stated duration.
     "you_cast_spell": "the cast announcement in mixins/oracle_instructions.py",
+    # "Until end of turn, … **whenever a player taps a Mountain for mana**, that
+    # player adds an additional {R}." (Chaos Moon's odd branch.) Gauntlet of
+    # Might prints the same triggered mana ability as a static of its own; this
+    # is that ability created for a turn, so it is the same event announced from
+    # the same seam.
+    #
+    # The one entry in this table whose fire site does **not** put the ability
+    # on the stack, and the rules say so rather than the engine: CR 605.4a makes
+    # a triggered mana ability resolve without using the stack, and the rule's
+    # own example is this clause. See ``matching_delayed_triggers`` — the
+    # enumeration half that exists so a site can resolve an entry where it
+    # stands instead of enqueuing it.
+    "land_tapped_for_mana": "the tap-for-mana seam in mixins/turn_management.py",
 }
 
 
@@ -353,6 +366,54 @@ def arm_delayed_trigger(game: "Game", trigger: DelayedTrigger) -> DelayedTrigger
     return trigger
 
 
+def matching_delayed_triggers(
+    game: "Game",
+    event: str,
+    *,
+    subject: "Permanent | None" = None,
+    agent: "Permanent | None" = None,
+    seat: int | None = None,
+) -> list[DelayedTrigger]:
+    """Every armed ability answering to *event*, with the one-shot ones already
+    taken off the waiting list.
+
+    The half of :func:`fire_delayed_triggers` that is *not* about the stack, and
+    it is separate because one event's abilities do not use it. CR 605.4a: a
+    triggered mana ability resolves without using the stack, so the tap-for-mana
+    seam has to resolve the entries where it stands — and everything before that
+    point (whose ability it is, whether it answers to this object, and CR
+    603.7b's "will trigger only once") is the same question the stack path asks.
+    A second copy of it in the seam is the second-copy bug this codebase keeps
+    finding; one that skipped the ``once`` bookkeeping would be an ability that
+    fires forever.
+
+    *seat* narrows to abilities controlled by one player, which is what "**your**
+    next main phase" means: the phase belongs to the active player, and an entry
+    armed by their opponent is not waiting for this one.
+
+    A ``once`` entry is removed **before** the caller does anything with it, so
+    an effect that re-announces the same event while resolving cannot fire it
+    twice.
+    """
+    if not game.delayed_triggers:
+        return []
+    fired: list[DelayedTrigger] = []
+    for entry in list(game.delayed_triggers):
+        if seat is not None and entry.controller_index != seat:
+            continue
+        if not entry.matches(game, event, subject, agent):
+            continue
+        if entry.instruction is None:
+            continue
+        fired.append(entry)
+    if fired:
+        game.delayed_triggers = [
+            entry for entry in game.delayed_triggers
+            if not (entry.once and entry in fired)
+        ]
+    return fired
+
+
 def fire_delayed_triggers(
     game: "Game",
     event: str,
@@ -364,7 +425,11 @@ def fire_delayed_triggers(
     trigger_context: dict | None = None,
 ) -> int:
     """Announce *event*, putting every delayed ability waiting for it onto the
-    stack (CR 603.3 — never inline). Returns how many fired.
+    stack (CR 603.3). Returns how many fired.
+
+    Not every event reaches the stack: CR 605.4a exempts a triggered mana
+    ability, and the tap-for-mana seam resolves its entries inline through
+    :func:`matching_delayed_triggers` instead of calling this.
 
     *seat* narrows to abilities controlled by one player, which is what "**your**
     next main phase" means: the phase belongs to the active player, and an
@@ -373,23 +438,11 @@ def fire_delayed_triggers(
     A ``once`` entry is removed **before** the batch is enqueued, so an effect
     that re-announces the same event while resolving cannot fire it twice.
     """
-    if not game.delayed_triggers:
-        return 0
-    fired: list[DelayedTrigger] = []
-    for entry in list(game.delayed_triggers):
-        if seat is not None and entry.controller_index != seat:
-            continue
-        if not entry.matches(game, event, subject, agent):
-            continue
-        if entry.instruction is None:
-            continue
-        fired.append(entry)
+    fired = matching_delayed_triggers(
+        game, event, subject=subject, agent=agent, seat=seat
+    )
     if not fired:
         return 0
-    game.delayed_triggers = [
-        entry for entry in game.delayed_triggers
-        if not (entry.once and entry in fired)
-    ]
     game._enqueue_triggered_batch([
         entry.trigger_event(
             # CR 603.7d: the source of a delayed ability is the source of the

@@ -597,6 +597,13 @@ def _lower_create_delayed_trigger(
         )
     if not effect:
         raise LoweringError("this delayed ability has no effect", node=node)
+    if node.duration is None:
+        # The opener printed no window and no leading duration supplied one. A
+        # repeating ability with no duration is CR 603.7b's other reading —
+        # "will trigger only once" — and taking it silently would be a card
+        # that fires once where it prints "whenever". Refusing leaves the line's
+        # refusal instead.
+        raise LoweringError("this delayed ability states no duration", node=node)
     # Several sentences behind one delay are one ability's effect, so they
     # compose the way every other multi-step effect does (CR 608.2) rather than
     # becoming several abilities.

@@ -196,6 +196,15 @@ GRAMMAR_CATEGORIES: frozenset[str] = frozenset(
         # with the productions: with no fallback underneath, a category left off
         # costs the card its support rather than routing its lines elsewhere.
         "chosen_players",
+        # "Count the number of permanents." (Chaos Moon.) CR 107.1's number,
+        # recorded for the sentences behind it. Its own category for the reason
+        # the coin flip and the chosen number have theirs: what is recorded and
+        # what reads it back are different questions, and one switch must not be
+        # able to gate half of a three-sentence card off. Switched on with the
+        # production, because with no fallback underneath the grammar a category
+        # left off costs the card its support rather than routing its line
+        # elsewhere.
+        "counted_numbers",
     }
 )
 

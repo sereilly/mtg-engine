@@ -234,6 +234,15 @@ class ProducesManaInstead:
     #: seat's whole class of lands against one named object, which is why the
     #: record they arm hangs off different things.
     by_controller: bool = False
+    #: "**a player** taps a Mountain for mana" (Chaos Moon) against "**you** tap
+    #: a land you control" (Deep Water). Which seats the swap covers, read off
+    #: the printed subject rather than inferred from the noun phrase's "you
+    #: control": the two are separate words and a card could print either
+    #: without the other, and inferring one from the other is how a swap ends up
+    #: covering an opponent's board or missing it. The record still hangs off a
+    #: seat — this says the effect arms one on **every** seat, so each player's
+    #: own lands are covered by their own record.
+    each_player: bool = False
 
 
 @dataclass(frozen=True)

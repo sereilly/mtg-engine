@@ -340,6 +340,21 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # the can't-branch is exactly what should run.
         return not happened if payload.get("negated") else happened
 
+    if kind == "counted_number":
+        # "**If the number** is odd, …" (Chaos Moon.) The number the count in
+        # front of this recorded, never a second count of the board: the two
+        # branches are one question asked once, and re-counting here would let a
+        # board that changed between them answer both or neither.
+        #
+        # An absent record is False for either parity rather than a guess — the
+        # lowering refuses a back-reference with no count in front of it, so
+        # this is unreachable from a compiled card.
+        if "counted_number" not in context.results:
+            return False
+        return _compare_count(
+            int(context.results["counted_number"]), str(payload.get("op", "")), None
+        )
+
     if kind == "coin_flip":
         # CR 705.2. The flip recorded its result; asking again would flip a
         # second coin, so a card printing both branches could win *and* lose.
@@ -635,6 +650,43 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         )
 
     return False
+
+
+@effect_handler("count_objects")
+def count_objects(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Count the number of permanents." (Chaos Moon.) CR 107.1's number, taken
+    once and written into this resolution's scratchpad.
+
+    Nothing on any board changes. The two sentences after it read the record
+    through ``if_then``'s ``counted_number`` condition, which is what makes
+    "If the number is odd, … If the number is even, …" *one* count rather than
+    two — and, on this card, what keeps the second branch from being read as
+    CR 603.4's intervening "if" and gating the whole ability on the first.
+
+    Every battlefield, not the controller's: "permanents" names every object in
+    the zone whoever controls it (CR 110.1). A narrower phrase travels as the
+    filter payload and is asked through ``subject_matches``, with the ability's
+    controller as CR 109.5's observer, so a narrowing that needs the layers is
+    answered rather than dropped.
+
+    A control-flow handler rather than a board one for ``flip_coin``'s reason:
+    the count has no effect of its own — it is the value the conditionals behind
+    it branch on.
+    """
+    from ..subject_filters import subject_matches
+
+    filters = instruction.payload.get("filter") or {}
+    observer = game.players.index(context.caster) if context.caster in game.players else None
+    counted = sum(
+        1 for perm in game.all_permanents()
+        if subject_matches(game, perm, filters, observer=observer,
+                           source=context.source_permanent)
+    )
+    context.results[str(instruction.payload.get("result_key") or "counted_number")] = counted
+    game.log.append(
+        f"{getattr(context.card, 'name', 'an effect')}: counted {counted}"
+    )
+    return True, "resolved"
 
 
 @effect_handler("flip_coin")

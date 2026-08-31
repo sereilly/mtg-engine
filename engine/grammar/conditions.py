@@ -298,6 +298,19 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             )
     stream.reset(zone_mark)
 
+    # "if **the number is odd**" (Chaos Moon). The parity below with the noun
+    # phrase replaced by a back-reference: the number is whatever the "Count the
+    # number of permanents." sentence in front of it recorded, so nothing is
+    # counted here at all. Read *before* that branch, whose phrase this one is a
+    # prefix of — "the number of" would consume "the number" and then fail on
+    # "is", taking the line with it.
+    counted_mark = stream.mark()
+    if stream.accept_phrase("the", "number", "is"):
+        for word in ("even", "odd"):
+            if stream.accept_word(word):
+                return ast.CountedNumber(ast.Comparison(word, ast.Fixed(0)))
+    stream.reset(counted_mark)
+
     # "if **the number of permanents is even**" (Chaos Lord). The same board
     # count as the branch above, compared by *parity* rather than against a
     # threshold — so it is the same node with a different operator, not a

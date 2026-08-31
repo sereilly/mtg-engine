@@ -24,6 +24,7 @@ from ._common import (
 from ._events import (
     _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
+    COUNTED_NUMBER,
     DAMAGE_RECIPIENT,
     EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
@@ -917,5 +918,37 @@ def _lower_damage_this_game_history(
         OracleInstruction(
             "deal_damage_to_those_damaged_this_game", "",
             {"amount": _amount_payload(node.amount), "classes": list(node.classes)},
+        ),
+    )
+
+
+def _lower_count_objects(node: ast.CountObjects) -> tuple[OracleInstruction, ...]:
+    """"Count the number of permanents." (Chaos Moon.)
+
+    Nothing happens on any board: the whole of what the step does is write
+    CR 107.1's number into the resolution scratchpad under
+    ``COUNTED_NUMBER``, which ``_records._PRODUCES`` declares and the
+    "if the number is odd" condition behind it reads. The same shape
+    ``flip_coin`` and ``choose_player_who_cast`` have, and for their reason —
+    what the value is *for* is the next sentence, not this one.
+
+    What is counted travels as a filter payload, so a card counting something
+    narrower than the whole board is this production with a different noun
+    phrase. It is held to what ``subject_matches`` can test, for the reason
+    every filter in this engine is: a restriction the matcher drops is a count
+    over strictly more objects than the card names, and the number it produces
+    then decides a branch.
+    """
+    from ...subject_filters import untestable_filter_keys
+
+    described = _filter_payload(node.filter)
+    untestable = untestable_filter_keys(described)
+    if untestable:
+        raise LoweringError(
+            "a count cannot test " + ", ".join(sorted(untestable)), node=node
+        )
+    return (
+        OracleInstruction(
+            "count_objects", "", {"filter": described, "result_key": COUNTED_NUMBER}
         ),
     )

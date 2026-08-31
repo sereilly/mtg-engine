@@ -392,7 +392,9 @@ def _lower_controller_mana_swap(
     node: ast.ProducesManaInstead,
 ) -> tuple[OracleInstruction, ...]:
     """Deep Water: "Until end of turn, if you tap a land you control for mana,
-    it produces {U} instead of any other type."
+    it produces {U} instead of any other type." Chaos Moon's even branch: "…if a
+    player taps a Mountain for mana, that Mountain produces colorless mana
+    instead of any other type."
 
     A swap over a *class* rather than one named land, which is why it is a
     different instruction from the targeted one above rather than the same one
@@ -409,9 +411,18 @@ def _lower_controller_mana_swap(
       and the record has no per-symbol reading.
     * a window the sweeps give. "Until end of turn" is the one the cleanup step
       ends; anything else would be a swap nothing ever lifts.
-    * a filter the matcher can test, and one naming the seat's own lands. A
-      restriction ``subject_matches`` cannot answer would be dropped where the
-      swap is applied, which is a seat whose *opponents*' lands change colour.
+    * a filter the matcher can test, and one whose reach matches the printed
+      tapper. A restriction ``subject_matches`` cannot answer would be dropped
+      where the swap is applied, which is a seat whose *opponents*' lands change
+      colour.
+
+    **The two tappers arm the same record on different seats.** "You" is one
+    record on the ability's controller; "a player" names no seat, so the effect
+    arms one on **every** seat — ``land_mana_swaps.swapped_symbol`` asks the
+    land's own controller for theirs, so a single record on the controller would
+    leave every opponent's Mountain making red. That is the payload's ``seats``
+    key, emitted only for the wider spelling so Deep Water's payload is
+    unchanged.
     """
     if node.replaced != ast.ANY_OTHER_TYPE:
         raise LoweringError(
@@ -421,9 +432,10 @@ def _lower_controller_mana_swap(
     if node.duration.kind not in _REST_OF_TURN:
         raise LoweringError("a recorded mana swap lasts exactly this turn", node=node)
     filt = node.target.filter
-    if node.target.quantifier not in ("a", "all", "each") or filt.controller != "you":
+    wanted_controller = None if node.each_player else "you"
+    if node.target.quantifier not in ("a", "all", "each") or filt.controller != wanted_controller:
         raise LoweringError(
-            "a controller-wide mana swap covers the lands its controller has",
+            "a recorded mana swap covers the lands the seat it names has",
             node=node,
         )
     described = _filter_payload(filt)
@@ -432,12 +444,10 @@ def _lower_controller_mana_swap(
         raise LoweringError(
             "a mana swap cannot test " + ", ".join(sorted(untestable)), node=node
         )
-    return (
-        OracleInstruction(
-            "swap_controller_land_mana_until_eot", "",
-            {"produced": node.produced, "lands": described},
-        ),
-    )
+    payload: dict[str, object] = {"produced": node.produced, "lands": described}
+    if node.each_player:
+        payload["seats"] = "each"
+    return (OracleInstruction("swap_controller_land_mana_until_eot", "", payload),)
 
 
 def _lower_spend_mana_as_though(

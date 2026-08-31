@@ -95,7 +95,7 @@ from .mana import (
     _parse_note_mana_spent,
     _parse_player_adds_mana,
     _parse_produces_instead,
-    _parse_you_tap_produces_instead,
+    _parse_tapper_produces_instead,
     _parse_spend_mana_as_though,
 )
 from .cards import (
@@ -153,6 +153,7 @@ from .game import (
     _parse_wins,
     _parse_choose_color,
     _parse_choose_number,
+    _parse_count_objects,
     _parse_choose_player_who_cast,
     _parse_coin_flip_stakes_loop,
     _parse_flip_coin,
@@ -237,7 +238,7 @@ __all__ = [
     "_parse_player_puts_hand_cards_on_library",
     "_parse_player_adds_mana",
     "_parse_produces_instead",
-    "_parse_you_tap_produces_instead",
+    "_parse_tapper_produces_instead",
     "_parse_spend_mana_as_though",
     "_parse_double",
     "_parse_switch_pt",
@@ -266,6 +267,7 @@ __all__ = [
     "_parse_wins",
     "_parse_choose_color",
     "_parse_choose_number",
+    "_parse_count_objects",
     "_parse_choose_player_who_cast",
     "_parse_coin_flip_stakes_loop",
     "_parse_flip_coin",

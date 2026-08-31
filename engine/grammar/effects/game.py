@@ -162,6 +162,44 @@ def _parse_choose_number(stream: TokenStream) -> ast.Statement | None:
     return None
 
 
+def _parse_count_objects(stream: TokenStream) -> "ast.CountObjects | None":
+    """``Count the number of permanents.`` (Chaos Moon.)
+
+    CR 107.1's number, taken once and named for the sentences behind it — see
+    :class:`ast.CountObjects` for why the card prints this instead of a third
+    "if", and why reading it as a sentence rather than folding it into the two
+    conditions is what keeps both branches reachable.
+
+    The noun phrase is read rather than assumed. "Permanents" is every object on
+    every battlefield (CR 110.1), and a card counting something narrower is this
+    same sentence with a different phrase — which is what makes the count
+    payload rather than a kind.
+
+    Refuses without consuming for anything else opening "count", and requires
+    the sentence to *end* there: "count the number of permanents **and** …" is a
+    sentence this has not read, and a reader that stopped early would leave the
+    rest to be dropped.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("count", "the", "number", "of"):
+        return None
+    try:
+        counted = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if counted.zone not in (None, "battlefield"):
+        # A count out of a hand or a library is a different question with a
+        # different answer, and nothing reads one back yet. Refusing keeps the
+        # line's refusal rather than recording a number off the wrong zone.
+        stream.reset(mark)
+        return None
+    if not (stream.exhausted or stream.at_punct(".", ";")):
+        stream.reset(mark)
+        return None
+    return ast.CountObjects(counted)
+
+
 def _parse_choose_color(stream: TokenStream) -> ast.Statement | None:
     """``Choose a color.`` (Chromatic Armor's activated ability.)
 

@@ -97,7 +97,7 @@ from .effects import (
     _parse_modal_head,
     _parse_player_adds_mana,
     _parse_produces_instead,
-    _parse_you_tap_produces_instead,
+    _parse_tapper_produces_instead,
     _parse_spend_mana_as_though,
     _parse_prevent,
     _parse_double,
@@ -346,6 +346,20 @@ def _distribute_duration(
                 for effect in statement.effects
             ),
         )
+    # A delayed triggered ability's window is CR 603.7b's "stated duration",
+    # and it is a key of `delayed_triggers.DELAYED_EVENTS`' vocabulary rather
+    # than a `Duration` node — so it takes the prefix by translation instead of
+    # by `replace`. Without this branch the recursion reached `existing.kind` on
+    # a string and raised `AttributeError`, which is not a `GrammarError` and so
+    # escaped the parser rather than refusing the line.
+    if isinstance(statement, ast.CreateDelayedTrigger):
+        if duration.kind != "until_end_of_turn":
+            raise stream.error(
+                "a delayed ability's stated duration is until end of turn"
+            )
+        if statement.duration not in (None, "end_of_turn"):
+            raise stream.error("this sentence prints two different durations")
+        return dataclasses.replace(statement, duration="end_of_turn")
     fields = {field.name for field in dataclasses.fields(statement)}
     if "duration" not in fields:
         raise stream.error(
