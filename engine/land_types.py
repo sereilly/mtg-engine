@@ -125,6 +125,27 @@ def end_land_type_change(perm: Permanent, *, source: Any) -> bool:
     return True
 
 
+def end_land_type_changes_from(perm: Permanent, *, prefix: str) -> int:
+    """Drop every recorded contribution whose *label source* starts with
+    *prefix*, and report how many went.
+
+    The sweep half of a **windowed** land-type change. "Target land becomes a
+    Swamp until its controller's next untap step" (Orcish Farmer) outlives the
+    permanent that made it, so its contribution is keyed on a per-activation
+    label rather than on a source object — and the untap step has to be able to
+    find those labels without reading the channel itself, which is what
+    ``tests/engine/test_layer_reads.py`` reserves to this module and the layer
+    bridge. Here rather than there for that reason: the sweep is a question
+    about the store, and the store has one reader.
+    """
+    dropped = 0
+    for entry in list(perm.metadata.get(LAND_TYPE_EFFECTS) or ()):
+        source = entry.get("source")
+        if isinstance(source, str) and source.startswith(prefix):
+            dropped += int(end_land_type_change(perm, source=source))
+    return dropped
+
+
 def clear_derived_land_types(perm: Permanent) -> None:
     """Drop the contributions derived from the current board (CR 611.3b).
 
@@ -439,7 +460,8 @@ __all__ = [
     "DERIVED_LAND_TYPES", "LAND_TYPE_EFFECTS", "MIRE_COUNTER",
     "STATIC_LAND_TYPE_KIND", "STATIC_SOURCE_TIMESTAMP", "StaticLandTypeChange",
     "add_derived_land_type", "change_land_type", "clear_derived_land_types",
-    "end_land_type_change", "land_type_changes", "static_land_type_change_applies",
+    "end_land_type_change", "end_land_type_changes_from", "land_type_changes",
+    "static_land_type_change_applies",
     "static_land_type_change_for", "static_land_type_change_payload",
     "static_source_timestamp",
 ]

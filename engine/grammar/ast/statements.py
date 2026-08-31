@@ -46,6 +46,7 @@ from .damage import (
 )
 from .characteristics import (
     BecomeColor,
+    ChangeLandType,
     ChangeSupertype,
     GainType,
     BecomeCreature,
@@ -183,7 +184,7 @@ Effect = Union[
     CoinFlipDamageLoop,
     DamageThoseDamagedThisGame,
     DamageRidersUntilEndOfTurn,
-    DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, ChangeSupertype, LoseKeyword, PlayerGetsCounters, PutCounter, RemoveCounter,
+    DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, ChangeSupertype, ChangeLandType, LoseKeyword, PlayerGetsCounters, PutCounter, RemoveCounter,
     DoublePower, SwitchPT,
     GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, Mill, PutHandCardsOnLibrary, Scry, Destroy, Sacrifice,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, ShuffleHandIntoLibrary, Exile,

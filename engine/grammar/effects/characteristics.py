@@ -16,7 +16,8 @@ from ..lexer import (GToken, PT, PUNCT, QUOTE, SELF, WORD, tokenize)
 from ..nouns import parse_object_filter
 from ..references import parse_recipient
 from ..stream import TokenStream
-from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS, SUBTYPE_INDEX,
+from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS,
+                          LAND_TYPES, SUBTYPE_INDEX,
                           TYPE_LINE_SUPERTYPES, match_longest)
 
 from ..phrases import (is_pt_counter, _expect_counter_kind,
@@ -602,7 +603,35 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
     supertype = _parse_becomes_supertype(stream, subject)
     if supertype is not None:
         return supertype
+    land_type = _parse_becomes_land_type(stream, subject)
+    if land_type is not None:
+        return land_type
     raise stream.error("expected a colour or a creature body after 'becomes'")
+
+
+def _parse_becomes_land_type(
+    stream: TokenStream, subject: ast.Recipient
+) -> "ast.ChangeLandType | None":
+    """``… becomes a Swamp until its controller's next untap step.``
+    (Orcish Farmer.)
+
+    Last of the ``becomes`` branches, because it is the one that accepts a bare
+    noun after the article and would otherwise claim "becomes an artifact
+    creature" — the animation and the gained-type forms both open the same way
+    and both say more than a land type. Read against the land-type catalog
+    (`data/vocabulary/`) rather than a list of the five basics, so a set
+    printing a new one needs `scripts/fetch_vocabulary.py` and nothing here.
+    """
+    mark = stream.mark()
+    if not (stream.accept_word("a") or stream.accept_word("an")):
+        stream.reset(mark)
+        return None
+    word = stream.peek_word()
+    if word is None or word not in LAND_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.ChangeLandType(subject, word, _parse_duration(stream))
 
 
 def _parse_becomes_supertype(

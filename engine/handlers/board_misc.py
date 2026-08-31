@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..continuous import next_timestamp
 from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
                                 arm_delayed_trigger)
 from ..land_types import MIRE_COUNTER, change_land_type
@@ -569,6 +570,114 @@ def animate_self_until_eot(game: Game, instruction: OracleInstruction, context: 
     game.log.append(
         f"{context.card.name} becomes a "
         f"{payload.get('power', 0)}/{payload.get('toughness', 0)} creature until end of turn"
+    )
+    return True, "resolved"
+
+
+#: How long a recorded land-type change lasts, as the untap step reads it.
+#: "Until its controller's next untap step" (Orcish Farmer) — the sweep is in
+#: `engine/phases/untap_step.py`, and a record with no sweep behind it would be
+#: a land permanently something else.
+LAND_TYPE_UNTIL_UNTAP = "until_controllers_next_untap_step"
+
+
+@effect_handler("animate_target_until_eot")
+def animate_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target snow land becomes a 2/2 creature until end of turn. It's still a
+    land." (Balduvian Conjurer, CR 613 layers 4 and 7b.)
+
+    The targeted twin of ``animate_self_until_eot`` above and the *same*
+    record: an animation is one metadata entry the layer bridge reads, so
+    animating something else is that entry on a different permanent and not a
+    second mechanism. `engine/land_animation.py` is the third spelling of the
+    same idea — a board-wide static recomputed from the board — and it is a
+    table rather than an instruction for exactly that reason.
+
+    "It's still a land" needs no code: the record *adds* types (CR 613 layer 4
+    addition, not CR 305.7's replacement), so the land keeps everything it had.
+
+    The P/T goes on the ``_until_eot`` channel, which the cleanup sweep clears
+    alongside the type record — the source-animating sibling writes the
+    persistent one, which is harmless on a permanent that stops being a
+    creature the same moment but would leave a stamp on someone else's land.
+    """
+    from ..subject_filters import subject_matches
+
+    filt = (instruction.payload.get("targets") or {}).get("filter") or {}
+    target = resolve_target_permanent(
+        game,
+        context,
+        predicate=lambda perm: subject_matches(
+            game, perm, filt,
+            observer=game.controller_index_of(context.source_permanent)
+            if context.source_permanent is not None else None,
+            source=context.source_permanent,
+        ),
+        fallback_on_invalid_choice=False,
+    )
+    if target is None:
+        game.log.append(f"{context.card.name}: no land to animate")
+        return True, "resolved"
+    payload = instruction.payload
+    power, toughness = int(payload.get("power", 0)), int(payload.get("toughness", 0))
+    set_base_pt(target, power, toughness, until_eot=True)
+    target.metadata[ANIMATE_UNTIL_EOT] = {
+        "subtypes": list(payload.get("subtypes") or ()),
+        "keywords": list(payload.get("keywords") or ()),
+        "card_types": list(payload.get("card_types") or ()),
+    }
+    game.log.append(
+        f"{target.card.name} becomes a {power}/{toughness} creature until end "
+        f"of turn ({context.card.name})"
+    )
+    return True, "resolved"
+
+
+@effect_handler("change_land_type_until")
+def change_land_type_until(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target land becomes a Swamp until its controller's next untap step."
+    (Orcish Farmer, CR 305.7 / CR 613 layer 4.)
+
+    A *replacement* of the land's basic land types, recorded as a contribution
+    keyed on this ability's source — so when the untap step drops it, whatever
+    else says the land is something (an Evil Presence Swamp) reasserts itself
+    rather than the printed type line coming back.
+
+    The source is the **permanent**, but the record has to survive that
+    permanent leaving: "until its controller's next untap step" says nothing
+    about the Farmer. So the contribution is keyed on a per-activation label
+    rather than on the permanent, and the untap sweep drops it by that label.
+    """
+    from ..subject_filters import subject_matches
+
+    filt = (instruction.payload.get("targets") or {}).get("filter") or {}
+    seat = (
+        game.controller_index_of(context.source_permanent)
+        if context.source_permanent is not None else None
+    )
+    target = resolve_target_permanent(
+        game,
+        context,
+        predicate=lambda perm: subject_matches(
+            game, perm, filt, observer=seat, source=context.source_permanent
+        ),
+        fallback_on_invalid_choice=False,
+    )
+    if target is None:
+        game.log.append(f"{context.card.name}: no land to change")
+        return True, "resolved"
+    land_type = str(instruction.payload.get("land_type", ""))
+    duration = str(instruction.payload.get("duration", "permanent"))
+    if duration == LAND_TYPE_UNTIL_UNTAP:
+        # A label, not the permanent: the change outlives its source, and two
+        # activations of the same Farmer aimed at two lands must not have the
+        # second replace the first's contribution.
+        source = f"{LAND_TYPE_UNTIL_UNTAP}:{next_timestamp()}"
+    else:
+        source = context.source_permanent
+    change_land_type(target, land_type, source=source, label=context.card.name)
+    game.log.append(
+        f"{target.card.name} became a {land_type.title()} ({context.card.name})"
     )
     return True, "resolved"
 

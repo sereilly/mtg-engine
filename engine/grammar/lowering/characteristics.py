@@ -17,7 +17,6 @@ from ...oracle_types import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
                              OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
-from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._events import binds_block_pair
 from ._amounts import (
     count_spec,
@@ -39,38 +38,6 @@ from ._common import (
     _restrictions_beyond,
     _signed,
 )
-
-
-def _lower_become_creature(
-    node: ast.BecomeCreature,
-) -> tuple[OracleInstruction, ...]:
-    """"…becomes a 3/3 Sphinx creature with flying in addition to its other
-    types until end of turn." (Riddleform.)
-
-    Only the source animates. The handler sets the P/T on ``source_permanent``
-    and the layer bridge reads the rest off one metadata record, so a sentence
-    animating anything else would be pointed at the wrong permanent — refused
-    rather than silently redirected.
-    """
-    if not _is_source(node.subject):
-        raise LoweringError(
-            "only the source animates itself until end of turn", node=node
-        )
-    return (
-        OracleInstruction(
-            "animate_self_until_eot", "",
-            {
-                "power": node.power,
-                "toughness": node.toughness,
-                "subtypes": list(node.subtypes),
-                "keywords": list(node.keywords),
-                # "…a 2/2 Assembly-Worker **artifact** creature" — the types the
-                # animation adds beside "creature", which the layer-4 collector
-                # reads off the same record.
-                "card_types": list(node.card_types),
-            },
-        ),
-    )
 
 
 #: The printed durations a *targeted* pump has a sweep for, mapped to the
@@ -921,62 +888,3 @@ def _lower_change_text(node: ast.ChangeText) -> tuple[OracleInstruction, ...]:
     if not _is_target(node.subject):
         raise LoweringError("a text change has to name what it changes", node=node)
     return (OracleInstruction("mark_text_modified", "", {"mode": node.mode}),)
-
-
-#: Durations a gained type may carry. "Permanently" is the absent kind, which
-#: is what Ashnod's Transmogrant prints — the creature stays an artifact long
-#: after the Transmogrant has been sacrificed.
-_GAINED_TYPE_DURATIONS = frozenset({None, "until_end_of_turn", "until_your_next_upkeep"})
-
-
-def _lower_gain_type(node: ast.GainType) -> tuple[OracleInstruction, ...]:
-    """Ashnod's Transmogrant / Xenic Poltergeist.
-
-    The subject must be a chosen target or the pronoun bound by an earlier
-    sentence of the same effect: the handler adds the record to *one* permanent,
-    and a quantified subject would name a set it cannot reach.
-    """
-    if node.duration.kind not in _GAINED_TYPE_DURATIONS:
-        raise LoweringError(
-            f"no handler holds a gained type for {node.duration.kind}", node=node
-        )
-    payload: dict[str, object] = {
-        "card_types": list(node.card_types),
-        "duration": node.duration.kind or "permanent",
-        "pt_from_mana_value": bool(node.pt_from_mana_value),
-    }
-    if isinstance(node.subject, ast.TargetSpec) and node.subject.quantifier in ("target", "that"):
-        if node.subject.quantifier == "target":
-            _describe_targets(payload, node.subject)
-        return (OracleInstruction("gain_type", "", payload),)
-    raise LoweringError("a gained type needs a single named permanent", node=node)
-
-
-def _lower_change_supertype(node: ast.ChangeSupertype) -> tuple[OracleInstruction, ...]:
-    """Arcum's Weathervane, both abilities.
-
-    One kind for both directions: the supertype and the polarity are payload,
-    which is what makes "becomes snow" and "is no longer snow" one handler
-    rather than two — and what makes a card printing "becomes legendary" cost
-    nothing.
-
-    The duration must be one the handler's channel can hold, and the subject a
-    single named permanent, for the reason ``_lower_gain_type`` requires both:
-    the record goes on one permanent, and a quantified subject names a set that
-    is a *static* ability rather than a one-shot (see
-    ``_parse_no_longer_supertype``).
-    """
-    if node.duration.kind not in _GAINED_TYPE_DURATIONS:
-        raise LoweringError(
-            f"no handler holds a supertype change for {node.duration.kind}", node=node
-        )
-    payload: dict[str, object] = {
-        "supertype": node.supertype,
-        "gained": bool(node.gained),
-        "duration": node.duration.kind or "permanent",
-    }
-    if isinstance(node.subject, ast.TargetSpec) and node.subject.quantifier in ("target", "that"):
-        if node.subject.quantifier == "target":
-            _describe_targets(payload, node.subject)
-        return (OracleInstruction("change_supertype", "", payload),)
-    raise LoweringError("a supertype change needs a single named permanent", node=node)
