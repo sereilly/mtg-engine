@@ -366,4 +366,67 @@ def test_the_helpers_no_longer_take_a_slot_at_all():
         assert "permanent" in parameters, (
             f"{name} must take the Permanent its caller resolved"
         )
+def _leadb_assassin(depart):
+    """Royal Assassin ("{T}: Destroy target tapped creature.") against a target
+    that has, or has not, left the battlefield."""
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers import EFFECT_HANDLERS
+    from engine.oracle import compile_card_oracle
+
+    game = _game(PlayerState(name="A"), PlayerState(name="B"))
+    assassin = _put(game, 0, "Royal Assassin")
+    intended = _put(game, 1, "Grizzly Bears")
+    decoy = _put(game, 1, "Hill Giant")
+    intended.tapped = decoy.tapped = True   # both legal targets for the filter
+
+    index = game.battlefield_index_of(intended)
+    chosen_id = intended.permanent_id
+    if depart:
+        _kill(game, intended)
+        assert game.battlefield_index_of(decoy) == index
+
+    instruction = compile_card_oracle(CARDS["Royal Assassin"]).activated_abilities[0].instruction
+    EFFECT_HANDLERS[instruction.kind](
+        game, instruction,
+        OracleExecutionContext(
+            caster=game.players[0], target=game.players[1],
+            card=CARDS["Royal Assassin"],
+            target_permanent_index=index, target_permanent_id=chosen_id,
+            source_permanent=assassin,
+        ),
+    )
+    return game, decoy, intended
+
+
+def test_royal_assassin_does_not_kill_the_creature_that_inherited_the_slot():
+    """The same defect one handler over, and the one that was worst.
+
+    ``destroy_target_permanent`` resolved its victim **twice**: by id, for the
+    "its controller" / "its mana value" riders, and then by raw index again
+    inside ``Game._destroy_target_permanent``. Both followed the slot once the
+    id stopped answering, so an ability whose target left destroyed whichever
+    creature had slid into its place — and the riders then described *that*
+    creature as though it had been named.
+
+    Royal Assassin is one of 28 activated and triggered abilities reaching this
+    handler, none of which ``legality.illegal_targets_refusal`` covers. The 55
+    spells that reach it were never exposed, which is why this went unnoticed.
+    """
+    game, decoy, intended = _leadb_assassin(depart=True)
+
+    assert not game.is_on_battlefield(intended)
+    assert game.is_on_battlefield(decoy), (
+        "Royal Assassin destroyed the creature that inherited its target's "
+        "slot — a creature nobody named (CR 400.7 / CR 608.2b)"
+    )
+
+
+def test_royal_assassin_still_kills_the_creature_it_named():
+    """The other direction."""
+    game, decoy, intended = _leadb_assassin(depart=False)
+
+    assert not game.is_on_battlefield(intended), "its actual target must die"
+    assert game.is_on_battlefield(decoy), "and only its target"
+
+
 # --- end LeadB ---
