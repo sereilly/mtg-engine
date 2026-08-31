@@ -596,29 +596,45 @@ class GameHelpersMixin:
                 return True
         return False
 
-    def put_card_into_hand(self, owner, card) -> bool:
-        """Put *card* into its owner's hand, unless CR 903.9b diverts it.
+    def put_card_into_hand(self, owner, card, *, from_battlefield=None) -> bool:
+        """Put *card* into its owner's hand, unless something diverts it.
 
         Returns True when the card actually arrived. False means it was a token
-        and ceased to exist (CR 111.7), it went to the command zone instead, or
-        it is waiting on its owner's answer and is in no zone until then — in
-        every case the caller must not also record a card arriving in hand.
+        and ceased to exist (CR 111.7), it went to the command zone instead
+        (CR 903.9b), a CR 614 replacement sent it somewhere else, or it is
+        waiting on its owner's answer and is in no zone until then — in every
+        case the caller must not also record a card arriving in hand.
+
+        *from_battlefield* is the :class:`Permanent` this card is the card
+        **of**, when it is arriving here by leaving the battlefield. It is what
+        makes a leaves-the-battlefield replacement (CR 614.6) expressible: this
+        seam is handed a ``CardDefinition``, which a deck shares between every
+        copy of a card, so the event cannot be keyed to the card — only to the
+        object that is leaving. A caller that moves a permanent and does not
+        pass it is a hole in that event, which is why
+        ``tests/engine/test_leave_battlefield_seam.py`` asks for it.
         """
         seat = self._owner_seat(owner)
         if is_token_card(card):
             return False  # CR 111.7 / 704.5d: it ceases to exist instead
+        if self._leaving_battlefield_replaced(from_battlefield, owner, "hand"):
+            return False
         if self.commander_zone_change(seat, card, "hand"):
             return False
         self.players[seat].hand.append(card)
         return True
 
-    def put_card_into_library(self, owner, card, position: str = "bottom") -> bool:
-        """Put *card* into its owner's library, unless CR 903.9b diverts it.
-        ``position`` is "top" or "bottom"; the return value reads as
-        :meth:`put_card_into_hand`'s does."""
+    def put_card_into_library(
+        self, owner, card, position: str = "bottom", *, from_battlefield=None
+    ) -> bool:
+        """Put *card* into its owner's library, unless something diverts it.
+        ``position`` is "top" or "bottom"; the return value and
+        *from_battlefield* read as :meth:`put_card_into_hand`'s do."""
         seat = self._owner_seat(owner)
         if is_token_card(card):
             return False  # CR 111.7 / 704.5d: it ceases to exist instead
+        if self._leaving_battlefield_replaced(from_battlefield, owner, "library"):
+            return False
         if self.commander_zone_change(seat, card, "library"):
             return False
         library = self.players[seat].library
@@ -627,6 +643,39 @@ class GameHelpersMixin:
         else:
             library.append(card)
         return True
+
+    def _leaving_battlefield_replaced(self, permanent, owner, destination: str) -> bool:
+        """CR 614.6 for a permanent on its way off the battlefield — whether a
+        replacement sent it somewhere other than *destination*.
+
+        Asked **at the destination**, not at ``remove_from_battlefield``, and
+        that is the whole design. The removal is the one transition every exit
+        passes through, but it decides no destination: the caller does, one
+        statement later, and a replacement fired at the removal would have to
+        suppress that caller. Asked here the event is complete — what is
+        leaving, and where it was going — and a consumed event simply returns
+        False, which every caller of these two seams already reads as "the card
+        did not arrive; do not record one".
+
+        The three destinations a permanent's card can reach are a graveyard, a
+        hand and a library, and each has exactly one seam:
+        ``_permanent_to_graveyard`` asks this too. **Exile is deliberately not
+        one of them**: a permanent already on its way to exile is a permanent
+        already going where "exile it instead" would send it, so there is
+        nothing to replace and firing here would exile the card twice.
+        """
+        if permanent is None:
+            return False
+        consumed, _ = apply_replacements(
+            self, "would_leave_battlefield",
+            {
+                "player": owner if isinstance(owner, PlayerState)
+                else self.players[self._owner_seat(owner)],
+                "permanent": permanent,
+                "destination": destination,
+            },
+        )
+        return bool(consumed)
 
     def _permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
         """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
@@ -638,6 +687,16 @@ class GameHelpersMixin:
             self, "would_die", {"player": player, "permanent": permanent}
         )
         if consumed:
+            return
+        # …and the wider event the graveyard is one destination of: "if the
+        # creature **would leave the battlefield**, exile it instead" (Dreams of
+        # the Dead). A second contention set at the same moment rather than a
+        # widening of the one above, because the two are different printed
+        # effects — a death is one of four ways a permanent leaves — and no card
+        # in the pool carries both. Asked after it for the same reason it is
+        # asked at all: the narrower reading is the one a card printed about
+        # dying means.
+        if self._leaving_battlefield_replaced(permanent, player, "graveyard"):
             return
         if not permanent.metadata.get("is_token", False):
             # CR 400.3: the card goes to its owner's graveyard, which differs

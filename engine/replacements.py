@@ -18,6 +18,7 @@ Event kinds and their payload keys:
 - ``damage_marked``:      {recipient, amount, dealt, source, combat}
 - ``life_loss``:          {recipient, amount, dealt, source, combat}
 - ``would_die``:          {player, permanent}
+- ``would_leave_battlefield``: {player, permanent, destination}
 - ``discard``:            {player, card}
 - ``draw``:               {player, count, drawn}
 
@@ -159,6 +160,11 @@ LIFE_FLOOR = 10  # Ali from Cairo
 # to the damage space above.
 LIFE_GAIN_TO_DRAW = 10  # Lich
 EXILE_INSTEAD_OF_DYING = 10  # Disintegrate's "exile it instead"
+#: "If the creature would leave the battlefield, exile it instead of putting it
+#: anywhere else." (Dreams of the Dead.) Its own event kind rather than a wider
+#: reading of ``would_die``: a death is one of the ways a permanent leaves, and
+#: the other three — a hand, a library, an exile — reach no graveyard at all.
+EXILE_INSTEAD_OF_LEAVING = 10  # Dreams of the Dead
 RETURN_TO_HAND_INSTEAD_OF_DYING = 20  # Firestorm Phoenix
 DISCARD_DESTINATION = 10  # Library of Leng
 # Before the two draw replacements that *consume* the event, and for the
@@ -1133,6 +1139,56 @@ def _exile_instead_of_dying(game, payload: dict) -> ReplacementOutcome | None:
     return ReplacementOutcome(replaced=True)
 
 
+#: "If the creature would leave the battlefield, exile it instead of putting it
+#: anywhere else." (Dreams of the Dead.) Armed on the **permanent** the
+#: reanimation created, not keyed to its card: a `CardDefinition` is shared
+#: between every copy of a card in a deck, so a record keyed to one would divert
+#: another copy's bounce too.
+#:
+#: The same shape Disintegrate's `exile_if_dies_this_turn` above has — a marker
+#: a handler stamps and a pure predicate reads — and the same reason it is a
+#: marker rather than a text probe: what carries the effect is the permanent,
+#: and its printed text says nothing about it.
+EXILE_ON_LEAVING_BATTLEFIELD = "exile_if_it_would_leave_the_battlefield"
+
+
+def _applies_exile_instead_of_leaving(game, payload: dict) -> bool:
+    permanent = payload["permanent"]
+    if permanent.metadata.get("is_token", False):
+        # CR 111.7: a token that leaves the battlefield ceases to exist, and
+        # there is no card for an exile to hold. Refused here rather than in the
+        # body, so the effect is not counted in a CR 616.1 contention it could
+        # not carry out.
+        return False
+    return bool(permanent.metadata.get(EXILE_ON_LEAVING_BATTLEFIELD))
+
+
+@replacement_effect(
+    "would_leave_battlefield", EXILE_INSTEAD_OF_LEAVING,
+    applies=_applies_exile_instead_of_leaving,
+)
+def _exile_instead_of_leaving(game, payload: dict) -> ReplacementOutcome | None:
+    """Dreams of the Dead: "If the creature would leave the battlefield, exile
+    it instead of putting it anywhere else."
+
+    The card never reaches the destination the effect was heading for, so no
+    dies-trigger, no bounce and no tuck happens (CR 614.6). Exile is CR 400.3's
+    owner's exile, which is not the controller's the moment the creature was
+    stolen.
+    """
+    permanent = payload["permanent"]
+    owner_index = game.owner_index_of(permanent)
+    owner = game.players[
+        owner_index if owner_index is not None else game.players.index(payload["player"])
+    ]
+    owner.exile.append(permanent.card)
+    game.log.append(
+        f"{permanent.card.name} was exiled instead of being put into "
+        f"{payload.get('destination', 'another zone')}"
+    )
+    return ReplacementOutcome(replaced=True)
+
+
 RETURN_TO_HAND_INSTEAD_TEXT = (
     "if this creature would die, return it to its owner's hand instead. until "
     "that player's next turn, that player plays with that card revealed in "
@@ -1177,7 +1233,7 @@ def _return_to_hand_instead_of_dying(game, payload: dict) -> ReplacementOutcome 
     if owner_seat is None:
         owner_seat = game.players.index(payload["player"])
     owner = game.players[owner_seat]
-    if game.put_card_into_hand(owner, permanent.card):
+    if game.put_card_into_hand(owner, permanent.card, from_battlefield=permanent):
         lock_card_in_hand(game, owner_seat, permanent.card, permanent.card.name)
         game.log.append(
             f"{permanent.card.name} returned to {owner.name}'s hand instead of dying, "

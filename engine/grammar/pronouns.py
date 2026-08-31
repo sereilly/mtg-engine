@@ -465,3 +465,70 @@ def _marks_entry_watched(node):
         if changed:
             return replace(node, **changed)
     return node
+
+
+def _parse_exile_instead_of_leaving_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``If the creature would leave the battlefield, exile it instead of
+    putting it anywhere else.`` (Dreams of the Dead.)
+
+    A pronoun rider like the grants above: "the creature" is the permanent an
+    earlier sentence of the same ability put onto the battlefield, and nothing
+    inside this sentence's own parse can see back that far.
+
+    It **folds into that move** rather than becoming a step, the way the
+    durationless keyword grant after a reanimation already does and for the
+    same reason: the permanent does not exist until the move runs, so a
+    separate step would have nothing to arm — and what it arms is not a target
+    anything chose, because this ability's target is a *card* in a graveyard.
+    Returns :data:`_RIDER_FOLDED` when it merges.
+
+    **Every word of the tail is consumed literally**, and each is load-bearing:
+
+    * "would leave the battlefield" is the whole event. Read as "would die" it
+      would be a strictly *smaller* effect — a death is one of the ways a
+      permanent leaves — and this clause is a drawback, so the smaller reading
+      is the one that hands the player a card better than the one printed.
+    * "instead of putting it anywhere else" is what says the exile replaces
+      **every** destination. A production that still matched with those words
+      deleted would be claiming a sentence it had not read, which is what the
+      parse-coverage deletion probe reports.
+
+    Returns None with the cursor untouched on anything else, so an ordinary
+    conditional keeps its own reading.
+    """
+    index = next(
+        (
+            i for i in range(len(steps) - 1, -1, -1)
+            if _creates_the_permanent_it_names(steps[i])
+        ),
+        None,
+    )
+    if index is None:
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("if"):
+        return None
+    # The printed noun, not a bare pronoun: the card says "the creature". Any
+    # other noun is a sentence about something else and must not be read as
+    # this one.
+    if not stream.accept_word("the"):
+        stream.reset(mark)
+        return None
+    noun = stream.peek_word()
+    if noun is None or noun not in CARD_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("would", "leave", "the", "battlefield"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "exile", "it", "instead", "of", "putting", "it", "anywhere", "else"
+    ):
+        stream.reset(mark)
+        return None
+    steps[index] = replace(steps[index], exile_on_leave=True)
+    return _RIDER_FOLDED

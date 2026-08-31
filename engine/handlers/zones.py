@@ -23,6 +23,7 @@ from ..oracle_types import (DISCARDED_BY_SEAT, EXILED_THIS_WAY, EXILED_THIS_WAY_
                             HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS,
                             X_FROM_COUNT_PER_RECIPIENT)
 from ..oracle_types import OracleInstruction as _OracleInstruction
+from ..replacements import EXILE_ON_LEAVING_BATTLEFIELD
 from ..resumption import run_resumable
 from ..search_filters import search_matches
 from ..tokens import CREATED_TOKEN_RESULT_KEY, tokens_created_with
@@ -1133,6 +1134,15 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     if reanimated is not None and gains:
         for keyword in gains:
             grant_keyword(reanimated, keyword)
+    # "If the creature would leave the battlefield, exile it instead of putting
+    # it anywhere else." (Dreams of the Dead.) Armed on the permanent this step
+    # created, which is the only object the sentence can be about — the
+    # ability's target is a card in a graveyard. The marker is what
+    # `engine/replacements.py`'s `would_leave_battlefield` interceptor reads,
+    # and it lives on the permanent rather than on the card because a
+    # `CardDefinition` is shared between every copy of a card in a deck.
+    if reanimated is not None and instruction.payload.get("exile_on_leave"):
+        reanimated.metadata[EXILE_ON_LEAVING_BATTLEFIELD] = True
     # What this step put onto the battlefield, for the sentences that name it
     # afterwards ("that creature gains …"). By id, like every other producer:
     # the permanent may leave between two steps of one resolution, and a
@@ -1299,7 +1309,7 @@ def return_source_card_to_owners_hand(game: Game, instruction: OracleInstruction
     if source is not None and game.is_on_battlefield(source):
         owner = game.players[source.metadata.get("base_controller_index", 0)]
         game.remove_from_battlefield(source)
-        if game.put_card_into_hand(owner, card):
+        if game.put_card_into_hand(owner, card, from_battlefield=source):
             game.log.append(f"{card.name} returned to {owner.name}'s hand")
         return True, "resolved"
     for player in game.players:
@@ -1472,7 +1482,7 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
         for perm in chosen:
             owner_idx = game.owner_index_of(perm)
             owner = game.players[owner_idx] if owner_idx is not None else context.caster
-            game.put_card_into_hand(owner, perm.card)
+            game.put_card_into_hand(owner, perm.card, from_battlefield=perm)
             if owner_idx is not None:
                 game.permanents_to_hand_this_turn[owner_idx] = (
                     game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
@@ -1520,7 +1530,7 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
             return True, "resolved"
         owner_idx = game.owner_index_of(perm)
         owner = game.players[owner_idx] if owner_idx is not None else context.caster
-        game.put_card_into_hand(owner, perm.card)
+        game.put_card_into_hand(owner, perm.card, from_battlefield=perm)
         if owner_idx is not None:
             game.permanents_to_hand_this_turn[owner_idx] = (
                 game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
@@ -1630,7 +1640,7 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
             continue
         owner_idx = game.owner_index_of(perm)
         owner = game.players[owner_idx] if owner_idx is not None else context.caster
-        game.put_card_into_hand(owner, perm.card)
+        game.put_card_into_hand(owner, perm.card, from_battlefield=perm)
         if owner_idx is not None:
             game.permanents_to_hand_this_turn[owner_idx] = (
                 game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
@@ -2478,7 +2488,9 @@ def return_all_owned_artifacts_to_hand(game: Game, instruction: OracleInstructio
                 continue
             # Identity, not value: two untapped Moxen of the same name are ``==``.
             game.remove_from_battlefield(permanent)
-            game.put_card_into_hand(owner_index, permanent.card)
+            game.put_card_into_hand(
+                owner_index, permanent.card, from_battlefield=permanent
+            )
             game._remove_aura_effects(permanent)
             returned += 1
     game.log.append(f"Returned {returned} artifact(s) to {context.target.name}'s hand")
@@ -2550,7 +2562,9 @@ def put_target_on_library_top(game: Game, instruction: OracleInstruction, contex
     owner = game.players[owner_idx] if owner_idx is not None else context.caster
     game.remove_from_battlefield(target_perm)
     game._remove_aura_effects(target_perm)
-    game.put_card_into_library(owner, target_perm.card, "top")
+    game.put_card_into_library(
+        owner, target_perm.card, "top", from_battlefield=target_perm
+    )
     game.log.append(
         f"{context.card.name}: {target_perm.card.name} put on top of {owner.name}'s library"
     )

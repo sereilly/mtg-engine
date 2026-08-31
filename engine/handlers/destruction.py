@@ -1053,7 +1053,14 @@ def destroy_tapped_land_and_reoffer_aura(
         return True, "resolved"
     player = game.players[controller_index]
     game.remove_from_battlefield(land)
-    player.graveyard.append(land.card)
+    # Through the one graveyard transition, not an append. This site was the
+    # only destruction in the engine that reached a graveyard by hand, so the
+    # land it destroyed fired no leaves-the-battlefield or dies trigger, was
+    # counted by nothing, and passed no CR 614 replacement — the five things
+    # `_permanent_to_graveyard` exists to do. The order is
+    # `sacrifice_permanent`'s: remove first, then move, so the trigger scans
+    # see the board the destruction left behind.
+    game._permanent_to_graveyard(player, land)
     aura.metadata.pop("attached_to", None)
     detach_aura(aura, land)
     game.log.append(f"{aura.card.name} destroyed {land.card.name}")

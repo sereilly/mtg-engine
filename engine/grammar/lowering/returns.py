@@ -729,6 +729,20 @@ def _lower_return_to_zone(
         gated = dataclasses.replace(filt, colors=())
     if node.from_zone is not None and _reads_no_return_restriction(gated):
         raise LoweringError("no return handler honours this restriction", node=node)
+    # The leave-the-battlefield rider is armed by exactly one handler (the
+    # reanimation below). Every other move here would carry the word and do
+    # nothing with it, and this rider is a *drawback* — dropped, the card is
+    # strictly better than the one printed, which is the one direction a
+    # dropped rider must never fail in.
+    if node.exile_on_leave and not (
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name == "battlefield"
+    ):
+        raise LoweringError(
+            "only a reanimation arms the leave-the-battlefield replacement",
+            node=node,
+        )
 
     source, destination = node.from_zone, node.to
 
@@ -765,6 +779,13 @@ def _lower_return_to_zone(
             payload: dict[str, object] = (
                 {"colors": tuple(filt.colors)} if filt.colors else {}
             )
+            # "…**If the creature would leave the battlefield, exile it instead
+            # of putting it anywhere else.**" (Dreams of the Dead.) Folded onto
+            # the move by the parse, because the permanent it applies to does
+            # not exist until this instruction runs — the same reason the
+            # keyword grant after a reanimation folds.
+            if node.exile_on_leave:
+                payload["exile_on_leave"] = True
             return (OracleInstruction("reanimate_creature", "", payload),)
 
         raise LoweringError(f"no handler moves a card to the {destination.name}", node=node)
