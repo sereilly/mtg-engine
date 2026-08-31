@@ -1238,11 +1238,25 @@ class PermanentStateMixin:
             (perm, static) for perm, static in self.lingering_global_statics
         ]
         for perm in all_permanents:
+            # **A static's own source is not exempt.** The scope is whatever
+            # the printed sentence says, and none of these templates says
+            # "other" — "Creatures you control attack each combat if able" (the
+            # Pirate token Pursued Whale gives each opponent) is a creature its
+            # controller controls, so CR 508.1d compels the token itself along
+            # with the rest of that seat's board. Skipping the source silently
+            # exempted exactly the permanent the card is printed on, which for
+            # this one is half the drawback the Whale's controller is paid for.
+            #
+            # The blanket skip cost the other two templates nothing and so hid
+            # this: Energy Flux and The Tabernacle at Pendrell Vale are
+            # enchantments and a land, and Titania's Song asks for a noncreature
+            # *artifact* — each of them is excluded by
+            # `_global_static_applies` on its own merits, which is where a
+            # scope belongs.
             applying = [
                 source
                 for source, static in sources
-                if source is not perm
-                and self._global_static_applies(static, perm, source, self)
+                if self._global_static_applies(static, perm, source, self)
             ]
             if applying:
                 perm.metadata["global_static_sources"] = applying
