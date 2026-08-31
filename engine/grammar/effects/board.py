@@ -235,7 +235,10 @@ def _parse_return(
 
 
 def _parse_further_subjects(
-    stream: TokenStream, first: "ast.Recipient | None" = None
+    stream: TokenStream,
+    first: "ast.Recipient | None" = None,
+    *,
+    several_targets: bool = False,
 ) -> list[ast.Recipient]:
     """The rest of ``<noun phrase>, <noun phrase>, and <noun phrase>``.
 
@@ -314,20 +317,25 @@ def _parse_further_subjects(
         ):
             stream.reset(mark)
             return extra
-        # **At most one targeted phrase in the union**, counting *first*. The
-        # cast picker asks a spell for one target (``targeting.derive_cast_spec``
-        # answers with one ``kind``), so a sentence naming two — "Destroy target
-        # creature and target land" (Fumarole) — would compile supported and
-        # then be uncastable, its second target picked by nobody. Refusing here
-        # keeps the card visibly unsupported, which is the direction this
-        # grammar fails in by construction.
-        #
-        # The two cards this round buys are unaffected because their first
-        # phrase is the source: "Exile **this creature** and target creature …"
-        # names one target, not two.
-        if nxt.quantifier == "target" and any(
-            isinstance(prior, ast.TargetSpec) and prior.quantifier == "target"
-            for prior in ((first,) if first is not None else ()) + tuple(extra)
+        # **At most one targeted phrase in the union, unless the caller can
+        # describe several.** The old reason was flat — the cast picker asks a
+        # spell for one target — and it is still true of a union lowered to a
+        # ``Conjunction``, whose spec comes from the first instruction that
+        # describes targets and leaves the rest picked by nobody. It is *not*
+        # true of a caller that folds the phrases into one statement with an
+        # ordered ``roles`` description, which the picker, the cast gate and the
+        # AI have all read since Glyph of Delusion. So ``several_targets`` is
+        # the claim "my lowering describes every one of these", and only the
+        # destroy production makes it. Unions whose first phrase is the source
+        # ("Exile **this creature** and target creature …") name one target and
+        # are unaffected either way.
+        if (
+            not several_targets
+            and nxt.quantifier == "target"
+            and any(
+                isinstance(prior, ast.TargetSpec) and prior.quantifier == "target"
+                for prior in ((first,) if first is not None else ()) + tuple(extra)
+            )
         ):
             raise stream.error(
                 "no spell picks two targets from one verb"
@@ -405,7 +413,7 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     # creatures your opponents control" (Remove Enchantments). One verb, three
     # noun phrases; see `_parse_further_subjects` for why the union is a shape
     # and not a filter.
-    further = _parse_further_subjects(stream, subject)
+    further = _parse_further_subjects(stream, subject, several_targets=True)
 
     # "…at end of combat" (CR 603.7). Only this one delay: a destruction
     # deferred to the next end step is a different handler, so leaving those
@@ -501,6 +509,26 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     else:
         stream.reset(mark)
     if further:
+        targeted = [
+            each for each in (subject, *further)
+            if isinstance(each, ast.TargetSpec) and each.quantifier == "target"
+        ]
+        if len(targeted) > 1:
+            # "Destroy target creature **and target land**." (Fumarole.) Two
+            # targets of one spell are one announcement (CR 601.2c), so one
+            # statement — see ``ast.Destroy.also_targets``. Every phrase must be
+            # targeted: a union mixing a target with a sweep is two different
+            # things happening, and the sweep half has nothing to ask a caster.
+            if len(targeted) != len(further) + 1:
+                raise stream.error(
+                    "a union naming a target and a sweep is not one announcement"
+                )
+            return ast.Destroy(
+                subject,
+                no_regen=no_regen,
+                delay=delay,
+                also_targets=tuple(targeted[1:]),
+            )
         return ast.Conjunction(tuple(
             ast.Destroy(each, no_regen=no_regen, delay=delay)
             for each in (subject, *further)
@@ -561,6 +589,8 @@ def _accept_destroyed_this_way_no_regen(stream: TokenStream) -> bool:
 #: The nouns "…destroyed this way…" is printed about. A closed set for the
 #: reason every other type word in this grammar is one: an open read would
 #: claim a sentence about something the destroy never touched.
+
+
 _DESTROYED_THIS_WAY_NOUNS: tuple[str, ...] = (
     "creature", "artifact", "enchantment", "land", "permanent",
 )
@@ -723,71 +753,6 @@ def _parse_sacrifice_expansion_permanents(stream: TokenStream) -> ast.Statement 
         stream.reset(mark)
         return None
     return ast.SacrificeExpansionPermanents(set_code)
-
-
-def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement | None:
-    """``Shuffle your graveyard into your library.`` (Feldon's Cane.)
-
-    Both possessives are read rather than assumed. A card moving *another*
-    player's graveyard is a different effect, and consuming "your" without
-    checking it would compile that card onto this one.
-    """
-    mark = stream.mark()
-    # "your graveyard" is a possessive, not a player reference — `parse_player_ref`
-    # reads "you" / "target player" / "each opponent" and rightly refuses it —
-    # so the word is matched directly, and both occurrences are checked. A card
-    # moving *another* player's graveyard is a different effect, and consuming
-    # the possessive without reading it would compile that card onto this one.
-    if not stream.accept_phrase(
-        "shuffle", "your", "graveyard", "into", "your", "library"
-    ):
-        stream.reset(mark)
-        return None
-    return ast.ShuffleGraveyardIntoLibrary(ast.PlayerRef("you"))
-
-
-def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | None:
-    """``Each player shuffles the cards from their hand into their library,
-    then draws that many cards.`` (Winds of Change.)
-
-    Read here beside the graveyard shuffle for the reason that one is read
-    outside the subject-verb loop: the sentence's object is a *zone*, not a set
-    of objects a filter could test, so the reader that expects a noun phrase has
-    nothing to take.
-
-    The possessive has to agree with the subject, which is what makes this the
-    sentence it looks like: "each player shuffles the cards from **your** hand"
-    would be a different effect, and consuming the word without reading it would
-    compile that card onto this one — the check `_parse_shuffle_graveyard_into_library`
-    makes for the same reason.
-
-    The draw is part of this production rather than a sentence after it: "that
-    many" is the number of cards the shuffle just moved, which nothing else in
-    the line knows. Parsed apart it would be a draw with no producer, and a
-    producerless back-reference reads as zero.
-    """
-    mark = stream.mark()
-    player = parse_player_ref(stream)
-    if player is None or not stream.accept_word("shuffles", "shuffle"):
-        stream.reset(mark)
-        return None
-    whose = "your" if player.kind == "you" else "their"
-    # "shuffles **the cards from** their hand" is the current wording and
-    # "shuffles their hand" the older one; they name the same cards, so the
-    # phrase is optional rather than a second production.
-    stream.accept_phrase("the", "cards", "from")
-    if not stream.accept_phrase(whose, "hand", "into", whose, "library"):
-        stream.reset(mark)
-        return None
-    then_draw = False
-    probe = stream.mark()
-    if stream.accept_punct(",") and stream.accept_phrase(
-        "then", "draws" if whose == "their" else "draw", "that", "many", "cards"
-    ):
-        then_draw = True
-    else:
-        stream.reset(probe)
-    return ast.ShuffleHandIntoLibrary(player, then_draw=then_draw)
 
 
 def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:

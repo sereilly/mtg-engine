@@ -230,6 +230,68 @@ def _parse_leading_for_each(
     return ast.DiedThisWay(filt)
 
 
+def _parse_leading_count_scale(
+    parse_body, stream: TokenStream
+) -> "ast.Statement | None":
+    """``For each <objects in a zone>, <effects>`` — a leading **count**, not a loop.
+
+    "For each artifact or creature card in target opponent's graveyard, add {C}
+    and you gain 1 life." (Spoils of Evil.) The sibling of
+    :func:`_parse_leading_for_each` and deliberately not the same production:
+    that one names a *set the effect repeats over* and yields an ``ast.ForEach``
+    the handler iterates, and this one names a *number the effect is multiplied
+    by*. Two mana and two life is one addition and one gain, not two of each —
+    and the pool already reads the multiplier in the trailing position ("Add {G}
+    for each Forest you control"), so the two spellings meet at the same
+    ``per_each`` field rather than at two mechanisms.
+
+    Restricted to a filter naming a **zone other than the battlefield**, which
+    is what keeps it from claiming the loop's sentences: every "for each
+    creature you control, …" the pool prints is the loop reading, and a
+    multiplier is only unambiguous once the phrase has said where to count.
+
+    The scale is distributed onto the effects behind the comma, the way
+    :func:`_distribute_duration` distributes a trailing duration. A statement
+    with no place to carry it **raises**, because a count silently dropped is a
+    card that adds one mana where it should add five.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    try:
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if filt.zone in (None, "battlefield") or not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    return _scale_by_count(parse_body(stream), filt, stream)
+
+
+#: Which statement nodes can carry a leading count, and under which field. A
+#: table rather than a chain of ``isinstance``, because the answer is "the node
+#: already has a ``per_each``" — the trailing spelling of the same multiplier
+#: writes exactly these fields, so the two printings cannot come to mean two
+#: things.
+_SCALABLE_BY_COUNT = (ast.AddMana, ast.GainLife)
+
+
+def _scale_by_count(
+    statement: "ast.Statement", filt: "ast.ObjectFilter", stream: TokenStream
+) -> "ast.Statement":
+    """*statement* with *filt* folded onto every effect as its multiplier."""
+    if isinstance(statement, ast.Sequence):
+        return ast.Sequence(tuple(
+            _scale_by_count(step, filt, stream) for step in statement.steps
+        ))
+    if isinstance(statement, _SCALABLE_BY_COUNT):
+        if statement.per_each is not None:
+            raise stream.error("this effect is already counted once")
+        return dataclasses.replace(statement, per_each=filt)
+    raise stream.error("no reading for a leading count over this effect")
+
+
 def _distribute_duration(
     statement: ast.Statement, duration: ast.Duration, stream: TokenStream
 ) -> ast.Statement:

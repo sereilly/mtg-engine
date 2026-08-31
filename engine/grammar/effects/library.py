@@ -772,3 +772,76 @@ def _parse_put_iterated_card_on_library(
         stream.reset(mark)
         return None
     return ast.PutIteratedCardOnLibrary(position=position)
+
+# --- Shuffling a pile into a library -----------------------------------
+# Moved here from ``board`` when that module crossed the thousand-line guard
+# at integration — two parallel groups' additions summed past it. The
+# boundary is the one this file already draws: the rest of ``board``
+# destroys, sacrifices, bounces or attaches a *permanent*, and these two
+# move a pile of cards into a library. They share no fragment with what
+# they left.
+
+
+def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement | None:
+    """``Shuffle your graveyard into your library.`` (Feldon's Cane.)
+
+    Both possessives are read rather than assumed. A card moving *another*
+    player's graveyard is a different effect, and consuming "your" without
+    checking it would compile that card onto this one.
+    """
+    mark = stream.mark()
+    # "your graveyard" is a possessive, not a player reference — `parse_player_ref`
+    # reads "you" / "target player" / "each opponent" and rightly refuses it —
+    # so the word is matched directly, and both occurrences are checked. A card
+    # moving *another* player's graveyard is a different effect, and consuming
+    # the possessive without reading it would compile that card onto this one.
+    if not stream.accept_phrase(
+        "shuffle", "your", "graveyard", "into", "your", "library"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ShuffleGraveyardIntoLibrary(ast.PlayerRef("you"))
+
+
+def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | None:
+    """``Each player shuffles the cards from their hand into their library,
+    then draws that many cards.`` (Winds of Change.)
+
+    Read here beside the graveyard shuffle for the reason that one is read
+    outside the subject-verb loop: the sentence's object is a *zone*, not a set
+    of objects a filter could test, so the reader that expects a noun phrase has
+    nothing to take.
+
+    The possessive has to agree with the subject, which is what makes this the
+    sentence it looks like: "each player shuffles the cards from **your** hand"
+    would be a different effect, and consuming the word without reading it would
+    compile that card onto this one — the check `_parse_shuffle_graveyard_into_library`
+    makes for the same reason.
+
+    The draw is part of this production rather than a sentence after it: "that
+    many" is the number of cards the shuffle just moved, which nothing else in
+    the line knows. Parsed apart it would be a draw with no producer, and a
+    producerless back-reference reads as zero.
+    """
+    mark = stream.mark()
+    player = parse_player_ref(stream)
+    if player is None or not stream.accept_word("shuffles", "shuffle"):
+        stream.reset(mark)
+        return None
+    whose = "your" if player.kind == "you" else "their"
+    # "shuffles **the cards from** their hand" is the current wording and
+    # "shuffles their hand" the older one; they name the same cards, so the
+    # phrase is optional rather than a second production.
+    stream.accept_phrase("the", "cards", "from")
+    if not stream.accept_phrase(whose, "hand", "into", whose, "library"):
+        stream.reset(mark)
+        return None
+    then_draw = False
+    probe = stream.mark()
+    if stream.accept_punct(",") and stream.accept_phrase(
+        "then", "draws" if whose == "their" else "draw", "that", "many", "cards"
+    ):
+        then_draw = True
+    else:
+        stream.reset(probe)
+    return ast.ShuffleHandIntoLibrary(player, then_draw=then_draw)

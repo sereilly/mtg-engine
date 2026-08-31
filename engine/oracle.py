@@ -304,7 +304,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"(?P<damager_self>this (?:creature|artifact|enchantment|land|permanent))"
      r"|(?P<damager_attached>enchanted (?:creature|artifact|enchantment|land|permanent))"
      r"|a source (?P<damager_controller>you) control"
-     r"|(?P<damager_subject>[^,]+?)"
+     # "…a red creature **or spell** deals damage" (Justice). One object, two
+     # nouns: English prints the adjective once and distributes it, so the
+     # subject group takes "a red creature" and the marker records that the
+     # same phrase also names a *spell*. Non-greedy, so the shorter subject
+     # plus the marker is preferred over the longer subject the noun parser
+     # would then refuse — which is what "a red creature or spell" used to do,
+     # taking the whole trigger down with it. Empty for every card that does
+     # not print the union, because an absent optional group is not in the
+     # match's groupdict.
+     r"|(?P<damager_subject>[^,]+?)(?P<damager_includes_spells> or spell)?"
      r")"
      r" deals(?: (?P<damage_combat>combat|noncombat))? damage"
      r"(?: to (?P<damage_recipient>a player or planeswalker|a player"
@@ -1459,6 +1468,17 @@ _PAIR_SUBJECT_GROUP_SUFFIX = "_pair_subject"
 # is how the two sides come apart.
 _PAIR_SUBJECT_FILTER_KEYS = ("blocked_filter", "blocker_filter")
 
+# What a ``<name>_includes_spells`` marker allows the accompanying noun phrase
+# to say. The union "a red creature or spell" describes one object under two
+# nouns, and only the words in front of the noun distribute over both — a spell
+# on the stack is the printed card (CR 109.5), which has no controller, no
+# layer-computed types and no board position to be asked about. ``type_filter``
+# is the creature half's own noun (dropped for the spell half) and
+# ``color_filter`` is the shared adjective; anything else refuses the condition,
+# because a restriction a spell cannot be tested for is one the dispatcher would
+# silently ignore on exactly half the sentence.
+_SPELL_UNION_FILTER_KEYS = frozenset({"type_filter", "color_filter"})
+
 
 def _match_trigger_patterns(
     text: str,
@@ -1539,6 +1559,18 @@ def _resolve_subject_groups(payload: dict) -> dict | None:
         if f"{stem}_includes_source" in payload:
             described = {k: v for k, v in described.items() if k != "exclude_self"}
             del resolved[f"{stem}_includes_source"]
+        if f"{stem}_includes_spells" in payload and (
+            set(described) - _SPELL_UNION_FILTER_KEYS or "color_filter" not in described
+        ):
+            # "…a red creature **or spell**". The noun is the half that does not
+            # distribute; every other word in the phrase does, and a spell is
+            # the printed card (CR 109.5) with no board, no controller and no
+            # layers — so a phrase saying anything a card cannot answer refuses
+            # the condition rather than firing on the creature half alone. The
+            # colour is required because it is the only thing left to test: a
+            # bare "a creature or spell" would fire on every point of damage in
+            # the game.
+            return None
         resolved[stem + "_filter"] = described
     return resolved
 
@@ -2801,6 +2833,16 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if evasion_negation_for(normalized) is not None:
         return True
+    # "Black and/or red permanents and spells are colorless sources of damage."
+    # (Ghostly Flame.) Asked of the reader every damage-colour question goes
+    # through, so a wording the table cannot read is a card reported unsupported
+    # rather than one admitted with the rewrite absent — which for an
+    # enchantment whose whole text is this sentence is a permanent that enters
+    # play and does nothing.
+    from .damage_source_colors import colorless_source_line
+
+    if colorless_source_line(normalized) is not None:
+        return True
     # "This token can't be enchanted." (Tetravus's Tetravites.) Asked of the
     # reader both attachment predicates use, so the claim and the enforcement
     # are one rule.
@@ -3602,6 +3644,9 @@ def _derived_static_claims(
     """
     from .card_hooks import DRAW_STEP_MODIFIERS
     from .cost_modifiers import cost_modifier_claims_line
+    from .cost_x_definitions import cast_x_definition_line
+    from .damage_source_colors import CLAIM as DAMAGE_SOURCE_COLORS_CLAIM
+    from .damage_source_colors import colorless_source_line
     from .draw_step_modifiers import (draw_step_bonus_for, draw_step_skip_for,
                                       skips_own_draw_step)
     from .enter_effects import enter_effect_line
@@ -3654,6 +3699,24 @@ def _derived_static_claims(
     # card reports unsupported however well the effect works.
     if negated_evasion_abilities(oracle_text):
         claims.append("evasion_negation")
+    # "Black and/or red permanents and spells are colorless sources of damage."
+    # (Ghostly Flame.) The damage paths ask the board for this at the moment a
+    # source's colour matters (CR 609.7b), so there is no instruction — and on
+    # an enchantment whose whole text is the sentence, no instruction means the
+    # card reports unsupported however well the rewrite works.
+    if any(
+        colorless_source_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(DAMAGE_SOURCE_COLORS_CLAIM)
+    # "X is the number of … as you cast this spell." (Spoils of War, CR 107.3c.)
+    # The cast path computes it before the caster is asked, so there is no
+    # instruction — and a definition no row reads must make the card unsupported
+    # rather than leave the caster announcing X freely.
+    if any(
+        cast_x_definition_line(line) for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("cast_x_definitions")
     if draw_step_bonus_for(oracle_text) is not None:
         claims.append("draw_step_modifiers")
     # "Skip your draw step." (Necropotence.) The draw step reads the

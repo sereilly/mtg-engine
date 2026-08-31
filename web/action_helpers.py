@@ -91,8 +91,16 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
     target = req.target_seat if req.target_seat is not None else _default_target(card_name, seat)
     # Cross-seat divided targets (Fireball): (seat, index|None) pairs; an index
     # of None is that player's face.
+    # A three-tuple only where a share was announced (CR 601.2d): the two-tuple
+    # is what every evenly-divided spell and every non-interactive caller sends,
+    # and `engine/divided_damage.divided_entry` reads both.
     divided = (
-        [(entry.seat, entry.index) for entry in req.divided_targets]
+        [
+            (entry.seat, entry.index)
+            if entry.amount is None
+            else (entry.seat, entry.index, entry.amount)
+            for entry in req.divided_targets
+        ]
         if req.divided_targets
         else None
     )

@@ -252,6 +252,22 @@ class LordBuff:
     # arguments — Zombie Master's granted ability arrived as a protection
     # quality, one character per letter, the first time this was written above.
     lost_keywords: tuple[str, ...] = ()
+    # "All creatures get +1/+0 **for each time counter on this artifact**."
+    # (Infinite Hourglass.) The counter word the P/T delta is multiplied by,
+    # counted on the *source* of the buff — so the anthem's size is a reading of
+    # the board rather than a number, recomputed with everything else in
+    # ``_recalculate_lord_buffs`` (CR 613.4b: a characteristic-changing effect
+    # whose value comes from information that keeps changing is applied
+    # continuously).
+    #
+    # Only the P/T delta scales: a keyword granted "for each counter" is not a
+    # sentence Magic prints, and multiplying a grant by zero and by one is the
+    # same grant — so :func:`lord_buff_for` refuses the combination rather than
+    # carrying a field that means nothing next to it.
+    #
+    # After ``lost_keywords`` for that field's own reason: the positional
+    # callers above must keep the arguments they were written with.
+    per_counter: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -269,6 +285,30 @@ _PT_AND_KEYWORD_RE = re.compile(
 )
 
 _KEYWORD_RE = re.compile(r"^ha(?:ve|s) (?P<keywords>.+)$")
+
+#: "…get +1/+0 **for each time counter on this artifact**." (Infinite
+#: Hourglass.) The trailing scale clause, lifted off the effect before the P/T
+#: patterns above see it — they are anchored at both ends, which is what made
+#: the whole line refuse and the anthem vanish rather than be applied at the
+#: wrong size. The counter word and the source noun are both payload, so a card
+#: printing "for each charge counter on this artifact" needs nothing here.
+_PER_COUNTER_RE = re.compile(
+    r"^(?P<effect>.+?) for each (?P<counter>[a-z][a-z-]*) counter on this [a-z]+$"
+)
+
+
+def _split_per_counter(effect: str) -> tuple[str, str | None]:
+    """*effect* with any "for each <word> counter on this <noun>" tail removed.
+
+    Returns ``(effect, counter word or None)``. Splitting rather than parsing
+    together for the reason :func:`_split_protection` does: the tail is a
+    multiplier on the delta and the delta is read by three anchored patterns,
+    so the two have to be separated before either is read.
+    """
+    match = _PER_COUNTER_RE.match(effect)
+    if match is None:
+        return effect, None
+    return match.group("effect").strip(), match.group("counter")
 
 # A duration ends the static reading: see the module docstring.
 _DURATIONS = ("until end of turn", "until end of combat", "this turn", "until your next turn")
@@ -512,6 +552,7 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
     if subject is None:
         return None
     effect = clause[match.start():].strip()
+    effect, per_counter = _split_per_counter(effect)
 
     keywords: tuple[str, ...] = ()
     protection_from: tuple[str, ...] = ()
@@ -562,9 +603,18 @@ def lord_buff_for(normalized_line: str) -> LordBuff | None:
     else:
         return None
 
+    if per_counter is not None and (
+        keywords or protection_from or granted_ability or not (power or toughness)
+    ):
+        # The scale multiplies a P/T delta and nothing else (see
+        # ``LordBuff.per_counter``). Refusing rather than dropping it: an anthem
+        # whose "for each" is ignored is a permanent +1/+0 where the card prints
+        # one that starts at nothing, which is a strictly larger card.
+        return None
+
     return LordBuff(
         subject, power, toughness, keywords, protection_from, granted_ability,
-        condition,
+        condition, per_counter=per_counter,
     )
 
 
@@ -601,6 +651,8 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["granted_ability"] = buff.granted_ability
     if buff.condition:
         payload["condition"] = buff.condition
+    if buff.per_counter:
+        payload["per_counter"] = buff.per_counter
     return payload
 
 
@@ -624,6 +676,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
         protection_from=tuple(payload.get("protection_from") or ()),
         granted_ability=payload.get("granted_ability"),
         condition=payload.get("condition"),
+        per_counter=payload.get("per_counter"),
     )
 
 

@@ -23,7 +23,11 @@ from ...auras import aura_enchant_clause
 from ...cast_costs import AdditionalCost, additional_costs
 from ...auras import controller_cast_ban
 from ...cast_restrictions import check_cast_timing
+from ...cost_x_definitions import cast_x_value, defines_cast_x
 from ...damage_ledger import record_cast
+from ...divided_damage import (
+    EVENLY, divided_description, divided_entry, division_refusal,
+)
 from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...classifier import classify_card
 from ...cost_modifiers import (
@@ -151,6 +155,27 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
     if excluded is not None and permanent.has_type(excluded):
         return False
     return matcher(permanent)
+
+
+def _divided_total(payload: dict, x_value: int | None) -> int:
+    """How much a divided instruction has to divide, as announced.
+
+    The same two keys the handler adds together — the amount and Meteor
+    Shower's "X **plus 1**" bonus — read here so CR 601.2d's "the division must
+    total this" is checked against the number the spell will really deal.
+    """
+    from ...handlers._common import resolve_amount
+
+    # ``count`` for a distributed *counter* placement (Spoils of War) and
+    # ``amount`` for damage: one sentence in CR 601.2d covers both, and the two
+    # instruction families spell their quantity with the words their own
+    # handlers read. Named here rather than normalized at the lowering, because
+    # renaming one would be a payload key changed for the gate's convenience.
+    quantity = payload.get("amount", payload.get("count", 0))
+    return int(resolve_amount(quantity, x_value)) + int(
+        payload.get("amount_bonus", 0) or 0
+    )
+
 
 
 class SpellCastingMixin:
@@ -588,16 +613,20 @@ class SpellCastingMixin:
         # A divided spell's cross-seat target list: sanity-check every entry so a
         # stale battlefield index can't crash resolution.
         if divided_targets is not None:
-            cleaned: list[tuple[int, int | None]] = []
+            cleaned: list[tuple] = []
             for entry in divided_targets:
-                seat, index = entry
+                seat, index, share = divided_entry(entry)
                 if not (isinstance(seat, int) and 0 <= seat < len(self.players)):
                     return SimulationResult(card.name, False, classification.effect_kind, "invalid divided target seat")
                 if index is not None and not (
                     isinstance(index, int) and 0 <= index < len(self.players[seat].battlefield)
                 ):
                     return SimulationResult(card.name, False, classification.effect_kind, "invalid divided target")
-                cleaned.append((seat, index))
+                # The two-tuple is kept where no share was announced: it is what
+                # every evenly-divided spell and every non-interactive caller
+                # sends, and normalizing it to a three-tuple would say a
+                # division was announced when none was.
+                cleaned.append((seat, index) if share is None else (seat, index, share))
             divided_targets = cleaned or None
 
         # Fireball-style spells cost {1} more to cast for each target beyond the
@@ -615,6 +644,20 @@ class SpellCastingMixin:
 
         x_color = x_spend_color_from_text(card.oracle_text)
         resolved_x_value = x_value
+        # CR 107.3c: some spells define X themselves, and then the caster does
+        # not announce it — the definition wins over anything the wire sent, the
+        # way it does for an activated ability's cost one table over. A card
+        # that defines an X this cast cannot compute refuses, because the
+        # alternative is letting the caster pick a number the card fixed.
+        if defines_cast_x(card.oracle_text):
+            defined = cast_x_value(self, caster_index, card.oracle_text)
+            if defined is None:
+                refusal = f"{card.name}: X cannot be determined for this cast"
+                self.log.append(refusal)
+                return SimulationResult(
+                    card.name, False, classification.effect_kind, refusal,
+                )
+            resolved_x_value = defined
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():
             # "…with mana value X" (Spell Blast, Detonate). The target and the X
             # are announced together (CR 601.2b before 601.2c), and only one X
@@ -630,6 +673,25 @@ class SpellCastingMixin:
                 caster, card.mana_cost, extra_generic_tax, x_color=x_color,
                 reduction=cost_reduction,
             )
+
+        # CR 601.2d, after X is announced (601.2b) and before any cost is paid:
+        # the division is part of *proposing* the spell, and CR 601.2e returns
+        # the game to the moment before a proposal that turns out to be illegal.
+        # Below the X resolution because a division of X cannot be measured
+        # until X is a number — the same ordering CR 601.2 puts them in, and the
+        # same lesson Fire Covenant's "pay X life" taught the cost gate below.
+        if divided_targets is not None:
+            found = divided_description(compile_card_oracle(card).instructions)
+            refusal = None if found is None else division_refusal(
+                _divided_total(found[0], resolved_x_value),
+                divided_targets,
+                division=found[1].get("division", EVENLY),
+            )
+            if refusal is not None:
+                self.log.append(f"{card.name}: {refusal}")
+                return SimulationResult(
+                    card.name, False, classification.effect_kind, refusal,
+                )
 
         # The printed additional costs, checked now: CR 601.2h says an unpayable
         # cost can't be paid, and the consequence is that the spell can't be

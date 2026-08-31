@@ -885,6 +885,7 @@ def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.St
             exile_if_dies=statement.riders.exile_if_dies or riders.exile_if_dies,
             divided=statement.riders.divided,
             divided_evenly=statement.riders.divided_evenly,
+            rounding=statement.riders.rounding,
             unpreventable_to_creature=(
                 statement.riders.unpreventable_to_creature
                 or riders.unpreventable_to_creature

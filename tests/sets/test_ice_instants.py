@@ -537,48 +537,92 @@ def test_w1g3_essence_vortex_offers_the_creature_as_a_cast_target(set_pool):
     assert derive_cast_spec(card, compile_card_oracle(card)) == {"kind": "creature"}
 
 
-# --- W1G3 (cont.): the one declined instant, with its pieces named ---
-def test_w1g3_spoils_of_evil_is_declined_and_says_which_pieces_are_missing(set_pool):
+# --- W1G3 (cont.): the declined instant, now landed ---
+def test_w1g3_spoils_of_evil_counts_a_chosen_graveyard(set_pool):
     """"For each artifact or creature card in target opponent's graveyard, add
-    {C} and you gain 1 life."
+    {C} and you gain 1 life." (W3G3 - the refusal this test used to pin.)
 
-    Five pieces. The refusal site says "expected a subject", which is the
-    generic no-production message and names none of them:
+    W1G3 named five pieces and W2 corrected the brief on the fourth: this is a
+    **count**, not a loop. Two mana and two life is one addition and one gain,
+    not two of each, and the pool already reads the multiplier in the trailing
+    position ("Add {G} for each Forest you control") - so the leading spelling
+    is a distribution onto the same ``per_each`` field rather than an
+    ``ast.ForEach`` nothing could walk.
 
-    1. There is no leading ``For each <noun phrase>, <effect>`` production at
-       all. The two that exist are a counter placement
-       (``effects/counters``) and the "for each creature that died this way"
-       back-reference (``statements``); a bare sentence opening with "for" has
-       no reading.
-    2. The *trailing* spelling that does exist ("Add {C} for each …") reads only
-       the caster's own zone: "in **target opponent's** graveyard" leaves
-       unconsumed text where "in your graveyard" parses.
-    3. ``lowering/mana._lower_add_mana``'s per-each branch refuses any owner but
-       "you" — "the mana multiplier counts the producer's own board".
-    4. The loop body is two effects joined by "and", and
-       ``handlers/control_flow.for_each`` iterates battlefield permanents or a
-       set an earlier step recorded. Cards in a graveyard are neither, so even a
-       parsed loop would have nothing to walk.
-    5. The spell targets a **player**, and with no instruction describing one
-       ``targeting.derive_cast_spec`` gives the picker nothing to ask for.
+    What was really missing: the noun parser's "in **target opponent's**
+    graveyard", a leading production that distributes the count, the two
+    lowerings' insistence on the caster's own zone, and a targets description so
+    the picker asks for the opponent.
     """
+    program = compile_card_oracle(set_pool("ICE")["Spoils of Evil"])
+    assert program.supported
+
+    (sequence,) = [i for i in program.instructions if i.kind == "sequence"]
+    add_mana, gain_life = sequence.payload["steps"]
+    counted = {"zone": "graveyard", "owner": "target_opponent",
+               "filter": {"type_filter": ["artifact", "creature"]}}
+    assert add_mana.payload["per_each"] == counted
+    assert gain_life.payload["per_each"] == counted,         "one sentence, one count - two readings of it would be two answers"
+
+
+def test_spoils_of_evil_pays_out_the_count_and_asks_for_an_opponent(set_pool):
+    """CR 115.4: "target opponent" never names the caster's own seat."""
+    from engine.targeting import derive_cast_spec
+
+    pool = set_pool("ICE")
+    lea = set_pool("LEA")
+    spoils = pool["Spoils of Evil"]
+    assert derive_cast_spec(spoils, compile_card_oracle(spoils)) == {
+        "kind": "player", "opponents_only": True,
+    }
+
+    p0 = PlayerState(name="P0", hand=[spoils], life=20)
+    p1 = PlayerState(name="P1", life=20, graveyard=[
+        pool["Balduvian Bears"], lea["Black Lotus"], lea["Mountain"],
+        pool["Tor Giant"],
+    ])
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.cast_from_hand(0, "Spoils of Evil", target_player_index=1)
+    assert result.supported, result.details
+    game._settle()
+
+    assert p0.life == 23, "three artifact-or-creature cards; the Mountain is neither"
+    assert p0.mana_pool["C"] == 3
+
+
+def test_an_empty_graveyard_is_a_real_answer(set_pool):
+    """"For each" of nothing is nothing - the spell resolves and pays out zero,
+    which is what makes the count above a count rather than a fixed 1."""
+    pool = set_pool("ICE")
+    p0 = PlayerState(name="P0", hand=[pool["Spoils of Evil"]], life=20)
+    p1 = PlayerState(name="P1", life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert game.cast_from_hand(0, "Spoils of Evil", target_player_index=1).supported
+    game._settle()
+
+    assert p0.life == 20 and p0.mana_pool["C"] == 0
+
+
+def test_a_leading_count_over_an_effect_that_cannot_carry_it_refuses():
+    """A count silently dropped is a card that adds one mana where it should add
+    five, so a statement with no ``per_each`` to fold it onto takes the line
+    down rather than resolving flat."""
     from engine.grammar import compile_line
 
-    assert not compile_card_oracle(set_pool("ICE")["Spoils of Evil"]).supported
-
-    # Piece 1: the leading form has no production.
-    leading = compile_line(
-        "For each artifact or creature card in target opponent's graveyard, "
-        "add {C} and you gain 1 life."
+    assert compile_line(
+        "For each artifact card in target opponent's graveyard, add {C}."
+    ).parsed
+    refused = compile_line(
+        "For each artifact card in target opponent's graveyard, draw a card."
     )
-    assert not leading.parsed
-
-    # Piece 2: the trailing form reads the caster's zone and only that one.
-    assert compile_line("Add {C} for each creature card in your graveyard.").lowered
-    theirs = compile_line(
-        "Add {C} for each artifact or creature card in target opponent's graveyard."
-    )
-    assert not theirs.parsed
+    assert not refused.parsed
+    assert "leading count" in (refused.parse_error or "")
 # --- end W1G3 ---
 # --- W1G2: combat relations and end of combat ---
 def _w1g2_venomous_board(set_pool, target_seat: int, target_index: int):
@@ -1105,6 +1149,127 @@ def test_word_of_undoing_spares_an_aura_you_do_not_own(set_pool):
     assert [card.name for card in p2.hand] == []
     assert [card.name for card in p2.graveyard] == ["Armor of Faith"]
 # --- end W2G4 ---
+
+
+# --- W3G3: X spells, multiple targets, damage sources ---
+def _covenant_board(set_pool):
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])      # 2/2
+    giant = Permanent(card=pool["Tor Giant"])            # 3/3
+    p0 = PlayerState(name="P0", hand=[pool["Fire Covenant"]], life=20)
+    p1 = PlayerState(name="P1", battlefield=[bears, giant], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, p0, p1, bears, giant
+
+
+def test_fire_covenant_divides_as_the_caster_chooses(set_pool):
+    """"Fire Covenant deals X damage divided **as you choose** among any number
+    of target creatures."
+
+    ``DamageRiders.divided_evenly`` was set by the parser and read by nothing,
+    so this and three other cards were played as ``damage // n`` — a 5-damage
+    Covenant over two creatures dealt 2 and 2 where the card lets the caster
+    deal 4 and 1.
+    """
+    game, _p0, _p1, bears, giant = _covenant_board(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Fire Covenant", x_value=5,
+        divided_targets=[(1, 0, 1), (1, 1, 4)],
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert game.is_on_battlefield(bears), "1 damage on a 2/2"
+    assert not game.is_on_battlefield(giant), "4 damage on a 3/3"
+
+
+def test_the_even_split_would_have_answered_differently(set_pool):
+    """The boundary the test above needs. The same X over the same two
+    creatures, with no division announced, is 2 and 2 — the 3/3 lives and the
+    2/2 dies, which is the opposite pair. Without this the assertion above
+    would pass on an engine that ignored the announcement.
+    """
+    game, _p0, _p1, bears, giant = _covenant_board(set_pool)
+
+    game.cast_from_hand(0, "Fire Covenant", x_value=5, divided_targets=[(1, 0), (1, 1)])
+    game._settle()
+
+    assert not game.is_on_battlefield(bears)
+    assert game.is_on_battlefield(giant)
+
+
+def test_fire_covenant_offers_only_creatures(set_pool):
+    """"…among any number of **target creatures**". The divided lowering
+    returned before it ever read the printed noun, so the picker's seat loop
+    offered both players' faces as legal Fire Covenant targets."""
+    from engine.targeting import derive_cast_spec
+
+    game, _p0, _p1, _bears, _giant = _covenant_board(set_pool)
+    pool = set_pool("ICE")
+    covenant = pool["Fire Covenant"]
+
+    spec = derive_cast_spec(covenant, compile_card_oracle(covenant))
+    assert spec["division"] == "chosen" and spec["creatures_only"]
+
+    offered = game.cast_target_spec(0, covenant)["valid_targets"]
+    assert all(option["kind"] == "permanent" for option in offered), offered
+    assert sorted(option["name"] for option in offered) == [
+        "Balduvian Bears", "Tor Giant",
+    ]
+
+
+def test_a_division_must_total_the_damage_and_give_each_target_one(set_pool):
+    """CR 601.2d, checked at announcement (CR 601.2e) rather than at
+    resolution — by resolution the mana is spent and the only answer left is to
+    deal the wrong amount."""
+    game, _p0, _p1, _bears, _giant = _covenant_board(set_pool)
+    short = game.cast_from_hand(
+        0, "Fire Covenant", x_value=5, divided_targets=[(1, 0, 1), (1, 1, 1)],
+    )
+    assert not short.supported and "601.2d" in short.details
+
+    game, _p0, _p1, _bears, _giant = _covenant_board(set_pool)
+    starved = game.cast_from_hand(
+        0, "Fire Covenant", x_value=5, divided_targets=[(1, 0, 0), (1, 1, 5)],
+    )
+    assert not starved.supported and "at least 1" in starved.details
+
+
+def test_meteor_shower_divides_x_plus_one(set_pool):
+    """"X **plus 1** damage divided as you choose." The announcement is checked
+    against what the spell will really deal, bonus included — a gate reading
+    only ``amount`` would refuse the division the card allows."""
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", hand=[pool["Meteor Shower"]], life=20)
+    p1 = PlayerState(name="P1", battlefield=[bears], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.cast_from_hand(
+        0, "Meteor Shower", x_value=2, divided_targets=[(1, 0, 1), (1, None, 2)],
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert p1.life == 18, "X=2 plus 1 is three points to divide, not two"
+    assert game.is_on_battlefield(bears), "one of them went to the 2/2"
+
+    # And the total really is the bonus: a division summing to X alone refuses.
+    p0 = PlayerState(name="P0", hand=[pool["Meteor Shower"]], life=20)
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pool["Balduvian Bears"])])
+    short = Game(players=[p0, p1])
+    short.enforce_mana_costs = False
+    short.start_turn(0)
+    refused = short.cast_from_hand(
+        0, "Meteor Shower", x_value=2, divided_targets=[(1, 0, 1), (1, None, 1)],
+    )
+    assert not refused.supported and "total 3" in refused.details
+# --- end W3G3 ---
 
 
 # --- W3G1: granted abilities in quotes ---

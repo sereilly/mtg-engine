@@ -15,6 +15,7 @@ import re
 
 from engine import Game
 from engine.activation_permissions import card_widens_activation
+from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.legality import cast_target_kind, targeting_instruction
 from engine.models import Permanent, PlayerState
 from engine.layer_bridge import displayed_type_line
@@ -524,9 +525,9 @@ def _stack_item_targets(item, game: Game) -> list[dict]:
 
     # Fireball & co: the full cross-seat list, which takes precedence over the
     # single-target fields (see StackItem.choices["divided_targets"]).
-    divided = item.choices.get("divided_targets")
+    divided = item.choices.get(DIVIDED_TARGETS)
     if divided:
-        for seat, idx in divided:
+        for seat, idx, _share in (divided_entry(entry) for entry in divided):
             if not 0 <= seat < len(players):
                 continue
             if idx is None:

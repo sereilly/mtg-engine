@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..card_hooks import ON_SPELL_COUNTERED
+from ..divided_damage import DIVIDED_TARGETS, divided_entry
 from ..game_types import StackItem
 from ..mana_payment import total_pips
 from .registry import effect_handler
@@ -755,9 +756,17 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
         )
         return True, "resolved"
     item.target_player_index = seat
-    divided = (item.choices or {}).get("divided_targets")
+    divided = (item.choices or {}).get(DIVIDED_TARGETS)
     if divided:
-        item.choices["divided_targets"] = [(seat, None)]
+        # CR 115.7f keeps the division unchanged, so the one surviving target
+        # keeps the share it was announced with. Only when the spell named one
+        # target is there a share to carry across; a list this collapses to one
+        # face has no single announcement to keep, and an even split of one is
+        # the whole amount either way.
+        share = divided_entry(divided[0])[2] if len(divided) == 1 else None
+        item.choices[DIVIDED_TARGETS] = (
+            [(seat, None)] if share is None else [(seat, None, share)]
+        )
     game.log.append(
         f"{card_name}: {item.card.name} now targets {game.players[seat].name}"
     )

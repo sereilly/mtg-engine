@@ -903,3 +903,65 @@ def test_the_gain_half_goes_through_the_life_gain_seam():
     assert gain.call_count == 1
     assert gain.call_args.args[1] is player
     assert gain.call_args.args[2] == 15
+
+
+# --- W3G3: X spells, multiple targets, damage sources ---
+@pytest.mark.cr("609.7b", "609.7c")
+def test_609_7b_a_shield_rechecks_the_sources_colour_when_it_would_deal_damage():
+    """609.7b: "When the source would deal damage, the shield rechecks the
+    source's properties. If the properties no longer match, the damage isn't
+    prevented."
+
+    609.7c is the other half: a static ability's rewrite applies to sources that
+    are permanents with the property **and** to sources that are not on the
+    battlefield — which is why the rewrite is asked of the board rather than of
+    the source, and why a spell is rewritten exactly as a creature is.
+    """
+    from engine.damage_events import deal_damage
+    from engine.damage_source_colors import damage_source_colors
+
+    flame = _mk_card(
+        "Spectral Fire", "Enchantment",
+        "Black and/or red permanents and spells are colorless sources of damage.",
+    )
+    red_bolt = _mk_card("Red Spell", "Instant", "", colors=("R",))
+
+    victim = PlayerState(name="P1", life=20)
+    caster = PlayerState(name="P2", life=20)
+    game = Game(players=[victim, caster])
+    game.resolving_seats.append(1)
+
+    assert damage_source_colors(game, red_bolt) == ("R",)
+
+    game.players[0].battlefield.append(Permanent(card=flame))
+    game._recompute_continuous_effects()
+    assert damage_source_colors(game, red_bolt) == (), \
+        "609.7c reaches a source that is not on the battlefield"
+
+    # And the recheck is what a colour shield asks: the event is unchanged.
+    assert deal_damage(
+        game, {"recipient": victim, "amount": 2, "source": red_bolt}
+    ).dealt == 2
+
+
+@pytest.mark.cr("609.7b")
+def test_609_7b_a_source_the_rewrite_does_not_name_keeps_its_colours():
+    """The rewrite names colours; a source of none of them is untouched — and a
+    source of one of them is colorless *entirely*, not merely stripped of the
+    named colour ("**are colorless** sources of damage")."""
+    from engine.damage_source_colors import damage_source_colors
+
+    flame = _mk_card(
+        "Spectral Fire", "Enchantment",
+        "Black and/or red permanents and spells are colorless sources of damage.",
+    )
+    blue = _mk_card("Blue Spell", "Instant", "", colors=("U",))
+    black_green = _mk_card("Rot", "Instant", "", colors=("B", "G"))
+
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=flame)])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game._recompute_continuous_effects()
+
+    assert damage_source_colors(game, blue) == ("U",)
+    assert damage_source_colors(game, black_green) == ()
+# --- end W3G3 ---

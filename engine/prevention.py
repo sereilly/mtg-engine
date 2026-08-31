@@ -63,6 +63,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
+from .damage_source_colors import damage_source_colors
 from .effect_ordering import Candidate
 from .models import PlayerState
 from .named_counters import add_counters, counters_on, remove_counters
@@ -239,24 +240,14 @@ def shield_candidates() -> list[Candidate]:
 # Source matching
 # ---------------------------------------------------------------------------
 
-def source_colors(source) -> tuple[str, ...]:
-    """Color symbols of a damage source — a Permanent (honoring a color
-    override), a CardDefinition (spell), or None."""
-    if source is None:
-        return ()
-    meta = getattr(source, "metadata", None)
-    override = meta.get("color_override") if isinstance(meta, dict) else None
-    if override:
-        # One symbol or several — Dream Coat's host is every colour it chose,
-        # and a shield answering to one of them answers to the permanent
-        # (CR 105.2). Read as a string a tuple would have compared as its repr,
-        # which matches no colour at all.
-        return (
-            tuple(str(part) for part in override)
-            if isinstance(override, (list, tuple)) else (str(override),)
-        )
-    card = getattr(source, "card", source)
-    return tuple(getattr(card, "colors", ()) or ())
+# ``source_colors`` used to live here. It moved to
+# ``engine/damage_source_colors.py`` when a *second* question grew beside it:
+# Ghostly Flame rewrites what colour a source is **as a source of damage**
+# without changing the object's colour, so the answer is no longer read off the
+# object at all — and it is asked by protection's damage prevention
+# (CR 702.16e) as well as by the shields here, which is two files.
+# ``damage_source_colors`` (imported at the top of this module) is what every
+# site below now asks.
 
 
 def source_has_type(game, source, card_type: str) -> bool:
@@ -426,7 +417,9 @@ def _source_matches(game, shield: Shield, source) -> bool:
     if shield.source is not None:
         if game._match_chosen_damage_source([shield.source], source) is None:
             return False
-    if shield.colors and not set(shield.colors) & set(source_colors(source)):
+    if shield.colors and not set(shield.colors) & set(
+        damage_source_colors(game, source)
+    ):
         return False
     if shield.source_type is not None and not source_has_type(
         game, source, shield.source_type
@@ -975,7 +968,7 @@ def _source_shield_matches(game, source, recipient, wanted: dict) -> bool:
         if not hasattr(source, "metadata") or not auras_attached_to(source):
             return False
     color = wanted.get("color")
-    if color and color not in source_colors(source):
+    if color and color not in damage_source_colors(game, source):
         # CR 615.9 rechecks the recorded property when the damage would be
         # dealt, so a source that has changed colour since the Aura entered is
         # tested by what it is now.

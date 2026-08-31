@@ -3289,3 +3289,107 @@ def test_reveal_events_reach_every_viewer_with_catalog_art():
             "image_uri": None,
             "large_image_uri": None,
         }
+
+
+# --- W3G3: X spells, multiple targets, damage sources ---
+_PYROTECHNICS_TEXT = (
+    "Pyrotechnics deals 4 damage divided as you choose among any number of targets."
+)
+
+
+def test_a_chosen_division_reaches_the_engine_through_the_wire():
+    """CR 601.2d: "the player announces the division."
+
+    The wire carried ``divided_targets`` as ``(seat, index)`` with no amounts,
+    so every "divided as you choose" spell arrived at the handler indis-
+    tinguishable from Fireball's "divided evenly" and was split evenly. The
+    share now rides the target entry.
+    """
+    pyro = _mk_card(
+        name="Pyrotechnics", mana_cost="{4}{R}", type_line="Sorcery",
+        oracle_text=_PYROTECHNICS_TEXT,
+    )
+    creatures = [_mk_creature_card("Goblin A", 3, 3), _mk_creature_card("Goblin B", 1, 1)]
+    sid = _make_main_phase_session(
+        90501, pyro,
+        mana_pool={"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 8},
+        opp_battlefield=[Permanent(card=c) for c in creatures],
+    )
+
+    cast = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0, "action": "cast", "card_name": "Pyrotechnics",
+            "divided_targets": [
+                {"seat": 1, "index": 0, "amount": 3},
+                {"seat": 1, "index": 1, "amount": 1},
+            ],
+        },
+    )
+    assert cast.status_code == 200, cast.json()
+    _resolve_top_stack(sid, 0)
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    assert state["players"][1]["battlefield"] == [], "3 and 1 is lethal to a 3/3 and a 1/1"
+
+
+def test_an_even_split_would_not_have_killed_the_bigger_creature():
+    """The cap the test above needs to prove itself: the same spell and the same
+    two targets, with the division left unannounced, splits 2/2 and the 3/3
+    lives. Without this the assertion above passes on an engine that ignored
+    the amounts entirely."""
+    pyro = _mk_card(
+        name="Pyrotechnics", mana_cost="{4}{R}", type_line="Sorcery",
+        oracle_text=_PYROTECHNICS_TEXT,
+    )
+    creatures = [_mk_creature_card("Goblin A", 3, 3), _mk_creature_card("Goblin B", 1, 1)]
+    sid = _make_main_phase_session(
+        90502, pyro,
+        mana_pool={"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 8},
+        opp_battlefield=[Permanent(card=c) for c in creatures],
+    )
+
+    cast = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0, "action": "cast", "card_name": "Pyrotechnics",
+            "divided_targets": [{"seat": 1, "index": 0}, {"seat": 1, "index": 1}],
+        },
+    )
+    assert cast.status_code == 200, cast.json()
+    _resolve_top_stack(sid, 0)
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    names = [perm["name"] for perm in state["players"][1]["battlefield"]]
+    assert names == ["Goblin A"], "2 damage each: the 3/3 survives"
+
+
+def test_a_division_that_does_not_total_the_damage_is_refused_at_announcement():
+    """CR 601.2d/601.2e: an illegal announcement returns the game to the moment
+    before the spell was proposed, so this is refused with nothing spent rather
+    than resolved for the wrong amount."""
+    pyro = _mk_card(
+        name="Pyrotechnics", mana_cost="{4}{R}", type_line="Sorcery",
+        oracle_text=_PYROTECHNICS_TEXT,
+    )
+    creatures = [_mk_creature_card("Goblin A", 3, 3), _mk_creature_card("Goblin B", 1, 1)]
+    sid = _make_main_phase_session(
+        90503, pyro,
+        mana_pool={"W": 0, "U": 0, "B": 0, "R": 1, "G": 0, "C": 8},
+        opp_battlefield=[Permanent(card=c) for c in creatures],
+    )
+
+    cast = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0, "action": "cast", "card_name": "Pyrotechnics",
+            "divided_targets": [
+                {"seat": 1, "index": 0, "amount": 3},
+                {"seat": 1, "index": 1, "amount": 3},
+            ],
+        },
+    )
+    assert cast.status_code == 400
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    assert len(state["players"][1]["battlefield"]) == 2
+# --- end W3G3 ---

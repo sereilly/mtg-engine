@@ -803,8 +803,22 @@ def _damage_dealt_filter(
         # announce at all, kept here where the phrase is instead of where the
         # damage is.
         if getattr(damager, "permanent_id", None) is None:
-            return False
-        if not trigger_subject_matches(
+            # …unless the card *said* "or spell" (Justice). Then the union names
+            # the spell half explicitly, and the only word that distributes onto
+            # it is the colour — the condition table refuses the phrase outright
+            # when it says anything else (`_SPELL_UNION_FILTER_KEYS`), so there
+            # is exactly one thing left to test here.
+            #
+            # Read off the printed card, **not** through the damage-source
+            # colour Ghostly Flame overrides: that static makes a red spell a
+            # *colorless source of damage* and leaves the spell red, and this
+            # sentence asks about the spell.
+            if damager is None or not payload.get("damager_includes_spells"):
+                return False
+            colour = payload["damager_filter"].get("color_filter")
+            if colour not in (getattr(damager, "colors", ()) or ()):
+                return False
+        elif not trigger_subject_matches(
             game, trig, "damager", damager, observer=observer, source=permanent,
         ):
             return False

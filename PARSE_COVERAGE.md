@@ -10,27 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **1160**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **77**
-
-## Measured sets — reported, not gated
-
-Cards in a `measured` set (see `cards/manifest.json`) that the
-compiler calls **supported** while carrying a printed line nothing
-implements. They are the debt behind that set's progress number, and
-`--hollow-lines` sees only the ones that produced an *ability part* —
-a line yielding nothing at all leaves that probe nothing to find.
-
-Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
-`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
-set nobody has implemented fires on its composition rather than on
-anything anyone did, and every ingest would arrive red.
-
-**2 unclaimed sentence(s) across 2 supported card(s).**
-
-- **Infinite Hourglass**
-  - `all creatures get +1/+0 for each time counter on this artifact`
-- **Justice**
-  - `whenever a red creature or spell deals damage, this enchantment deals that much damage to that creature's or spell's controller`
+- With deletion-probe findings (ignored words): **76**
 
 ## Acknowledged simplifications
 
@@ -70,7 +50,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Eureka | `starting with you, each player may put a permanent card from their han` | permanent |
 | Experimental Overload | `create an x/x blue and red weird creature token, where x is the number` | cards or |
 | Feint | `tap all creatures blocking target attacking creature. prevent all comb` | all each |
-| Fireball | `fireball deals x damage divided evenly, rounded down, among any number` | evenly, down, |
 | Flashfires | `destroy all plains` | all |
 | Fungal Rebirth | `return target permanent card from your graveyard to your hand. if a cr` | permanent |
 | Gabriel Angelfire | `choose flying, first strike, trample, or rampage 3. gabriel angelfire ` | or |

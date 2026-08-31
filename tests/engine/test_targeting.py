@@ -90,7 +90,10 @@ def test_an_aura_on_a_graveyard_card_is_not_a_battlefield_target(supported_cards
         # to a bare `deal_damage`; only the target description tells them apart.
         ("Lightning Bolt", {"kind": "any"}),
         ("Disintegrate", {"kind": "any"}),
-        ("Fireball", {"kind": "divided"}),
+        # "divided **evenly**" — which division the card prints is part of
+        # the spec (CR 601.2d), because the picker asks the caster for a
+        # division only where the card says the caster chooses.
+        ("Fireball", {"kind": "divided", "division": "evenly"}),
         ("Flight", {"kind": "creature"}),           # Enchant creature
         ("Evil Presence", {"kind": "land"}),        # Enchant land
         ("Steal Artifact", {"kind": "artifact"}),   # Enchant artifact
@@ -119,6 +122,19 @@ def test_an_aura_on_a_graveyard_card_is_not_a_battlefield_target(supported_cards
         }),
         ("Volcanic Eruption", {
             "kind": "divided", "land_filter": "mountain", "x_equals_targets": True,
+        }),
+        # "…divided **as you choose**" (Pyrotechnics) against Fireball's
+        # "divided evenly" above: one printed sentence asks the caster for a
+        # division (CR 601.2d) and the other does not, and the picker cannot
+        # tell them apart without this. The narrowed form — "among any number of
+        # target *creatures*" — is Fire Covenant, in a measured set, so it is
+        # covered in tests/sets/test_ice_instants.py instead.
+        ("Pyrotechnics", {
+            "kind": "divided", "division": "chosen",
+            # How much there is to divide, so the picker can ask for a
+            # division that totals it. Printed here; X plus a bonus for
+            # Meteor Shower.
+            "division_total": 4, "division_x_bonus": 0,
         }),
         ("Reverse Damage", {
             "kind": "permanent", "source_of_choice": True, "also_stack": True,

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**339 / 612 tracked rules covered (55%)** — 1678 tests, 0 unannotated.
+**340 / 612 tracked rules covered (55%)** — 1682 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -78,7 +78,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [606. Loyalty Abilities](#606-loyalty-abilities) | 5/6 | 83% |
 | [607. Linked Abilities](#607-linked-abilities) | 2/5 | 40% |
 | [608. Resolving Spells and Abilities](#608-resolving-spells-and-abilities) | 3/3 | 100% |
-| [609. Effects](#609-effects) | 4/7 | 57% |
+| [609. Effects](#609-effects) | 5/7 | 71% |
 | [610. One-Shot Effects](#610-one-shot-effects) | 2/5 | 40% |
 | [611. Continuous Effects](#611-continuous-effects) | 3/3 | 100% |
 | [612. Text-Changing Effects](#612-text-changing-effects) | 3/10 | 30% |
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(107 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(109 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(6 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -741,7 +741,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat... *(4 tests)*
 - [ ] **609.5** If an effect could result in a tie, the text of the spell or ability that created the effect will...
 - [ ] **609.6** Some continuous effects are replacement effects or prevention effects. See rules 614 and 615.
-- [ ] **609.7** Some effects apply to damage from a source—for example, “The next time a red source of your choic...
+- [x] **609.7** Some effects apply to damage from a source—for example, “The next time a red source of your choic... *(3 tests, subrules bc)*
 
 ### 610. One-Shot Effects
 

@@ -205,13 +205,14 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
     stream.expect_word("damage")
 
     if stream.accept_word("divided"):
-        if stream.accept_word("evenly"):
-            riders = ast.DamageRiders(divided=True, divided_evenly=True)
-        else:
-            riders = ast.DamageRiders(divided=True)
+        evenly = bool(stream.accept_word("evenly"))
         stream.accept_punct(",")
+        rounding = ""
         if stream.accept_word("rounded"):
-            stream.accept_word("down", "up")
+            rounding = stream.accept_word("down", "up") or ""
+        riders = ast.DamageRiders(
+            divided=True, divided_evenly=evenly, rounding=rounding,
+        )
         stream.accept_punct(",")
         if stream.accept_word("among", "between"):
             stream.accept_phrase("any", "number", "of")

@@ -101,6 +101,13 @@ PARSE_LAYERS = [
     # out of `triggers` at the size guard below, along the boundary that module
     # already drew, and under it: these read tokens and build events, and none
     # of them reaches a table.
+    # Which printed phrase names which trigger event, as data. Split out of
+    # `triggers` at the guard below when two parallel branches' additions summed
+    # past it; the boundary is the one that module already had in its own shape,
+    # a block of phrase-to-event tables followed by the productions that walk a
+    # stream against them. Below `triggers`, and it imports nothing from the
+    # reading side, which is what makes it a layer rather than a second half.
+    "trigger_tables",
     "trigger_subjects",
     # The trigger tables and the productions that read them. Split out of
     # `phrases` when Antiquities' trigger work pushed that module past the

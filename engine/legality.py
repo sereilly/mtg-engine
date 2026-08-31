@@ -38,6 +38,7 @@ import re
 from .handlers._common import (graveyard_card_matches, permanent_matches_filter,
                                state_holds)
 from .models import CardDefinition, Permanent
+from .cost_x_definitions import cast_x_value, defines_cast_x
 from .oracle import compile_card_oracle, expand_ability_lines
 from .static_bonuses import conditional_static_holds
 from .subject_filters import card_matches_any, subject_matches
@@ -443,6 +444,16 @@ class LegalityMixin:
         # describes no cast-time choice means the spell makes none.
         spec = derive_cast_spec(card, program) or {"kind": "none"}
         spec["requires_target"] = spec["kind"] != "none"
+        # CR 107.3c: a spell that defines its own X takes the announcement away
+        # from the caster, so the picker must not ask for one — and a divided
+        # spell's caster needs the number *before* announcing the division
+        # (CR 601.2d), which is exactly what a browser that had asked for X
+        # would have got wrong. Answered here rather than in the browser because
+        # the definition counts a graveyard, which only the game can read.
+        if defines_cast_x(card.oracle_text):
+            defined = cast_x_value(self, caster_index, card.oracle_text)
+            if defined is not None:
+                spec["defined_x"] = defined
         if spec["kind"] == ROLES_TARGET_KIND:
             # A spell whose targets are of *different kinds*, chosen in
             # dependency order (CR 601.2c). ``valid_targets`` is role 0's list —
@@ -1137,7 +1148,15 @@ class LegalityMixin:
         targets: list[dict] = []
         # Player faces are legal for player-targeted, "any target", and divided
         # spells — but not a divided land selection (Volcanic Eruption's Mountains).
-        if kind in ("player", "any", "divided", "player_or_planeswalker") and not spec.get("land_filter"):
+        if (
+            kind in ("player", "any", "divided", "player_or_planeswalker")
+            # "…among any number of **target creatures**" (Fire Covenant) — the
+            # divided sibling of the land narrowing beside it. Without the noun,
+            # a player's face was offered as a legal target for a spell that
+            # names none.
+            and not spec.get("land_filter")
+            and not spec.get("creatures_only")
+        ):
             for seat in range(len(self.players)):
                 # "target opponent" (Word of Command) can't be the caster's own seat.
                 if spec.get("opponents_only") and seat == caster_index:

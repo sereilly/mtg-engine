@@ -625,7 +625,7 @@ class CombatDamageStepMixin:
             if amount <= 0 or not (0 <= member_idx < len(attacker_controller.battlefield)):
                 return
             member = attacker_controller.battlefield[member_idx]
-            if self._is_protected_from(member, blocker):
+            if self._is_protected_from(member, blocker, as_damage_source=True):
                 return
             self._mark_damage_on_permanent(
                 member, amount, source=blocker, combat=True,
@@ -683,7 +683,7 @@ class CombatDamageStepMixin:
             if not self._strikes_in_pass(blocker, run_first_pass, has_first_strike_pass):
                 return
             # CR 702.16e: damage from a source of the protected quality is prevented.
-            if self._is_protected_from(attacker, blocker):
+            if self._is_protected_from(attacker, blocker, as_damage_source=True):
                 return
             self._mark_damage_on_permanent(
                 attacker, blocker_assigns, source=blocker, combat=True,
@@ -719,7 +719,9 @@ class CombatDamageStepMixin:
                 else None
             )
             # CR 702.16e: protection prevents damage from the protected quality.
-            if source_attacker is not None and self._is_protected_from(blocker_perm, source_attacker):
+            if source_attacker is not None and self._is_protected_from(
+                blocker_perm, source_attacker, as_damage_source=True,
+            ):
                 return
             self._mark_damage_on_permanent(
                 blocker_perm, damage, source=source_attacker, combat=True,
@@ -751,7 +753,9 @@ class CombatDamageStepMixin:
                 walker = self.permanent_by_id(attacked_walker_id)
                 if walker is None:
                     return
-                if source_attacker is not None and self._is_protected_from(walker, source_attacker):
+                if source_attacker is not None and self._is_protected_from(
+                    walker, source_attacker, as_damage_source=True,
+                ):
                     return
                 self._mark_damage_on_permanent(
                     walker, damage, source=source_attacker, combat=True,

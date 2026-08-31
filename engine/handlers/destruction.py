@@ -8,9 +8,10 @@ from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
 from ..oracle_types import PER_OBJECT_SEAT_RECORDS
 from ..resumption import run_resumable
+from ..divided_damage import DIVIDED_TARGETS, divided_entry
 from ._common import (
-    apply_damage_to_creature, permanent_matches_filter, resolve_target_permanent,
-    resolve_target_permanents,
+    apply_damage_to_creature, permanent_matches_filter, resolve_role_permanent,
+    resolve_target_permanent, resolve_target_permanents,
 )
 from .registry import effect_handler
 
@@ -36,9 +37,12 @@ def volcanic_eruption(game: Game, instruction: OracleInstruction, context: Oracl
     # indices on the target player's battlefield; fall back to the first X
     # Mountains anywhere for AI/no explicit choice.
     chosen: list[tuple[PlayerState, Permanent]] = []
-    divided = context.choices.get("divided_targets")
+    divided = context.choices.get(DIVIDED_TARGETS)
     if divided:
-        for seat, index in divided:
+        # Through `divided_entry`, because an entry may carry an announced share
+        # (CR 601.2d) — Volcanic Eruption divides its damage among creatures and
+        # players *after* this, and this list is only the Mountains it chose.
+        for seat, index, _share in (divided_entry(entry) for entry in divided):
             if index is None or not (0 <= seat < len(game.players)):
                 continue
             player = game.players[seat]
@@ -523,6 +527,54 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     # (CR 608.2b) — the same reading `untap_target_permanent` takes for
     # Candelabra of Tawnos, through the same helper.
     targets_desc = instruction.payload.get("targets") or {}
+    if isinstance(targets_desc, dict) and targets_desc.get("kind") == "roles":
+        # "Destroy target creature **and target land**." (Fumarole.) Several
+        # targeted phrases of one announcement, each with its own noun — so each
+        # slot is resolved *by its role* rather than by position, through the
+        # same ``targets`` description the picker and the cast gate read.
+        #
+        # Per role rather than all-or-nothing: CR 608.2b removes the spell from
+        # the stack only when **every** target is illegal (which
+        # ``legality.illegal_targets_refusal`` answers above this), and an
+        # illegal one among several is simply skipped. So a land that left is
+        # not destroyed and the creature still is.
+        #
+        # The filter is re-asked at resolution for the reason the picker asked
+        # it at announcement: a creature that became a land between the two is
+        # no longer the thing the caster chose for that role.
+        from ..subject_filters import subject_matches
+
+        observer = (
+            game.players.index(context.caster) if context.caster in game.players
+            else None
+        )
+        died: list[Permanent] = []
+        for role in targets_desc.get("roles") or ():
+            victim = resolve_role_permanent(
+                game, context, instruction.payload, role.get("role")
+            )
+            if victim is None or not game.is_on_battlefield(victim):
+                continue
+            if not subject_matches(
+                game, victim, role.get("filter") or {},
+                observer=observer, source=source_permanent,
+            ):
+                continue
+            seat = game.controller_index_of(victim)
+            if seat is None:
+                continue
+            died.extend(game._destroy_swept_permanents(
+                game.players[seat],
+                lambda candidate, chosen=victim: candidate is chosen,
+                allow_regeneration=not instruction.payload.get("bypass_regeneration"),
+            ))
+        context.results["destroyed_this_way_objects"] = died
+        context.results["destroyed_this_way"] = len(died)
+        game.log.append(
+            f"{card.name} destroyed " + ", ".join(p.card.name for p in died)
+            if died else f"{card.name}: nothing to destroy"
+        )
+        return True, "resolved"
     if isinstance(targets_desc, dict) and targets_desc.get("count") not in (None, 1):
         from ..subject_filters import subject_matches
 

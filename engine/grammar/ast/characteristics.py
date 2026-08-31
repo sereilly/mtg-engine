@@ -171,6 +171,13 @@ class PutCounter:
     # may do. Parsed apart it would be an effect nothing performs, and the
     # ability would put counters on without limit.
     cap: int | None = None
+    # "**Distribute** X +1/+1 counters among any number of target creatures."
+    # (Spoils of War.) The counters go on several targets in shares the caster
+    # announces (CR 601.2d), exactly as a divided damage spell's do — so this
+    # is the counter half of ``DamageRiders.divided`` and travels to the same
+    # ``divided_targets`` list on the stack item. ``subject`` is then the noun
+    # the shares are divided *among* rather than one permanent.
+    distributed: bool = False
 
 
 @dataclass(frozen=True)

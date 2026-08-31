@@ -32,6 +32,13 @@ class DamageRiders:
     exile_if_dies: bool = False
     divided: bool = False
     divided_evenly: bool = False
+    #: "…divided evenly, **rounded down**, among any number of targets."
+    #: (Fireball.) The word the printed sentence spends on what an integer
+    #: division does anyway — recorded rather than swallowed, because a rule
+    #: that consumes a word and stores nothing is a rule that would read
+    #: "rounded **up**" as the same sentence and deal one less than the card
+    #: says. Empty where the card prints no rounding at all.
+    rounding: str = ""
     #: "If <this source> would deal damage to a creature, that damage can't be
     #: prevented or dealt instead to another permanent or player." (Lava Burst.)
     #: Whippoorwill's lock (:class:`DamageCantBePreventedOrRedirected`) said

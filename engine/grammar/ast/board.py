@@ -20,6 +20,7 @@ from ._core import (
     ObjectFilter,
     PlayerRef,
     Recipient,
+    TargetSpec,
     Zone,
 )
 from .costs import ManaCost
@@ -36,6 +37,22 @@ class Destroy:
     # a delayed destroy as a *different* handler, never the immediate one with a
     # flag it might ignore.
     delay: str = ""
+    # "Destroy target creature **and target land**." (Fumarole.) The *other*
+    # targeted phrases the same verb names, beyond ``subject``.
+    #
+    # One statement rather than a ``Conjunction`` of two ``Destroy``s, which is
+    # the shape every other union of noun phrases takes: a conjunction lowers to
+    # a sequence of two instructions, and a spell's cast-time target spec is
+    # derived from the **first** instruction that describes one, so the second
+    # target would be picked by nobody. Two targets of one spell are one
+    # announcement (CR 601.2c), so they are one description — the ordered
+    # ``roles`` shape ``engine/targeting.py`` already carries for Glyph of
+    # Delusion, here with no relation between the roles.
+    #
+    # Empty for every union whose phrases are swept sets ("all enchantments you
+    # control, and all Auras …"), which stay a conjunction: those name no
+    # targets at all, so there is nothing for a picker to ask.
+    also_targets: tuple[TargetSpec, ...] = ()
 
 
 @dataclass(frozen=True)

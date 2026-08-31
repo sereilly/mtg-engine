@@ -51,6 +51,7 @@ from .tapping import (
 )
 from .counters import (
     _expect_counter_kind,
+    _parse_distribute_counters,
     _parse_put_counter,
     _parse_remove_counter,
 )
@@ -76,8 +77,6 @@ from .board import (
     _parse_counted_sacrifice,
     _parse_sacrifice_expansion_permanents,
     _parse_delayed_self_action,
-    _parse_shuffle_graveyard_into_library,
-    _parse_shuffle_hand_into_library,
     parse_player_chooses_permanent,
     _parse_return,
     _parse_put_source_into_zone,
@@ -120,6 +119,8 @@ from .cards import (
     _parse_player_puts_hand_cards_on_library,
 )
 from .library import (
+    _parse_shuffle_graveyard_into_library,
+    _parse_shuffle_hand_into_library,
     _parse_exile_top_of_library,
     _parse_look_at_hand,
     _parse_put_iterated_card_on_library,
@@ -185,6 +186,7 @@ __all__ = [
     "_parse_has_base_pt",
     "_expect_counter_kind",
     "_parse_for_each",
+    "_parse_distribute_counters",
     "_parse_put_counter",
     "_parse_remove_counter",
     "_TEXT_CHANGE_MODES",
