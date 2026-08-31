@@ -27,7 +27,7 @@ from __future__ import annotations
 from ...oracle_types import HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       CREATED_TOKEN, EXILED_THIS_WAY,
-                      _PERMANENTS_GIVEN_COUNTERS)
+                      _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS)
 
 
 _PRODUCES: dict[str, str | tuple[str, ...]] = {
@@ -192,6 +192,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # (CR 511.2). So the counters record their recipients by id, and the tap,
     # the untap restriction and the granted ability all read that record.
     "add_named_counter_to_creatures_in_combat_with_source": _PERMANENTS_GIVEN_COUNTERS,
+    # "Return target white or black creature card from your graveyard to the
+    # battlefield. **That creature** gains "Cumulative upkeep {2}."" (Dreams of
+    # the Dead.) The permanent did not exist when the ability was activated —
+    # the ability's target is a *card* in a graveyard — so the reanimation is
+    # the only step that can say which permanent the sentences behind it name.
+    "reanimate_creature": _REANIMATED_PERMANENTS,
     "tap_all_matching": "tapped_this_way",
     "tap_target_permanent": "tapped_permanents",
     # "…tap the creature, **remove it** from combat" (Imprison). The Aura's tap

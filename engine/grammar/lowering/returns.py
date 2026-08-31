@@ -712,7 +712,22 @@ def _lower_return_to_zone(
     # stronger question than a hand-kept list of exceptions to this one, which
     # is what it used to be (``excluded_subtypes``, ``other_than_source``,
     # ``controller``, ``excluded_types``, stripped before asking).
-    if node.from_zone is not None and _reads_no_return_restriction(filt):
+    # "Return target **white or black** creature card from your graveyard to
+    # the battlefield." (Dreams of the Dead.) The one adjective the reanimation
+    # *does* read: it travels as ``colors`` on the payload, and the picker, the
+    # activation gate and the handler all test it through the one predicate
+    # (``graveyard_card_matches``). Lifted out of the blanket refusal here
+    # rather than weakened inside it, so every other zone-change handler keeps
+    # refusing every adjective — none of them reads one.
+    gated = filt
+    if (
+        node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+        and node.to.name == "battlefield"
+        and filt.colors
+    ):
+        gated = dataclasses.replace(filt, colors=())
+    if node.from_zone is not None and _reads_no_return_restriction(gated):
         raise LoweringError("no return handler honours this restriction", node=node)
 
     source, destination = node.from_zone, node.to
@@ -745,7 +760,12 @@ def _lower_return_to_zone(
             # here: claiming it would silently narrow the player's choice.
             if filt.card_types != ("creature",):
                 raise LoweringError("the reanimation handler only moves creature cards", node=node)
-            return (OracleInstruction("reanimate_creature", "", {}),)
+            # A printed colour narrowing rides the payload; a card with none
+            # keeps emitting the empty payload byte for byte.
+            payload: dict[str, object] = (
+                {"colors": tuple(filt.colors)} if filt.colors else {}
+            )
+            return (OracleInstruction("reanimate_creature", "", payload),)
 
         raise LoweringError(f"no handler moves a card to the {destination.name}", node=node)
 

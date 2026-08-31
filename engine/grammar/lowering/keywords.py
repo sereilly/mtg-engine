@@ -419,6 +419,26 @@ def _lower_gain_ability_text(
         and not _restrictions_beyond(node.subject.filter, frozenset({"card_types"}))
     )
     if bound:
+        # "Return target … creature card from your graveyard to the
+        # battlefield. **That creature** gains "Cumulative upkeep {2}.""
+        # (Dreams of the Dead.) The bound object is a permanent an earlier step
+        # of this effect *created*, not the ability's target — the target is a
+        # card in a graveyard, and granting to it would grant to nothing. So
+        # when a step recorded permanents, the grant reads that record; when
+        # none did, the words keep their existing reading as the ability's own
+        # chosen target (Life Matrix, Glyph of Delusion) and the payload below
+        # is byte-identical to what it has always been.
+        recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+        if len(recorded) > 1:
+            raise LoweringError(
+                "\"that creature\" is ambiguous: several earlier steps "
+                "recorded objects", node=node,
+            )
+        if recorded:
+            payload["permanents_from"] = recorded[0]
+            return (
+                OracleInstruction("grant_target_ability_text", "", payload),
+            )
         # The printed noun, carried even though the *choice* was made by the
         # clause in front of this one: "**that enchantment** gains …"
         # (Balduvian Shaman) is not a creature, and the grant's resolution

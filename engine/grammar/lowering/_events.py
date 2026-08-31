@@ -381,9 +381,16 @@ _UNBLOCKABLE_PERMANENTS = "unblockable_permanents"
 #: there may be no combat left to read.
 _PERMANENTS_GIVEN_COUNTERS = "permanents_given_counters"
 
+#: "Return target … creature card from your graveyard to the battlefield.
+#: **That creature** gains "Cumulative upkeep {2}."" (Dreams of the Dead.) The
+#: reanimation records the permanent it created, because it is the only step
+#: that can name it: the permanent did not exist when the ability was
+#: activated, so nothing on the stack or on the board points at it.
+_REANIMATED_PERMANENTS = "reanimated_permanents"
+
 _RECORDED_PERMANENTS: frozenset[str] = frozenset({
     _TAPPED_PERMANENTS, _UNTAPPED_PERMANENTS, _UNBLOCKABLE_PERMANENTS,
-    _PERMANENTS_GIVEN_COUNTERS,
+    _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS,
 })
 
 

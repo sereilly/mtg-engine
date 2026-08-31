@@ -1078,6 +1078,14 @@ def add_named_counter_to_target(game: Game, instruction: OracleInstruction, cont
     return True, "resolved"
 
 
+#: The scratchpad key the combat-pair counter placement records its recipients
+#: under. Spelled here and again in ``grammar/lowering/_events.py`` rather than
+#: imported across the seam — a lowering may not reach into the handlers and a
+#: handler may not reach into the grammar, and ``lowering/_records._PRODUCES``
+#: is the declaration that holds the two spellings together.
+PERMANENTS_GIVEN_COUNTERS = "permanents_given_counters"
+
+
 @effect_handler("add_named_counter_to_creatures_in_combat_with_source")
 def add_named_counter_to_creatures_in_combat_with_source(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Put a paralyzation counter on each creature blocking or blocked by this
@@ -1095,7 +1103,6 @@ def add_named_counter_to_creatures_in_combat_with_source(game: Game, instruction
     maps is a set that may already be empty.
     """
     from ..named_counters import add_counters
-    from ..grammar.lowering._events import _PERMANENTS_GIVEN_COUNTERS
 
     # The relation as the fire site froze it (CR 603.10). Dread Wight's trigger
     # resolves in the priority window at the end of the end-of-combat step, and
@@ -1110,7 +1117,7 @@ def add_named_counter_to_creatures_in_combat_with_source(game: Game, instruction
             game.log.append(
                 f"{context.card.name}: no source to read the combat from"
             )
-            context.results[_PERMANENTS_GIVEN_COUNTERS] = ()
+            context.results[PERMANENTS_GIVEN_COUNTERS] = ()
             return True, "resolved"
         victims = game.creatures_in_combat_with(source)
     counter = str(instruction.payload.get("counter", ""))
@@ -1128,7 +1135,7 @@ def add_named_counter_to_creatures_in_combat_with_source(game: Game, instruction
     # sentences behind this one read, and an *absent* key is a back-reference
     # with no producer, which is a different thing from a producer that found
     # nobody.
-    context.results[_PERMANENTS_GIVEN_COUNTERS] = tuple(
+    context.results[PERMANENTS_GIVEN_COUNTERS] = tuple(
         perm.permanent_id for perm in marked
     )
     game.log.append(

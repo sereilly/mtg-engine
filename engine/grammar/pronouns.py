@@ -101,6 +101,30 @@ def _parse_pronoun_verb_rider(
     return ast.Untap(target)
 
 
+def _creates_the_permanent_it_names(statement: ast.Statement) -> bool:
+    """Whether *statement* puts a card onto the battlefield, so that a pronoun
+    after it names a **permanent that did not exist** when the choice was made.
+
+    "Return target white or black creature card from your graveyard to the
+    battlefield. **That creature** gains "Cumulative upkeep {2}."" (Dreams of
+    the Dead.) What the sentence before it chose is a *card in a graveyard*;
+    what this one talks about is the permanent that arrived. Reusing the
+    previous target spec — which every other pronoun rider does, and rightly —
+    would hand the grant a graveyard-scoped noun phrase, and there is no such
+    permanent to grant to.
+
+    So the pronoun is left as the bare bound marker and the lowering points it
+    at what the move *recorded*, the way every other back-reference to an
+    earlier step's objects is resolved.
+    """
+    return (
+        isinstance(statement, ast.ReturnToZone)
+        and statement.from_zone is not None
+        and statement.from_zone.name == "graveyard"
+        and statement.to.name == "battlefield"
+    )
+
+
 def _parse_pronoun_grant_rider(
     stream: TokenStream, steps: list[ast.Statement]
 ) -> ast.Statement | None:
@@ -148,8 +172,15 @@ def _parse_pronoun_grant_rider(
     if not stream.at_word("gains", "gain"):
         stream.reset(mark)
         return None
+    # A move that *creates* the permanent the pronoun names hands over the bound
+    # marker instead of its own target spec — see
+    # :func:`_creates_the_permanent_it_names`.
+    subject = (
+        ast.TargetSpec("that", ast.ObjectFilter(card_types=("creature",)))
+        if _creates_the_permanent_it_names(steps[-1]) else target
+    )
     try:
-        grant = _parse_gains(stream, target)
+        grant = _parse_gains(stream, subject)
     except GrammarError:
         stream.reset(mark)
         return None

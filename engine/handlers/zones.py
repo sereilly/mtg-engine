@@ -1091,6 +1091,13 @@ def return_chosen_cards_from_graveyard_to_hand(
     return True, "resolved"
 
 
+#: The scratchpad key a reanimation records its arrival under. Spelled again in
+#: ``grammar/lowering/_events.py`` rather than imported across the seam, and
+#: held to it by ``lowering/_records._PRODUCES`` — the same arrangement the
+#: tap's ``tapped_permanents`` has.
+REANIMATED_PERMANENTS = "reanimated_permanents"
+
+
 @effect_handler("reanimate_creature")
 def reanimate_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
@@ -1104,19 +1111,39 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     source_player = caster
     if instruction.payload.get("any_graveyard") and context.target is not None:
         source_player = context.target
-    reanimated = game._reanimate_creature_to_battlefield(caster, source_player, idx)
+    # "target **white or black** creature card" (Dreams of the Dead). Applied
+    # here as well as at announcement, through the one predicate the picker and
+    # the activation gate ask (`graveyard_card_matches`) — a picker and a
+    # resolution that disagree are a target the player may announce and the
+    # effect then declines to affect. A card with no printed colour hands over
+    # no filter at all, so every reanimation written before this is unchanged.
+    colors = tuple(instruction.payload.get("colors") or ())
+    card_filter = None
+    if colors:
+        spec = {"graveyard_colors": list(colors)}
+        card_filter = lambda card: graveyard_card_matches(spec, card)
+    reanimated = game._reanimate_creature_to_battlefield(
+        caster, source_player, idx, card_filter=card_filter
+    )
     # "It gains haste." — folded into the reanimation because the permanent
-    # does not exist until this step runs. The newest arrival on the caster's
-    # battlefield is the reanimated creature.
+    # does not exist until this step runs, and read off the arrival itself
+    # rather than off "the newest permanent the caster controls", which an
+    # enters-trigger creating a token makes wrong.
     gains = tuple(instruction.payload.get("gains") or ())
-    if reanimated and gains:
-        caster_index = game.players.index(caster)
-        arrivals = list(game.controlled_by(caster_index))
-        if arrivals:
-            newest = arrivals[-1]
-            for keyword in gains:
-                grant_keyword(newest, keyword)
-    game.log.append("Reanimated creature to battlefield" if reanimated else "No creature to reanimate")
+    if reanimated is not None and gains:
+        for keyword in gains:
+            grant_keyword(reanimated, keyword)
+    # What this step put onto the battlefield, for the sentences that name it
+    # afterwards ("that creature gains …"). By id, like every other producer:
+    # the permanent may leave between two steps of one resolution, and a
+    # returning one is a new object (CR 400.7).
+    context.results[REANIMATED_PERMANENTS] = (
+        (reanimated.permanent_id,) if reanimated is not None else ()
+    )
+    game.log.append(
+        "Reanimated creature to battlefield" if reanimated is not None
+        else "No creature to reanimate"
+    )
     return True, "resolved"
 
 
