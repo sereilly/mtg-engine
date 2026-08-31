@@ -60,6 +60,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "shuffle_hand_into_library": "zones",
     "gain_type": "characteristics",
     "change_supertype": "characteristics",
+    # "Target land becomes a Swamp until its controller's next untap step."
+    # (Orcish Farmer.) CR 305.7 replaces the land's subtypes, which is the
+    # same layer-4 question the two above ask about a card type and a
+    # supertype — so the same category, with the land type as payload.
+    "change_land_type_until": "characteristics",
     "restrict_untap_while_source_tapped": "tapping",
     "arm_self_action_at_next_end_step": "destruction",
     "add_power_counters_to_self": "counters",
@@ -104,6 +109,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The "pump" family, because what the sentence does is set a P/T — the
     # type change beside it is the layer bridge reading the same record.
     "animate_self_until_eot": "pump",
+    # "Target snow land becomes a 2/2 creature until end of turn." (Balduvian
+    # Conjurer.) The same record on a permanent the sentence names rather than
+    # on the source, so the same category: what differs is which permanent
+    # holds it, not what the sentence does.
+    "animate_target_until_eot": "pump",
     "set_team_base_pt_until_eot": "pump",
     # The CR 613.4b rewrite template (Sentinel, Wall of Tombstones, Halfdane,
     # Brine Hag). The same category as the setters above: a one-shot layer-7b

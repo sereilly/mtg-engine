@@ -75,6 +75,32 @@ def chooses_color_on_enter(text: str) -> bool:
     """
     return bool(_CHOOSE_COLOR_ON_ENTER_RE.search(text or ""))
 
+#: "As this enchantment enters, choose **two basic land types**." (Illusionary
+#: Terrain.) An *ordered pair* — the static line beside it names "the first
+#: chosen type" and "the second chosen type" — which is what separates it from
+#: the colour choice above and why the record it stamps is a tuple rather than
+#: a word.
+#:
+#: Matched by shape rather than listed as a phrase, so the printed noun is data
+#: the way it is for the colour: an artifact or a creature printing the same
+#: sentence is the same choice.
+_CHOOSE_TWO_LAND_TYPES_ON_ENTER_RE = re.compile(
+    r"as this [a-z]+ enters, choose two basic land types"
+)
+
+
+def chooses_two_land_types_on_enter(text: str) -> bool:
+    """Whether *text* asks its controller for two basic land types as the
+    permanent enters.
+
+    A substring probe like the colour one above, because the mixin asks it of
+    the card's whole normalized text; :func:`enter_effect_line` asks the
+    whole-line question through this same matcher, so what is performed and
+    what is claimed cannot drift.
+    """
+    return bool(_CHOOSE_TWO_LAND_TYPES_ON_ENTER_RE.search(text or ""))
+
+
 # "As this enchantment enters, choose a card name." (Runed Halo.) A *name*
 # rather than a quality: nothing on any board constrains it, and the choice is
 # made from the whole card pool — which is why the default below is a name the
@@ -609,6 +635,8 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "enters with X P/T counters"
     if chooses_color_on_enter(normalized):
         return "chooses a color as it enters"
+    if chooses_two_land_types_on_enter(normalized):
+        return "chooses two basic land types as it enters"
     if choose_number_on_enter(normalized) is not None:
         return "chooses a number as it enters"
     if sacrifice_any_number_on_enter(normalized) is not None:
@@ -631,6 +659,7 @@ __all__ = [
     "CHOOSE_COLOR_AND_OPPONENT_ON_ENTER",
     "CHOOSE_OPPONENT_ON_ENTER",
     "chooses_color_on_enter",
+    "chooses_two_land_types_on_enter",
     "COPY_ARTIFACT_ON_ENTER",
     "COPY_CREATURE_ON_ENTER",
     "ENTERS_TAPPED",

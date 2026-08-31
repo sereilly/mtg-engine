@@ -1689,3 +1689,358 @@ def test_necropotence_pays_life_and_returns_the_card_at_its_next_end_step(set_po
     assert [card.name for card in p1.hand] == ["Balduvian Bears"]
     assert p1.exile == []
 # --- end W1G4 ---
+
+
+# --- W2G2: mana-production replacements and land-type changes ---
+def _lands_board(set_pool, permanent_name=None, lands=("Forest", "Plains", "Island", "Mountain", "Swamp"), opponents=False):
+    """A seat with one basic of each type, and optionally a permanent printing a
+    mana-production replacement — on either battlefield.
+
+    The lands are LEA basics on purpose: their whole printed text is CR 305.6
+    reminder text, so they compile to no mana ability and fall through the tap
+    seam's ``produced_mana`` branch. ``_dual_board`` below covers the other one.
+    """
+    perms = [Permanent(card=set_pool("LEA")[name]) for name in lands]
+    p1 = PlayerState(name="P1", battlefield=list(perms))
+    p2 = PlayerState(name="P2")
+    if permanent_name is not None:
+        source = Permanent(card=set_pool("ICE")[permanent_name])
+        (p2 if opponents else p1).battlefield.append(source)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2, perms
+
+
+def _tap_every_land(game, player, lands=("Forest", "Plains", "Island", "Mountain", "Swamp")):
+    player.mana_pool = {symbol: 0 for symbol in ("W", "U", "B", "R", "G", "C")}
+    for index, name in enumerate(lands):
+        assert game.tap_land_for_mana(0, name, permanent_index=index), name
+    return {symbol: count for symbol, count in player.mana_pool.items() if count}
+
+
+def test_ritual_of_subdual_makes_every_land_produce_colorless(set_pool):
+    """"If a land is tapped for mana, it produces colorless mana instead of any
+    other type."
+
+    CR 106.12b: a replacement effect over the mana production event, so the
+    only way to see it is to tap the lands and read the pool. The compiler
+    would have been happy with a claimed line that changed nothing.
+    """
+    game, p1, _p2, _lands = _lands_board(set_pool, "Ritual of Subdual")
+
+    assert _tap_every_land(game, p1) == {"C": 5}
+
+
+def test_ritual_of_subdual_is_gone_when_the_enchantment_is(set_pool):
+    """Nothing is stamped on the lands, so the static stops applying the moment
+    its source leaves — the half a recorded swap would have got wrong."""
+    game, p1, _p2, _lands = _lands_board(set_pool, "Ritual of Subdual")
+    game.remove_from_battlefield(p1.battlefield[-1])
+
+    assert _tap_every_land(game, p1) == {"W": 1, "U": 1, "B": 1, "R": 1, "G": 1}
+
+
+def test_ritual_of_subdual_covers_an_opponents_lands_too(set_pool):
+    """"**A land**" names no seat, so the enchantment reaches every
+    battlefield — the same reading Worms of the Earth's "Lands can't enter the
+    battlefield" gets, and the reason this is not a per-seat record."""
+    game, p1, _p2, _lands = _lands_board(set_pool, "Ritual of Subdual", opponents=True)
+
+    assert _tap_every_land(game, p1) == {"C": 5}
+
+
+def test_infernal_darkness_makes_every_land_produce_black(set_pool):
+    """The same sentence with the symbol as payload: a card printing another
+    colour needs no code."""
+    game, p1, _p2, _lands = _lands_board(set_pool, "Infernal Darkness")
+
+    assert _tap_every_land(game, p1) == {"B": 5}
+
+
+def test_reality_twist_substitutes_by_land_type(set_pool):
+    """"If tapped for mana, Plains produce {R}, Swamps produce {G}, Mountains
+    produce {W}, and Forests produce {B} instead of any other type."
+
+    Four clauses, and the Island the card does not name still makes {U} — which
+    is what separates this from the untyped spelling above.
+    """
+    game, p1, _p2, _lands = _lands_board(set_pool, "Reality Twist")
+
+    assert _tap_every_land(game, p1) == {"R": 1, "G": 1, "W": 1, "B": 1, "U": 1}
+
+
+def test_reality_twist_reads_the_type_through_layer_4(set_pool):
+    """A land made a Swamp by an effect is one of the Swamps the clause names.
+
+    ``has_type``, not the printed type line: the substitution is keyed to what
+    the land *is* when it is tapped, so an Evil Presence Forest produces {G}
+    and not {B}.
+    """
+    from engine.land_types import change_land_type
+
+    game, p1, _p2, lands = _lands_board(set_pool, "Reality Twist", lands=("Forest",))
+    change_land_type(lands[0], "swamp", source="a test", label="test")
+
+    p1.mana_pool = {symbol: 0 for symbol in ("W", "U", "B", "R", "G", "C")}
+    assert game.tap_land_for_mana(0, "Forest", permanent_index=0)
+
+    assert p1.mana_pool["G"] == 1, "a Swamp, so the Swamp clause"
+    assert p1.mana_pool["B"] == 0, "not the Forest clause it no longer answers"
+
+
+def test_ritual_of_subdual_covers_a_land_whose_mana_ability_compiles(set_pool):
+    """A dual land runs its own compiled ability and writes into the pool
+    itself, so the substitution cannot be a swap on ``produced_mana``.
+
+    The tap seam snapshots the pool and moves whatever came out, which is the
+    one place both production branches meet.
+    """
+    game, p1, _p2, _lands = _lands_board(
+        set_pool, "Ritual of Subdual", lands=("Tundra",)
+    )
+
+    p1.mana_pool = {symbol: 0 for symbol in ("W", "U", "B", "R", "G", "C")}
+    assert game.tap_land_for_mana(0, "Tundra", permanent_index=0, chosen_color="U")
+
+    assert p1.mana_pool["C"] == 1
+    assert p1.mana_pool["U"] == 0, "the blue is replaced, not added to"
+
+
+def test_ritual_of_subdual_line_is_claimed_by_the_replacement_registry(set_pool):
+    """The interceptor is what implements the line, so the claim asks it — the
+    card would otherwise carry a printed sentence nothing accounts for."""
+    from engine.grammar.registries import registry_for_line
+
+    for name in ("Ritual of Subdual", "Infernal Darkness", "Reality Twist"):
+        card = set_pool("ICE")[name]
+        line = [
+            text for text in card.oracle_text.split("\n")
+            if text.lower().startswith("if ")
+        ][0]
+        assert registry_for_line(line) == "replacements", name
+
+def _blizzard_game(set_pool, lands):
+    """Blizzard in hand over a board of *lands*, named out of ICE or LEA."""
+    ice, lea = set_pool("ICE"), set_pool("LEA")
+    perms = [Permanent(card=ice.get(name) or lea[name]) for name in lands]
+    p1 = PlayerState(name="P1", battlefield=perms, hand=[ice["Blizzard"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, p1
+
+
+def test_blizzard_refuses_a_board_with_no_snow_land(set_pool):
+    """"Cast this spell only if you control a snow land." (CR 601.3.)
+
+    A printed restriction is only done when something enforces it: the line was
+    read and dropped, so the spell cast off any board at all.
+    """
+    game, p1 = _blizzard_game(set_pool, ["Forest"])
+
+    result = game.cast_from_hand(0, "Blizzard")
+
+    assert not result.supported
+    assert "snow land" in result.details
+    assert [card.name for card in p1.hand] == ["Blizzard"], "nothing was spent"
+
+
+def test_blizzard_casts_over_a_snow_land(set_pool):
+    game, _p1 = _blizzard_game(set_pool, ["Snow-Covered Forest"])
+
+    assert game.cast_from_hand(0, "Blizzard").supported
+
+
+def test_blizzard_wants_a_snow_land_and_not_merely_something_snow(set_pool):
+    """The noun phrase is read by the grammar's own noun parser, so "snow"
+    qualifies the *land* — a snow permanent that is not one does not answer."""
+    game, _p1 = _blizzard_game(set_pool, ["Forest"])
+    assert not game.cast_from_hand(0, "Blizzard").supported
+
+
+def test_blizzard_reads_snow_through_the_layers(set_pool):
+    """"All lands are no longer snow." (Melting.) The condition asks
+    ``subject_matches``, which resolves the supertype through layer 4 — so a
+    board Melting has thawed stops answering."""
+    game, p1 = _blizzard_game(set_pool, ["Snow-Covered Forest"])
+    p1.battlefield.append(Permanent(card=set_pool("ICE")["Melting"]))
+    game._refresh_dynamic_creatures()
+
+    result = game.cast_from_hand(0, "Blizzard")
+
+    assert not result.supported, result.details
+
+def _terrain_game(set_pool, opponent_lands, interactive=False):
+    """Illusionary Terrain in hand over an opponent's *opponent_lands*."""
+    ice, lea = set_pool("ICE"), set_pool("LEA")
+    p1 = PlayerState(name="P1", hand=[ice["Illusionary Terrain"]])
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=lea[name]) for name in opponent_lands],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    if interactive:
+        game.interactive_seats = {0}
+    game.start_turn(0)
+    return game, p1, p2
+
+
+def test_illusionary_terrain_changes_the_chosen_basic_type(set_pool):
+    """"As this enchantment enters, choose two basic land types." / "Basic
+    lands of the first chosen type are the second chosen type."
+
+    CR 614.1c's entry choice feeding a CR 613 layer-4 static: the sentence
+    names no land type at all, so the derivation reads the ordered pair off the
+    permanent. Proved by tapping the land, because a type change nothing
+    produces mana from is one only the metadata can see.
+    """
+    game, p1, p2 = _terrain_game(set_pool, ["Forest", "Forest"])
+
+    assert game.cast_from_hand(0, "Illusionary Terrain").supported
+    game._settle()
+
+    terrain = p1.battlefield[-1]
+    assert terrain.metadata["chosen_land_types"] == ("forest", "plains"), (
+        "the default is the hoser's choice: the type the opponents hold most "
+        "of becomes the one they hold least"
+    )
+    forest = p2.battlefield[0]
+    assert forest.basic_land_types == ("plains",)
+
+    p2.mana_pool = {symbol: 0 for symbol in ("W", "U", "B", "R", "G", "C")}
+    assert game.tap_land_for_mana(1, "Forest", permanent_index=0)
+    assert p2.mana_pool["W"] == 1
+    assert p2.mana_pool["G"] == 0
+
+
+def test_illusionary_terrain_leaves_a_nonbasic_alone(set_pool):
+    """"**Basic** lands of the first chosen type" — a Taiga is a Forest and is
+    not basic, so the static does not reach it. Asked of ``has_supertype``,
+    which computes the word rather than reading the printed line."""
+    game, _p1, p2 = _terrain_game(set_pool, ["Forest", "Taiga"])
+    assert game.cast_from_hand(0, "Illusionary Terrain").supported
+    game._settle()
+
+    assert p2.battlefield[0].basic_land_types == ("plains",)
+    assert p2.battlefield[1].basic_land_types == ("mountain", "forest")
+
+
+def test_illusionary_terrain_asks_its_controller_and_takes_the_answer(set_pool):
+    """The default is stamped before the prompt so a headless seat never
+    blocks; an interactive controller's answer overwrites it, and the static
+    recomputes from the new pair."""
+    game, p1, p2 = _terrain_game(set_pool, ["Forest"], interactive=True)
+    assert game.cast_from_hand(0, "Illusionary Terrain").supported
+    game._settle()
+    assert game.pending_enter_choice["needs_land_types"]
+
+    assert game.confirm_enter_choice(0, land_types=["forest", "island"])
+
+    assert p1.battlefield[-1].metadata["chosen_land_types"] == ("forest", "island")
+    assert p2.battlefield[0].basic_land_types == ("island",)
+
+
+def test_illusionary_terrain_refuses_a_pair_that_is_not_two_types(set_pool):
+    """An answer naming one type twice is refused rather than repaired:
+    quietly keeping the default would tell the player they had chosen
+    something they had not."""
+    game, _p1, _p2 = _terrain_game(set_pool, ["Forest"], interactive=True)
+    assert game.cast_from_hand(0, "Illusionary Terrain").supported
+    game._settle()
+
+    assert not game.confirm_enter_choice(0, land_types=["forest", "forest"])
+    assert not game.confirm_enter_choice(0, land_types=["forest", "wastes"])
+
+
+def test_illusionary_terrain_reverts_when_it_leaves(set_pool):
+    """A derived static, recomputed from the board — so the land is a Forest
+    again the moment the enchantment is gone (CR 611.3a/b)."""
+    game, p1, p2 = _terrain_game(set_pool, ["Forest"])
+    assert game.cast_from_hand(0, "Illusionary Terrain").supported
+    game._settle()
+    assert p2.battlefield[0].basic_land_types == ("plains",)
+
+    game.remove_from_battlefield(p1.battlefield[-1])
+    game._refresh_dynamic_creatures()
+
+    assert p2.battlefield[0].basic_land_types == ("forest",)
+
+def _snowfall_board(set_pool, land_name):
+    ice, lea = set_pool("ICE"), set_pool("LEA")
+    land = Permanent(card=ice.get(land_name) or lea[land_name])
+    p1 = PlayerState(
+        name="P1", battlefield=[land, Permanent(card=ice["Snowfall"])]
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    p1.mana_pool = {symbol: 0 for symbol in ("W", "U", "B", "R", "G", "C")}
+    p1.restricted_mana = {}
+    return game, p1, land
+
+
+def _pools(player):
+    pool = {symbol: count for symbol, count in player.mana_pool.items() if count}
+    restricted = {
+        key: {symbol: count for symbol, count in bucket.items() if count}
+        for key, bucket in player.restricted_mana.items()
+        if any(bucket.values())
+    }
+    return pool, restricted
+
+
+def test_snowfall_adds_restricted_mana_for_an_island(set_pool):
+    """"Whenever an Island is tapped for mana, its controller may add an
+    additional {U}. … Spend this mana only to pay cumulative upkeep costs."
+
+    The whole ability failed to parse, so the card reported supported on its
+    cumulative upkeep alone and made **no mana at all**. Two things were
+    wrong at once: the trigger table read "whenever **a** … is tapped for
+    mana" and the card prints "an Island", and the offer's three sentences
+    had no production that read them together.
+    """
+    game, p1, _land = _snowfall_board(set_pool, "Island")
+
+    assert game.tap_land_for_mana(0, "Island", permanent_index=0)
+
+    pool, restricted = _pools(p1)
+    assert pool == {"U": 1}, "the Island's own mana, unrestricted"
+    assert restricted == {"cumulative_upkeep": {"U": 1}}
+
+
+def test_snowfall_doubles_the_offer_for_a_snow_island(set_pool):
+    """"If that Island is snow, its controller may add an additional {U}{U}
+    **instead**." The alternative replaces the base production rather than
+    adding to it — parsed apart, the two sentences would make three."""
+    game, p1, _land = _snowfall_board(set_pool, "Snow-Covered Island")
+
+    assert game.tap_land_for_mana(0, "Snow-Covered Island", permanent_index=0)
+
+    pool, restricted = _pools(p1)
+    assert pool == {"U": 1}
+    assert restricted == {"cumulative_upkeep": {"U": 2}}, "instead, not as well"
+
+
+def test_snowfall_ignores_a_land_that_is_not_an_island(set_pool):
+    game, p1, _land = _snowfall_board(set_pool, "Forest")
+
+    assert game.tap_land_for_mana(0, "Forest", permanent_index=0)
+
+    assert _pools(p1) == ({"G": 1}, {})
+
+
+def test_snowfall_mana_pays_a_cumulative_upkeep_and_nothing_else(set_pool):
+    """A printed restriction is only done when something enforces it. The
+    bucket is ``engine/restricted_mana.py``'s, so the three payment paths
+    already ask what it may pay for."""
+    from engine.restricted_mana import (CAST, CUMULATIVE_UPKEEP, PaymentPurpose,
+                                        spendable_restricted_mana)
+
+    game, p1, _land = _snowfall_board(set_pool, "Island")
+    assert game.tap_land_for_mana(0, "Island", permanent_index=0)
+
+    upkeep = PaymentPurpose(kind=CUMULATIVE_UPKEEP)
+    assert spendable_restricted_mana(p1, upkeep) == {"U": 1}
+    casting = PaymentPurpose(kind=CAST, card=set_pool("LEA")["Ancestral Recall"])
+    assert spendable_restricted_mana(p1, casting) == {}
+# --- end W2G2 ---

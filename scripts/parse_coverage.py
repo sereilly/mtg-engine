@@ -56,7 +56,8 @@ from engine.card_loader import manifest_set_paths  # noqa: E402
 from engine.grammar import compile_line as compile_grammar_line  # noqa: E402
 from engine.oracle_types import OracleInstruction  # noqa: E402
 from engine.cast_costs import cast_cost_claims_line  # noqa: E402
-from engine.cast_restrictions import CAST_RESTRICTIONS  # noqa: E402
+from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
+                                      cast_condition_line)
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for  # noqa: E402
 from engine.draw_step_modifiers import (  # noqa: E402
@@ -220,6 +221,12 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("aura enchant noun (oracle_instructions attach)", lambda s: s.startswith("enchant ")),
     ("aura static (oracle_instructions/permanent_state)", lambda s: _matches_any(s, _AURA_STATIC_PATTERNS)),
     ("cast_restrictions.py", lambda s: any(r.phrase in s for r in CAST_RESTRICTIONS)),
+    # The board half of CR 601.3 — "Cast this spell only if you control a
+    # snow land" (Blizzard). A row whose noun phrase is payload, so the
+    # claim asks the reader that answers it rather than comparing against a
+    # phrase list this file would be free to drift from.
+    ("cast_restrictions.py (board condition)",
+     lambda s: cast_condition_line(s) is not None),
     # A CR 614 replacement effect, in full. `engine/replacements.py`'s
     # REPLACEMENT_LINES *is* the set of constants its interceptors probe for, so
     # asking it is asking the code that carries the line out. Three of these

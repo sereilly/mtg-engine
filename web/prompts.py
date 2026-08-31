@@ -26,6 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from engine.grammar.phrases import BASIC_LAND_WORDS
 from engine.pending_choices import CHOICE_SPECS, public_data
 from engine.search_filters import search_matches, searched_seat
 
@@ -922,6 +923,14 @@ def _enter_choice(ctx: PromptContext, choices: list) -> dict:
         "default_seat": data["default_seat"],
         "default_color": data["default_color"],
         "colors": ["W", "U", "B", "R", "G"] if data["needs_color"] else [],
+        # "…choose two basic land types." (Illusionary Terrain.) A fourth shape
+        # of this one prompt: an ordered pair out of CR 205.3i's five, with no
+        # seat and no colour. The offered list is the vocabulary the resolver
+        # checks against, asked of the same constant, so the picker cannot
+        # offer a word the answer path would refuse (idiom 9).
+        "needs_land_types": bool(data.get("needs_land_types")),
+        "land_types": list(BASIC_LAND_WORDS) if data.get("needs_land_types") else [],
+        "default_land_types": list(data.get("default_land_types") or ()),
     }
 
 

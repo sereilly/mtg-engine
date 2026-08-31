@@ -8,6 +8,7 @@ from ..hand_locks import expire_hand_locks
 from .. import land_mana_swaps
 from ..game_types import OracleExecutionContext, SimulationResult
 from ..oracle import compile_card_oracle
+from ..replacements import apply_replacements
 from ..trigger_utils import iter_triggered_abilities
 
 def _is_free_beyond_tapping(cost) -> bool:
@@ -381,16 +382,31 @@ class TurnManagementMixin:
         # on the stack (CR 603.3) from wherever the tap happens.
         self.become_tapped(land)
         # "Until end of turn, if you tap a land you control for mana, it
-        # produces {U} instead of any other type." (Deep Water.) Read here, and
-        # applied to whatever the production below actually puts in the pool,
-        # because this is the one place the two production paths meet: a land
-        # with a compiled mana ability runs it and writes into the pool itself,
-        # where a basic falls through to the `produced_mana` summary — and the
-        # per-permanent swap `Permanent._swapped_mana` applies is only on the
-        # second of those. Snapshotting the pool is what makes "instead of any
-        # **other** type" mean what it says: whatever came out, this is what it
-        # is instead.
-        swapped_to = land_mana_swaps.swapped_symbol(self, land)
+        # produces {U} instead of any other type." (Deep Water.) "If a land is
+        # tapped for mana, it produces {B} instead…" (Infernal Darkness.)
+        # CR 106.12b makes these replacement effects over the mana production
+        # event, so they are asked through the CR 614 registry — one event kind
+        # with its own contention set, and nothing consumed: mana is still
+        # produced and the land is still tapped for mana (CR 106.12a).
+        #
+        # Read here, and applied to whatever the production below actually puts
+        # in the pool, because this is the one place the two production paths
+        # meet: a land with a compiled mana ability runs it and writes into the
+        # pool itself, where a basic falls through to the `produced_mana`
+        # summary — and the per-permanent swap `Permanent._swapped_mana`
+        # applies is only on the second of those. Snapshotting the pool is what
+        # makes "instead of any **other** type" mean what it says: whatever came
+        # out, this is what it is instead.
+        #
+        # No `restart` thunk: a land is tapped for mana part-way through paying
+        # a cost (CR 601.2g), before the spell it pays for is on the stack, so
+        # there is no moment at which a CR 616.1e choice could be answered and
+        # nothing to re-run it against.
+        _, mana_event = apply_replacements(
+            self, "land_mana_produced",
+            {"land": land, "player": player, "produced": None},
+        )
+        swapped_to = mana_event.get("produced")
         pool_before = dict(player.mana_pool) if swapped_to else {}
         # **The land's own compiled mana ability, when it has one.** This used
         # to add exactly one symbol chosen from `produced_mana`, which is right
@@ -405,6 +421,15 @@ class TurnManagementMixin:
         # compiled ability says both, so it is what runs, and the summary is
         # the fallback for a basic whose whole ability line is CR 305.6
         # reminder text and compiles to nothing.
+        # "One mana of any type **that land produced**" (Mana Flare) reads this
+        # at the bottom of the method, and the compiled-ability branch below
+        # writes into the pool without ever naming a symbol — so it was left
+        # unbound there, and a Mana Flare over any land whose mana ability
+        # compiles (every dual, every filter land) raised `UnboundLocalError`
+        # instead of adding mana. Seeded with the colour the seat asked for,
+        # which is the answer for a land that offers a choice and the closest
+        # honest one for a land that does not.
+        mana_symbol = chosen_color
         mana_ability = self._land_mana_instruction(land)
         if mana_ability is not None:
             instruction = mana_ability
@@ -426,7 +451,6 @@ class TurnManagementMixin:
                 ),
             )
         else:
-            mana_symbol = chosen_color
             produced = land.effective_produced_mana
             if produced:
                 # A colour swapped away is still a legitimate request: the seat
@@ -455,6 +479,10 @@ class TurnManagementMixin:
                 self.log.append(
                     f"{land_name} produced {{{swapped_to}}} instead"
                 )
+            # "One mana of any type **that land produced**" is what came out,
+            # not what would have: a Mana Flare over a Ritual of Subdual board
+            # matches the colourless the land really made.
+            mana_symbol = swapped_to
 
         self.log.append(f"{player.name} tapped {land_name} for mana")
 
@@ -538,6 +566,16 @@ class TurnManagementMixin:
         the same seat here, because a player may only tap lands they control —
         but they are resolved separately rather than assumed equal, so a future
         card that separates them does not silently pay the wrong player.
+
+        **``optional`` is recorded and taken.** "…its controller **may** add an
+        additional {U}" (Snowfall) is an offer, and CR 605.4a gives it no
+        window in which to be answered: a triggered mana ability resolves
+        without using the stack, here, inside the cost payment that tapped the
+        land, before the spell being paid for is even announced. Nothing is
+        lost by taking it in this engine — there is no mana burn (CR 500.4
+        empties the pool at every step boundary), and Snowfall's mana is
+        restricted to cumulative upkeep costs, so unspent mana costs its
+        controller nothing. A seat that could be asked would be asked here.
         """
         recipient = str(instruction.payload.get("recipient", "that_player"))
         if recipient == "land_controller":
@@ -548,9 +586,27 @@ class TurnManagementMixin:
             seat = tapping_player_index
         player = self.players[seat]
 
+        # "**If that Island is snow**, its controller may add an additional
+        # {U}{U} **instead**." (Snowfall.) The alternative *replaces* the base
+        # production, so it is chosen here rather than added to it, and the
+        # supertype is asked of `has_supertype` — computed through the layers,
+        # so an Arcum's Weathervane that thawed the Island stops the upgrade.
+        pips = tuple(instruction.payload.get("pips", ()))
+        alt_supertype = instruction.payload.get("alt_supertype")
+        if alt_supertype and land.has_supertype(str(alt_supertype)):
+            pips = tuple(instruction.payload.get("alt_pips", ()))
+        # "Spend this mana only to pay cumulative upkeep costs." The bucket is
+        # `engine/restricted_mana.py`'s, the same one an activated mana ability
+        # writes to, so the three payment paths already ask what it may pay for.
+        spend_only = instruction.payload.get("spend_only")
+        bucket = (
+            player.restricted_mana.setdefault(str(spend_only), {})
+            if spend_only else player.mana_pool
+        )
+
         added: list[str] = []
-        for symbol, count in instruction.payload.get("pips", ()):  # "an additional {R}"
-            player.mana_pool[symbol] = player.mana_pool.get(symbol, 0) + int(count)
+        for symbol, count in pips:  # "an additional {R}"
+            bucket[symbol] = bucket.get(symbol, 0) + int(count)
             added.append(f"{{{symbol}}}" * int(count))
         # "One mana of any type that land produced" — the type is whatever the
         # land just made, which is why it cannot be written as pips.

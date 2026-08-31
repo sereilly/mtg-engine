@@ -1157,3 +1157,127 @@ def test_ashen_ghoul_is_refused_outside_your_upkeep(set_pool):
     assert not result.supported
     assert p1.battlefield == []
 # --- end W1G4 ---
+
+
+# --- W2G2: mana-production replacements and land-type changes ---
+def _w2g2_board(set_pool, creature_name, lands):
+    """*creature_name* out of ICE with *lands* beside it, ready to activate.
+
+    Lands are named out of ICE first and LEA second, so "Snow-Covered Forest"
+    and "Forest" are both spellable in one list.
+    """
+    ice, lea = set_pool("ICE"), set_pool("LEA")
+    source = Permanent(card=ice[creature_name])
+    perms = [Permanent(card=ice.get(name) or lea[name]) for name in lands]
+    p1 = PlayerState(name="P1", battlefield=[source, *perms])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    _nosick(source)
+    return game, p1, source, perms
+
+
+def _w2g2_aim(game, name, index):
+    result = game.activate_permanent_ability(
+        0, name, permanent_index=0,
+        target_permanent_index=index, target_player_index=0,
+    )
+    game._settle()
+    return result
+
+
+def test_orcish_farmer_replaces_the_lands_basic_type(set_pool):
+    """"Target land becomes a Swamp until its controller's next untap step."
+
+    CR 305.7's *replacement*: the land is a Swamp instead of a Forest, so it
+    makes {B} and not {G}. Read through ``basic_land_types`` (layer 4) and then
+    proved by tapping it, because a type change nothing produces mana from is
+    a type change only the metadata can see.
+    """
+    game, p1, _farmer, lands = _w2g2_board(set_pool, "Orcish Farmer", ["Forest"])
+    forest = lands[0]
+    assert forest.basic_land_types == ("forest",)
+
+    assert _w2g2_aim(game, "Orcish Farmer", 1).supported
+
+    assert forest.basic_land_types == ("swamp",)
+    p1.mana_pool = {symbol: 0 for symbol in ("W", "U", "B", "R", "G", "C")}
+    assert game.tap_land_for_mana(0, "Forest", permanent_index=1)
+    assert p1.mana_pool["B"] == 1
+    assert p1.mana_pool["G"] == 0
+
+
+def test_orcish_farmer_ends_at_the_lands_controllers_untap_step(set_pool):
+    """The window names the **land's** controller, not the Farmer's opponent
+    and not the Farmer itself — so an opponent's untap step does not lift it."""
+    game, _p1, _farmer, lands = _w2g2_board(set_pool, "Orcish Farmer", ["Forest"])
+    assert _w2g2_aim(game, "Orcish Farmer", 1).supported
+
+    game.resolve_untap_step(1)
+    assert lands[0].basic_land_types == ("swamp",), "not that player's step"
+
+    game.resolve_untap_step(0)
+    assert lands[0].basic_land_types == ("forest",)
+
+
+def test_orcish_farmer_change_outlives_the_farmer(set_pool):
+    """"Until its controller's next untap step" says nothing about the Farmer,
+    so the record is keyed on a label rather than on the permanent — a Farmer
+    that dies leaves the Swamp behind until the window closes."""
+    game, _p1, farmer, lands = _w2g2_board(set_pool, "Orcish Farmer", ["Forest"])
+    assert _w2g2_aim(game, "Orcish Farmer", 1).supported
+    game.remove_from_battlefield(farmer)
+
+    assert lands[0].basic_land_types == ("swamp",)
+
+    game.resolve_untap_step(0)
+    assert lands[0].basic_land_types == ("forest",)
+
+
+def test_balduvian_conjurer_animates_a_snow_land(set_pool):
+    """"Target snow land becomes a 2/2 creature until end of turn. It's still a
+    land." (CR 613 layers 4 and 7b.)
+
+    The line parsed already and refused in the *lowering* — "only the source
+    animates itself until end of turn" — so the card was unsupported for want
+    of a place to put the record, not for want of a reading.
+    """
+    game, _p1, _conjurer, lands = _w2g2_board(
+        set_pool, "Balduvian Conjurer", ["Snow-Covered Forest"]
+    )
+    land = lands[0]
+    assert not land.is_creature
+
+    assert _w2g2_aim(game, "Balduvian Conjurer", 1).supported
+
+    assert land.is_creature
+    assert land.has_type("land"), "it's still a land"
+    assert (land.effective_power, land.effective_toughness) == (2, 2)
+
+
+def test_balduvian_conjurer_animation_ends_at_cleanup(set_pool):
+    game, _p1, _conjurer, lands = _w2g2_board(
+        set_pool, "Balduvian Conjurer", ["Snow-Covered Forest"]
+    )
+    assert _w2g2_aim(game, "Balduvian Conjurer", 1).supported
+
+    game.resolve_cleanup_step(0)
+
+    assert not lands[0].is_creature
+    assert lands[0].has_type("land")
+
+
+def test_balduvian_conjurer_refuses_a_land_that_is_not_snow(set_pool):
+    """The printed noun narrows the target, and the gate that reads it is the
+    one the picker reads (CR 602.2b) — so the ability is refused with the
+    Conjurer still untapped rather than animating a land it cannot name."""
+    game, _p1, conjurer, lands = _w2g2_board(
+        set_pool, "Balduvian Conjurer", ["Forest"]
+    )
+
+    result = _w2g2_aim(game, "Balduvian Conjurer", 1)
+
+    assert not result.supported
+    assert not conjurer.tapped, "nothing was paid"
+    assert not lands[0].is_creature
+# --- end W2G2 ---

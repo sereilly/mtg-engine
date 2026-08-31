@@ -12,7 +12,9 @@ aggregates and enforces them, so new restriction cards never touch it.
 from ..auras import aura_restriction_active
 from ..replacements import apply_replacements
 from ..subject_filters import subject_matches
+from ..handlers.board_misc import LAND_TYPE_UNTIL_UNTAP
 from ..handlers.tapping import UNTAP_LOCK_WHILE_TAPPED_KEY
+from ..land_types import end_land_type_changes_from
 from ..control import LINKED_CONTROL_CONDITIONS
 from ..turn_state import record_turn_start_states
 from ..turn_state import attacked_during_seats_last_turn
@@ -414,6 +416,14 @@ class UntapStepMixin:
                 permanent.metadata["skip_next_untap"] = held
             else:
                 permanent.metadata.pop("skip_next_untap", None)
+            # "Target land becomes a Swamp **until its controller's next untap
+            # step**." (Orcish Farmer.) The window names the land's controller,
+            # which is this seat, and the record outlives the permanent that
+            # made it — so it is keyed by a label rather than by that permanent
+            # and dropped here by the label's prefix. Dropping one contribution
+            # is CR 611.3b: what the land is afterwards is whatever the others
+            # still say, not what was printed on it.
+            end_land_type_changes_from(permanent, prefix=LAND_TYPE_UNTIL_UNTAP)
 
         self.log.append(f"{player.name} untapped {untapped} permanent(s)")
         self._on_step_or_phase_end(phase, step)

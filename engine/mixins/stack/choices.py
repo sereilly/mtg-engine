@@ -26,7 +26,8 @@ from dataclasses import replace
 
 from ...auras import attach_aura
 from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
-from ...land_types import change_land_type
+from ...grammar.phrases import BASIC_LAND_WORDS
+from ...land_types import CHOSEN_LAND_TYPES, change_land_type
 from ...models import CardDefinition, Permanent
 from ...oracle_types import DISCARDED_BY_SEAT
 from ... import land_mana_swaps
@@ -2001,20 +2002,48 @@ class PendingChoicesMixin:
     def confirm_enter_choice(
         self, player_index: int, opponent_index: int | None = None,
         mana_color: str | None = None, card_name: str | None = None,
+        land_types: "tuple[str, str] | list[str] | None" = None,
     ) -> bool:
         """Resolve a pending "as this enters, choose an opponent [and a color]"
         prompt (Black Vise / Jihad), overwriting the provisional defaults
         stamped on the permanent at ETB."""
         return self.resolve_pending_choice(
             "enter_choice", player_index, opponent_index=opponent_index,
-            mana_color=mana_color, card_name=card_name,
+            mana_color=mana_color, card_name=card_name, land_types=land_types,
         )
 
     def _resolve_enter_choice(
         self, choice: PendingChoice, opponent_index: int | None = None,
         mana_color: str | None = None, card_name: str | None = None,
+        land_types: "tuple[str, str] | list[str] | None" = None,
     ) -> bool:
         player_index = choice.player_index
+        # "…choose **two basic land types**." (Illusionary Terrain.) A fourth
+        # shape of this one prompt, and the third that names no seat — so it
+        # answers and returns like the two below rather than falling through to
+        # the opponent check. The pair is **ordered**: the static reads "the
+        # first chosen type" and "the second chosen type", so a reversed answer
+        # is a different, legal choice and not a normalization to apply.
+        #
+        # An answer naming anything but two distinct basic land types is
+        # refused rather than repaired: quietly keeping the default would tell
+        # the player they had chosen something they had not.
+        if choice.data.get("needs_land_types"):
+            permanent = choice.data["permanent"]
+            if land_types is not None:
+                pair = tuple(str(word).strip().lower() for word in land_types)
+                if len(pair) != 2 or pair[0] == pair[1]:
+                    return False
+                if any(word not in BASIC_LAND_WORDS for word in pair):
+                    return False
+                if self.is_on_battlefield(permanent):
+                    permanent.metadata[CHOSEN_LAND_TYPES] = pair
+                    self.log.append(
+                        f"{choice.data['card_name']}: chose {pair[0]} and {pair[1]}"
+                    )
+                    self._refresh_dynamic_creatures()
+            self.discard_pending_choice(choice)
+            return True
         # "…choose a card name" (Runed Halo). A different question from the
         # opponent-and-colour one this prompt was written for, so it answers and
         # returns rather than falling through the seat check below — there is no
@@ -4514,7 +4543,8 @@ register_choice(
 register_choice(
     "enter_choice",
     resolve=lambda game, choice, r: game._resolve_enter_choice(
-        choice, r.get("opponent_index"), r.get("mana_color"), r.get("card_name")
+        choice, r.get("opponent_index"), r.get("mana_color"), r.get("card_name"),
+        r.get("land_types"),
     ),
     # Black Vise / Jihad stamp their deterministic defaults on the permanent as
     # it enters, so a non-interactive controller has nothing left to apply.

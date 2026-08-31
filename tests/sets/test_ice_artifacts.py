@@ -846,3 +846,30 @@ def test_urzas_bauble_shows_one_card_and_draws_next_upkeep(set_pool):
 
     assert [card.name for card in p1.hand] == ["Scaled Wurm"]
 # --- end W1G4 ---
+
+
+# --- W2G2: mana-production replacements and land-type changes ---
+def test_naked_singularity_substitutes_five_land_types_at_once(set_pool):
+    """"If tapped for mana, Plains produce {R}, Islands produce {G}, Swamps
+    produce {W}, Mountains produce {U}, and Forests produce {B} instead of any
+    other type."
+
+    Five clauses on one line. How many there are is payload — Reality Twist
+    prints four of the same shape — so the list is split rather than counted.
+    """
+    lands = [Permanent(card=set_pool("LEA")[name]) for name in
+             ("Plains", "Island", "Swamp", "Mountain", "Forest")]
+    p1 = PlayerState(name="P1", battlefield=[
+        *lands, Permanent(card=set_pool("ICE")["Naked Singularity"]),
+    ])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+
+    p1.mana_pool = {symbol: 0 for symbol in ("W", "U", "B", "R", "G", "C")}
+    for index, name in enumerate(("Plains", "Island", "Swamp", "Mountain", "Forest")):
+        assert game.tap_land_for_mana(0, name, permanent_index=index), name
+
+    assert {s: c for s, c in p1.mana_pool.items() if c} == {
+        "R": 1, "G": 1, "W": 1, "U": 1, "B": 1,
+    }
+# --- end W2G2 ---

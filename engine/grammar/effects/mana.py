@@ -22,7 +22,7 @@ from ..amounts import parse_amount
 from ..errors import GrammarError
 from ..lexer import (MANA, render)
 from ..nouns import parse_object_filter
-from ..references import parse_target_spec
+from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 
 
@@ -382,8 +382,116 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     )
 
 
-def _parse_player_adds_mana(
+def _parse_pip_run(stream: TokenStream) -> dict[str, int]:
+    """A run of written-out mana symbols at the cursor, as ``{symbol: count}``.
+
+    Shared by the base clause and its snow alternative below, which read the
+    same run in two sentences of one printed ability.
+    """
+    pips: dict[str, int] = {}
+    while stream.at_kind(MANA):
+        token = stream.next()
+        symbol = token.text.strip("{}")
+        if symbol.isdigit() or symbol in ("T", "Q", "X"):
+            raise stream.error(f"unsupported mana symbol {token.text!r}")
+        pips[symbol] = pips.get(symbol, 0) + 1
+    return pips
+
+
+def _parse_supertype_alternative(
     stream: TokenStream, recipient: ast.PlayerRef
+) -> "tuple[str, tuple[tuple[str, int], ...]] | None":
+    """``. If that <noun> is <supertype>, <player> may add an additional <pips>
+    instead`` — Snowfall's second sentence, as ``(supertype, pips)``.
+
+    Read here rather than as a step of its own or as `riders`'
+    conditional-instead fold, and the reason is the same one that keeps the
+    spend restriction out of the statement list: the whole printed ability is
+    **one triggered mana ability** (CR 605.4a), fired inline by the tap seam
+    off a single instruction. A `Conditional` wrapping two mana productions
+    would hide both of them from the only code that runs them.
+
+    Every word is required and non-consuming on refusal:
+
+    * the noun is checked against the land-type catalog (``data/vocabulary/``)
+      or the bare word "land", because "that Island" can only mean the land the
+      enclosing trigger named — an alternative about anything else is a
+      sentence this cannot place;
+    * the recipient must be the **same** reference the base clause names, since
+      one bucket of mana is produced and a second seat would be a second
+      production;
+    * "instead" is required, because without it the sentence *adds* to the base
+      clause rather than replacing it, and reading one as the other doubles or
+      halves the mana.
+    """
+    from ..vocabulary import LAND_TYPES, TYPE_LINE_SUPERTYPES
+
+    mark = stream.mark()
+    if not stream.accept_punct("."):
+        return None
+    if not stream.accept_phrase("if", "that"):
+        stream.reset(mark)
+        return None
+    noun = stream.peek_word()
+    if noun is None or (noun != "land" and noun not in LAND_TYPES):
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_word("is"):
+        stream.reset(mark)
+        return None
+    supertype = stream.peek_word()
+    if supertype is None or supertype not in TYPE_LINE_SUPERTYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    alt_recipient = parse_player_ref(stream)
+    if alt_recipient != recipient:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("may"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("add", "adds"):
+        stream.reset(mark)
+        return None
+    stream.accept_phrase("an", "additional")
+    pips = _parse_pip_run(stream)
+    if not pips or not stream.accept_word("instead"):
+        stream.reset(mark)
+        return None
+    return supertype, tuple(sorted(pips.items()))
+
+
+def _parse_spend_restriction(stream: TokenStream) -> str | None:
+    """``. Spend this mana only to …`` — the restriction key, or None.
+
+    The same delegation `riders._attach_spend_only` makes for the ordinary
+    "Add {G}" clause, made here because this production reads its own sentences
+    to the end: which restrictions exist is `engine/restricted_mana.py`'s
+    question, asked through its matcher so a copy of the phrase cannot drift
+    from the predicate that enforces it.
+    """
+    from ...restricted_mana import mana_restriction_for
+
+    mark = stream.mark()
+    if not stream.accept_punct("."):
+        return None
+    start = stream.pos
+    while not stream.exhausted and not stream.at_punct(".", ";"):
+        stream.advance()
+    restriction = mana_restriction_for(stream.text_between(start, stream.pos))
+    if restriction is None:
+        stream.reset(mark)
+        return None
+    return restriction.key
+
+
+def _parse_player_adds_mana(
+    stream: TokenStream, recipient: ast.PlayerRef, *, optional: bool = False
 ) -> ast.AddManaForTappedLand:
     """``<player> adds an additional {R}`` / ``<player> adds one mana of any type
     that land produced`` — the effect half of a triggered mana ability on a land
@@ -393,20 +501,28 @@ def _parse_player_adds_mana(
     ability's own controller. Here the subject is a *player reference* bound by
     the trigger, so the mana can land in someone else's pool, and "any type that
     land produced" names a quantity no pip list can express.
+
+    *optional* is the printed "may" the caller has already consumed
+    (`subject_verb`), recorded on the node rather than dropped.
+
+    **The pip form reads its own trailing sentences.** Snowfall prints three —
+    the base production, a snow alternative that replaces it, and the
+    restriction on what the mana may pay for — and all three are one triggered
+    mana ability (CR 605.4a). Parsed apart, the second would add on top of the
+    first instead of replacing it and the third would be an effect nothing
+    performs.
     """
     stream.expect_word("adds", "add")
     additional = bool(stream.accept_phrase("an", "additional"))
 
-    pips: dict[str, int] = {}
-    while stream.at_kind(MANA):
-        token = stream.next()
-        symbol = token.text.strip("{}")
-        if symbol.isdigit() or symbol in ("T", "Q", "X"):
-            raise stream.error(f"unsupported mana symbol {token.text!r}")
-        pips[symbol] = pips.get(symbol, 0) + 1
+    pips = _parse_pip_run(stream)
     if pips:
+        alternative = _parse_supertype_alternative(stream, recipient)
+        alt_supertype, alt_pips = alternative or (None, ())
         return ast.AddManaForTappedLand(
-            recipient, pips=tuple(sorted(pips.items())), additional=additional
+            recipient, pips=tuple(sorted(pips.items())), additional=additional,
+            optional=optional, alt_supertype=alt_supertype, alt_pips=alt_pips,
+            spend_only=_parse_spend_restriction(stream),
         )
 
     # "one mana of any type that land produced". Every word is read: "any type
@@ -424,7 +540,8 @@ def _parse_player_adds_mana(
     if amount <= 0:
         raise stream.error("expected a fixed amount of mana")
     return ast.AddManaForTappedLand(
-        recipient, of_type_produced=amount, additional=additional
+        recipient, of_type_produced=amount, additional=additional,
+        optional=optional,
     )
 
 

@@ -74,6 +74,16 @@ _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # above gives about turns and upkeeps.
     ("until_end_of_your_next_upkeep",
      ("until", "the", "end", "of", "your", "next", "upkeep")),
+    # "…until **its controller's next untap step**." (Orcish Farmer.) A moment
+    # in someone else's turn, which is what separates it from every entry above:
+    # the four "your next …" kinds all name a step of the seat the effect
+    # belongs to, and this one names a step of whoever controls the *object*.
+    # Read before "this turn" only by being longer; they share no prefix.
+    # The possessive is two tokens: the lexer splits "controller's" into the
+    # noun and the clitic, which is what `_parse_doesnt_untap_next_step` spells
+    # out one family over.
+    ("until_controllers_next_untap_step",
+     ("until", "its", "controller", "'s", "next", "untap", "step")),
     ("this_turn", ("this", "turn")),
     # "…until the end of **that** turn" (Giant Slug). Which turn "that" names
     # is not in the sentence: it comes from the delay the sentence sits inside

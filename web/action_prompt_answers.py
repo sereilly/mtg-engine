@@ -8,6 +8,7 @@ effect began) and hands it to the engine's confirm entry point.
 from __future__ import annotations
 
 from fastapi import HTTPException
+from engine.text_changes import LAND_TYPE_WORDS
 from .action_registry import action_handler
 from .turn_steps import _begin_turn, _start_next_turn
 
@@ -571,6 +572,24 @@ def _action_enter_choice_confirm(session, req, seat_type):
     pending = session.game.pending_enter_choice
     if pending is None or pending.get("controller_index") != req.seat:
         raise HTTPException(status_code=400, detail="no enter choice is pending for you")
+    # "…choose two basic land types." (Illusionary Terrain.) The one shape of
+    # this prompt that names no seat at all, so `target_seat` is not required
+    # for it; the pair arrives as the two colour fields the text-change spells
+    # already use, where a basic land type is addressed by its colour
+    # (W=plains, U=island, B=swamp, R=mountain, G=forest) — `old_color` is the
+    # first chosen type and `mana_color` the second, and the order is the whole
+    # of what the static reads.
+    if pending.get("needs_land_types"):
+        words = LAND_TYPE_WORDS
+        pair = [words.get(req.old_color or ""), words.get(req.mana_color or "")]
+        if not all(pair):
+            raise HTTPException(
+                status_code=400,
+                detail="old_color (first chosen type) and mana_color (second) are required",
+            )
+        if not session.game.confirm_enter_choice(req.seat, land_types=pair):
+            raise HTTPException(status_code=400, detail="invalid enter choice")
+        return
     if req.target_seat is None:
         raise HTTPException(status_code=400, detail="target_seat is required")
     if not session.game.confirm_enter_choice(req.seat, req.target_seat, req.mana_color):

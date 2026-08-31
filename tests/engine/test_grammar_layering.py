@@ -196,7 +196,17 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # battlefield->owner's hand read three different kinds of index. Asymmetric
 # like `zones` itself and for the same reason: the parse side is one
 # production.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "tapping", "redirection", "fighting", "where_x", "control_flow", "attachments"]
+# `types` split out of `lowering/characteristics.py` at 982 of the cap, the
+# round a targeted land animation (Balduvian Conjurer) and a targeted
+# land-type change (Orcish Farmer) landed together. The line is the CR's own
+# and the one `engine/land_types.py`, `engine/land_animation.py` and
+# `engine/keywords.py` already draw one package over: CR 208 is how big a
+# permanent is, CR 105 what colour it is, CR 612 what its text says — and
+# CR 205 is what it **is**. The two halves share no helper. Asymmetric like
+# `zones` and `returns`: the parse side stays in `effects/characteristics.py`,
+# where every one of these is a branch of one `becomes` production reading
+# one shared duration clause.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "tapping", "redirection", "fighting", "where_x", "control_flow", "attachments", "types"]
 # The AST side has no `library`: what a search or a look-at *is* — the pile, the
 # filter, the fate of what was found — is a handful of nodes that sit perfectly
 # well beside the other card nodes, and the split that made `library` a family

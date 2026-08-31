@@ -9,7 +9,9 @@ template has one home on each side — prowess parses in
     damage           dealing it, and preventing it
     redirection      CR 614.9, changing who dealt damage reaches
     fighting         CR 701.14, two creatures damaging each other
-    characteristics  P/T, keywords, colour, printed text
+    characteristics  P/T, colour, printed text
+    types            CR 205 / layer 4: animation, a gained card type, a
+                     supertype, a basic land type
     counters         putting and removing them, and the per-death repetition
     board            destruction, bouncing, tapping, control, exile
     cards            draw, discard, mill, scry
@@ -100,14 +102,17 @@ from .characteristics import (
     _fused_two_target_pump,
     _lower_double_power,
     _lower_switch_pt,
-    _lower_become_creature,
     _lower_pump,
     _lower_change_base_pt,
     _lower_set_base_pt,
     _lower_become_color,
+    _lower_change_text,
+)
+from .types import (
+    _lower_become_creature,
+    _lower_change_land_type,
     _lower_change_supertype,
     _lower_gain_type,
-    _lower_change_text,
 )
 from .keywords import (
     _KEYWORD_GRANTS,
@@ -339,6 +344,7 @@ __all__ = [
     "_lower_remove_counter",
     "_lower_for_each",
     "_lower_become_color",
+    "_lower_change_land_type",
     "_lower_change_supertype",
     "_lower_gain_type",
     "_lower_change_text",

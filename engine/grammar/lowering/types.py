@@ -1,0 +1,172 @@
+"""Lowering what an object's *type line* says (CR 205, CR 613 layer 4).
+
+Animation ("becomes a 2/2 creature"), a gained card type ("becomes an artifact
+in addition to its other types"), a supertype ("becomes snow") and a basic land
+type ("becomes a Swamp") — four printed shapes of one layer.
+
+Split out of `characteristics.py` at 982 of the thousand-line cap, the round a
+targeted land animation and a targeted land-type change landed together. The
+line is the CR's own and it is the line `engine/land_types.py`,
+`engine/land_animation.py` and `engine/keywords.py` already draw one package
+over: CR 208 is how *big* a permanent is (layer 7), CR 105 what colour it is
+(layer 5), CR 612 what its text says (layer 3) — and CR 205 is what it **is**.
+The two halves share no helper; everything either uses is in `_common`.
+
+Asymmetric on purpose, like `zones`, `library` and `returns` before it: the
+parse side stays in `effects/characteristics.py`, where every one of these is a
+branch of one `becomes` production reading one shared duration clause. A
+near-empty `effects/types.py` would buy back the symmetry and cost the thing
+symmetry is for.
+"""
+
+from ...oracle_types import OracleInstruction
+from .. import ast
+from ..errors import LoweringError
+from ._common import _describe_targets, _filter_payload, _is_source, _is_target
+
+
+def _lower_become_creature(
+    node: ast.BecomeCreature,
+) -> tuple[OracleInstruction, ...]:
+    """"…becomes a 3/3 Sphinx creature with flying in addition to its other
+    types until end of turn." (Riddleform.) "Target snow land becomes a 2/2
+    creature until end of turn. It's still a land." (Balduvian Conjurer.)
+
+    Two instruction kinds for one node, and the difference is which permanent
+    holds the record: the animation *is* one metadata entry the layer bridge
+    reads (layers 4, 6 and 7b together), so a sentence about the source writes
+    it on the source and a sentence about a target writes it on whatever the
+    target turned out to be. A quantified subject refuses — "all Forests become
+    1/1 creatures" is a board-wide static recomputed every pass
+    (`engine/land_animation.py`), not a record stamped once.
+    """
+    if _is_source(node.subject):
+        return (
+            OracleInstruction(
+                "animate_self_until_eot", "", _animation_payload(node)
+            ),
+        )
+    if not _is_target(node.subject):
+        raise LoweringError(
+            "an animation names the source or one target", node=node
+        )
+    payload = _animation_payload(node)
+    payload.update(_filter_payload(node.subject.filter))
+    _describe_targets(payload, node.subject)
+    return (OracleInstruction("animate_target_until_eot", "", payload),)
+
+
+def _animation_payload(node: ast.BecomeCreature) -> dict[str, object]:
+    """What the animation record says, shared by both kinds above.
+
+    ``card_types`` is "…a 2/2 Assembly-Worker **artifact** creature" — the types
+    the animation adds beside "creature", which the layer-4 collector reads off
+    the same record. Balduvian Conjurer's "It's still a land" adds none, and the
+    production has already consumed the words; the addition is what the record
+    means either way, since nothing is taken away.
+    """
+    return {
+        "power": node.power,
+        "toughness": node.toughness,
+        "subtypes": list(node.subtypes),
+        "keywords": list(node.keywords),
+        "card_types": list(node.card_types),
+    }
+
+
+#: Durations a gained type may carry. "Permanently" is the absent kind, which
+#: is what Ashnod's Transmogrant prints — the creature stays an artifact long
+#: after the Transmogrant has been sacrificed.
+_GAINED_TYPE_DURATIONS = frozenset({None, "until_end_of_turn", "until_your_next_upkeep"})
+
+
+def _lower_gain_type(node: ast.GainType) -> tuple[OracleInstruction, ...]:
+    """Ashnod's Transmogrant / Xenic Poltergeist.
+
+    The subject must be a chosen target or the pronoun bound by an earlier
+    sentence of the same effect: the handler adds the record to *one* permanent,
+    and a quantified subject would name a set it cannot reach.
+    """
+    if node.duration.kind not in _GAINED_TYPE_DURATIONS:
+        raise LoweringError(
+            f"no handler holds a gained type for {node.duration.kind}", node=node
+        )
+    payload: dict[str, object] = {
+        "card_types": list(node.card_types),
+        "duration": node.duration.kind or "permanent",
+        "pt_from_mana_value": bool(node.pt_from_mana_value),
+    }
+    if isinstance(node.subject, ast.TargetSpec) and node.subject.quantifier in ("target", "that"):
+        if node.subject.quantifier == "target":
+            _describe_targets(payload, node.subject)
+        return (OracleInstruction("gain_type", "", payload),)
+    raise LoweringError("a gained type needs a single named permanent", node=node)
+
+
+def _lower_change_supertype(node: ast.ChangeSupertype) -> tuple[OracleInstruction, ...]:
+    """Arcum's Weathervane, both abilities.
+
+    One kind for both directions: the supertype and the polarity are payload,
+    which is what makes "becomes snow" and "is no longer snow" one handler
+    rather than two — and what makes a card printing "becomes legendary" cost
+    nothing.
+
+    The duration must be one the handler's channel can hold, and the subject a
+    single named permanent, for the reason ``_lower_gain_type`` requires both:
+    the record goes on one permanent, and a quantified subject names a set that
+    is a *static* ability rather than a one-shot (see
+    ``_parse_no_longer_supertype``).
+    """
+    if node.duration.kind not in _GAINED_TYPE_DURATIONS:
+        raise LoweringError(
+            f"no handler holds a supertype change for {node.duration.kind}", node=node
+        )
+    payload: dict[str, object] = {
+        "supertype": node.supertype,
+        "gained": bool(node.gained),
+        "duration": node.duration.kind or "permanent",
+    }
+    if isinstance(node.subject, ast.TargetSpec) and node.subject.quantifier in ("target", "that"):
+        if node.subject.quantifier == "target":
+            _describe_targets(payload, node.subject)
+        return (OracleInstruction("change_supertype", "", payload),)
+    raise LoweringError("a supertype change needs a single named permanent", node=node)
+
+
+#: Durations a *basic land type* change has a sweep for. CR 305.7 replaces the
+#: land's subtypes for as long as the effect lasts, so a window nothing ever
+#: ends would be a land permanently something else — the direction a dropped
+#: duration always fails in. "Until its controller's next untap step" is the
+#: one the untap step itself lifts; the absent kind is CR 611.2's
+#: "indefinitely", which the recorded contribution already holds.
+_LAND_TYPE_DURATIONS = frozenset({None, "until_controllers_next_untap_step"})
+
+
+def _lower_change_land_type(node: ast.ChangeLandType) -> tuple[OracleInstruction, ...]:
+    """"Target land becomes a Swamp until its controller's next untap step."
+    (Orcish Farmer.)
+
+    CR 305.7's *replacement* of a land's basic land types, recorded as one
+    layer-4 contribution keyed on the source (`engine/land_types.py`) — so the
+    land is whatever the remaining contributions say when this one ends, rather
+    than whatever was printed on it.
+
+    The land type is payload, so a card printed about a Forest is this
+    production. The **duration** is not: a window with no sweep behind it is a
+    change that never ends, so a kind absent from the table above refuses.
+    """
+    if node.duration.kind not in _LAND_TYPE_DURATIONS:
+        raise LoweringError(
+            f"no sweep ends a land-type change at {node.duration.kind}", node=node
+        )
+    if not _is_target(node.subject):
+        raise LoweringError(
+            "a land-type change names one target land", node=node
+        )
+    payload: dict[str, object] = {
+        "land_type": node.land_type,
+        "duration": node.duration.kind or "permanent",
+        **_filter_payload(node.subject.filter),
+    }
+    _describe_targets(payload, node.subject)
+    return (OracleInstruction("change_land_type_until", "", payload),)

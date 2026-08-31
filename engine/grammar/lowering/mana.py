@@ -305,6 +305,23 @@ def _lower_add_mana_for_tapped_land(
         payload["of_type_produced"] = node.of_type_produced
     if node.additional:
         payload["additional"] = True
+    # Snowfall's three keys, each emitted only when the sentence printed it, so
+    # every payload written before they existed is byte-identical.
+    if node.optional:
+        payload["optional"] = True
+    if node.alt_supertype:
+        # The alternative replaces the base production rather than adding to
+        # it, so both halves travel together: an alternative with no pips would
+        # be a snow Island making nothing.
+        if not node.alt_pips:
+            raise LoweringError(
+                "a supertype alternative names the mana it makes instead",
+                node=node,
+            )
+        payload["alt_supertype"] = node.alt_supertype
+        payload["alt_pips"] = node.alt_pips
+    if node.spend_only:
+        payload["spend_only"] = node.spend_only
     return (OracleInstruction("add_mana_for_tapped_land", "", payload),)
 
 

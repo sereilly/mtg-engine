@@ -200,6 +200,14 @@ UNPAYABLE_ENTRY_COST = 15  # Frankenstein's Monster
 # nothing.
 SACRIFICE_AFTER_ENTERING = 20  # Land Equilibrium
 COUNTERS_REMOVED_INSTEAD_OF_UNTAPPING = 10  # Freyalise's Winds
+# CR 106.12b's kind: what a land produces is decided while its mana ability is
+# resolving. One slot, because ``engine/land_mana_swaps.py`` answers "what does
+# this land make instead?" for every producer of the effect at once — a
+# battlefield static (Ritual of Subdual), a per-seat record (Deep Water) and a
+# per-permanent one (Quarum Trench Gnomes) all reduce to a single symbol, and
+# the payment planner has to be able to ask the same question without applying
+# anything.
+LAND_MANA_SUBSTITUTION = 10  # Ritual of Subdual, Infernal Darkness, Deep Water
 
 # Set on the event once an interceptor consumes it. It lives on the payload
 # because the payload is the one piece of state the 616.1 loop threads through
@@ -2010,6 +2018,53 @@ def _mill_cards(game, player, count: int) -> int:
 
 
 # ---------------------------------------------------------------------------
+# CR 106.12b — what a land produces when it is tapped for mana
+# ---------------------------------------------------------------------------
+
+
+def _applies_land_mana_substitution(game, payload: dict) -> bool:
+    from .land_mana_swaps import swapped_symbol
+
+    return swapped_symbol(game, payload["land"]) is not None
+
+
+@replacement_effect(
+    "land_mana_produced", LAND_MANA_SUBSTITUTION,
+    applies=_applies_land_mana_substitution,
+)
+def _substitute_land_mana(game, payload: dict) -> ReplacementOutcome | None:
+    """"If a land is tapped for mana, it produces {B} instead of any other
+    type." (Infernal Darkness, Ritual of Subdual, Naked Singularity, Reality
+    Twist, Deep Water, Quarum Trench Gnomes.)
+
+    CR 106.12b: a replacement effect that applies if a permanent "is tapped for
+    mana" modifies the mana production event **while the mana ability is
+    resolving**. So this is not a change to what the land is or to what it
+    could produce — ``effective_produced_mana`` still says what the land makes
+    — it is a change to the one event, which is why the tap seam asks here
+    rather than reading a stamped answer off the permanent.
+
+    The event is not consumed: mana is still produced and the land is still
+    tapped for mana, so every trigger that watches for that still fires
+    (CR 106.12a). What changes is ``payload["produced"]`` — the symbol the
+    seam moves the produced mana onto once its own production has run, which
+    is what makes "instead of any **other** type" mean what it says whether
+    the land ran a compiled mana ability or fell through to its printed
+    summary.
+
+    Which symbol is ``engine/land_mana_swaps.py``'s question, not this one's.
+    Three different producers print this sentence — a battlefield static, a
+    per-seat record and a per-permanent record — and they reduce to one symbol
+    there, so the payment planner can ask what a land will make without
+    applying a replacement to find out.
+    """
+    from .land_mana_swaps import swapped_symbol
+
+    payload["produced"] = swapped_symbol(game, payload["land"])
+    return ReplacementOutcome()
+
+
+# ---------------------------------------------------------------------------
 # Which printed lines this registry implements, for the two readers that ask
 # ---------------------------------------------------------------------------
 
@@ -2116,4 +2171,16 @@ def replacement_claims_line(line: str) -> bool:
         return True
     # "If an instant or sorcery source would deal 3 or more damage to you…"
     # (Forethought Amulet), the same arrangement for the same reason.
-    return source_damage_cap(normalized) is not None
+    if source_damage_cap(normalized) is not None:
+        return True
+    # "If a land is tapped for mana, it produces {B} instead of any other
+    # type." (Infernal Darkness, Ritual of Subdual.) "If tapped for mana,
+    # Plains produce {R}, …" (Naked Singularity, Reality Twist.) Matched by
+    # shape for the reason the three above are: the land type and the symbol
+    # are payload, and how many clauses the sentence lists is what separates
+    # the two cards printing the second spelling. Asked of the same reader
+    # ``_substitute_land_mana`` reaches, so a clause it cannot read leaves the
+    # line unclaimed rather than admitted with the substitution not firing.
+    from .land_mana_swaps import substitution_line
+
+    return substitution_line(normalized) is not None

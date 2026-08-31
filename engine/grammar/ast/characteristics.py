@@ -356,3 +356,24 @@ class SwitchPT:
     """
     subject: Recipient
     duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
+class ChangeLandType:
+    """``Target land becomes a Swamp until its controller's next untap step.``
+    (Orcish Farmer.)
+
+    CR 305.7's *replacement* of a land's basic land types (CR 613 layer 4):
+    the land is a Swamp **instead of** whatever it was, and it loses the
+    abilities its old types gave it. Distinct from :class:`GainType`, which
+    adds a card type and takes nothing away, and from :class:`ChangeSupertype`,
+    which changes the word in front of them.
+
+    ``land_type`` is one basic land type, singular and lowercase — payload,
+    because a card printed about a Forest is this sentence with one word
+    changed. ``duration`` with no kind is CR 611.2's "indefinitely", which is
+    what Evil Presence's targeted cousins print.
+    """
+    subject: Recipient
+    land_type: str
+    duration: Duration = field(default_factory=Duration)
