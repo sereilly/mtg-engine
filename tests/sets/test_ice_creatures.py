@@ -1567,4 +1567,67 @@ def test_mercenaries_only_stops_its_own_damage(set_pool):
     game._deal_damage_to_player(p2, 2, source=other)
 
     assert p2.life == 18
+
+
+def test_elvish_healer_shields_one_point_off_a_nongreen_target(set_pool):
+    """"{T}: Prevent the next 1 damage that would be dealt to any target this
+    turn. If it's a green creature, prevent the next 2 damage instead."
+
+    The printed default, and the size the second sentence is measured against.
+    """
+    pool = set_pool("ICE")
+    healer = _nosick(Permanent(card=pool["Elvish Healer"]))
+    white = Permanent(card=pool["Kjeldoran Royal Guard"])
+    p1 = PlayerState(name="P1", battlefield=[healer, white], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+
+    result = game.activate_permanent_ability(
+        0, "Elvish Healer", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert white.damage_prevention_pool == 1
+
+
+def test_elvish_healer_gives_a_green_creature_the_larger_shield(set_pool):
+    """One shield of one size, chosen when the target is known — never two
+    shields, which would prevent three."""
+    pool = set_pool("ICE")
+    healer = _nosick(Permanent(card=pool["Elvish Healer"]))
+    green = Permanent(card=pool["Balduvian Bears"])
+    p1 = PlayerState(name="P1", battlefield=[healer, green], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+
+    assert game.activate_permanent_ability(
+        0, "Elvish Healer", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    ).supported
+    game._settle()
+
+    assert green.damage_prevention_pool == 2
+
+    game._mark_damage_on_permanent(green, 3)
+    assert green.damage_marked == 1, "two of the three points were absorbed"
+
+
+def test_elvish_healer_shields_a_player_at_the_printed_default(set_pool):
+    """"Any target" includes a player, and a player is not a green creature —
+    so the rider's noun phrase decides rather than being dropped."""
+    pool = set_pool("ICE")
+    healer = _nosick(Permanent(card=pool["Elvish Healer"]))
+    p1 = PlayerState(name="P1", battlefield=[healer], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    assert game.activate_permanent_ability(
+        0, "Elvish Healer", permanent_index=0, target_player_index=1,
+    ).supported
+    game._settle()
+
+    assert p2.damage_prevention_pool == 1
 # --- end W1G1 ---

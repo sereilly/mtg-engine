@@ -60,6 +60,37 @@ def _lower_prevent_half(node: ast.PreventDamage) -> tuple[OracleInstruction, ...
     )
 
 
+def _alternate_amount(node: ast.PreventDamage) -> dict | None:
+    """The second size Elvish Healer's rider gives its shield, or None.
+
+    ``{"filter": …, "amount": N}`` — the printed noun phrase the recipient is
+    tested against and how much the shield holds when it answers. Both halves
+    or neither: a filter with no amount is a sentence that prevents nothing and
+    an amount with no filter is one that always applies, and either alone would
+    be a shield of the wrong size rather than a refusal.
+
+    The filter is held to what ``subject_matches`` can test, like every other
+    printed noun phrase that reaches a handler: a narrowing the matcher would
+    drop is a shield that takes the *larger* size for every recipient.
+    """
+    if node.alternate_amount is None and node.alternate_subject is None:
+        return None
+    if node.alternate_amount is None or node.alternate_subject is None:
+        raise LoweringError(
+            "a second shield size needs both the condition and the amount",
+            node=node,
+        )
+    larger = _amount_payload(node.alternate_amount)
+    if not isinstance(larger, int) or larger <= 0:
+        raise LoweringError("a second shield size is a printed number", node=node)
+    described = _filter_payload(node.alternate_subject)
+    if not described or set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+        raise LoweringError(
+            "the shield cannot test the noun phrase that sizes it", node=node
+        )
+    return {"filter": described, "amount": larger}
+
+
 def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]:
     """"Prevent the next N damage …" and the Circle-of-Protection shield.
 
@@ -78,6 +109,22 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
     if node.dealt_by_others and not isinstance(node.amount, ast.AllOf):
         raise LoweringError(
             "no counted shield covers more than one source", node=node
+        )
+    # "…**If it's a green creature, prevent the next 2 damage instead.**"
+    # (Elvish Healer.) Refused for every shape but the counted shield below,
+    # and refused here rather than in each branch, because the failure it
+    # guards is the silent one: every branch was written before the rider
+    # existed and reads none of it, so a Circle or a blanket printed with a
+    # second size would arm at the smaller one and report the card supported.
+    alternate = _alternate_amount(node)
+    if alternate is not None and (
+        not isinstance(node.amount, ast.Fixed)
+        or node.combat_only
+        or node.from_filter is not None
+        or node.dealt_by is not None
+    ):
+        raise LoweringError(
+            "only a counted shield takes a second size", node=node
         )
     # "…prevent **half** that damage, rounded down." (Dark Sphere.) Read before
     # the source-scoped branch below, which counts a shield in whole instances
@@ -172,6 +219,8 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
         "to_self": bool(_is_you(recipient)),
         "to_source": bool(_is_source(recipient)),
     }
+    if alternate is not None:
+        payload["amount_if"] = alternate
     # "…dealt to **enchanted creature** this turn." (Fylgja.) A fourth
     # recipient, in the same shape as the three booleans above rather than as a
     # kind of its own, because CR 615.1's shield goes around one object either

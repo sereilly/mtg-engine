@@ -270,6 +270,15 @@ class PreventDamage:
     # cannot be hurt is not the card that also cannot hurt anything, and the
     # half that goes missing is silent either way.
     to_and_by: bool = False
+    # "…dealt to any target this turn. **If it's a green creature, prevent the
+    # next 2 damage instead.**" (Elvish Healer.) A second size the shield takes
+    # when the recipient answers a printed noun phrase, which is a property of
+    # *this* shield rather than a second effect: the two sentences arm one
+    # shield of one size, chosen when the target is known. Two fields rather
+    # than a nested node, because either alone is meaningless — the lowering
+    # refuses unless both are present.
+    alternate_amount: "Amount | None" = None
+    alternate_subject: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)

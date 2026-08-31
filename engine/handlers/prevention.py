@@ -64,6 +64,54 @@ def apply_prevention_shield(
     return target.name
 
 
+def _sized_for_recipient(
+    game: Game,
+    context: OracleExecutionContext,
+    instruction: OracleInstruction,
+    target: PlayerState,
+    amount: int,
+) -> int:
+    """*amount*, or the second size the card prints for a matching recipient.
+
+    "Prevent the next 1 damage that would be dealt to any target this turn. **If
+    it's a green creature, prevent the next 2 damage instead.**" (Elvish
+    Healer.) One shield of one size, chosen here because here is the first place
+    the target is known — the size cannot be decided when the line compiles, and
+    two shields would prevent three.
+
+    Asked through ``subject_matches``, the one reader of a printed noun phrase,
+    with the ability's controller as the observer (CR 109.5) — so "green" is
+    layer 5's answer and a creature recoloured since the ability was activated
+    is sized by what it is now.
+    """
+    alternate = instruction.payload.get("amount_if")
+    if not alternate:
+        return amount
+    # The same choice ``apply_prevention_shield`` is about to make — a creature
+    # the ability named, or nothing and therefore the player — resolved through
+    # the id seam rather than by indexing the battlefield, so the two cannot
+    # disagree about which permanent is being shielded.
+    chosen = resolve_target_permanent(
+        game, context,
+        player=target,
+        predicate=lambda perm: perm.is_creature,
+        fallback_players=(),
+        fallback_on_invalid_choice=False,
+    )
+    if chosen is None:
+        return amount
+    from ..subject_filters import subject_matches
+
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+    if subject_matches(
+        game, chosen, dict(alternate.get("filter") or {}),
+        observer=observer, source=context.source_permanent,
+    ):
+        return int(alternate.get("amount", amount))
+    return amount
+
+
 @effect_handler("grant_prevention_shield")
 def grant_prevention_shield(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
@@ -155,6 +203,7 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     # "Prevent the next N damage that would be dealt to any target" (Healing
     # Salve's prevention mode, Samite Healer, …): the target may be a creature,
     # in which case the shield protects that creature rather than its controller.
+    amount = _sized_for_recipient(game, context, instruction, target, amount)
     apply_prevention_shield(game, target, context.target_permanent_index, amount, source_name)
     return True, "resolved"
 

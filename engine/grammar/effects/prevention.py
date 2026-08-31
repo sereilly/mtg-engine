@@ -21,6 +21,8 @@ printed", and the name is the half of it the pool mostly prints.
 from .. import ast
 from ..amounts import parse_amount
 from ..references import parse_recipient
+from ..errors import GrammarError
+from ..nouns import parse_object_filter
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
 from ..phrases import _parse_duration, _parse_opponents_choice, parse_bound_subject
@@ -47,7 +49,64 @@ def _parse_prevent(stream: TokenStream) -> ast.PreventDamage:
     if recipient is None:
         raise stream.error("expected something to shield")
     duration = _parse_duration(stream)
-    return ast.PreventDamage(amount, to=recipient, duration=duration)
+    alternate = _parse_instead_rider(stream)
+    if alternate is None:
+        return ast.PreventDamage(amount, to=recipient, duration=duration)
+    described, larger = alternate
+    return ast.PreventDamage(
+        amount, to=recipient, duration=duration,
+        alternate_amount=larger, alternate_subject=described,
+    )
+
+
+def _parse_instead_rider(
+    stream: TokenStream,
+) -> "tuple[ast.ObjectFilter, ast.Amount] | None":
+    """``. If it's <noun phrase>, prevent the next N damage instead.`` (Elvish
+    Healer.)
+
+    A rider on the shield in front of it rather than a sentence of its own: it
+    prevents nothing by itself, and "instead" says so — the two sentences arm
+    **one** shield whose size depends on what the first one's target turns out
+    to be. Read here for the same reason the upkeep toll's trailing sentence is
+    read inside its own production: a statement layer that split them would arm
+    two shields and prevent three.
+
+    Every part is required. The pronoun must be "it" (the target the sentence
+    in front of it chose), the noun phrase is what decides which size applies,
+    and the printed "instead" is the difference between a larger shield and a
+    second one.
+
+    Refuses with the cursor untouched, so a prevention sentence followed by any
+    other sentence keeps the reading it has.
+    """
+    mark = stream.mark()
+    if not stream.accept_punct("."):
+        return None
+    if not stream.accept_phrase("if", "it", "'s"):
+        stream.reset(mark)
+        return None
+    stream.accept_word("a", "an")
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("prevent", "the", "next"):
+        stream.reset(mark)
+        return None
+    try:
+        larger = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("damage", "instead"):
+        stream.reset(mark)
+        return None
+    return described, larger
 
 
 def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
