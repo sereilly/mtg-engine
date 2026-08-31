@@ -400,6 +400,17 @@ def _narrowing_flags(source: dict) -> dict:
     supertypes = source.get("supertypes")
     if supertypes:
         narrowed["supertypes"] = list(supertypes)
+    # The negations travel with them. "Target **nonsnow** basic land" (Arcum's
+    # Weathervane) is one description, and carrying the "basic" while dropping
+    # the "nonsnow" offers a superset — the picker would list the snow lands
+    # the ability then refuses. Both keys are in
+    # ``TESTABLE_SUBJECT_FILTER_KEYS``, so the enumeration can ask them; a
+    # narrowing the matcher could not test would have to stay off the spec
+    # rather than ride it unenforced.
+    for key in ("exclude_supertypes", "exclude_subtypes"):
+        excluded = source.get(key)
+        if excluded:
+            narrowed[key] = list(excluded)
     if narrowed:
         flags["filter"] = narrowed
     return flags

@@ -128,7 +128,16 @@ def test_a_subtype_only_target_needs_no_special_case(by_name, name, ability_inde
     """
     ability = _abilities(by_name[name])[ability_index]
 
-    assert derive_activation_spec(ability) == {"kind": "creature"}
+    spec = derive_activation_spec(ability)
+    assert spec["kind"] == "creature"
+    # And the printed subtype rides the spec under ``filter``, so the picker
+    # offers the Elephants rather than every creature. King Suleiman's "Djinn
+    # or Efreet" is a union, which is not one subtype and stays off the spec —
+    # a narrowing the spec cannot state is left to the instruction's own filter
+    # rather than stated wrongly.
+    assert spec.get("filter") == (
+        {"subtype_filter": "elephant"} if name == "Elephant Graveyard" else None
+    )
 
 
 # ===========================================================================
@@ -187,7 +196,11 @@ def test_each_ability_of_a_multi_ability_permanent_answers_for_itself(by_name):
     classifier reading the whole card can only report one of them."""
     destroy, shield = _abilities(by_name["Pyramids"])
 
-    assert derive_activation_spec(destroy) == {"kind": "permanent"}
+    # "Destroy target Aura" carries its subtype under ``filter``; the shield's
+    # "target land" prints no narrowing beyond the type, so it carries none.
+    assert derive_activation_spec(destroy) == {
+        "kind": "permanent", "filter": {"subtype_filter": "aura"},
+    }
     assert derive_activation_spec(shield) == {"kind": "land"}
 
 

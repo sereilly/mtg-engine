@@ -359,8 +359,13 @@ def test_volcanic_eruption_hand_card_offers_mountain_multiselect():
     state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
     ve = next(c for c in state["players"][0]["hand"] if c["name"] == "Volcanic Eruption")
     spec = ve["target_spec"]
-    assert spec["kind"] == "divided" and spec["land_filter"] == "mountain"
-    assert spec["x_equals_targets"] is True
+    # The hook's hand-written "divided" spec retired with it; the grammar
+    # derives an X-targets land picker whose ``filter`` carries the printed
+    # subtype. What the wire test guards is unchanged and is the part that
+    # matters: the client is offered exactly the two Mountains, never the
+    # Forest, and the number it collects is X.
+    assert spec["kind"] == "land" and spec["filter"] == {"subtype_filter": "mountain"}
+    assert spec["x_targets"] is True
     assert {(t["seat"], t["index"]) for t in spec["valid_targets"]} == {(0, 0), (0, 1)}
 
     resp = client.post(
