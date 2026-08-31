@@ -1074,4 +1074,53 @@ def test_a_ward_that_recorded_no_colour_shields_nothing(set_pool):
     game._mark_damage_on_permanent(bears, 3, source=red)
 
     assert bears.damage_marked == 3
+
+
+def test_energy_storm_stops_a_burn_spell_but_not_a_creature(set_pool, catalog_by_name):
+    """"Prevent all damage that would be dealt by instant and sorcery spells."
+
+    A silent mis-play until now: the card reported *supported* on its cumulative
+    upkeep and its untap restriction while this line did nothing at all — the
+    census cannot see it, because a card is supported when any of its lines is.
+
+    A permanent is not a spell however it is dealing the damage (CR 111.1), so
+    the second half is the half that says the shield reads the source's kind
+    rather than shielding everything.
+    """
+    pool = set_pool("ICE")
+    storm = Permanent(card=pool["Energy Storm"])
+    bears = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(
+        name="P0", battlefield=[storm, bears], life=20,
+        hand=[catalog_by_name["Lightning Bolt"]],
+    )
+    p1 = PlayerState(name="P1", life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+
+    assert game.cast_from_hand(0, "Lightning Bolt", target_player_index=1).supported
+    game._settle()
+    assert p1.life == 20
+
+    game._deal_damage_to_player(p1, 2, source=bears)
+    assert p1.life == 18
+
+
+def test_energy_storm_covers_the_table_not_its_controller(set_pool, catalog_by_name):
+    """The sentence names no recipient, so an opponent's Energy Storm shields
+    this damage exactly as your own would — the scan is over every battlefield
+    rather than the recipient's."""
+    pool = set_pool("ICE")
+    storm = Permanent(card=pool["Energy Storm"])
+    p0 = PlayerState(
+        name="P0", life=20, hand=[catalog_by_name["Lightning Bolt"]]
+    )
+    p1 = PlayerState(name="P1", battlefield=[storm], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+
+    assert game.cast_from_hand(0, "Lightning Bolt", target_player_index=0).supported
+    game._settle()
+
+    assert p0.life == 20
 # --- end W1G1 ---

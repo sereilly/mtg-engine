@@ -105,6 +105,12 @@ SOURCE_TYPE_BLANKET = 25
 # costs its controller nothing and spends no shield that could cover later
 # damage.
 CONTROLLER_BLANKET = 28
+# "Prevent all damage that would be dealt by instant and sorcery spells."
+# (Energy Storm.) A blanket over the whole table with no recipient at all —
+# whoever the damage was headed for. Beside the others here for the reason they
+# are here: it has no charges, so applying it costs nobody anything and spends
+# no shield that could cover later damage.
+SPELL_CLASS_BLANKET = 29
 # "Prevent all damage that would be dealt to you this turn by attacking
 # creatures without flying." (Al-abara's Carpet.) A blanket a *player* was
 # handed rather than one a permanent prints, but a blanket all the same — no
@@ -1381,6 +1387,112 @@ def _prevent_all_to_controller(game, event: dict) -> PreventionOutcome | None:
     return PreventionOutcome(prevented=event["amount"])
 
 
+#: "Prevent all damage that would be dealt by instant and sorcery spells."
+#: (Energy Storm.) A static prevention with **no recipient** — every point every
+#: spell of the named classes would deal, to anything. The narrowing is on the
+#: source's card type, which is what makes it a different reader from the
+#: recipient-scoped blanket above: there is no object to hang the shield off, so
+#: the permanent printing the line is scanned for on every event instead.
+#:
+#: The classes are captured and split on "and", so a card printing one type or
+#: three needs no code — the same choice ``_SOURCE_DAMAGE_CAP`` makes about its
+#: own printed class one file over.
+_PREVENT_ALL_FROM_SPELL_CLASS_RE = re.compile(
+    r"^prevent all (?P<combat>combat )?damage that would be dealt by "
+    r"(?P<classes>[a-z ]+?) spells$"
+)
+
+
+def prevent_all_from_spell_class(line: str) -> dict | None:
+    """The spell classes *line* shields the whole table from, or None.
+
+    One matcher, asked by the interceptor below and by the claim reader, so what
+    is prevented and what is claimed cannot drift.
+
+    A class naming no readable type refuses the whole line rather than
+    shielding against everything: ``source_has_type`` answers False for a word
+    it does not know, and a shield that matched every spell would be a card
+    nobody printed.
+    """
+    match = _PREVENT_ALL_FROM_SPELL_CLASS_RE.match(
+        " ".join((line or "").strip().lower().rstrip(".").split())
+    )
+    if match is None:
+        return None
+    classes = tuple(
+        word.strip()
+        for word in match.group("classes").replace(" and ", ",").split(",")
+        if word.strip()
+    )
+    if not classes or any(word not in _SPELL_CLASSES for word in classes):
+        return None
+    return {"classes": classes, "combat_only": bool(match.group("combat"))}
+
+
+#: The card types a spell class may name. A closed set rather than any word,
+#: because ``source_has_type`` substring-matches a type line: an unlisted word
+#: would answer False for every spell and the shield would silently do nothing,
+#: which is the failure this file's claim readers exist to keep out of the
+#: supported pool.
+_SPELL_CLASSES = frozenset({
+    "artifact", "creature", "enchantment", "instant", "sorcery",
+})
+
+
+def _spell_class_blanket(game, event: dict) -> dict | None:
+    """The spell-class blanket covering this event, or None. Pure.
+
+    Scanned over every battlefield rather than the recipient's: the sentence
+    names no recipient at all, so an opponent's Energy Storm covers this damage
+    exactly as your own would.
+    """
+    if event["amount"] <= 0:
+        return None
+    source = event.get("source")
+    if source is None or hasattr(source, "metadata"):
+        # A permanent is not a spell however it is dealing the damage
+        # (CR 111.1). A spell's source is the card as printed (CR 109.5), which
+        # is the shape with no ``metadata``.
+        return None
+    for permanent in game.all_permanents():
+        for line in permanent.effective_card.oracle_text.splitlines():
+            described = prevent_all_from_spell_class(line)
+            if described is None:
+                continue
+            if described["combat_only"] and not event.get("combat"):
+                continue
+            if any(
+                source_has_type(game, source, word)
+                for word in described["classes"]
+            ):
+                return described
+    return None
+
+
+def _applies_spell_class_blanket(game, event: dict) -> bool:
+    return _spell_class_blanket(game, event) is not None
+
+
+@prevention_effect(SPELL_CLASS_BLANKET, applies=_applies_spell_class_blanket)
+def _prevent_all_from_spell_class(game, event: dict) -> PreventionOutcome | None:
+    """Energy Storm: "Prevent all damage that would be dealt by instant and
+    sorcery spells."
+
+    Every point, for as long as the permanent printing it is on the
+    battlefield. Nothing is spent and nothing recorded — the next event asks the
+    board again, which is what ends the shield with the permanent (CR 611.2)
+    rather than with a sweep.
+    """
+    described = _spell_class_blanket(game, event)
+    if described is None:  # pragma: no cover - the predicate just said otherwise
+        return None
+    game.log.append(
+        f"{event['amount']} damage from a "
+        f"{'/'.join(described['classes'])} spell is prevented"
+    )
+    return PreventionOutcome(prevented=event["amount"])
+
+
 def prevention_claims_line(line: str) -> bool:
     """Whether one printed line is, in full, a static prevention effect
     implemented above.
@@ -1400,4 +1512,5 @@ def prevention_claims_line(line: str) -> bool:
         or attached_prevent_all_from_source_type(line) is not None
         or attached_combat_shield_direction(line) is not None
         or prevent_all_to_controller(line) is not None
+        or prevent_all_from_spell_class(line) is not None
     )
