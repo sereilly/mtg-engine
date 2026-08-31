@@ -499,3 +499,74 @@ def halved_count_spec(amount: "ast.Amount", node) -> dict | None:
     if rounding is not None:
         spec["half"] = rounding
     return spec
+
+
+# ---------------------------------------------------------------------------
+# How big a printed P/T change is.
+#
+# Beside the count itself, and for the same reason: "+1/+1 **for each** …",
+# "+X/+0 **where X is** …" and "…**beyond the first**" are three spellings of
+# one quantity, and `lowering/characteristics.py` reached the thousand-line
+# guard holding them. They read the count spec above and nothing reads them
+# back, which is what makes them floor rather than family.
+# ---------------------------------------------------------------------------
+def _static_x_amount(amount: ast.Amount, negative: bool, node) -> int | str:
+    """One half of a computed static bonus: the string "x" or a literal.
+
+    A negated X refuses. The refresh resolves the amount against the computed
+    value and nothing carries a sign for it, so admitting "-X/-0" here would be
+    a bonus applied with the wrong sign — the direction that makes a creature
+    bigger when the card shrinks it.
+    """
+    if isinstance(amount, ast.Var):
+        if negative:
+            raise LoweringError("a static computed bonus cannot be negative", node=node)
+        return "x"
+    if isinstance(amount, ast.Fixed):
+        return -amount.value if negative else amount.value
+    raise LoweringError("a static computed bonus needs X or a number", node=node)
+
+
+def _per_each_amount(amount: ast.Amount, negative: bool, node) -> dict | int:
+    """One half of a "for each" bonus: how much *each* repetition is worth.
+
+    ``{"times_x": n}`` is what ``resolve_amount`` multiplies by the count. A
+    printed 0 stays a plain 0 — nothing times a count is still nothing, and the
+    literal keeps every payload written before this existed byte-identical.
+    """
+    if not isinstance(amount, ast.Fixed):
+        raise LoweringError(
+            'a "for each" bonus needs a printed number to repeat', node=node
+        )
+    value = -amount.value if negative else amount.value
+    return {"times_x": value} if value else 0
+
+
+def _x_definition_spec(definition: ast.Amount, node) -> dict:
+    """The spec behind a where-clause's X, whichever aggregate it names."""
+    if isinstance(definition, ast.GreatestPowerAmong):
+        return count_spec(definition.filter, node, aggregate="greatest_power")
+    if isinstance(definition, ast.ColorsAmong):
+        return count_spec(definition.filter, node, aggregate="distinct_colors")
+    if isinstance(definition, ast.CountOf):
+        return count_spec(definition.filter, node)
+    if isinstance(definition, ast.CharacteristicOfSubject):
+        # "…, where X is **its** mana value" (Great Defender, Subdue, Kry
+        # Shield), "…, where X is **its toughness minus 1**" (Blood Lust). Not
+        # an aggregate over a set: the object is the one the sentence already
+        # named, and the resolution reads the characteristic off it — mana
+        # value off the card (CR 202.3), power and toughness through the layers
+        # (CR 613), which is the resolution's business rather than this one's.
+        return {
+            "object_characteristic": {
+                "object": "target",
+                "characteristic": definition.characteristic,
+                "offset": definition.offset,
+            }
+        }
+    raise LoweringError("only a count or a maximum can define X here", node=node)
+
+
+def _per_each_offset(node: ast.Pump) -> int:
+    """"…beyond the first" as the count spec's offset."""
+    return -1 if node.per_each_beyond_first else 0

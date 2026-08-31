@@ -1619,4 +1619,65 @@ def test_a_for_each_count_refuses_a_relation_it_cannot_take(set_pool):
     )
     assert not refuses.lowered
     assert "count cannot test" in (refuses.lowering_error or ""), refuses.lowering_error
+
+
+def test_marton_stromgald_pumps_the_team_by_the_number_of_attackers(set_pool):
+    """"Whenever Márton Stromgald attacks, other attacking creatures get +1/+1
+    until end of turn for each attacking creature other than Márton Stromgald."
+
+    Three other attackers: each of them gets +3/+3, and Márton gets nothing.
+    """
+    pool = set_pool("ICE")
+    marton = _nosick(Permanent(card=pool["Márton Stromgald"]))
+    friends = [_nosick(Permanent(card=pool["Balduvian Bears"])) for _ in range(3)]
+    bench = _nosick(Permanent(card=pool["Tor Giant"]))
+    p1 = PlayerState(name="P1", battlefield=[marton, *friends, bench], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    marton_power = marton.effective_power
+
+    _w1g2_combat(game, [0, 1, 2, 3])
+    game._settle()
+
+    for friend in friends:
+        assert (friend.effective_power, friend.effective_toughness) == (5, 5), (
+            "2/2 plus +3/+3, one for each other attacker"
+        )
+    assert marton.effective_power == marton_power, "\"other\" excludes the source"
+    assert (bench.effective_power, bench.effective_toughness) == (3, 3), (
+        "a creature that stayed home is not attacking"
+    )
+
+
+def test_marton_stromgald_alone_pumps_nobody(set_pool):
+    """Attacking by himself, the count is zero and there is no team to pump."""
+    pool = set_pool("ICE")
+    marton = _nosick(Permanent(card=pool["Márton Stromgald"]))
+    p1 = PlayerState(name="P1", battlefield=[marton], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    before = (marton.effective_power, marton.effective_toughness)
+
+    _w1g2_combat(game, [0])
+    game._settle()
+
+    assert (marton.effective_power, marton.effective_toughness) == before
+
+
+def test_marton_stromgald_pumps_the_blockers_on_his_side(set_pool):
+    """The mirrored line, and the mirror is the whole point: the same sentence
+    with "blocks" in it, so it is the same production and the same handler."""
+    pool = set_pool("ICE")
+    marton = _nosick(Permanent(card=pool["Márton Stromgald"]))
+    friends = [_nosick(Permanent(card=pool["Balduvian Bears"])) for _ in range(2)]
+    attackers = [_nosick(Permanent(card=pool["Tor Giant"])) for _ in range(3)]
+    p1 = PlayerState(name="P1", battlefield=attackers, life=20)
+    p2 = PlayerState(name="P2", battlefield=[marton, *friends], life=20)
+    game = Game(players=[p1, p2])
+
+    _w1g2_combat(game, [0, 1, 2], {0: 0, 1: 1, 2: 2})
+    game._settle()
+
+    for friend in friends:
+        assert (friend.effective_power, friend.effective_toughness) == (4, 4), (
+            "2/2 plus +2/+2, one for each other blocker"
+        )
 # --- end W1G2 ---

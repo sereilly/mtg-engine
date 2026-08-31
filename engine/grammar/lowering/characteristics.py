@@ -19,7 +19,13 @@ from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._events import binds_block_pair
-from ._amounts import count_spec
+from ._amounts import (
+    count_spec,
+    _per_each_amount,
+    _per_each_offset,
+    _static_x_amount,
+    _x_definition_spec,
+)
 from ._common import (
     _amount_payload,
     _describe_several_targets,
@@ -33,63 +39,6 @@ from ._common import (
     _restrictions_beyond,
     _signed,
 )
-
-
-def _static_x_amount(amount: ast.Amount, negative: bool, node) -> int | str:
-    """One half of a computed static bonus: the string "x" or a literal.
-
-    A negated X refuses. The refresh resolves the amount against the computed
-    value and nothing carries a sign for it, so admitting "-X/-0" here would be
-    a bonus applied with the wrong sign — the direction that makes a creature
-    bigger when the card shrinks it.
-    """
-    if isinstance(amount, ast.Var):
-        if negative:
-            raise LoweringError("a static computed bonus cannot be negative", node=node)
-        return "x"
-    if isinstance(amount, ast.Fixed):
-        return -amount.value if negative else amount.value
-    raise LoweringError("a static computed bonus needs X or a number", node=node)
-
-
-def _per_each_amount(amount: ast.Amount, negative: bool, node) -> dict | int:
-    """One half of a "for each" bonus: how much *each* repetition is worth.
-
-    ``{"times_x": n}`` is what ``resolve_amount`` multiplies by the count. A
-    printed 0 stays a plain 0 — nothing times a count is still nothing, and the
-    literal keeps every payload written before this existed byte-identical.
-    """
-    if not isinstance(amount, ast.Fixed):
-        raise LoweringError(
-            'a "for each" bonus needs a printed number to repeat', node=node
-        )
-    value = -amount.value if negative else amount.value
-    return {"times_x": value} if value else 0
-
-
-def _x_definition_spec(definition: ast.Amount, node) -> dict:
-    """The spec behind a where-clause's X, whichever aggregate it names."""
-    if isinstance(definition, ast.GreatestPowerAmong):
-        return count_spec(definition.filter, node, aggregate="greatest_power")
-    if isinstance(definition, ast.ColorsAmong):
-        return count_spec(definition.filter, node, aggregate="distinct_colors")
-    if isinstance(definition, ast.CountOf):
-        return count_spec(definition.filter, node)
-    if isinstance(definition, ast.CharacteristicOfSubject):
-        # "…, where X is **its** mana value" (Great Defender, Subdue, Kry
-        # Shield), "…, where X is **its toughness minus 1**" (Blood Lust). Not
-        # an aggregate over a set: the object is the one the sentence already
-        # named, and the resolution reads the characteristic off it — mana
-        # value off the card (CR 202.3), power and toughness through the layers
-        # (CR 613), which is the resolution's business rather than this one's.
-        return {
-            "object_characteristic": {
-                "object": "target",
-                "characteristic": definition.characteristic,
-                "offset": definition.offset,
-            }
-        }
-    raise LoweringError("only a count or a maximum can define X here", node=node)
 
 
 def _lower_become_creature(
@@ -135,9 +84,23 @@ _TARGET_PUMP_DURATIONS: dict[str, str] = {
 }
 
 
-def _per_each_offset(node: ast.Pump) -> int:
-    """"…beyond the first" as the count spec's offset."""
-    return -1 if node.per_each_beyond_first else 0
+def _is_global_per_each_buff(node: ast.Pump) -> bool:
+    """Whether a "for each" pump is the one-shot **team** shape.
+
+    "Other attacking creatures get +1/+1 until end of turn for each attacking
+    creature other than Márton Stromgald." The subject is a class, so the
+    global-buff branch owns the noun phrase; the duration is required, because
+    `buff_creatures_global` walks the board once and stamps a temporary boost —
+    with no duration the sentence would be a continuous anthem whose size
+    recomputes, which that handler cannot be.
+    """
+    return (
+        node.per_each is not None
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "all"
+        and not node.subject.targeted
+        and node.duration.kind is not None
+    )
 
 
 def _resolve_per_each_pronoun(node: ast.Pump) -> ast.Pump:
@@ -180,41 +143,65 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         # Wombat). A CR 613 layer-7c contribution whose *size* is a count, like
         # the where-clause form below it — only the spelling of the
         # multiplication differs, so it lands on the same ``dynamic_pt_bonus``
-        # kind and the same shared count spec. Every other reading refuses
-        # rather than falling through: a duration would make it a one-shot pump
-        # whose handler has no repetition, and a subject other than the source
-        # would point the bonus at a permanent the refresh is not refreshing.
-        if not _is_source(node.subject):
-            raise LoweringError(
-                'a "for each" pump is only a continuous bonus on its own source',
-                node=node,
-            )
-        node = _resolve_per_each_pronoun(node)
-        if node.duration.kind is not None:
-            # "…**it gets +1/+0 until end of turn** for each other attacking
-            # Aurochs." A duration makes it a one-shot pump rather than a
-            # continuous contribution, and `pump_self` already boosts the source
-            # until end of turn with a computed size — the where-clause branch
-            # below hands it the very same `x_from_count` spec. What differs is
-            # only how the multiplication is *spelled*: "+X/+0, where X is the
-            # number of …" and "+1/+0 for each …" are one amount, and
-            # `resolve_amount`'s `times_x` is where the printed repetition size
-            # already lives.
-            duration = _TARGET_PUMP_DURATIONS.get(node.duration.kind)
-            if duration is None:
+        # kind and the same shared count spec.
+        #
+        # Three readings, and everything outside them refuses rather than
+        # falling through: without a duration and on the source it is that
+        # continuous bonus; with a duration and on the source it is a one-shot
+        # `pump_self` sized the same way; and with a duration on a *class* it is
+        # the global buff below, which is the one shape whose subject is not the
+        # source at all. A subject that is neither points a bonus at a permanent
+        # nothing refreshes.
+        if not _is_global_per_each_buff(node):
+            if not _is_source(node.subject):
                 raise LoweringError(
-                    "no pump handler ends at this duration", node=node
+                    'a "for each" pump is only a continuous bonus on its own '
+                    "source or a one-shot buff on a named class", node=node,
+                )
+            node = _resolve_per_each_pronoun(node)
+            if node.duration.kind is not None:
+                # "…**it gets +1/+0 until end of turn** for each other attacking
+                # Aurochs." A duration makes it a one-shot pump rather than a
+                # continuous contribution, and `pump_self` already boosts the
+                # source until end of turn with a computed size — the
+                # where-clause branch below hands it the very same
+                # `x_from_count` spec. What differs is only how the
+                # multiplication is *spelled*: "+X/+0, where X is the number of
+                # …" and "+1/+0 for each …" are one amount, and
+                # `resolve_amount`'s `times_x` is where the printed repetition
+                # size already lives.
+                duration = _TARGET_PUMP_DURATIONS.get(node.duration.kind)
+                if duration is None:
+                    raise LoweringError(
+                        "no pump handler ends at this duration", node=node
+                    )
+                return (
+                    # The sign is already inside `times_x`, which is what
+                    # `dynamic_pt_bonus` below relies on — so the negation flags
+                    # `pump_self` reads must *not* be emitted here as well. They
+                    # were, and the handler negated a second time: "it gets
+                    # -2/-1 until end of turn for each creature blocking it
+                    # beyond the first" (Johtull Wurm) would have *grown* the
+                    # wurm. Latent until that card, because every earlier one
+                    # reaching this branch printed a plus.
+                    OracleInstruction("pump_self", "", {
+                        "power": _per_each_amount(
+                            node.power, node.power_negative, node
+                        ),
+                        "toughness": _per_each_amount(
+                            node.toughness, node.toughness_negative, node
+                        ),
+                        "x_from_count": count_spec(
+                            node.per_each, node, offset=_per_each_offset(node)
+                        ),
+                    }),
                 )
             return (
-                # The sign is already inside `times_x`, which is what
-                # `dynamic_pt_bonus` below relies on — so the negation flags
-                # `pump_self` reads must *not* be emitted here as well. They
-                # were, and the handler negated a second time: "it gets -2/-1
-                # until end of turn for each creature blocking it beyond the
-                # first" (Johtull Wurm) would have *grown* the wurm. Latent
-                # until this round, because every earlier card reaching this
-                # branch printed a plus.
-                OracleInstruction("pump_self", "", {
+                OracleInstruction("dynamic_pt_bonus", "", {
+                    # The printed number sizes *one* repetition. Carried as an
+                    # amount rather than folded into the spec's multiplier: the
+                    # spec is one count and the two halves may scale
+                    # differently.
                     "power": _per_each_amount(node.power, node.power_negative, node),
                     "toughness": _per_each_amount(
                         node.toughness, node.toughness_negative, node
@@ -224,20 +211,6 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
                     ),
                 }),
             )
-        return (
-            OracleInstruction("dynamic_pt_bonus", "", {
-                # The printed number sizes *one* repetition. Carried as an
-                # amount rather than folded into the spec's multiplier: the
-                # spec is one count and the two halves may scale differently.
-                "power": _per_each_amount(node.power, node.power_negative, node),
-                "toughness": _per_each_amount(
-                    node.toughness, node.toughness_negative, node
-                ),
-                "x_from_count": count_spec(
-                    node.per_each, node, offset=_per_each_offset(node)
-                ),
-            }),
-        )
     if node.duration.kind is None:
         # "This creature gets +X/+0, where X is the greatest power among
         # creature cards in your graveyard." (Carrion Grub.) A pump with no
@@ -379,6 +352,21 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
                 "the global buff cannot narrow by: " + ", ".join(leftover), node=node
             )
         payload = {"power": power, "toughness": toughness}
+        # "…**for each attacking creature other than Márton Stromgald**". The
+        # printed P/T sizes one repetition and the count multiplies it, exactly
+        # as it does on the two source-shaped branches above — the same
+        # `times_x` amount and the same shared count spec, so one printed clause
+        # means one number wherever it is printed. The whole set is fixed at
+        # resolution (CR 611.2c), which is what makes a one-shot buff the right
+        # handler for it.
+        if node.per_each is not None:
+            payload["power"] = _per_each_amount(node.power, node.power_negative, node)
+            payload["toughness"] = _per_each_amount(
+                node.toughness, node.toughness_negative, node
+            )
+            payload["x_from_count"] = count_spec(
+                node.per_each, node, offset=_per_each_offset(node)
+            )
         if filt.colors:
             payload["color"] = filt.colors[0]
         # "**Nonwhite** creatures get -1/-1 until end of turn." (Holy Light.)

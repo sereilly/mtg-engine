@@ -303,8 +303,19 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     caster = context.caster
     card = context.card
     color_sym = instruction.payload.get("color")
-    power_delta = int(instruction.payload.get("power", 0))
-    toughness_delta = int(instruction.payload.get("toughness", 0))
+    # "…get +1/+1 until end of turn **for each attacking creature other than
+    # Márton Stromgald**." The printed P/T sizes one repetition and the count
+    # multiplies it — the same `times_x` amount and the same shared evaluator
+    # `pump_self` reads, so one printed clause means one number wherever the
+    # card prints it. Taken once, here, rather than per creature: CR 611.2c
+    # fixes the affected set and the size when the effect begins, and a count
+    # re-taken inside the loop would change as the loop's own boosts landed.
+    x_count = instruction.payload.get("x_from_count")
+    x_value = (
+        count_from_payload(game, context, x_count) if x_count is not None else None
+    )
+    power_delta = resolve_amount(instruction.payload.get("power", 0), x_value)
+    toughness_delta = resolve_amount(instruction.payload.get("toughness", 0), x_value)
     exclude_colors = set(instruction.payload.get("exclude_colors") or ())
     attacking_only = bool(instruction.payload.get("attacking_only"))
     blocking_only = bool(instruction.payload.get("blocking_only"))
