@@ -2286,8 +2286,8 @@ def _emblem_texts(instruction: OracleInstruction) -> list[str]:
 # on resolution (CR 603.7): "Whenever [one or more] [nontoken] creature(s)
 # attack(s) this turn, <effect>." (Basri Ket's −2, Basri, Devoted Paladin's −1.)
 _DELAYED_ATTACK_RE = re.compile(
-    r"^whenever (?:(?P<batch>one or more )|an? )?(?P<nontoken>nontoken )?creatures? attacks?"
-    r" this turn, (?P<effect>.+)$"
+    r"^whenever (?:(?P<batch>one or more )|an? )?(?P<nontoken>nontoken )?creatures? "
+    r"(?P<event>attack|block)s? this turn, (?P<effect>.+)$"
 )
 
 # The same delayed trigger with its duration printed *first* and its subject
@@ -2324,7 +2324,13 @@ _DELAYED_CAST_UNTIL_RE = re.compile(
 #: at the moment it should have fired. Which events *have* a fire site is
 #: ``engine/delayed_triggers.DELAYED_EVENTS``, not a second list here.
 _DELAYED_EVENT_PHRASES: dict[str, str] = {
+    "attack": "creatures_attack",
     "attacks": "creatures_attack",
+    # "Whenever a creature **blocks** this turn, …" (Battle Cry). One word of
+    # the sentence differs, so it is a row here rather than a second regex —
+    # the shape, the duration and the repetition are the attack form's.
+    "block": "creature_blocks",
+    "blocks": "creature_blocks",
     "deals combat damage to a player": "creature_deals_combat_damage_to_player",
 }
 
@@ -2397,6 +2403,15 @@ def _parse_delayed_attack_trigger(
     match = _DELAYED_ATTACK_RE.match(normalized)
     if match is None:
         return None
+    event = _DELAYED_EVENT_PHRASES[match.group("event")]
+    batch = bool(match.group("batch"))
+    if batch and event != "creatures_attack":
+        # "One or more creatures" is CR 508.1's declaration read as one event,
+        # which is what the attack fire site announces. The block fire site
+        # announces one creature at a time (CR 509.1g), so an entry armed as a
+        # batch would fire per blocker with a count nobody set. No card prints
+        # it; refusing is what keeps that true rather than assumed.
+        return None
     inner = _line_instruction(match.group("effect"), card_name, activated=True)
     if inner is None:
         return None
@@ -2404,8 +2419,8 @@ def _parse_delayed_attack_trigger(
         "create_delayed_trigger",
         "",
         {
-            "event": "creatures_attack",
-            "batch": bool(match.group("batch")),
+            "event": event,
+            "batch": batch,
             "nontoken": bool(match.group("nontoken")),
             "instruction": inner[0],
             "once": False,
@@ -3269,6 +3284,21 @@ def _noncreature_line_instructions(
         found = _line_instruction(line, card_name, spell_line_only=True)
         if found is not None:
             instructions.append(found[0])
+            continue
+        # "Whenever a creature blocks this turn, it gets +0/+1 until end of
+        # turn." (Battle Cry.) A spell whose own line creates a delayed
+        # triggered ability (CR 603.7) — the same clause Basri Ket's loyalty
+        # ability and Subira's activated one print, and the same table, asked
+        # here so the shape has one home. Read after the grammar and before the
+        # ability lookup, which is where a spell's plain effect lines are read.
+        #
+        # Without it the sentence was claimed by nothing: the card was
+        # `supported` on its *first* line and the second one silently did
+        # nothing, which is what `parse_coverage.py` reports and what a
+        # promotion gates on.
+        delayed = _parse_delayed_attack_trigger(line, card_name)
+        if delayed is not None:
+            instructions.append(delayed)
             continue
         if not whole_card:
             continue

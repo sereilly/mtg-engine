@@ -1083,6 +1083,38 @@ def test_glyph_of_doom_fires_once(set_pool):
     assert game.delayed_triggers == []
 
 
+# --- W2G3: combat restrictions and requirements ---
+def test_glyph_of_doom_still_destroys_when_its_wall_died_in_the_block(set_pool):
+    """The card's **main line**, and it did nothing.
+
+    The Wall blocks, the delayed ability waits for the end of combat, and
+    combat damage kills the Wall in between — which is the ordinary way this
+    card is played, not an edge case. The record was read off the Wall, so a
+    dead Wall answered "the creature whose blocks it names is gone" and the
+    Glyph destroyed nothing.
+
+    The relation has two ends and ``_record_block_history`` writes both; only
+    the attacker's end survives the Wall, so that is the one the sweep reads.
+    """
+    game, p1, wall, first, _second = _glyph_of_doom_board(set_pool)
+    # A Wall that dies to the attacker it blocks, rather than the 0/9 the
+    # shared board hands out.
+    wall.card = CardDefinition(
+        name="Small Wall", mana_cost="", cmc=0.0, type_line="Creature - Wall",
+        oracle_text="Defender", colors=(), color_identity=(),
+        keywords=("Defender",), produced_mana=(),
+        raw={"name": "Small Wall", "type_line": "Creature - Wall",
+             "power": "0", "toughness": "1"},
+    )
+
+    _one_combat(game, {0: 0})
+
+    assert "Small Wall" not in [p.card.name for p in game.controlled_by(1)]
+    assert [p.card.name for p in game.controlled_by(0)] == ["Attacker Two"]
+    assert [card.name for card in p1.graveyard] == ["Attacker One"]
+# --- end W2G3 ---
+
+
 # ---------------------------------------------------------------------------
 # Teleport (round 23) — "Cast this spell only during the declare attackers
 # step." / "Target creature can't be blocked this turn."

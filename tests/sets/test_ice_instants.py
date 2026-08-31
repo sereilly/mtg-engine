@@ -859,3 +859,100 @@ def test_whiteouts_graveyard_ability_needs_a_snow_land_to_sacrifice(set_pool):
     assert p1.hand == []
     assert any(perm.card.name == "Forest" for perm in p1.battlefield)
 # --- end W1G4 ---
+
+
+# --- W2G3: combat restrictions and requirements ---
+def test_battle_cry_arms_a_delayed_block_trigger(set_pool):
+    """"Whenever a creature blocks this turn, it gets +0/+1 until end of turn."
+
+    The card was already `supported` on its *first* line, so this sentence was
+    claimed by nothing and did nothing — the failure `parse_coverage.py`
+    reports and a promotion gates on. It is the same printed shape Basri Ket's
+    "whenever one or more creatures attack this turn" prints, so it is a word in
+    that table rather than a second reader.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Battle Cry"])
+
+    assert program.supported
+    kinds = [i.kind for i in program.instructions]
+    assert "create_delayed_trigger" in kinds
+    delayed = next(
+        i for i in program.instructions if i.kind == "create_delayed_trigger"
+    )
+    assert delayed.payload["event"] == "creature_blocks"
+    # CR 603.7b: "whenever ... this turn" keeps triggering for the turn.
+    assert delayed.payload["once"] is False
+    assert delayed.payload["duration"] == "end_of_turn"
+    assert delayed.payload["instruction"].kind == "pump_self"
+
+
+def _w2g3_battle_cry_board(set_pool):
+    """Seat 0 attacking with two bears; seat 1 holding two and the spell."""
+    pool = set_pool("ICE")
+    attackers = [_nosick(Permanent(card=pool["Balduvian Bears"])) for _ in range(2)]
+    blockers = [_nosick(Permanent(card=pool["Balduvian Bears"])) for _ in range(2)]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=attackers, life=20),
+        PlayerState(
+            name="P2", battlefield=blockers, hand=[pool["Battle Cry"]], life=20
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, attackers, blockers
+
+
+def test_battle_cry_toughens_each_creature_that_blocks_after_it_resolves(set_pool):
+    """The ability fires per blocker (CR 509.1i) and keeps firing for the turn,
+    so both blockers are 2/3 — and it reaches the *defender's* creatures even
+    though a spell's own source is in a graveyard by then."""
+    game, _attackers, blockers = _w2g3_battle_cry_board(set_pool)
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0, 1], 1)[0]
+
+    assert game.cast_from_hand(1, "Battle Cry").supported
+    game._settle()
+
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert game.declare_blockers(1, {0: 0, 1: 1})[0]
+    game._settle()
+
+    assert [b.effective_toughness for b in blockers] == [3, 3]
+    assert [b.effective_power for b in blockers] == [2, 2]
+
+
+def test_battle_cry_does_nothing_to_a_creature_that_did_not_block(set_pool):
+    """The trigger is per blocking creature, not a board-wide anthem — a
+    defender kept back is untouched."""
+    game, attackers, blockers = _w2g3_battle_cry_board(set_pool)
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0, 1], 1)[0]
+
+    assert game.cast_from_hand(1, "Battle Cry").supported
+    game._settle()
+
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert game.declare_blockers(1, {0: 0})[0]
+    game._settle()
+
+    assert blockers[0].effective_toughness == 3
+    assert blockers[1].effective_toughness == 2
+    # Nor does it reach the attackers, which blocked nothing.
+    assert [a.effective_toughness for a in attackers] == [2, 2]
+
+
+def test_battle_cry_stops_at_the_end_of_its_turn(set_pool):
+    """"This turn" is CR 603.7b's stated duration: the ability is swept with
+    the turn, so a block in the *next* combat gets nothing."""
+    game, _attackers, blockers = _w2g3_battle_cry_board(set_pool)
+    game.active_player_index = 0
+    assert game.cast_from_hand(1, "Battle Cry").supported
+    game._settle()
+    assert len(game.delayed_triggers) == 1
+
+    game.resolve_cleanup_step(0)
+
+    assert game.delayed_triggers == []
+# --- end W2G3 ---

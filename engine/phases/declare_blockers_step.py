@@ -18,6 +18,7 @@ from ..combat_restrictions import declaration_company_required, participation_ca
 from ..evasion_negation import negated_evasion_abilities
 from ..landwalk import LANDWALK, land_satisfies, landwalk_requirement
 from ..mana_payment import mana_cost_label, plan_payment, untapped_mana_lands
+from ..delayed_triggers import fire_delayed_triggers
 from ..layer_bridge import computed_abilities
 from ..subject_filters import subject_matches
 from ..models import Permanent
@@ -343,6 +344,7 @@ class DeclareBlockersStepMixin:
         # is what let the third, Cockatrice-specific fire site here be deleted:
         # it did the same work with the "non-Wall" test written out by hand.
         self._fire_creature_blocks_triggers(controller_index, assignments)
+        self._fire_delayed_block_triggers(controller_index, assignments)
         self._fire_becomes_blocked_triggers(controller_index, assignments)
         self._apply_flanking(controller_index)
         # CR 509.4/802.4: once every defending player has declared, the active
@@ -1251,6 +1253,36 @@ class DeclareBlockersStepMixin:
                 self.log.append(
                     f"{permanent.card.name} triggered (attacked and wasn't blocked)"
                 )
+
+    def _fire_delayed_block_triggers(
+        self, controller_index: int, assignments: dict[int, list[int]]
+    ) -> None:
+        """Announce ``creature_blocks`` for each creature this declaration made
+        a blocker (CR 509.1i, CR 603.7).
+
+        A delayed ability belongs to no permanent, so the scan
+        ``_fire_creature_blocks_triggers`` runs over the battlefield cannot
+        reach it - the entry is a spell's ("Whenever a creature blocks this
+        turn, ...", Battle Cry) and the spell is in a graveyard. Its own pass
+        for that reason rather than a branch inside the scan.
+
+        Once per *blocking creature*, whatever it was declared against:
+        CR 509.3c is the line the printed scan beside this one already draws,
+        and this opener prints no narrowing by what was blocked.
+
+        ``source_permanent`` is named rather than defaulted, exactly as the
+        combat-damage site names its attacker: the sentence behind this opener
+        says "..., <do something to **it**>", and CR 603.7d's own-source
+        default would point the effect at the spell that created the ability.
+        """
+        for _blocker_idx, blocker, _blocked in self._resolved_block_pairs(
+            controller_index, assignments
+        ):
+            fire_delayed_triggers(
+                self, "creature_blocks",
+                subject=blocker,
+                source_permanent=blocker,
+            )
 
     def _fire_becomes_blocked_triggers(
         self, controller_index: int, assignments: dict[int, list[int]],
