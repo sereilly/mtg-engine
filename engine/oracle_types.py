@@ -462,13 +462,19 @@ PER_OBJECT_SEAT_RECORDS: dict[str, str] = {
 # not enough: three more caches sit downstream of it.
 #
 # `engine/granted_abilities.granted_ability_supported` is the one that
-# collected. It compiles the quoted text of a granted ability on a probe card
-# to decide whether the engine can read it, so with the grammar stubbed out it
-# cached **False** for every grant in the pool — and kept it after the stub was
-# gone. Dread Wight and Musician then reported their granted lines unreadable
-# for the rest of the process, which showed up as an unclaimed-parse failure in
-# a *different* test file, hundreds of tests later. A stale cache does not fail
-# where it is written.
+# collected, and how it collected is the reason this is a registry rather than
+# a longer `cache_clear()` line. It compiles the quoted text of a granted
+# ability on a probe card to decide whether the engine can read it. The live
+# pass had already cached the pool's grants under their own keys, so the
+# stubbed pass mostly *hit* — but it asked two questions the live pass never
+# had, the lowercased period-stripped forms of Dread Wight's and Musician's
+# granted lines, and cached **False** for both. Those two keys are the ones
+# `scripts/parse_coverage.py` asks.
+#
+# So every compiled program still came back identical and nothing looked
+# wrong; the failure surfaced hundreds of tests later, in a different file, as
+# two unclaimed sentences. A stale cache does not fail where it is written,
+# and two poisoned keys out of seventy-four are not visible from the outside.
 #
 # Registered by the caches themselves rather than listed here, because a list
 # of cache names is the same second copy as a list of fire sites: the fourth
