@@ -21,6 +21,7 @@ from .._constants import _MANA_SYMBOLS as _POOL_SYMBOLS
 from ...cast_permissions import consume as consume_permission, permission_for
 from ...auras import aura_enchant_clause
 from ...cast_costs import AdditionalCost, additional_costs
+from ...auras import controller_cast_ban
 from ...cast_restrictions import check_cast_timing
 from ...damage_ledger import record_cast
 from ...hand_locks import hand_lock_reason, playable_hand_index
@@ -369,6 +370,19 @@ class SpellCastingMixin:
         banning_card = self._set_lockout_banning_card(card)
         if banning_card is not None:
             details = f"can't cast or play {card.name}: banned by {banning_card}"
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        # "Enchanted creature's controller can't cast creature spells."
+        # (Brand of Ill Omen.) A restriction imposed on a *player* by something
+        # on the battlefield rather than a timing gate the spell prints about
+        # itself, which is why it is asked here beside the lockout above and not
+        # through `check_cast_timing` — that reader looks at the casting card's
+        # own oracle text, and this sentence is on a card the caster may not
+        # even control.
+        forbidding_aura = controller_cast_ban(self, caster_index, card)
+        if forbidding_aura is not None:
+            details = f"can't cast {card.name}: {forbidding_aura}"
             self.log.append(details)
             return SimulationResult(card.name, False, classification.effect_kind, details)
 
