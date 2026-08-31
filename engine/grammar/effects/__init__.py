@@ -137,6 +137,7 @@ from .stack import (
 )
 from .combat import (
     _parse_assigns_no_combat_damage,
+    _parse_force_chosen_creature_to_attack,
     _parse_attacking_doesnt_tap,
     _parse_cant_attack_or_block,
     _CANT_BE_ACTIONS,
@@ -249,6 +250,7 @@ __all__ = [
     "_parse_cost_x_definition",
     "_parse_cant_attack_or_block",
     "_parse_assigns_no_combat_damage",
+    "_parse_force_chosen_creature_to_attack",
     "_parse_attacking_doesnt_tap",
     "_parse_remove_from_combat",
     "_CANT_BE_ACTIONS",

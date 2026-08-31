@@ -676,5 +676,32 @@ def _lower_force_chosen_creature_to_attack(
     that creature did about the second. Three instructions would need a
     scratchpad key to pass the chosen creature between them and a fourth to
     remember the requirement, which is a fused instruction with extra steps.
+
+    Arcum's Whistle puts a price on it — "That player may pay {X}, where X is
+    that creature's mana value. **If they don't pay**, …" — and that half *is*
+    composed, through the ordinary offer: the requirement is the offer's
+    declined branch and nothing else about it changes. ``that_player`` is the
+    seat the ability's own target names (the creature's controller, which this
+    template's noun phrase already fixes as the active player), and the price is
+    the one computed amount every other offer carries.
     """
-    return (OracleInstruction("mark_non_wall_target_to_attack", "", {}),)
+    requirement = OracleInstruction("mark_non_wall_target_to_attack", "", {})
+    if not node.unless_controller_pays_mana_value:
+        return (requirement,)
+    return (
+        OracleInstruction("may", "", {
+            "actor": "that_player",
+            "cost": {"generic": "x"},
+            "x_from_count": {
+                "object_characteristic": {
+                    "object": "target", "characteristic": "mana_value",
+                    "offset": 0,
+                },
+            },
+            # The **declined** branch, which is where the target lives:
+            # `targeting._from_instructions` reads an offer's `otherwise` last
+            # and for exactly this reason — CR 601.2c picks the creature as the
+            # ability is activated, before anyone is offered the payment.
+            "otherwise": (requirement,),
+        }),
+    )

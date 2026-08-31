@@ -382,6 +382,14 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
     else:
         stream.reset(mark)
         return False
+    # "If they don't **pay**, …" (Arcum's Whistle). The verb said again, which
+    # is what the offer in front of it already was — so it narrows nothing and
+    # is consumed here. Only over an offer that really is a payment: over
+    # "you may sacrifice a creature" the word would name an action the card
+    # never offered, and a word consumed and unread is a word that could be
+    # deleted with no change to what was lowered.
+    if isinstance(target, ast.May) and target.cost is not None:
+        stream.accept_word("pay")
     # "If a player does **either**, destroy this enchantment." (Worms of the
     # Earth.) The word points back at the two alternatives the offer printed, so
     # it is admitted only over an offer that really has two — over a single
