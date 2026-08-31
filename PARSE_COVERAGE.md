@@ -25,12 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**30 unclaimed sentence(s) across 20 supported card(s).**
+**29 unclaimed sentence(s) across 19 supported card(s).**
 
 - **Battle Cry**
   - `whenever a creature blocks this turn, it gets +0/+1 until end of turn`
-- **Blizzard**
-  - `cast this spell only if you control a snow land`
 - **Breath of Dreams**
   - `green creatures have "cumulative upkeep {1}."`
 - **Call to Arms**
