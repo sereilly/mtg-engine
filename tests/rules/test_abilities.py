@@ -1219,3 +1219,114 @@ def test_701_8a_a_board_with_no_legal_choice_destroys_nothing():
 
 
 # --- end FixA ---
+
+
+# --- LeadC: a free offer is not automatically taken ---
+#
+# CR 603.5 puts an optional trigger on the stack whether or not its controller
+# means to take the option, and makes the choice at resolution — which is also
+# where the "unless" half of a pay-or-else trigger is dealt with. Both halves
+# reach a seat nobody is asking (an AI, a headless resolution), and its default
+# used to be decided by *affordability*: a free offer was vacuously affordable,
+# so it was always accepted. That was right for the gift below and wrong for
+# the price, which is a cost printed as a deed rather than as mana.
+
+_LEAD_C_GIFT = "At the beginning of your upkeep, you may draw a card."
+_LEAD_C_PRICE = (
+    "At the beginning of your upkeep, you may sacrifice a creature. "
+    "If you do, you gain 3 life."
+)
+_LEAD_C_TOLL = (
+    "At the beginning of your upkeep, you may sacrifice a creature. "
+    "If you don't, tap this enchantment."
+)
+
+
+def _lead_c_board(text: str):
+    """An upkeep trigger carrying *text*, with one creature to spend and a
+    library to draw from. Synthetic on purpose: the rule is about the shape of
+    the sentence, and every card printing it gets the same answer."""
+    engine_perm = Permanent(card=_mk_card("Offer Engine", "Enchantment", text))
+    bear = Permanent(card=_bear())
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[engine_perm, bear],
+        library=[_bear(f"Card {i}") for i in range(8)],
+    )
+    p2 = PlayerState(name="P2", library=[_bear(f"Other {i}") for i in range(8)])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._initialize_permanent_state(engine_perm, 0, None)
+    game._initialize_permanent_state(bear, 0, None)
+    game._sync_control()
+    game.start_turn(0)
+    game._settle()
+    return game, p1, engine_perm, bear
+
+
+@pytest.mark.cr("603.5")
+def test_603_5_a_free_gift_is_still_taken_by_a_seat_nobody_asks():
+    """"You may draw a card" costs its controller nothing, so the default takes
+    it. This is the half the affordability test got right, and the half a
+    blanket "refuse everything" would have broken."""
+    game, p1, _engine, _bear_perm = _lead_c_board(_LEAD_C_GIFT)
+
+    game.auto_resolve_pending_choices()
+
+    assert len(p1.hand) == 1, game.log
+
+
+@pytest.mark.cr("603.5")
+def test_603_5_a_free_price_is_declined_by_a_seat_nobody_asks():
+    """"You may **sacrifice a creature**. If you do, you gain 3 life" carries no
+    mana cost, so the affordability test called it free and paid it every
+    upkeep. The price is in the offered deed, and nothing is printed for
+    refusing — so the default refuses."""
+    game, p1, _engine, bear_perm = _lead_c_board(_LEAD_C_PRICE)
+
+    game.auto_resolve_pending_choices()
+
+    assert game.is_on_battlefield(bear_perm), game.log
+    assert p1.life == 20, game.log
+
+
+@pytest.mark.cr("603.5")
+def test_603_5_an_interactive_seat_is_asked_for_the_price_and_may_take_it():
+    """The choice is made at resolution by *the player* (CR 603.5). A default is
+    only what happens when there is nobody to ask, so the prompt is still
+    queued and answering it still pays the price and gains the life."""
+    game, p1, _engine, bear_perm = _lead_c_board(_LEAD_C_PRICE)
+
+    assert game.pending_optional_pays, game.log
+    assert game.confirm_optional_pay(0, "Offer Engine", accept=True), game.log
+
+    assert not game.is_on_battlefield(bear_perm), game.log
+    assert p1.life == 23, game.log
+
+
+@pytest.mark.cr("603.5")
+def test_603_5_an_interactive_seat_is_asked_for_the_gift_and_may_refuse_it():
+    """The mirror, and the reason a default is never the whole answer: an
+    interactive seat is asked about the gift too, and declining it draws
+    nothing."""
+    game, p1, _engine, _bear_perm = _lead_c_board(_LEAD_C_GIFT)
+
+    assert game.pending_optional_pays, game.log
+    assert game.confirm_optional_pay(0, "Offer Engine", accept=False), game.log
+
+    assert p1.hand == [], game.log
+
+
+@pytest.mark.cr("603.5")
+def test_603_5_a_toll_is_still_paid_because_refusing_it_is_not_free():
+    """The "unless" half of CR 603.5, and the line the policy draws. Here
+    refusing costs the controller something too — the enchantment taps — so
+    which of the two losses is smaller is the seat's judgement rather than a
+    default's, and the default keeps paying the printed price."""
+    game, _p1, engine_perm, bear_perm = _lead_c_board(_LEAD_C_TOLL)
+
+    game.auto_resolve_pending_choices()
+
+    assert not game.is_on_battlefield(bear_perm), game.log
+    assert not engine_perm.tapped, game.log
+# --- end LeadC ---

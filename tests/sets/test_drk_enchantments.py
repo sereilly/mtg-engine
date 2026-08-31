@@ -784,6 +784,12 @@ def test_worms_of_the_earth_offers_every_seat_its_own_two_lands(set_pool):
     game, worms = _worms_board(set_pool)
 
     _run_upkeep(game, 0)
+    # Both seats **accept**, said outright. The offer is free and refusing it
+    # costs nothing, so the non-interactive default now declines it
+    # (`_default_optional_pay`) — which is a fact about the default and not
+    # about whose lands each seat sacrifices, the question this test asks.
+    assert game.confirm_optional_pay(0, accept=True), game.log
+    assert game.confirm_optional_pay(1, accept=True), game.log
     game.auto_resolve_pending_choices()
 
     assert [p.card.name for p in game.players[0].battlefield] == ["Forest"], game.log
@@ -800,6 +806,11 @@ def test_worms_of_the_earth_burns_the_seat_that_took_the_damage(set_pool):
     game, worms = _worms_board(set_pool, p1_lands=1, p2_lands=1)
 
     _run_upkeep(game, 0)
+    # Accepted outright, for the reason the test above states: the damage is
+    # the only alternative left on the offer, and taking it is what this test
+    # is about.
+    assert game.confirm_optional_pay(0, accept=True), game.log
+    assert game.confirm_optional_pay(1, accept=True), game.log
     game.auto_resolve_pending_choices()
 
     assert game.players[0].life == 15, game.log

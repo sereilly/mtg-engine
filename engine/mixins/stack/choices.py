@@ -3994,6 +3994,52 @@ class PendingChoicesMixin:
         )
         return offerable
 
+    def _offer_is_an_unpriced_trade(self, choice: PendingChoice) -> bool:
+        """Whether this offer's price is paid out of the offered seat's own
+        resources while the card prices refusing it at nothing.
+
+        Three questions, each read off the entry the offer was armed with:
+
+        1. is it free *as the entry states it* — no mana cost, no life cost, no
+           CR 118.8 alternative? A printed cost is already answered above, and
+           correctly: the seat spends what is floating and no more.
+        2. does taking it spend something of the seat's own
+           (``ai_valuation.offered_action_is_a_payment``)?
+        3. is refusing it free — no "if you don't" branch and no legacy damage
+           field, which are the two spellings of a printed penalty?
+
+        Only all three together make refusing the strictly cheaper answer. Drop
+        (3) and Season of the Witch sacrifices itself rather than pay 2 life and
+        Elder Spawn takes 6 damage rather than sacrifice one Island; drop (2)
+        and Sylvan Library stops drawing.
+
+        The player references are resolved to seats *here* because only the
+        resolution knows them: "that player" is whoever the offer was rebound
+        to, and CR 601.2b's chooser is the seat holding the prompt.
+        """
+        from ...ai_valuation import offered_action_is_a_payment
+
+        entry = choice.data
+        if (
+            entry.get("cost")
+            or entry.get("life_cost")
+            or entry.get("cost_alternatives")
+        ):
+            return False
+        if entry.get("_on_decline") or int(entry.get("damage", 0) or 0):
+            return False
+        seat = self.players[choice.player_index]
+        context = entry.get("_context")
+        self_recipients = set()
+        if context is not None:
+            if getattr(context, "caster", None) is seat:
+                self_recipients.add("caster")
+            if getattr(context, "target", None) is seat:
+                self_recipients.update(("target", "target_player"))
+        return offered_action_is_a_payment(
+            entry.get("_on_accept") or (), self_recipients
+        )
+
     def _default_optional_pay(self, choice: PendingChoice) -> None:
         """Pay when the floating mana is already there; an unpayable "unless you
         pay" entry applies its decline consequence (Hasran Ogress' damage).
@@ -4002,7 +4048,20 @@ class PendingChoicesMixin:
         spends mana it already has and never taps a land for an optional cost,
         because tapping is a real decision about the rest of the turn.
         ``_player_can_pay_optional`` is the wider question and belongs to the
-        seat that was actually asked."""
+        seat that was actually asked.
+
+        **The whole policy in one line: take gifts, pay tolls, make no trades.**
+        A cost this could not see was one it charged nothing for, so every
+        *free* offer was accepted — and "free" was read off the ``cost`` field
+        alone, which is only where the grammar puts a price printed as mana or
+        as life. A price printed as a deed ("you may **sacrifice another
+        creature**", "you may **ante the top card of your library**") is lowered
+        into the offered action instead, where the affordability test could not
+        find it, so it read as free and was taken every time — the AI sacrificed
+        a creature at the beginning of every combat and anteed away a card it
+        was never asked about. ``_offer_is_an_unpriced_trade`` asks the same
+        question of that half, and refusing is the same answer this already
+        gives an offer it cannot afford."""
         entry = choice.data
         player = self.players[choice.player_index]
         # A life cost has no "already floating" reading — nothing is held in
@@ -4048,6 +4107,17 @@ class PendingChoicesMixin:
         alternative = int(entry.get("life_alternative", 0) or 0)
         if floating is None and alternative and player.life > alternative:
             floating = True
+        # Take gifts, pay tolls, make no trades: an offer whose price is a deed
+        # rather than a payment, and whose refusal the card prices at nothing,
+        # is refused. A *toll* — an offer with a printed "if you don't" — is
+        # still paid, because refusing it is not free either and choosing which
+        # of two losses is smaller is the seat's judgement, not a default's.
+        if floating is not None and self._offer_is_an_unpriced_trade(choice):
+            floating = None
+            self.log.append(
+                f"{player.name} declined {entry['card_name']} "
+                "(declining costs nothing)"
+            )
         self.discard_pending_choice(choice)
         if floating is not None and self._optional_action_still_takeable(
             choice.player_index, entry

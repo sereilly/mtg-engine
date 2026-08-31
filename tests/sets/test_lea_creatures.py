@@ -1784,3 +1784,33 @@ def test_nettling_imp_compiles_through_the_grammar_not_a_card_hook(set_pool):
         "if it didn't attack this turn."
     )
     assert [i.kind for i in read.instructions] == ["mark_non_wall_target_to_attack"]
+
+
+# --- LeadC: a free offer is not automatically taken ---
+
+
+def test_verduran_enchantress_still_draws_for_a_seat_nobody_asks(all_cards):
+    """"Whenever you cast an enchantment spell, you may draw a card."
+
+    The other direction of the same policy, on the other arm of the machinery:
+    this offer is raised by ``card_hooks._resolve_optional_pay_trigger`` rather
+    than by the ``may`` handler, so its entry carries a legacy ``draw`` field
+    and no accept branch at all. A gift with no price in it, and a seat nobody
+    asks still takes it.
+    """
+    enchantress = _get(all_cards, "Verduran Enchantress")
+    blessing = _get(all_cards, "Blessing")
+    island = _get(all_cards, "Island")
+    p1 = PlayerState(
+        name="P1", hand=[blessing], library=[island],
+        battlefield=[Permanent(card=enchantress)],
+    )
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    assert game.cast_from_hand(
+        0, "Blessing", target_player_index=0, target_permanent_index=0
+    ).supported
+    game.auto_resolve_pending_choices()
+
+    assert len(p1.hand) == 1, game.log
+# --- end LeadC ---
