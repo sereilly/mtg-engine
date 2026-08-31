@@ -297,3 +297,54 @@ def test_blood_of_the_martyr_ends_with_the_turn(set_pool):
 
     assert bears.damage_marked == 2, game.log
     assert p1.life == life_before
+
+
+# --- FixC: a sweep names a class, not a target ---
+def _fixc_riptide_game(set_pool, theirs=()):
+    lea = set_pool("LEA")
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("DRK")["Riptide"]]),
+        PlayerState(name="P2", battlefield=[Permanent(card=lea[n]) for n in theirs]),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, game.players[1]
+
+
+def test_riptide_taps_all_the_blue_ones_and_points_at_none(set_pool):
+    """"Tap all blue creatures." CR 115.1a — no "target", so no target.
+
+    The colour and the type both rode the sweep's filter, and the derivation
+    turned them into a picker: ``{"kind": "creature", "color_filter": "U"}``.
+    Two things were wrong at once. The picker should not have existed, and the
+    enumerator behind it ignored ``color_filter`` for a creature kind, so it
+    offered every creature on the board for a spell that taps only the blue.
+    """
+    game, p2 = _fixc_riptide_game(
+        set_pool, ("Merfolk of the Pearl Trident", "Scathe Zombies"),
+    )
+
+    assert game.cast_target_spec(0, set_pool("DRK")["Riptide"]) == {
+        "kind": "none", "requires_target": False, "valid_targets": [],
+    }
+
+    result = game.cast_from_hand(0, "Riptide")
+    game._settle()
+
+    assert result.supported, result.details
+    assert [(p.card.name, p.tapped) for p in p2.battlefield] == [
+        ("Merfolk of the Pearl Trident", True), ("Scathe Zombies", False),
+    ]
+
+
+def test_riptide_is_castable_with_no_creature_in_play(set_pool):
+    """The board that made it uncastable: the browser's creature prompt found
+    nothing to list and dropped the cast before it began."""
+    game, _p2 = _fixc_riptide_game(set_pool)
+
+    result = game.cast_from_hand(0, "Riptide")
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.stack == []
+# --- end FixC ---

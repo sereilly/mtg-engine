@@ -1878,3 +1878,57 @@ def test_melee_refuses_the_turn_scoped_printing_of_its_sentence(set_pool):
     with pytest.raises(LoweringError):
         lower_ability(node)
 # --- end W4G2 ---
+
+
+# --- FixC: a sweep names a class, not a target ---
+def test_battle_cry_untaps_the_class_and_asks_for_no_creature(set_pool):
+    """"Untap all white creatures you control." CR 115.1a — no "target".
+
+    Its filter carried a colour *and* a seat, and both reached the picker as
+    narrowings on a target the card never names: the browser raised a creature
+    prompt and abandoned the cast when nothing was in play. The colour was
+    ignored by the enumerator on top of that, so on a populated board it
+    offered every creature for a spell that untaps only the white ones a
+    player controls.
+    """
+    lea = set_pool("LEA")
+    mine = [Permanent(card=lea["Savannah Lions"], tapped=True),
+            Permanent(card=lea["Scathe Zombies"], tapped=True)]
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("ICE")["Battle Cry"]],
+                    battlefield=mine),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    assert game.cast_target_spec(0, set_pool("ICE")["Battle Cry"]) == {
+        "kind": "none", "requires_target": False, "valid_targets": [],
+    }
+
+    result = game.cast_from_hand(0, "Battle Cry")
+    game._settle()
+
+    assert result.supported, result.details
+    assert [(p.card.name, p.tapped) for p in mine] == [
+        ("Savannah Lions", False), ("Scathe Zombies", True),
+    ]
+
+
+def test_battle_cry_is_castable_for_its_blocking_rider_alone(set_pool):
+    """The reason the empty board matters here rather than being a curiosity:
+    the card's second sentence — "whenever a creature blocks this turn, it gets
+    +0/+1" — is worth casting for on its own, and the phantom creature prompt
+    made that impossible with no white creature untapped."""
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("ICE")["Battle Cry"]]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+
+    result = game.cast_from_hand(0, "Battle Cry")
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.stack == []
+# --- end FixC ---

@@ -2351,3 +2351,89 @@ def test_a_damage_sources_colour_is_read_through_the_layers(set_pool, catalog_by
     green.metadata["color_override_until_eot"] = "R"
     assert source_colors(green) == ("R",)
 # --- end W3G3 ---
+
+
+# --- FixC: a sweep names a class, not a target ---
+def test_wrath_of_marit_lage_enters_without_asking_for_a_creature(set_pool):
+    """An **enchantment** that could not be cast without a creature in play.
+
+    "When this enchantment enters, tap all red creatures." ``derive_cast_spec``
+    reads a permanent's enters trigger at cast time, so the sweep's filter
+    reached the cast picker as ``{"kind": "creature", "color_filter": "R"}`` —
+    the browser demanded a creature target for an enchantment whose static
+    half ("red creatures don't untap") is the reason to play it at all.
+
+    Once cast it fared no better: the trigger was treated as targeted and, on
+    a board with no creature, struck off the stack under CR 603.3c.
+    """
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("ICE")["Wrath of Marit Lage"]]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+
+    assert game.cast_target_spec(0, set_pool("ICE")["Wrath of Marit Lage"]) == {
+        "kind": "none", "requires_target": False, "valid_targets": [],
+    }
+
+    result = game.cast_from_hand(0, "Wrath of Marit Lage")
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Wrath of Marit Lage"
+    ]
+    assert not any("603.3c" in line for line in game.log), game.log
+
+
+def test_wrath_of_marit_lage_taps_the_red_creatures_it_never_chose(set_pool):
+    """And the sweep is unchanged where there is something to sweep."""
+    lea = set_pool("LEA")
+    theirs = [Permanent(card=lea["Goblin Balloon Brigade"]),
+              Permanent(card=lea["Savannah Lions"])]
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("ICE")["Wrath of Marit Lage"]]),
+        PlayerState(name="P2", battlefield=theirs),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    game.cast_from_hand(0, "Wrath of Marit Lage")
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+    assert [(p.card.name, p.tapped) for p in theirs] == [
+        ("Goblin Balloon Brigade", True), ("Savannah Lions", False),
+    ]
+
+
+def test_fylgja_shields_its_own_host_without_a_picker(set_pool):
+    """The same defect one payload key over, on an **activated** ability.
+
+    "Remove a healing counter from this Aura: Prevent the next 1 damage that
+    would be dealt to enchanted creature this turn." An Aura's ability acts on
+    its own host (CR 303.4), so nothing is chosen — but the shield instruction
+    reports its recipient in the payload, and the reader answered "any target"
+    for every printing of the kind that did not say ``to_self`` or
+    ``to_source``. Fylgja is the printing that says ``to_attached``.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    host = Permanent(card=set_pool("LEA")["Grizzly Bears"])
+    fylgja = Permanent(card=pool["Fylgja"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[host, fylgja]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    attach_aura(fylgja, host)
+
+    assert game.activation_target_spec(0, 1, 0) == {
+        "kind": "none", "requires_target": False, "valid_targets": [],
+    }
+# --- end FixC ---

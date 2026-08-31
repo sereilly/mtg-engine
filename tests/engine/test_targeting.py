@@ -311,3 +311,144 @@ def test_the_grammar_supplies_evidence_the_legacy_rules_never_recorded(supported
     assert payloads, "Lightning Bolt's damage instruction should describe its target"
     assert payloads[0]["targets"]["kind"] == "any"
     assert derive_cast_target(bolt, program) == "any"
+
+
+# --- FixC: a sweep names a class, not a target ---
+#: Every printed way a card hands its caster a choice as it is cast.
+#:
+#: Deliberately *looser* than :func:`_names_a_cast_target` above, because the
+#: two ratchets ask opposite questions. That one asks "this card targets — does
+#: it derive a prompt?", so it has to be sure the word means a cast target.
+#: This one asks "this card derives a prompt — is there anything on it to
+#: choose?", so any use of a choosing word anywhere is enough to hand the card
+#: back to its twin. A card with none of these words that still derives a
+#: picker is asking a question its own text never poses.
+#:
+#: "of your choice" is CR 609.3's choice (Circle of Protection, Reverse
+#: Damage), and "card in a graveyard" / "card from your graveyard" is a card
+#: picked out of a zone (Animate Dead's CR 115.1b enchant line, Experimental
+#: Overload's return) — neither is the word "target" and both are real prompts.
+_CAST_CHOOSER = re.compile(
+    r"\btargets?\b|\bof your choice\b|\bchoose\b|\bchosen\b"
+    r"|card in a graveyard|card from your graveyard"
+)
+
+
+def _card_names_a_chooser(card, program) -> bool:
+    """Whether anything about *card* asks its caster to pick something.
+
+    The evidence sources ``derive_cast_spec`` consults, asked of the *card*
+    rather than of the derivation, plus the printed words above. A card that
+    answers False here has nothing for a cast picker to be about.
+    """
+    from engine.cast_costs import additional_costs
+    from engine.enter_effects import copy_on_enter_type
+    from engine.targeting import _cost_picker_spec, card_enchant_subject
+
+    if _CAST_CHOOSER.search(_REMINDER.sub("", card.oracle_text or "").lower()):
+        return True
+    if card_enchant_subject(card.oracle_text) is not None:
+        return True                                     # CR 115.1b
+    if copy_on_enter_type(program.normalized_text or "") is not None:
+        return True                                     # CR 707.9a
+    return any(
+        _cost_picker_spec(cost) is not None for cost in additional_costs(card)
+    )
+
+
+def test_no_card_derives_a_cast_prompt_its_text_never_asks_for(supported_cards):
+    """The ratchet above, in the other direction — and the direction whose
+    absence is how this defect shipped.
+
+    A ratchet with one direction measures half a derivation. "Every card that
+    targets derives a prompt" was held all along; nothing asked whether a card
+    that targets *nothing* derives one, so seventeen supported cards reported a
+    cast-time choice their text never offers.
+
+    Eleven were mass effects, whose ``type_filter`` names the class the sweep
+    affects and was read as the class a picker offers (CR 115.1a: an instant or
+    sorcery is targeted only where its ability says "target"). The other six
+    name their recipient in the payload — "each player loses 2 life", "you lose
+    3 life", an enters trigger that mills its own controller — and a recipient
+    the sentence fixes is chosen by nobody.
+
+    Not cosmetic. `web/static/app.js` starts a target prompt for any spec kind
+    but ``"none"``, and its picker **aborts the cast** when the candidate list
+    comes back empty: Cleanse, Tivadar's Crusade, Riptide and Battle Cry could
+    not be cast at all on a board with no creature.
+    """
+    gaps = []
+    for card in supported_cards:
+        program = compile_card_oracle(card)
+        spec = derive_cast_spec(card, program)
+        if spec is None or spec.get("kind") == "none":
+            continue
+        if not _card_names_a_chooser(card, program):
+            gaps.append(f"{card.name}: {spec}")
+
+    assert gaps == [], (
+        "these cards derive a cast prompt but choose nothing: "
+        + "; ".join(sorted(gaps))
+    )
+
+
+def test_the_twin_ratchet_still_covers_most_of_what_derives(supported_cards):
+    """A ratchet is worth what it examines, and the evidence list above is the
+    way to make this one pass by looking at less — widening one word excuses
+    every card printing it. So the examined set is asserted, exactly as its
+    sibling asserts its own."""
+    examined = [
+        card for card in supported_cards
+        if derive_cast_target(card, compile_card_oracle(card))
+        not in (None, "none")
+    ]
+
+    assert len(examined) >= 350, (
+        f"the twin ratchet examines only {len(examined)} cards — the "
+        "derivation has stopped answering for cards that do choose"
+    )
+
+
+#: The cards the unkeyed ``type_filter`` reading invented a target for, and
+#: what each one actually does. Named rather than derived, because "which cards
+#: were wrong" is a fact about this defect and not a rule about the pool — the
+#: rule is the ratchet above.
+_SWEEPS_THAT_CHOOSE_NOTHING = {
+    "Cleanse": "destroy all black creatures",
+    "Jokulhaups": "destroy all artifacts, creatures, and lands",
+    "Tivadar's Crusade": "destroy all Goblins",
+    "Riptide": "tap all blue creatures",
+    "Battle Cry": "untap all white creatures you control",
+    "Reset": "untap all lands you control",
+    "Hellfire": "destroy all nonblack creatures",
+    "Martyr's Cry": "exile all white creatures",
+    "Remove Enchantments": "return, then destroy all other enchantments",
+    # Two permanents, whose sweep sits on an enters trigger. Worse than the
+    # spells: `derive_cast_spec` reads an enters trigger at cast time, so a
+    # board with no creature made an *artifact* and an *enchantment*
+    # uncastable.
+    "Arena of the Ancients": "tap all legendary creatures on entering",
+    "Wrath of Marit Lage": "tap all red creatures on entering",
+}
+
+
+@pytest.mark.parametrize("name", sorted(_SWEEPS_THAT_CHOOSE_NOTHING))
+def test_a_mass_effect_derives_no_cast_picker(supported_cards, name):
+    """Wrath of God is the control that made this findable: the same sentence,
+    the same sweep, and it answered "none" all along — because "destroy all
+    creatures" has an instruction kind of its own with the class in the *name*,
+    so there was no ``type_filter`` for the reader to mistake for a target.
+    """
+    card = next(c for c in supported_cards if c.name == name)
+
+    assert derive_cast_spec(card, compile_card_oracle(card)) is None
+
+
+def test_the_control_and_the_defect_now_answer_the_same_way(supported_cards):
+    """Wrath of God and Cleanse, side by side."""
+    by_name = {card.name: card for card in supported_cards}
+    wrath, cleanse = by_name["Wrath of God"], by_name["Cleanse"]
+
+    assert derive_cast_target(wrath, compile_card_oracle(wrath)) is None
+    assert derive_cast_target(cleanse, compile_card_oracle(cleanse)) is None
+# --- end FixC ---

@@ -683,3 +683,66 @@ def test_r31_a_multi_slot_description_offers_what_any_slot_admits(catalog_by_nam
     assert _r31_offer(
         game, walker, _r31_targeting_index(walker.card)
     ) == ["Air Elemental", "Grizzly Bears"]
+
+
+# --- FixC: a sweep names a class, not a target ---
+def _ability_names_a_chooser(ability) -> bool:
+    """Whether *ability*'s printed line asks its activator to pick something.
+
+    ``_TARGETY`` above is the same question asked for the opposite ratchet, so
+    it is reused rather than re-spelled; what is added is the **cost**, which
+    the line states and the effect never does — Atog's "sacrifice an artifact"
+    and Diamond Valley's "sacrifice a creature" are choices CR 602.2b makes as
+    the ability is activated, and neither prints the word "target".
+    """
+    from engine.targeting import _cost_picker_spec
+
+    line = _QUOTED.sub("", _REMINDER.sub("", ability.source_line or "")).lower()
+    if _TARGETY.search(line):
+        return True
+    return _cost_picker_spec(getattr(ability, "cost", None)) is not None
+
+
+def test_no_ability_derives_a_prompt_its_line_never_asks_for(supported_cards):
+    """The twin of ``test_every_ability_that_names_a_target_derives_its_own
+    _prompt`` above — and the direction neither side of this module had.
+
+    What an instruction targets does not depend on whether a spell or an
+    ability produced it, so the tables are shared; a hole in one of them is a
+    hole in both, and only a ratchet on each side proves otherwise. Two
+    abilities were in this one: Caged Zombie's "each opponent loses 2 life"
+    raised a player picker for an effect that hits every opponent, and Fylgja's
+    "prevent the next 1 damage that would be dealt to **enchanted creature**"
+    raised an "any target" picker for a shield an Aura puts on its own host
+    (CR 303.4). Both sent an answer nothing read.
+    """
+    gaps = []
+    for card in supported_cards:
+        for index, ability in enumerate(_abilities(card)):
+            spec = derive_activation_spec(ability)
+            if spec is None or spec.get("kind") == "none":
+                continue
+            if not _ability_names_a_chooser(ability):
+                gaps.append(f"{card.name} [{index}]: {spec}")
+
+    assert gaps == [], (
+        "these abilities derive a prompt but choose nothing: " + "; ".join(gaps)
+    )
+
+
+def test_the_activation_twin_ratchet_covers_the_pool(supported_cards):
+    """A ratchet over an empty set ratchets nothing — the sibling's words, and
+    its reason: the evidence list above is the way to make this pass by looking
+    at less."""
+    derived = [
+        (card.name, index)
+        for card in supported_cards
+        for index, ability in enumerate(_abilities(card))
+        if (derive_activation_spec(ability) or {}).get("kind") not in (None, "none")
+    ]
+
+    assert len(derived) >= 290, (
+        f"only {len(derived)} abilities derive a prompt — the derivation has "
+        "stopped answering for abilities that do choose"
+    )
+# --- end FixC ---

@@ -1668,3 +1668,58 @@ def test_forethought_amulet_ignores_a_source_of_the_wrong_class(catalog_by_name,
     assert game.queue_permanent_ability(0, "Rod of Ruin", target_player_index=1).supported
     game._settle()
     assert game.players[1].life == 19
+
+
+# --- FixC: a sweep names a class, not a target ---
+def test_arena_is_castable_on_a_board_with_no_legendary_creature(set_pool):
+    """An **artifact** that demanded a creature target to be cast.
+
+    ``derive_cast_spec`` reads a permanent's enters trigger at cast time — this
+    engine's standing approximation of CR 603.3d — so Arena's "tap all
+    legendary creatures" reached the cast picker, and its ``type_filter``
+    was read as the class a picker offers rather than the class the sweep
+    affects (CR 115.1a). On a creature-free board the browser enumerated zero
+    candidates and abandoned the cast, which makes an Artifact spell that costs
+    {4} unplayable for the reason its *trigger* would have found nothing to do.
+
+    The trigger fared no better once cast: with no legal target it was struck
+    off the stack under CR 603.3c, a rule about targets applied to an ability
+    that names none.
+    """
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("LEG")["Arena of the Ancients"]]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+
+    assert game.cast_target_spec(0, set_pool("LEG")["Arena of the Ancients"]) == {
+        "kind": "none", "requires_target": False, "valid_targets": [],
+    }
+
+    result = game.cast_from_hand(0, "Arena of the Ancients")
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in game.players[0].battlefield] == [
+        "Arena of the Ancients"
+    ]
+    assert not any("603.3c" in line for line in game.log), game.log
+
+
+def test_arena_taps_the_class_it_names_without_being_asked_for_one(set_pool):
+    """And on a populated board the sweep is unchanged: every legend, neither
+    chosen nor narrowed by anything a caster clicked."""
+    game, my_legend, my_bear, their_legend = _arena_game(set_pool)
+
+    assert game.cast_target_spec(0, set_pool("LEG")["Arena of the Ancients"])[
+        "requires_target"
+    ] is False
+
+    game.cast_from_hand(0, "Arena of the Ancients")
+    game._settle()
+
+    assert my_legend.tapped and their_legend.tapped
+    assert not my_bear.tapped
+# --- end FixC ---

@@ -1612,3 +1612,50 @@ def test_the_default_names_the_commonest_card_it_can_see(set_pool):
 
     (choice,) = game.pending_choices
     assert choice.data["default_name"] == "Shock"
+
+
+# --- FixC: a sweep names a class, not a target ---
+def _fixc_solo_cast(pool, name):
+    """*name* alone in seat 0's hand, nothing on either battlefield."""
+    game = Game(players=[
+        PlayerState(name="P1", hand=[pool[name]]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    return game
+
+
+def test_bad_deal_hits_each_player_and_offers_neither_of_them(set_pool):
+    """"Each player loses 2 life." CR 115.1a: no "target", so nothing chosen.
+
+    The life-loss instruction names its recipient in the payload, and the
+    derivation answered a flat ``{"kind": "player"}`` for every printing of the
+    kind — so a symmetric drain came with a seat picker whose answer no handler
+    reads. Its twin, ``target_gains_life``, had read the recipient since the
+    round that found the same bug on the *gaining* side; the losing side was
+    never asked the question.
+    """
+    pool = set_pool("M21")
+    game = _fixc_solo_cast(pool, "Bad Deal")
+
+    assert game.cast_target_spec(0, pool["Bad Deal"]) == {
+        "kind": "none", "requires_target": False, "valid_targets": [],
+    }
+
+    result = game.cast_from_hand(0, "Bad Deal")
+    game._settle()
+
+    assert result.supported, result.details
+    assert [p.life for p in game.players] == [18, 18]
+
+
+def test_grim_tutor_loses_its_casters_life_and_asks_nobody(set_pool):
+    """"You lose 3 life" — the recipient is the caster, printed rather than
+    chosen, and the picker offered *either* seat for it."""
+    pool = set_pool("M21")
+    game = _fixc_solo_cast(pool, "Grim Tutor")
+
+    assert game.cast_target_spec(0, pool["Grim Tutor"]) == {
+        "kind": "none", "requires_target": False, "valid_targets": [],
+    }
+# --- end FixC ---

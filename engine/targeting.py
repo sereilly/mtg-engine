@@ -231,6 +231,62 @@ def _kind_for_type_filter(type_filter) -> str | None:
     return _TYPE_FILTER_TO_KIND.get(type_filter)
 
 
+#: The instruction kinds whose ``type_filter`` describes **the object the
+#: caster picks**, rather than the class the effect sweeps.
+#:
+#: The third kind-keyed evidence table in this module, beside
+#: :data:`_KIND_TO_SPEC_FROM_PAYLOAD` and :data:`_KIND_TO_SPEC`, and it exists
+#: because ``type_filter`` is the one payload key that means two different
+#: things. "Destroy target permanent" and "destroy all black creatures" both
+#: carry ``{"type_filter": "creature"}``: on the first it is the target
+#: description (CR 115.1a's "target [something]"), on the second it is the
+#: class the sweep affects, and the payload alone cannot tell them apart.
+#:
+#: :func:`_from_instruction` used to read the key on *any* kind, which is this
+#: module's one guess — the thing its docstring says it does not do. Six mass
+#: spells (Cleanse, Jokulhaups, Tivadar's Crusade, Riptide, Battle Cry, Reset)
+#: and five more whose sweep sits on a trigger reported a target they never
+#: choose, and the client refused to cast four of them at all: its picker
+#: aborts a cast when the candidate list comes back empty, so "Destroy all
+#: black creatures" was uncastable on a board with no creatures. Wrath of God
+#: was the accidental control — "destroy all creatures" has a kind of its own
+#: (``destroy_all_creatures``) with the class baked into the *name* and so no
+#: filter for the reader to misread.
+#:
+#: One entry today, and that is the measurement rather than an oversight: every
+#: other targeted line in the pool carries the lowering's own ``targets``
+#: description, which is deliberate evidence and is read first. A kind that
+#: needs to be here and is not answers None, and the ratchet in
+#: `tests/engine/test_targeting.py` fails on the card that targets and derives
+#: no prompt — the loud direction. A sweep needs no entry at all, so the defect
+#: cannot come back by omission.
+_TYPE_FILTER_NAMES_THE_TARGET = frozenset({
+    # "Destroy target permanent", narrowed by a printed noun the lowering
+    # carries as payload rather than as a `targets` description
+    # (`lowering/destruction.py`). Hooded Blightfang's "destroy that
+    # planeswalker" is the pool's only one; the same kind's ordinary printed
+    # forms describe their target and never reach here.
+    "destroy_target_permanent",
+})
+
+
+def _spec_from_type_filter(payload: dict) -> dict | None:
+    """The picker *payload*'s ``type_filter`` describes, or None for none.
+
+    Only reached for a kind :data:`_TYPE_FILTER_NAMES_THE_TARGET` lists. A
+    filter no picker matches answers None rather than short-circuiting the
+    whole derivation, so the kind's own :data:`_KIND_TO_SPEC` row still gets
+    its say.
+    """
+    type_filter = payload.get("type_filter")
+    if not type_filter:
+        return None
+    kind = _kind_for_type_filter(type_filter)
+    if kind is None:
+        return None
+    return {"kind": kind, **_narrowing_flags(payload)}
+
+
 def _narrowing_flags(source: dict) -> dict:
     """The picker-narrowing flags *source* (a filter or a payload) carries.
 
@@ -450,9 +506,10 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # part of what the kind means. Emitted by Dwarven Weaponsmith's hook and,
     # since the M21 counter round, by the grammar's put-counter lowering.
     "add_counter_to_target": {"kind": "creature"},
-    # Three effects that act on a *player*: the handler reads `context.target`,
-    # a seat, and never looks at the battlefield.
-    "mill_target_player": {"kind": "player"},
+    # Effects that act on a *player*: the handler reads `context.target`,
+    # a seat, and never looks at the battlefield. ``mill_target_player`` is not
+    # among them — it names its recipient in the payload, so it is read by
+    # ``_player_recipient_spec`` rather than answered flat.
     "look_at_target_hand": {"kind": "player"},
     "look_at_target_library_top": {"kind": "player"},
     "discard_target_cards": {"kind": "player"},
@@ -463,10 +520,8 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # card-shaped.
     "name_and_strip": {"kind": "player"},
     "name_then_reveal_top": {"kind": "player"},
-    # "Target opponent loses 2 life for each creature card in their graveyard."
-    # (Liliana, Death Mage's ultimate.) The recipient is a seat; the per-each
-    # count is read at resolution and names nothing.
-    "target_loses_life": {"kind": "player"},
+    # ``target_loses_life`` is **not** here. Like its twin above it spells the
+    # recipient in the payload, so it reads it — see ``_player_recipient_spec``.
     # "Exchange life totals with target opponent." (Mirror Universe.) The other
     # seat is a target chosen as the ability is activated (CR 602.2b); the
     # controller's own half is not chosen at all.
@@ -625,6 +680,39 @@ def _life_gain_spec(payload: dict) -> dict | None:
     return _from_targets_payload(payload.get("targets")) or {"kind": "player"}
 
 
+#: The ``recipient`` values that mean "whoever this instruction targets".
+#:
+#: An **absent** key is one of them: a lowering that names no recipient is
+#: spelling its kind's default, and for every "target <player> …" kind that
+#: default is the target. Every other value names a seat the printed sentence
+#: already fixed — the caster, each opponent, each player, the seat some
+#: earlier event picked — and a fixed recipient is chosen by nobody
+#: (CR 115.1a: a spell is targeted only where its ability says "target").
+_CHOSEN_RECIPIENTS = frozenset({None, "target"})
+
+
+def _player_recipient_spec(payload: dict) -> dict | None:
+    """A seat-affecting instruction's picker, or None when the seat is fixed.
+
+    :func:`_life_gain_spec` directly above is the same reading, written for the
+    kind that needed it first; these are its twins, and they were flat
+    ``{"kind": "player"}`` rows until this round — so the whole question the
+    docstring above answers ("who gains the life is what decides whether
+    anything is chosen at all") was never asked of who *loses* it.
+
+    Twelve cards paid for that. "Each player loses 2 life" (Bad Deal, Pox),
+    "you lose 3 life" (Grim Tutor) and "each opponent loses 2 life" (Caged
+    Zombie's ability) each raised a player picker in front of an effect that
+    chooses nobody, and whatever seat was clicked was sent as a target the
+    handler then ignored. Carrion Grub is the same shape one kind over: an
+    enters-the-battlefield mill of *its own controller's* library, which asked
+    a creature spell's caster to pick a player.
+    """
+    if payload.get("recipient") not in _CHOSEN_RECIPIENTS:
+        return None
+    return _from_targets_payload(payload.get("targets")) or {"kind": "player"}
+
+
 def _counter_spec(payload: dict) -> dict:
     """A counterspell, narrowed to the colour its payload names.
 
@@ -767,14 +855,21 @@ def _graveyard_exile_spec(payload: dict) -> dict:
 def _prevention_shield_spec(payload: dict) -> dict | None:
     """A "prevent the next N damage" shield, and who is being shielded.
 
-    One kind, four answers, and the payload settles which: the shield sits on
-    the caster (Conservator), on the source permanent itself (Rock Hydra), on a
-    *source of the named colour* the controller chooses (the Circles of
-    Protection), or on a target the ability picks (Oasis, Samite Healer,
-    Guardian Angel). The first two choose nothing at all, which is why this
-    returns None rather than a spec.
+    One kind, five answers, and the payload settles which: the shield sits on
+    the caster (Conservator), on the source permanent itself (Rock Hydra), on
+    the permanent this Aura is attached to (Fylgja), on a *source of the named
+    colour* the controller chooses (the Circles of Protection), or on a target
+    the ability picks (Oasis, Samite Healer, Guardian Angel). The first three
+    choose nothing at all, which is why this returns None rather than a spec.
     """
     if payload.get("to_self") or payload.get("to_source"):
+        return None
+    if payload.get("to_attached"):
+        # "…that would be dealt to **enchanted creature**" (Fylgja). The fifth
+        # answer, and the docstring above counted four because nothing had
+        # looked: an Aura's ability acts on its own host (CR 303.4), so the
+        # host is named rather than chosen and the ability raised an "any
+        # target" picker whose answer the shield never read.
         return None
     if payload.get("protection_kind") == "color":
         # The chosen source may be a permanent of that colour on any
@@ -942,6 +1037,8 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "put_graveyard_cards_on_library_top": _graveyard_to_library_spec,
     "sacrifice_matching_permanent": _forced_sacrifice_spec,
     "target_gains_life": _life_gain_spec,
+    "target_loses_life": _player_recipient_spec,
+    "mill_target_player": _player_recipient_spec,
     "counter_top_stack_spell": _counter_spec,
     "counter_stack_ability": _counter_ability_spec,
     "choose_permanent": _chosen_permanent_spec,
@@ -1238,12 +1335,18 @@ def _from_instruction(instruction) -> dict | None:
                 instruction.payload.get("amount_bonus", 0) or 0
             )
         return described
-    type_filter = instruction.payload.get("type_filter")
-    if type_filter:
-        kind = _kind_for_type_filter(type_filter)
-        if kind is None:
-            return None
-        return {"kind": kind, **_narrowing_flags(instruction.payload)}
+    # **A ``type_filter`` is only a picker for a kind that picks.** The key
+    # names the class an instruction is *about*, and what that class is for
+    # depends entirely on the kind holding it: "destroy target permanent"
+    # narrows the one object the caster chooses, while "destroy all black
+    # creatures" names every object the effect touches and chooses none of them
+    # (CR 115.1a — an instant or sorcery is targeted only where its ability
+    # says "target"). Read unkeyed, the two are the same payload, so the reader
+    # guessed "picker" and a sweep reported a target it never chooses.
+    if instruction.kind in _TYPE_FILTER_NAMES_THE_TARGET:
+        spec = _spec_from_type_filter(instruction.payload)
+        if spec is not None:
+            return spec
     by_kind = _KIND_TO_SPEC.get(instruction.kind)
     return dict(by_kind) if by_kind is not None else None
 

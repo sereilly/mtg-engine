@@ -22,6 +22,7 @@ from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
+from engine.targeting import derive_cast_spec   # FixC
 
 
 @pytest.fixture(scope="module")
@@ -101,3 +102,72 @@ def test_701_7a_every_sweep_kind_is_registered(catalog):
 
     for kind in _SWEEP_TYPES:
         assert kind in EFFECT_HANDLERS, kind
+
+
+# --- FixC: a sweep names a class, not a target ---
+@pytest.mark.cr("115.1a")
+def test_115_1a_one_word_decides_whether_a_sweep_is_targeted(catalog):
+    """"An instant or sorcery spell is targeted **if** its spell ability
+    identifies something it will affect by using the phrase 'target
+    [something]'" — so "all black creatures" and "target black creature" are
+    the same class named two ways, and only the second is a target.
+
+    One synthetic pair, differing by one word, because that word is the whole
+    rule. The engine used to answer the same for both: a sweep's ``type_filter``
+    describes the class it affects and a picker's describes the object chosen,
+    and the reader could not tell them apart from the payload.
+    """
+    sweep = _sweeper(catalog, "Sweep D", "Destroy all black creatures.")
+    aimed = _sweeper(catalog, "Aimed D", "Destroy target black creature.")
+
+    assert derive_cast_spec(sweep, compile_card_oracle(sweep)) is None
+    assert derive_cast_spec(aimed, compile_card_oracle(aimed)) == {
+        "kind": "creature", "color_filter": "B",
+    }
+
+
+@pytest.mark.cr("115.1a")
+def test_115_1a_a_sweep_is_cast_with_nothing_to_point_at(catalog):
+    """The rule as the player meets it. Cleanse names no target, so it is cast
+    and resolved with none — on a board holding creatures it could have been
+    read as naming, and on one holding nothing at all.
+
+    Both boards matter and the empty one most: the client raises a picker for
+    any derived kind but "none" and abandons the cast when that picker has
+    nothing to offer, so a spell that reported a target it never chooses was
+    uncastable exactly when its controller had swept the board already.
+    """
+    for battlefield in ([catalog["Bog Imp"], catalog["Savannah Lions"]], []):
+        p1 = PlayerState(name="P1", hand=[catalog["Cleanse"]])
+        p2 = PlayerState(
+            name="P2", battlefield=[Permanent(card=c) for c in battlefield]
+        )
+        game = Game(players=[p1, p2])
+        game.enforce_mana_costs = False
+        game._sync_control()
+
+        spec = game.cast_target_spec(0, catalog["Cleanse"])
+        assert spec["kind"] == "none"
+        assert spec["requires_target"] is False
+        assert spec["valid_targets"] == []
+
+        result = game.cast_from_hand(0, "Cleanse")
+
+        assert result.supported, result.details
+        # Only the black one dies; the class is the sweep's, not a picker's.
+        assert [p.card.name for p in p2.battlefield] == (
+            ["Savannah Lions"] if battlefield else []
+        )
+
+
+@pytest.mark.cr("115.1a")
+def test_115_1a_wrath_of_god_and_cleanse_agree(catalog):
+    """The control. Wrath of God prints the same sentence without a colour and
+    answered "none" throughout — its "destroy all creatures" has an instruction
+    kind of its own carrying the class in the *name*, so no filter sat in the
+    payload to be misread. That the two now agree is the whole fix.
+    """
+    for name in ("Wrath of God", "Cleanse", "Jokulhaups", "Tivadar's Crusade"):
+        card = catalog[name]
+        assert derive_cast_spec(card, compile_card_oracle(card)) is None, name
+# --- end FixC ---
