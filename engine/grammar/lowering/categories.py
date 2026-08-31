@@ -427,6 +427,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # does is look at the top of a library and move that card somewhere, and
     # the name is only what decides which somewhere.
     "name_then_reveal_top": "zones",
+    # Demonic Consultation, beside it: the same guess, taken against your own
+    # library and paid for with its top cards.
+    "name_then_consult": "zones",
     "exile_all_matching": "zones",
     "grant_team_keyword_until_eot": "pump",
     # A durationless keyword grant to the enchanted creature (Cocoon's hatch):

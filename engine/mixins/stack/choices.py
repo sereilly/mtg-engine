@@ -1866,6 +1866,72 @@ class PendingChoicesMixin:
         ):
             self.discard_pending_choice(choice)
 
+    # -- "Choose a card name, then consult your own library" -----------------
+
+    def confirm_name_then_consult(self, player_index: int, card_name: str) -> bool:
+        """Answer Demonic Consultation's "choose a card name" prompt."""
+        return self.resolve_pending_choice(
+            "name_then_consult", player_index, card_name=card_name
+        )
+
+    def _resolve_name_then_consult(
+        self, choice: PendingChoice, card_name: str
+    ) -> bool:
+        """Exile the top N, then reveal down to the named card.
+
+        Everything happens **after** the name is fixed, which is the whole
+        card: the six exiled cards are never looked at, so the name may be
+        among them and the reveal may then run the library out. That is not a
+        failure and not a loss — CR 704.5b only fires when a player actually
+        attempts to draw from an empty library, so the spell finishes and the
+        next draw step is what kills them.
+
+        CR 202.1 lets a player name any card at all and this spell prints no
+        restriction, so no name is refused. The comparison is against the
+        card's printed name: nothing in a library is a permanent, so nothing
+        there can be copying anything (CR 706.2).
+        """
+        player = self.players[choice.player_index]
+        named = (card_name or "").strip()
+        exile_count = int(choice.data.get("exile_count", 0) or 0)
+        paid = [player.library.pop(0) for _ in range(min(exile_count, len(player.library)))]
+        player.exile.extend(paid)
+        revealed: list = []
+        found = None
+        while player.library:
+            card = player.library.pop(0)
+            revealed.append(card)
+            if named and card.name == named:
+                found = card
+                break
+        # "…and exile all other cards revealed this way" — everything the
+        # reveal turned over except the find, in the order it was turned over.
+        for card in revealed:
+            if card is found:
+                continue
+            player.exile.append(card)
+        if found is not None:
+            # Through the CR 614 seam every "put this card into a hand" uses,
+            # so a commander headed for a hand goes to the command zone instead
+            # (CR 903.9b).
+            self.put_card_into_hand(player, found)
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{player.name} named {named or 'nothing'}, exiled {len(paid)} card(s) "
+            + (
+                f"and revealed down to {found.name}"
+                if found is not None
+                else f"and revealed their whole library ({len(revealed)} card(s)) without finding it"
+            )
+        )
+        return True
+
+    def _default_name_then_consult(self, choice: PendingChoice) -> None:
+        if not self._resolve_name_then_consult(
+            choice, choice.data.get("default_name", "")
+        ):
+            self.discard_pending_choice(choice)
+
     # -- "Choose a card name, then reveal N at random from a hand" -----------
 
     def confirm_name_and_random_reveal(self, player_index: int, card_name: str) -> bool:
@@ -4411,6 +4477,17 @@ register_choice(
     action="name_then_reveal_top_confirm",
     prompt_key="name_then_reveal_top",
     blocked_detail="name a card before other actions",
+)
+
+register_choice(
+    "name_then_consult",
+    resolve=lambda game, choice, r: game._resolve_name_then_consult(
+        choice, r["card_name"]
+    ),
+    default=lambda game, choice: game._default_name_then_consult(choice),
+    action="name_then_consult_confirm",
+    prompt_key="name_then_consult",
+    blocked_detail="name a card for the consultation before other actions",
 )
 
 register_choice(

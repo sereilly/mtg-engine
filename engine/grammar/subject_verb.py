@@ -25,6 +25,7 @@ from .paragraphs import (
     _parse_force_chosen_creature_to_attack,
     _parse_exchange_greatest_mana_value, _parse_exile_graveyard_until_leaves,
     _parse_exile_until_leaves_or_untaps, _parse_name_and_strip,
+    _parse_name_then_consult,
     _parse_name_then_random_reveal, _parse_name_then_reveal_top,
     _parse_ownership_exchange_unless_paid, _parse_random_reveal_ownership_exchange,
     _parse_transmute_by_sacrifice,
@@ -556,6 +557,13 @@ def parse_subject_verb(
         hand_pick = _parse_choose_cards_in_hand(stream)
         if hand_pick is not None:
             return hand_pick
+        # Demonic Consultation's naming paragraph. Tried before the two below
+        # it because all three open with the same four words and this one is
+        # the only one whose fifth token is a full stop followed by "exile" —
+        # it declines without consuming, so nothing else loses a reading.
+        consulted = _parse_name_then_consult(stream)
+        if consulted is not None:
+            return consulted
         # Nebuchadnezzar's naming paragraph. Tried before Necromentia's, which
         # is the last resort here and raises rather than refusing — the two
         # differ from the fifth word on, and this one declines without

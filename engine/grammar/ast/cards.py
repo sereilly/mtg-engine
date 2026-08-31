@@ -666,6 +666,29 @@ class NameThenRevealTop:
 
 
 @dataclass(frozen=True)
+class NameThenConsult:
+    """``Choose a card name. Exile the top six cards of your library, then
+    reveal cards from the top of your library until you reveal a card with the
+    chosen name. Put that card into your hand and exile all other cards
+    revealed this way.`` (Demonic Consultation.)
+
+    One node for the whole paragraph, for the reason :class:`NameThenRevealTop`
+    is one: every sentence after the first reads the name it chose, and the last
+    reads the pile the third turned over. Parsed apart, three of the four would
+    have nothing to look at.
+
+    **The order is the card.** Naming before the exile is what makes this a
+    gamble rather than a tutor: the six cards go without being looked at, and
+    the named card may be among them. A reading that searched for the name
+    first would be Demonic Tutor with extra words.
+
+    ``exile_count`` is the only number the sentence carries, so it is the only
+    field — a card printing "the top three cards" is this same paragraph.
+    """
+    exile_count: Amount
+
+
+@dataclass(frozen=True)
 class RevealUntil:
     """``…reveals cards from the top of their library until they reveal a
     creature card. That player puts that card onto the battlefield, then

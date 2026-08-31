@@ -460,3 +460,73 @@ def test_whiteouts_graveyard_ability_needs_a_snow_land_to_sacrifice(set_pool):
     assert p1.hand == []
     assert any(perm.card.name == "Forest" for perm in p1.battlefield)
 # --- end W1G4 ---
+
+
+# --- W1G4: library, hand and graveyard ---
+def _consultation_game(set_pool, library):
+    pool = set_pool("ICE")
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Demonic Consultation"]],
+        library=[pool[name] for name in library],
+        life=20,
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    result = game.cast_from_hand(0, "Demonic Consultation")
+    assert result.supported, result.details
+    game._settle()
+    return pool, p1, game
+
+
+def test_demonic_consultation_pays_six_then_reveals_down_to_the_name(set_pool):
+    """"Choose a card name. Exile the top six cards of your library, then
+    reveal cards from the top of your library until you reveal a card with the
+    chosen name. Put that card into your hand and exile all other cards
+    revealed this way."
+    """
+    names = ["Balduvian Bears"] * 6 + ["Brown Ouphe", "Tor Giant", "Scaled Wurm"]
+    pool, p1, game = _consultation_game(set_pool, names)
+
+    prompt = game.pending_choice_of("name_then_consult", 0)
+    assert prompt is not None, "the name is chosen as the spell resolves"
+    assert prompt.data["exile_count"] == 6
+
+    assert game.confirm_name_then_consult(0, "Scaled Wurm")
+
+    assert [card.name for card in p1.hand] == ["Scaled Wurm"]
+    assert p1.library == [], "six paid, three revealed, nothing left"
+    assert len(p1.exile) == 8, "the six, plus the two revealed before the find"
+
+
+def test_demonic_consultation_can_exile_the_card_it_named(set_pool):
+    """The six go without being looked at, which is the whole gamble: name a
+    card that is in them and the spell finds nothing and eats the library.
+
+    Reading the sentences in any other order — searching first, paying after —
+    would make this Demonic Tutor with extra words.
+    """
+    names = ["Scaled Wurm"] + ["Balduvian Bears"] * 8
+    pool, p1, game = _consultation_game(set_pool, names)
+
+    assert game.confirm_name_then_consult(0, "Scaled Wurm")
+
+    assert p1.hand == []
+    assert p1.library == []
+    assert len(p1.exile) == 9
+    assert not p1.lost, "an empty library is not a loss until a draw is attempted"
+
+
+def test_demonic_consultation_leaves_the_cards_below_the_find(set_pool):
+    """"Exile all **other** cards revealed this way" is the pile the reveal
+    turned over, not the rest of the library."""
+    names = ["Balduvian Bears"] * 6 + ["Tor Giant", "Brown Ouphe", "Scaled Wurm"]
+    pool, p1, game = _consultation_game(set_pool, names)
+
+    assert game.confirm_name_then_consult(0, "Tor Giant")
+
+    assert [card.name for card in p1.hand] == ["Tor Giant"]
+    assert [card.name for card in p1.library] == ["Brown Ouphe", "Scaled Wurm"]
+    assert len(p1.exile) == 6
+# --- end W1G4 ---

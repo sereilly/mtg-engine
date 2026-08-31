@@ -3394,6 +3394,39 @@ def name_then_reveal_top(game: Game, instruction: OracleInstruction, context: Or
     return True, "pending_name_then_reveal_top"
 
 
+@effect_handler("name_then_consult")
+def name_then_consult(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Demonic Consultation: "Choose a card name. Exile the top six cards of
+    your library, then reveal cards from the top of your library until you
+    reveal a card with the chosen name. Put that card into your hand and exile
+    all other cards revealed this way."
+
+    Nothing happens here but the question. **The order is the card**: the six
+    cards are exiled after the name is fixed and without being looked at, so
+    the name may be among them — which is why the exile lives in the answer
+    rather than here, where it would happen before the chooser had spoken.
+
+    Unlike Petra Sphinx's guess, an empty library is not a reason to skip the
+    prompt: exiling nothing and revealing nothing is a legal outcome of this
+    spell, and the player has still cast it.
+    """
+    caster = context.caster
+    seat = game.players.index(caster)
+    game.arm_pending_choice(
+        "name_then_consult", seat,
+        card_name=context.card.name if context.card is not None else "",
+        exile_count=int(instruction.payload.get("exile_count", 0) or 0),
+        # A player knows what is in their own library, only not its order
+        # (CR 400.2), so naming its commonest remaining card is a choice a human
+        # at the table could make — and it is deterministic, which is what a
+        # seeded replay needs.
+        default_name=_commonest_visible_name(
+            game, seat, ("library",), exclude_basics=False
+        ),
+    )
+    return True, "pending_name_then_consult"
+
+
 @effect_handler("name_and_random_reveal")
 def name_and_random_reveal(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Nebuchadnezzar: name a card, make an opponent reveal N cards at random

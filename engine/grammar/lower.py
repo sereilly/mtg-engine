@@ -520,6 +520,14 @@ def lower_statement(
             ),
         )
 
+    if isinstance(statement, ast.NameThenConsult):
+        return (
+            OracleInstruction(
+                "name_then_consult", "",
+                {"exile_count": _amount_payload(statement.exile_count)},
+            ),
+        )
+
     if isinstance(statement, ast.NameThenRevealTop):
         # "Target player chooses…" is the only subject printed on this
         # paragraph, and it is the whole shape of the effect: the chooser, the

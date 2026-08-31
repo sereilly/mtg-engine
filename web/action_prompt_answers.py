@@ -134,6 +134,22 @@ def _action_name_then_reveal_top_confirm(session, req, seat_type):
     if not session.game.confirm_name_then_reveal_top(req.seat, req.card_name):
         raise HTTPException(status_code=400, detail="the name could not be applied")
 
+@action_handler("name_then_consult_confirm")
+def _action_name_then_consult_confirm(session, req, seat_type):
+    pending = next(
+        (c for c in session.game.pending_choices_of("name_then_consult")),
+        None,
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no name choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if not req.card_name:
+        raise HTTPException(status_code=400, detail="card_name is required")
+    if not session.game.confirm_name_then_consult(req.seat, req.card_name):
+        raise HTTPException(status_code=400, detail="the name could not be applied")
+
+
 @action_handler("trigger_target_confirm")
 def _action_trigger_target_confirm(session, req, seat_type):
     pending = next(

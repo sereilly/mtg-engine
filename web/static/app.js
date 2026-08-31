@@ -2441,6 +2441,15 @@ function getNameThenRevealTopInfo(state = currentState) {
   return info;
 }
 
+// Demonic Consultation: the caster names a card, then pays the top of their
+// own library to go looking for it.
+function getNameThenConsultInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.name_then_consult;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
 // Nebuchadnezzar: the activating player names a card, then an opponent reveals
 // N cards at random from their hand and discards the ones that match.
 function getNameAndRandomRevealInfo(state = currentState) {
@@ -5001,6 +5010,60 @@ function applyNameThenRevealTopPrompt(info) {
   steps.querySelector("[data-name-then-reveal-confirm]")?.addEventListener("click", submit);
 }
 
+// Demonic Consultation's naming prompt. No suggestion list either, and for the
+// mirror-image reason: the cards it will turn over are in this seat's *own*
+// library, and a list of them would hand the player the order they are betting
+// against.
+let nameThenConsultDraft = null;
+function applyNameThenConsultPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  if (nameThenConsultDraft === null) nameThenConsultDraft = "";
+  title.textContent = "Name a card";
+  body.textContent =
+    `${info.card_name || "This spell"}: name a card, then exile the top ` +
+    `${info.exile_count || 0} cards of your library and reveal down to the ` +
+    `card you named. Everything revealed before it is exiled too.`;
+  steps.innerHTML =
+    `<div class="name-strip-row"><input id="nameThenConsultInput" type="text" placeholder="Card name" value="${escapeHtml(nameThenConsultDraft)}" autocomplete="off" /><button type="button" class="prompt-choice-btn" data-name-then-consult-confirm="1">Name It</button></div>`;
+
+  const input = steps.querySelector("#nameThenConsultInput");
+  const submit = async () => {
+    const name = (input?.value || "").trim();
+    if (!name) {
+      updateActionHint("Type a card name first.", true);
+      return;
+    }
+    try {
+      await sendAction({ seat, action: "name_then_consult_confirm", card_name: name });
+      nameThenConsultDraft = null;
+    } catch (e) {
+      updateActionHint(e.message, true);
+    }
+  };
+  input?.addEventListener("input", () => {
+    nameThenConsultDraft = input.value;
+  });
+  input?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submit();
+  });
+  steps.querySelector("[data-name-then-consult-confirm]")?.addEventListener("click", submit);
+}
+
 // Nebuchadnezzar's naming prompt. No suggestion list: the cards it will turn
 // over are in the opponent's hand, which this seat may not look at (CR 400.2),
 // so any list would be a list of the wrong cards.
@@ -7205,6 +7268,12 @@ function renderActivationPrompt() {
   const nameThenRevealTopInfo = getNameThenRevealTopInfo();
   if (nameThenRevealTopInfo) {
     applyNameThenRevealTopPrompt(nameThenRevealTopInfo);
+    return;
+  }
+
+  const nameThenConsultInfo = getNameThenConsultInfo();
+  if (nameThenConsultInfo) {
+    applyNameThenConsultPrompt(nameThenConsultInfo);
     return;
   }
 
