@@ -1287,8 +1287,16 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
         "can_only_attack_alone",
     ),
     (
+        # The optional P/T prefix is the same split `_KEYWORD_GRANT` and the
+        # attack-alone row make: "Enchanted creature gets +1/+1 **and** doesn't
+        # untap during its controller's untap step" (Dance of the Dead) is one
+        # printed line carrying two effects in two channels, and
+        # `aura_static_pt_grant` searches rather than anchors, so both halves
+        # are read. Without the prefix the line matched nothing and the Aura
+        # lost the restriction *and* reported the line unclaimed.
         re.compile(
-            rf"^{_ATTACHED} {_NOUN} doesn't untap during its controller's untap step$"
+            rf"^{_ATTACHED} {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? "
+            r"doesn't untap during its controller's untap step$"
         ),
         "doesnt_untap",
     ),
