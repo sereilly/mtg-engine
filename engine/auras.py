@@ -909,6 +909,29 @@ def aura_board_counted_penalty(oracle_text: str) -> dict | None:
     return None
 
 
+def aura_board_counted_penalty_sentences(oracle_text: str) -> tuple[str, ...]:
+    """The sentences :func:`aura_board_counted_penalty` reads, or empty.
+
+    Snowblind's effect is **four sentences on one printed line** and none of
+    them means anything alone: the penalty, the two boards it can be counted on,
+    and the clamp. So the reader matches them joined, and this names the run for
+    a caller that walks a card sentence by sentence
+    (``scripts/parse_coverage.py``) and would otherwise report all four as text
+    nothing read. The same pairing :func:`aura_cost_reduction_sentences` keeps
+    for Power Artifact, which is the other reader shaped this way.
+    """
+    if aura_board_counted_penalty(oracle_text) is None:
+        return ()
+    for raw_line in (oracle_text or "").splitlines():
+        line = _line_text(raw_line)
+        if _BOARD_COUNTED_PENALTY.match(line) is None:
+            continue
+        return tuple(
+            sentence.strip() for sentence in line.split(". ") if sentence.strip()
+        )
+    return ()
+
+
 def auras_attached_to(permanent) -> list:
     """Every Aura currently attached to *permanent*, in attachment order.
 
