@@ -178,6 +178,29 @@ def _divided_total(payload: dict, x_value: int | None) -> int:
 
 
 
+def _x_mana_actually_spent(
+    allocation: dict[str, int], cost: dict[str, int]
+) -> dict[str, int]:
+    """The allocation, clamped to what the *reduced* cost really charged.
+
+    A coloured cost reduction (CR 118.7b, "this spell costs {B} less to cast")
+    comes off a flat symbol dict in which the printed {B} pip and a black mana
+    put on X are the same entry, so the rules do not say which half of it the
+    reduction takes. The caster would take it off the pip, keeping as much black
+    on X as they can — which is exactly this clamp: X's share is whatever the
+    cost still charges in that colour, up to what was allocated to X.
+
+    Nothing is inflated. An over-reported symbol is life gained for mana nobody
+    spent, and "not more than the amount of {B} spent on X" is a limit that must
+    never err upward.
+    """
+    return {
+        symbol: min(count, cost.get(symbol, 0))
+        for symbol, count in allocation.items()
+        if min(count, cost.get(symbol, 0)) > 0
+    }
+
+
 class SpellCastingMixin:
     def cast_from_hand(
         self,
@@ -1791,12 +1814,12 @@ class SpellCastingMixin:
                     card.mana_cost, x_value=x_value,
                     extra_generic=extra_generic, x_allocation=allocation,
                 ),
-                reduction,
+                reduction or CostReduction(),
             )
             if self._pay_mana_cost(
                 caster, cost, purpose=PaymentPurpose(CAST, card=card)
             ):
-                return {sym: count for sym, count in allocation.items() if count}
+                return _x_mana_actually_spent(allocation, cost)
         return None
     def _pay_mana_cost(
         self, player: PlayerState, required: dict[str, int], *, purpose=None

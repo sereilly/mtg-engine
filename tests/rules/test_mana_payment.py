@@ -198,4 +198,51 @@ def test_120_3c_the_life_gain_is_capped_by_the_planeswalkers_loyalty(pool):
     assert result.supported, result.details
     game._settle()
     assert p0.life == 22, "four damage at two loyalty gains two"
+
+
+@pytest.mark.cr("118.7b", "601.2h")
+def test_118_7b_a_coloured_reduction_never_inflates_the_mana_noted_as_spent_on_x(pool):
+    """"This spell costs {B} less to cast" against Soul Burn's {X}{2}{B}.
+
+    A reduction comes off a flat symbol dict in which the printed {B} pip and a
+    black mana put on X are the same entry, so CR 118.7 does not say which half
+    it takes. The caster would take it off the pip, keeping as much black on X
+    as possible — but the *record* of what X consumed has to be clamped to what
+    the reduced cost actually charged, because an over-reported symbol is life
+    gained for mana nobody spent, and "not more than the amount of {B} spent on
+    X" is a limit that must never err upward.
+
+    No card in the pool prints a coloured reduction yet; the reader that would
+    build one does, so this pins the arithmetic before the card arrives.
+    """
+    from engine.cost_modifiers import CostReduction
+
+    game, p0, _p1 = _soul_burn_seat(pool, {"B": 6})
+    card = pool["Soul Burn"]
+
+    # Unreduced: the pip plus three black on X.
+    spent = game._pay_cast_cost(
+        p0, card, 3, ("B", "R"), extra_generic=0, reduction=None,
+    )
+    assert spent == {"B": 3}
+    assert sum(p0.mana_pool.values()) == 0, "{3}{2}{B} out of six black"
+
+    # Reduced by {B}: five black leave the pool, and X is still worth three of
+    # them — the reduction came off the pip, which is the caster's reading.
+    game, p0, _p1 = _soul_burn_seat(pool, {"B": 6})
+    spent = game._pay_cast_cost(
+        p0, card, 3, ("B", "R"),
+        extra_generic=0, reduction=CostReduction(0, (("B", 1),)),
+    )
+    assert spent == {"B": 3}
+    assert sum(p0.mana_pool.values()) == 1
+
+    # Reduced by {B}{B}{B}{B}: the pip and three of X's black are gone, so only
+    # two black could have reached X however the caster reads it.
+    game, p0, _p1 = _soul_burn_seat(pool, {"B": 6})
+    spent = game._pay_cast_cost(
+        p0, card, 3, ("B", "R"),
+        extra_generic=0, reduction=CostReduction(0, (("B", 2),)),
+    )
+    assert spent == {"B": 2}
 # --- end W4G3 ---
