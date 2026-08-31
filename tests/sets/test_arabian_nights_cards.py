@@ -2030,3 +2030,84 @@ def test_mijae_djinn_stops_being_an_attacking_creature_when_it_loses(arn_by_name
     assert attacker.attacking is False
     assert attacker.defending_player_index is None
 # --- end W4G2 ---
+
+# --- FixB: a departed target is a fizzle, not the next permanent along ---
+
+
+def _fixb_sandals_board(arn_by_name, catalog_by_name):
+    """The Sandals, the creature it names, and a decoy in the slot behind it.
+
+    The decoy's position is the experiment: when the named creature leaves,
+    every later slot renumbers (CR 400.7), so the index the activation recorded
+    comes to mean the decoy.
+    """
+    from tests.helpers import _nosick
+
+    sandals = Permanent(card=arn_by_name["Sandals of Abdallah"])
+    chosen = _nosick(Permanent(card=catalog_by_name["Grizzly Bears"]))
+    decoy = _nosick(Permanent(card=catalog_by_name["Balduvian Barbarians"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[sandals, chosen, decoy], life=20),
+        PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+    game.queue_permanent_ability(
+        0, "Sandals of Abdallah", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    return game, sandals, chosen, decoy
+
+
+def _fixb_settle(game):
+    game.pass_priority(0)
+    game.pass_priority(1)
+    game._settle()
+
+
+def test_sandals_of_abdallah_watches_nothing_when_its_target_has_left(
+    arn_by_name, catalog_by_name,
+):
+    """"{2}, {T}: Target creature gains islandwalk until end of turn. When that
+    creature dies this turn, destroy this artifact."
+
+    Kill the named creature in response and both sentences followed its vacated
+    slot: the decoy gained islandwalk, and the Sandals then bound their own
+    destruction to a creature they had never targeted. CR 608.2b - the ability
+    affects nothing; the rule as a rule is in
+    ``tests/rules/test_targets_and_costs.py``.
+    """
+    game, sandals, chosen, decoy = _fixb_sandals_board(arn_by_name, catalog_by_name)
+
+    game.remove_from_battlefield(chosen)
+    game.check_state_based_actions()
+    _fixb_settle(game)
+
+    assert not game._has_keyword(decoy, "islandwalk"), game.log
+    assert game.delayed_triggers == [], game.log
+
+    game._permanent_to_graveyard(game.players[0], decoy)
+    game.remove_from_battlefield(decoy)
+    game._settle()
+    assert game.is_on_battlefield(sandals), game.log
+
+
+def test_sandals_of_abdallah_still_watches_a_target_that_is_still_there(
+    arn_by_name, catalog_by_name,
+):
+    """The other direction, so the fizzle cannot pass by never firing: the
+    named creature is granted islandwalk, and the Sandals still break when it
+    dies."""
+    game, sandals, chosen, decoy = _fixb_sandals_board(arn_by_name, catalog_by_name)
+
+    _fixb_settle(game)
+
+    assert game._has_keyword(chosen, "islandwalk"), game.log
+    assert not game._has_keyword(decoy, "islandwalk"), game.log
+
+    game._permanent_to_graveyard(game.players[0], chosen)
+    game.remove_from_battlefield(chosen)
+    game._settle()
+    assert not game.is_on_battlefield(sandals), game.log
+# --- end FixB ---

@@ -748,3 +748,121 @@ def test_reflecting_mirror_moves_a_divided_spells_one_share_too(set_pool):
     game._settle()
     assert players[0].life == 20, game.log
     assert players[1].life == 16, game.log
+
+# --- FixB: a departed target is a fizzle, not the next permanent along ---
+#
+# CR 608.2b at the resolver. When the creature these two name leaves with the
+# ability still on the stack, the recorded id stops resolving and the index
+# beside it comes to mean whatever slid into the vacated slot (CR 400.7). The
+# rule as a rule is in ``tests/rules/test_targets_and_costs.py``.
+
+
+def _fixb_dark_board(set_pool, source_name):
+    """Seat 0 with *source* and a chosen creature; seat 1 with the decoy that
+    inherits the chosen creature's slot when it leaves."""
+    source = _nosick(Permanent(card=set_pool("DRK")[source_name]))
+    chosen = _nosick(Permanent(card=_mk_creature_card("Sailor", 2, 2)))
+    decoy = _nosick(Permanent(card=_mk_creature_card("Bystander", 1, 1)))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[source], life=20),
+        PlayerState(name="P2", battlefield=[chosen, decoy], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.start_turn(0)
+    return game, source, chosen, decoy
+
+
+def _fixb_dark_settle(game):
+    game.pass_priority(0)
+    game.pass_priority(1)
+    game._settle()
+
+
+def test_war_barge_grants_nothing_when_its_target_has_left(set_pool):
+    """"{3}: Target creature gains islandwalk until end of turn. When this
+    artifact leaves the battlefield this turn, destroy that creature."
+
+    The Barge is what the entry *watches* and the creature is what it is
+    *about*, so a mis-bound target does not silence the entry - it re-aims it.
+    The bystander was made unblockable and then destroyed by an artifact that
+    had never targeted it.
+    """
+    game, barge, chosen, decoy = _fixb_dark_board(set_pool, "War Barge")
+    game.queue_permanent_ability(
+        0, "War Barge", target_player_index=1, target_permanent_index=0,
+    )
+
+    game.remove_from_battlefield(chosen)
+    game.check_state_based_actions()
+    _fixb_dark_settle(game)
+
+    assert not game._has_keyword(decoy, "islandwalk"), game.log
+    assert game.delayed_triggers == [], game.log
+
+    game.remove_from_battlefield(barge)
+    game._settle()
+    assert game.is_on_battlefield(decoy), game.log
+
+
+def test_war_barge_still_takes_its_surviving_target_with_it(set_pool):
+    """The other direction, so the fizzle cannot pass by never firing: a target
+    still on the battlefield is still granted islandwalk and is still destroyed
+    when the Barge leaves."""
+    game, barge, chosen, decoy = _fixb_dark_board(set_pool, "War Barge")
+    game.queue_permanent_ability(
+        0, "War Barge", target_player_index=1, target_permanent_index=0,
+    )
+    _fixb_dark_settle(game)
+
+    assert game._has_keyword(chosen, "islandwalk"), game.log
+    assert [entry.bound_permanent_id for entry in game.delayed_triggers] == [
+        chosen.permanent_id
+    ], game.log
+
+    game.remove_from_battlefield(barge)
+    game._settle()
+    assert not game.is_on_battlefield(chosen), game.log
+    assert game.is_on_battlefield(decoy), game.log
+
+
+def test_runesword_pumps_nothing_when_its_attacker_has_left(set_pool):
+    """"{3}, {T}: Target attacking creature gets +2/+0 until end of turn. When
+    that creature leaves the battlefield this turn, sacrifice this artifact."
+
+    Runesword's target is its *controller's* attacker, so the decoy that
+    inherits the slot is on the same battlefield - and the Sword then owed its
+    own life to a creature it had never pumped.
+    """
+    sword = _nosick(Permanent(card=set_pool("DRK")["Runesword"]))
+    chosen = _nosick(Permanent(card=_mk_creature_card("Raider", 2, 2)))
+    decoy = _nosick(Permanent(card=_mk_creature_card("Second Raider", 2, 2)))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[sword, chosen, decoy], life=20),
+        PlayerState(name="P2", battlefield=[
+            _nosick(Permanent(card=_mk_creature_card("Blocker", 1, 1)))], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [1, 2], 1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+
+    game.queue_permanent_ability(
+        0, "Runesword", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    game.remove_from_battlefield(chosen)
+    game.check_state_based_actions()
+    game.pass_priority(0)
+    game.pass_priority(1)
+    game._settle()
+
+    assert decoy.effective_power == 2, game.log
+    assert game.delayed_triggers == [], game.log
+
+    game.remove_from_battlefield(decoy)
+    game._settle()
+    assert game.is_on_battlefield(sword), game.log
+# --- end FixB ---

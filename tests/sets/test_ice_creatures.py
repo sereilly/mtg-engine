@@ -1951,3 +1951,230 @@ def test_every_land_type_barbarian_guides_offers_targets_the_same_creature(set_p
     assert {
         repr(_from_instructions((mode["instruction"],))) for mode in modes
     } == {repr({"kind": "creature", "own_only": True})}
+
+# --- FixB: a departed target is a fizzle, not the next permanent along ---
+#
+# Five ICE creatures whose ability names a creature and then arms a delayed
+# ability about it (CR 603.7). When the named creature leaves with the ability
+# still on the stack, the recorded id stops resolving and the *index* beside it
+# comes to mean whichever permanent slid into the vacated slot (CR 400.7) - so
+# the printed effect landed on a permanent nobody chose and the delayed ability
+# was armed about it. CR 608.2b says the ability simply does not affect it.
+#
+# The CR-level statement of the rule is in
+# ``tests/rules/test_targets_and_costs.py``; what is here is each card.
+
+
+def _fixb_board(set_pool, source_name, *, target_seat=0, combat=False):
+    """Seat 0 with *source*; a chosen creature with a **decoy behind it**.
+
+    The decoy's slot is the experiment: it is the index the chosen creature
+    vacates. The two are different creatures so an assertion about one cannot
+    accidentally be satisfied by the other.
+    """
+    pool = set_pool("ICE")
+    source = _nosick(Permanent(card=pool[source_name]))
+    chosen = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    decoy = _nosick(Permanent(card=pool["Balduvian Barbarians"]))
+    if target_seat == 0:
+        boards = ([source, chosen, decoy], [])
+    else:
+        boards = ([source], [chosen, decoy])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=boards[0], life=20),
+        PlayerState(name="P2", battlefield=boards[1], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.active_player_index = 0
+    if combat:
+        game._set_phase_and_step("combat", "declare_attackers")
+    else:
+        game.start_turn(0)
+    return game, source, chosen, decoy
+
+
+def _fixb_settle(game):
+    game.pass_priority(0)
+    game.pass_priority(1)
+    game._settle()
+
+
+def test_kjeldoran_elite_guard_pumps_nothing_when_its_target_has_left(set_pool):
+    """"{T}: Target creature gets +2/+2 until end of turn. When that creature
+    leaves the battlefield this turn, sacrifice this creature."
+
+    Both sentences went wrong together: the decoy got the +2/+2, and the Guard
+    then answered with its own life for a creature it never buffed.
+    """
+    game, guard, chosen, decoy = _fixb_board(
+        set_pool, "Kjeldoran Elite Guard", combat=True,
+    )
+    game.queue_permanent_ability(
+        0, "Kjeldoran Elite Guard", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+
+    game.remove_from_battlefield(chosen)
+    game.check_state_based_actions()
+    _fixb_settle(game)
+
+    assert decoy.effective_power == 3, game.log
+    assert game.delayed_triggers == [], game.log
+
+    game.remove_from_battlefield(decoy)
+    game._settle()
+    assert game.is_on_battlefield(guard), game.log
+
+
+def test_kjeldoran_elite_guard_still_pumps_a_target_that_is_still_there(set_pool):
+    """The other direction. A fizzle that fires too eagerly is the same bug
+    pointing the other way, so the surviving-target case is asserted beside
+    it - and the Guard still trades itself when *that* creature leaves."""
+    game, guard, chosen, decoy = _fixb_board(
+        set_pool, "Kjeldoran Elite Guard", combat=True,
+    )
+    game.queue_permanent_ability(
+        0, "Kjeldoran Elite Guard", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    _fixb_settle(game)
+
+    assert chosen.effective_power == 4, game.log
+    assert decoy.effective_power == 3, game.log
+    assert [entry.bound_permanent_id for entry in game.delayed_triggers] == [
+        chosen.permanent_id
+    ], game.log
+
+    game.remove_from_battlefield(chosen)
+    game._settle()
+    assert not game.is_on_battlefield(guard), game.log
+
+
+def test_kjeldoran_guard_pumps_nothing_when_its_target_has_left(set_pool):
+    """The Elite Guard's cheaper twin - "+1/+1", and one more activation
+    clause. The same two sentences, so the same two failures."""
+    game, guard, chosen, decoy = _fixb_board(
+        set_pool, "Kjeldoran Guard", combat=True,
+    )
+    game.queue_permanent_ability(
+        0, "Kjeldoran Guard", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+
+    game.remove_from_battlefield(chosen)
+    game.check_state_based_actions()
+    _fixb_settle(game)
+
+    assert decoy.effective_power == 3, game.log
+    assert game.delayed_triggers == [], game.log
+    assert game.is_on_battlefield(guard), game.log
+
+
+def test_phantasmal_mount_carries_nobody_when_its_rider_has_left(set_pool):
+    """"{T}: Target creature you control with toughness 2 or less gets +1/+1 and
+    gains flying until end of turn. When this creature leaves the battlefield
+    this turn, sacrifice that creature. When the creature leaves the
+    battlefield this turn, sacrifice this creature."
+
+    Two delayed abilities off one target, so a mis-bound target cost twice: the
+    decoy was pumped, and each of the two entries was armed about it. The
+    Mount's own death then took the decoy with it.
+    """
+    game, mount, chosen, decoy = _fixb_board(set_pool, "Phantasmal Mount")
+    game.queue_permanent_ability(
+        0, "Phantasmal Mount", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+
+    game.remove_from_battlefield(chosen)
+    game.check_state_based_actions()
+    _fixb_settle(game)
+
+    assert decoy.effective_power == 3, game.log
+    assert not game._has_keyword(decoy, "flying"), game.log
+    assert game.delayed_triggers == [], game.log
+
+    game.remove_from_battlefield(mount)
+    game._settle()
+    assert game.is_on_battlefield(decoy), "the Mount never carried it"
+
+
+def test_goblin_sappers_destroys_nothing_when_its_target_has_left(set_pool):
+    """"{R}{R}{R}{R}, {T}: Target creature you control can't be blocked this
+    turn. Destroy it at end of combat."
+
+    The expensive ability, because it arms exactly one delayed entry and the
+    entry is the whole card. Mis-bound, it made the decoy unblockable and then
+    destroyed it at end of combat - an attack the player never planned and a
+    creature they never spent.
+    """
+    game, sappers, chosen, decoy = _fixb_board(set_pool, "Goblin Sappers")
+    game._set_phase_and_step("precombat_main", None)
+    game.queue_permanent_ability(
+        0, "Goblin Sappers", permanent_index=0, ability_index=1,
+        target_player_index=0, target_permanent_index=1,
+    )
+
+    game.remove_from_battlefield(chosen)
+    game.check_state_based_actions()
+    _fixb_settle(game)
+
+    assert not decoy.metadata.get("cant_be_blocked_until_eot"), game.log
+    assert game.delayed_triggers == [], game.log
+
+    game._set_phase_and_step("combat", "declare_attackers")
+    game.end_combat(step_already_started=True)
+    game._settle()
+    assert game.is_on_battlefield(decoy), game.log
+
+
+def test_merieke_ri_berit_steals_nothing_when_her_target_has_left(set_pool):
+    """"{T}: Gain control of target creature for as long as you control Merieke
+    Ri Berit. When Merieke Ri Berit leaves the battlefield or becomes untapped,
+    destroy that creature."
+
+    The worst of the nine, because a control change is not undone by the turn
+    ending: the decoy changed hands for as long as Merieke stayed tapped, and
+    was destroyed when she left. Nothing in the game said its controller had
+    ever been asked.
+    """
+    game, merieke, chosen, decoy = _fixb_board(
+        set_pool, "Merieke Ri Berit", target_seat=1,
+    )
+    game.queue_permanent_ability(
+        0, "Merieke Ri Berit", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+
+    game.remove_from_battlefield(chosen)
+    game.check_state_based_actions()
+    _fixb_settle(game)
+
+    assert game.controller_index_of(decoy) == 1, game.log
+    assert game.delayed_triggers == [], game.log
+
+    game.remove_from_battlefield(merieke)
+    game._settle()
+    assert game.is_on_battlefield(decoy), game.log
+
+
+def test_merieke_ri_berit_still_takes_a_creature_that_is_still_there(set_pool):
+    """The surviving-target direction for the control change, and for the
+    delayed destruction that ends it."""
+    game, merieke, chosen, decoy = _fixb_board(
+        set_pool, "Merieke Ri Berit", target_seat=1,
+    )
+    game.queue_permanent_ability(
+        0, "Merieke Ri Berit", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    _fixb_settle(game)
+
+    assert game.controller_index_of(chosen) == 0, game.log
+    assert game.controller_index_of(decoy) == 1, game.log
+
+    game.remove_from_battlefield(merieke)
+    game._settle()
+    assert not game.is_on_battlefield(chosen), game.log
+# --- end FixB ---

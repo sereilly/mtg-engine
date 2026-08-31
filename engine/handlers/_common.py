@@ -1088,6 +1088,9 @@ def pick_target_permanent(
        passes ``predicate``, that is the target. This is the stable answer: the
        id was recorded when the target was chosen (CR 601.2c) and means the same
        permanent however the battlefield has been renumbered since.
+    0b. If ``permanent_id`` was recorded and now names **no permanent at all**,
+       the target is gone (CR 608.2b) and the answer is None. Nothing below is
+       consulted — see the asymmetry below for why this one case fizzles.
     1. Otherwise, if ``index`` is a valid index into ``player``'s battlefield and
        that permanent passes ``predicate`` (default: is a creature), return it.
     2. Otherwise scan ``fallback_players`` (default: just ``player``) for the
@@ -1095,20 +1098,49 @@ def pick_target_permanent(
        or ``fallback_on_invalid_choice=False`` to skip the fallback only when
        the player explicitly chose an illegal index (the choice fizzles).
 
-    Step 0 is *additive*: when the id no longer resolves — the target died, or
-    changed controller — this falls through to exactly the index behaviour it
-    has always had, rather than inventing a fizzle the rest of the engine is not
-    yet written for. So the id can only turn a wrong answer into a right one.
+    Step 0 is *additive* in one direction only, and the asymmetry is the point.
+    An id that resolves to a permanent this caller cannot use — it changed
+    controller, or stopped being a creature — falls through to the index
+    behaviour this function has always had, rather than inventing a fizzle the
+    rest of the engine is not yet written for. Those are questions about a
+    permanent that still exists, and the engine has no answer for them yet.
+
+    An id that resolves to **nothing** is a different question, and it has an
+    answer. The recorded id is the choice (CR 601.2c/602.2b); CR 400.7 makes a
+    permanent that has left the battlefield a *new object* if it ever comes
+    back, so there is no permanent anywhere that the choice can still mean. The
+    index cannot be it either: the slot renumbered when the chosen permanent
+    left, so ``battlefield[index]`` is by construction a permanent nobody
+    chose, and the fallback scan is one nobody even looked at. This is
+    CR 608.2b at the resolver — "the target is gone" — and it is the only shape
+    where the fallback can be shown to be wrong rather than merely unsupported.
+
+    So: **an id that was recorded and no longer resolves is a fizzle; an id
+    that was never recorded is not.** A targetless activation stamps no id
+    (``permanent_ids_at`` maps a missing slot to None) and keeps the fallback —
+    which is what ``handlers/destruction.arm_self_action_at_next_end_step``
+    asks by hand for Goblin Ski Patrol, and what every caller that resolves a
+    "this permanent" pronoun off the context relies on.
     """
     if predicate is None:
         predicate = lambda p: p.is_creature
     if game is not None and isinstance(permanent_id, int) and player is not None:
         chosen = game.permanent_by_id(permanent_id)
+        if chosen is None:
+            # CR 608.2b/400.7: a choice was recorded and its object has left.
+            # Sandals of Abdallah watched whatever slid into the dead
+            # creature's slot and the islandwalk landed there too; War Barge,
+            # Runesword, the two Kjeldoran guards, Phantasmal Mount, Goblin
+            # Sappers, Whippoorwill and Merieke Ri Berit all read the same
+            # resolver. The spells are already refused above the instructions
+            # (``legality.illegal_targets_refusal``); an activated ability has
+            # no such gate, so the fizzle has to be here.
+            return None
         # Scoped to *player* on purpose: the callers pass the battlefield the
         # target was chosen from ("a creature you control", "target artifact an
         # opponent controls"), and widening that here would be a targeting
         # change wearing an identity change's clothes.
-        if chosen is not None and game.controls(player, chosen) and predicate(chosen):
+        if game.controls(player, chosen) and predicate(chosen):
             return chosen
     explicit = isinstance(index, int)
     if explicit and player is not None and 0 <= index < len(player.battlefield):
