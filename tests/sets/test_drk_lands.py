@@ -490,3 +490,45 @@ def test_sorrows_path_does_not_re_announce_an_attacker_becoming_blocked(set_pool
 
     assert game.combat_blockers[1] == {0: [1], 1: [0]}, game.log
     assert [line for line in game.log if "triggered on becoming blocked" in line] == announced
+
+
+# --- LeadC: a free offer is not automatically taken ---
+
+
+def test_safe_haven_is_not_sacrificed_by_a_seat_nobody_asks(set_pool):
+    """"At the beginning of your upkeep, you may sacrifice this land. If you do,
+    return each card exiled with this land…"
+
+    The offer carries no mana cost, so the non-interactive default read it as
+    free and took it — every upkeep, whether or not anything was exiled under
+    it. The price is the land, and nothing is printed for refusing, so the
+    default refuses; the two tests above still drive the offer by hand and
+    still get both answers.
+    """
+    game, haven = _safe_haven_holding_a_creature(set_pool)
+
+    _run_upkeep(game, 0)
+    game.auto_resolve_pending_choices()
+
+    assert game.is_on_battlefield(haven), game.log
+    assert [c.name for c in game.players[0].exile] == ["Grizzly Bears"], game.log
+
+
+def test_safe_haven_with_nothing_exiled_still_keeps_its_land(set_pool):
+    """The case that made the old default plainly wrong rather than merely
+    debatable: with an empty pile the accept branch returns nothing at all, so
+    a seat nobody asked sacrificed a land every upkeep and bought exactly
+    nothing with it."""
+    haven = Permanent(card=set_pool("DRK")["Safe Haven"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[haven]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    _run_upkeep(game, 0)
+    game.auto_resolve_pending_choices()
+
+    assert game.is_on_battlefield(haven), game.log
+# --- end LeadC ---

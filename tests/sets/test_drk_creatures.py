@@ -1287,3 +1287,30 @@ def test_whippoorwill_still_locks_a_target_that_is_still_there(set_pool):
         chosen.permanent_id
     ], game.log
 # --- end FixB ---
+
+
+# --- LeadC: a free offer is not automatically taken ---
+
+
+def test_leviathan_keeps_its_islands_when_nobody_is_asked(set_pool):
+    """"At the beginning of your upkeep, you may sacrifice two Islands. If you
+    do, untap this creature."
+
+    Two Islands is a cost printed as a deed, so the ``cost`` field is empty and
+    the affordability test called the offer free: an AI seat drowned two lands
+    every upkeep to untap a creature it might not attack with. Nothing is
+    printed for refusing, so the default refuses — and the test above still
+    accepts by hand and still untaps.
+    """
+    game, leviathan = _leviathan_board(set_pool, island_count=3)
+    game.become_tapped(leviathan)
+    game.current_turn_phase = "beginning"
+
+    game.resolve_upkeep(0)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+
+    assert leviathan.tapped, game.log
+    assert sum(1 for p in game.controlled_by(0) if p.has_type("island")) == 3, game.log
+# --- end LeadC ---

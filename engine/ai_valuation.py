@@ -30,6 +30,13 @@ of it cannot disagree about what the card does.
 weights stay in ``ai_policy``. Heuristics are tuning, and a tuning constant is
 not a correctness claim — but *which cards a constant applies to* is, and that
 is what lives here.
+
+The same split is why ``offered_action_is_a_payment`` is here rather than in
+``engine/mixins/stack/choices.py`` beside the default that reads it. "This
+offer's price comes out of the taker's own permanents, hand, library or life"
+is a claim about what a card *does*, true of every card printing the sentence;
+"and therefore a seat nobody asked refuses it" is the stated policy, and that
+stays with the other stated policies in ``_default_optional_pay``.
 """
 
 from __future__ import annotations
@@ -174,6 +181,96 @@ def activation_target_side(instruction: OracleInstruction) -> str | None:
     return None
 
 
+#: Instruction kinds whose whole effect is that the player performing them
+#: **pays** — CR 118.3's list of what a cost can be, restricted to the ones the
+#: rules define as done to oneself, which is why no payload has to be consulted
+#: to know whose resources are spent:
+#:
+#: * CR 701.21a — "A player can't sacrifice ... something that's a permanent
+#:   they don't control": a sacrifice is always of your own permanent;
+#: * CR 701.9a — a discard moves a card "from its **owner's** hand";
+#: * CR 118.3b — life is subtracted from the paying player's own life total;
+#: * CR 407.4 — "the owner of an object is the only player who can ante that
+#:   object", and CR 407.2 hands the ante zone to the winner, so it is the one
+#:   price on this list a player does not get back at end of game;
+#: * CR 701.13a — an exile, here out of the offered seat's own hand or off its
+#:   own battlefield, which is what the two kinds below name.
+#:
+#: A kind, never a card: "you may sacrifice a creature" is one price whoever
+#: prints it, so the eight cards in the pool that print it and every card still
+#: to come are classified by construction. Held to live handler kinds by
+#: ``tests/engine/test_optional_offer_defaults.py``, which is the guard
+#: ``MANA_ABILITY_KINDS`` above wants for the same reason: a rename that
+#: emptied this set would silently restore the always-accept default.
+SELF_PAYMENT_KINDS = frozenset({
+    "sacrifice_matching_permanent",
+    "sacrifice_self",
+    "sacrifice_attached_permanent",
+    "discard_controller_cards",
+    "pay_life",
+    "ante_top_card",
+    "exile_chosen_card_from_hand",
+    "exile_any_number_of_own_tokens",
+})
+
+
+def _step_is_a_payment(step, self_recipients: frozenset[str]) -> bool:
+    kind = getattr(step, "kind", None)
+    if kind in SELF_PAYMENT_KINDS:
+        return True
+    if kind == "deal_damage":
+        # "…**or have this enchantment deal 5 damage to that player**" (Worms
+        # of the Earth). Damage is a price only when the player taking the
+        # offer is the one dealt it, which the payload cannot say on its own —
+        # the recipient is a printed reference ("caster", "target_player") that
+        # the resolution binds. So the caller resolves those references to
+        # seats and passes in the ones that name the offered seat; Goblin
+        # Arsonist's "you may have it deal 1 damage to any target" names no
+        # player recipient at all and is a gift.
+        return step.payload.get("recipient") in self_recipients
+    if kind == "choose_one":
+        # "…sacrifice a creature **or** discard a creature card" (Crypt
+        # Lurker). CR 601.2b lets the payer pick, so the offer is a price only
+        # when *every* alternative left on it is one — an offer with a way out
+        # that costs nothing is not a price. The modes read here are the ones
+        # ``_narrow_to_takeable_actions`` left, so a mode the seat could not
+        # take is not counted against it.
+        modes = tuple(step.payload.get("modes") or ())
+        chosen = [
+            mode["instruction"]
+            for mode in modes
+            if isinstance(mode, dict) and mode.get("instruction") is not None
+        ]
+        return bool(chosen) and all(
+            _step_is_a_payment(instruction, self_recipients)
+            for instruction in chosen
+        )
+    return False
+
+
+def offered_action_is_a_payment(steps, self_recipients=()) -> bool:
+    """Whether taking this offer spends the offered seat's **own** resources.
+
+    *steps* is the offer's accept branch as the compiled program holds it, and
+    the leading step is the one the printed sentence offers: the grammar splits
+    "You may **A**. If you do, B." into ``action`` and ``then``, and
+    ``handlers/control_flow._offer_to_seat`` concatenates them in that order. So
+    A is what the seat is being asked to *do* and B is what follows from it —
+    which is the whole difference between Sylvan Library ("you may **draw two
+    additional cards**. If you do, … pay 4 life or put the card back") and
+    Crypt Lurker ("you may **sacrifice a creature or discard a creature card**.
+    If you do, draw a card"). Reading the branch as a whole would call both of
+    them payments, and reading it as a whole *backwards* would call both gifts.
+
+    *self_recipients* is the set of printed player references that resolve to
+    the offered seat, for the one kind whose answer depends on it.
+    """
+    leading = next((step for step in steps if getattr(step, "kind", None)), None)
+    if leading is None:
+        return False
+    return _step_is_a_payment(leading, frozenset(self_recipients))
+
+
 def is_mana_ability(instruction: OracleInstruction) -> bool:
     """Whether *instruction* adds mana to its controller's pool."""
     return instruction.kind in MANA_ABILITY_KINDS
@@ -305,6 +402,7 @@ def several_target_slot_sides(program) -> tuple[str | None, ...]:
 
 __all__ = [
     "MANA_ABILITY_KINDS",
+    "SELF_PAYMENT_KINDS",
     "SPELL_TYPES",
     "CounterProfile",
     "cards_drawn_by_controller",
@@ -313,6 +411,7 @@ __all__ = [
     "destroyed_permanent_filter",
     "is_mana_ability",
     "mana_ability_amount",
+    "offered_action_is_a_payment",
     "returns_creature_to_hand",
     "several_target_slot_sides",
 ]
