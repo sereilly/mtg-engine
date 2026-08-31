@@ -301,7 +301,10 @@ carries a number should be re-run before it is cited.
     the same destination by a different rule. A graveyard target already has a
     deliberate answer (clamp to the last surviving copy, because two copies of
     a card in one graveyard are literally one object). Both are decisions to
-    change on purpose, not gaps to close on sight.
+    change on purpose, not gaps to close on sight. **The graveyard half now has
+    a reproduction** showing the clamp is not the whole of it — when *no* copy
+    remains the fallback names a different card, which is the one case the data
+    model can establish; see the Hymn of Rebirth entry in the Ice Age section.
 - **CR 508.5's second sentence is not implemented** — "if that creature is no
   longer attacking, the defending player it's referring to is the player that
   creature *was* attacking". `_prune_combat_state` clears `attacking` and
@@ -836,9 +839,34 @@ a warning about carrying a finding between rounds without re-probing it.
 * **Preacher** (DRK) never asks the opponent for the choice the card gives
   them: `derive_activation_spec` answers None, so the picker offers nothing and
   the engine takes the opponent's slot-0 creature.
-* **Hymn of Rebirth** (LEG) compiles `any_graveyard` while its derived spec says
-  own-graveyard-only, so the cast is refused outright. The only such card in the
-  pool; belongs with the "graveyard target" item.
+* ~~**Hymn of Rebirth** compiles `any_graveyard` while its derived spec says
+  own-graveyard-only, so the cast is refused outright.~~ *Fixed 2026-08-31.*
+  **ICE, not LEG** — and it did not belong with the "graveyard target" item
+  below, which is CR 608.2b's fizzle and was never about a derivation.
+  `own_graveyard_only` was a *constant* in `_reanimation_spec`; the payload
+  already knew. Three more places had the same seat baked in and only the widened
+  target could reach them: `_validate_cast_targets` refused every seat but the
+  caster's, `_reanimate_creature_to_battlefield` recorded no owner (CR 108.3 —
+  the creature would have died into the reanimator's graveyard), and the
+  unnamed-slot fallback searched the caster's pile, so an AI announcement
+  resolved and reanimated nothing. Whole-pool spec differential: this card alone.
+  Two residuals, both with reproductions, both deliberately not taken:
+  * **CR 608.2b's graveyard decline is right about its own case and over-broad
+    in practice.** The stated reason is the ambiguous one — two copies of one
+    card in one graveyard are one `CardDefinition`, so resolution clamps. The
+    *unambiguous* case is answerable and answered wrong: with the chosen card
+    gone from the pile entirely, `graveyard_index_of` returns None and
+    `chosen_graveyard_index` falls through to the stale index, which now names a
+    different card. Exile the Serra Angel a Resurrection targeted and it
+    reanimates the Grizzly Bears beneath it. The docstring's "this can only turn
+    a wrong answer into a right one" is false for that path.
+  * **Two cast-side graveyard targets reach no gate at all.** `cast_target_refusal`
+    excludes `graveyard_creature` and `_validate_cast_targets`'s arm keys on the
+    *primary* instruction kind, so a spell whose targeting sits inside a
+    `sequence` — Fungal Rebirth, Experimental Overload — accepts an announcement
+    naming an opponent's graveyard and re-points it at the caster's own. Only
+    Fungal Rebirth is genuinely targeted, and the web picker never offers the
+    illegal choice, so it is engine-level laxity rather than a reachable misplay.
 * **Five handler paths still resolve by index alone**, reached today only by
   instants and so caught by the CR 608.2b gate first. The next *activated*
   ability printed with "return target creature to its owner's hand" walks in.

@@ -1365,6 +1365,16 @@ class EffectsMixin:
         applied here as well as at announcement for the reason every filter is
         applied twice: a picker and a resolution that disagree are a target the
         player may announce and the effect then declines to affect.
+
+        **The graveyard it came out of is remembered when it is not the
+        caster's.** "Put target creature card from **a** graveyard onto the
+        battlefield **under your control**" (Hymn of Rebirth) is the one printed
+        phrase here that crosses seats, and CR 108.3 says the card is still its
+        owner's — so without the record it would die into the *reanimator's*
+        graveyard, ready to be reanimated again by the player who never owned
+        it. The Aura printing of the same effect (Animate Dead, in
+        ``mixins/oracle_instructions.py``) has recorded it all along; this is
+        the same line for the spell printing.
         """
         controller_index = self.players.index(caster)
 
@@ -1372,6 +1382,17 @@ class EffectsMixin:
             if card.primary_type != "creature":
                 return False
             return card_filter is None or card_filter(card)
+
+        def arrive(card, owner_index: int) -> "Permanent":
+            arrival = Permanent(card=card)
+            # CR 400.3: where it goes when it next leaves is a question about
+            # its owner, and the base controller answers it everywhere else in
+            # this pool because everything else enters under its owner's
+            # control. Here the two differ by construction.
+            if owner_index != controller_index:
+                arrival.metadata["owner_player_index"] = owner_index
+            self._put_permanent_onto_battlefield(controller_index, arrival, None)
+            return arrival
 
         # "Return target creature card from your graveyard" (Resurrection): honor the
         # creature the caster chose (Rule 601.2c) instead of always grabbing the
@@ -1383,17 +1404,14 @@ class EffectsMixin:
             and 0 <= target_permanent_index < len(source.graveyard)
             and eligible(source.graveyard[target_permanent_index])
         ):
-            revived = source.graveyard.pop(target_permanent_index)
-            arrival = Permanent(card=revived)
-            self._put_permanent_onto_battlefield(controller_index, arrival, None)
-            return arrival
+            return arrive(
+                source.graveyard.pop(target_permanent_index),
+                self.players.index(source),
+            )
         # Fallback (AI / legacy callers with no explicit choice): first creature.
         for idx, card in enumerate(caster.graveyard):
             if eligible(card):
-                revived = caster.graveyard.pop(idx)
-                arrival = Permanent(card=revived)
-                self._put_permanent_onto_battlefield(controller_index, arrival, None)
-                return arrival
+                return arrive(caster.graveyard.pop(idx), controller_index)
         return None
 
     def _bounce_target_creature(self, permanent: "Permanent | None") -> bool:

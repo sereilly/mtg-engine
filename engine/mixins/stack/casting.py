@@ -1610,8 +1610,35 @@ class SpellCastingMixin:
             # "target card" — any type (any_card in the parsed payload). Only
             # enforce the ownership/index check when the caster made an explicit
             # graveyard pick; an untargeted cast just needs a legal card there.
+            #
+            # **Whose graveyard is the payload's answer, not this arm's.** "Put
+            # target creature card **from a graveyard** onto the battlefield"
+            # (Hymn of Rebirth) lowers to ``any_graveyard``, and the handler
+            # already reads the named seat's pile; this arm refused the seat
+            # anyway, so the one card in the pool printing the phrase could not
+            # be cast at a card in an opponent's graveyard at all. The seats
+            # searched here are the same ones ``_enumerate_graveyard_creatures``
+            # offers for the derived spec — the picker's list and the re-check
+            # are one answer (idiom #9).
             caster = self.players[caster_index]
-            any_card = bool(primary.payload.get("any_card"))
+            any_graveyard = bool(primary.payload.get("any_graveyard"))
+            sources = list(self.players) if any_graveyard else [caster]
+            # The pile the caller pointed at: the named seat's when the phrase
+            # reads any graveyard, the caster's own otherwise. Resolved once and
+            # asked by both branches, because "whose graveyard" is one question
+            # and two copies of the answer is how they come to disagree.
+            wrong_seat = (
+                not any_graveyard
+                and target_player_index is not None
+                and target_player_index != caster_index
+            )
+            named = (
+                self.players[target_player_index]
+                if any_graveyard
+                and target_player_index is not None
+                and 0 <= target_player_index < len(self.players)
+                else caster
+            )
             targets_desc = primary.payload.get("targets") or {}
             several = (
                 isinstance(targets_desc, dict)
@@ -1629,26 +1656,28 @@ class SpellCastingMixin:
                     if isinstance(target_permanent_index, list)
                     else ([] if target_permanent_index is None else [target_permanent_index])
                 )
-                if slots and target_player_index is not None and target_player_index != caster_index:
+                if slots and wrong_seat:
                     return False, f"no valid target for {card.name}"
                 if len(slots) > targets_desc["count"]:
                     return False, f"too many targets for {card.name}"
                 for slot in slots:
-                    if not isinstance(slot, int) or not (0 <= slot < len(caster.graveyard)):
+                    if not isinstance(slot, int) or not (0 <= slot < len(named.graveyard)):
                         return False, f"no valid target for {card.name}"
-                    if not graveyard_card_matches(primary.payload, caster.graveyard[slot]):
+                    if not graveyard_card_matches(primary.payload, named.graveyard[slot]):
                         return False, f"no valid target for {card.name}"
             elif isinstance(target_permanent_index, int):
-                if target_player_index is not None and target_player_index != caster_index:
+                if wrong_seat:
                     return False, f"no valid target for {card.name}"
-                if not (0 <= target_permanent_index < len(caster.graveyard)) or (
+                if not (0 <= target_permanent_index < len(named.graveyard)) or (
                     not graveyard_card_matches(
-                        primary.payload, caster.graveyard[target_permanent_index]
+                        primary.payload, named.graveyard[target_permanent_index]
                     )
                 ):
                     return False, f"no valid target for {card.name}"
             elif not any(
-                graveyard_card_matches(primary.payload, c) for c in caster.graveyard
+                graveyard_card_matches(primary.payload, c)
+                for player in sources
+                for c in player.graveyard
             ):
                 return False, f"no valid target for {card.name}"
 

@@ -394,9 +394,11 @@ def _narrowing_flags(source: dict) -> dict:
 #
 # The flags beside a kind describe the same thing the kind's *handler* does, so
 # they are read off the handler rather than off the card. `reanimate_creature`
-# calls `_reanimate_creature_to_battlefield(caster, caster, …)` — always the
-# caster's own graveyard — so `own_graveyard_only` belongs to the kind and not
-# to whether the words "your graveyard" happen to appear.
+# is the worked example and also the caveat: its handler reads the caster's own
+# graveyard *unless* the payload says `any_graveyard`, in which case it reads
+# the graveyard of the seat the caster named. So `own_graveyard_only` belongs to
+# the kind **and its payload** — never to whether the words "your graveyard"
+# happen to appear, which would be the text cascade this module replaced.
 #
 # One table, consulted by the cast side and the activation side alike: what an
 # instruction targets is a property of the instruction, not of whether a spell
@@ -955,15 +957,27 @@ def _cast_permission_spec(payload: dict) -> dict | None:
 def _reanimation_spec(payload: dict) -> dict:
     """"Return target creature card from your graveyard to the battlefield",
     narrowed by the colours the phrase prints (Dreams of the Dead's "white or
-    black").
+    black") and by **whose graveyard** the printed phrase reads.
 
     Derived rather than a fixed dict for :func:`_graveyard_return_spec`'s
     reason: the handler re-checks the same narrowing against the same predicate
     (``graveyard_card_matches``), so a picker that offered more would be
     offering choices the resolution then declines — and one that offered fewer
     would take a legal choice away.
+
+    ``own_graveyard_only`` is the second half of that and was a constant here,
+    which is the same failure one key over. "Put target creature card **from a
+    graveyard** onto the battlefield under your control" (Hymn of Rebirth) is
+    lowered with ``any_graveyard``, and its handler already reads the named
+    seat's graveyard — so the flag was the derivation disagreeing with the
+    program it is derived from, and the disagreement cost the card every target:
+    with the only creature card in an opponent's pile, ``_enumerate_targets``
+    returned nothing and the cast was refused outright. The payload is the
+    evidence, exactly as the colours beside it are.
     """
-    spec: dict = {"kind": "graveyard_creature", "own_graveyard_only": True}
+    spec: dict = {"kind": "graveyard_creature"}
+    if not payload.get("any_graveyard"):
+        spec["own_graveyard_only"] = True
     colors = tuple(payload.get("colors") or ())
     if colors:
         spec["graveyard_colors"] = list(colors)
