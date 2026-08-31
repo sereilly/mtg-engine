@@ -1208,9 +1208,12 @@ def test_611_3a_a_whose_turn_static_switches_at_the_turn_boundary():
 
     The engine writes a conditional grant into a channel that
     ``_recalculate_lord_buffs`` clears and rebuilds, and every *other* recompute
-    is driven by a board change. A turn passing is not one — so the keyword
-    stayed granted on the opponent's turn, with the card reporting supported and
-    nothing failing.
+    is driven by a board change — a turn passing is not one. The untap step
+    recomputes a moment later, so the headless flow was right by the time anyone
+    had priority; what was stale is the window between the turn beginning and
+    that recompute, which ``web/turn_steps._begin_turn`` returns to the client
+    inside (Time Vault, Winter Orb, Old Man of the Sea). This asserts the
+    bookkeeping itself, because that is the moment the client can observe.
     """
     radha = _mk_card(
         "Radha, Heart of Keld",
