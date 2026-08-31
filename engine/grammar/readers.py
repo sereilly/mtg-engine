@@ -65,3 +65,26 @@ def accept_source_reference(stream: TokenStream) -> bool:
     return False
 
 
+def accept_source_reference_spec(stream: TokenStream):
+    """The same reference, as the spec that says **which word was printed**.
+
+    :func:`accept_source_reference` collapses the three spellings, which is
+    right for a caller asking only about identity. A caller building a
+    condition node needs one thing more: a bare "it" is a *pronoun*, and after
+    a trigger whose condition named an object it means that object rather than
+    the source (``rebinding.rebind_pronoun_to_event_subject``, which finds a
+    pronoun by its quantifier). "This creature" and the card's own name are not
+    pronouns and keep ``"this"``, so nothing rebinds them.
+
+    Returns None with the cursor untouched when no reference was there.
+    """
+    if stream.at_word("it"):
+        stream.advance()
+        return ast.TargetSpec("it", ast.ObjectFilter(is_source=True))
+    mark = stream.mark()
+    if accept_source_reference(stream):
+        return ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
+    stream.reset(mark)
+    return None
+
+

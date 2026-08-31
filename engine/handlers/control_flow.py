@@ -28,9 +28,10 @@ from ..oracle_types import PER_OBJECT_SEAT_RECORDS, OracleInstruction
 from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
-from ._common import flip_coin, permanent_matches_filter
+from ._common import attached_host, flip_coin, permanent_matches_filter
 from .registry import effect_handler
 from ..mana_payment import mana_cost_label
+from ..turn_state import attacked_this_turn
 
 if TYPE_CHECKING:
     from ..game import Game
@@ -376,10 +377,24 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
 
     if kind == "is_state":
         source = context.source_permanent
+        if payload.get("subject") == "attached":
+            # "…if **it** didn't attack this turn", printed on an Aura and
+            # asked of the creature it enchants (Aggression). CR 613/303.4: the
+            # Aura's own state is not what the sentence is about, and with the
+            # host gone there is nothing to ask — False, which is the direction
+            # that does not destroy anything.
+            source = attached_host(game, source)
         if source is None:
             return False
         state = payload.get("state")
-        value = bool(getattr(source, state, False)) if state else False
+        if state == "attacked_this_turn":
+            # A *record* of the turn rather than a field on the permanent, so
+            # `getattr` would answer False forever and Aggression would destroy
+            # a creature that attacked. One reader, beside the stamp
+            # (`engine/turn_state.py`).
+            value = attacked_this_turn(source)
+        else:
+            value = bool(getattr(source, state, False)) if state else False
         return (not value) if payload.get("negated") else value
 
     if kind == "started_turn_state":

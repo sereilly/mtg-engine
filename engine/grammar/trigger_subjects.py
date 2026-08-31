@@ -65,6 +65,63 @@ def _accept_ability_activated_tail(stream: TokenStream) -> bool:
 
 
 
+#: The phase steps a trigger can name **by way of the permanent the source is
+#: attached to** — "at the beginning of the upkeep of enchanted creature's
+#: controller" (Feedback, Wanderlust, Dance of the Dead), "…of the end step of
+#: enchanted creature's controller" (Aggression). One printed shape with the
+#: step word as its parameter, because the step is what differs and nothing
+#: else is: which seat the trigger fires on is read off the attachment either
+#: way, by ``upkeep_trigger_seat_matches`` and its end-step twin.
+_ATTACHED_STEP_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("upkeep",), "upkeep_enchanted_controller"),
+    (("end", "step"), "end_step_enchanted_controller"),
+)
+
+#: The types an Aura or Equipment may say it is attached to in such a clause.
+#: The set the legacy condition table admits, written out rather than left open
+#: so the two front ends name the same events.
+_ATTACHED_STEP_NOUNS = ("creature", "artifact", "enchantment", "land")
+
+
+def _parse_attached_step_event(
+    stream: TokenStream, word: str
+) -> "ast.TriggerEvent | None":
+    """"At the beginning of the <step> of enchanted <noun>'s controller, …".
+
+    A production rather than four more rows of ``triggers._AT_EVENTS``, and the
+    **subject** is why — the same reason ``_parse_attached_combat_event`` is
+    one. A table row builds an event with no subject, and the effect behind
+    this one says "destroy that creature **if it** didn't attack this turn":
+    with no subject on the event, ``rebinding`` leaves the pronoun pointing at
+    the ability's own source, and the Aura would ask whether *it* attacked.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("the", "beginning", "of", "the"):
+        stream.reset(mark)
+        return None
+    for step, kind in _ATTACHED_STEP_EVENTS:
+        step_mark = stream.mark()
+        if not stream.accept_phrase(*step):
+            continue
+        if not stream.accept_phrase("of", "enchanted"):
+            stream.reset(step_mark)
+            continue
+        noun = stream.peek_word()
+        if noun not in _ATTACHED_STEP_NOUNS:
+            stream.reset(step_mark)
+            continue
+        stream.advance()
+        if not stream.accept_phrase("'s", "controller"):
+            stream.reset(step_mark)
+            continue
+        return ast.TriggerEvent(
+            kind, word,
+            subject=ast.ObjectFilter(is_enchanted=True, card_types=(noun,)),
+        )
+    stream.reset(mark)
+    return None
+
+
 #: The combat events an Aura or Equipment watches its host for. Both are
 #: events ``_WHENEVER_EVENTS`` already holds for "this creature", read here
 #: about the attached permanent instead — one kind per event, because whose

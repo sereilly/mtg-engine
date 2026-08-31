@@ -93,6 +93,18 @@ __all__ = [
 #: attack. Overwritten on each attack: only the latest one can be "last turn".
 ATTACKED_ON_SEAT_TURN_KEY = "attacked_on_seat_turn"
 
+#: The metadata key for the *current* turn's attack (CR 508.1), stamped by the
+#: declare-attackers step and swept at cleanup with the rest of the turn's
+#: marks. It is not a field on ``Permanent``, which is why it needs a reader:
+#: every caller asking "did it attack this turn?" through ``getattr`` gets
+#: False forever, and that is a card that acts as though nothing ever attacked.
+ATTACKED_THIS_TURN_KEY = "attacked_this_turn"
+
+
+def attacked_this_turn(permanent) -> bool:
+    """Whether *permanent* has been declared as an attacker this turn."""
+    return bool(permanent.metadata.get(ATTACKED_THIS_TURN_KEY))
+
 
 def record_attack(permanent, seat: int, seat_turn: int) -> None:
     """Stamp that *permanent* attacked on *seat*'s turn number *seat_turn*."""

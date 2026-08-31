@@ -650,6 +650,15 @@ def aura_compiled_trigger_claim(normalized_line: str, card_name: str = "") -> st
     # can actually play.
     if cond in _ORDINARY_UPKEEP_SEATS and kind in EFFECT_HANDLERS:
         return "ordinary upkeep trigger (CR 603.3) — phases/upkeep_step.py"
+    from .phases.end_step import END_STEP_CONDITIONS
+
+    # The end step's own table, asked the way the upkeep step's is one line up.
+    # "At the beginning of the end step of enchanted creature's controller,
+    # destroy that creature if it didn't attack this turn" (Aggression) is a
+    # CR 603.3 trigger with an ordinary handler behind it, and the end step
+    # enqueues every condition in that set whatever the effect turned out to be.
+    if cond in END_STEP_CONDITIONS and kind in EFFECT_HANDLERS:
+        return "end-step trigger (CR 603.3) — phases/end_step.py"
     return None
 
 

@@ -42,7 +42,37 @@ END_STEP_DID_NOT_ATTACK_KINDS = frozenset({"end_step_damage_if_not_attacked"})
 #: alone.
 END_STEP_SELF_CONDITION = "end_step_self"
 END_STEP_EACH_CONDITION = "end_step"
-END_STEP_CONDITIONS = frozenset({END_STEP_SELF_CONDITION, END_STEP_EACH_CONDITION})
+
+#: "At the beginning of the end step of **enchanted creature's controller**"
+#: (Aggression). A third scope, and one no seat comparison on the *source* can
+#: answer: the seat is whoever controls the permanent the Aura is attached to,
+#: which is on the attachment record. The upkeep step's
+#: ``upkeep_enchanted_controller`` is the same clause one step earlier and is
+#: scoped the same way — see :func:`end_step_trigger_seat_matches`.
+END_STEP_ENCHANTED_CONTROLLER_CONDITION = "end_step_enchanted_controller"
+END_STEP_CONDITIONS = frozenset({
+    END_STEP_SELF_CONDITION,
+    END_STEP_EACH_CONDITION,
+    END_STEP_ENCHANTED_CONTROLLER_CONDITION,
+})
+
+
+def end_step_trigger_seat_matches(game, permanent, cond: str, player_index: int) -> bool:
+    """Whether a trigger of *cond* on *permanent* fires on *player_index*'s end step.
+
+    Only the attached scope answers anything here; the two ordinary conditions
+    were already scoped by the scan that found them. One reader for the loop
+    below and for the support gate in ``engine/auras.py``, so what the engine
+    claims it can fire and what it actually fires cannot drift — which is the
+    pairing ``upkeep_trigger_seat_matches`` keeps one step earlier.
+    """
+    if cond != END_STEP_ENCHANTED_CONTROLLER_CONDITION:
+        return True
+    attached = permanent.metadata.get("attached_to")
+    return (
+        attached is not None
+        and game.controller_index_of(attached) == player_index
+    )
 
 #: Every instruction kind an ``end_step`` trigger can be dispatched on *by kind*.
 #: The fourth scan below is keyed on a payload **shape** instead and so has no
@@ -192,7 +222,21 @@ class EndStepMixin:
         )) + list(iter_triggered_abilities(
             self,
             condition_kinds={END_STEP_EACH_CONDITION},
-        ))
+        )) + [
+            # The attached scope, scanned over every seat and then narrowed by
+            # the attachment: the Aura's controller and the enchanted
+            # permanent's controller need not be the same player (Aggression is
+            # printed to be put on an *opponent's* creature), so the seat this
+            # trigger answers to is not the one holding the Aura.
+            found for found in iter_triggered_abilities(
+                self,
+                condition_kinds={END_STEP_ENCHANTED_CONTROLLER_CONDITION},
+            )
+            if end_step_trigger_seat_matches(
+                self, found[1],
+                END_STEP_ENCHANTED_CONTROLLER_CONDITION, player_index,
+            )
+        ]
         for controller_index, permanent, trig in gated:
             if trig.instruction is None:
                 continue

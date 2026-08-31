@@ -38,6 +38,7 @@ from .trigger_subjects import (
     _accept_ability_activated_tail,
     _parse_ability_activated_event,
     _parse_attached_combat_event,
+    _parse_attached_step_event,
     _parse_named_subject_tap_event,
 )
 from .vocabulary import (
@@ -194,22 +195,13 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # words name — idiom 1's rule that a condition narrowed on one side only is
     # a card firing on the wrong event.
     ("upkeep_each", ("the", "beginning", "of", "each", "opponent", "'s", "upkeep")),
-    # An Aura firing on the upkeep of whoever controls what it enchants
-    # (Feedback, Wanderlust, Warp Artifact). Written out per enchanted type
-    # rather than as "enchanted <any noun>'s controller" so the set stays
-    # exactly the one the legacy condition table admits — `enchanted land's
-    # All four attached types read the same condition — the deal_damage handler
-    # (phases/upkeep_effects.py) reads `attached_to`, not the enchanted type —
-    # so Cursed Land's "enchanted land's controller" is one of them now, and the
-    # bespoke enchant-land pass it used to need is gone.
-    ("upkeep_enchanted_controller",
-     ("the", "beginning", "of", "the", "upkeep", "of", "enchanted", "creature", "'s", "controller")),
-    ("upkeep_enchanted_controller",
-     ("the", "beginning", "of", "the", "upkeep", "of", "enchanted", "artifact", "'s", "controller")),
-    ("upkeep_enchanted_controller",
-     ("the", "beginning", "of", "the", "upkeep", "of", "enchanted", "enchantment", "'s", "controller")),
-    ("upkeep_enchanted_controller",
-     ("the", "beginning", "of", "the", "upkeep", "of", "enchanted", "land", "'s", "controller")),
+    # An Aura firing on the upkeep — or the end step — of whoever controls what
+    # it enchants (Feedback, Wanderlust, Warp Artifact, Aggression) is
+    # `trigger_subjects._parse_attached_step_event`, tried before this table.
+    # It left because the event needs a **subject**: the phrase names the
+    # permanent the source is attached to, and a bare pronoun in the effect
+    # behind it is a back-reference to that permanent rather than to the Aura.
+    # A table row cannot carry one.
     ("upkeep_chosen", ("the", "beginning", "of", "the", "chosen", "player", "'s", "upkeep")),
     # "Your draw step" beside "each player's", the same pair as the upkeep two
     # above and for the same reason: the scope is what the dispatcher reads, and
@@ -810,6 +802,9 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         stream.reset(mark)
         return _parse_quantified_tap_event(stream)
     if stream.accept_word("at"):
+        attached_step = _parse_attached_step_event(stream, "at")
+        if attached_step is not None:
+            return attached_step
         for kind, phrase in _AT_EVENTS:
             if stream.accept_phrase(*phrase):
                 return ast.TriggerEvent(kind, "at")

@@ -1801,4 +1801,89 @@ def test_a_cloaked_attacker_assigns_no_combat_damage(set_pool):
     assert combat_damage_assigned_by(bear) == 0
 
 
+def _aggression_board(set_pool):
+    """P1's Aggression on P2's bear — the way the card is printed to be used.
+
+    The trigger's seat is the *enchanted* creature's controller, not the Aura's,
+    so putting the two on opposite sides is what the scoping is about.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    aggression = Permanent(card=pool["Aggression"])
+    p1 = PlayerState(name="P1", battlefield=[aggression], life=20)
+    p2 = PlayerState(name="P2", battlefield=[bear], life=20)
+    game = Game(players=[p1, p2])
+    attach_aura(aggression, bear)
+    game._settle()
+    _nosick(bear)
+    return game, bear, aggression
+
+
+def test_aggression_grants_first_strike_and_trample(set_pool):
+    game, bear, _ = _aggression_board(set_pool)
+
+    assert bear.has_keyword("first strike")
+    assert bear.has_keyword("trample")
+
+
+def test_aggression_destroys_a_creature_that_sat_out_its_controllers_end_step(set_pool):
+    game, bear, _ = _aggression_board(set_pool)
+
+    game.active_player_index = 1
+    game.resolve_end_step(1)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert bear not in list(game.controlled_by(game.players[1]))
+    assert [card.name for card in game.players[1].graveyard] == ["Balduvian Bears"]
+
+
+def test_aggression_spares_a_creature_that_attacked(set_pool):
+    """CR 603.4's gate read off the *enchanted* creature. Asked of the Aura it
+    would always answer "didn't attack" — an Aura never does — and the card
+    would destroy its host every turn."""
+    game, bear, _ = _aggression_board(set_pool)
+
+    game.active_player_index = 1
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(1, [0], defending_player_index=0)[0]
+    game.resolve_end_step(1)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert bear in list(game.controlled_by(game.players[1]))
+
+
+def test_aggression_fires_on_the_hosts_controllers_end_step_and_no_other(set_pool):
+    """The seat is whoever controls the enchanted creature (CR 109.5 does not
+    reach it — the clause names the *host's* controller), so the Aura's own
+    controller's end step must leave the creature alone."""
+    game, bear, _ = _aggression_board(set_pool)
+
+    game.active_player_index = 0
+    game.resolve_end_step(0)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert bear in list(game.controlled_by(game.players[1]))
+
+
+def test_a_detached_aggression_destroys_nothing(set_pool):
+    from engine.auras import detach_aura
+
+    game, bear, aggression = _aggression_board(set_pool)
+    detach_aura(aggression, bear)
+    game._settle()
+
+    game.active_player_index = 1
+    game.resolve_end_step(1)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert bear in list(game.controlled_by(game.players[1]))
+    assert not bear.has_keyword("first strike")
+
+
 # --- end W2G4 ---

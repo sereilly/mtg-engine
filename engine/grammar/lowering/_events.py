@@ -435,7 +435,14 @@ def _chosen_cast_amount(
 #: the firing event's object (Hooded Blightfang's damaged planeswalker) and
 #: under most events is nothing at all — and a "that" resolved against the
 #: wrong one of those does not fail, it acts on a different permanent.
-ATTACHED_SUBJECT_EVENTS: frozenset[str] = frozenset({"upkeep_enchanted_controller"})
+ATTACHED_SUBJECT_EVENTS: frozenset[str] = frozenset({
+    "upkeep_enchanted_controller",
+    # "At the beginning of the end step of enchanted creature's controller,
+    # destroy **that creature** …" (Aggression). The same printed shape one
+    # step later, and the same referent — which is why the parse side reads
+    # both through one production.
+    "end_step_enchanted_controller",
+})
 
 
 def names_attached_permanent(subject, event: str | None) -> bool:

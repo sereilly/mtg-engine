@@ -213,6 +213,7 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "upkeep_self": "at the beginning of your upkeep",
     "upkeep_each": "at the beginning of each upkeep",
     "upkeep_enchanted_controller": "at the beginning of the upkeep of enchanted creature's controller",
+    "end_step_enchanted_controller": "at the beginning of the end step of enchanted creature's controller",
     "upkeep_chosen": "at the beginning of the chosen player's upkeep",
     "draw_step_self": "at the beginning of your draw step",
     "draw_step_each": "at the beginning of each player's draw step",
