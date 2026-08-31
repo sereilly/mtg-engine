@@ -2178,4 +2178,37 @@ def test_lim_duls_hex_damages_a_player_who_cannot_pay_either_cost(set_pool):
     game._settle()
 
     assert (p0.life, p1.life) == (19, 19)
+
+
+def test_seizures_offers_the_toll_to_the_creatures_controller(set_pool):
+    """"Whenever enchanted creature becomes tapped, this Aura deals 3 damage to
+    that creature's controller unless that player pays {3}."
+
+    The seat is "that **creature's** controller", which the tap announcement
+    freezes under its own key — where an upkeep or a cast freezes "that
+    player". The lowering named the second key without asking which event it
+    was under, so the handler found no seat and this Aura did nothing at all,
+    on every tap, since it was printed.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    seizures = Permanent(card=pool["Seizures"])
+    bears = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", battlefield=[seizures], life=20)
+    p1 = PlayerState(name="P1", battlefield=[bears], life=20)
+    game = Game(players=[p0, p1])
+    attach_aura(seizures, bears)
+
+    game.become_tapped(bears)
+    game._settle()
+
+    owed = [c for c in game.pending_choices if c.kind == "optional_pay"]
+    assert [c.player_index for c in owed] == [1], "the creature's controller"
+    assert owed[0].data["cost"] == {"generic": 3}
+
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+
+    assert (p0.life, p1.life) == (20, 17), "unpaid, so the damage lands"
 # --- end W2G1 ---

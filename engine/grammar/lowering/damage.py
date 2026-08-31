@@ -43,6 +43,7 @@ from ._common import (
 from ._events import (
     _chosen_cast_amount,
     _EVENT_SUBJECT_CONTROLLERS,
+    _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_CONTROLLER,
     EVENT_SUBJECT_PLAYER,
@@ -162,7 +163,25 @@ def _lower_damage_unless_pay(
         # Which seat is offered the cost, as payload rather than a second kind:
         # same prompt, same damage, same decline — only the player differs, and
         # the handler reads the seat off the trigger's frozen context.
-        payload["payer"] = "event_subject_player"
+        #
+        # **Which** frozen key depends on the event, and this branch used to
+        # name one without asking. "That player" is the seat the event was
+        # *about* under an upkeep or a cast; under a tap it is the seat that
+        # controlled the object the event was about, stamped under a different
+        # key by a different fire site. Seizures ("whenever enchanted creature
+        # becomes tapped, this Aura deals 3 damage to **that creature's
+        # controller** unless that player pays {3}") compiled to the first key
+        # under an event that stamps the second, so the handler found no seat
+        # and the Aura did nothing at all — on every tap, since it was printed.
+        if event in _EVENT_SUBJECT_PLAYERS:
+            payload["payer"] = EVENT_SUBJECT_PLAYER
+        elif event in _EVENT_SUBJECT_CONTROLLERS:
+            payload["payer"] = EVENT_SUBJECT_CONTROLLER
+        else:
+            raise LoweringError(
+                f"no event named {event!r} freezes the seat 'that player' names",
+                node=node,
+            )
     return (OracleInstruction("self_damage_unless_pay", "", payload),)
 
 

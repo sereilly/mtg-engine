@@ -964,6 +964,18 @@ def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: 
             game.log.append(f"{card.name}: no recorded player, nothing offered")
             return True, "resolved"
         seat = recorded
+    elif instruction.payload.get("payer") == "event_subject_controller":
+        # "…deals 3 damage to **that creature's controller** unless that player
+        # pays {3}" (Seizures). The branch above one question over: the seat
+        # that controlled the object the event was about, frozen by the tap
+        # announcement under its own key. Read the same way, and refused the
+        # same way — a prompt aimed at a guessed seat is a card doing something
+        # it never says.
+        recorded = (context.trigger_context or {}).get("event_subject_controller")
+        if not isinstance(recorded, int) or not (0 <= recorded < len(game.players)):
+            game.log.append(f"{card.name}: no recorded player, nothing offered")
+            return True, "resolved"
+        seat = recorded
     payer = game.players[seat]
     game.arm_pending_choice(
         "optional_pay", seat,
