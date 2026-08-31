@@ -792,19 +792,58 @@ cards name-keyed. Nine hooks were retired and **none added** across four waves
 — Abu Ja'far, Power Leak, Magnetic Mountain, Animate Dead, Lord of the Pit,
 Drain Life among them. Grammar coverage rose to 87.2% parsed / 54.9% executed.
 
-**Two findings deliberately left for their own round**, both engine-wide rather
-than one card's:
+**Three follow-on rounds were taken after the promotion, and all three found
+the recorded scope wrong** — twice too narrow, once too wide. Worth reading as
+a warning about carrying a finding between rounds without re-probing it.
 
-1. `create_delayed_trigger`'s `binds_target` resolves a departed target **by
-   index**, so it binds whichever creature slid into the slot. Fourteen
-   supported cards arm one, and the handler's own fizzle branch is unreachable.
-   Reproduced with Reincarnation arming a death-watch on the wrong permanent.
-2. **The Abyss**'s "of their choice" arms no prompt at all — the affected
-   player never chooses, and the creature destroyed is whichever sits in
-   battlefield slot 0.
+1. **A departed target was resolved by index.** `pick_target_permanent` tried
+   the recorded id, then the *index*, then a scan; when the id no longer
+   resolved it fell to the index, which CR 400.7's renumbering had turned into
+   the decoy. Recorded as a delayed-trigger binding bug; it was **half that**.
+   The same resolver carried the activation's *immediate* effect, so Sandals of
+   Abdallah's islandwalk, Runesword's pump, Goblin Sappers' unblockable and the
+   two Kjeldoran pumps all landed on a permanent nobody targeted — and
+   **Merieke Ri Berit gained control of the decoy**, which the turn ending does
+   not undo. Nine cards live, all activated abilities; the five spells were
+   never reachable because `illegal_targets_refusal` is instants and sorceries
+   only, which is exactly why the hole sat where it did. Fixed at the resolver:
+   an id that resolves to *nothing* is a fizzle, an id that resolves to a
+   permanent the caller cannot use is not. `fallback_on_invalid_choice=False`
+   was already set on the broken path — it disables the scan, never the index.
+2. **"That player" was the wrong player.** Recorded as The Abyss never asking
+   the affected player to choose — true, and the second of two defects. The
+   first: `destroy_target_permanent`'s single-target tail takes a fixed keyword
+   list that has no `controller`, so `controller: "that_player"` was dropped and
+   the destroy scanned the *default opposing seat*. **Feline Sovereign** (M21)
+   shared it. The lowering's own guard against an unfrozen "that player" existed
+   but was wired only into the sweep branch. (The journal also recorded that The
+   Abyss destroys two creatures per upkeep; that was a bad reproduction —
+   `start_turn` already resolves the upkeep and the probe called it again.)
+3. **A sweep is not a target, on 17 cards rather than six.** `_from_instruction`
+   read `type_filter` off any instruction kind, but that key is the target
+   description on one kind and the affected class on another. Recorded as a
+   client-only annoyance; it was also a real engine misplay —
+   `_choose_trigger_targets` reads the same derivation and struck the ability
+   off the stack under CR 603.3c when the board held nothing. Two of the
+   seventeen are an artifact and an enchantment whose ETB sweep reached the
+   *cast* picker, so a {4} artifact was uncastable on a creature-free board.
+   Wrath of God was only accidentally right. **The ratchet that let this survive
+   ran in one direction** — a card that targets must derive a prompt — and its
+   twin now exists on both sides.
 
-Also open: 39 supported cards arm a free `optional_pay` whose headless default
-accepts every one, which nobody chose — it falls out of the affordability check.
+**Still open, with reproductions:**
+
+* **Preacher** (DRK) never asks the opponent for the choice the card gives
+  them: `derive_activation_spec` answers None, so the picker offers nothing and
+  the engine takes the opponent's slot-0 creature.
+* **Hymn of Rebirth** (LEG) compiles `any_graveyard` while its derived spec says
+  own-graveyard-only, so the cast is refused outright. The only such card in the
+  pool; belongs with the "graveyard target" item.
+* **Five handler paths still resolve by index alone**, reached today only by
+  instants and so caught by the CR 608.2b gate first. The next *activated*
+  ability printed with "return target creature to its owner's hand" walks in.
+* 39 supported cards arm a free `optional_pay` whose headless default accepts
+  every one — nobody chose that; it falls out of the affordability check.
 
 **Phase 1 (ingest and measure).** 383 printings, 373 unique cards, **346 new to
 the pool** — the largest set ingested and the first since M21 that is mostly new
