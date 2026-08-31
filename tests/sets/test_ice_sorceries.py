@@ -552,4 +552,83 @@ def test_lava_burst_lock_is_not_left_on_the_creature(set_pool):
     game._mark_damage_on_permanent(victim, 2, source=pool["Balduvian Bears"])
 
     assert victim.damage_marked == 1, "the later damage was prevented"
+
+
+def _w2g5_filter_game(set_pool, *, interactive):
+    """Essence Filter in seat 0's hand; a white and a blue enchantment out."""
+    pool = set_pool("ICE")
+    justice = Permanent(card=pool["Justice"])
+    snowfall = Permanent(card=pool["Snowfall"])
+    p1 = PlayerState(name="P1", hand=[pool["Essence Filter"]], battlefield=[justice], life=20)
+    p2 = PlayerState(name="P2", battlefield=[snowfall], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    if interactive:
+        game.interactive_seats = {0}
+    else:
+        game.interactive_seats = set()
+    game._sync_control()
+    return pool, p1, p2, justice, snowfall, game
+
+
+def test_essence_filter_offers_both_halves_of_its_or(set_pool):
+    """"Destroy all enchantments or all nonwhite enchantments."
+
+    Not CR 700.2's modes — no bulleted list, nothing announced as the spell is
+    cast — but CR 608.2d's choice made while the effect is applied. It reaches
+    the same prompt the printed "you may A or B" does, with both object phrases
+    offered.
+    """
+    pool, p1, p2, justice, snowfall, game = _w2g5_filter_game(set_pool, interactive=True)
+
+    result = game.cast_from_hand(0, "Essence Filter")
+    game._settle()
+
+    assert result.supported, result.details
+    prompt = game.pending_choice_of("mode_choice", 0)
+    assert prompt is not None, "the caster chooses at resolution"
+    assert len(prompt.data["labels"]) == 2
+
+
+def test_essence_filter_second_half_spares_the_white_enchantment(set_pool):
+    """The narrowing is the whole content of the second option, and it is the
+    half a sweep silently loses: taking it destroys the blue enchantment and
+    leaves the white one alone."""
+    pool, p1, p2, justice, snowfall, game = _w2g5_filter_game(set_pool, interactive=True)
+    game.cast_from_hand(0, "Essence Filter")
+    game._settle()
+
+    assert game.resolve_pending_choice("mode_choice", 0, mode_index=1)
+    game._settle()
+
+    assert justice in p1.battlefield, "white was excluded"
+    assert snowfall not in p2.battlefield
+
+
+def test_essence_filter_first_half_destroys_both(set_pool):
+    """And the other option really is the wider one — otherwise the choice is
+    a prompt with one answer wearing two labels."""
+    pool, p1, p2, justice, snowfall, game = _w2g5_filter_game(set_pool, interactive=True)
+    game.cast_from_hand(0, "Essence Filter")
+    game._settle()
+
+    assert game.resolve_pending_choice("mode_choice", 0, mode_index=0)
+    game._settle()
+
+    assert justice not in p1.battlefield
+    assert snowfall not in p2.battlefield
+
+
+def test_essence_filter_takes_the_first_option_headless(set_pool):
+    """A non-interactive seat answers where the prompt stands, so a headless or
+    AI game never stalls on the choice."""
+    pool, p1, p2, justice, snowfall, game = _w2g5_filter_game(set_pool, interactive=False)
+
+    game.cast_from_hand(0, "Essence Filter")
+    game._settle()
+
+    assert game.pending_choice_of("mode_choice", 0) is None
+    assert justice not in p1.battlefield
+    assert snowfall not in p2.battlefield
 # --- end W2G5 ---
