@@ -46,11 +46,28 @@ def _action_declare_blockers(session, req, seat_type):
     # just a single pre-picked defender. With zero attackers this turn nobody
     # is formally "a defending player" yet, but any non-active seat may still
     # submit a trivial no-op declaration (mirrors the engine's own check).
-    defending_players = session.game.combat_defending_players()
+    # "You choose which creatures block this combat and how those creatures
+    # block." (Melee.) CR 509.1a's chooser may be a seat that is not defending
+    # at all, so "who may act here" is asked of the engine's one answer rather
+    # than of the defender list — and the declaration is still made *for* the
+    # defending player, whose creatures block and whose costs are charged.
+    # `target_seat` names which defender when the acting seat is choosing for
+    # someone else; with none given the rail's next pending declarer is meant,
+    # which is the only unambiguous reading in a two-player game.
+    game = session.game
+    defending_players = game.combat_defending_players()
+    declaring_for = req.seat
+    if req.seat not in defending_players:
+        pending = (
+            req.target_seat if req.target_seat is not None
+            else game._pending_block_declarer()
+        )
+        if isinstance(pending, int) and game.block_chooser_index(pending) == req.seat:
+            declaring_for = pending
     if defending_players:
-        if req.seat not in defending_players:
+        if declaring_for not in defending_players:
             raise HTTPException(status_code=400, detail="only a defending player may declare blockers")
-    elif req.seat == session.game.active_player_index or not (0 <= req.seat < len(session.game.players)):
+    elif declaring_for == game.active_player_index or not (0 <= declaring_for < len(game.players)):
         raise HTTPException(status_code=400, detail="only a defending player may declare blockers")
     # Declaring blockers is the defending player's turn-based action (CR 509.1),
     # not a priority action: no spells may be cast during the assignment, and the
@@ -64,7 +81,9 @@ def _action_declare_blockers(session, req, seat_type):
         int(k): [int(a) for a in (v if isinstance(v, list) else [v])]
         for k, v in raw_pairs.items()
     }
-    ok, details = session.game.declare_blockers(req.seat, blocker_pairs)
+    ok, details = game.declare_blockers(
+        declaring_for, blocker_pairs, acting_index=req.seat
+    )
     if not ok:
         raise HTTPException(status_code=400, detail=details)
 

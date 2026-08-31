@@ -19,14 +19,31 @@ if TYPE_CHECKING:
 
 @effect_handler("untap_self")
 def untap_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Untap this creature." — and, where the sentence continues, the object
+    the clause behind it names.
+
+    The record is written **before** the tapped check and whether or not the
+    permanent was tapped, which is `untap_target_permanent`'s rule beside it and
+    for its reason: CR 611.2c fixes the set when the effect begins, so "untap it
+    **and remove it from combat**" (Melee's delayed ability) is about the
+    creature the sentence chose, not about whether the untap had anything to do.
+    A vigilance attacker was never tapped and is still "it".
+    """
     card = context.card
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
+    context.results.setdefault("untapped_permanents", []).append(
+        source_permanent.permanent_id
+    )
     if not source_permanent.tapped:
         return False, f"{card.name} is already untapped"
     game.become_untapped(source_permanent)
-    game.log.append(f"{card.name} untapped itself")
+    # The permanent, not the card: a delayed ability created by a spell
+    # (Melee's "untap it") carries the *spell* as its card and the creature it
+    # is about as its source, and "Melee untapped itself" names the wrong
+    # object in the one place a player reads what happened.
+    game.log.append(f"{source_permanent.card.name} untapped")
     return True, "resolved"
 
 

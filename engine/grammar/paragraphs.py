@@ -787,143 +787,62 @@ def _parse_random_reveal_ownership_exchange(
     return ast.RandomRevealOwnershipExchange(life)
 
 
-def _parse_pay_mana_to_prevent_upkeep_damage(
+def _parse_reassign_blockers_between_attackers(
     stream: TokenStream,
-) -> "ast.DamageReducedByPaidMana | None":
-    """``That player may pay any amount of mana. <source> deals N damage to that
-    player. Prevent X of that damage, where X is the amount of mana that player
-    paid this way.`` (Power Leak, Errant Minion.)
+) -> "ast.ReassignBlockersBetweenAttackers | None":
+    """``Choose two target blocked attacking creatures. If each of those
+    creatures could be blocked by all creatures that the other is blocked by,
+    each creature that's blocking exactly one of those attacking creatures stops
+    blocking it and is blocking the other attacking creature.`` (General
+    Jarkeld.)
 
-    Three sentences and one effect, for the reason
-    :func:`_parse_upkeep_damage_unless_cost` below reads two: the offer has no
-    printed bound, so the only thing that limits it is the damage the next
-    sentence names, and the third sentence spends the payment against it. Read
-    separately, the first would be an offer of nothing in particular and the
-    second would deal its damage before the payment existed.
+    Two sentences, one effect, for this module's reason: the second names
+    "those creatures" and "the other", and only the first supplies them. Read
+    apart, the first would announce two targets and do nothing with them and the
+    second would have nothing to read at all.
 
-    **This was Power Leak's card hook**, keyed on its whole printed line with
-    "enchanted enchantment's controller" in it — so Errant Minion, which prints
-    the identical sentence about a creature, reached nothing and compiled
-    *supported* on a substring with no instruction behind its only ability. The
-    noun is the trigger condition's, not this clause's, which is exactly what
-    makes the clause a template.
+    The noun phrase is *parsed*, not matched as words — "two target blocked
+    attacking creatures" is an ordinary counted recipient the filter parser
+    already reads — so a card printing the same relation about a narrower kind
+    of attacker is payload. Everything after it is fixed, because every word of
+    it is a way the sentence could mean something smaller: the hypothetical
+    (drop it and the swap happens between creatures that could never have been
+    declared that way), "exactly one" (drop it and a creature blocking *both*
+    chosen attackers is moved off one of them), and "is blocking the other
+    attacking creature" (drop it and the blockers are removed rather than
+    reassigned).
 
-    Every part is required and none is dropped: the offer must be unbounded
-    ("any amount of mana" — a printed cost is a different card and a different
-    handler), the damage must be a printed number (the reduction is arithmetic
-    against it), and the third sentence must name the same payment back
-    ("the amount of mana that player paid **this way**").
-
-    Refuses without consuming, so every other sentence opening "that player may
-    …" keeps its own reading.
+    Refuses without consuming when the words are not this paragraph, so every
+    other sentence opening "Choose …" keeps its own reading.
     """
     mark = stream.mark()
+    if not stream.accept_word("choose"):
+        stream.reset(mark)
+        return None
+    try:
+        subject = parse_recipient(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if subject is None or not isinstance(subject, ast.TargetSpec):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
     if not stream.accept_phrase(
-        "that", "player", "may", "pay", "any", "amount", "of", "mana"
+        "if", "each", "of", "those", "creatures", "could", "be", "blocked",
+        "by", "all", "creatures", "that", "the", "other", "is", "blocked", "by",
     ):
-        return None
-    if not stream.accept_punct("."):
-        stream.reset(mark)
-        return None
-    if not accept_source_reference(stream):
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("deals"):
-        stream.reset(mark)
-        return None
-    token = stream.peek()
-    if token is None or token.kind != NUMBER:
-        stream.reset(mark)
-        return None
-    amount = int(token.text)
-    stream.advance()
-    if not stream.accept_phrase("damage", "to", "that", "player"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_punct("."):
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase("prevent", "x", "of", "that", "damage"):
         stream.reset(mark)
         return None
     stream.accept_punct(",")
     if not stream.accept_phrase(
-        "where", "x", "is", "the", "amount", "of", "mana", "that", "player",
-        "paid", "this", "way",
+        "each", "creature", "that", "'s", "blocking", "exactly", "one", "of",
+        "those", "attacking", "creatures", "stops", "blocking", "it", "and",
+        "is", "blocking", "the", "other", "attacking", "creature",
     ):
-        stream.reset(mark)
-        return None
-    return ast.DamageReducedByPaidMana(amount)
-
-
-def _parse_upkeep_damage_unless_cost(stream: TokenStream) -> "ast.Statement | None":
-    """``<source> deals N damage to you unless you <cost>. If it deals damage to
-    you this way, tap it.`` (Mishra's War Machine, Minion of Leshrac.)
-
-    Two sentences and one effect: the tap is on the *damage* branch, so the
-    second sentence has nothing to read apart from the first.
-
-    **This was Mishra's War Machine's card hook**, keyed on its whole printed
-    line with its number and its cost baked in — so Minion of Leshrac, which
-    prints the same sentence with 5 for 3 and a sacrifice for the discard,
-    reached nothing. Both are payload here, which is the whole difference
-    between a hook and a production.
-
-    The trailing sentence is optional because it is a rider: a card printing
-    the offer without the tap is this same effect, and demanding it would refuse
-    one for text it does not have.
-    """
-    mark = stream.mark()
-    # Every printed spelling of the source, through the reader `nouns` shares
-    # upward for exactly this: a card naming itself is one SELF token, "this
-    # creature" is two words, and the trigger's effect clause arrives in the
-    # second form.
-    if not accept_source_reference(stream):
-        return None
-    if not stream.accept_word("deals"):
-        stream.reset(mark)
-        return None
-    try:
-        amount = parse_amount(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase("damage", "to", "you", "unless", "you"):
-        stream.reset(mark)
-        return None
-    discard, sacrifice = 0, None
-    if stream.accept_phrase("discard", "a", "card"):
-        discard = 1
-    elif stream.accept_word("sacrifice"):
-        # The same noun phrase the board family's "unless you sacrifice" reads,
-        # so what the offer asks for and what the charger collects cannot come
-        # to disagree about the words. "…**other than this creature**" (Minion
-        # of Leshrac) is part of that phrase and comes back on the filter as
-        # ``other_than_source`` — read rather than re-parsed, because a second
-        # reading is how the exclusion gets dropped and the card pays by
-        # sacrificing the one permanent the sentence rules out.
-        stream.accept_word("a", "an")
-        try:
-            sacrifice = parse_object_filter(stream)
-        except GrammarError:
-            stream.reset(mark)
-            return None
-    else:
-        stream.reset(mark)
-        return None
-    taps_source = False
-    rider = stream.mark()
-    if stream.accept_punct(".") and stream.accept_word("if"):
-        if not accept_source_reference(stream):
-            stream.reset(rider)
-        elif stream.accept_phrase(
-            "deals", "damage", "to", "you", "this", "way"
-        ) and stream.accept_punct(",") and stream.accept_phrase("tap", "it"):
-            taps_source = True
-        else:
-            stream.reset(rider)
-    else:
-        stream.reset(rider)
-    return ast.UpkeepDamageUnlessCost(
-        amount, discard=discard, sacrifice=sacrifice, taps_source=taps_source,
-    )
+        raise stream.error(
+            "expected the reassignment that closes the blocked-attacker swap"
+        )
+    return ast.ReassignBlockersBetweenAttackers(subject)

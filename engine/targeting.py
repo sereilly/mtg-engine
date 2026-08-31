@@ -219,7 +219,14 @@ def _narrowing_flags(source: dict) -> dict:
     from the same compiled payload; only the vocabulary differs.
     """
     flags: dict = {}
-    for key in ("attacking_only", "blocking_only", "flying_only"):
+    # `blocked_only` joined the three when General Jarkeld printed "two target
+    # **blocked** attacking creatures". Left out, the word parsed, rode the
+    # instruction's own filter to resolution and was dropped by the picker: the
+    # ability could be activated naming an unblocked attacker, which is the
+    # wider-than-printed reading CR 602.2b exists to refuse before anything is
+    # paid. `unblocked_attacker` beside it in the enumerator is Forcefield's
+    # spelling of the other half.
+    for key in ("attacking_only", "blocked_only", "blocking_only", "flying_only"):
         if source.get(key):
             flags[key] = True
     # Carried by value, not flattened to a flag: "attacking or blocking" and

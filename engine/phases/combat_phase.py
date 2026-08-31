@@ -52,6 +52,33 @@ class CombatPhaseMixin:
                 return idx
         return None
 
+    def block_chooser_index(self, defender_index: int) -> int:
+        """Which seat makes *defender_index*'s CR 509.1a choices.
+
+        Normally the defending player. "You choose which creatures block this
+        combat and how those creatures block" (Melee) substitutes another seat
+        for **every** defender — the printed sentence names no defender, and in
+        a free-for-all every player being attacked is one.
+
+        What is substituted is the *choosing*, not the declaration: CR 509.1
+        keeps the turn-based action the defending player's, their creatures are
+        the ones that block, and CR 509.1d–f still charges them the cost. So
+        ``declare_blockers`` is still called for the defender and every
+        restriction and requirement is still checked against their board — this
+        answers only "whose decision is it", which is the one thing the card
+        changes and the one thing the engine, the AI stepper and the web layer
+        each used to answer for themselves.
+
+        A chooser who has left the game (conceded, lost) falls back to the
+        defender rather than stalling a declaration nobody can make.
+        """
+        chooser = self.combat_block_chooser
+        if chooser is None or not (0 <= chooser < len(self.players)):
+            return defender_index
+        if self.players[chooser].lost:
+            return defender_index
+        return chooser
+
     def _has_any_legal_attacker(self, attacker_index: int, defender_index: int) -> bool:
         if attacker_index < 0 or attacker_index >= len(self.players):
             return False
@@ -355,6 +382,9 @@ class CombatPhaseMixin:
         self.combat_defender_piles = {}
         self.combat_attacker_piles = {}
         self.combat_defending_player_index = None
+        # "…block **this combat**" (Melee): CR 509.1a's substituted chooser
+        # lasts exactly as long as the combat phase that installed it.
+        self.combat_block_chooser = None
         self.combat_damage_resolved = False
         self.combat_first_strike_done = False
         self.combat_attackers_locked = False
@@ -520,6 +550,17 @@ class CombatPhaseMixin:
             # Camouflage (cast during this turn's declare-attackers step): the
             # defender assigns piles instead of declaring blockers.
             "camouflage_active": self.is_camouflage_active(),
+            # "You choose which creatures block this combat and how those
+            # creatures block." (Melee.) CR 509.1a's chooser per defending
+            # seat, so the client can offer the declaration to whoever actually
+            # owes it — and go on drawing the *defender's* creatures as the
+            # ones that block, which is what the card leaves alone. Every seat
+            # maps to itself in an ordinary combat, so a reader may use it
+            # unconditionally.
+            "block_chooser": {
+                seat: self.block_chooser_index(seat)
+                for seat in sorted(self.combat_defending_players())
+            },
             # Banding (CR 702.22): declared attacking bands and the per-attacker
             # blockers added by band propagation (702.22h).
             "bands": [list(band) for band in self.combat_bands],

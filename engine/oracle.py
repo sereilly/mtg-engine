@@ -385,8 +385,18 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("attackers_declared",
      r"whenever (?P<any_attacking_seat>)a player attacks with "
      r"(?P<attackers_count>[a-z]+) or more (?P<attacker_subjects>[^,]+)"),
+    # The negative lookahead is the whole of what keeps this row honest.
+    # "attacks" is unanchored here because the effect clause follows it, and
+    # "whenever a creature attacks **and isn't blocked** this combat" (Melee)
+    # answered the pattern with "creature" as the noun and the rest of the
+    # condition left unread — a condition that fires on *every* attack where
+    # the card prints one that fires on an unblocked one. Melee is a spell, so
+    # it only went hollow; a permanent printing the sentence would have played
+    # wider than it reads, silently. Refusing sends the line on to the delayed
+    # reading (`_parse_delayed_attack_trigger`), and a permanent printing it
+    # is reported unsupported naming the clause, which is the loud direction.
     ("matching_creature_attacks",
-     r"whenever (?P<attacker_subject>(?:a|another) [^,]+) attacks"),
+     r"whenever (?P<attacker_subject>(?:a|another) [^,]+) attacks(?! and isn't blocked)"),
     # Two spellings of one event: the *declaration* (CR 508.1), which is the
     # only thing that can answer "how many creatures attacked". One kind and two
     # rows, because what differs is not the event but what the card asks about
@@ -2384,10 +2394,25 @@ def _emblem_texts(instruction: OracleInstruction) -> list[str]:
 # A loyalty ability whose whole effect is a delayed triggered ability created
 # on resolution (CR 603.7): "Whenever [one or more] [nontoken] creature(s)
 # attack(s) this turn, <effect>." (Basri Ket's −2, Basri, Devoted Paladin's −1.)
+# "…**this combat**" (Melee) is the same shape over a shorter window, and
+# "attacks and isn't blocked" the same shape over a later moment of the same
+# step. Both are payload: the event comes from `_DELAYED_EVENT_PHRASES` and the
+# duration from `_DELAYED_DURATIONS`, so neither is a second regex. The event
+# alternation is ordered — "attacks and isn't blocked" before the bare
+# "attacks" it begins with — for the reason the narrowed pattern below states.
 _DELAYED_ATTACK_RE = re.compile(
     r"^whenever (?:(?P<batch>one or more )|an? )?(?P<nontoken>nontoken )?creatures? "
-    r"(?P<event>attack|block)s? this turn, (?P<effect>.+)$"
+    r"(?P<event>attacks and isn't blocked|attacks?|blocks?) "
+    r"(?P<duration>this turn|this combat), (?P<effect>.+)$"
 )
+
+#: Which delayed-trigger lifetime each printed window names (CR 603.7b's
+#: "stated duration"). Data rather than a branch, so a card printing the other
+#: window is a row: `engine/delayed_triggers.py` holds both sweeps.
+_DELAYED_DURATIONS: dict[str, str] = {
+    "this turn": "end_of_turn",
+    "this combat": "end_of_combat",
+}
 
 # The same delayed trigger with its duration printed *first* and its subject
 # narrowed: "Until end of turn, whenever a creature you control with power 2 or
@@ -2530,7 +2555,7 @@ def _parse_delayed_attack_trigger(
             "nontoken": bool(match.group("nontoken")),
             "instruction": inner[0],
             "once": False,
-            "duration": "end_of_turn",
+            "duration": _DELAYED_DURATIONS[match.group("duration")],
         },
     )
 

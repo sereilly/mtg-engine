@@ -389,7 +389,17 @@ def _advance_phase(session: Session) -> None:
             # order — _pending_block_declarer() names whichever one is up next,
             # not a single fixed defender.
             defender_index = game._pending_block_declarer()
-            if isinstance(defender_index, int) and _seat_type(session, defender_index) == "ai":
+            # CR 509.1a's chooser, which is the defending player unless "You
+            # choose which creatures block this combat" (Melee) moved it. The
+            # *declaration* is still the defender's — the engine keeps taking it
+            # under their seat — so only the seat that has to be prompted
+            # changes, and that is the seat whose kind decides whether the AI
+            # answers here or the rail waits for a person.
+            chooser_index = (
+                game.block_chooser_index(defender_index)
+                if isinstance(defender_index, int) else None
+            )
+            if isinstance(defender_index, int) and _seat_type(session, chooser_index) == "ai":
                 if not combat_state.get("blockers_locked", False):
                     if game.is_camouflage_active() and combat_state.get("attackers"):
                         # Camouflage: the AI defender divides its creatures into
@@ -397,15 +407,41 @@ def _advance_phase(session: Session) -> None:
                         ok, _ = game.resolve_camouflage_blocking(defender_index)
                     else:
                         blocker_pairs = choose_combat_blockers(game, defender_index)
-                        ok, _ = game.declare_blockers(defender_index, blocker_pairs)
+                        ok, _ = game.declare_blockers(
+                            defender_index, blocker_pairs, acting_index=chooser_index
+                        )
                         if not ok and blocker_pairs:
-                            ok, _ = game.declare_blockers(defender_index, {})
+                            ok, _ = game.declare_blockers(
+                                defender_index, {}, acting_index=chooser_index
+                            )
+                        elif not ok:
+                            # The empty declaration a substituted chooser prefers
+                            # can itself be illegal (Lure). Fall back to the
+                            # defender's own scoring rather than to the safety
+                            # valve below, which wipes every seat's blocks.
+                            ok, _ = game.declare_blockers(
+                                defender_index,
+                                choose_combat_blockers(
+                                    game, defender_index,
+                                    ignore_substitution=True,
+                                ),
+                                acting_index=chooser_index,
+                            )
                     if not ok:
                         # Safety valve: never let AI declaration failures deadlock combat progression.
                         game.combat_blockers = {}
                         game.combat_blockers_locked = True
                         game._prune_combat_state()
-                    instant_action = choose_combat_instant_cast_action(game, defender_index)
+                    # The declaration may have been made *for* this seat by
+                    # another (Melee). Casting an instant afterwards is the
+                    # defender's own priority action, so it is offered only to
+                    # an AI defender — reaching for a human's hand because an
+                    # AI chose their blocks would be the substitution spilling
+                    # past the one decision the card moves.
+                    instant_action = (
+                        choose_combat_instant_cast_action(game, defender_index)
+                        if _seat_type(session, defender_index) == "ai" else None
+                    )
                     if instant_action is not None:
                         card_to_cast = game.players[defender_index].hand[instant_action.hand_index]
                         for permanent_index in instant_action.land_tap_indices:

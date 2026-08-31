@@ -144,6 +144,7 @@ from .combat import (
     _CANT_BE_ACTIONS,
     _parse_cant_be,
     _parse_remove_from_combat,
+    _parse_choose_blocks_for_defenders,
 )
 from .game import (
     _parse_ante,
@@ -256,6 +257,7 @@ __all__ = [
     "_parse_force_chosen_creature_to_attack",
     "_parse_attacking_doesnt_tap",
     "_parse_remove_from_combat",
+    "_parse_choose_blocks_for_defenders",
     "_CANT_BE_ACTIONS",
     "_parse_cant_be",
     "_parse_ante",

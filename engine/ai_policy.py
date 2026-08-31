@@ -388,11 +388,42 @@ def choose_attackers(game: Game, attacking_player_index: int) -> list[int]:
     return sorted(chosen)
 
 
-def choose_combat_blockers(game: Game, defending_player_index: int) -> dict[int, int | list[int]]:
+def choose_combat_blockers(
+    game: Game,
+    defending_player_index: int,
+    *,
+    ignore_substitution: bool = False,
+) -> dict[int, int | list[int]]:
+    """The blocks an AI seat declares for *defending_player_index*.
+
+    ``ignore_substitution`` asks for the defender's *own* best blocks even while
+    another seat is choosing (see the Melee note below) — the fallback for when
+    the empty declaration a substituted chooser wants is itself illegal, because
+    a blocking requirement (Lure) compels a block. An illegal-but-preferred
+    answer is no answer at all, and the alternative is the safety valve that
+    wipes every seat's blocks.
+    """
     combat = game.get_combat_state()
     if game.current_turn_phase != "combat" or game.current_step != "declare_blockers":
         return {}
     if defending_player_index not in game.combat_defending_players():
+        return {}
+    # "You choose which creatures block this combat and how those creatures
+    # block." (Melee.) CR 509.1a's chooser is someone else, and the weights
+    # below score a block for the *defender* — handed to an opponent making the
+    # choice they would pick the blocks that best defend the seat they are
+    # attacking. Every printing of this substitution is cast by the attacking
+    # player, so the honest answer is the one the card is played for: block with
+    # nothing. Asked of the seam rather than of the card, so a second printing
+    # needs no weight here; if a requirement (Lure) makes the empty declaration
+    # illegal, the caller falls back to the defender's own choice, which is at
+    # least legal.
+    chooser = game.block_chooser_index(defending_player_index)
+    if (
+        not ignore_substitution
+        and chooser != defending_player_index
+        and chooser in game.opponents_of(defending_player_index)
+    ):
         return {}
 
     active_index = game.active_player_index

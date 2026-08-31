@@ -8,7 +8,8 @@ combat" is still known, then clears until-end-of-combat effects and combat state
 """
 
 from ..attack_tapping import clear_attack_tap_exemptions
-from ..delayed_triggers import fire_delayed_triggers
+from ..delayed_triggers import (expire_combat_delayed_triggers,
+                                fire_delayed_triggers)
 from ..keywords import clear_granted_ability_lines, clear_granted_keywords
 from ..models import Permanent
 from ..pt import remove_temporary_pt
@@ -60,6 +61,12 @@ class EndOfCombatStepMixin:
         # phase, so they end where every other until-end-of-combat effect above
         # does rather than waiting for cleanup.
         clear_attack_tap_exemptions(self)
+        # "Whenever a creature attacks and isn't blocked **this combat**, …"
+        # (Melee). CR 603.7b's stated duration, ending in the same sweep as
+        # every other until-end-of-combat effect above rather than waiting for
+        # cleanup — a turn may hold a second combat phase, and an entry left
+        # waiting would fire on a declaration the card never saw.
+        expire_combat_delayed_triggers(self)
         self.combat_damage_prevented_until_eot = False
         self.combat_damage_prevented_for = []
         for player in self.players:

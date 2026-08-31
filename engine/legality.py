@@ -318,7 +318,17 @@ def _ability_target_quantifiers(instruction) -> list[str]:
     activation, so an empty stack must not make the *whole* ability
     unactivatable — the draw before the flip always happens. Basri Ket's "up to
     one target creature" sits directly in the sequence, so it is seen (and, as
-    an "up_to", does not make a target mandatory)."""
+    an "up_to", does not make a target mandatory).
+
+    A **counted** announcement is mandatory too, and reported as "target" here
+    so the one caller keeps one word to test. "Choose **two** target blocked
+    attacking creatures" (General Jarkeld) parses as ``exactly`` with a count of
+    two, which is CR 601.2c's "the announcement is illegal unless every target
+    can be chosen" just as plainly as the singular word is — and left out, the
+    gate returned None and the ability was activatable naming a creature nobody
+    was blocking. A count read off X ("X target lands", Candelabra of Tawnos) is
+    deliberately *not* mandatory: X may legally be announced as zero, and there
+    is then nothing to target."""
     quantifiers: list[str] = []
 
     def walk(instr) -> None:
@@ -327,7 +337,11 @@ def _ability_target_quantifiers(instruction) -> list[str]:
         payload = getattr(instr, "payload", None) or {}
         targets = payload.get("targets")
         if isinstance(targets, dict) and "quantifier" in targets:
-            quantifiers.append(targets.get("quantifier"))
+            quantifier = targets.get("quantifier")
+            count = targets.get("count")
+            if quantifier == "exactly" and isinstance(count, int) and count >= 1:
+                quantifier = "target"
+            quantifiers.append(quantifier)
         for step in payload.get("steps") or ():
             walk(step)
 
@@ -1515,6 +1529,15 @@ class LegalityMixin:
             # reached the same answer through its own `_validate_cast_targets`
             # probe, and an *ability* narrowed this way had nothing at all.
             if spec.get("blocking_only") and not state_holds(perm, "blocking"):
+                return False
+            # "target **blocked** attacking creature" (General Jarkeld). The
+            # other end of the same relation, asked exactly as
+            # `permanent_matches_filter` asks it so the picker and the
+            # resolution cannot disagree — CR 509.1h's blocked creature is an
+            # attacking one that has blockers declared for it.
+            if spec.get("blocked_only") and not (
+                getattr(perm, "attacking", False) and getattr(perm, "blocked", False)
+            ):
                 return False
             # The Legends pinger cycle: "target attacking or blocking creature".
             # Enforced here as well as at resolution, because CR 602.2b refuses

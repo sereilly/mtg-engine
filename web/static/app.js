@@ -320,11 +320,40 @@ function isCombatAttackerDrag(payload, state = currentState) {
   return isCombatStep(state, "declare_attackers") && seat === state?.current_turn;
 }
 
+// CR 509.1a's chooser, as the client has to ask it: *which defender's blocks am
+// I declaring?* Normally the defending player makes every choice inside their
+// own declare-blockers turn-based action; "You choose which creatures block this
+// combat and how those creatures block" (Melee) moves those choices to another
+// seat and leaves everything else alone — the declaration is still the
+// defender's, their creatures block, and CR 509.1d-f still charges them.
+//
+// So the answer is a *defender seat*, not a boolean: every site below still
+// draws and indexes the defender's battlefield, and only "may I act?" changes.
+// The map comes from the server (combat.block_chooser) rather than being
+// re-derived here, and it maps every seat to itself in an ordinary combat.
+function blockDeclarationDefender(state = currentState) {
+  const combat = getCombatState(state);
+  if (!combat) return null;
+  const defender = combat.defending_player_index;
+  if (!Number.isInteger(defender)) return null;
+  // Camouflage replaces the declaration with random piles, and the engine
+  // exempts it from the substitution for that reason: there is no choice left
+  // for another seat to make, so the pile buttons stay the defender's.
+  const chooserMap = combat.camouflage_active ? null : combat.block_chooser;
+  const raw = chooserMap ? (chooserMap[defender] ?? chooserMap[String(defender)]) : undefined;
+  const chooser = Number.isInteger(raw) ? raw : defender;
+  return chooser === seat ? defender : null;
+}
+
+function iDeclareBlocks(state = currentState) {
+  return blockDeclarationDefender(state) !== null;
+}
+
 function isCombatBlockerDrag(payload, state = currentState) {
   if (!payload || payload.kind !== "permanent" || !Number.isInteger(payload.permanentIndex)) return false;
   const combat = getCombatState(state);
   if (!combat) return false;
-  return isCombatStep(state, "declare_blockers") && seat === combat.defending_player_index;
+  return isCombatStep(state, "declare_blockers") && iDeclareBlocks(state);
 }
 
 function getCombatDraftStepKey(state = currentState) {
@@ -346,7 +375,7 @@ function syncCombatDrafts(state = currentState) {
     combatBandDraft = false;
   }
 
-  if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index) {
+  if (isCombatStep(state, "declare_blockers") && iDeclareBlocks(state)) {
     combatBlockerDraft = {};
     for (const pair of combat?.blockers || []) {
       const b = Number(pair.blocker_index);
@@ -401,7 +430,7 @@ function getValidAttackerIndices(state = currentState) {
 function getValidBlockerAssignments(state = currentState) {
   if (!state || !isCombatStep(state, "declare_blockers")) return [];
   const combat = getCombatState(state);
-  if (!combat || seat !== combat.defending_player_index) return [];
+  if (!combat || !iDeclareBlocks(state)) return [];
   const pairs = Array.isArray(combat.legal_blocker_assignments) ? combat.legal_blocker_assignments : [];
   return pairs
     .map((p) => ({ blocker_index: Number(p.blocker_index), attacker_index: Number(p.attacker_index) }))
@@ -413,7 +442,7 @@ function getValidBlockerAssignments(state = currentState) {
 // extra checks below only produce a friendlier message for the common cases.
 function blockAssignmentRejectionReason(state = currentState, blockerIdx, attackerIdx) {
   const combat = getCombatState(state);
-  if (!combat || seat !== combat.defending_player_index) return "You aren't the defending player.";
+  if (!combat || !iDeclareBlocks(state)) return "Someone else is choosing this combat's blocks.";
   if (combat.camouflage_active) {
     return "Camouflage: use the pile buttons above your creatures — piles block random attackers.";
   }
@@ -461,7 +490,7 @@ function getDisplayedAttackerLinks(state = currentState) {
 function getDisplayedBlockerLinks(state = currentState) {
   const combat = getCombatState(state);
   if (!combat) return [];
-  if (isCombatStep(state, "declare_blockers") && seat === combat.defending_player_index && !combat.blockers_locked) {
+  if (isCombatStep(state, "declare_blockers") && iDeclareBlocks(state) && !combat.blockers_locked) {
     return Object.entries(combatBlockerDraft).flatMap(([blockerIndex, attackerIndices]) =>
       (Array.isArray(attackerIndices) ? attackerIndices : [attackerIndices]).map((attackerIndex) => ({
         blocker_index: Number(blockerIndex),
@@ -1168,7 +1197,7 @@ async function maybeAutoPassUntilTurnEnd(state = currentState) {
       return;
     }
 
-    if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && !combat?.blockers_locked) {
+    if (isCombatStep(state, "declare_blockers") && iDeclareBlocks(state) && !combat?.blockers_locked) {
       // Camouflage replaces blocker declaration with pile assignment; an empty
       // division (every creature out of the piles) is the "no blocks" equivalent.
       if (combat?.camouflage_active) {
@@ -1315,7 +1344,7 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
       });
       return;
     }
-    if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && !combat?.blockers_locked) {
+    if (isCombatStep(state, "declare_blockers") && iDeclareBlocks(state) && !combat?.blockers_locked) {
       // Camouflage replaces blocker declaration with pile assignment; an empty
       // division (every creature out of the piles) is the "no blocks" equivalent.
       if (combat?.camouflage_active) {
@@ -1363,7 +1392,7 @@ async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
     actionBody = { seat, action: "declare_attackers", attacker_indices: [], target_seat: defendingSeat };
   } else if (
     isCombatStep(state, "declare_blockers") &&
-    seat === combat.defending_player_index &&
+    iDeclareBlocks(state) &&
     !combat.blockers_locked &&
     combat.camouflage_active
   ) {
@@ -1374,7 +1403,7 @@ async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
     }
   } else if (
     isCombatStep(state, "declare_blockers") &&
-    seat === combat.defending_player_index &&
+    iDeclareBlocks(state) &&
     !combat.blockers_locked &&
     getValidBlockerAssignments(state).length === 0
   ) {
@@ -3327,7 +3356,7 @@ function combatPromptNeedsConfirmation(state = currentState) {
     }
     return !combat.attackers_locked;
   }
-  if (isCombatStep(state, "declare_blockers") && seat === combat.defending_player_index) {
+  if (isCombatStep(state, "declare_blockers") && iDeclareBlocks(state)) {
     if (getValidBlockerAssignments(state).length === 0) {
       return false;
     }
@@ -3395,7 +3424,7 @@ async function handleCombatPromptOk() {
     return true;
   }
 
-  if (isCombatStep(state, "declare_blockers") && seat === combat.defending_player_index && !combat.blockers_locked) {
+  if (isCombatStep(state, "declare_blockers") && iDeclareBlocks(state) && !combat.blockers_locked) {
     if (getValidBlockerAssignments(state).length === 0) {
       return false;
     }
@@ -12571,7 +12600,7 @@ function renderCombatControls(state) {
     }
   }
 
-  if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index) {
+  if (isCombatStep(state, "declare_blockers") && iDeclareBlocks(state)) {
     const validBlockerAssignments = getValidBlockerAssignments(state);
     if (validBlockerAssignments.length === 0) {
       return;
@@ -13731,8 +13760,10 @@ function renderBoard(state) {
       for (const idx of (untapInfo.selected_indices || [])) selfSelectedKeys.push(`${viewerSeat}-${idx}`);
     } else if (isCombatStep(state, "declare_attackers") && seat === state.current_turn && seat === viewerSeat) {
       for (const idx of combatAttackerDraft) selfSelectedKeys.push(`${viewerSeat}-${idx}`);
-    } else if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && seat === viewerSeat) {
-      for (const idx of Object.keys(combatBlockerDraft)) selfSelectedKeys.push(`${viewerSeat}-${Number(idx)}`);
+    } else if (isCombatStep(state, "declare_blockers") && seat === blockDeclarationDefender(state)) {
+      // The row being drawn is the *defender's*, which is where the drafted
+      // blockers are however chose them.
+      for (const idx of Object.keys(combatBlockerDraft)) selfSelectedKeys.push(`${seat}-${Number(idx)}`);
       // Highlight targeted attackers on opponent side (a blocker may target several).
       if (seat !== oppSeat) {
         for (const list of Object.values(combatBlockerDraft)) {
@@ -14358,7 +14389,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
       updateActionHint("Choose which lands untap, then press OK.");
     } else if (isCombatStep(state, "declare_attackers") && seat === state.current_turn && !combat?.attackers_locked) {
       updateActionHint("Declare attackers by clicking creatures, or use Alpha Strike to toggle all valid attackers, then press OK.");
-    } else if (isCombatStep(state, "declare_blockers") && seat === combat?.defending_player_index && !combat?.blockers_locked) {
+    } else if (isCombatStep(state, "declare_blockers") && iDeclareBlocks(state) && !combat?.blockers_locked) {
       updateActionHint("Declare blockers by dragging to attacking creatures, then press OK.");
     }
   }
@@ -14588,7 +14619,7 @@ function handleCanvasCardContextMenu({ seat: targetSeat, idx: permanentIndex, ca
     if (
       combat &&
       isCombatStep(currentState, "declare_blockers") &&
-      seat === combat.defending_player_index &&
+      iDeclareBlocks(currentState) &&
       !combat.blockers_locked &&
       blockerDraftReferences(permanentIndex, targetSeat, combat)
     ) {
@@ -14711,8 +14742,8 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       if (
         targetItem &&
         isCombatStep(currentState, "declare_blockers") &&
-        seat === getCombatState(currentState)?.defending_player_index &&
-        targetItem.seat !== seat &&
+        iDeclareBlocks(currentState) &&
+        targetItem.seat !== blockDeclarationDefender(currentState) &&
         !getCombatState(currentState)?.blockers_locked
       ) {
         // Validate the block immediately (CR 509.1b) rather than on confirm.

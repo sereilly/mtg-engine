@@ -890,3 +890,85 @@ def test_509_1b_the_same_restriction_lifts_when_the_condition_fails():
     _to_declare_blockers(game, [0])
 
     assert game.declare_blockers(1, {0: 0})[0]
+
+
+# --- W4G2: blocker control ---
+@pytest.mark.cr("509.1a", "509.1")
+def test_509_1a_an_effect_may_move_the_choices_to_another_player():
+    """CR 509.1 keeps the declaration the defending player's turn-based action;
+    CR 509.1a is the part an effect can take away — *who chooses* which of their
+    creatures block and what each one blocks (Melee).
+
+    So the substituted seat declares and the defending player may not, while the
+    creatures that block, the seat they belong to and the legality checked
+    against their board are all unchanged.
+    """
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", battlefield=[blocker]),
+    ])
+    _to_declare_blockers(game, [0])
+    game.combat_block_chooser = 0
+
+    assert game.block_chooser_index(1) == 0
+    refused, message = game.declare_blockers(1, {0: 0})
+    assert not refused
+    assert "chooses which creatures block" in message
+
+    ok, msg = game.declare_blockers(1, {0: 0}, acting_index=0)
+    assert ok, msg
+    # The declaration is still the defender's: their entry, their creature.
+    assert game.combat_blockers == {1: {0: [0]}}
+    assert blocker.blocking_attacker_index == 0
+
+
+@pytest.mark.cr("509.1a")
+def test_509_1a_the_substitution_lasts_only_as_long_as_its_combat():
+    """"…block **this combat**". The chooser is combat-scoped state, so the next
+    combat phase asks the defending player again."""
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    _to_declare_blockers(game, [])
+    game.combat_block_chooser = 0
+    assert game.block_chooser_index(1) == 0
+
+    game._enter_combat_step("beginning_of_combat")
+
+    assert game.block_chooser_index(1) == 1
+
+
+@pytest.mark.cr("509.1h", "506.4")
+def test_509_1h_removal_alone_leaves_the_attacker_blocked():
+    """"A creature remains blocked even if all the creatures blocking it are
+    removed from combat."
+
+    The removal sweep used to unblock it unconditionally. Every card in the pool
+    that reaches that sweep prints the unblocking as its own extra sentence
+    (Ydwen Efreet, False Orders, Imprison), so the rule is the default and the
+    clause is the override — checked here in both directions, because the
+    coincidence is what hid the bug.
+    """
+    attacker = Permanent(card=_mk_creature("Attacker", 2, 2))
+    blocker = Permanent(card=_mk_creature("Blocker", 2, 2))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", battlefield=[blocker]),
+    ])
+    _to_declare_blockers(game, [0])
+    assert game.declare_blockers(1, {0: 0})[0]
+
+    game._remove_blocker_from_combat(1, 0)
+
+    assert game.combat_blockers.get(1, {}) == {}
+    assert attacker.blocked is True
+
+    # …and the printed clause is what takes it back off. The block is put back
+    # by hand rather than re-declared: the step is over, and what is under test
+    # is the sweep's own two answers to the same board.
+    game.combat_blockers = {1: {0: [0]}}
+    blocker.blocking_attacker_index = 0
+    game._remove_blocker_from_combat(1, 0, frees_blocked_attackers=True)
+
+    assert attacker.blocked is False
+# --- end W4G2 ---

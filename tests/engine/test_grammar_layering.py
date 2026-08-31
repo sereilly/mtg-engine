@@ -72,6 +72,16 @@ PARSE_LAYERS = [
     "postmodifiers",
     "nouns",
     "references",
+    # The two paragraphs whose frame is an **upkeep trigger** (Power Leak /
+    # Errant Minion, Mishra's War Machine / Minion of Leshrac). Split out of
+    # `paragraphs` at the guard below, along the boundary that module already
+    # had: every other paragraph in it is read from a spell's own line or an
+    # activated ability, and these two are paragraphs only because of the
+    # upkeep frame around them. The name is the one `lowering/categories.py`
+    # already gives the kinds they lower to and `engine/phases/upkeep_effects.py`
+    # gives the registry that runs them, so the mirror re-forms rather than
+    # forking. Below `paragraphs`, and it imports nothing from it.
+    "upkeep",
     # Whole printed *paragraphs* that are one effect (Necromentia, Idol of
     # Endurance, Tawnos's Coffin, Transmute Artifact). Below `statements`
     # because none of them calls back into the sentence parser — each reads its

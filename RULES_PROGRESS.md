@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**340 / 612 tracked rules covered (55%)** — 1695 tests, 0 unannotated.
+**340 / 612 tracked rules covered (55%)** — 1698 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -603,7 +603,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **506.1** The combat phase has five steps, which proceed in order: beginning of combat, declare attackers, ... *(6 tests)*
 - [x] **506.2** During the combat phase, the active player is the attacking player; creatures that player control... *(5 tests)*
 - [x] **506.3** Only a creature can attack or block. Only a player, a planeswalker, or a battle can be attacked. *(13 tests, subrules ab)*
-- [x] **506.4** A permanent is removed from combat if it leaves the battlefield, if its controller changes, if it... *(9 tests, subrules bc)*
+- [x] **506.4** A permanent is removed from combat if it leaves the battlefield, if its controller changes, if it... *(10 tests, subrules bc)*
 - [x] **506.5** A creature attacks alone if it’s the only creature declared as an attacker during the declare att... *(5 tests)*
 - [x] **506.6** Some abilities check to see whether or not a creature “had to attack” during a particular combat ... *(2 tests)*
 - [x] **506.7** Some spells state that they may be cast “only [before/after] [a particular point in the combat ph... *(8 tests)*
@@ -626,7 +626,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(42 tests, subrules abcghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(46 tests, subrules abcghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(9 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*

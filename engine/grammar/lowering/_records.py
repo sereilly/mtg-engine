@@ -24,6 +24,7 @@ what a step of that kind always writes when it does.
 
 from __future__ import annotations
 
+from .. import ast
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS,
                              HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS)
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
@@ -218,6 +219,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # names its own attachment rather than a target, so it is a different
     # producer of the same record — what this effect just tapped.
     "tap_enchanted_creature": "tapped_permanents",
+    # "Untap **it** and remove **it** from combat." (Melee's delayed ability.)
+    # The same record from the other spelling of the same step: the sentence
+    # names its own source rather than a target, so the pronoun that follows
+    # has to read what *this* effect untapped — and the pair "untap … and
+    # remove it from combat" is the same pair Disharmony prints below with a
+    # target in front of it. Recorded whether or not the permanent was tapped:
+    # CR 611.2c fixes the set when the effect begins, so a vigilance attacker
+    # nobody tapped is still "it".
+    "untap_self": "untapped_permanents",
     # "Untap target attacking creature and remove **it** from combat. Gain
     # control of **that creature** until end of turn." (Disharmony.) The untap
     # records what it resolved — affected, not merely flipped: a vigilance
@@ -283,3 +293,20 @@ def primary_produced(kind: str) -> str | None:
     if recorded is None:
         return None
     return recorded if isinstance(recorded, str) else (recorded[0] if recorded else None)
+
+
+#: Which scratchpad key an activation **cost** writes when it is paid. The twin
+#: of ``_PRODUCES`` for the cost side of a colon, and separate from it for the
+#: same reason the two sides are separate: a cost is charged by
+#: ``engine/mixins/stack/activation.py`` rather than by an instruction, so there
+#: is no instruction kind to key it on. Land's Edge's "the discarded card" reads
+#: the record this names; a cost added here needs the activation path to record
+#: it under the same key, or the condition would compile and read nothing.
+#:
+#: Beside ``_PRODUCES`` because it is the same question about the other side of
+#: the colon, and this module is the one home for "what does a step record?".
+#: It sat in `lower.py` while that file was the only reader; the table is a
+#: registry either way, and `lower.py` is dispatch.
+_COST_PRODUCES: dict[type, str] = {
+    ast.DiscardCost: "discarded_cards",
+}

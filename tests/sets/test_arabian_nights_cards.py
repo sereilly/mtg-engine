@@ -2002,3 +2002,31 @@ def test_pyramids_modal_head_is_read_by_the_parser_not_a_regex(arn_by_name):
     ]
     # The bullets are alternatives of an ability, never cast-time modes.
     assert program.modes == ()
+
+
+# --- W4G2: blocker control ---
+def test_mijae_djinn_stops_being_an_attacking_creature_when_it_loses(arn_by_name):
+    """CR 506.4: "a creature that's removed from combat stops being an
+    attacking, blocking, blocked, and/or unblocked creature."
+
+    The handler popped the attacker map and stopped there, so the Djinn kept
+    ``attacking`` stamped True and its defending seat recorded for the rest of
+    the turn — and every filter that asks "attacking" (a pump, a sweep, a
+    picker offering "target attacking creature") went on admitting a creature
+    that had left combat. Routed through the one removal transition instead,
+    which is where the per-permanent state and the maps are kept in step.
+    """
+    attacker = Permanent(card=arn_by_name["Mijae Djinn"])
+    game = _declare_combat(
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", life=20),
+    )
+
+    with patch("engine.handlers.combat.random.random", return_value=0.9):
+        assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+        game._settle()
+
+    assert 0 not in game.combat_attackers
+    assert attacker.attacking is False
+    assert attacker.defending_player_index is None
+# --- end W4G2 ---
