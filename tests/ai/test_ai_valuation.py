@@ -249,6 +249,17 @@ def test_mana_ability_amount_reads_both_payload_shapes(all_cards):
     assert mana_ability_amount(pool["Lightning Bolt"]) is None
 
 
+def test_a_choice_between_mana_runs_is_worth_its_largest_run(catalog_by_name):
+    """"Add {U} or {C}{U}" (Adarkar Unicorn) is ``pips_alternatives`` — a
+    choice between written-out runs, which ``pips_choice``'s one (symbol,
+    count) pair per alternative cannot say. The valuation never learned the
+    key, so it fell through to the ``return 1`` floor and the AI read a
+    two-mana ability as one. Worth the largest run, because that is the
+    alternative the headless default actually takes
+    (handlers/mana._pick_mana_alternative)."""
+    assert mana_ability_amount(catalog_by_name["Adarkar Unicorn"]) == 2
+
+
 def test_a_mana_source_is_unattractive_when_mana_is_free(all_cards):
     """The named card was Black Lotus. With ``enforce_mana_costs`` off, a Mox is
     worth exactly as little and used to be worth +0.8 for being an artifact."""

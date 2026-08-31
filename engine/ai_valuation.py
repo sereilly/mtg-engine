@@ -301,6 +301,18 @@ def mana_ability_amount(card: CardDefinition) -> int | None:
         pips_choice = instruction.payload.get("pips_choice")
         if pips_choice:
             return max(int(count) for _symbol, count in pips_choice)
+        # "Add {U} or {C}{U}" (Adarkar Unicorn): a choice between written-out
+        # *runs*, so each alternative is a pip list of its own and the ability
+        # is worth the largest run — the same "best single option" reading as
+        # ``pips_choice``, and the choice the headless default actually takes
+        # (handlers/mana._pick_mana_alternative: no mana burn, so more of the
+        # same is never worse).
+        pips_alternatives = instruction.payload.get("pips_alternatives")
+        if pips_alternatives:
+            return max(
+                sum(int(count) for _symbol, count in alternative)
+                for alternative in pips_alternatives
+            )
         any_count = instruction.payload.get("any_color_count")
         if isinstance(any_count, int):
             return any_count

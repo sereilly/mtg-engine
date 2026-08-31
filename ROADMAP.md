@@ -331,16 +331,6 @@ last re-probed. Re-probe before scheduling one.
   fire site records only the `CardDefinition`, not the stack item. Fixing it
   means giving that fire site the object.
 
-- **A payload shape the AI valuation never learned.** Found by this cleanup
-  (2026-08-31) and small: `ai_valuation.mana_ability_amount` enumerates `pips`,
-  `pips_choice`, `any_color_count` and `amount`, and Ice Age added a fifth —
-  `pips_alternatives`, a choice between written-out *runs* ("Add {U} or {C}{U}",
-  Adarkar Unicorn) that `pips_choice`'s one `(symbol, count)` pair per
-  alternative cannot say. One card in the pool carries it, and the valuation
-  falls through to its `return 1` floor, so the AI reads a two-mana ability as
-  one. Idiom 3's shape in a valuation rather than a fire site: `pips_choice` has
-  three readers and `pips_alternatives` one.
-
 - **`_offer_to_seat` moves `context.target` to the offered seat and deliberately
   not `context.caster`**, so a bare imperative inside "each player may …" would
   act on the controller's board while `_action_is_takeable` tested the offered
