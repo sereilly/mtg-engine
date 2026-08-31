@@ -134,6 +134,24 @@ def _action_name_then_reveal_top_confirm(session, req, seat_type):
     if not session.game.confirm_name_then_reveal_top(req.seat, req.card_name):
         raise HTTPException(status_code=400, detail="the name could not be applied")
 
+@action_handler("graveyard_pick_for_price_confirm")
+def _action_graveyard_pick_for_price_confirm(session, req, seat_type):
+    pending = next(
+        (c for c in session.game.pending_choices_of("graveyard_pick_for_price")),
+        None,
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no graveyard pick pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.graveyard_index is None:
+        raise HTTPException(status_code=400, detail="graveyard_index is required")
+    if not session.game.confirm_graveyard_pick_for_price(
+        req.seat, req.graveyard_index
+    ):
+        raise HTTPException(status_code=400, detail="that card cannot be chosen")
+
+
 @action_handler("name_then_consult_confirm")
 def _action_name_then_consult_confirm(session, req, seat_type):
     pending = next(

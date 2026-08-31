@@ -59,6 +59,7 @@ ActionKind = Literal[
     "name_and_random_reveal_confirm",
     "name_then_reveal_top_confirm",
     "name_then_consult_confirm",
+    "graveyard_pick_for_price_confirm",
     "reorder_library_confirm",
     "scry_confirm",
     "discard_confirm",
@@ -306,6 +307,10 @@ class GameActionRequest(BaseModel):
     emblem_index: int | None = Field(default=None, ge=0)
     x_value: int | None = Field(default=None, ge=0)
     hand_index: int | None = Field(default=None, ge=0)
+    # Forgotten Lore: which card in the *caster's* graveyard the chooser
+    # picked. Its own field rather than `hand_index`, because the zone is
+    # not the answering seat's and not a hand.
+    graveyard_index: int | None = Field(default=None, ge=0)
     # "Choose two cards in your hand drawn this turn" (Sylvan Library): the
     # whole answer at once, because the prompt owes a *set* and a card at a
     # time would leave a half-made choice the engine has no state for.

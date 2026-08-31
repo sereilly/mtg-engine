@@ -541,6 +541,22 @@ def lower_statement(
             ),
         )
 
+    if isinstance(statement, ast.RepeatedGraveyardPick):
+        # "**Target opponent** chooses" — a chosen seat, which the picker has to
+        # offer and the handler has to read. Any other reference names a seat
+        # nothing chose.
+        if statement.chooser.kind != "target_opponent":
+            raise LoweringError(
+                "the repeated graveyard pick is made by the opponent this "
+                "spell targets",
+                node=statement,
+            )
+        payload: dict[str, object] = {
+            "cost": {symbol: count for symbol, count in statement.cost.pips},
+            "targets": _targets_payload(statement.chooser),
+        }
+        return (OracleInstruction("repeated_graveyard_pick", "", payload),)
+
     if isinstance(statement, ast.PutExiledCardIntoHand):
         # The producer gate every back-reference makes: "that card" names what
         # a step of this same effect exiled, and a sentence with no exile behind

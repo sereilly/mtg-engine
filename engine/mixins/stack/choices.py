@@ -36,6 +36,8 @@ from ...resumption import resume_after_answer, run_resumable
 from ...mana_payment import (generic_cost, mana_cost_label, plan_payment,
                             untapped_mana_lands)
 from ...search_filters import landing_seat, search_matches, searched_seat
+from ...handlers.zones import FORGOTTEN_PICKS
+from ...oracle_types import OracleInstruction
 from ...subject_filters import subject_matches
 
 class PendingChoicesMixin:
@@ -1923,6 +1925,84 @@ class PendingChoicesMixin:
         if not self._resolve_name_then_reveal_top(
             choice, choice.data.get("default_name", "")
         ):
+            self.discard_pending_choice(choice)
+
+    # -- An opponent picking out of your graveyard, again for each payment ---
+
+    def confirm_graveyard_pick_for_price(
+        self, player_index: int, graveyard_index: int
+    ) -> bool:
+        """Answer Forgotten Lore's "target opponent chooses a card"."""
+        return self.resolve_pending_choice(
+            "graveyard_pick_for_price", player_index,
+            graveyard_index=graveyard_index,
+        )
+
+    def _resolve_graveyard_pick_for_price(
+        self, choice: PendingChoice, graveyard_index: int
+    ) -> bool:
+        """Record the pick, then offer its price to the *other* seat.
+
+        Two seats answer alternately, which is why the loop is a chain of
+        prompts and not a Python loop: the payment is the caster's decision and
+        the pick is the opponent's, and neither is available while the other is
+        being asked.
+
+        The legal indices are re-checked against the record armed with the
+        choice rather than trusted from the wire — a client offering the whole
+        graveyard would otherwise let one card be chosen twice, which is the
+        exclusion clause deleted.
+        """
+        if graveyard_index not in (choice.data.get("legal_indices") or []):
+            return False
+        owner = self.players[int(choice.data["owner_index"])]
+        if not 0 <= graveyard_index < len(owner.graveyard):
+            return False
+        context = choice.data.get("_context")
+        instruction = choice.data.get("_instruction")
+        if context is None or instruction is None:
+            return False
+        chosen = owner.graveyard[graveyard_index]
+        context.results.setdefault(FORGOTTEN_PICKS, []).append(chosen)
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{self.players[choice.player_index].name} chose {chosen.name} "
+            f"({choice.data.get('card_name', '')})"
+        )
+        # "You may pay {G}. **If you do**, repeat this process." The offer goes
+        # to the caster through the ordinary optional-cost prompt, with the same
+        # instruction as its accept branch — so paying re-arms the pick with the
+        # exclusion set the shared context has just grown, and declining runs
+        # the sentence that ends the process.
+        cost = dict(choice.data.get("cost") or {})
+        self.arm_pending_choice(
+            "optional_pay", self.players.index(context.caster),
+            card_name=choice.data.get("card_name", ""),
+            cost=cost,
+            life=0,
+            prompt=f"Pay {mana_cost_label(cost)} to repeat?",
+            _on_accept=(instruction,),
+            _on_decline=(
+                OracleInstruction("finish_repeated_graveyard_pick", "", {}),
+            ),
+            _context=context,
+        )
+        return True
+
+    def _default_graveyard_pick_for_price(self, choice: PendingChoice) -> None:
+        """A non-interactive opponent gives up the cheapest card there is.
+
+        A stated policy, like every other default here: mana value is the one
+        ranking every card in the pool answers, and the chooser is the player
+        who does *not* want the caster to get anything back.
+        """
+        legal = list(choice.data.get("legal_indices") or [])
+        owner = self.players[int(choice.data["owner_index"])]
+        if not legal:
+            self.discard_pending_choice(choice)
+            return
+        legal.sort(key=lambda i: ((owner.graveyard[i].cmc or 0), i))
+        if not self._resolve_graveyard_pick_for_price(choice, legal[0]):
             self.discard_pending_choice(choice)
 
     # -- "Choose a card name, then consult your own library" -----------------
@@ -4598,6 +4678,25 @@ register_choice(
     action="name_then_reveal_top_confirm",
     prompt_key="name_then_reveal_top",
     blocked_detail="name a card before other actions",
+)
+
+register_choice(
+    "graveyard_pick_for_price",
+    resolve=lambda game, choice, r: game._resolve_graveyard_pick_for_price(
+        choice, r["graveyard_index"]
+    ),
+    default=lambda game, choice: game._default_graveyard_pick_for_price(choice),
+    action="graveyard_pick_for_price_confirm",
+    prompt_key="graveyard_pick_for_price",
+    blocked_detail="choose a card in that graveyard before other actions",
+    # A graveyard is a public zone (CR 400.2), so a spectator sees the offer
+    # exactly as the choosing seat does.
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The sentence after this one reads the pick, and the one after that reads
+    # the whole set of them: nothing behind this prompt may run until it is
+    # answered (CR 608.2).
+    suspends=True,
 )
 
 register_choice(

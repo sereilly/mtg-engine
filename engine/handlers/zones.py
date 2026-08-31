@@ -3437,6 +3437,102 @@ def name_then_reveal_top(game: Game, instruction: OracleInstruction, context: Or
     return True, "pending_name_then_reveal_top"
 
 
+#: Where the repeated pick keeps the cards it has already offered, on the
+#: resolution's own scratchpad. Written here and read by the prompt's resolver
+#: through the context it carries, because the loop spans several prompts and
+#: nothing on a board records a choice.
+FORGOTTEN_PICKS = "repeated_graveyard_picks"
+
+
+@effect_handler("repeated_graveyard_pick")
+def repeated_graveyard_pick(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Forgotten Lore: "Target opponent chooses a card in your graveyard. You
+    may pay {G}. If you do, repeat this process except that opponent can't
+    choose a card already chosen for Forgotten Lore. Then put the last chosen
+    card into your hand."
+
+    One round of the loop: the opponent picks, and answering that prompt offers
+    the caster the cost that buys another round. The chain runs through the
+    pending-choice queue rather than a Python loop, because two different seats
+    answer alternately and neither answer is available when this returns.
+
+    The exclusion set and the last pick live on ``context.results``, which every
+    round of the chain shares — the `optional_pay` entry carries this same
+    context, so the instruction that re-arms the prompt sees what the previous
+    rounds recorded.
+
+    Nothing left to choose ends the process, which is the other way out of it
+    besides declining: the printed "repeat" cannot repeat over an empty
+    graveyard, and the last card chosen is still put into the hand.
+    """
+    caster = context.caster
+    opponent = context.target
+    if opponent is None or opponent is caster:
+        game.log.append(f"{context.card.name}: no opponent to choose")
+        return True, "resolved"
+    already = context.results.setdefault(FORGOTTEN_PICKS, [])
+    legal = [
+        index
+        for index, card in enumerate(caster.graveyard)
+        if not any(card is taken for taken in already)
+    ]
+    if not legal:
+        _finish_repeated_graveyard_pick(game, context)
+        return True, "resolved"
+    game.arm_pending_choice(
+        "graveyard_pick_for_price", game.players.index(opponent),
+        card_name=context.card.name,
+        owner_index=game.players.index(caster),
+        legal_indices=legal,
+        cost=dict(instruction.payload.get("cost") or {}),
+        _instruction=instruction,
+        _context=context,
+    )
+    game.log.append(
+        f"{opponent.name} must choose a card in {caster.name}'s graveyard "
+        f"({context.card.name})"
+    )
+    return True, "pending_graveyard_pick_for_price"
+
+
+def _finish_repeated_graveyard_pick(game: Game, context: OracleExecutionContext) -> None:
+    """"Then put the **last chosen** card into your hand." — the pick the loop
+    stopped on, whichever way it stopped.
+
+    By identity in the caster's own graveyard: a graveyard is a list of card
+    definitions and two copies of a card are the same object, so a name match
+    would take whichever one came first.
+    """
+    caster = context.caster
+    picks = context.results.get(FORGOTTEN_PICKS) or []
+    if not picks:
+        game.log.append(f"{context.card.name}: nothing was chosen")
+        return
+    last = picks[-1]
+    for index, held in enumerate(caster.graveyard):
+        if held is last:
+            caster.graveyard.pop(index)
+            game.put_card_into_hand(caster, last)
+            game.log.append(
+                f"{caster.name} put {last.name} into their hand "
+                f"({context.card.name})"
+            )
+            return
+    game.log.append(f"{last.name} was no longer in {caster.name}'s graveyard")
+
+
+@effect_handler("finish_repeated_graveyard_pick")
+def finish_repeated_graveyard_pick(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Then put the last chosen card into your hand." (Forgotten Lore.)
+
+    The decline branch of the loop's payment offer, and its own instruction
+    because the loop can also end by running the graveyard out — two ways in,
+    one sentence.
+    """
+    _finish_repeated_graveyard_pick(game, context)
+    return True, "resolved"
+
+
 @effect_handler("put_exiled_cards_into_hand")
 def put_exiled_cards_into_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Necropotence: "Put that card into your hand at the beginning of your next

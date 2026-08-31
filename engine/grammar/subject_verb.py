@@ -67,6 +67,7 @@ from .effects import (
     _parse_put_hand_cards_on_library,
     _parse_player_puts_hand_cards_on_library,
     _parse_player_puts_whole_hand_on_library,
+    _parse_repeated_graveyard_pick,
     _parse_put_source_into_zone, _parse_remove_counter,
     _parse_remove_from_combat, _parse_return, _parse_reveal_hand, _parse_reveal_top,
     _parse_sacrifice,
@@ -783,6 +784,13 @@ def parse_subject_verb(
             to_library = _parse_player_puts_hand_cards_on_library(stream, source_spec)
             if to_library is not None:
                 return to_library
+            # "Target opponent **chooses a card in your graveyard**…"
+            # (Forgotten Lore.) Same reason as the two above: it declines
+            # without consuming, where the paragraph below expects "a card
+            # name" from its second word and would fail the line on "in".
+            repeated = _parse_repeated_graveyard_pick(stream, source_spec)
+            if repeated is not None:
+                return repeated
             return _parse_name_then_reveal_top(stream, source_spec)
         # "Each opponent sacrifices a creature" (Goremand). The AST node has
         # carried its player since it was written; only the *bare* imperative

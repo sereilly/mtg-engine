@@ -448,6 +448,112 @@ def test_mind_warp_for_zero_asks_nothing(set_pool):
 
     assert game.pending_choice_of("revealed_hand_pick", 0) is None
     assert len(p2.hand) == 3
+def _lore_game(set_pool, graveyard):
+    pool = set_pool("ICE")
+    p1 = PlayerState(
+        name="P1",
+        hand=[pool["Forgotten Lore"]],
+        graveyard=[pool[name] for name in graveyard],
+        life=20,
+    )
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    # The repetition's {G} is a real payment even with the cast cost waived:
+    # `_player_can_pay_optional` asks the board, and a seat that cannot pay
+    # declines whatever it answers.
+    p1.mana_pool["G"] = 3
+    # Queued and passed rather than cast headlessly, because *this* card is
+    # about a resolution that stops to ask: CR 608.2m puts a spell into its
+    # owner's graveyard as the **final** part of its resolution, so Forgotten
+    # Lore must not be one of the cards its own loop offers. `cast_from_hand`
+    # settles the stack in one go and would bin it between the rounds.
+    result = game.queue_from_hand(0, "Forgotten Lore", target_player_index=1)
+    assert result.supported, result.details
+    game.start_priority_window(0)
+    game.pass_priority(0)
+    game.pass_priority(1)
+    return pool, p1, p2, game
+
+
+def test_forgotten_lore_gives_you_the_card_the_opponent_chose(set_pool):
+    """"Target opponent chooses a card in your graveyard. You may pay {G}. …
+    Then put the last chosen card into your hand."
+
+    Declining the payment ends the process, and the pick it stopped on is the
+    one you keep — however little you wanted it.
+    """
+    pool, p1, p2, game = _lore_game(set_pool, ["Balduvian Bears", "Dark Ritual"])
+
+    pick = game.pending_choice_of("graveyard_pick_for_price", 1)
+    assert pick is not None, "the opponent chooses, not the caster"
+    assert sorted(pick.data["legal_indices"]) == [0, 1]
+
+    assert game.confirm_graveyard_pick_for_price(1, 0)
+    offer = game.pending_choice_of("optional_pay", 0)
+    assert offer is not None, "the price is the caster's to pay"
+
+    assert game.confirm_optional_pay(0, accept=False)
+
+    assert [card.name for card in p1.hand] == ["Balduvian Bears"]
+    # Forgotten Lore itself is there too, put in by CR 608.2n as it finished.
+    assert sorted(card.name for card in p1.graveyard) == [
+        "Dark Ritual", "Forgotten Lore",
+    ]
+
+
+def test_forgotten_lore_repeats_and_cannot_reoffer_a_chosen_card(set_pool):
+    """"…repeat this process except that opponent can't choose a card already
+    chosen for Forgotten Lore."
+
+    Without the exclusion the loop would offer the same card forever, which is
+    a different card — and one the payment could never get past.
+    """
+    pool, p1, p2, game = _lore_game(
+        set_pool, ["Balduvian Bears", "Dark Ritual", "Brown Ouphe"]
+    )
+
+    assert game.confirm_graveyard_pick_for_price(1, 0)
+    assert game.confirm_optional_pay(0, accept=True)
+
+    second = game.pending_choice_of("graveyard_pick_for_price", 1)
+    assert second is not None, "paying repeats the process"
+    assert 0 not in second.data["legal_indices"], (
+        "the card already chosen is off the list"
+    )
+
+    assert game.confirm_graveyard_pick_for_price(1, 1)
+    assert game.confirm_optional_pay(0, accept=False)
+
+    assert [card.name for card in p1.hand] == ["Dark Ritual"], (
+        "the *last* chosen card, not the first"
+    )
+    assert sorted(card.name for card in p1.graveyard) == [
+        "Balduvian Bears", "Brown Ouphe", "Forgotten Lore",
+    ]
+
+
+def test_forgotten_lore_ends_when_the_graveyard_runs_out(set_pool):
+    """The other way out of the loop: "repeat this process" over a graveyard
+    with nothing left to choose ends it, and the last pick is still kept."""
+    pool, p1, p2, game = _lore_game(set_pool, ["Balduvian Bears"])
+
+    assert game.confirm_graveyard_pick_for_price(1, 0)
+    assert game.confirm_optional_pay(0, accept=True)
+
+    assert game.pending_choice_of("graveyard_pick_for_price", 1) is None
+    assert [card.name for card in p1.hand] == ["Balduvian Bears"]
+    assert [card.name for card in p1.graveyard] == ["Forgotten Lore"]
+
+
+def test_forgotten_lore_on_an_empty_graveyard_chooses_nothing(set_pool):
+    """Nothing to choose at all is not a prompt, and nothing is put anywhere:
+    an offer with no legal answer is not an offer."""
+    pool, p1, p2, game = _lore_game(set_pool, [])
+
+    assert game.pending_choice_of("graveyard_pick_for_price", 1) is None
+    assert p1.hand == []
 # --- end W1G4 ---
 
 

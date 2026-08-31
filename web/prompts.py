@@ -295,6 +295,29 @@ def _name_then_reveal_top(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("graveyard_pick_for_price")
+def _graveyard_pick_for_price(ctx: PromptContext, choices: list) -> dict:
+    """Forgotten Lore's "target opponent chooses a card in your graveyard".
+
+    A graveyard is a public zone (CR 400.2), so the cards this offers are ones
+    the chooser may already look at — the list is the whole zone minus the
+    picks the loop has already made, which is exactly the printed exclusion.
+    """
+    choice = choices[0]
+    owner_index = int(choice.data.get("owner_index", 0))
+    graveyard = ctx.game.players[owner_index].graveyard
+    legal = [i for i in (choice.data.get("legal_indices") or []) if i < len(graveyard)]
+    return {
+        "player_seat": choice.player_index,
+        "owner_seat": owner_index,
+        "card_name": choice.data.get("card_name", ""),
+        "options": [
+            {"index": index, "card": ctx.serialize_card(graveyard[index])}
+            for index in legal
+        ],
+    }
+
+
 @prompt_renderer("name_then_consult")
 def _name_then_consult(ctx: PromptContext, choices: list) -> dict:
     """Demonic Consultation's "choose a card name".
