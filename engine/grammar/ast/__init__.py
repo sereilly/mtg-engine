@@ -88,6 +88,7 @@ from ._core import (
 )
 from .conditions import (
     Controls,
+    CountedNumber,
     EveryOf,
     IsState,
     StartedTheTurnState,
@@ -264,6 +265,7 @@ from .combat import (
 from .game import (
     Ante,
     CoinFlipStakesLoop,
+    CountObjects,
     CreateEmblem,
     GainLife,
     LifeGainCap,
@@ -365,6 +367,7 @@ __all__ = [
     "ItWas",
     "RevealedCardIs",
     "Controls",
+    "CountedNumber",
     "SacrificeExpansionPermanents",
     "DelayedSelfAction",
     "DoesntUntapWhileSourceTapped",
@@ -538,6 +541,7 @@ __all__ = [
     "ChooseColor",
     "ChooseNumber",
     "ChoosePlayerWhoCast",
+    "CountObjects",
     "FlipCoin",
     "WinGame",
     "LoseGame",

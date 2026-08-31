@@ -292,6 +292,42 @@ def _delayed_bound_subject(stream: TokenStream) -> "ast.ObjectFilter | None":
     return spec.filter
 
 
+def _parse_land_tapped_for_mana(stream: TokenStream) -> "ast.ObjectFilter | None":
+    """``a player taps <land phrase> for mana`` — the land phrase, or None.
+
+    The active-voice spelling of the event ``trigger_tables`` already reads in
+    the passive ("whenever a Mountain **is tapped** for mana"), and the same
+    event: CR 106.11's mana production, announced by the tap seam. Read here
+    rather than there because a delayed ability is created by a resolving
+    effect, so the sentence sits inside a statement rather than opening a line.
+
+    Refuses without consuming anything it can put back — the caller marks — so
+    every other "whenever …" opener keeps its reading. The noun phrase travels
+    as the ability's subject filter and is tested by the fire site, which is
+    what makes "a Mountain" payload rather than a second event.
+    """
+    if not stream.accept_phrase("a", "player", "taps"):
+        return None
+    # The indefinite article is the noun parser's caller's business everywhere
+    # in this grammar: `parse_object_filter` reads the phrase from the noun on.
+    stream.accept_word("a", "an")
+    try:
+        land = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.accept_phrase("for", "mana"):
+        return None
+    # A land, and the parser says so rather than the fire site: the seam only
+    # ever announces a land being tapped, so a phrase describing anything else
+    # would arm an ability that can never fire — and "land" is how the card says
+    # which objects it is about ("a **Mountain**" is a land type, CR 305.6).
+    if land.card_types not in ((), ("land",)) or (
+        not land.subtypes and land.card_types != ("land",)
+    ):
+        return None
+    return land
+
+
 def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.CreateDelayedTrigger | None":
     """A sentence that **creates** a delayed triggered ability (CR 603.7).
 
@@ -350,6 +386,7 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
         # "Whenever that creature is dealt damage by an attacking creature this
         # turn, …" — "this turn" is CR 603.7b's stated duration, so this one
         # fires every time for as long as it lasts.
+        after_whenever = stream.mark()
         subject = _delayed_bound_subject(stream)
         if subject is not None and stream.accept_phrase("is", "dealt", "damage", "by"):
             # The indefinite article is the noun parser's caller's business
@@ -362,6 +399,23 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
                 agent = None
             if agent is not None and stream.accept_phrase("this", "turn"):
                 event, binds, once = "bound_permanent_dealt_damage", True, False
+        if event is None:
+            # "…**whenever a player taps a Mountain for mana**, that player adds
+            # an additional {R}." (Chaos Moon's odd branch.) The one opener here
+            # that names no bound object at all: the land is described by a
+            # printed noun phrase and the ability answers to whichever one is
+            # tapped, on anybody's battlefield.
+            #
+            # Its duration is **unstated** — the card prints "until end of turn"
+            # once, in front of the whole sentence, and shares it with the anthem
+            # beside it. So the opener leaves it None and the leading-duration
+            # reader fills it in; a sentence that reaches the lowering still
+            # unstated refuses, because a repeating ability with no window is one
+            # nothing ever lifts.
+            stream.reset(after_whenever)
+            subject = _parse_land_tapped_for_mana(stream)
+            if subject is not None:
+                event, once, duration = "land_tapped_for_mana", False, None
     else:
         for phrase, kind, kind_once, kind_duration, kind_binds in _DELAYED_OPENERS:
             if stream.accept_phrase(*phrase):
@@ -387,6 +441,17 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
     # sentence of their own and be performed **now** rather than when the
     # ability fires. Declining instead leaves the refusal the line already had.
     if not stream.exhausted and not stream.at_punct(".", ";"):
+        stream.reset(mark)
+        return None
+    if event == "land_tapped_for_mana" and not isinstance(
+        effect, ast.AddManaForTappedLand
+    ):
+        # CR 605.4a: the abilities this event announces resolve *without using
+        # the stack*, inside the cost payment that tapped the land — so the seam
+        # that announces them can only carry out a mana production, and there is
+        # no priority window in which anything else could resolve. An effect the
+        # seam cannot perform refuses here rather than arming an ability that
+        # would be found and skipped.
         stream.reset(mark)
         return None
     effect = resolve_that_turn(effect) or effect

@@ -264,6 +264,7 @@ from .combat import (
     _lower_remove_from_combat,
 )
 from .game import (
+    _lower_count_objects,
     _lower_create_emblem,
     _lower_ante,
     _lower_repeat_process,

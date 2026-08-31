@@ -522,7 +522,9 @@ def channel_life_for_mana(game: Game, instruction: OracleInstruction, context: O
 @effect_handler("swap_controller_land_mana_until_eot")
 def swap_controller_land_mana_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Deep Water: "Until end of turn, if you tap a land you control for mana,
-    it produces {U} instead of any other type."
+    it produces {U} instead of any other type." Chaos Moon's even branch: "…if a
+    player taps a Mountain for mana, that Mountain produces colorless mana
+    instead of any other type."
 
     The record goes on the **seat**, not on the lands, which is the whole of
     what separates this from ``produce_mana_instead`` above: the class it names
@@ -530,20 +532,32 @@ def swap_controller_land_mana_until_eot(game: Game, instruction: OracleInstructi
     controls is answered when each is tapped. See
     ``engine/land_mana_swaps.py`` for why the per-permanent record cannot carry
     either half.
+
+    ``seats: "each"`` is the printed "a player" rather than "you", and it arms
+    one record per seat. That is not a convenience: ``swapped_symbol`` asks the
+    **land's own controller** for their records — CR 109.5's seat, and the only
+    seat a "you" sentence could mean — so a single record on this ability's
+    controller would leave every opponent's Mountain producing red on a board
+    the card says is colourless.
     """
     from ..land_mana_swaps import LandManaSwap, add_swap
 
     caster = context.caster
-    add_swap(
-        caster,
-        LandManaSwap(
-            produced=str(instruction.payload.get("produced", "")),
-            lands=dict(instruction.payload.get("lands") or {}),
-            source_name=getattr(context.card, "name", None),
-        ),
+    seats = (
+        list(game.players) if instruction.payload.get("seats") == "each" else [caster]
     )
+    for player in seats:
+        add_swap(
+            player,
+            LandManaSwap(
+                produced=str(instruction.payload.get("produced", "")),
+                lands=dict(instruction.payload.get("lands") or {}),
+                source_name=getattr(context.card, "name", None),
+            ),
+        )
+    whose = "every player's" if len(seats) > 1 else f"{caster.name}'s"
     game.log.append(
-        f"{getattr(context.card, 'name', 'an effect')}: {caster.name}'s lands "
+        f"{getattr(context.card, 'name', 'an effect')}: {whose} lands "
         f"produce {{{instruction.payload.get('produced', '')}}} this turn"
     )
     return True, "resolved"

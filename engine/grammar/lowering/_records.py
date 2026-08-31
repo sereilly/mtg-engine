@@ -28,8 +28,9 @@ from .. import ast
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS,
                              HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS)
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
-                      CREATED_TOKEN, DAMAGE_RECIPIENT, EXILED_THIS_WAY,
-                      _PERMANENTS_GIVEN_COUNTERS, _REANIMATED_PERMANENTS)
+                      COUNTED_NUMBER, CREATED_TOKEN, DAMAGE_RECIPIENT,
+                      EXILED_THIS_WAY, _PERMANENTS_GIVEN_COUNTERS,
+                      _REANIMATED_PERMANENTS)
 
 
 _PRODUCES: dict[str, str | tuple[str, ...]] = {
@@ -53,6 +54,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # step behind it acts on — the choice is not a target, so nothing on the
     # board or on the stack records it.
     "choose_permanent": CHOSEN_PERMANENT,
+    # "Count the number of permanents. **If the number** is odd, …" (Chaos
+    # Moon.) The count is the whole of what the sentence does, and the only
+    # place the two conditions behind it can read that number from — asking the
+    # board again would be a second count, which is a different question the
+    # moment anything between them changes it.
+    "count_objects": COUNTED_NUMBER,
     # "Choose a player who cast one or more sorcery spells this turn.
     # Backdraft deals damage to **that player** …" The seat is the whole of what
     # the first sentence does, and the only place the second can read it: a

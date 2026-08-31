@@ -59,6 +59,26 @@ class OnBattlefield:
 
 
 @dataclass(frozen=True)
+class CountedNumber:
+    """"If **the number** is odd" / "…is even" (Chaos Moon).
+
+    A back-reference, not a count: the number is whatever the "Count the number
+    of permanents." in front of it recorded, read out of the resolution
+    scratchpad. Its own node rather than an :class:`OnBattlefield` with a
+    missing filter, and that is the whole distinction — one asks the board and
+    the other asks what an earlier sentence of the same effect already asked.
+    Folded together, the two branches would each count a board that the first
+    branch may have changed, and a card printing both parities could answer yes
+    to neither.
+
+    The comparison is always a parity, because that is what "the number is …"
+    prints; the lowering refuses when no count precedes it, the way every other
+    back-reference in this grammar refuses without a producer.
+    """
+    comparison: Comparison
+
+
+@dataclass(frozen=True)
 class EveryOf:
     """"if you control an Urza's Mine **and** an Urza's Tower" — every part must
     hold (CR 104 has no conjunction rule; this is plain English "and").
@@ -656,7 +676,8 @@ class TurnIsYours:
 
 
 Condition = Union[
-    EveryOf, CoinFlipResult, Controls, DestroyedThisWay, DestroyedTargetWas,
+    EveryOf, CoinFlipResult, Controls, CountedNumber, DestroyedThisWay,
+    DestroyedTargetWas,
     DiscardedCardWas,
     IsState, StartedTheTurnState, DiedThisTurn, DamagedBySourceDiedThisTurn,
     ItIsColor, ObjectHasKeyword,

@@ -718,6 +718,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # a category of its own — here, damage. A choice sharing the category of
     # what reads it would let one switch gate half of a two-sentence card.
     "choose_player_who_cast": "chosen_players",
+    # "Count the number of permanents." (Chaos Moon.) Its own category for the
+    # reason the chosen number and the chosen player have theirs: the count is a
+    # *value* the effect records, and the sentences that read it back carry the
+    # categories of whatever they do — a count sharing one of those would let a
+    # single switch gate half of a three-sentence card.
+    "count_objects": "counted_numbers",
     # "…the damage dealt by **one of those** sorcery spells this turn." The
     # second half of the same decision, and a separate step because it is a
     # separate question: which player, then which of their spells.

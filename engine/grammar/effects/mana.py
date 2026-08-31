@@ -616,12 +616,48 @@ def _parse_produces_instead(stream: TokenStream) -> "ast.ProducesManaInstead | N
     return ast.ProducesManaInstead(target, replaced=replaced, produced=produced)
 
 
-def _parse_you_tap_produces_instead(
+def _accept_swapped_land_back_reference(
+    stream: TokenStream, subject: "ast.TargetSpec"
+) -> bool:
+    """``it`` / ``that Mountain`` — the land the clause's condition just named.
+
+    Read rather than skipped: a different subject here would be a different
+    card, and the noun in the long spelling has to be the one the condition
+    described. Chaos Moon prints "if a player taps **a Mountain** for mana,
+    **that Mountain** produces …" and a reader that took any noun would accept
+    a sentence swapping the mana of something the clause never mentioned.
+    """
+    if stream.accept_word("it"):
+        return True
+    mark = stream.mark()
+    if not stream.accept_word("that"):
+        return False
+    noun = stream.peek_word()
+    if noun is None:
+        stream.reset(mark)
+        return False
+    subtypes = subject.filter.subtypes
+    # "that land" answers a clause that named no land type; "that Mountain"
+    # answers one that named exactly that type. Anything else is a noun the
+    # condition did not describe.
+    if noun == "land" and not subtypes:
+        stream.advance()
+        return True
+    if noun in subtypes:
+        stream.advance()
+        return True
+    stream.reset(mark)
+    return False
+
+
+def _parse_tapper_produces_instead(
     stream: TokenStream,
 ) -> "ast.ProducesManaInstead | None":
     """``If you tap <objects> for mana, it produces {X} instead of any other
-    type.`` (Deep Water, with "Until end of turn," in front of it — the leading
-    duration the statement layer distributes.)
+    type.`` (Deep Water.) ``If a player taps <objects> for mana, that <noun>
+    produces <colour> mana instead of any other type.`` (Chaos Moon.) Both with
+    "Until end of turn," in front of them — the leading duration the statement
+    layer distributes.
 
     The same CR 611.2 / CR 305.7 swap :func:`_parse_produces_instead` reads, in
     the active voice and about a *class* of lands rather than one named object.
@@ -630,15 +666,26 @@ def _parse_you_tap_produces_instead(
     the subject slot, the other names the tapper and puts the land in the
     object slot.
 
-    Refuses without consuming, for that function's reason: "if" opens every
-    conditional in the pool.
+    **The tapper is the whole difference between the two spellings here**, and
+    it is read rather than inferred. "You" arms the swap on the ability's own
+    controller; "a player" arms it on every seat, because the sentence names
+    none. Inferring that from the noun phrase's "you control" instead would tie
+    two independent printed words together, and each of them can appear without
+    the other.
+
+    Refuses without consuming, for :func:`_parse_produces_instead`'s reason:
+    "if" opens every conditional in the pool.
 
     Both ends are read. "instead of any other **type**" is not a colour — it is
     everything the land would have produced — and a production that stopped at
     "instead of" would compile Deep Water onto a swap of one unnamed symbol.
     """
     mark = stream.mark()
-    if not stream.accept_phrase("if", "you", "tap"):
+    if stream.accept_phrase("if", "you", "tap"):
+        each_player = False
+    elif stream.accept_phrase("if", "a", "player", "taps"):
+        each_player = True
+    else:
         return None
     try:
         subject = parse_target_spec(stream)
@@ -651,20 +698,30 @@ def _parse_you_tap_produces_instead(
     if not stream.accept_punct(","):
         stream.reset(mark)
         return None
-    # "**it** produces" — the land the condition just named, exactly as the
-    # passive spelling reads it.
-    if not stream.accept_phrase("it", "produces"):
+    if not _accept_swapped_land_back_reference(stream, subject):
         stream.reset(mark)
         return None
-    token = stream.peek()
-    produced = token.text.strip("{}") if token is not None and token.kind == MANA else ""
-    # One coloured symbol, spelled as the card prints it. A hybrid, a phyrexian
-    # or a generic pip is a symbol the record has no way to produce, and
-    # admitting one would arm a swap onto a symbol no mana pool has.
-    if len(produced) != 1 or not produced.isalpha():
+    if not stream.accept_word("produces"):
         stream.reset(mark)
         return None
-    stream.advance()
+    # Two printed spellings of one symbol, because the pool prints both: the
+    # symbol itself ({U}, Deep Water) and the colour written out ("colorless
+    # mana", Chaos Moon). The word form is read first and non-consuming, so a
+    # line printing neither still falls out on the mana check below.
+    produced = _parse_produced_mana_word(stream)
+    if produced is None:
+        token = stream.peek()
+        produced = (
+            token.text.strip("{}") if token is not None and token.kind == MANA else ""
+        )
+        # One coloured symbol, spelled as the card prints it. A hybrid, a
+        # phyrexian or a generic pip is a symbol the record has no way to
+        # produce, and admitting one would arm a swap onto a symbol no mana pool
+        # has.
+        if len(produced) != 1 or not produced.isalpha():
+            stream.reset(mark)
+            return None
+        stream.advance()
     if not stream.accept_phrase("instead", "of", "any", "other", "type"):
         stream.reset(mark)
         return None
@@ -673,6 +730,7 @@ def _parse_you_tap_produces_instead(
         replaced=ast.ANY_OTHER_TYPE,
         produced=produced,
         by_controller=True,
+        each_player=each_player,
     )
 
 

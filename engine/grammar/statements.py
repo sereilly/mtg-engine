@@ -83,6 +83,7 @@ from .effects import (
     _parse_gain_control,
     _parse_gains,
     _parse_choose_number,
+    _parse_count_objects,
     _parse_flip_coin,
     _parse_game_is_a_draw,
     _parse_gets,
@@ -94,7 +95,7 @@ from .effects import (
     _parse_modal_head,
     _parse_player_adds_mana,
     _parse_produces_instead,
-    _parse_you_tap_produces_instead,
+    _parse_tapper_produces_instead,
     _parse_spend_mana_as_though,
     _parse_prevent,
     _parse_double,
@@ -383,6 +384,14 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     choose_then_gain = _parse_choose_then_gain(stream)
     if choose_then_gain is not None:
         return choose_then_gain
+    # "Count the number of permanents." (Chaos Moon.) A sentence whose whole
+    # content is CR 107.1's number, named for the sentences behind it. Gated on
+    # the word so every other opener is untouched, and the production itself
+    # refuses without consuming.
+    if stream.at_word("count"):
+        counted = _parse_count_objects(stream)
+        if counted is not None:
+            return counted
     # "When that creature dies this turn, …" / "At the beginning of your next
     # main phase, …" — a delayed triggered ability (CR 603.7). Read before the
     # productions its inner effect uses, whose sentences this one's tail is:
@@ -470,9 +479,11 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         if produces is not None:
             return produces
         # "…if **you tap** a land you control for mana, it produces {U} instead
-        # of any other type." (Deep Water.) The active-voice spelling of the
-        # same swap, beside it and refusing the same way.
-        produces = _parse_you_tap_produces_instead(stream)
+        # of any other type." (Deep Water.) "…if **a player taps** a Mountain
+        # for mana, that Mountain produces colorless mana instead of any other
+        # type." (Chaos Moon.) The active-voice spellings of the same swap,
+        # beside it and refusing the same way.
+        produces = _parse_tapper_produces_instead(stream)
         if produces is not None:
             return produces
 

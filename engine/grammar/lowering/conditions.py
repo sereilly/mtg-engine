@@ -25,7 +25,8 @@ from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import untestable_filter_keys
 from ._common import _filter_payload, _is_enchanted, _restrictions_beyond
-from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
+from ._events import (_EVENT_SUBJECT_PLAYERS, COUNTED_NUMBER,
+                      EVENT_SUBJECT_PLAYER)
 
 #: What ``targets.kind`` on a guarded effect says the pronoun "it" names, and
 #: therefore which half of the resolution context answers a question about it.
@@ -309,6 +310,17 @@ def _lower_condition(
                 for part in condition.conditions
             ],
         }
+    if isinstance(condition, ast.CountedNumber):
+        # "**If the number** is odd" (Chaos Moon). The count in front of it is
+        # what the condition reads, so a clause with no producer refuses — the
+        # same rule every other back-reference in this file is held to, and the
+        # reason it matters here is that an unproduced record evaluates False
+        # for *both* parities: the card would silently do neither branch.
+        if COUNTED_NUMBER not in produced:
+            raise LoweringError(
+                "'the number' has no count in front of it", node=condition
+            )
+        return {"kind": "counted_number", "op": condition.comparison.op}
     if isinstance(condition, ast.OnBattlefield):
         # No seat travels down: the payload names the zone and the noun phrase,
         # and the evaluator counts the board. The comparison is always set by

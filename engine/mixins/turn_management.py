@@ -4,6 +4,7 @@ import dataclasses
 import random
 
 from ..auras import aura_additional_mana_on_tap
+from ..delayed_triggers import matching_delayed_triggers
 from ..hand_locks import expire_hand_locks
 from .. import land_mana_swaps
 from ..game_types import OracleExecutionContext, SimulationResult
@@ -548,6 +549,38 @@ class TurnManagementMixin:
                 ),
             )
 
+        # The same ability created for a turn instead of printed on a permanent
+        # (CR 603.7): "Until end of turn, … whenever a player taps a Mountain
+        # for mana, that player adds an additional {R}." (Chaos Moon's odd
+        # branch.) It belongs to no permanent, so the scan above cannot see it —
+        # it waits on `game.delayed_triggers` and is announced here.
+        #
+        # **Resolved inline, not enqueued**, and that is CR 605.4a rather than a
+        # convenience: a triggered mana ability does not use the stack, and the
+        # rule's own example is this clause. `fire_delayed_triggers` always
+        # enqueues, so this site asks `matching_delayed_triggers` for the
+        # entries and performs them where the permanent-borne ones above are
+        # performed — the same instruction, the same dispatcher, the same
+        # cost-payment moment.
+        for entry in matching_delayed_triggers(
+            self, "land_tapped_for_mana", subject=land
+        ):
+            # The grammar admits no other effect under this event (it refuses
+            # the sentence), so anything else here is an entry built by hand;
+            # skipping it is the safe reading, because this site has no way to
+            # give a non-mana effect the priority window the stack would.
+            if entry.instruction.kind != "add_mana_for_tapped_land":
+                continue
+            self._add_triggered_land_mana(
+                entry.instruction, player_index, land, mana_symbol,
+                # CR 603.7d: the source is the object whose ability created the
+                # delayed one — the enchantment, not the land being tapped. It
+                # may have left by now, in which case the log falls back to the
+                # name the entry froze when it was armed.
+                self.permanent_by_id(entry.source_permanent_id),
+                source_name=entry.source_name,
+            )
+
         return True
 
     def _add_triggered_land_mana(
@@ -557,6 +590,8 @@ class TurnManagementMixin:
         land,
         produced_symbol: str,
         source,
+        *,
+        source_name: str | None = None,
     ) -> None:
         """Resolve an ``add_mana_for_tapped_land`` instruction (Mana Flare,
         Gauntlet of Might).
@@ -618,6 +653,12 @@ class TurnManagementMixin:
             added.append(f"{{{produced_symbol}}}" * produced)
         if added:
             extra = " an additional" if instruction.payload.get("additional") else ""
+            # A delayed ability's source may have left the battlefield since it
+            # was created (CR 603.7d freezes the object, not its zone), so the
+            # name the entry froze is what the log falls back to.
+            name = source.card.name if source is not None else (
+                source_name or "a delayed ability"
+            )
             self.log.append(
-                f"{source.card.name}: {player.name} added{extra} {''.join(added)}"
+                f"{name}: {player.name} added{extra} {''.join(added)}"
             )

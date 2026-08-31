@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from ._core import (
     Amount,
+    ObjectFilter,
     PlayerRef,
     TargetSpec,
 )
@@ -339,3 +340,28 @@ class PayLife:
     """
     player: PlayerRef
     amount: Amount
+
+
+@dataclass(frozen=True)
+class CountObjects:
+    """"Count the number of permanents." (Chaos Moon.) CR 107.1's number, taken
+    once and named for the sentences behind it.
+
+    Nothing on any board changes, which is why it is here beside
+    :class:`FlipCoin` and :class:`ChooseNumber` rather than in the board family:
+    the whole of what the sentence does is *produce a value* a later sentence of
+    the same effect reads back ("if **the number** is odd"). The record is the
+    resolution scratchpad's, declared in ``lowering/_records.py`` like every
+    other one, so a back-reference with no count in front of it refuses instead
+    of reading nothing.
+
+    Its own sentence rather than being folded into the two conditions behind it,
+    and that is the load-bearing part: CR 603.4's intervening-if is read off the
+    clause that *follows the trigger event*, so a card that printed "at the
+    beginning of each upkeep, **if** the number of permanents is odd, … . If the
+    number is even, …" would gate its whole ability on the first branch and the
+    second could never run. Chaos Moon prints a count instead of an "if", and
+    reading it as one keeps the two branches siblings.
+    """
+
+    filter: ObjectFilter

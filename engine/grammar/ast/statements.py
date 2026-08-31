@@ -168,6 +168,7 @@ from .combat import (
 from .game import (
     Ante,
     CoinFlipStakesLoop,
+    CountObjects,
     CreateEmblem,
     CreateCopyToken,
     CreateToken,
@@ -220,7 +221,7 @@ Effect = Union[
     RevealHandAndChoose,
     RevealRandomFromHand,
     DiscardRevealedUnlessPayLife,
-    Shuffle, ExtraTurn, EndTheTurn, ChooseNumber, ChooseColor, ChoosePlayerWhoCast, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCreature,
+    Shuffle, ExtraTurn, EndTheTurn, ChooseNumber, ChooseColor, ChoosePlayerWhoCast, CountObjects, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCreature,
     SacrificeUnlessPay, DestroyUnlessPay, DestroyEachUnlessPaid, DamageUnlessPay, Fight, LookAtHand, LookAtLibraryTop,
     CantBe, AttackAsThough, CombatRestriction, AttackingDoesntTap,
     AssignsNoCombatDamage,
@@ -449,7 +450,13 @@ class CreateDelayedTrigger:
     * ``once`` is CR 603.7b — "when" is one-shot, "whenever … this turn"
       has a stated duration and is not;
     * ``duration`` is "this turn" against a named future step, which is how
-      long an ability that never triggers survives;
+      long an ability that never triggers survives. **None means the opener
+      printed none**, which happens when the card prints one duration in front
+      of a whole sentence and shares it with the effect beside the delay (Chaos
+      Moon's "until end of turn, red creatures get +1/+1 **and** whenever a
+      player taps a Mountain for mana, …"). The leading-duration reader fills it
+      in; a node that reaches the lowering still None refuses, because a
+      repeating ability with no window is one nothing ever lifts;
     * ``binds_target`` is "**that** creature" — the delayed ability is about
       the object the creating spell targeted (CR 603.7c);
     * ``agent`` is the second noun phrase some events print ("dealt damage
@@ -463,7 +470,7 @@ class CreateDelayedTrigger:
     event: str
     effect: "Statement"
     once: bool = True
-    duration: str = "end_of_turn"
+    duration: str | None = "end_of_turn"
     binds_target: bool = False
     #: The noun phrase "that <noun>" printed for the bound object. The id binds
     #: it exactly, so this re-states rather than narrows — carried and tested

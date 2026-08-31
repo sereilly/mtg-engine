@@ -337,6 +337,19 @@ CHOSEN_PLAYER = "chosen_player"
 CHOSEN_PERMANENT = "attach_host"
 CHOSEN_CAST_DAMAGE = "damage_dealt_by_chosen_cast"
 
+#: The number "Count the number of permanents." records and "if **the number**
+#: is odd" reads (Chaos Moon). Named here for the reason every other key on this
+#: page is: the ``game`` and ``conditions`` lowering families and
+#: ``_records._PRODUCES`` all write the string, and a second spelling would make
+#: the producer gate vacuous while the condition read an empty record — which on
+#: this card is a board that is neither odd nor even and a trigger that does
+#: nothing.
+#:
+#: Deliberately **not** in ``_PRODUCED_QUANTITIES`` below. No card prints "draw
+#: that many cards" after a count, and a bare back-reference resolving to this
+#: would be a reading nothing exercises; the condition names the key outright.
+COUNTED_NUMBER = "counted_number"
+
 # The scratchpad keys that are *quantities*. `_records._PRODUCES` also records
 # things no amount can read — a controller's seat, a list of exiled cards — so
 # a bare back-reference resolves against this narrower set. A producer added
