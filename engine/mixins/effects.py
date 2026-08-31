@@ -5,7 +5,7 @@ import re
 
 from ..ante import is_ante_card
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
-from ..handlers._common import permanent_matches_filter, pick_target_permanent
+from ..handlers._common import permanent_matches_filter
 from ..auras import aura_restriction_active
 from ..auras import aura_enchants
 from ..damage_events import EVENT_LOCK, damage_source_seat, deal_damage, lifelink_life_gained
@@ -1432,22 +1432,6 @@ class EffectsMixin:
         # Identity: ``remove`` would bounce a look-alike instead of the chosen one.
         self.remove_from_battlefield(chosen)
         return True
-
-    def _sacrifice_creature_for_mana(self, caster: PlayerState, chosen_index: int | None = None) -> Permanent | None:
-        """Sacrifice one of *caster*'s creatures for a cost/effect, returning the
-        sacrificed **Permanent** (not its card) so callers can still read the
-        characteristics it had on the battlefield — CR 608.2h last-known
-        information, which Diamond Valley's "equal to the sacrificed creature's
-        toughness" depends on."""
-        # The caster chooses which creature to sacrifice; honor an explicit
-        # choice, otherwise sacrifice the first creature.
-        chosen = pick_target_permanent(caster, chosen_index)
-        if chosen is None:
-            return None
-        # CR 400.3 (the stolen creature's card goes to its *owner's* graveyard)
-        # used to be resolved here, by hand; it is one of the six things
-        # ``sacrifice_permanent`` does, and the only one this site remembered.
-        return self.sacrifice_permanent(chosen)
 
     def _apply_color_override(
         self, permanent: "Permanent | None", symbol: str

@@ -595,3 +595,82 @@ def test_no_battlefield_write_exemption_has_gone_stale(key):
         f"{key} is exempted from the battlefield-write rule but no longer "
         "writes one — delete the exemption"
     )
+
+
+# --- LeadB: an index is not a target ---
+
+
+def _leadb_calls_to(name: str):
+    """Every call to *name* under ``engine/`` and ``web/``, with its keywords.
+
+    Yields ``(module, line, keyword names)``. The function's own ``def`` is not
+    a call, so it never appears.
+    """
+    for package in ("engine", "web"):
+        for path in sorted((ROOT / package).rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                callee = node.func
+                callee_name = (
+                    callee.attr if isinstance(callee, ast.Attribute)
+                    else callee.id if isinstance(callee, ast.Name)
+                    else None
+                )
+                if callee_name == name:
+                    yield (
+                        path.relative_to(ROOT).as_posix(),
+                        node.lineno,
+                        {kw.arg for kw in node.keywords},
+                    )
+
+
+def test_the_id_aware_resolver_is_never_asked_without_the_id():
+    """``pick_target_permanent`` must always be handed ``game`` and ``permanent_id``.
+
+    The resolver's id lookup is *opt-in by keyword*: with neither argument it
+    silently degrades to the index-only behaviour it had before ids existed,
+    and an index names a slot, not a permanent (CR 400.7). So the dangerous
+    call and the correct call look identical at a glance and differ only in two
+    keywords — which is why three callers in ``engine/mixins/effects.py`` kept
+    the old behaviour for a whole release after the keywords were added, with
+    nothing in the suite failing. The Ice Age Talisman cycle untapped a
+    permanent nobody chose the entire time.
+
+    A **zero-exception ban**, which it can afford to be: the one legitimate
+    caller is ``resolve_target_permanent`` in the same module, the context-based
+    wrapper that reads both values off ``OracleExecutionContext`` and passes
+    them. Every handler goes through that wrapper. If a new call needs the
+    unarmed form, the honest fix is to give its caller an id to pass, not to
+    add a name here.
+    """
+    unarmed = [
+        (module, line, sorted(keywords))
+        for module, line, keywords in _leadb_calls_to("pick_target_permanent")
+        if not {"game", "permanent_id"} <= keywords
+    ]
+
+    assert not unarmed, (
+        "these calls get the index-only half of the id-aware resolver, so a "
+        "target that has left the battlefield resolves to whichever permanent "
+        "inherited its slot: "
+        + "; ".join(f"{m}:{ln} (keywords: {kw})" for m, ln, kw in unarmed)
+    )
+
+
+def test_the_resolver_still_has_exactly_one_caller():
+    """The other half of the ban above, so it cannot pass by becoming vacuous.
+
+    A guard that only inspects the calls it finds is satisfied by finding none
+    — deleting ``resolve_target_permanent``'s body, or renaming the resolver,
+    would leave the assertion above green over an empty list. Pin the one call
+    that is supposed to exist.
+    """
+    callers = list(_leadb_calls_to("pick_target_permanent"))
+
+    assert [module for module, _, _ in callers] == ["engine/handlers/_common.py"], (
+        "the id-aware resolver grew a caller outside its own module — route it "
+        f"through resolve_target_permanent instead: {callers}"
+    )
+# --- end LeadB ---
