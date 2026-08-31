@@ -2094,4 +2094,66 @@ def test_the_caribou_sacrifice_spares_a_printed_caribou(set_pool):
     assert not permanent_matches_filter(printed, described)
 
 
+def _breath_board(set_pool):
+    """Breath of Dreams out, with one green creature and one that is not."""
+    pool = set_pool("ICE")
+    breath = Permanent(card=pool["Breath of Dreams"])
+    green = Permanent(card=pool["Balduvian Bears"])   # green, vanilla
+    blue = Permanent(card=pool["Phantasmal Mount"])   # blue
+    p1 = PlayerState(name="P1", battlefield=[breath, green, blue], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game._settle()
+    return game, breath, green, blue
+
+
+def test_breath_of_dreams_gives_green_creatures_a_cumulative_upkeep(set_pool):
+    """"Green creatures have "Cumulative upkeep {1}."" — the ability reaches
+    the creature through ``effective_card``, so the upkeep step builds the
+    trigger without knowing this enchantment exists."""
+    game, _, green, blue = _breath_board(set_pool)
+
+    (trigger,) = [
+        trig for trig in compile_card_oracle(green.effective_card).triggered_abilities
+        if trig.instruction is not None
+        and trig.instruction.kind == "cumulative_upkeep"
+    ]
+    assert trigger.condition.kind == "upkeep_self"
+    assert trigger.instruction.payload["mana"] == {"generic": 1}
+    assert not [
+        trig for trig in compile_card_oracle(blue.effective_card).triggered_abilities
+        if trig.instruction is not None
+        and trig.instruction.kind == "cumulative_upkeep"
+    ]
+
+
+def test_breath_of_dreams_sacrifices_an_unpaid_green_creature(set_pool):
+    """The whole mechanism end to end: the granted ability is a real CR 702.24
+    upkeep, so declining it sacrifices the creature."""
+    game, breath, green, blue = _breath_board(set_pool)
+
+    game.active_player_index = 0
+    game.resolve_upkeep(
+        0,
+        human_choices={"Balduvian Bears": False, "Breath of Dreams": False},
+    )
+    game._settle()
+
+    board = list(game.controlled_by(game.players[0]))
+    assert green not in board
+    assert blue in board
+
+
+def test_breath_of_dreams_stops_granting_when_it_leaves(set_pool):
+    """CR 611.3b again: the grant is derived from the source recorded on the
+    creature, so removing the enchantment takes the upkeep away with nothing to
+    undo."""
+    game, breath, green, _ = _breath_board(set_pool)
+    assert "cumulative upkeep" in green.effective_card.oracle_text.lower()
+
+    game.remove_from_battlefield(breath)
+    game._settle()
+
+    assert "cumulative upkeep" not in (green.effective_card.oracle_text or "").lower()
+
+
 # --- end W2G4 ---

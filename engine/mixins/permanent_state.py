@@ -1253,6 +1253,14 @@ class PermanentStateMixin:
             else:
                 perm.metadata.pop("global_static_sources", None)
 
+    #: The printed colour word a ``GlobalStatic``'s scope carries, as the symbol
+    #: every filter payload in the engine spells a colour with. One map rather
+    #: than a symbol in the table, because the *table* holds what the card
+    #: prints.
+    _COLOR_SYMBOLS = {
+        "white": "W", "blue": "U", "black": "B", "red": "R", "green": "G",
+    }
+
     @staticmethod
     def _global_static_applies(static, permanent: Permanent, source=None, game=None) -> bool:
         """Whether *static* covers *permanent*.
@@ -1273,7 +1281,28 @@ class PermanentStateMixin:
             # Through the layer-6/4 accessors rather than the printed line, so
             # an animated land is a creature to The Tabernacle at Pendrell Vale
             # and a Clone of an artifact is an artifact to Energy Flux.
-            return permanent.has_type(static.applies_to)
+            if not permanent.has_type(static.applies_to):
+                return False
+            # "**Green** creatures have …" (Breath of Dreams). Asked through
+            # ``subject_matches``, the one reader of what a printed noun phrase
+            # means, so "green" here is the same question a targeting line or a
+            # trigger's subject asks — and layer 5 for the same reason the type
+            # word above is layer 4: a creature a lace has turned green is a
+            # green creature, and one that stops being green stops paying the
+            # upkeep with nothing to undo.
+            if static.colors:
+                from ..subject_filters import subject_matches
+
+                if game is None:
+                    return False
+                return all(
+                    subject_matches(
+                        game, permanent,
+                        {"color_filter": PermanentStateMixin._COLOR_SYMBOLS[colour]},
+                    )
+                    for colour in static.colors
+                )
+            return True
         if static.applies_to == "noncreature_artifact":
             printed = permanent.card.type_line.lower()
             return "artifact" in printed and "creature" not in printed
