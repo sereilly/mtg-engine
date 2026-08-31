@@ -719,3 +719,47 @@ def test_615_9_a_colour_shield_may_record_several_admissible_colours():
     assert _damage_dealt(game, p1, 4, source=elf) == 4, "neither recorded colour"
     assert _damage_dealt(game, p1, 4, source=goblin) == 0, "the second one matches"
     assert _damage_dealt(game, p1, 4, source=zombie) == 4, "and one shield is one use"
+
+
+# --- W4G4: how long a directional shield lasts (CR 615.3 / 511.2) ---
+@pytest.mark.cr("615.1", "615.3", "511.2")
+def test_615_3_a_directional_shield_lasts_the_window_its_card_printed():
+    """CR 615.3: a prevention effect lasts until it is used up or **its
+    duration** expires, and CR 511.2 makes "this combat" end with the combat
+    phase.
+
+    The two-way combat shield had one window baked in -- the rest of the turn --
+    because the two cards that printed it (Ebony Horse, Maze of Ith) both say
+    "this turn". "…dealt to and dealt by that creature **this combat**"
+    (Winter's Chill) is the same sentence four characters apart, and a shield
+    that ignored the difference would go on preventing through a second combat
+    phase the card never mentions. So the window is data on the record and the
+    end-of-combat sweep asks for it.
+    """
+    from engine.prevention import (COMBAT_SHIELD_BOTH, add_directional_shield,
+                                   clear_directional_shields, shields_damage)
+    from engine.shields import END_OF_COMBAT, END_OF_TURN
+
+    game, _, _ = _game()
+    for_the_combat = Permanent(card=_mk_creature("Chilled"))
+    for_the_turn = Permanent(card=_mk_creature("Mazed"))
+    add_directional_shield(
+        for_the_combat, COMBAT_SHIELD_BOTH, combat_only=True,
+        lifetime=END_OF_COMBAT,
+    )
+    add_directional_shield(
+        for_the_turn, COMBAT_SHIELD_BOTH, combat_only=True, lifetime=END_OF_TURN,
+    )
+    for shielded in (for_the_combat, for_the_turn):
+        assert shields_damage(shielded, dealt_to=True, combat=True)
+        assert shields_damage(shielded, dealt_to=False, combat=True), "and dealt by"
+
+    for shielded in (for_the_combat, for_the_turn):
+        clear_directional_shields(shielded, END_OF_COMBAT)
+
+    assert not shields_damage(for_the_combat, dealt_to=True, combat=True)
+    assert not shields_damage(for_the_combat, dealt_to=False, combat=True)
+    assert shields_damage(for_the_turn, dealt_to=True, combat=True), (
+        "a turn-long shield is not swept by the combat that happens to contain it"
+    )
+# --- end W4G4 ---

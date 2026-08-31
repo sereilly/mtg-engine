@@ -1183,3 +1183,69 @@ def test_601_2c_a_named_target_the_spell_cannot_describe_is_refused(set_pool):
     assert [card.name for card in p1.hand] == ["Divine Offering"]
     assert p1.life == 20
     assert game.stack == []
+
+
+# --- W4G4: a printed ceiling on the announced X ---
+@pytest.mark.cr("601.2b", "107.3a")
+def test_601_2b_an_announced_x_may_not_exceed_a_bound_the_card_prints():
+    """"X can't be greater than the number of <objects> you control."
+
+    CR 107.3a leaves the value of X to the caster where the card does not
+    *define* it, and CR 601.2b is where they announce it. A bound is neither of
+    those two things and both readings get the card wrong: treated as a
+    definition it would take the choice away, and dropped it would leave the
+    announcement free. So it is checked against whatever was announced, at the
+    announcement -- and the parameters are payload, which is why this test
+    prints a noun phrase no card in the pool uses.
+    """
+    bounded = _mk_card(
+        "Bounded Draw", "Sorcery",
+        "X can't be greater than the number of Forests you control.\n"
+        "Draw X cards.",
+        mana_cost="{X}{U}", colors=("U",), cmc=1.0,
+    )
+    forest = _mk_card(
+        "Forest", "Basic Land - Forest", produced_mana=("G",),
+    )
+    p1 = PlayerState(
+        name="P1", hand=[bounded], library=[bounded] * 10,
+        battlefield=[Permanent(card=forest)], life=20,
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+
+    refused = game.cast_from_hand(0, "Bounded Draw", x_value=2)
+    assert not refused.supported
+    assert "X can't be greater than 1" in refused.details
+    assert [card.name for card in p1.hand] == ["Bounded Draw"], "nothing was spent"
+
+    allowed = game.cast_from_hand(0, "Bounded Draw", x_value=1)
+    assert allowed.supported, allowed.details
+    assert len(p1.hand) == 1, "one card drawn, the spell gone"
+
+
+@pytest.mark.cr("601.2b", "107.3a")
+def test_601_2b_a_bound_the_board_grows_lets_a_bigger_x_be_announced():
+    """The bound is counted as the spell is announced, not baked into the card.
+
+    A ceiling read once at compile time would be a constant; CR 601.2b asks the
+    question at the announcement, so a second Forest is a second point of X.
+    """
+    bounded = _mk_card(
+        "Bounded Draw", "Sorcery",
+        "X can't be greater than the number of Forests you control.\n"
+        "Draw X cards.",
+        mana_cost="{X}{U}", colors=("U",), cmc=1.0,
+    )
+    forest = _mk_card("Forest", "Basic Land - Forest", produced_mana=("G",))
+    p1 = PlayerState(
+        name="P1", hand=[bounded, bounded], library=[bounded] * 10,
+        battlefield=[Permanent(card=forest)], life=20,
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+
+    assert not game.cast_from_hand(0, "Bounded Draw", x_value=2).supported
+    p1.battlefield.append(Permanent(card=forest))
+    assert game.cast_from_hand(0, "Bounded Draw", x_value=2).supported
+# --- end W4G4 ---

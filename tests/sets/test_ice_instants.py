@@ -1358,3 +1358,213 @@ def test_touch_of_vitae_takes_both_halves_away_at_end_of_turn(set_pool):
     assert not bear.has_keyword("haste")
     assert '{0}: Untap this creature' not in bear.effective_card.oracle_text
 # --- end W3G1 ---
+
+
+# --- W4G4: an X ceiling, and a three-outcome toll ---
+def _chill_game(
+    pool, *, snow_lands: int = 2, payer_lands: int = 4,
+    attackers: tuple[str, ...] = ("Balduvian Bears",), blocker: bool = False,
+):
+    """Seat 0 attacking with *attackers*, seat 1 holding Winter's Chill.
+
+    Both seats are interactive so the offer queues rather than taking its
+    non-interactive default: the whole point of the card is which option the
+    payer picks, and a default answers that question before the test can.
+    """
+    attacking = [Permanent(card=pool[name]) for name in attackers]
+    p0 = PlayerState(
+        name="P0", life=20,
+        battlefield=attacking + [
+            Permanent(card=pool["Snow-Covered Island"]) for _ in range(payer_lands)
+        ],
+    )
+    defence = [Permanent(card=pool["Snow-Covered Island"]) for _ in range(snow_lands)]
+    if blocker:
+        defence.insert(0, Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(
+        name="P1", life=20, battlefield=defence, hand=[pool["Winter's Chill"]],
+    )
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    ok, message = game.declare_attackers(0, list(range(len(attacking))))
+    assert ok, message
+    return game, p0, p1, attacking
+
+
+def _cast_chill(game, targets, x_value):
+    """Cast Winter's Chill at *targets* (indices on seat 0's battlefield).
+
+    Before blockers are declared, which the card's own timing line requires --
+    the `_combat` helper the earlier rounds use advances one step further than
+    this card may be cast in.
+    """
+    result = game.cast_from_hand(
+        1, "Winter's Chill", target_permanent_index=list(targets),
+        target_player_index=0, x_value=x_value,
+    )
+    game._settle()
+    return result
+
+
+def _finish_combat(game):
+    game.advance_combat_phase()  # declare_blockers
+    game.advance_combat_phase()  # combat_damage
+    game.advance_combat_phase()  # end_of_combat
+    game._settle()
+
+
+def test_winters_chill_refuses_an_x_above_the_snow_lands_you_control(set_pool):
+    """"X can't be greater than the number of snow lands you control."
+
+    A printed restriction is only done when something enforces it. Parsed and
+    dropped, this line lets the caster announce any X the mana pool covers --
+    silent, and in their favour. The bound is counted at the announcement
+    (CR 601.2b), before any cost is paid.
+    """
+    pool = set_pool("ICE")
+    game, _, p1, _ = _chill_game(pool, snow_lands=1)
+
+    refused = _cast_chill(game, [0], 2)
+    assert not refused.supported
+    assert "X can't be greater than 1" in refused.details
+    assert [card.name for card in p1.hand] == ["Winter's Chill"], "nothing was spent"
+
+    assert _cast_chill(game, [0], 1).supported, "the bound itself is legal"
+
+
+def test_winters_chill_destroys_the_creature_nobody_paid_for(set_pool):
+    """Pay nothing: "destroy that creature at end of combat."
+
+    The delayed ability is about the creature the loop was on, and it fires at
+    end of combat (CR 603.7) -- after the creature has already dealt its combat
+    damage, which is what separates this branch from the shield one.
+    """
+    pool = set_pool("ICE")
+    game, p0, p1, attacking = _chill_game(pool)
+    assert _cast_chill(game, [0], 1).supported
+
+    game.confirm_optional_pay(0, accept=False)
+    game._settle()
+    _finish_combat(game)
+
+    assert p1.life == 18, "the damage was dealt; only the creature was bought"
+    assert not any(perm is attacking[0] for perm in game.all_permanents())
+    assert [card.name for card in p0.graveyard] == ["Balduvian Bears"]
+
+
+def test_winters_chill_paying_only_one_prevents_both_ends_of_the_combat(set_pool):
+    """Pay {1}: "prevent all combat damage that would be dealt **to and dealt
+    by** that creature this combat."
+
+    Both ends, so the attacker neither hurts the blocker nor is hurt by it --
+    and the creature survives, because the destroy branch is the one that was
+    not taken.
+    """
+    pool = set_pool("ICE")
+    game, p0, p1, attacking = _chill_game(pool, blocker=True)
+    assert _cast_chill(game, [0], 1).supported
+
+    game.confirm_optional_pay(0, accept=True, option=0)
+    game._settle()
+    paid = sum(
+        1 for perm in p0.battlefield
+        if perm.card.name == "Snow-Covered Island" and perm.tapped
+    )
+    assert paid == 1, "the option the payer named, not the other one"
+
+    game.advance_combat_phase()  # declare_blockers
+    ok, message = game.declare_blockers(1, {0: [0]})
+    assert ok, message
+    game.advance_combat_phase()  # combat_damage
+    game._settle()
+
+    assert attacking[0].damage_marked == 0, "dealt to it"
+    assert p1.battlefield[0].damage_marked == 0, "and dealt by it"
+    assert p1.life == 20
+
+
+def test_winters_chill_paying_two_buys_off_both_consequences(set_pool):
+    """Pay {2}: neither the shield nor the destruction. The third outcome is a
+    real one -- an engine that read "{1} or {2}" as one offer with one
+    consequence would either prevent the damage of a creature whose controller
+    paid full price, or destroy it."""
+    pool = set_pool("ICE")
+    game, p0, p1, attacking = _chill_game(pool)
+    assert _cast_chill(game, [0], 1).supported
+
+    game.confirm_optional_pay(0, accept=True, option=1)
+    game._settle()
+    paid = sum(
+        1 for perm in p0.battlefield
+        if perm.card.name == "Snow-Covered Island" and perm.tapped
+    )
+    assert paid == 2
+
+    _finish_combat(game)
+    assert p1.life == 18, "the damage was dealt"
+    assert any(perm is attacking[0] for perm in game.all_permanents())
+
+
+def test_winters_chill_binds_each_outcome_to_its_own_creature(set_pool):
+    """One offer per chosen creature, and each answer acts on the creature its
+    offer was about.
+
+    The failure this pins is the one the loop makes easy: the resolution's own
+    target list is *every* chosen creature, so a shield or a delayed destroy
+    that read it would land on the first one twice.
+    """
+    pool = set_pool("ICE")
+    game, p0, p1, attacking = _chill_game(
+        pool, attackers=("Balduvian Bears", "Balduvian Barbarians"),
+    )
+    assert _cast_chill(game, [0, 1], 2).supported
+    assert len(game.pending_choices_of("optional_pay", 0)) == 2
+
+    game.confirm_optional_pay(0, accept=False)           # the Bears' controller
+    game._settle()
+    game.confirm_optional_pay(0, accept=True, option=0)  # the Barbarians'
+    game._settle()
+    _finish_combat(game)
+
+    assert p1.life == 18, "the Bears' 2 damage; the shielded Barbarians dealt none"
+    alive = {
+        perm.card.name for perm in game.all_permanents()
+        if perm.card.name.startswith("Balduvian")
+    }
+    assert alive == {"Balduvian Barbarians"}
+
+
+def test_winters_chill_offers_nothing_a_controller_cannot_afford(set_pool):
+    """CR 601.2h: an offer nobody can pay is not made, and the decline branch
+    applies. With no untapped land the creature is simply destroyed at end of
+    combat rather than sitting behind a prompt nobody can answer."""
+    pool = set_pool("ICE")
+    game, p0, p1, attacking = _chill_game(pool, payer_lands=0)
+    assert _cast_chill(game, [0], 1).supported
+
+    assert not game.pending_choices_of("optional_pay", 0)
+    _finish_combat(game)
+    assert [card.name for card in p0.graveyard] == ["Balduvian Bears"]
+
+
+def test_winters_chill_shield_ends_with_the_combat_it_names(set_pool):
+    """"...this combat", not "this turn". The window is data on the shield, so
+    the end-of-combat sweep ends it -- read and dropped, the creature would go
+    on being unable to deal or take damage for the rest of the turn."""
+    pool = set_pool("ICE")
+    game, p0, p1, attacking = _chill_game(pool)
+    assert _cast_chill(game, [0], 1).supported
+    game.confirm_optional_pay(0, accept=True, option=0)
+    game._settle()
+    assert attacking[0].metadata.get("prevent_combat_damage_direction_until_eot")
+
+    _finish_combat(game)
+    assert not attacking[0].metadata.get(
+        "prevent_combat_damage_direction_until_eot"
+    ), "the shield expired with the combat phase, not with the turn"
+# --- end W4G4 ---

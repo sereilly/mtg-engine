@@ -76,6 +76,7 @@ from engine.activation_permissions import (  # noqa: E402
     permission_clause_readable,
 )
 from engine.cost_x_definitions import (  # noqa: E402
+    cast_x_ceiling_line,
     cast_x_definition_line,
     cost_x_definition_readable,
 )
@@ -318,6 +319,13 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # instruction — and the claim asks that module rather than a phrase list,
     # for the reason every entry above does.
     ("cost_x_definitions.py (cast)", cast_x_definition_line),
+    # And the **bound** half: "X can't be greater than the number of snow lands
+    # you control." (Winter's Chill, CR 601.2b.) The caster still announces X;
+    # the casting path refuses one above the board's number and the picker
+    # never offers one, so again there is no instruction. Asked through the
+    # module that counts it, like every entry above.
+    ("cost_x_definitions.py (ceiling)",
+     lambda line: cast_x_ceiling_line(line) is not None),
     # "Players play with their hands revealed." (Revelation.) CR 701.20a, whose
     # whole effect is who may see what -- so the consumer is the per-seat
     # serialization in web/serialization.py, reading engine/revealed_hands.py's
