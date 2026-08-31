@@ -14,6 +14,7 @@ from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_path
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
+from tests.helpers import _nosick
 
 
 @pytest.fixture(scope="module")
@@ -389,3 +390,176 @@ def test_gravity_sphere_gives_flying_back_when_it_leaves(set_pool):
     game._recalculate_lord_buffs()
 
     assert (mine.has_keyword("flying"), theirs.has_keyword("flying")) == (True, True)
+
+
+# --- FixA: "of their choice" is the affected player's ---
+
+
+def _abyss_board(set_pool, seats: int = 2, interactive=frozenset()):
+    """The Abyss on seat 0, and two creatures on every other seat.
+
+    Two creatures rather than one, because "of their choice" is only visible
+    where there is a choice to make: with one candidate every reading of the
+    card — the controller picking, the affected player picking, and the
+    resolver picking whatever it finds first — lands on the same permanent.
+    """
+    leg, lea = set_pool("LEG"), set_pool("LEA")
+    # Libraries, because the upkeep this test is about is followed by a draw
+    # step: an empty library loses the game (CR 104.3c) and takes the seat's
+    # creatures with it, which would answer this question for the wrong reason.
+    deck = lambda: [lea["Forest"]] * 5
+    players = [PlayerState(
+        name="P0", battlefield=[Permanent(card=leg["The Abyss"])], library=deck(),
+    )]
+    for seat in range(1, seats):
+        players.append(PlayerState(name=f"P{seat}", library=deck(), battlefield=[
+            _nosick(Permanent(card=lea["Grizzly Bears"])),
+            _nosick(Permanent(card=lea["Serra Angel"])),
+        ]))
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game, players
+
+
+def test_the_abyss_asks_the_player_whose_upkeep_it_is(set_pool):
+    """"…of their choice" is not a property of any candidate, so no matcher can
+    test it — which is why ``TESTABLE_SUBJECT_FILTER_KEYS`` deliberately omits
+    the word. It shipped in the payload of a single-target destroy anyway, where
+    nothing read it, and the effect quietly became the *controller's* pick.
+
+    Read now as Preacher's decomposition: a ``choose_permanent`` armed on the
+    seat the firing event froze, and a destroy behind it acting on the id that
+    prompt recorded.
+    """
+    program = compile_card_oracle(set_pool("LEG")["The Abyss"])
+    assert program.supported, program.reason
+    trigger = program.triggered_abilities[0]
+    assert trigger.condition.kind == "upkeep_each"
+
+    steps = trigger.instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "choose_permanent", "destroy_target_permanent",
+    ]
+    choose, destroy = steps
+    # Who is asked, and whose battlefield they may pick from: one seat named
+    # twice by the card ("**that player** … **their** choice"), so both halves
+    # read the same frozen seat rather than two answers free to disagree.
+    assert choose.payload["chooser"] == "event_subject_player"
+    assert choose.payload["controlled_by"] == "chooser"
+    assert destroy.payload["permanents_from"] == choose.payload["result_key"]
+    assert destroy.payload["bypass_regeneration"] is True
+    # And neither of the two keys nothing could read survives into the payload:
+    # "of their choice" is performed by the prompt, and "that player controls"
+    # by where the prompt draws its candidates from.
+    assert "their_choice" not in choose.payload["filter"]
+    assert "controller" not in choose.payload["filter"]
+    assert choose.payload["filter"] == {
+        "type_filter": "creature", "exclude_types": ["artifact"],
+    }
+
+
+def test_the_abyss_destroys_one_creature_of_the_player_whose_upkeep_it_is(set_pool):
+    """Three seats, because two make the bug invisible: the resolver was handed
+    the *default opposing seat*, which in a duel is the same player the card
+    names and with three seats is not."""
+    game, players = _abyss_board(set_pool, seats=3)
+
+    game.start_turn(2)
+    game._settle()
+
+    assert [c.name for c in players[2].graveyard] == ["Grizzly Bears"]
+    assert players[1].graveyard == []
+    assert [p.card.name for p in game.controlled_by(2)] == ["Serra Angel"]
+
+
+def test_the_abyss_destroys_its_own_controllers_creature_on_their_upkeep(set_pool):
+    """"Each player's upkeep" includes the controller's own, and on that upkeep
+    "that player" is them. The seat was read off ``context.target`` — never the
+    controller — so the World enchantment its owner built a deck around was the
+    one player it never touched."""
+    leg, lea = set_pool("LEG"), set_pool("LEA")
+    mine = _nosick(Permanent(card=lea["Hill Giant"]))
+    p0 = PlayerState(name="P0", battlefield=[Permanent(card=leg["The Abyss"]), mine])
+    p1 = PlayerState(name="P1", battlefield=[_nosick(Permanent(card=lea["Grizzly Bears"]))])
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+
+    game.start_turn(0)
+    game._settle()
+
+    assert [c.name for c in p0.graveyard] == ["Hill Giant"]
+    assert p1.graveyard == []
+
+
+def test_the_abyss_prompts_the_affected_player_who_picks(set_pool):
+    """The prompt is owed by the seat the card names, not by the ability's
+    controller — and the resolution waits for it (CR 608.2)."""
+    game, players = _abyss_board(set_pool, seats=2, interactive={0, 1})
+
+    game.start_turn(1)
+    game._settle()
+
+    prompt = game.waiting_prompt()
+    assert prompt is not None
+    assert (prompt.kind, prompt.player_index) == ("permanent_choice", 1)
+    offered = game.live_permanent_choices(game.pending_choices[0])
+    assert sorted(p.card.name for p in offered) == ["Grizzly Bears", "Serra Angel"]
+
+    angel = next(p for p in offered if p.card.name == "Serra Angel")
+    assert game.confirm_permanent_choice(1, angel.permanent_id)
+    game._settle()
+
+    # The one they chose, not the one board order would have found first.
+    assert [c.name for c in players[1].graveyard] == ["Serra Angel"]
+
+
+def test_a_non_interactive_seat_takes_the_stated_default(set_pool):
+    """``default_at_arm``: an AI or headless seat never queues the prompt, so
+    the whole resolution still finishes inline. The stated default is board
+    order, which is what keeps a seeded run reproducible."""
+    game, players = _abyss_board(set_pool, seats=2)
+
+    game.start_turn(1)
+    game._settle()
+
+    assert game.pending_choices == []
+    assert [c.name for c in players[1].graveyard] == ["Grizzly Bears"]
+
+
+def test_the_abyss_never_offers_an_artifact_creature(set_pool):
+    """"**Nonartifact** creature" narrows the candidates the prompt lists, so a
+    board of nothing but artifact creatures loses nothing at all."""
+    leg = set_pool("LEG")
+    horse = _nosick(Permanent(card=leg["Bronze Horse"]))
+    p0 = PlayerState(name="P0", battlefield=[Permanent(card=leg["The Abyss"])])
+    p1 = PlayerState(name="P1", battlefield=[horse])
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+
+    game.start_turn(1)
+    game._settle()
+
+    assert game.is_on_battlefield(horse)
+    assert p1.graveyard == []
+
+
+def test_the_abyss_ignores_a_regeneration_shield(set_pool):
+    """"It can't be regenerated" (CR 701.19c): the shield is not applied. The
+    rider rides the *destroy* step of the sequence, which is the step that has
+    to know."""
+    leg, lea = set_pool("LEG"), set_pool("LEA")
+    bears = _nosick(Permanent(card=lea["Grizzly Bears"]))
+    bears.regeneration_shield = 1
+    p0 = PlayerState(name="P0", battlefield=[Permanent(card=leg["The Abyss"])])
+    p1 = PlayerState(name="P1", battlefield=[bears])
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+
+    game.start_turn(1)
+    game._settle()
+
+    assert [c.name for c in p1.graveyard] == ["Grizzly Bears"]
+
+
+# --- end FixA ---

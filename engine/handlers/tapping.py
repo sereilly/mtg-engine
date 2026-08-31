@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from ..oracle_types import X_FROM_COUNT
 from ._common import (
+    frozen_that_player_seat,
     permanent_matches_filter,
     resolve_amount,
     resolve_target_permanent,
@@ -255,8 +256,8 @@ def _tap_or_untap_all_matching(
     # that seat, exactly as ``untap_up_to_matching`` rewrites Mudslide's "they
     # control".
     if described.get("controller") == "that_player":
-        frozen = (context.trigger_context or {}).get("event_subject_player")
-        if not isinstance(frozen, int) or not (0 <= frozen < len(game.players)):
+        frozen = frozen_that_player_seat(game, context)
+        if frozen is None:
             return False, "no seat was frozen for 'that player'"
         observer = frozen
         described["controller"] = "you"

@@ -1201,6 +1201,44 @@ def roles_still_legal(
     return bool(roles)
 
 
+#: The context keys a fire site freezes "that player" under, in the order this
+#: reads them. Two, because two kinds of event name a player directly: one whose
+#: *subject is a seat* ("each player's upkeep", "an opponent draws a card",
+#: "a player attacks") and one whose subject is a **damage event**, whose seat
+#: the announcement has always called ``defending_player_index``. A firing
+#: stamps one or the other, never both, so the order is a lookup and not a
+#: precedence.
+#:
+#: One table because "that player" is one printed phrase. Before this it was
+#: three handlers each hardcoding whichever key its own card happened to
+#: freeze, which is why the fourth — the targeted destroy, The Abyss and Feline
+#: Sovereign — could be written with **neither** and nobody noticed: there was
+#: no one place the omission was visible.
+_THAT_PLAYER_CONTEXT_KEYS: tuple[str, ...] = (
+    "event_subject_player",
+    "defending_player_index",
+)
+
+
+def frozen_that_player_seat(game: Game, context: OracleExecutionContext) -> int | None:
+    """The seat a printed "**that player**" names, or ``None`` if none was frozen.
+
+    ``subject_matches`` refuses ``controller: "that_player"`` outright and says
+    why: it is not a seat any read of the board can make, because it names a
+    player the *event* picked. The resolution holding the trigger's context is
+    the only place that seat exists (CR 603.10), so this is where the phrase is
+    answered — and a caller that gets ``None`` must end the effect rather than
+    drop the narrowing, since a dropped seat on a destroy is not a card that
+    does less, it is one that reaches the wrong battlefield.
+    """
+    frozen = context.trigger_context or {}
+    for key in _THAT_PLAYER_CONTEXT_KEYS:
+        seat = frozen.get(key)
+        if isinstance(seat, int) and 0 <= seat < len(game.players):
+            return seat
+    return None
+
+
 def resolve_role_permanent(
     game: Game,
     context: OracleExecutionContext,

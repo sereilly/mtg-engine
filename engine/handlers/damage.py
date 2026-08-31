@@ -14,7 +14,7 @@ from ..named_counters import counters_on
 from ..resumption import run_resumable
 from ._common import (
     apply_damage_to_creature, apply_temp_pt_boost, evaluate_count, flip_coin,
-    permanent_matches_filter, resolve_amount,
+    frozen_that_player_seat, permanent_matches_filter, resolve_amount,
     resolve_target_permanent, resolve_target_permanents,
 )
 from ..oracle_types import X_FROM_COUNT_PER_RECIPIENT
@@ -240,8 +240,10 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # announcement used to call it `damaged_seat` and the combat one
         # `defending_player_index`, which is a second name for one thing and the
         # reason a handler could only be written against one of them. There is
-        # one announcement now and one key.
-        seat = (context.trigger_context or {}).get("defending_player_index")
+        # one announcement now and one key — read through the one reader of the
+        # printed phrase, so a *fourth* handler cannot be written against a key
+        # this one does not know about.
+        seat = frozen_that_player_seat(game, context)
         if seat is None:
             game.log.append(f"{card.name}: no player for 'that player' to name")
             return True, "resolved"

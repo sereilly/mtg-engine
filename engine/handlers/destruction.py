@@ -10,7 +10,8 @@ from ..oracle_types import PER_OBJECT_SEAT_RECORDS
 from ..resumption import run_resumable
 from ..divided_damage import DIVIDED_TARGETS, divided_entry
 from ._common import (
-    apply_damage_to_creature, permanent_matches_filter, resolve_role_permanent,
+    apply_damage_to_creature, frozen_that_player_seat,
+    permanent_matches_filter, resolve_role_permanent,
     resolve_target_permanent, resolve_target_permanents,
 )
 from .registry import effect_handler
@@ -398,8 +399,8 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
     # less, it is one that takes the board.
     attacking_seat: int | None = None
     if filters.get("controller") == "that_player":
-        frozen = (context.trigger_context or {}).get("event_subject_player")
-        if not isinstance(frozen, int) or not (0 <= frozen < len(game.players)):
+        frozen = frozen_that_player_seat(game, context)
+        if frozen is None:
             game.log.append(
                 f"{context.card.name}: no player for 'that player' to name"
             )
@@ -521,6 +522,40 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     target = context.target
     card = context.card
     source_permanent = context.source_permanent
+    # "…destroy target nonartifact creature that player controls **of their
+    # choice**." (The Abyss.) The victim was picked by another seat as this
+    # resolution ran, so it comes out of the scratchpad rather than off the
+    # ability's own target — the same ``permanents_from`` reading
+    # ``steal_target_linked_to_source`` makes of the very same producer, which
+    # records one id rather than a list.
+    #
+    # Nothing recorded is a legal outcome, not an error: the seat had no
+    # creature, or the one they chose left before the destroy step ran
+    # (CR 400.7 — what comes back is a new object).
+    recorded_key = instruction.payload.get("permanents_from")
+    if recorded_key is not None:
+        permanent_id = context.results.get(recorded_key)
+        victim = (
+            game.permanent_by_id(permanent_id) if permanent_id is not None else None
+        )
+        died: list[Permanent] = []
+        if victim is not None:
+            seat = game.controller_index_of(victim)
+            if seat is not None:
+                died = game._destroy_swept_permanents(
+                    game.players[seat],
+                    lambda candidate, chosen=victim: candidate is chosen,
+                    allow_regeneration=not instruction.payload.get(
+                        "bypass_regeneration"
+                    ),
+                )
+        context.results["destroyed_this_way_objects"] = died
+        context.results["destroyed_this_way"] = len(died)
+        game.log.append(
+            f"{card.name} destroyed " + ", ".join(p.card.name for p in died)
+            if died else f"{card.name}: nothing to destroy"
+        )
+        return True, "resolved"
     # "Destroy X target snow lands." (Avalanche.) The several-targets
     # description says a *list* was collected, so each slot resolves strictly
     # and one that has left is dropped rather than slid onto another
@@ -614,6 +649,27 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
             if died else f"{card.name}: nothing to destroy"
         )
         return True, "resolved"
+    # "…destroy up to one target artifact or enchantment **that player**
+    # controls." (Feline Sovereign.) A seat the firing event picked — whoever
+    # the Cats damaged — and not one any read of the board can name, so
+    # ``subject_matches`` refuses it outright and the resolution holding the
+    # trigger's context is what answers. Answered as *whose battlefield* rather
+    # than as a filter key, because that is what the resolver below scans: the
+    # keyword arguments it takes are the filter, and ``controller`` is not among
+    # them, so the phrase was simply dropped and the destroy landed on
+    # ``context.target`` — the default opposing seat, which is the right player
+    # in a two-player game by coincidence and the wrong one the moment there are
+    # three.
+    #
+    # An unresolvable seat ends the resolution, for the reason the sweep beside
+    # this one ends: a dropped seat is not an ability that destroys less, it is
+    # one that destroys somebody else's permanent.
+    if instruction.payload.get("controller") == "that_player":
+        seat = frozen_that_player_seat(game, context)
+        if seat is None:
+            game.log.append(f"{card.name}: no player for 'that player' to name")
+            return True, "resolved"
+        target = game.players[seat]
     # A later step of the same resolution may read the victim's controller
     # ("Destroy target creature. Its controller loses 2 life." — Liliana,
     # Death Mage), and by then the permanent is gone — record it now

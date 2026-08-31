@@ -2394,3 +2394,47 @@ def test_alpine_houndmaster_finds_each_named_card_once(set_pool):
     assert game.pending_choices == [], (
         "both slots read \"into your hand\", so there is nothing to ask"
     )
+
+
+# --- FixA: "that player" is a seat the event froze ---
+
+
+def test_feline_sovereign_destroys_a_permanent_of_the_player_its_cats_damaged(set_pool):
+    """"…destroy up to one target artifact or enchantment **that player**
+    controls." The seat is the one the batched combat-damage trigger froze, and
+    nothing any read of the board can name — so ``subject_matches`` refuses the
+    word and the resolution holding the trigger's context answers it.
+
+    Three seats, because ``destroy_target_permanent`` never read the key at all:
+    its resolver's keyword arguments *are* the filter and ``controller`` is not
+    among them, so the phrase was dropped and the destroy landed on the default
+    opposing seat. In a duel that is the same player the Cats damaged; here it
+    is the bystander, whose Black Lotus this ability destroyed.
+    """
+    pool = set_pool("M21")
+    sovereign = _nosick(Permanent(card=pool["Feline Sovereign"]))
+    bystander_crypt = Permanent(card=pool["Tormod's Crypt"])
+    damaged_crypt = Permanent(card=pool["Tormod's Crypt"])
+    p0 = PlayerState(name="P0", battlefield=[sovereign])
+    p1 = PlayerState(name="P1", battlefield=[bystander_crypt])
+    p2 = PlayerState(name="P2", battlefield=[damaged_crypt])
+    game = Game(players=[p0, p1, p2])
+    game._settle()
+
+    game.active_player_index = 0
+    game.current_turn_phase = "combat"
+    game.current_step = "declare_attackers"
+    game.declare_attackers(0, [0], defending_player_index=2)
+    game.current_step = "declare_blockers"
+    game.declare_blockers(2, {})
+    game.current_step = "combat_damage"
+    game.resolve_combat_damage(0)
+    game._settle()
+
+    assert not game.is_on_battlefield(damaged_crypt)
+    assert game.is_on_battlefield(bystander_crypt), (
+        "the seat the Cats did not damage keeps its artifact"
+    )
+
+
+# --- end FixA ---

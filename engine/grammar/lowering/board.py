@@ -168,8 +168,16 @@ _SACRIFICE_PAYERS: frozenset[str] = frozenset(
 #   look-alike on the same battlefield is a different permanent.
 # - ``their_choice`` ("a creature **of their choice**", Run Afoul) says the
 #   sacrificing player picks, which is what CR 701.21a already says and what the
-#   prompt already does. It is read and dropped *here*, at the one lowering whose
-#   rule puts the choice there; anywhere else the word refuses.
+#   prompt already does. It is read and dropped here, at a lowering whose rule
+#   puts the choice there; anywhere else the word refuses.
+#
+#   "Anywhere else the word refuses" was a claim and not a mechanism until The
+#   Abyss: ``to_payload`` emits ``their_choice`` so a gate can see it, but only
+#   the gates asking "are all these keys testable?" look, and the single-target
+#   destroy asked none — so the word rode into the payload, nothing read it, and
+#   the ability's controller picked. ``_filter_payload`` now refuses it unless
+#   the call site names it in ``carried_separately``, which is what makes the
+#   sentence above true of every lowering rather than of this one.
 
 
 def _per_payer_count(node: ast.Sacrifice) -> dict:

@@ -216,6 +216,22 @@ def _chooser_seat(game, payload: dict, context) -> int | None:
     """
     caster_seat = game.players.index(context.caster)
     chooser = payload.get("chooser")
+    if chooser == "event_subject_player":
+        # "At the beginning of each player's upkeep, destroy target nonartifact
+        # creature **that player** controls **of their choice**." (The Abyss.)
+        # The seat the firing event *is about*, frozen by the fire site
+        # (CR 603.10) — one step over from the branch below, which names the
+        # controller of an object the event was about. A trigger that fires
+        # once per player has a different seat every firing, and by resolution
+        # the only one still readable off the board is the source's controller,
+        # which is the wrong one on every upkeep but their own. None when no
+        # event named one, which the caller reports as a choice nobody could
+        # make rather than handing the pick to the ability's controller — the
+        # seat the card has just said must not choose.
+        seat = (context.trigger_context or {}).get("event_subject_player")
+        if isinstance(seat, int) and 0 <= seat < len(game.players):
+            return seat
+        return None
     if chooser == "event_subject_controller":
         # "**That creature's** controller chooses …" (Takklemaggot): the seat
         # the firing event froze, which is the one place it can be read — the
