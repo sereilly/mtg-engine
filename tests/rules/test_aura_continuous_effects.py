@@ -556,3 +556,94 @@ def test_502_3_counter_conditioned_untap_reads_the_counter_on_the_aura(catalog):
     assert aura_restriction_active(bear, "doesnt_untap") is False, (
         "the creature's counters are not the Aura's"
     )
+
+
+# --- W2G4: Auras and attachments ---
+def _cast_aura(catalog, aura_name, host, *, pips):
+    """Cast *aura_name* from P1's hand at *host*, which P2 controls, and let it
+    resolve — so the resolution-time half of ``_apply_aura_effect`` runs. An
+    Aura simply attached with ``attach_aura`` never reaches it.
+    """
+    p1 = PlayerState(name="P1", life=20, hand=[catalog[aura_name]])
+    p2 = PlayerState(name="P2", battlefield=[host], life=20)
+    game = Game(players=[p1, p2])
+    for symbol, count in pips.items():
+        p1.mana_pool[symbol] = count
+    result = game.cast_from_hand(
+        0, aura_name, target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+    aura = next(
+        perm for perm in game.all_permanents() if perm.card.name == aura_name
+    )
+    return game, aura
+
+
+@pytest.mark.cr("611.3", "613.10")
+def test_611_3_a_control_change_ends_when_its_aura_is_bounced(catalog):
+    """Control Magic returned to its controller's *hand* — not to a graveyard.
+
+    The Aura's effects were ended from ``_permanent_to_graveyard``, which is the
+    destination rather than the departure, so every other way off the
+    battlefield left the contribution standing: the creature stayed stolen for
+    the rest of the game while the Aura sat in a hand.
+    """
+    bear = Permanent(card=catalog["Grizzly Bears"])
+    game, aura = _cast_aura(catalog, "Control Magic", bear, pips={"U": 2, "generic": 1})
+    assert game.controller_index_of(bear) == 0
+
+    game.remove_from_battlefield(aura)
+    game.put_card_into_hand(game.players[0], aura.card)
+    game._settle()
+
+    assert game.controller_index_of(bear) == 1
+
+
+@pytest.mark.cr("611.3", "305.7")
+def test_611_3_a_land_type_change_ends_when_its_aura_is_bounced(catalog):
+    """The same departure, the same fix, a different layer: Evil Presence's
+    layer-4 contribution outlived the Aura for exactly the same reason."""
+    forest = Permanent(card=catalog["Forest"])
+    game, aura = _cast_aura(catalog, "Evil Presence", forest, pips={"B": 1})
+    assert forest.has_type("swamp") and not forest.has_type("forest")
+
+    game.remove_from_battlefield(aura)
+    game.put_card_into_hand(game.players[0], aura.card)
+    game._settle()
+
+    assert forest.has_type("forest") and not forest.has_type("swamp")
+
+
+@pytest.mark.cr("611.3")
+def test_611_3_a_quoted_ability_granted_beside_a_pt_bonus_is_granted(catalog):
+    """"Enchanted creature gets +2/+0 and has "When this creature dies, draw a
+    card."" (Infernal Scarring.) One line, two channels — and the quoted-grant
+    pattern was anchored without the P/T prefix, so the card applied the +2/+0
+    and granted nothing at all while reporting supported."""
+    from engine.auras import attach_aura, detach_aura
+    from engine.oracle import compile_card_oracle
+
+    bear = Permanent(card=catalog["Grizzly Bears"])
+    aura = Permanent(card=catalog["Infernal Scarring"])
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[bear, aura], life=20),
+            PlayerState(name="P2", life=20),
+        ]
+    )
+    attach_aura(aura, bear)
+    game._settle()
+
+    assert (bear.effective_power, bear.effective_toughness) == (4, 2)
+    assert [
+        trig.condition.kind
+        for trig in compile_card_oracle(bear.effective_card).triggered_abilities
+    ] == ["dies"]
+
+    detach_aura(aura, bear)
+    game._settle()
+    assert not compile_card_oracle(bear.effective_card).triggered_abilities
+# --- end W2G4 ---

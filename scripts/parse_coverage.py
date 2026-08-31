@@ -86,7 +86,10 @@ from engine.untap_restrictions import (  # noqa: E402
     untap_restriction_for,
 )
 from engine.hand_size import hand_size_line  # noqa: E402
-from engine.auras import aura_cost_reduction_sentences  # noqa: E402
+from engine.auras import (  # noqa: E402
+    aura_board_counted_penalty_sentences,
+    aura_cost_reduction_sentences,
+)
 from engine.oracle import (  # noqa: E402
     _is_supported_keyword_line,
     _is_supported_static_creature_line,
@@ -694,6 +697,15 @@ CARD_CHANNELS: tuple[tuple[str, object], ...] = (
     (
         "auras.py (attached ability cost reduction)",
         lambda card, s: s in aura_cost_reduction_sentences(card.oracle_text or ""),
+    ),
+    (
+        # Snowblind, the second reader shaped that way: the penalty, the two
+        # boards it can be counted on and the clamp are four sentences that mean
+        # nothing apart, so the derivation matches them joined.
+        "auras.py (board-counted clamped penalty)",
+        lambda card, s: s in aura_board_counted_penalty_sentences(
+            card.oracle_text or ""
+        ),
     ),
 )
 

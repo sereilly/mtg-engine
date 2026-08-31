@@ -346,12 +346,15 @@ def _lower_doesnt_untap_next_step(
     # "**It** doesn't untap during its controller's next two untap steps."
     # (Telekinesis.) The singular twin of "those creatures": the bare pronoun,
     # which after a sentence that tapped something names what was tapped. It is
-    # told apart from "this creature" by carrying no noun at all — the printed
-    # word for the source is a noun phrase, and reading them as one would point
-    # the marker at the ability's own permanent.
+    # told apart from "this creature" by the quantifier the pronoun carries —
+    # the printed word for the source is a noun phrase and reads as ``"this"``,
+    # and reading them as one would point the marker at the ability's own
+    # permanent. The empty filter is kept beside it because that is what makes
+    # the pronoun *bare*: "it" narrowed by anything is a phrase this production
+    # has not met.
     bare_pronoun = (
         isinstance(subject, ast.TargetSpec)
-        and subject.quantifier == "this"
+        and subject.quantifier == "it"
         and subject.filter.is_source
         and subject.filter.to_payload() == {}
     )
@@ -497,12 +500,26 @@ def _fused_upkeep_pay_to_untap(
         # the enchanted controller's offers "that player". A row whose actor
         # does not match its condition is a sentence neither handler implements.
         return None
-    # The consequence is untapping the source and nothing else. `untap_self`'s
-    # handler is not consulted here — the fused handler untaps `ctx.permanent`
-    # directly — so the subject is checked against the source rather than
+    # The consequence is untapping one permanent and nothing else, and *which*
+    # permanent is the row's: `upkeep_pay_to_untap_self` untaps ``ctx.permanent``
+    # and `…_enchanted` untaps what it is attached to. Neither untap lowering is
+    # consulted here — the fused handlers do the untapping themselves — so the
+    # subject is checked against the object that row's handler moves rather than
     # against what any untap lowering would accept.
+    #
+    # Paralyze prints "untap **the** creature", which is a pronoun
+    # (`references.py`) and is rebound to the trigger's event subject — the
+    # enchanted creature. So the enchanted row's subject is the attached
+    # permanent, not the source; reading it as the source only ever worked while
+    # the event carried no subject for the pronoun to be pointed at.
     then = statement.then
-    if not isinstance(then, ast.Untap) or not _is_source(then.subject):
+    if not isinstance(then, ast.Untap):
+        return None
+    subject_ok = (
+        _is_enchanted(then.subject) if fused_kind == "upkeep_pay_to_untap_enchanted"
+        else _is_source(then.subject)
+    )
+    if not subject_ok:
         return None
     return (
         OracleInstruction(

@@ -547,6 +547,15 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # prints one.
             if following is not None and _singular(following) in ("permanent", "card"):
                 continue
+            # "a **Caribou token**" (Caribou Range's sacrifice cost). CR 111.1's
+            # fact about the object, printed *after* the subtype rather than in
+            # front of a bare noun — the branch below reads "tokens created with
+            # this creature" (Tetravus), where the word is the head. Here it is a
+            # narrowing on a head already read, so it is consumed here: left
+            # unread it is one unconsumed word, which refuses the whole line.
+            if following in ("token", "tokens"):
+                d.token_only = True
+                stream.advance()
             d.is_card = _accept_card_noun(stream)
             d.saw_head = True
             break

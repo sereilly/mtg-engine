@@ -78,9 +78,27 @@ class EveryOf:
 
 @dataclass(frozen=True)
 class IsState:
-    """"it is untapped", "this creature is attacking"."""
+    """"it is untapped", "this creature is attacking", "it didn't attack this
+    turn".
+
+    Every state is a field the permanent already carries, which is what makes
+    the word a parameter rather than a production apiece — the evaluator reads
+    ``getattr(permanent, state)`` and nothing here has to know what blocking
+    means.
+
+    ``attacked_this_turn`` is a *record* of the turn rather than a present
+    state, and it is on this node anyway because it is asked the same way, of
+    the same object, off the same permanent; the cleanup step sweeps it. What
+    keeps it honest is that nothing about the reading differs — a past-tense
+    axis the board could not answer would want its own node, which is what
+    :class:`StartedTheTurnState` beside it is.
+
+    The **subject** is on the node because it is not always the source: an
+    Aura's "…if it didn't attack this turn" (Aggression) asks about the
+    creature it enchants, and ``rebinding`` is what points the pronoun there.
+    """
     subject: TargetSpec
-    state: str          # tapped | untapped | attacking | blocking
+    state: str          # tapped | attacking | blocking | attacked_this_turn
     negated: bool = False
 
 

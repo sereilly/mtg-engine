@@ -51,7 +51,23 @@ _ENCHANT_TARGET_MATCHERS = {
     "land": lambda perm: perm.card.primary_type == "land",
     "enchantment": lambda perm: perm.has_type("enchantment"),
     "wall": lambda perm: perm.has_type("wall"),
+    # "Enchant **permanent**" (Faith's Fetters). Everything on the battlefield
+    # is one (CR 110.1), so the answer is yes — written out rather than left to
+    # the fallback below, which says yes for a noun nobody has read.
+    "permanent": lambda perm: True,
 }
+
+#: "Enchant **non-Wall** creature" (Aggression). The negation is a *prefix* on
+#: the noun the table above already knows, so it is read here rather than
+#: becoming a row per excluded subtype — "non-Wall creature" and "non-Zombie
+#: creature" are one clause with the word as payload.
+#:
+#: Without it the whole phrase missed the table and the fallback said yes, so
+#: Aggression could be put on a Wall — the restriction printed on the card, the
+#: card reported supported, and nothing anywhere enforcing it. Through
+#: ``has_type`` so it is CR 613 layer 4's answer: a creature an effect has made
+#: a Wall is a Wall to this clause, and one whose Wall type was removed is not.
+_NON_SUBTYPE_ENCHANT = re.compile(r"^non-(?P<subtype>[a-z]+) (?P<noun>.+)$")
 
 
 def aura_enchant_noun(card: CardDefinition) -> str | None:
@@ -114,10 +130,26 @@ def enchant_seat_satisfied(game, aura_seat: int | None, host_seat: int | None, n
 
 
 def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
+    """Whether *permanent* is a legal host for an Aura printing "enchant *noun*".
+
+    Read by the cast gate (CR 601.2c), the target picker,
+    ``auras.aura_attach_refusal`` and the CR 704.5m sweep — one answer, so the
+    list offered and the rule enforced cannot drift.
+    """
     noun = enchant_subject_seat(noun)[0]
+    excluded = None
+    negated = _NON_SUBTYPE_ENCHANT.match(noun)
+    if negated is not None:
+        excluded, noun = negated.group("subtype"), negated.group("noun")
     matcher = _ENCHANT_TARGET_MATCHERS.get(noun)
     if matcher is None:
-        return True  # unknown enchant type — treat any permanent as legal
+        # A noun nobody has read. Every one the pool prints has a row above, so
+        # this is unreachable today and is kept as the permissive answer rather
+        # than made strict: a printed clause reaching here is a gap to fill, and
+        # refusing every host would make the Aura uncastable instead of loud.
+        return True
+    if excluded is not None and permanent.has_type(excluded):
+        return False
     return matcher(permanent)
 
 

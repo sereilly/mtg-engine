@@ -36,6 +36,13 @@ from .vocabulary import (CARD_TYPES, CREATURE_TYPES, KEYWORD_FAMILIES,
                          KEYWORD_INDEX, NUMBER_WORDS,
                          NUMERIC_ARGUMENT_KEYWORDS, SUBTYPE_INDEX,
                          match_longest)
+from .keywords import (
+    PROTECTION_FROM_CHOSEN_COLOR,
+    _accept_bands_with_other,
+    _parse_keywords,
+)
+
+
 _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # "for as long as this artifact remains tapped" (Ashnod's Battle Gear,
     # Tawnos's Weaponry). A *linked* duration: it ends when the source untaps
@@ -105,6 +112,8 @@ _DURATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
 #: combat restriction ("can't attack unless defending player controls a
 #: Forest") and the choose-a-type grant (Giant Slug) — and a fragment two
 #: families share is what this module is for.
+
+
 BASIC_LAND_WORDS: tuple[str, ...] = (
     "plains", "island", "swamp", "mountain", "forest",
 )
@@ -138,9 +147,13 @@ def is_pt_counter(kind: str) -> bool:
 # with one number changed, and spelling the 4 in made every other threshold a
 # non-match. That is why The Rack was a name-keyed hook — not because its
 # sentence was bespoke, but because its number was 3.
+
+
 NUMBER_SLOT = "<n>"
 
 # Zone names a destination clause can end in (CR 400.1).
+
+
 _ZONES = frozenset({"battlefield", "graveyard", "hand", "library", "exile", "stack"})
 
 
@@ -155,6 +168,8 @@ _ZONES = frozenset({"battlefield", "graveyard", "hand", "library", "exile", "sta
 # was already asking. A fragment two families want lives in `phrases`, never
 # in one of them — that coupling is what makes the grouping stop being
 # information, and the layering guard fails on it.
+
+
 def _parse_for_each(stream: TokenStream) -> ast.DiedThisTurn | None:
     """``for each <objects> that died this turn`` — a trailing iteration clause.
 
@@ -264,6 +279,8 @@ def _accept_number(stream: TokenStream) -> int | None:
 #: quantifier rather than a word to skip. Each keeps its own, for the reason
 #: "that" and "those" do: a lowering written for one must fail by name rather
 #: than silently receive the other.
+
+
 PAIR_ORDINALS = ("other", "first")
 
 
@@ -434,147 +451,6 @@ def _accept_literal(stream: TokenStream, *phrase: str) -> tuple[bool, int | None
 #: not known until the effect resolves (CR 609.3). Named once here because the
 #: parser writes it, the grant gate reads it and the handler resolves it, and a
 #: third spelling of the same string is how those three come apart.
-PROTECTION_FROM_CHOSEN_COLOR = "protection from the color of your choice"
-
-
-def _accept_bands_with_other(stream: TokenStream) -> str | None:
-    """One "bands with other [quality]" item of a keyword list, or None.
-
-    Its own reader rather than a ``KEYWORD_INDEX`` entry because the ability's
-    name is not a word: CR 702.22b's keyword carries a printed **noun phrase**
-    ("legendary creatures", "creatures named Wolves of the Hunt"), and the
-    vocabulary index matches fixed word sequences. Magic prints it in quotes for
-    exactly that reason — the quotes are where the quality ends.
-
-    Two printed shapes, and they mean different things:
-
-    * ``"bands with other <quality>"`` — one ability, granted or held.
-    * ``all "bands with other" abilities`` — the **family**, which is what a
-      removal names (Shelkin Brownie, Tolaria). It is not an ability anything
-      has; :func:`engine.banding.expand_ability_removal` is what turns it into
-      the ones a permanent actually has, and lowering is what refuses it as a
-      *grant*.
-
-    A quality the engine cannot test raises rather than returning None: the
-    phrase *is* a bands-with-other ability, so falling back to another
-    production would read the card as something else. Loud, with the clause
-    named, is the answer this parser gives everywhere else.
-    """
-    from ..banding import BANDS_WITH_OTHER, is_implemented
-
-    mark = stream.mark()
-    stream.accept_word("all")
-    if stream.accept_kind(QUOTE) is None:
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase("bands", "with", "other"):
-        stream.reset(mark)
-        return None
-    words: list[str] = []
-    while not stream.exhausted and not stream.at_kind(QUOTE):
-        token = stream.next()
-        # The sentence-ending period Magic prints *inside* the quotes is
-        # punctuation of the quoted ability, not part of the quality.
-        if token.kind == WORD:
-            words.append(token.text)
-    if stream.accept_kind(QUOTE) is None:
-        raise stream.error("unterminated quoted banding ability")
-    # "all \"bands with other\" **abilities**" — the plural head noun belongs to
-    # the family form and is consumed here, or the caller would be left a word
-    # no production reads and would refuse the whole line.
-    stream.accept_word("abilities", "ability")
-    if not words:
-        return BANDS_WITH_OTHER
-    name = f"{BANDS_WITH_OTHER} " + " ".join(words)
-    if not is_implemented(name):
-        raise stream.error(f"unimplemented banding quality {' '.join(words)!r}")
-    return name
-
-
-def _parse_keywords(stream: TokenStream) -> tuple[str, ...]:
-    # "all **landwalk** abilities" (Hammerheim) — a card naming a keyword
-    # *family* rather than listing its members. CR 702.14a makes landwalk a
-    # family of "[type]walk" abilities, so the phrase means every member and the
-    # member list is what everything above this production wants: the loss then
-    # lowers, targets and dispatches as the ordinary keyword list it is, with no
-    # second notion of "a family" for the layer-6 channel to learn.
-    #
-    # Read first and whole, because "all" is not a keyword and the loop below
-    # would stop on it — which is how Hammerheim's second ability refused with
-    # "expected a keyword ability" for a family the engine implements six
-    # members of.
-    family_mark = stream.mark()
-    if stream.accept_word("all"):
-        family = stream.peek_word()
-        if family in KEYWORD_FAMILIES and stream.peek_word(1) in ("ability", "abilities"):
-            stream.advance(2)
-            return KEYWORD_FAMILIES[str(family)]
-    stream.reset(family_mark)
-
-    keywords: list[str] = []
-    while True:
-        banded = _accept_bands_with_other(stream)
-        if banded is not None:
-            name = banded
-            keywords.append(name)
-            if stream.accept_word("and") or stream.accept_word("or"):
-                continue
-            break
-        matched = match_longest(stream.words_from(), 0, KEYWORD_INDEX)
-        if matched is None:
-            break
-        name, consumed = matched
-        stream.advance(consumed)
-        # "protection from red" — the argument belongs to the keyword.
-        if name == "protection" and stream.accept_word("from"):
-            # "…from **the color of your choice**" (Feat of Resistance). CR
-            # 609.3: the colour is chosen as the effect resolves, so the keyword
-            # cannot name it — it names the *choice*, and the grant resolves it.
-            # Read before the bare colour word, which would otherwise consume
-            # "the" and grant protection from a colour called "the".
-            if stream.accept_phrase("the", "color", "of", "your", "choice"):
-                name = PROTECTION_FROM_CHOSEN_COLOR
-            else:
-                colour = stream.peek_word()
-                if colour is not None:
-                    stream.advance()
-                    name = f"protection from {colour}"
-        # "rampage 2" — CR 702.23a's "Rampage N". The number is the whole of
-        # this keyword's argument, exactly as a colour word is protection's, so
-        # it is read here and carried on the keyword string; which keywords take
-        # one is `NUMERIC_ARGUMENT_KEYWORDS`, and the value is payload.
-        #
-        # Optional here, because the two readers of a keyword word want
-        # different things: a *test* asks whether the creature has rampage at
-        # all ("if it doesn't have rampage") and the number would be no part of
-        # the question, while a *grant* has to name the N it grants. So the
-        # parser reads what is printed and `_lower_gain_keyword` is what refuses
-        # a grant with no number — the refusal belongs where the number is
-        # needed, not where the word is read.
-        if name in NUMERIC_ARGUMENT_KEYWORDS:
-            amount = stream.accept_kind(NUMBER)
-            if amount is not None:
-                name = f"{name} {amount.text}"
-        keywords.append(name)
-        # "deathtouch or lifelink" (two items) and "banding, flying, first
-        # strike, or trample" (four) — English punctuates a list of four
-        # differently from a list of two and the card means the same thing
-        # either way, which is the same reason the subtype parser reads both.
-        # A comma is consumed only when a keyword follows it, so a line that
-        # ends its keyword list and goes on keeps the comma for whatever reads
-        # the rest.
-        if stream.accept_word("and") or stream.accept_word("or"):
-            continue
-        comma = stream.mark()
-        if stream.accept_punct(","):
-            stream.accept_word("or")
-            if match_longest(stream.words_from(), 0, KEYWORD_INDEX) is not None:
-                continue
-            stream.reset(comma)
-        break
-    if not keywords:
-        raise stream.error("expected a keyword ability")
-    return tuple(keywords)
 
 
 def _accept_self_reference(stream: TokenStream) -> bool:
@@ -780,6 +656,30 @@ def accept_member_state_clause(stream: TokenStream) -> tuple[str, bool] | None:
     return field_name, (not value) if negated else value
 
 
+def _parse_sacrificed_subject(
+    stream: TokenStream, player: ast.PlayerRef
+) -> ast.Statement:
+    """What a "sacrifice …" sentence names when ``parse_recipient`` refused it.
+
+    Two readings reach here, and neither is a noun phrase the recipient parser
+    has: the object an earlier step of this same ability *bound* ("sacrifice
+    **that creature**", Phantasmal Mount), and a bare count in front of an
+    untargeted plural ("sacrifice **two Islands**", Leviathan). The bound one is
+    tried first because "that creature" would otherwise reach
+    :func:`parse_counted_subject`, which has no count to read and would refuse
+    the whole line.
+
+    Only the *sacrifice* verb comes through this door; the "unless you
+    sacrifice" tails go straight to the counted reader, because an alternative
+    cost naming an object the sentence already chose is not a shape any card
+    prints.
+    """
+    bound = parse_bound_subject(stream)
+    if bound is not None:
+        return ast.Sacrifice(player, bound)
+    return _parse_counted_sacrifice(stream, player)
+
+
 def _parse_counted_sacrifice(
     stream: TokenStream, player: ast.PlayerRef
 ) -> ast.Statement:
@@ -956,6 +856,8 @@ def _parse_opponents_choice(
 # to ``phrases``. ``counters`` reads it for "put a <kind> counter on…" and
 # ``characteristics`` for "<player> gets a <kind> counter"; leaving it with
 # either would have made one family import the other.
+
+
 def _expect_counter_kind(stream: TokenStream, suffix: str = "") -> GToken:
     """The counter's written name, as its token.
 

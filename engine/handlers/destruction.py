@@ -798,6 +798,34 @@ def destroy_bound_permanent(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
+@effect_handler("sacrifice_bound_permanent")
+def sacrifice_bound_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"When this creature leaves the battlefield this turn, **sacrifice that
+    creature**." (Phantasmal Mount.)
+
+    ``destroy_bound_permanent``'s twin, and a different rule: CR 701.21a is a
+    sacrifice, so it is not a destruction — regeneration does not save it, an
+    indestructible creature still goes, and no "if it would be destroyed"
+    replacement ever sees an event. That is why it is its own kind rather than
+    the destroy with a flag.
+
+    The victim is the object the creating ability bound (CR 603.7c), carried by
+    id in the trigger's context, and it is sacrificed by **its own controller**
+    (CR 701.21a) — which need not be whoever controls this ability. A creature
+    already gone is sacrificed by nothing, which is CR 608.2b doing as much as
+    it can rather than a failure.
+    """
+    victim = game.permanent_by_id(
+        (context.trigger_context or {}).get("bound_permanent_id")
+    )
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: the creature it named is gone")
+        return True, "resolved"
+    game.sacrifice_permanent(victim)
+    game.log.append(f"{context.card.name}: {victim.card.name} was sacrificed")
+    return True, "resolved"
+
+
 @effect_handler("destroy_attached_permanent")
 def destroy_attached_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"When enchanted land becomes tapped, destroy it." (Blight.)

@@ -401,6 +401,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # blockers are (CR 509.1h), so it is announced at the combat damage step
     # (engine/phases/combat_damage_step._fire_unblocked_attack_triggers) rather
     # than at declare-attackers with the generic attack triggers.
+    # "Whenever **enchanted creature** attacks and isn't blocked" (Cloak of
+    # Confusion), above the source's own spelling for the same reason every
+    # attached row in this table sits above its unattached twin: one kind,
+    # because it is one event, and which permanent's ability is watching is the
+    # narrowing — payload, exactly as `combatant_attached` is on
+    # `creature_attacks_or_blocks`. The declare-blockers fire site reads the key
+    # and scans the attacker's attachments beside its own abilities.
+    ("attacks_unblocked",
+     r"whenever enchanted (?P<combatant_attached>[a-z]+) attacks and isn't blocked"),
     ("attacks_unblocked",           r"whenever this creature attacks and isn't blocked"),
     ("creature_attacks",            r"whenever this creature attacks"),
     # "…blocks **a creature with flying**" (Snarespinner) narrows the source's
@@ -815,6 +824,11 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # used to deal it (and the double-fire that excluding `land` guarded against)
     # are both gone.
     ("upkeep_enchanted_controller", r"at the beginning of the upkeep of enchanted (?:creature|artifact|enchantment|land)'s controller"),
+    # The same clause naming the **end step** instead (Aggression). A kind of
+    # its own rather than a scope on the upkeep one, because the two are
+    # dispatched by different steps — CR 513 and CR 502 — and a scope the end
+    # step did not read would be an Aura firing at the wrong moment.
+    ("end_step_enchanted_controller", r"at the beginning of the end step of enchanted (?:creature|artifact|enchantment|land)'s controller"),
     ("upkeep_chosen",       r"at the beginning of the chosen player's upkeep"),
     # "Your draw step" is a scope narrowing and so its own kind, exactly as
     # upkeep_self is beside upkeep_each: it fires only on its controller's draw

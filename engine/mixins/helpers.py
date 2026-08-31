@@ -1253,6 +1253,18 @@ class GameHelpersMixin:
             fire_delayed_triggers(
                 self, "bound_permanent_leaves_or_untaps", subject=perm,
             )
+        # An Aura's continuous effects end when it leaves (CR 611.3), and this
+        # is the one transition it can leave by. It was wired into
+        # ``_permanent_to_graveyard`` alone, which is the *destination* rather
+        # than the departure — so an Aura bounced, exiled or tucked kept
+        # applying: Control Magic returned to its controller's hand left the
+        # creature stolen for the rest of the game, and Evil Presence exiled
+        # left the land a Swamp. Idempotent, because ``_remove_aura_effects``
+        # returns at once when nothing is attached, so the graveyard path's own
+        # call stays harmless.
+        for perm in removed:
+            if "Aura" in perm.card.type_line:
+                self._remove_aura_effects(perm)
         for perm in removed:
             self.return_linked_exile(perm, "left the battlefield", LEAVES)
         return removed

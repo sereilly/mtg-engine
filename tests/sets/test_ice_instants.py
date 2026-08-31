@@ -1009,3 +1009,99 @@ def test_w2g5_fire_covenant_cannot_be_cast_for_more_life_than_you_have(set_pool)
     assert [card.name for card in p1.hand] == ["Fire Covenant"]
     assert bears.damage_marked == 0
 # --- end W2G5 ---
+
+
+# --- W2G4: Auras and attachments ---
+def _undoing_game(pool, battlefield, second_seat=None):
+    p1 = PlayerState(
+        name="P1", battlefield=battlefield, life=20,
+        hand=[pool["Word of Undoing"]],
+    )
+    p2 = PlayerState(name="P2", battlefield=second_seat or [], life=20)
+    game = Game(players=[p1, p2])
+    return game, p1, p2
+
+
+def _cast_undoing(game, host):
+    game.players[0].mana_pool["W"] = 1
+    result = game.cast_from_hand(
+        0, "Word of Undoing",
+        target_player_index=game.controller_index_of(host),
+        target_permanent_index=game.battlefield_index_of(host),
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+    return result
+
+
+def test_word_of_undoing_returns_the_creature_and_only_the_white_auras(set_pool):
+    """"Return target creature and all white Auras you own attached to it to
+    their owners' hands."
+
+    Three narrowings at once: *white* Auras, ones **you own**, and the ones on
+    that creature. Regeneration is green, so it is left behind and CR 704.5m
+    puts it in the graveyard — which is the trade the card is printed for.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    white = Permanent(card=pool["Armor of Faith"])
+    green = Permanent(card=pool["Regeneration"])
+    game, p1, _ = _undoing_game(pool, [bear, white, green])
+    attach_aura(white, bear)
+    attach_aura(green, bear)
+    game._settle()
+
+    assert _cast_undoing(game, bear).supported
+    assert sorted(card.name for card in p1.hand) == [
+        "Armor of Faith", "Balduvian Bears",
+    ]
+    assert [card.name for card in p1.graveyard] == [
+        "Word of Undoing", "Regeneration",
+    ]
+
+
+def test_word_of_undoing_leaves_a_white_aura_on_another_creature_alone(set_pool):
+    """"Attached to **it**" is the whole narrowing, and a sweep's dropped rider
+    does not do less — it takes the board."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    other = Permanent(card=pool["Balduvian Bears"])
+    on_bear = Permanent(card=pool["Armor of Faith"])
+    elsewhere = Permanent(card=pool["Armor of Faith"])
+    game, p1, _ = _undoing_game(pool, [bear, other, on_bear, elsewhere])
+    attach_aura(on_bear, bear)
+    attach_aura(elsewhere, other)
+    game._settle()
+
+    _cast_undoing(game, bear)
+
+    assert elsewhere in list(game.controlled_by(game.players[0]))
+    assert other in list(game.controlled_by(game.players[0]))
+    assert sorted(card.name for card in p1.hand) == [
+        "Armor of Faith", "Balduvian Bears",
+    ]
+
+
+def test_word_of_undoing_spares_an_aura_you_do_not_own(set_pool):
+    """"Auras **you own**" — CR 108.3 ownership, not control. An opponent's
+    white Aura on your creature is not yours to take back."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bear = Permanent(card=pool["Balduvian Bears"])
+    theirs = Permanent(card=pool["Armor of Faith"])
+    game, p1, p2 = _undoing_game(pool, [bear], second_seat=[theirs])
+    attach_aura(theirs, bear)
+    game._settle()
+
+    _cast_undoing(game, bear)
+
+    assert [card.name for card in p1.hand] == ["Balduvian Bears"]
+    assert [card.name for card in p2.hand] == []
+    assert [card.name for card in p2.graveyard] == ["Armor of Faith"]
+# --- end W2G4 ---

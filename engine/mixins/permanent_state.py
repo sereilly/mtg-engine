@@ -886,6 +886,56 @@ class PermanentStateMixin:
                 )
                 _add_static_pt(creature, lands // 2, (lands + 1) // 2)
 
+    def _refresh_board_counted_penalties(self) -> None:
+        """Snowblind: "Enchanted creature gets -X/-Y", where X counts a class of
+        permanent on **whichever** board the combat points at, and Y is clamped
+        so the creature is never killed by it.
+
+        Derived rather than remembered, like every other Aura contribution: X
+        changes when a land enters and when the creature attacks, and neither
+        of those is a moment anything could hook. CR 611.3a says a continuous
+        effect applies whenever its criteria are met, and "the number of snow
+        lands defending player controls" is a criterion re-read on every pass.
+
+        **The toughness the clamp reads is the toughness without this effect.**
+        The derived channel this contributes to was cleared at the top of the
+        refresh, so ``effective_toughness`` here is base P/T plus every other
+        layer — which is the reading the printed clamp means: "toughness minus
+        1" is what makes Snowblind unable to kill, and reading a toughness this
+        effect had already reduced would make the clamp chase itself.
+        """
+        from ..auras import aura_board_counted_penalty, auras_attached_to
+        from ..subject_filters import subject_matches
+
+        for seat, host in self.permanents_with_controller():
+            for aura in auras_attached_to(host):
+                payload = aura_board_counted_penalty(
+                    aura.effective_card.oracle_text
+                )
+                if payload is None:
+                    continue
+                # CR 506.2: the board is the *defending player's* while the
+                # creature is attacking, and its own controller's otherwise.
+                # The defending seat is stamped on the attacker at declaration,
+                # so this is a read rather than a search — and an attacker
+                # whose defender is gone falls back to its controller, which is
+                # the sentence's own "otherwise".
+                counted_seat = seat
+                if host.attacking and isinstance(host.defending_player_index, int):
+                    counted_seat = host.defending_player_index
+                if not (0 <= counted_seat < len(self.players)):
+                    continue
+                described = payload["filter"]
+                amount = sum(
+                    1
+                    for perm in self.controlled_by(counted_seat)
+                    if subject_matches(self, perm, described)
+                )
+                if amount <= 0:
+                    continue
+                clamp = max(0, host.effective_toughness - 1)
+                _add_static_pt(host, -amount, -min(amount, clamp))
+
     def _refresh_linked_tapped_pumps(self, all_permanents) -> None:
         """"…gets +2/-2 for as long as this artifact remains tapped."
         (Ashnod's Battle Gear, Tawnos's Weaponry.)
@@ -938,6 +988,9 @@ class PermanentStateMixin:
         # creatures must see the lands this pass animates, not last pass's.
         self._refresh_land_animation(all_permanents, animations)
         self._refresh_aspect_of_wolf()
+        # After the other 7c contributions, because its clamp reads the
+        # toughness the creature has *without* it — see the method.
+        self._refresh_board_counted_penalties()
 
         # "Attacking creatures you control get +X/+Y" (Orcish Oriflamme) used to
         # be counted here, into a channel of its own, because the lord-buff
@@ -1077,7 +1130,11 @@ class PermanentStateMixin:
                 # these five cards are for.
                 recipient = permanent
                 if cs.payload.get("subject") == "attached":
-                    recipient = attached_host(self, permanent)
+                    # The **live** record: CR 611.3b, a continuous effect
+                    # applies only while it is attached, and an Equipment that
+                    # unattaches stays on the battlefield with the last-known
+                    # host still recorded on it.
+                    recipient = attached_host(self, permanent, last_known=False)
                     if recipient is None:
                         continue
                 _apply_conditional_bonus(
@@ -1303,6 +1360,14 @@ class PermanentStateMixin:
             else:
                 perm.metadata.pop("global_static_sources", None)
 
+    #: The printed colour word a ``GlobalStatic``'s scope carries, as the symbol
+    #: every filter payload in the engine spells a colour with. One map rather
+    #: than a symbol in the table, because the *table* holds what the card
+    #: prints.
+    _COLOR_SYMBOLS = {
+        "white": "W", "blue": "U", "black": "B", "red": "R", "green": "G",
+    }
+
     @staticmethod
     def _global_static_applies(static, permanent: Permanent, source=None, game=None) -> bool:
         """Whether *static* covers *permanent*.
@@ -1323,7 +1388,28 @@ class PermanentStateMixin:
             # Through the layer-6/4 accessors rather than the printed line, so
             # an animated land is a creature to The Tabernacle at Pendrell Vale
             # and a Clone of an artifact is an artifact to Energy Flux.
-            return permanent.has_type(static.applies_to)
+            if not permanent.has_type(static.applies_to):
+                return False
+            # "**Green** creatures have …" (Breath of Dreams). Asked through
+            # ``subject_matches``, the one reader of what a printed noun phrase
+            # means, so "green" here is the same question a targeting line or a
+            # trigger's subject asks — and layer 5 for the same reason the type
+            # word above is layer 4: a creature a lace has turned green is a
+            # green creature, and one that stops being green stops paying the
+            # upkeep with nothing to undo.
+            if static.colors:
+                from ..subject_filters import subject_matches
+
+                if game is None:
+                    return False
+                return all(
+                    subject_matches(
+                        game, permanent,
+                        {"color_filter": PermanentStateMixin._COLOR_SYMBOLS[colour]},
+                    )
+                    for colour in static.colors
+                )
+            return True
         if static.applies_to == "noncreature_artifact":
             printed = permanent.card.type_line.lower()
             return "artifact" in printed and "creature" not in printed
@@ -1962,8 +2048,34 @@ class PermanentStateMixin:
                     self, cs_seat, cs_perm, cs.payload.get("condition") or {}
                 ):
                     continue
+                # "Enchanted creature has first strike as long as it's blocking
+                # and you control a snow land." (Snow Devil.) The same
+                # instruction with the grant landing on the host, read off the
+                # same ``subject`` key ``_refresh_dynamic_creatures`` already
+                # reads for the P/T half — one sentence, one instruction, one
+                # answer about which permanent it is about.
+                #
+                # The seat stays the Aura's (CR 109.5), so "you control a snow
+                # land" is measured from whoever controls the Aura even when
+                # the creature belongs to somebody else.
+                #
+                # **Here rather than in ``layer_bridge``**, where the
+                # unconditional Aura keyword grants live and where the CR 613.7e
+                # attach timestamp is available. ``collect_ability_effects`` is
+                # deliberately game-free — the board half of this condition
+                # needs both the game and a seat, and giving a layer collector a
+                # game handle is the read `tests/engine/test_layer_reads.py`
+                # exists to keep out. The cost is the timestamp: this grant
+                # sorts with the derived channel rather than at the Aura's
+                # attach time. Nothing in the pool orders two contending
+                # keyword grants, and a keyword granted twice is granted once.
+                recipient = cs_perm
+                if cs.payload.get("subject") == "attached":
+                    recipient = attached_host(self, cs_perm, last_known=False)
+                    if recipient is None:
+                        continue
                 for keyword in cs_keywords:
-                    add_derived_grant(cs_perm, keyword)
+                    add_derived_grant(recipient, keyword)
 
     # Conditions a lord buff may hang on, keyed by what engine/lord_buffs.py
     # derives. A condition that table can name with no predicate here would be a

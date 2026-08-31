@@ -46,7 +46,16 @@ _DAMAGED_PLAYER_EVENTS: frozenset[str] = frozenset({"damage_dealt"})
 # defending is a fact about a combat, not about the ability's controller or its
 # target — under any other event the phrase names nobody, and an offer made to
 # nobody is an effect that silently does not happen.
-_DEFENDING_PLAYER_EVENTS: frozenset[str] = frozenset({"creature_attacks"})
+_DEFENDING_PLAYER_EVENTS: frozenset[str] = frozenset({
+    "creature_attacks",
+    # "Whenever this creature attacks and isn't blocked, … **defending player**
+    # discards a card at random." (Cloak of Confusion.) The declare-blockers
+    # fire site stamps the same key the declare-attackers one does, which is
+    # what makes the phrase name a seat here — the set is the list of events
+    # that stamped it, and an event added here without the stamp is a phrase
+    # naming nobody.
+    "attacks_unblocked",
+})
 
 
 # Trigger events after which "that player" names the controller of the object
@@ -450,7 +459,14 @@ def _chosen_cast_amount(
 #: the firing event's object (Hooded Blightfang's damaged planeswalker) and
 #: under most events is nothing at all — and a "that" resolved against the
 #: wrong one of those does not fail, it acts on a different permanent.
-ATTACHED_SUBJECT_EVENTS: frozenset[str] = frozenset({"upkeep_enchanted_controller"})
+ATTACHED_SUBJECT_EVENTS: frozenset[str] = frozenset({
+    "upkeep_enchanted_controller",
+    # "At the beginning of the end step of enchanted creature's controller,
+    # destroy **that creature** …" (Aggression). The same printed shape one
+    # step later, and the same referent — which is why the parse side reads
+    # both through one production.
+    "end_step_enchanted_controller",
+})
 
 
 def names_attached_permanent(subject, event: str | None) -> bool:

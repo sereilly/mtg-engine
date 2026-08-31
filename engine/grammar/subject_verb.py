@@ -666,7 +666,18 @@ def parse_subject_verb(
         source_spec = ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
     elif stream.at_word("it"):
         stream.advance()
-        source_spec = ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
+        # Quantifier ``"it"``, not ``"this"``, and the difference is the whole
+        # of ``rebinding.rebind_pronoun_to_event_subject``: a bare pronoun means
+        # the source only where the trigger's condition named nothing else, and
+        # that rebinder finds one by its quantifier. Spelled ``"this"`` here,
+        # the pronoun in a *subject* position was never rebindable — "whenever
+        # enchanted creature attacks and isn't blocked, you may have **it**
+        # assign no combat damage" pointed at the Aura, which assigns no combat
+        # damage in any case. ``parse_recipient`` has always answered "it" with
+        # this quantifier; the two positions now read one word one way, and the
+        # SELF branch above keeps ``"this"`` because a card naming itself is not
+        # a pronoun (see that rebinder's docstring).
+        source_spec = ast.TargetSpec("it", ast.ObjectFilter(is_source=True))
     else:
         # "**That creature** deals damage equal to its power to …" (Hunter's
         # Edge): a back-reference to the object the *previous sentence* chose.

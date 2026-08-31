@@ -24,7 +24,7 @@ from .errors import GrammarError
 from .lexer import PT
 from .amounts import parse_comparison
 from .nouns import parse_object_filter
-from .readers import accept_source_reference
+from .readers import accept_source_reference, accept_source_reference_spec
 from .references import parse_player_ref, parse_target_spec
 from .phrases import _parse_duration, _parse_keywords, parse_bound_subject
 from .stream import TokenStream
@@ -35,6 +35,19 @@ from .vocabulary import COLOR_WORDS, NUMBER_WORDS
 #: The subject is fixed because the evaluator reads ``context.source_permanent``
 #: — a spec naming anything else would describe a permanent nothing looks up.
 _SOURCE_SPEC = ast.TargetSpec("this", ast.ObjectFilter(is_source=True))
+
+#: ``(printed word, state, negated)`` for the present-tense "it is …" clause.
+#: Each state is a field ``evaluate_condition`` reads straight off the
+#: permanent, which is what keeps this a table rather than a branch per card:
+#: "it's blocking" (Snow Devil) and "it's attacking" (Snowblind) are the same
+#: production as "it's tapped" with a different field name, and a word listed
+#: here that no permanent carries would answer False forever.
+_PRESENT_STATES: tuple[tuple[str, str, bool], ...] = (
+    ("tapped", "tapped", False),
+    ("untapped", "tapped", True),
+    ("attacking", "attacking", False),
+    ("blocking", "blocking", False),
+)
 
 #: The characteristics a "…'s <X> is N or greater" / "…has <X> N or greater"
 #: clause may ask about. A table rather than a literal in the production for the
@@ -599,13 +612,27 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     stream.reset(started_mark)
 
     state_mark = stream.mark()
-    if accept_source_reference(stream) and (
-        stream.accept_word("is") or stream.accept_word("'s")
-    ):
-        if stream.accept_word("tapped"):
-            return ast.IsState(_SOURCE_SPEC, "tapped")
-        if stream.accept_word("untapped"):
-            return ast.IsState(_SOURCE_SPEC, "tapped", negated=True)
+    # The spec, not the bare predicate: a printed "it" is a pronoun and may name
+    # the object the trigger's condition described (Aggression's "…if **it**
+    # didn't attack this turn", printed on an Aura and asked of the creature it
+    # enchants), while "this creature" and the card's own name always mean the
+    # source. `rebinding` tells them apart by the quantifier, so the word has to
+    # survive this far.
+    subject = accept_source_reference_spec(stream)
+    if subject is not None:
+        if stream.accept_word("is") or stream.accept_word("'s"):
+            for word, state, negated in _PRESENT_STATES:
+                if stream.accept_word(word):
+                    return ast.IsState(subject, state, negated=negated)
+        # "…**didn't attack this turn**" / "…**attacked this turn**"
+        # (Aggression, and the delayed end-step destruction Norritt's family
+        # prints about a creature it chose). The same axis the present-tense
+        # clause above reads, asked of the turn's record rather than of the
+        # board — `Permanent.attacked_this_turn`, which the cleanup step sweeps.
+        if stream.accept_phrase("didn't", "attack", "this", "turn"):
+            return ast.IsState(subject, "attacked_this_turn", negated=True)
+        if stream.accept_phrase("attacked", "this", "turn"):
+            return ast.IsState(subject, "attacked_this_turn")
     stream.reset(state_mark)
 
     raise stream.error("unrecognized condition")

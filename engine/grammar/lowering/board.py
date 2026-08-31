@@ -234,6 +234,23 @@ def _lower_sacrifice(
     # offered the wrong one to give up.
     if names_attached_permanent(node.subject, event):
         return (OracleInstruction("sacrifice_attached_permanent", "", {}),)
+    # "When this creature leaves the battlefield this turn, **sacrifice that
+    # creature**." (Phantasmal Mount.) The object the creating ability bound
+    # (CR 603.7c), carried by id in the trigger's context — the mirror of
+    # ``destroy_bound_permanent`` one family over, and its own kind for the same
+    # reason: routed through the chosen-sacrifice prompt below the ability would
+    # ask its controller to pick, and Phantasmal Mount's rider is not a choice.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+        and not node.subject.targeted
+        and event in _BOUND_OBJECT_DELAYED_EVENTS
+    ):
+        return (
+            OracleInstruction(
+                "sacrifice_bound_permanent", "", _filter_payload(node.subject.filter)
+            ),
+        )
     if (
         node.player.kind in _SACRIFICE_PAYERS
         and isinstance(node.subject, ast.TargetSpec)

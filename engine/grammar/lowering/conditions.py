@@ -23,7 +23,7 @@ from __future__ import annotations
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import untestable_filter_keys
-from ._common import _filter_payload, _restrictions_beyond
+from ._common import _filter_payload, _is_enchanted, _restrictions_beyond
 from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
 
 #: What ``targets.kind`` on a guarded effect says the pronoun "it" names, and
@@ -391,7 +391,18 @@ def _lower_condition(
             "count": condition.comparison.value.value,
         }
     if isinstance(condition, ast.IsState):
-        return {"kind": "is_state", "state": condition.state, "negated": condition.negated}
+        payload = {
+            "kind": "is_state",
+            "state": condition.state,
+            "negated": condition.negated,
+        }
+        # "…if **it** didn't attack this turn" on an Aura (Aggression): the
+        # pronoun was rebound to the permanent the source is attached to, and
+        # the evaluator has to ask that permanent rather than the Aura. Which
+        # object, as payload — the question and the reading are identical.
+        if _is_enchanted(condition.subject):
+            payload["subject"] = "attached"
+        return payload
     if isinstance(condition, ast.StartedTheTurnState):
         # Its own kind, not `is_state` with a flag: the evaluator reads a
         # different thing (the untap step's record, not the board), so a payload

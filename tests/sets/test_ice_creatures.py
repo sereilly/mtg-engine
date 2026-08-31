@@ -1789,3 +1789,84 @@ def test_w2g5_gangrenous_zombies_wants_a_swamp_not_any_snow_land(set_pool):
 
     assert game.players[1].life == 19
 # --- end W2G5 ---
+
+
+# --- W2G4: Auras and attachments ---
+def _mount_board(set_pool):
+    """Phantasmal Mount and a 2/2 to ride it, both able to act."""
+    pool = set_pool("ICE")
+    mount = Permanent(card=pool["Phantasmal Mount"])
+    rider = Permanent(card=pool["Balduvian Bears"])  # toughness 2, so eligible
+    p1 = PlayerState(name="P1", battlefield=[mount, rider], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game._settle()
+    _nosick(mount)
+    _nosick(rider)
+    return game, mount, rider
+
+
+def _mount_up(game, mount, rider):
+    result = game.activate_permanent_ability(
+        0, "Phantasmal Mount",
+        target_player_index=0,
+        permanent_index=game.battlefield_index_of(mount),
+        target_permanent_index=game.battlefield_index_of(rider),
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+    return result
+
+
+def _settle_triggers(game):
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+
+def test_phantasmal_mount_pumps_and_flies_its_rider(set_pool):
+    game, mount, rider = _mount_board(set_pool)
+
+    assert _mount_up(game, mount, rider).supported
+    assert (rider.effective_power, rider.effective_toughness) == (3, 3)
+    assert rider.has_keyword("flying")
+
+
+def test_the_mount_leaving_sacrifices_the_creature_it_carried(set_pool):
+    """"When this creature leaves the battlefield this turn, sacrifice that
+    creature." The bound object (CR 603.7c), not a pick — the ability offers
+    its controller no choice at all."""
+    game, mount, rider = _mount_board(set_pool)
+    _mount_up(game, mount, rider)
+
+    game.remove_from_battlefield(mount)
+    game._settle()
+    _settle_triggers(game)
+
+    assert rider not in list(game.controlled_by(game.players[0]))
+    assert "Balduvian Bears" in [card.name for card in game.players[0].graveyard]
+
+
+def test_the_rider_leaving_sacrifices_the_mount(set_pool):
+    """The other half of the linked pair, printed the other way round."""
+    game, mount, rider = _mount_board(set_pool)
+    _mount_up(game, mount, rider)
+
+    game.remove_from_battlefield(rider)
+    game._settle()
+    _settle_triggers(game)
+
+    assert mount not in list(game.controlled_by(game.players[0]))
+
+
+def test_the_mount_carries_nobody_until_its_ability_is_activated(set_pool):
+    """Both delays are armed by the activation, so a Mount that never carried
+    anything takes nothing with it — and is taken by nothing."""
+    game, mount, rider = _mount_board(set_pool)
+
+    game.remove_from_battlefield(rider)
+    game._settle()
+    _settle_triggers(game)
+
+    assert mount in list(game.controlled_by(game.players[0]))
+# --- end W2G4 ---

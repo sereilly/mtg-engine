@@ -124,3 +124,46 @@ def rebind_pronoun_to_event_subject(
     if not isinstance(subject, ast.ObjectFilter) or subject.is_source:
         return statement
     return _rebound(statement, subject)
+
+
+def rebind_attachment_pronoun_to_sentence_target(statement: ast.Statement) -> ast.Statement:
+    """"…and all white Auras you own **attached to it**" (Word of Undoing).
+
+    The third rebinder, and the one whose pronoun sits inside a *filter* rather
+    than in a recipient position. ``postmodifiers`` reads "attached to it" as
+    the referent ``"source"``, which is what the words mean on Rabid Wombat
+    ("gets +2/+2 for each Aura attached to it" — a count clause that chooses
+    nothing). In a sentence that has already **targeted** an object, the same
+    two words name that object: Word of Undoing returns the creature and the
+    Auras on it, and Tawnos's Coffin exiles them.
+
+    So the rebinding is gated on the sentence having a target at all, which is
+    also what makes it safe: with nothing chosen there is nothing for the
+    pronoun to be pointed at, and the referent stays the source. A card that
+    targeted something *and* meant its own attachments would be misread — no
+    such card is printed, and it would have to say "attached to this creature"
+    to be readable at all, which is a different referent.
+    """
+    if not _names_a_target(statement):
+        return statement
+
+    def _rewrite(spec: ast.TargetSpec) -> ast.TargetSpec | None:
+        if spec.filter.attached_to != "source":
+            return None
+        return replace(spec, filter=replace(spec.filter, attached_to="target"))
+
+    return _walk_specs(statement, _rewrite)
+
+
+def _names_a_target(node) -> bool:
+    """Whether any part of *node* announces a target (CR 601.2c)."""
+    if isinstance(node, ast.TargetSpec) and node.targeted:
+        return True
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        return any(
+            _names_a_target(getattr(node, field.name))
+            for field in dataclasses.fields(node)
+        )
+    if isinstance(node, (tuple, list)):
+        return any(_names_a_target(item) for item in node)
+    return False

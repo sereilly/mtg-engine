@@ -4,6 +4,7 @@ import random
 from typing import TYPE_CHECKING
 
 from ._common import (
+    attached_host,
     block_pair_permanents,
     flip_coin,
     resolve_own_combatant,
@@ -872,12 +873,19 @@ def assign_no_combat_damage_until_eot(
     Marks the effect's own source; ``engine/combat_assignment.py`` is what the
     combat damage step reads and the cleanup sweep is what ends it.
 
-    With no source on the battlefield there is nothing the sentence is about,
+    ``subject: "attached"`` marks the permanent the source is attached to
+    instead (Cloak of Confusion). One mark on one permanent either way — which
+    permanent is payload, because the Aura's own assignment is not what the
+    sentence is about and marking it would be the card doing nothing.
+
+    With no permanent on the battlefield there is nothing the sentence is about,
     and the effect refuses rather than reporting a mark it did not make — the
     rider is the whole reason the card's first half is worth doing, so a
     silently dropped one is the card doing strictly more than it prints.
     """
     source = context.source_permanent
+    if instruction.payload.get("subject") == "attached":
+        source = attached_host(game, source)
     if source is None:
         return False, "ability not implemented"
     source.metadata[ASSIGNS_NO_COMBAT_DAMAGE] = True

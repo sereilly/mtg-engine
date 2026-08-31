@@ -49,6 +49,13 @@ class GlobalStatic:
     # upkeep step, the UI, the coverage scripts — sees it without knowing this
     # module exists.
     grants_ability: str = ""
+    # "**Green** creatures have …" (Breath of Dreams). The colour narrowing the
+    # scope carries, as data beside the type word rather than as a scope name of
+    # its own: "green creatures" and "creatures" are the same mechanism over
+    # different sets, and a ``green_creature`` predicate would be a second one
+    # per colour per type. A tuple, because a frozen dataclass has to stay
+    # hashable.
+    colors: tuple[str, ...] = ()
     # "If this enchantment leaves the battlefield, this effect continues until
     # end of turn." (Titania's Song.) A continuous effect that outlives its
     # source: the source stops existing, the effect does not.
@@ -84,6 +91,19 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         # the one place a printed plural becomes the singular type word
         # ``_global_static_applies`` tests.
         re.compile(r"^all (?P<scope>artifacts|creatures) have \"(?P<ability>.+)\"$"),
+        GlobalStatic(name="granted_board_wide_ability", applies_to=""),
+    ),
+    (
+        # "**Green creatures** have "Cumulative upkeep {1}."" (Breath of
+        # Dreams.) The row above with a colour in front of the noun, and one
+        # row rather than five: the colour is payload for the reason the noun
+        # already is, and the two are read into the same ``GlobalStatic``. No
+        # "all" here — the printed sentence has none, and inventing one would
+        # be a second spelling of the same scope.
+        re.compile(
+            r"^(?P<color>white|blue|black|red|green) "
+            r"(?P<scope>artifacts|creatures) have \"(?P<ability>.+)\"$"
+        ),
         GlobalStatic(name="granted_board_wide_ability", applies_to=""),
     ),
     (
@@ -134,6 +154,7 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
                 # printed English, not a key. Singularised here rather than in
                 # the predicate, so each type word has one spelling.
                 scope = groups.get("scope")
+                colour = groups.get("color")
                 return GlobalStatic(
                     name=static.name,
                     applies_to=(scope[:-1] if scope else static.applies_to),
@@ -141,6 +162,7 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
                     adds_creature_type=static.adds_creature_type,
                     pt_from_mana_value=static.pt_from_mana_value,
                     grants_ability=granted,
+                    colors=(colour,) if colour else (),
                 )
             return static
     return None

@@ -51,7 +51,8 @@ from .riders import (_attach_destroyed_this_way, _attach_exchanged_this_way, _at
 from .phrases import accept_member_state_clause
 from .stream import TokenStream
 from .vocabulary import (KEYWORD_INDEX, match_longest)
-from .rebinding import rebind_pronoun_to_event_subject
+from .rebinding import (rebind_attachment_pronoun_to_sentence_target,
+                        rebind_pronoun_to_event_subject)
 from .triggers import _parse_trigger_event
 from .effects import (
     _parse_activation_restriction,
@@ -903,7 +904,9 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
     statement = _statements_from_sentences(stream)
     if _looks_static(statement):
         return ast.StaticAbilityNode(statement)
-    return ast.SpellEffectLine(statement)
+    return ast.SpellEffectLine(
+        rebind_attachment_pronoun_to_sentence_target(statement)
+    )
 
 
 __all__ = ["parse_line", "parse_statement"]

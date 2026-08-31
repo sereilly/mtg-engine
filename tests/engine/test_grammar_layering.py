@@ -78,6 +78,13 @@ PARSE_LAYERS = [
     # own words to the end — and split out of it when Antiquities' four-sentence
     # cards pushed that file past the guard below.
     "paragraphs",
+    # Reading a keyword-ability list off a printed line. Split out of `phrases`
+    # at the guard below, reusing the name `lowering/keywords.py` has carried
+    # since it left the same family one package over. Below `phrases`, which
+    # re-exports it so no caller moved: the boundary is what a phrase *is*
+    # (`phrases`) against which keyword abilities it names (here), and nothing
+    # in it calls back.
+    "keywords",
     "phrases",
     # The "…, where X is …" clause. Above `phrases`, whose word tables and
     # literal reader it uses, and split out of it at the guard the round two

@@ -25,10 +25,8 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**14 unclaimed sentence(s) across 8 supported card(s).**
+**13 unclaimed sentence(s) across 7 supported card(s).**
 
-- **Breath of Dreams**
-  - `green creatures have "cumulative upkeep {1}."`
 - **Call to Arms**
   - `white creatures get +1/+1 as long as the chosen color is the most common color among nontoken permanents the chosen player controls but isn't tied for most common`
   - `when the chosen color isn't the most common color among nontoken permanents the chosen player controls or is tied for most common, sacrifice this enchantment`
