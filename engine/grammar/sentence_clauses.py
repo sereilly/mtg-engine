@@ -191,6 +191,21 @@ def _parse_leading_for_each(
             stream.reset(mark)
             return None
         return ast.ChosenThisWay()
+    # "For each of **those creatures**, …" (Winter's Chill) — the same
+    # back-reference over permanents rather than over cards in a hand. Read
+    # here, beside the hand spelling and before the noun phrase below, for that
+    # branch's reason: "those creatures" is not a filter, and read as one it
+    # would name every creature on the battlefield.
+    those = stream.mark()
+    if stream.accept_phrase("of", "those"):
+        try:
+            named = parse_object_filter(stream)
+        except GrammarError:
+            stream.reset(those)
+        else:
+            if stream.accept_punct(","):
+                return ast.ChosenThisWay(named)
+            stream.reset(those)
     try:
         filt = parse_object_filter(stream)
     except GrammarError:

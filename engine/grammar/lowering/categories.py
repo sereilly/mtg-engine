@@ -566,6 +566,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # because it touches nothing: it is the targeting, and saying otherwise
     # would let the report claim the spell destroys or pumps something.
     "choose_target_permanent": "targeting",
+    # "Choose X target attacking creatures." (Winter's Chill.) The same
+    # category and the same nothing-happens-here reading; the plural records
+    # what it chose so the loop behind it has a set to walk.
+    "choose_target_permanents": "targeting",
     # A delayed triggered ability (CR 603.7). The category is the *creating*
     # act; what the ability does when it fires is its inner instruction's, read
     # through `_nested_instructions` below for the reason `choose_one`'s

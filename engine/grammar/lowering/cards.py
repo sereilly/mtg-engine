@@ -6,8 +6,9 @@ families of their own: mana production in `mana.py`, the hidden-zone
 search/reveal/exile-linkage flows in `library.py`.
 """
 
-from ...oracle_types import (PER_OBJECT_SEAT_RECORDS, X_FROM_COUNT,
-                             X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
+from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, PER_OBJECT_SEAT_RECORDS,
+                             X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
+                             OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec, halved_count_spec
@@ -15,6 +16,7 @@ from ._common import (
     chargeable_card_filter,
     _amount_payload,
     _describe_targets,
+    _filter_payload,
     _is_you,
 )
 from ._events import (
@@ -538,11 +540,47 @@ def _lower_for_each_chosen(
     produced: frozenset[str],
 ) -> tuple[OracleInstruction, ...]:
     """"**For each of those cards,** <effect>." (Sylvan Library.)
+    "**For each of those creatures,** <effect>." (Winter's Chill.)
 
     The sibling of ``_lower_for_each_destroyed``, and refused the same way: a
     back-reference with no earlier step that made a choice names nothing, and
     an empty loop is a sentence that reports supported and does not run.
+
+    Two records, one clause. Which of them answers is the printed noun: a hand
+    spelling reads the cards a "choose two cards in your hand" step recorded,
+    and a permanent spelling reads the permanents a "choose X target …"
+    sentence did. Reading either as the other walks an empty list, which is a
+    sentence that reports supported and does nothing — so the noun decides and
+    the missing producer refuses.
     """
+    named = node.iterator.subject
+    if named is not None:
+        if CHOSEN_TARGET_PERMANENTS not in produced:
+            raise LoweringError(
+                "'those <permanents>' with no earlier step in this effect that "
+                "chose any",
+                node=node,
+            )
+        if not inner:
+            raise LoweringError("a per-permanent loop with no effect in it", node=node)
+        # The printed noun rides beside the record's name, exactly as it does
+        # for a destruction sweep's loop: "for each of those **creatures**"
+        # after a sentence that targeted attacking creatures is a restatement,
+        # and a restatement checked is a restatement. ``for_each`` applies it
+        # with ``permanent_matches_filter``, so a target that stopped answering
+        # the phrase drops out of the loop rather than being acted on.
+        return (
+            OracleInstruction(
+                "for_each", "",
+                {
+                    "iterator": {
+                        "produced_by": CHOSEN_TARGET_PERMANENTS,
+                        **_filter_payload(named),
+                    },
+                    "effect": inner,
+                },
+            ),
+        )
     if CHOSEN_HAND_CARDS_RESULT not in produced:
         raise LoweringError(
             "'those cards' with no earlier step in this effect that chose any",

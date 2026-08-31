@@ -415,12 +415,26 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
     line fails on whatever it really says.
     """
     mark = stream.mark()
-    if not stream.accept_phrase("choose", "target"):
+    if not stream.accept_word("choose"):
         stream.reset(mark)
         return None
+    # Through `parse_target_spec` rather than "target" plus a noun phrase, so
+    # the counted spelling — "Choose **X target** attacking creatures"
+    # (Winter's Chill) — is the same production with the same quantifier
+    # machinery every other counted target phrase in the grammar uses. The word
+    # "target" is still required (the `targeted` check below): CR 115.1b makes
+    # an untargeted "choose" a *resolution* choice, and reading one as the other
+    # would raise a cast-time picker for a decision the card makes later.
     try:
-        filt = parse_object_filter(stream)
+        chosen = parse_target_spec(stream)
     except GrammarError:
+        # "Choose **one or more** —" (Sublime Epiphany) opens with the same
+        # word and a quantifier this reader half-recognizes; the modal head is
+        # a different production, so the refusal is handed straight back rather
+        # than becoming this one's.
+        stream.reset(mark)
+        return None
+    if chosen is None or not chosen.targeted:
         stream.reset(mark)
         return None
     after_filter = stream.mark()
@@ -435,11 +449,18 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
         # next sentence bind this choice — and a second binder is a second
         # answer to it, not a second production of this one.
         binds = _parse_bound_targeting_prevention(stream) is not None
+    if not binds:
+        # …or a loop over the set this sentence just named — "**For each of
+        # those creatures,** its controller may pay …" (Winter's Chill). The
+        # third answer to the one question, and the only one a *several*-target
+        # choice can give: a set of creatures is bound by a sentence that
+        # repeats over it, not by one that says "that creature".
+        binds = bool(stream.accept_phrase("for", "each", "of", "those"))
     stream.reset(after_filter)
     if not binds:
         stream.reset(mark)
         return None
-    return ast.ChooseTarget(ast.TargetSpec("target", filt, targeted=True))
+    return ast.ChooseTarget(chosen)
 
 
 # ---------------------------------------------------------------------------

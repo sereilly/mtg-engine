@@ -8,7 +8,8 @@ from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
 from ..land_types import MIRE_COUNTER, change_land_type
 from ..layer_bridge import GAINED_TYPES
 from ..models import CardDefinition, Permanent
-from ..oracle_types import X_FROM_COUNT_PER_RECIPIENT, OracleInstruction
+from ..oracle_types import (CHOSEN_TARGET_PERMANENTS,
+                            X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
 from ..exiled_records import source_object
 from ..named_counters import counters_on, remove_counters
 from ..pt import pt_counter_key, set_base_pt
@@ -67,6 +68,38 @@ def choose_target_permanent(game: Game, instruction: OracleInstruction, context:
     if resolve_target_permanent(game, context) is None:
         game.log.append(f"{context.card.name} had no legal target")
         return True, "no target"
+    return True, "resolved"
+
+
+@effect_handler("choose_target_permanents")
+def choose_target_permanents(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose X target attacking creatures." (Winter's Chill.)
+
+    The plural of :func:`choose_target_permanent`, and it records where that one
+    does not have to: the sentence behind a single choice reads the target off
+    the context the way every handler does, and a *set* has nowhere to be read
+    from — nothing about a board says which attacking creatures a spell named,
+    and by the time the loop runs one of them may no longer be attacking.
+
+    Each slot is re-checked against the printed noun phrase, which is CR 608.2b
+    at resolution: a creature that has left combat is no longer a legal target
+    and simply is not in the set. An empty set is a legal outcome (every target
+    illegal is refused above the instructions, in ``legality``), and the loop
+    behind this walks nothing.
+    """
+    described = dict((instruction.payload.get("targets") or {}).get("filter") or {})
+    chosen = resolve_target_permanents(
+        game, context,
+        predicate=lambda perm: permanent_matches_filter(perm, described),
+    )
+    context.results[CHOSEN_TARGET_PERMANENTS] = chosen
+    if not chosen:
+        game.log.append(f"{context.card.name} had no legal targets")
+        return True, "no target"
+    game.log.append(
+        f"{context.card.name} chose "
+        + ", ".join(perm.card.name for perm in chosen)
+    )
     return True, "resolved"
 
 

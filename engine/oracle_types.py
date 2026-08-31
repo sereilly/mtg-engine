@@ -407,6 +407,16 @@ EXILED_THIS_WAY_OBJECTS = "exiled_this_way_objects"
 HAND_CARDS_TO_LIBRARY = "hand_cards_to_library"
 
 
+#: "**Choose X target attacking creatures.** For each of those creatures, …"
+#: (Winter's Chill.) The permanents a targeting sentence named, recorded so the
+#: loop behind it has a set to walk: the spell chose them at announcement
+#: (CR 601.2c) and nothing about the board says which attacking creatures those
+#: were. Here for ``EXILED_THIS_WAY``'s reason — the lowering gates the printed
+#: "those creatures" on the marker and the handler writes the objects, and the
+#: two sit at opposite ends of the pipeline.
+CHOSEN_TARGET_PERMANENTS = "chosen_target_permanents"
+
+
 PER_OBJECT_SEAT_RECORDS: dict[str, str] = {
     "controller_when_blocked": "blocked_controller_seats",
     # "For each creature exiled this way, **its controller** draws a card."
