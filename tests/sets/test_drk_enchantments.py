@@ -969,3 +969,39 @@ def test_deep_water_stops_at_the_end_of_the_turn(set_pool):
 
     assert game.tap_land_for_mana(0, "Forest"), game.log
     assert p1.mana_pool["G"] == 1, game.log
+
+
+# --- FixC: a sweep names a class, not a target ---
+def test_season_of_the_witchs_trigger_is_not_struck_off_for_want_of_a_target(
+    set_pool,
+):
+    """A sweep on a *trigger* fails in a way the spells cannot.
+
+    "At the beginning of the end step, destroy all untapped creatures that
+    didn't attack this turn" chooses nothing, but its ``type_filter`` reached
+    the shared target derivation as ``{"kind": "creature"}`` — so
+    ``_choose_trigger_targets`` treated the ability as targeted (CR 603.3d)
+    and, with no creature on the board to offer, removed it from the stack
+    under CR 603.3c: a rule about a targeted ability with no legal target,
+    applied to an ability that names none.
+
+    With a creature present the harm was quieter and still real: an
+    interactive controller was asked to point at a creature the sweep destroys
+    all of, and the answer went nowhere.
+    """
+    season = Permanent(card=set_pool("DRK")["Season of the Witch"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[season]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._sync_control()
+
+    game.resolve_end_step(0)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert not any("603.3c" in line for line in game.log), game.log
+    assert game.pending_choices == []
+# --- end FixC ---

@@ -1655,3 +1655,91 @@ def test_psychic_purge_stays_quiet_when_you_discard_it_yourself(
     game._settle()
     assert game.players[0].life == 20
     assert game.players[1].life == 20
+
+
+# --- FixC: a sweep names a class, not a target ---
+def _fixc_game(spell, theirs=()):
+    """*spell* in seat 0's hand and *theirs* on seat 1's battlefield."""
+    p1 = PlayerState(name="P1", hand=[spell])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=c) for c in theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, p1, p2
+
+
+def test_cleanse_and_hellfire_name_a_class_and_choose_nobody(set_pool):
+    """"Destroy all black creatures" / "destroy all nonblack creatures" —
+    CR 115.1a makes a sorcery targeted only where its ability says "target",
+    and neither does.
+
+    Both compiled to a sweep whose ``type_filter`` says which creatures it
+    affects, and the target derivation read that filter as a picker's: Cleanse
+    reported "target creature", so the browser raised a creature prompt and
+    **abandoned the cast** when no creature was in play.
+    """
+    pool = set_pool("LEG")
+    for name in ("Cleanse", "Hellfire"):
+        game, _p1, _p2 = _fixc_game(pool[name])
+
+        assert game.cast_target_spec(0, pool[name]) == {
+            "kind": "none", "requires_target": False, "valid_targets": [],
+        }, name
+
+
+def test_cleanse_sweeps_the_black_creatures_with_nothing_named(set_pool):
+    """The colour is the sweep's own description, applied to every creature —
+    not a narrowing on a target nobody chose."""
+    lea = set_pool("LEA")
+    game, _p1, p2 = _fixc_game(
+        set_pool("LEG")["Cleanse"], (lea["Scathe Zombies"], lea["Savannah Lions"]),
+    )
+
+    result = game.cast_from_hand(0, "Cleanse")
+    game._settle()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in p2.battlefield] == ["Savannah Lions"]
+
+
+def test_cleanse_still_casts_with_no_creature_anywhere(set_pool):
+    """The board the defect was actually met on. A sweep with nothing to sweep
+    is a legal, resolvable spell — CR 601.2c has no target to announce, so
+    there is nothing for an empty candidate list to refuse."""
+    game, _p1, _p2 = _fixc_game(set_pool("LEG")["Cleanse"])
+
+    result = game.cast_from_hand(0, "Cleanse")
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.stack == []
+
+
+def test_hellfire_pays_its_own_damage_off_the_sweep_it_performed(set_pool):
+    """"…deals X plus 3 damage to you, where X is the number of creatures that
+    died this way." The second sentence counts the first sentence's sweep, so
+    the whole card works off a class it named and an object it never chose."""
+    lea = set_pool("LEA")
+    game, p1, p2 = _fixc_game(
+        set_pool("LEG")["Hellfire"], (lea["Scathe Zombies"], lea["Savannah Lions"]),
+    )
+
+    result = game.cast_from_hand(0, "Hellfire")
+    game._settle()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in p2.battlefield] == ["Scathe Zombies"]  # black survives
+    assert p1.life == 16                                         # X=1, plus 3
+
+
+def test_hellfire_on_an_empty_board_still_costs_its_caster_three(set_pool):
+    """X is 0 and the 3 is not: the sweep hitting nothing is not the spell
+    failing, which is the difference a cast the client refused could not make."""
+    game, p1, _p2 = _fixc_game(set_pool("LEG")["Hellfire"])
+
+    result = game.cast_from_hand(0, "Hellfire")
+    game._settle()
+
+    assert result.supported, result.details
+    assert p1.life == 17
+# --- end FixC ---

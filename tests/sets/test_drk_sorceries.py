@@ -384,3 +384,75 @@ def test_mind_bomb_deals_the_printed_three_when_nobody_can_discard(set_pool):
 
     assert players[0].life == 17, game.log
     assert players[1].life == 17, game.log
+
+
+# --- FixC: a sweep names a class, not a target ---
+def _fixc_game(spell, theirs=()):
+    """*spell* in seat 0's hand and *theirs* on seat 1's battlefield."""
+    p1 = PlayerState(name="P1", hand=[spell])
+    p2 = PlayerState(name="P2", battlefield=[Permanent(card=c) for c in theirs])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return game, p1, p2
+
+
+def test_tivadars_crusade_names_the_goblins_rather_than_one_of_them(set_pool):
+    """"Destroy all Goblins." CR 115.1a: targeted only if the ability says
+    "target", and it does not.
+
+    The sweep's subtype rode a ``creature`` type_filter, which the target
+    derivation read as a picker — so the browser asked for a creature and
+    **refused the cast outright** when there was none to offer, which is
+    exactly the board a player empties the Goblins from and then tries again.
+    """
+    lea = set_pool("LEA")
+    game, _p1, p2 = _fixc_game(
+        set_pool("DRK")["Tivadar's Crusade"],
+        (lea["Goblin Balloon Brigade"], lea["Scathe Zombies"]),
+    )
+
+    assert game.cast_target_spec(0, set_pool("DRK")["Tivadar's Crusade"]) == {
+        "kind": "none", "requires_target": False, "valid_targets": [],
+    }
+
+    result = game.cast_from_hand(0, "Tivadar's Crusade")
+    game._settle()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in p2.battlefield] == ["Scathe Zombies"]
+
+
+def test_tivadars_crusade_casts_with_no_goblin_in_play(set_pool):
+    """The board where the picker had nothing to offer and the client gave
+    up. Nothing is destroyed and the spell still resolves."""
+    game, _p1, _p2 = _fixc_game(set_pool("DRK")["Tivadar's Crusade"])
+
+    result = game.cast_from_hand(0, "Tivadar's Crusade")
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.stack == []
+
+
+def test_martyrs_cry_exiles_the_class_and_asks_for_nobody(set_pool):
+    """"Exile all white creatures. For each creature exiled this way, its
+    controller draws a card." The second sentence counts what the first swept,
+    so nothing in the card is ever pointed at."""
+    lea = set_pool("LEA")
+    game, _p1, p2 = _fixc_game(
+        set_pool("DRK")["Martyr's Cry"],
+        (lea["Savannah Lions"], lea["Scathe Zombies"]),
+    )
+
+    assert game.cast_target_spec(0, set_pool("DRK")["Martyr's Cry"])[
+        "requires_target"
+    ] is False
+
+    result = game.cast_from_hand(0, "Martyr's Cry")
+    game._settle()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in p2.battlefield] == ["Scathe Zombies"]
+    assert [c.name for c in p2.exile] == ["Savannah Lions"]
+# --- end FixC ---

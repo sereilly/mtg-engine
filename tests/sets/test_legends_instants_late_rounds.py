@@ -168,3 +168,97 @@ def test_r35_remove_enchantments_returns_what_it_owns_and_destroys_the_rest(set_
     assert {card.name for card in p2.graveyard} == {
         "Theirs, I Control", "Theirs, On Mine", "Theirs, On Their Attacker",
     }
+
+
+# --- FixC: a sweep names a class, not a target ---
+def _fixc_reset_board(set_pool):
+    """Reset in seat 0's hand, two of their lands tapped, one of seat 1's."""
+    lea = set_pool("LEA")
+    mine = [Permanent(card=lea["Forest"], tapped=True),
+            Permanent(card=lea["Island"], tapped=True)]
+    theirs = Permanent(card=lea["Island"], tapped=True)
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("LEG")["Reset"]], battlefield=mine),
+        PlayerState(name="P2", battlefield=[theirs]),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    # The card's own window: an opponent's turn, after their upkeep step.
+    game.active_player_index = 1
+    game.current_turn_phase = "beginning"
+    game.current_step = "draw"
+    return game, mine, theirs
+
+
+def test_reset_asks_for_no_land_it_is_about_to_untap(set_pool):
+    """"Untap all lands you control." — a class, not a target (CR 115.1a).
+
+    It reported ``kind: "land"`` with ``own_only``, so the browser demanded a
+    click on one of the very lands the spell untaps all of. The click changed
+    nothing, which is the tell: a picker whose answer no handler reads.
+    """
+    game, _mine, _theirs = _fixc_reset_board(set_pool)
+
+    assert game.cast_target_spec(0, set_pool("LEG")["Reset"]) == {
+        "kind": "none", "requires_target": False, "valid_targets": [],
+    }
+
+
+def test_reset_untaps_every_land_of_its_casters_with_nothing_named(set_pool):
+    """And the sweep still reads every word of its own description — the
+    opponent's land stays tapped."""
+    game, mine, theirs = _fixc_reset_board(set_pool)
+
+    result = game.cast_from_hand(0, "Reset")
+    game._settle()
+
+    assert result.supported, result.details
+    assert all(not land.tapped for land in mine)
+    assert theirs.tapped
+
+
+def test_reset_is_castable_with_no_land_to_untap_at_all(set_pool):
+    """The board the client refused: nothing for a picker to offer, and a
+    spell whose sweep is simply empty."""
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("LEG")["Reset"]]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.active_player_index = 1
+    game.current_turn_phase = "beginning"
+    game.current_step = "draw"
+
+    result = game.cast_from_hand(0, "Reset")
+    game._settle()
+
+    assert result.supported, result.details
+
+
+def test_remove_enchantments_chooses_none_of_the_enchantments_it_moves(set_pool):
+    """Three sweeps in one sentence — return yours, then destroy the rest —
+    and its last clause's ``type_filter`` was read as a picker, so the spell
+    reported "target permanent you control" and could not be cast without
+    one."""
+    pool = set_pool("LEG")
+    lea = set_pool("LEA")
+    mine = Permanent(card=lea["Circle of Protection: Red"])
+    game = Game(players=[
+        PlayerState(name="P1", hand=[pool["Remove Enchantments"]],
+                    battlefield=[mine]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    assert game.cast_target_spec(0, pool["Remove Enchantments"]) == {
+        "kind": "none", "requires_target": False, "valid_targets": [],
+    }
+
+    result = game.cast_from_hand(0, "Remove Enchantments")
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.players[0].battlefield == []
+    assert [c.name for c in game.players[0].hand] == ["Circle of Protection: Red"]
+# --- end FixC ---

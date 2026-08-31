@@ -1626,3 +1626,74 @@ def test_soul_burn_gains_the_whole_amount_when_nothing_caps_it(set_pool):
     assert p1.life == 17
     assert p0.life == 23, "three black on X, an opponent on 20 — nothing binds"
 # --- end W4G3 ---
+
+
+# --- FixC: a sweep names a class, not a target ---
+def test_jokulhaups_names_three_classes_and_chooses_none_of_them(set_pool):
+    """"Destroy all artifacts, creatures, and lands." CR 115.1a: a sorcery is
+    targeted only where its ability says "target".
+
+    The union lowers to ``type_filter: ["artifact", "creature", "land"]``, and
+    the target derivation read a union as the general permanent picker — so
+    the browser demanded a click on one permanent before letting a spell
+    destroy every one of them. The click was ignored; the sweep never reads a
+    target.
+    """
+    lea = set_pool("LEA")
+    mine = Permanent(card=lea["Mox Ruby"])
+    theirs = [Permanent(card=lea["Scathe Zombies"]), Permanent(card=lea["Forest"])]
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("ICE")["Jokulhaups"]],
+                    battlefield=[mine]),
+        PlayerState(name="P2", battlefield=theirs),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    assert game.cast_target_spec(0, set_pool("ICE")["Jokulhaups"]) == {
+        "kind": "none", "requires_target": False, "valid_targets": [],
+    }
+
+    result = game.cast_from_hand(0, "Jokulhaups")
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.players[0].battlefield == []
+    assert game.players[1].battlefield == []
+
+
+def test_jokulhaups_resolves_over_an_empty_board(set_pool):
+    """Nothing to destroy is not nothing to cast."""
+    game = Game(players=[
+        PlayerState(name="P1", hand=[set_pool("ICE")["Jokulhaups"]]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+
+    result = game.cast_from_hand(0, "Jokulhaups")
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.stack == []
+def test_pox_hits_each_player_and_lets_none_of_them_be_picked(set_pool):
+    """The same defect through a different payload key. "Each player loses a
+    third of their life" lowers to a life loss whose ``recipient`` is *each
+    player*, and the kind was answered flat as ``{"kind": "player"}`` — so the
+    caster was handed a seat picker for an effect that hits everybody, and
+    whichever seat was clicked went nowhere.
+    """
+    game = Game(players=[PlayerState(name="P1", hand=[set_pool("ICE")["Pox"]]),
+                         PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    p1, p2 = game.players
+
+    assert game.cast_target_spec(0, set_pool("ICE")["Pox"]) == {
+        "kind": "none", "requires_target": False, "valid_targets": [],
+    }
+
+    result = game.cast_from_hand(0, "Pox")
+    game._settle()
+
+    assert result.supported, result.details
+    assert (p1.life, p2.life) == (13, 13)   # both, symmetrically
+# --- end FixC ---
