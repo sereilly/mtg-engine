@@ -23,7 +23,7 @@ from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, NUMBER_WORDS, SUBTYPE_INDE
 from ..phrases import (
     _accept_number, _accept_self_reference, _parse_counted_sacrifice,
     _parse_mana_payment, _parse_pay_life,
-    _parse_that_object, _parse_zone,
+    _parse_sacrificed_subject, _parse_that_object, _parse_zone,
     parse_bound_subject, parse_counted_subject, parse_pair_ordinal_subject,
     parse_subject_filter_at,
 )
@@ -649,16 +649,12 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
     another = bool(stream.accept_word("another"))
     subject = parse_recipient(stream)
     if subject is None:
-        # "You may sacrifice **two Islands**." (Leviathan.) A bare count in
-        # front of an untargeted plural, which `parse_recipient` has no reading
-        # for — the same noun phrase the "unless you sacrifice" tail below
-        # already reads, so it is the same production rather than a second
-        # spelling of "two Islands". Without it the offer refused, and
-        # Leviathan's whole upkeep line with it.
-        counted = _parse_counted_sacrifice(stream, player)
-        if counted is not None:
-            return counted
-        raise stream.error("expected something to sacrifice")
+        # The two readings `parse_recipient` has none for: a bound object
+        # ("sacrifice **that creature**", Phantasmal Mount) and a bare count in
+        # front of an untargeted plural ("**two Islands**", Leviathan). Both
+        # live in `phrases`, because the counted one is also the phrase the
+        # "unless you sacrifice" tail below reads.
+        return _parse_sacrificed_subject(stream, player)
     if another and isinstance(subject, ast.TargetSpec):
         subject = dataclasses.replace(
             subject, filter=dataclasses.replace(subject.filter, other_than_source=True)

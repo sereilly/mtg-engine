@@ -744,6 +744,30 @@ def accept_member_state_clause(stream: TokenStream) -> tuple[str, bool] | None:
     return field_name, (not value) if negated else value
 
 
+def _parse_sacrificed_subject(
+    stream: TokenStream, player: ast.PlayerRef
+) -> ast.Statement:
+    """What a "sacrifice …" sentence names when ``parse_recipient`` refused it.
+
+    Two readings reach here, and neither is a noun phrase the recipient parser
+    has: the object an earlier step of this same ability *bound* ("sacrifice
+    **that creature**", Phantasmal Mount), and a bare count in front of an
+    untargeted plural ("sacrifice **two Islands**", Leviathan). The bound one is
+    tried first because "that creature" would otherwise reach
+    :func:`parse_counted_subject`, which has no count to read and would refuse
+    the whole line.
+
+    Only the *sacrifice* verb comes through this door; the "unless you
+    sacrifice" tails go straight to the counted reader, because an alternative
+    cost naming an object the sentence already chose is not a shape any card
+    prints.
+    """
+    bound = parse_bound_subject(stream)
+    if bound is not None:
+        return ast.Sacrifice(player, bound)
+    return _parse_counted_sacrifice(stream, player)
+
+
 def _parse_counted_sacrifice(
     stream: TokenStream, player: ast.PlayerRef
 ) -> ast.Statement:
