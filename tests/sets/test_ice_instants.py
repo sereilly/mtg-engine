@@ -1105,3 +1105,124 @@ def test_word_of_undoing_spares_an_aura_you_do_not_own(set_pool):
     assert [card.name for card in p2.hand] == []
     assert [card.name for card in p2.graveyard] == ["Armor of Faith"]
 # --- end W2G4 ---
+
+
+# --- W3G3: X spells, multiple targets, damage sources ---
+def _covenant_board(set_pool):
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])      # 2/2
+    giant = Permanent(card=pool["Tor Giant"])            # 3/3
+    p0 = PlayerState(name="P0", hand=[pool["Fire Covenant"]], life=20)
+    p1 = PlayerState(name="P1", battlefield=[bears, giant], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, p0, p1, bears, giant
+
+
+def test_fire_covenant_divides_as_the_caster_chooses(set_pool):
+    """"Fire Covenant deals X damage divided **as you choose** among any number
+    of target creatures."
+
+    ``DamageRiders.divided_evenly`` was set by the parser and read by nothing,
+    so this and three other cards were played as ``damage // n`` — a 5-damage
+    Covenant over two creatures dealt 2 and 2 where the card lets the caster
+    deal 4 and 1.
+    """
+    game, _p0, _p1, bears, giant = _covenant_board(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Fire Covenant", x_value=5,
+        divided_targets=[(1, 0, 1), (1, 1, 4)],
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert game.is_on_battlefield(bears), "1 damage on a 2/2"
+    assert not game.is_on_battlefield(giant), "4 damage on a 3/3"
+
+
+def test_the_even_split_would_have_answered_differently(set_pool):
+    """The boundary the test above needs. The same X over the same two
+    creatures, with no division announced, is 2 and 2 — the 3/3 lives and the
+    2/2 dies, which is the opposite pair. Without this the assertion above
+    would pass on an engine that ignored the announcement.
+    """
+    game, _p0, _p1, bears, giant = _covenant_board(set_pool)
+
+    game.cast_from_hand(0, "Fire Covenant", x_value=5, divided_targets=[(1, 0), (1, 1)])
+    game._settle()
+
+    assert not game.is_on_battlefield(bears)
+    assert game.is_on_battlefield(giant)
+
+
+def test_fire_covenant_offers_only_creatures(set_pool):
+    """"…among any number of **target creatures**". The divided lowering
+    returned before it ever read the printed noun, so the picker's seat loop
+    offered both players' faces as legal Fire Covenant targets."""
+    from engine.targeting import derive_cast_spec
+
+    game, _p0, _p1, _bears, _giant = _covenant_board(set_pool)
+    pool = set_pool("ICE")
+    covenant = pool["Fire Covenant"]
+
+    spec = derive_cast_spec(covenant, compile_card_oracle(covenant))
+    assert spec["division"] == "chosen" and spec["creatures_only"]
+
+    offered = game.cast_target_spec(0, covenant)["valid_targets"]
+    assert all(option["kind"] == "permanent" for option in offered), offered
+    assert sorted(option["name"] for option in offered) == [
+        "Balduvian Bears", "Tor Giant",
+    ]
+
+
+def test_a_division_must_total_the_damage_and_give_each_target_one(set_pool):
+    """CR 601.2d, checked at announcement (CR 601.2e) rather than at
+    resolution — by resolution the mana is spent and the only answer left is to
+    deal the wrong amount."""
+    game, _p0, _p1, _bears, _giant = _covenant_board(set_pool)
+    short = game.cast_from_hand(
+        0, "Fire Covenant", x_value=5, divided_targets=[(1, 0, 1), (1, 1, 1)],
+    )
+    assert not short.supported and "601.2d" in short.details
+
+    game, _p0, _p1, _bears, _giant = _covenant_board(set_pool)
+    starved = game.cast_from_hand(
+        0, "Fire Covenant", x_value=5, divided_targets=[(1, 0, 0), (1, 1, 5)],
+    )
+    assert not starved.supported and "at least 1" in starved.details
+
+
+def test_meteor_shower_divides_x_plus_one(set_pool):
+    """"X **plus 1** damage divided as you choose." The announcement is checked
+    against what the spell will really deal, bonus included — a gate reading
+    only ``amount`` would refuse the division the card allows."""
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", hand=[pool["Meteor Shower"]], life=20)
+    p1 = PlayerState(name="P1", battlefield=[bears], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.cast_from_hand(
+        0, "Meteor Shower", x_value=2, divided_targets=[(1, 0, 1), (1, None, 2)],
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert p1.life == 18, "X=2 plus 1 is three points to divide, not two"
+    assert game.is_on_battlefield(bears), "one of them went to the 2/2"
+
+    # And the total really is the bonus: a division summing to X alone refuses.
+    p0 = PlayerState(name="P0", hand=[pool["Meteor Shower"]], life=20)
+    p1 = PlayerState(name="P1", battlefield=[Permanent(card=pool["Balduvian Bears"])])
+    short = Game(players=[p0, p1])
+    short.enforce_mana_costs = False
+    short.start_turn(0)
+    refused = short.cast_from_hand(
+        0, "Meteor Shower", x_value=2, divided_targets=[(1, 0, 1), (1, None, 1)],
+    )
+    assert not refused.supported and "total 3" in refused.details
+# --- end W3G3 ---

@@ -152,14 +152,6 @@
   ]
  },
  {
-  "card": "Fireball",
-  "clause": "fireball deals x damage divided evenly, rounded down, among any number of targets",
-  "ignored": [
-   "evenly,",
-   "down,"
-  ]
- },
- {
   "card": "Flashfires",
   "clause": "destroy all plains",
   "ignored": [

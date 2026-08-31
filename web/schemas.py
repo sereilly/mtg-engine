@@ -217,6 +217,13 @@ class DividedTargetRef(BaseModel):
     # When set it replaces ``index``; ``seat`` is then advisory, since an id
     # already knows which battlefield it is on.
     id: int | None = Field(default=None, ge=1)
+    # "…damage **divided as you choose** among any number of targets"
+    # (Pyrotechnics). CR 601.2d: the caster announces the division with the
+    # spell, and each target must get at least one — so the share rides the
+    # target rather than travelling as a second list beside it. Omitted for
+    # "divided evenly" and by any caller that cannot be asked, which then gets
+    # the even split (engine/divided_damage.py).
+    amount: int | None = Field(default=None, ge=1)
 
 
 class SearchPickRef(BaseModel):

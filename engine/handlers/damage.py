@@ -5,6 +5,9 @@ from typing import TYPE_CHECKING
 from ..damage_events import (DAMAGE_DENIES_REGENERATION,
                              DAMAGE_EXILES_INSTEAD)
 from ..damage_redirects import DamageRedirect, add_redirect
+from ..divided_damage import (
+    DIVIDED_TARGETS, EVENLY, divide, divided_entry,
+)
 from ..dexterity import flip_lands_on
 from ..models import Permanent
 from ..named_counters import counters_on
@@ -382,35 +385,43 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
 
         run_resumable(game, game.opponents_of(game.players.index(caster)), _hit_opponent)
         return True, "resolved"
-    # Fireball's cross-seat divided list: any mix of creatures and player faces
-    # on both sides, each dealt damage // n ("divided evenly, rounded down").
-    divided = context.choices.get("divided_targets")
+    # A divided spell's cross-seat list: any mix of creatures and player faces
+    # on both sides. How much each one gets is `engine/divided_damage.py` —
+    # the caster's announced division (CR 601.2d) for "divided as you choose",
+    # and "divided evenly, rounded down" otherwise. It was `damage // n` for
+    # both, so four cards printing the second sentence were played as the first.
+    divided = context.choices.get(DIVIDED_TARGETS)
     if divided:
         entries = [
-            (seat, index)
-            for seat, index in divided
+            entry
+            for entry in divided
+            for seat, index, _share in (divided_entry(entry),)
             if 0 <= seat < len(game.players)
             and (index is None or 0 <= index < len(game.players[seat].battlefield))
         ]
-        n = len(entries)
-        if n == 0:
+        if not entries:
             game.log.append(f"{card.name} had no remaining targets")
             return True, "resolved"
-        per_target = damage // n
+        # A target that has left keeps its share out of the event — CR 608.2b
+        # makes it an illegal target, and nothing redistributes what was
+        # assigned to it. Dividing over the survivors is what the *even* split
+        # has always done and is what an unannounced division still means.
+        division = (instruction.payload.get("targets") or {}).get("division", EVENLY)
+        assigned = divide(damage, entries, division=division)
         # Creatures first (highest index first so removals can't shift earlier
         # indices), then faces. One resumable list rather than two loops: a
         # target that stops to ask the player something has to take the targets
         # behind it with it, and "behind it" spans both groups.
         ordered = sorted(
-            (e for e in entries if e[1] is not None), key=lambda e: e[1], reverse=True
-        ) + [e for e in entries if e[1] is None]
+            (e for e in assigned if e[1] is not None), key=lambda e: e[1], reverse=True
+        ) + [e for e in assigned if e[1] is None]
 
         def hit(entry) -> None:
-            seat, index = entry
+            seat, index, share = entry
             if index is None:
                 face = game.players[seat]
                 game._deal_damage_to_player(
-                    face, per_target, source=card, asks=True,
+                    face, share, source=card, asks=True,
                     then=lambda dealt: game.log.append(
                         f"{card.name} dealt {dealt} damage to {face.name}"
                     ),
@@ -418,7 +429,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
                 return
             target_perm = game.players[seat].battlefield[index]
             game._mark_damage_on_permanent(
-                target_perm, per_target, source=source_permanent or card, asks=True,
+                target_perm, share, source=source_permanent or card, asks=True,
                 then=_damage_reporter(game, card, target_perm),
             )
 

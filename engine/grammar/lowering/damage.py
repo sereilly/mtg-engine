@@ -17,7 +17,9 @@ import dataclasses
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+from ...subject_filters import (
+    TESTABLE_SUBJECT_FILTER_KEYS, untestable_filter_keys,
+)
 from ...oracle_types import PER_OBJECT_SEAT_RECORDS, X_FROM_COUNT
 from ._amounts import (
     _damaged_player_is,
@@ -574,7 +576,39 @@ def _lower_damage_shape(
     # engine/targeting.py raise the divided prompt from the compiled program
     # rather than from a "divided" substring in legality.py.
     if node.riders.divided:
-        payload["targets"] = {"quantifier": "divided", "kind": "divided"}
+        described: dict[str, object] = {
+            "quantifier": "divided",
+            "kind": "divided",
+            # **Which division the card prints** (CR 601.2d). "Divided evenly,
+            # rounded down" is the game's; "divided as you choose" is the
+            # caster's, announced with the spell. The parser has told the two
+            # apart since it was written and nothing read the answer, so four
+            # cards printing the second sentence were played as the first.
+            "division": "evenly" if node.riders.divided_evenly else "chosen",
+        }
+        if node.riders.rounding == "up":
+            # No card in this pool prints it, and rounding a share down where
+            # the card says up deals less damage than printed — a refusal here
+            # is the loud direction.
+            raise LoweringError("a division rounded up is not implemented", node=node)
+        if node.riders.rounding:
+            described["rounding"] = node.riders.rounding
+        # "…among any number of **target creatures**" (Fire Covenant). The
+        # printed noun narrows the picker, and dropping it is why the engine
+        # offered a player's face as a legal Fire Covenant target: this branch
+        # returned before the recipient was ever read.
+        narrowing = (
+            _filter_payload(recipient.filter)
+            if isinstance(recipient, ast.TargetSpec) else {}
+        )
+        if narrowing:
+            if untestable_filter_keys(narrowing):
+                raise LoweringError(
+                    "a divided spell's targets carry a narrowing nothing tests",
+                    node=node,
+                )
+            described["filter"] = narrowing
+        payload["targets"] = described
         return (OracleInstruction("deal_damage", "", payload),)
 
     # Damage aimed at the source's own controller rather than the spell's

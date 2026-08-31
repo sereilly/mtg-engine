@@ -790,3 +790,44 @@ def test_115_9a_a_spell_with_a_single_target_is_counted_by_what_it_chose(set_poo
         1, "Fireball", x_value=2, divided_targets=[(0, None), (1, None)]
     )
     assert spread.activation_target_spec(0, 0)["valid_targets"] == [], spread.log
+
+
+# --- W3G3: X spells, multiple targets, damage sources ---
+@pytest.mark.cr("601.2d")
+def test_601_2d_the_caster_announces_the_division_and_it_totals_the_effect():
+    """601.2d: "If the spell requires the player to divide or distribute an
+    effect (such as damage or counters) among one or more targets, the player
+    announces the division. Each of these targets must receive at least one of
+    whatever is being divided."
+
+    Announced, not derived. The engine divided every such spell evenly, which is
+    a different sentence — one printed on Fireball and on no other card in this
+    pool.
+    """
+    from engine.divided_damage import CHOSEN, EVENLY, divide, division_refusal
+
+    entries = [(1, 0, 3), (1, 1, 1)]
+    assert division_refusal(4, entries, division=CHOSEN) is None
+    assert divide(4, entries, division=CHOSEN) == [(1, 0, 3), (1, 1, 1)]
+
+    # Each target must receive at least one.
+    assert "at least 1" in division_refusal(4, [(1, 0, 4), (1, 1, 0)], division=CHOSEN)
+    # And the division must be of the whole effect.
+    assert "total 4" in division_refusal(4, [(1, 0, 3), (1, 1, 3)], division=CHOSEN)
+    # A spell whose card divides it evenly is not the caster's to divide.
+    assert division_refusal(4, entries, division=EVENLY) is not None
+
+
+@pytest.mark.cr("601.2d")
+def test_601_2d_an_unannounced_division_falls_back_to_the_even_split():
+    """No division is not an illegal division. Every "divided evenly" spell has
+    none by definition, and a chosen-division spell cast by a seat with nothing
+    to ask (the AI, a scripted duel) takes the even split — the same answer a
+    ``ChoiceSpec`` gives a non-interactive seat."""
+    from engine.divided_damage import CHOSEN, divide, division_refusal
+
+    entries = [(1, 0), (1, 1)]
+    assert division_refusal(5, entries, division=CHOSEN) is None
+    assert divide(5, entries, division=CHOSEN) == [(1, 0, 2), (1, 1, 2)], \
+        "rounded down, so the remainder simply disappears"
+# --- end W3G3 ---

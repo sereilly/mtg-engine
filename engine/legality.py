@@ -1134,7 +1134,15 @@ class LegalityMixin:
         targets: list[dict] = []
         # Player faces are legal for player-targeted, "any target", and divided
         # spells — but not a divided land selection (Volcanic Eruption's Mountains).
-        if kind in ("player", "any", "divided", "player_or_planeswalker") and not spec.get("land_filter"):
+        if (
+            kind in ("player", "any", "divided", "player_or_planeswalker")
+            # "…among any number of **target creatures**" (Fire Covenant) — the
+            # divided sibling of the land narrowing beside it. Without the noun,
+            # a player's face was offered as a legal target for a spell that
+            # names none.
+            and not spec.get("land_filter")
+            and not spec.get("creatures_only")
+        ):
             for seat in range(len(self.players)):
                 # "target opponent" (Word of Command) can't be the caster's own seat.
                 if spec.get("opponents_only") and seat == caster_index:

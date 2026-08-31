@@ -44,6 +44,7 @@ from __future__ import annotations
 import re
 
 from .cast_costs import additional_costs
+from .divided_damage import CHOSEN, DIVIDED_TARGETS, divided_entry
 from .enter_effects import copy_on_enter_type
 from .subject_filters import filter_head_noun
 
@@ -1079,6 +1080,18 @@ def _from_instruction(instruction) -> dict | None:
         return from_payload(instruction.payload)
     described = _from_targets_payload(instruction.payload.get("targets"))
     if described is not None:
+        if described.get("division") == CHOSEN:
+            # **How much there is to divide**, so the picker can ask for a
+            # division that totals it (CR 601.2d). Read off the payload here
+            # rather than copied into the `targets` description at lowering: the
+            # amount is the instruction's own field, and a second copy beside
+            # the target description is a second thing to keep in step.
+            amount = instruction.payload.get("amount", 0)
+            if isinstance(amount, int):
+                described["division_total"] = amount
+            described["division_x_bonus"] = int(
+                instruction.payload.get("amount_bonus", 0) or 0
+            )
         return described
     type_filter = instruction.payload.get("type_filter")
     if type_filter:
@@ -1307,7 +1320,16 @@ def _from_targets_payload(targets) -> dict | None:
         # Fireball: "X damage divided evenly … among any number of targets".
         # The UI picks the targets and X follows from how many were chosen, so
         # this is its own prompt rather than a repeated "any target".
-        return {"kind": "divided"}
+        spec = {"kind": "divided", "division": targets.get("division", "evenly")}
+        # "…among any number of **target creatures**" (Fire Covenant). The
+        # printed noun, carried through so the picker offers what the card
+        # names — without it the seat loop in `legality._enumerate_targets`
+        # offers both players' faces, which is a legal Fire Covenant target
+        # only in an engine that never read the noun.
+        narrowing = targets.get("filter") or {}
+        if narrowing.get("type_filter") == "creature":
+            spec["creatures_only"] = True
+        return spec
     if kind == "player":
         spec = {"kind": "player"}
         if targets.get("attacked_this_turn"):
@@ -1623,11 +1645,11 @@ def single_player_target(game, item) -> int | None:
         return None
 
     seats = range(len(game.players))
-    divided = (getattr(item, "choices", None) or {}).get("divided_targets")
+    divided = (getattr(item, "choices", None) or {}).get(DIVIDED_TARGETS)
     if divided:
         if len(divided) != 1:
             return None
-        seat, permanent_index = divided[0]
+        seat, permanent_index, _share = divided_entry(divided[0])
         if permanent_index is not None:
             return None
         return int(seat) if int(seat) in seats else None

@@ -24,6 +24,9 @@ from ...cast_costs import AdditionalCost, additional_costs
 from ...auras import controller_cast_ban
 from ...cast_restrictions import check_cast_timing
 from ...damage_ledger import record_cast
+from ...divided_damage import (
+    EVENLY, divided_description, divided_entry, division_refusal,
+)
 from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...classifier import classify_card
 from ...cost_modifiers import (
@@ -151,6 +154,21 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
     if excluded is not None and permanent.has_type(excluded):
         return False
     return matcher(permanent)
+
+
+def _divided_total(payload: dict, x_value: int | None) -> int:
+    """How much a divided instruction has to divide, as announced.
+
+    The same two keys the handler adds together — the amount and Meteor
+    Shower's "X **plus 1**" bonus — read here so CR 601.2d's "the division must
+    total this" is checked against the number the spell will really deal.
+    """
+    from ...handlers._common import resolve_amount
+
+    return int(resolve_amount(payload.get("amount", 0), x_value)) + int(
+        payload.get("amount_bonus", 0) or 0
+    )
+
 
 
 class SpellCastingMixin:
@@ -588,17 +606,38 @@ class SpellCastingMixin:
         # A divided spell's cross-seat target list: sanity-check every entry so a
         # stale battlefield index can't crash resolution.
         if divided_targets is not None:
-            cleaned: list[tuple[int, int | None]] = []
+            cleaned: list[tuple] = []
             for entry in divided_targets:
-                seat, index = entry
+                seat, index, share = divided_entry(entry)
                 if not (isinstance(seat, int) and 0 <= seat < len(self.players)):
                     return SimulationResult(card.name, False, classification.effect_kind, "invalid divided target seat")
                 if index is not None and not (
                     isinstance(index, int) and 0 <= index < len(self.players[seat].battlefield)
                 ):
                     return SimulationResult(card.name, False, classification.effect_kind, "invalid divided target")
-                cleaned.append((seat, index))
+                # The two-tuple is kept where no share was announced: it is what
+                # every evenly-divided spell and every non-interactive caller
+                # sends, and normalizing it to a three-tuple would say a
+                # division was announced when none was.
+                cleaned.append((seat, index) if share is None else (seat, index, share))
             divided_targets = cleaned or None
+            # CR 601.2d, at announcement and before any cost is paid: the
+            # division is part of proposing the spell, and CR 601.2e returns the
+            # game to the moment before a proposal that turns out to be illegal.
+            # Checked here rather than at resolution for `cast_target_refusal`'s
+            # reason — by resolution the mana is spent and the only honest
+            # answer left is to deal the wrong amount.
+            found = divided_description(compile_card_oracle(card).instructions)
+            refusal = None if found is None else division_refusal(
+                _divided_total(found[0], x_value),
+                divided_targets,
+                division=found[1].get("division", EVENLY),
+            )
+            if refusal is not None:
+                self.log.append(f"{card.name}: {refusal}")
+                return SimulationResult(
+                    card.name, False, classification.effect_kind, refusal,
+                )
 
         # Fireball-style spells cost {1} more to cast for each target beyond the
         # first. Count the chosen targets (the cross-seat divided list, a list of

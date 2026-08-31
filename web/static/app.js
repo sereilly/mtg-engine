@@ -5,6 +5,12 @@ let stateSyncSource = null;
 let pendingActivation = null;
 let pendingCastTarget = null;
 let pendingCastX = null;
+// "…damage **divided as you choose** among any number of targets"
+// (Pyrotechnics). CR 601.2d makes the division part of *announcing* the spell,
+// so it is a step of the cast flow rather than a prompt at resolution: the
+// caster picks the targets, settles X if there is one, and then says how much
+// each target gets. Absent for "divided evenly", where nobody chooses.
+let pendingCastDivision = null;
 let pendingCastHandCard = null;
 let pendingManaColor = null;
 let pendingAutoTap = null;
@@ -7509,7 +7515,7 @@ function renderActivationPrompt() {
     return;
   }
 
-  if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingManaColor && !pendingAbilityChoice && !pendingChannel) {
+  if (!pendingActivation && !pendingCastTarget && !pendingCastX && !pendingCastDivision && !pendingManaColor && !pendingAbilityChoice && !pendingChannel) {
     const shouldShowPriority = shouldShowPriorityPrompt(currentState);
     const opponentHasPriority =
       !!currentState &&
@@ -7750,6 +7756,46 @@ function renderActivationPrompt() {
     cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
     customOkBtn.disabled = !pendingChannel.awaitingCustomValue;
+    return;
+  }
+
+  if (pendingCastDivision) {
+    // CR 601.2d: "the player announces the division. Each of these targets must
+    // receive at least one of whatever is being divided." A number per target,
+    // starting from the even split, with the remaining total shown live — a
+    // prompt rather than a silent even split, which is what four cards printing
+    // "as you choose" were played as.
+    panel.classList.remove("hidden");
+    okBtn.classList.add("hidden");
+    title.textContent = `Divide ${pendingCastDivision.total} damage — ${pendingCastDivision.cardName}`;
+    const left = divisionRemaining();
+    body.textContent =
+      "Say how much each chosen target gets. Every target must get at least 1, "
+      + `and the shares must total ${pendingCastDivision.total}.`;
+    const rows = pendingCastDivision.entries.map((entry, position) => (
+      `<div class="prompt-choice-row">`
+      + `<label>${escapeHtml(entry.label)} `
+      + `<input type="number" min="1" max="${pendingCastDivision.total}" `
+      + `data-division-share="${position}" value="${pendingCastDivision.shares[position]}"></label>`
+      + `</div>`
+    ));
+    steps.innerHTML = [
+      ...rows,
+      `<div id="divisionRemaining">${left === 0 ? "Fully assigned." : `${left} left to assign.`}</div>`,
+      `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="divisionConfirmBtn"`
+      + `${left === 0 ? "" : " disabled"}>Confirm division</button></div>`,
+    ].join("");
+    for (const input of steps.querySelectorAll("[data-division-share]")) {
+      const onEdit = (event) => setDivisionShare(
+        Number(event.target.getAttribute("data-division-share")), event.target.value,
+      );
+      input.addEventListener("input", onEdit);
+      input.addEventListener("change", onEdit);
+    }
+    document.getElementById("divisionConfirmBtn")?.addEventListener("click", confirmCastDivision);
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
     return;
   }
 
@@ -9473,9 +9519,15 @@ function confirmDividedTargets() {
     ...(p.dividedFaces || []).map((faceSeat) => ({ seat: faceSeat })),
   ];
   const { card, cardName, castAction } = p;
+  const chosenValidTargets = p.validTargets || [];
   // Volcanic Eruption: X equals the number of chosen targets (Mountains), so there
   // is no separate X prompt — cast straight away with x_value = the count.
   const xEqualsTargets = !!targetSpecOf(card)?.x_equals_targets;
+  // "…divided **as you choose**" with a printed amount (Pyrotechnics, Fiery
+  // Justice): the total is known already, so the division is asked now.
+  const fixedTotal = (card.mana_cost || "").includes("{X}")
+    ? null
+    : dividedDivisionTotal(card, null);
   pendingCastTarget = null;
   battlefieldCanvas?.setTargetingKeys([]);
   for (const elementId of ["selfLife", "oppLife", "selfName", "oppName"]) {
@@ -9497,10 +9549,131 @@ function confirmDividedTargets() {
       .finally(() => clearPendingHandCast());
     return;
   }
-  startCastDividedXPrompt(card, cardName, dividedPayload, n - 1, castAction || "cast");
+  if (Number.isInteger(fixedTotal)) {
+    startCastDivisionPrompt(
+      card, cardName, dividedPayload, fixedTotal, castAction || "cast", null,
+      chosenValidTargets,
+    );
+    return;
+  }
+  startCastDividedXPrompt(
+    card, cardName, dividedPayload, n - 1, castAction || "cast", chosenValidTargets,
+  );
 }
 
-function startCastDividedXPrompt(card, cardName, dividedPayload, extraTargetTax, castAction = "cast") {
+// --- CR 601.2d: announcing the division --------------------------------------
+
+/** How much a "divided as you choose" spell has to divide, once X is known. */
+function dividedDivisionTotal(card, xValue) {
+  const spec = targetSpecOf(card) || {};
+  if (spec.division !== "chosen") return null;
+  const bonus = Number(spec.division_x_bonus || 0);
+  if (Number.isInteger(spec.division_total)) return spec.division_total + bonus;
+  return Number(xValue || 0) + bonus;
+}
+
+/** A readable name for one chosen divided target, for the division prompt. */
+function dividedTargetLabel(entry, validTargets) {
+  if (!Number.isInteger(entry.index)) {
+    const player = (currentState?.players || [])[entry.seat];
+    return player?.name ? `${player.name} (face)` : `Player ${entry.seat} (face)`;
+  }
+  const match = (validTargets || []).find(
+    (t) => t && t.kind === "permanent" && t.seat === entry.seat && t.index === entry.index,
+  );
+  return match?.name || `Permanent ${entry.seat}-${entry.index}`;
+}
+
+/** The even split, as the starting point the caster edits (CR 601.2d needs at
+ * least 1 each, so the remainder goes to the earliest targets rather than
+ * leaving a target on zero). */
+function evenStartingDivision(total, count) {
+  const base = Math.floor(total / count);
+  const shares = new Array(count).fill(base);
+  let left = total - base * count;
+  for (let i = 0; left > 0 && i < count; i += 1, left -= 1) shares[i] += 1;
+  return shares;
+}
+
+function startCastDivisionPrompt(card, cardName, dividedPayload, total, castAction, xValue, validTargets) {
+  pendingCastDivision = {
+    card,
+    cardName,
+    castAction: castAction || "cast",
+    xValue,
+    total,
+    entries: dividedPayload.map((entry) => ({
+      ...entry,
+      label: dividedTargetLabel(entry, validTargets),
+    })),
+    shares: evenStartingDivision(total, dividedPayload.length),
+  };
+  renderActivationPrompt();
+  updateActionHint(`Divide ${total} damage among ${dividedPayload.length} target(s) for ${cardName}.`);
+}
+
+function setDivisionShare(position, value) {
+  if (!pendingCastDivision) return;
+  const parsed = Number.parseInt(value, 10);
+  pendingCastDivision.shares[position] = Number.isFinite(parsed) ? parsed : 0;
+  // Patched in place rather than re-rendered. `renderActivationPrompt` rebuilds
+  // `#promptSteps` wholesale, which destroys the input being typed into — the
+  // caster's second number went into an element that no longer existed, and the
+  // readout stayed one edit behind.
+  refreshDivisionReadout();
+}
+
+/** Update the "N left to assign" line and the confirm button, without
+ * rebuilding the inputs around them. */
+function refreshDivisionReadout() {
+  if (!pendingCastDivision) return;
+  const left = divisionRemaining();
+  const readout = document.getElementById("divisionRemaining");
+  if (readout) readout.textContent = left === 0 ? "Fully assigned." : `${left} left to assign.`;
+  const confirm = document.getElementById("divisionConfirmBtn");
+  if (confirm) confirm.disabled = left !== 0;
+}
+
+function divisionRemaining() {
+  if (!pendingCastDivision) return 0;
+  const assigned = pendingCastDivision.shares.reduce((sum, n) => sum + (Number(n) || 0), 0);
+  return pendingCastDivision.total - assigned;
+}
+
+function confirmCastDivision() {
+  const pending = pendingCastDivision;
+  if (!pending) return;
+  if (pending.shares.some((n) => !Number.isInteger(n) || n < 1)) {
+    updateActionHint("Each target must be assigned at least 1 (CR 601.2d).", true);
+    return;
+  }
+  if (divisionRemaining() !== 0) {
+    updateActionHint(`The division must total ${pending.total} (CR 601.2d).`, true);
+    return;
+  }
+  const body = {
+    seat,
+    action: pending.castAction,
+    card_name: pending.cardName,
+    divided_targets: pending.entries.map((entry, position) => ({
+      seat: entry.seat,
+      ...(Number.isInteger(entry.index) ? { index: entry.index } : {}),
+      amount: pending.shares[position],
+    })),
+  };
+  if (Number.isInteger(pending.xValue)) body.x_value = pending.xValue;
+  pendingCastDivision = null;
+  updateActionHint(`Casting ${pending.cardName}...`);
+  sendAction(body)
+    .then(() => updateActionHint(`Cast ${pending.cardName}.`))
+    .catch((e) => updateActionHint(e.message, true))
+    .finally(() => clearPendingHandCast());
+}
+
+function startCastDividedXPrompt(
+  card, cardName, dividedPayload, extraTargetTax, castAction = "cast",
+  dividedValidTargets = null,
+) {
   const baseMax = getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || "", card);
   pendingCastX = {
     kind: "cast_x",
@@ -9509,6 +9682,8 @@ function startCastDividedXPrompt(card, cardName, dividedPayload, extraTargetTax,
     targetSeat: null,
     targetPermanentIndex: null,
     dividedPayload, // [{seat, index}] creatures + [{seat}] faces, both sides
+    // Kept so the division prompt behind this one can name what was chosen.
+    dividedValidTargets,
     extraTargetTax,
     castAction,
     manaRequirement: parseManaCostSymbols(card.mana_cost || ""),
@@ -10026,6 +10201,18 @@ function resolvePendingCastX(xValue) {
     body.target_seat = pending.targetSeat;
     body.target_stack_index = pending.targetStackIndex;
   } else if (Array.isArray(pending.dividedPayload)) {
+    // "…divided as you choose" (Meteor Shower, Fire Covenant): X settles the
+    // total, and CR 601.2d's division is the announcement's last step rather
+    // than an even split nobody chose. Asked here, before the action is sent.
+    const chosenTotal = dividedDivisionTotal(pending.card, selectedX);
+    if (Number.isInteger(chosenTotal)) {
+      pendingCastX = null;
+      startCastDivisionPrompt(
+        pending.card, pending.cardName, pending.dividedPayload, chosenTotal,
+        pending.castAction || "cast", selectedX, pending.dividedValidTargets,
+      );
+      return;
+    }
     body.divided_targets = pending.dividedPayload;
   } else {
     body.target_seat = pending.targetSeat;
@@ -13794,6 +13981,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
     pendingActivation = null;
     pendingCastTarget = null;
     pendingCastX = null;
+    pendingCastDivision = null;
     clearPendingHandCast();
     pendingManaColor = null;
     pendingAbilityChoice = null;
@@ -15491,10 +15679,11 @@ for (const elementId of ["selfName", "oppName", "selfLife", "oppLife"]) {
 
 q("promptCancelBtn").addEventListener("click", () => {
   SFX.onMenuCancel();
-  const wasCasting = !!(pendingCastTarget || pendingCastX || pendingAutoTap || pendingModalChoice || pendingDiscardCost);
+  const wasCasting = !!(pendingCastTarget || pendingCastX || pendingCastDivision || pendingAutoTap || pendingModalChoice || pendingDiscardCost);
   pendingActivation = null;
   pendingCastTarget = null;
   pendingCastX = null;
+  pendingCastDivision = null;
   pendingManaColor = null;
   pendingAutoTap = null;
   pendingModalChoice = null;
@@ -15648,6 +15837,7 @@ q("endTurnBtn").addEventListener("click", async () => {
     pendingActivation = null;
     pendingCastTarget = null;
     pendingCastX = null;
+    pendingCastDivision = null;
     pendingManaColor = null;
     battlefieldCanvas?.hideManaFan();
     const isSelfTurn = !!currentState && seat !== null && currentState.current_turn === seat;

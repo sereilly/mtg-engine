@@ -8,6 +8,7 @@ from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
 from ..oracle_types import PER_OBJECT_SEAT_RECORDS
 from ..resumption import run_resumable
+from ..divided_damage import DIVIDED_TARGETS, divided_entry
 from ._common import (
     apply_damage_to_creature, permanent_matches_filter, resolve_role_permanent,
     resolve_target_permanent, resolve_target_permanents,
@@ -36,9 +37,12 @@ def volcanic_eruption(game: Game, instruction: OracleInstruction, context: Oracl
     # indices on the target player's battlefield; fall back to the first X
     # Mountains anywhere for AI/no explicit choice.
     chosen: list[tuple[PlayerState, Permanent]] = []
-    divided = context.choices.get("divided_targets")
+    divided = context.choices.get(DIVIDED_TARGETS)
     if divided:
-        for seat, index in divided:
+        # Through `divided_entry`, because an entry may carry an announced share
+        # (CR 601.2d) — Volcanic Eruption divides its damage among creatures and
+        # players *after* this, and this list is only the Mountains it chose.
+        for seat, index, _share in (divided_entry(entry) for entry in divided):
             if index is None or not (0 <= seat < len(game.players)):
                 continue
             player = game.players[seat]
