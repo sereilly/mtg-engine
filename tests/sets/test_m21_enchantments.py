@@ -1697,3 +1697,39 @@ def test_nine_lives_spends_an_armed_shield_before_a_counter(set_pool):
 
     assert p1.life == 20
     assert "incarnation_counters" not in enchantment.metadata
+
+
+# --- ICE promotion: an Enchant clause the picker could not read ---
+def test_faiths_fetters_offers_a_permanent_to_enchant(set_pool, catalog_by_name):
+    """"Enchant permanent" — the widest enchant noun printed in the pool, and
+    one `targeting.py`'s vocabulary did not carry, so the card derived
+    `kind: "none"`. That is the value the client tests to decide whether to ask
+    for a target at all, so it asked for none, sent a bare cast, and the engine
+    refused: the Aura was uncastable in the app while compiling supported,
+    carrying no hollow line and claiming every printed sentence.
+
+    Found during Ice Age's promotion, by a sweep over what the pickers *offer*
+    rather than over what the compiler accepts — which is the only way an
+    unreadable enchant clause shows up, since every card-level instrument is
+    satisfied. Aggression printed the other unreadable clause and is tested
+    with the ICE enchantments.
+    """
+    fetters = set_pool("M21")["Faith's Fetters"]
+    holder = PlayerState(
+        name="P1", hand=[fetters],
+        battlefield=[Permanent(card=catalog_by_name["Black Lotus"])],
+    )
+    game = Game(players=[holder, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    spec = game.cast_target_spec(0, fetters)
+    assert spec["kind"] == "permanent", spec
+    assert [t["name"] for t in spec["valid_targets"]] == ["Black Lotus"]
+
+    result = game.cast_from_hand(
+        0, "Faith's Fetters", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+    assert result.supported, game.log
+    assert holder.life == 24, game.log

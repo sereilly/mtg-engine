@@ -537,3 +537,47 @@ def test_chaos_moons_two_halves_treat_a_latecomer_differently(set_pool):
         "CR 611.2c: the anthem's set was fixed when the effect began"
     )
 # --- end ChaosMoon ---
+
+
+# --- Promotion: an Enchant clause the picker could not read ---
+def test_aggression_offers_a_creature_to_enchant(set_pool, catalog_by_name):
+    """"Enchant non-Wall creature" is one of the two printed enchant clauses
+    `targeting.py`'s noun vocabulary could not read, so it derived
+    `kind: "none"` — and "none" is what the client tests to decide whether to
+    ask for a target at all. It asked for none, sent a bare cast, and the engine
+    refused it. The Aura was dead in hand, and no guard could see it: the card
+    compiles supported, carries no hollow line and claims every printed
+    sentence. (Faith's Fetters printed the other clause; its test is with the
+    M21 enchantments.)
+
+    Found at ICE's promotion by sweeping what the pickers *offer* rather than
+    what the compiler accepts. The negated noun narrows to its head — the
+    exclusion is the cast gate's to enforce, and the second half below keeps it
+    enforcing it, because a picker that offered a Wall would be the same bug
+    pointing the other way.
+    """
+    pool = set_pool("ICE")
+
+    def cast(host_name):
+        holder = PlayerState(
+            name="P1", hand=[pool["Aggression"]],
+            battlefield=[Permanent(card=catalog_by_name[host_name])],
+        )
+        game = Game(players=[holder, PlayerState(name="P2")])
+        game.enforce_mana_costs = False
+        game.start_turn(0)
+        spec = game.cast_target_spec(0, pool["Aggression"])
+        result = game.cast_from_hand(
+            0, "Aggression", target_player_index=0, target_permanent_index=0
+        )
+        game._settle()
+        return spec, result, game
+
+    spec, result, game = cast("Grizzly Bears")
+    assert spec["kind"] == "creature", spec
+    assert [t["name"] for t in spec["valid_targets"]] == ["Grizzly Bears"]
+    assert result.supported, game.log
+
+    _spec, refused, _game = cast("Wall of Stone")
+    assert not refused.supported
+# --- end Promotion ---

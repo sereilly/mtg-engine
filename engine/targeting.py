@@ -63,9 +63,18 @@ from .subject_filters import filter_head_noun
 # instead means the tenth combination costs nothing, which is how "artifact an
 # opponent controls" (Relic Bind — the only card in the pool printing it)
 # arrived without a second entry.
-_ENCHANT_NOUNS = ("creature", "land", "artifact", "enchantment", "wall")
+_ENCHANT_NOUNS = ("creature", "land", "artifact", "enchantment", "wall",
+                  "permanent")
+#: A printed **negated** noun ("Enchant non-Wall creature", Aggression). The
+#: exclusion is enforced by `mixins/stack/casting.aura_enchant_noun`, which
+#: reads the whole printed subject; what the picker needs from it is the head
+#: noun, so the candidate list is the right *kind* and the gate then refuses
+#: the excluded ones. Admitting the prefix here rather than a second noun per
+#: exclusion keeps the two readers on one vocabulary.
+_ENCHANT_NEGATION = r"(?:non-[a-z]+ )?"
 _ENCHANT_SEAT_CLAUSES = {"you control": "you", "an opponent controls": "opponent"}
 _ENCHANT_SUBJECT = (
+    rf"{_ENCHANT_NEGATION}"
     rf"(?:{'|'.join(_ENCHANT_NOUNS)})"
     rf"(?: (?:{'|'.join(_ENCHANT_SEAT_CLAUSES)}))?"
 )
@@ -151,6 +160,10 @@ _ENCHANT_NOUN_TO_SPEC: dict[str, dict] = {
     "land": {"kind": "land"},
     "artifact": {"kind": "artifact"},
     "enchantment": {"kind": "permanent", "enchant_enchantment": True},
+    # "Enchant permanent" (Faith's Fetters). The widest noun there is, so the
+    # general picker with no narrowing at all - and the one enchant clause
+    # whose spec needs no flag, because there is nothing to exclude.
+    "permanent": {"kind": "permanent"},
 }
 
 # The seat half of the clause as the picker's own flag. It is a seat test, not
@@ -168,6 +181,14 @@ def enchant_subject_spec(subject: str) -> dict | None:
     combinations are composed here rather than enumerated.
     """
     noun, seat = enchant_subject_seat(subject)
+    # "non-Wall creature" (Aggression) picks among *creatures*; the exclusion is
+    # the cast gate's to enforce, and it reads the whole printed subject. A
+    # picker narrowed to the head noun offers a superset and the gate refuses
+    # the rest, which is the safe direction — the unsafe one would be offering
+    # nothing, which is what this clause did before: no spec meant `kind: none`,
+    # so the client sent no target and the engine refused the cast outright.
+    if noun.startswith("non-"):
+        noun = noun.split(" ", 1)[1] if " " in noun else noun
     spec = _ENCHANT_NOUN_TO_SPEC.get(noun)
     if spec is None:
         return None

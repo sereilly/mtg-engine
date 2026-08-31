@@ -1315,3 +1315,44 @@ def test_general_jarkeld_activates_only_in_the_declare_blockers_step(set_pool):
     assert not result.supported
     assert "declare blockers step" in result.details
 # --- end W4G2 ---
+
+
+# --- Promotion: a bound subject with nothing bound ---
+def test_goblin_ski_patrol_sacrifices_itself_and_not_the_opponents_board(set_pool, catalog_by_name):
+    """"Its controller sacrifices **it** at the beginning of the next end step."
+
+    The pronoun names the Ski Patrol: the ability targets nothing, so there is
+    no other object it could mean. Found at ICE's promotion, when the whole set
+    reached `load_catalog()` and a sweep over every unchosen target could see
+    it: `resolve_target_permanent` does not answer None for a resolution that
+    named nothing — it falls through to a battlefield scan over `context.target`,
+    which for a targetless activation is the *opponent*. So the card sacrificed
+    whichever permanent the opponent had in slot 0 and kept its own +2/+0 and
+    flying for good: the drawback never applied, and an opponent's permanent
+    went with it. Wrong twice, both times in the player's favour.
+    """
+    pool = set_pool("ICE")
+    ski = _nosick(Permanent(card=pool["Goblin Ski Patrol"]))
+    p1 = PlayerState(
+        name="P1", battlefield=[Permanent(card=pool["Snow-Covered Mountain"]), ski]
+    )
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[Permanent(card=catalog_by_name["Black Lotus"]),
+                     Permanent(card=catalog_by_name["Serra Angel"])],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert game.activate_permanent_ability(
+        0, "Goblin Ski Patrol", permanent_index=1
+    ).supported
+    game._settle()
+    game.resolve_end_step(0)
+    game._settle()
+
+    assert [c.name for c in p2.graveyard] == [], game.log
+    assert [c.name for c in p1.graveyard] == ["Goblin Ski Patrol"], game.log
+    assert {p.card.name for p in p2.battlefield} == {"Black Lotus", "Serra Angel"}
+# --- end Promotion ---

@@ -747,11 +747,29 @@ def arm_self_action_at_next_end_step(game: Game, instruction: OracleInstruction,
         # compile time because the printed pronoun does not say which of the two
         # it is, and the fallback is the source — the reading every other
         # printing of this sentence has.
+        #
+        # Asked only when the resolution actually *names* something. With no
+        # index and no id, `resolve_target_permanent` does not answer None - it
+        # falls through to `pick_target_permanent`'s battlefield scan, and with
+        # an always-true predicate that scan returns `context.target`'s first
+        # permanent, which for a targetless activation is the **opponent's**.
+        # Goblin Ski Patrol ("This creature gets +2/+0 and gains flying. Its
+        # controller sacrifices it at the beginning of the next end step")
+        # sacrificed whatever the opponent happened to have in slot 0 and kept
+        # its own pump for good: the drawback never applied and an opponent's
+        # permanent went with it. It is the only carrier of this payload that
+        # names no target - Glyph of Destruction, Krovikan Elementalist,
+        # Barbarian Guides and Celestial Sword all target, so all four keep the
+        # reading above unchanged.
+        names_a_target = (
+            context.target_permanent_index is not None
+            or context.target_permanent_id is not None
+        )
         chosen = resolve_target_permanent(
             game, context,
             predicate=lambda perm: True,
             fallback_on_invalid_choice=False,
-        )
+        ) if names_a_target else None
         if chosen is not None:
             source = chosen
     if source is None:
