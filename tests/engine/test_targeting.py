@@ -230,6 +230,35 @@ _NO_PICKER = {
 }
 
 
+def test_the_cast_ratchet_still_covers_most_of_what_targets(supported_cards):
+    """A ratchet is only worth what it examines, and every exclusion above
+    shrinks that.
+
+    Five patterns decide what this file asks of the derivation, and each was
+    added because a line uses the word "target" about something other than a
+    cast choice. Every one of them is also a way to make the ratchet pass by
+    looking at less — the trigger prefix most of all, since widening it by a
+    few characters silently excused Gaze of Pain and could as easily excuse a
+    hundred cards. So the size of the examined set is asserted, not assumed:
+    the delayed-trigger widening cost exactly one card (203 -> 202), and a
+    later loosening that costs more fails here before it can hide anything.
+    """
+    from engine.legality import _cast_lines
+
+    examined = {
+        card.name for card in supported_cards
+        if any(
+            _names_a_cast_target(_REMINDER.sub("", line))
+            for line in _cast_lines(card)
+        )
+    }
+
+    assert len(examined) >= 200, (
+        f"the cast ratchet examines only {len(examined)} cards — an exclusion "
+        "pattern above has started matching lines that really do target"
+    )
+
+
 def test_every_card_that_targets_as_it_is_cast_derives_its_own_prompt(supported_cards):
     """The end state of this migration, as a ratchet.
 
