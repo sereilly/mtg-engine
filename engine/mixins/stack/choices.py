@@ -31,7 +31,9 @@ from ...land_types import CHOSEN_LAND_TYPES, change_land_type
 from ...models import CardDefinition, Permanent
 from ...oracle_types import DISCARDED_BY_SEAT
 from ... import land_mana_swaps
-from ...pending_choices import CHOICE_SPECS, PendingChoice, register_choice, spec_for
+from ...pending_choices import (CHOICE_SPECS, PendingChoice,
+                                optional_pay_options, register_choice,
+                                spec_for)
 from ...replacement_choices import pending_choices_for
 from ...resumption import resume_after_answer, run_resumable
 from ...mana_payment import (generic_cost, mana_cost_label, plan_payment,
@@ -3149,7 +3151,7 @@ class PendingChoicesMixin:
 
     # -- Optional "you may pay {N}" ------------------------------------------
 
-    def _optional_pay_plan(self, player, entry: dict):
+    def _optional_pay_plan(self, player, entry: dict, option: int | None = None):
         """How *player* would pay this entry's cost, or None if they cannot.
 
         The cost is the whole printed one — ``{1}{B}`` is a dict of symbols, not
@@ -3163,9 +3165,16 @@ class PendingChoicesMixin:
         # alternatives are readings of the *same* offer, so they are tried
         # here rather than at a second prompt — in printed order, which is the
         # stated policy the life alternative below already takes.
+        #
+        # *option* names one of them instead, and that is a different question:
+        # where each way of covering the offer buys something different
+        # (Winter's Chill), the payer is *choosing* rather than finding the
+        # first they can afford, so only the option they chose may be planned.
         lands = untapped_mana_lands(self.controlled_by(player))
-        printed = entry.get("cost") or {}
-        for cost in (printed, *(entry.get("cost_alternatives") or ())):
+        options = optional_pay_options(entry)
+        if option is not None:
+            options = options[option:option + 1]
+        for cost in options:
             plan = plan_payment(
                 player.mana_pool, lands, cost,
                 produces=self._land_payment_colors,
@@ -3210,9 +3219,62 @@ class PendingChoicesMixin:
         alternative = int(entry.get("life_alternative", 0) or 0)
         return bool(alternative) and player.life >= alternative
 
-    def _pay_optional(self, player_index: int, entry: dict) -> None:
+    def graded_pay_options(self, entry: dict) -> list[dict] | None:
+        """The costs a **graded** offer asks the payer to choose between, or None.
+
+        Graded means each way of covering the offer buys something different —
+        "its controller may pay {1} or {2}. If that player doesn't, destroy that
+        creature … If that player pays only {1}, prevent …" (Winter's Chill).
+        CR 118.8's ordinary alternative is not graded: {B} or {3} (Lim-Dûl's
+        Hex) are two ways to buy one consequence, and which one the board covers
+        is the engine's to state. Here the payer is choosing, so the prompt has
+        to ask *which* — and the answer has to come back, because it decides
+        what happens next.
+
+        Answered off ``_option_effects`` rather than off a flag, so "the payer
+        chooses" and "the choice buys something" cannot come apart.
+        """
+        if not entry.get("_option_effects"):
+            return None
+        return optional_pay_options(entry)
+
+    def _graded_option_taken(
+        self, player, entry: dict, option: int | None,
+    ) -> int | None:
+        """Which option a graded offer is being paid with, or None if none can be.
+
+        A named option is honoured when the payer can cover it and refused when
+        they cannot — an offer answered with a cost they cannot pay buys nothing
+        rather than falling through to a cheaper one they did not choose.
+
+        With no option named (a non-interactive seat, or a client that sent a
+        bare "yes"), the **stated policy** is the last option the board can
+        cover. A graded toll prints its options in increasing order and the
+        extra payment is what buys off the extra consequence, so taking the
+        first would pay *and* take the penalty — which is the one answer no
+        payer would give.
+        """
+        options = optional_pay_options(entry)
+        if option is not None:
+            if not 0 <= option < len(options):
+                return None
+            return option if self._optional_pay_plan(
+                player, entry, option=option
+            ) is not None else None
+        for index in reversed(range(len(options))):
+            if self._optional_pay_plan(player, entry, option=index) is not None:
+                return index
+        return None
+
+    def _pay_optional(
+        self, player_index: int, entry: dict, option: int | None = None,
+    ) -> None:
         """Collect the entry's mana cost from its player and run what accepting
-        buys. A cost that turns out to be unpayable buys nothing."""
+        buys. A cost that turns out to be unpayable buys nothing.
+
+        *option* is which of a graded offer's costs the payer chose; None
+        everywhere else, and on a graded offer means "take the stated policy".
+        """
         player = self.players[player_index]
         # A free optional "you may draw a card" rider (Verduran Enchantress): no
         # cost to pay, just draw on accept.
@@ -3232,7 +3294,15 @@ class PendingChoicesMixin:
                 f"{player.name} paid {life_cost} life ({entry.get('card_name', '')})"
             )
         else:
-            plan = self._optional_pay_plan(player, entry)
+            # A graded offer is paid with the option that was chosen and with no
+            # other: falling back through the alternatives would charge a cost
+            # the payer did not pick and then run the consequence that cost
+            # buys.
+            if self.graded_pay_options(entry) is not None:
+                option = self._graded_option_taken(player, entry, option)
+                if option is None:
+                    return
+            plan = self._optional_pay_plan(player, entry, option=option)
             if plan is None:
                 # CR 118.8's alternative ("…pays {1} **or 1 life**", Erosion).
                 # A *stated policy* rather than a second prompt: the mana is
@@ -3255,6 +3325,12 @@ class PendingChoicesMixin:
         # than as one of the three fixed fields above, so any effect can sit
         # behind an optional cost.
         ran = self._run_optional_branch(entry, "_on_accept")
+        # What *this* option bought (Winter's Chill's {1}). Beside the accept
+        # branch rather than instead of it: a card could print both, and the
+        # accept branch is what every option has in common.
+        graded = entry.get("_option_effects")
+        if graded and option is not None and 0 <= option < len(graded):
+            ran = self._run_optional_steps(entry, list(graded[option])) or ran
         # CR 603.12, and it runs whether or not there was an accept branch: the
         # reflexive ability is created *by the payment*, not by the consequence.
         self._create_reflexive_ability(player_index, entry)
@@ -3521,7 +3597,16 @@ class PendingChoicesMixin:
         Returns whether anything ran, so the legacy life/draw/damage fields stay
         the fallback for entries that predate instruction branches.
         """
-        steps = entry.get(key) or ()
+        return self._run_optional_steps(entry, entry.get(key) or ())
+
+    def _run_optional_steps(self, entry: dict, steps) -> bool:
+        """Run *steps* against the entry's frozen resolution context.
+
+        Split from :meth:`_run_optional_branch` because a graded offer's branch
+        is not a fixed payload key — which option was taken is only known once
+        the payment is made — and the two must run the same way: through
+        ``run_resumable``, against the context the offer was armed with.
+        """
         context = entry.get("_context")
         if not steps or context is None:
             return False
@@ -3728,10 +3813,18 @@ class PendingChoicesMixin:
         else:
             self.log.append(f"{player.name} declined {entry['card_name']}")
 
-    def confirm_optional_pay(self, player_index: int, card_name: str | None = None, accept: bool = True) -> bool:
+    def confirm_optional_pay(
+        self, player_index: int, card_name: str | None = None,
+        accept: bool = True, option: int | None = None,
+    ) -> bool:
         """Resolve the first pending optional "pay {N}" trigger for a player (the
         color rods' gain-life riders, Hasran Ogress' pay-or-take-damage).
-        ``accept`` pays it; otherwise the decline consequence (if any) applies."""
+        ``accept`` pays it; otherwise the decline consequence (if any) applies.
+
+        *option* is which of a **graded** offer's printed costs is being paid
+        (:meth:`graded_pay_options`) — ignored on every other offer, where the
+        alternatives are two ways to buy one thing and the engine states which
+        it spends."""
         choice = next(
             (
                 c for c in self.pending_choices_of("optional_pay", player_index)
@@ -3742,10 +3835,12 @@ class PendingChoicesMixin:
         if choice is None:
             return False
         return self._answer_pending_choice(
-            choice, lambda: self._resolve_optional_pay(choice, accept)
+            choice, lambda: self._resolve_optional_pay(choice, accept, option)
         )
 
-    def _resolve_optional_pay(self, choice: PendingChoice, accept: bool) -> bool:
+    def _resolve_optional_pay(
+        self, choice: PendingChoice, accept: bool, option: int | None = None,
+    ) -> bool:
         player_index = choice.player_index
         entry = choice.data
         self.discard_pending_choice(choice)
@@ -3754,7 +3849,7 @@ class PendingChoicesMixin:
             and self._player_can_pay_optional(self.players[player_index], entry)
             and self._optional_action_still_takeable(player_index, entry)
         ):
-            self._pay_optional(player_index, entry)
+            self._pay_optional(player_index, entry, option)
         else:
             self._apply_optional_pay_decline(player_index, entry)
         # The trigger ability that raised this prompt was held on the stack (human
@@ -3823,6 +3918,23 @@ class PendingChoicesMixin:
                 None,
             )
         )
+        # A graded offer needs the policy to say *which* option as well as
+        # whether to pay, because each buys something different (Winter's
+        # Chill). The same policy one step further: the last option the floating
+        # mana covers — a graded toll prints its options in increasing order and
+        # the extra payment is what buys off the extra consequence, so paying
+        # the cheapest would spend mana *and* take the penalty.
+        option = None
+        graded = self.graded_pay_options(entry)
+        if graded is not None:
+            option = next(
+                (
+                    index for index in reversed(range(len(graded)))
+                    if plan_payment(player.mana_pool, (), graded[index]) is not None
+                ),
+                None,
+            )
+            floating = None if option is None else True
         # The same policy for CR 118.8's alternative: floating mana first, and
         # the life only when there is none — and never down to zero, which is
         # the reading the life-cost branch above already takes.
@@ -3833,7 +3945,7 @@ class PendingChoicesMixin:
         if floating is not None and self._optional_action_still_takeable(
             choice.player_index, entry
         ):
-            self._pay_optional(choice.player_index, entry)
+            self._pay_optional(choice.player_index, entry, option)
         elif int(entry.get("damage", 0) or 0) > 0 or entry.get("_on_decline"):
             # A decline is an *answer*, and an answer with a consequence has to
             # have it applied. This read the legacy damage field alone, so a
@@ -4842,7 +4954,9 @@ register_choice(
 
 register_choice(
     "optional_pay",
-    resolve=lambda game, choice, r: game._resolve_optional_pay(choice, r["accept"]),
+    resolve=lambda game, choice, r: game._resolve_optional_pay(
+        choice, r["accept"], r.get("option"),
+    ),
     default=lambda game, choice: game._default_optional_pay(choice),
     action="resolve_optional_pay",
     prompt_key="optional_pay",

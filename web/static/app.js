@@ -4215,22 +4215,38 @@ function applyOptionalPayPrompt(info) {
     // directly, so the prompt's own wording says what paying buys.
     setSymbolsHtml(body, `${cardName}: ${current?.prompt || `pay ${costText}?`}`);
   }
+  // "…may pay {1} **or {2}**. If that player doesn't, destroy that creature …
+  // If that player pays only {1}, prevent …" (Winter's Chill.) Each way of
+  // covering the offer buys something different, so the payer picks *which* and
+  // the index goes back with the answer. Every other offer sends no index at
+  // all: CR 118.8's alternatives are two ways to buy one consequence and the
+  // engine states which currency it spends.
+  const gradedOptions = Array.isArray(current?.graded_options) ? current.graded_options : [];
+  const payButtons = gradedOptions.length
+    ? gradedOptions.map(
+      (label, index) =>
+        `<button type="button" class="prompt-choice-btn" data-optional-pay="yes" ` +
+        `data-pay-option="${index}">Pay ${renderSymbolsInline(label)}</button>`,
+    )
+    : [`<button type="button" class="prompt-choice-btn" data-optional-pay="yes">${acceptLabel}</button>`];
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(cardName)}</div>`,
     `<div>Remaining decisions: ${pending.length}</div>`,
     `<div class="prompt-choice-row">` +
-      `<button type="button" class="prompt-choice-btn" data-optional-pay="yes">${acceptLabel}</button>` +
+      payButtons.join("") +
       `<button type="button" class="prompt-choice-btn" data-optional-pay="no">${declineLabel}</button>` +
       `</div>`,
   ].join("");
 
   steps.querySelectorAll("[data-optional-pay]").forEach((btn) => {
     btn.addEventListener("click", async () => {
+      const chosen = btn.dataset.payOption;
       await sendAction({
         seat,
         action: "resolve_optional_pay",
         card_name: cardName,
         accept: btn.dataset.optionalPay === "yes",
+        ...(chosen === undefined ? {} : { pay_option: Number(chosen) }),
       });
     });
   });
