@@ -15,6 +15,7 @@ from ..enter_effects import (
     COPY_CREATURE_ON_ENTER,
     ENTERS_TAPPED,
     enters_with_x_pt_counters,
+    enters_with_x_named_counters,
     choose_number_on_enter,
     pay_any_life_on_enter,
     enters_with_pt_counters,
@@ -593,6 +594,24 @@ class PermanentStateMixin:
             if placed is not None:
                 count, counter = placed
                 add_named_counters(permanent, counter, count)
+
+        # "This enchantment enters with **X ice** counters on it." (Iceberg.)
+        # The named store above with the announced X (CR 601.2b) for its count,
+        # which is the same separation the two P/T loops below make and for the
+        # same reason: a printed number is read off the line, and X is read off
+        # the cast. Iceberg spends those counters for mana, so entering with an
+        # empty store made a card that compiled supported and could never pay
+        # its own second ability.
+        for raw_line in entry_lines:
+            counter = enters_with_x_named_counters(
+                raw_line, permanent.effective_card.name
+            )
+            if counter is None:
+                continue
+            x_value = permanent.metadata.get("cast_x_value")
+            if not isinstance(x_value, int) or x_value <= 0:
+                continue
+            add_named_counters(permanent, counter, x_value)
 
         # "…enters with <N> <kind> counters on it." The count and the kind are
         # read off the line (engine/enter_effects.enters_with_pt_counters), so

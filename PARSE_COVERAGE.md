@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**13 unclaimed sentence(s) across 7 supported card(s).**
+**12 unclaimed sentence(s) across 6 supported card(s).**
 
 - **Call to Arms**
   - `white creatures get +1/+1 as long as the chosen color is the most common color among nontoken permanents the chosen player controls but isn't tied for most common`
@@ -33,8 +33,6 @@ anything anyone did, and every ingest would arrive red.
 - **Drought**
   - `spells cost an additional "sacrifice a swamp" to cast for each black mana symbol in their mana costs`
   - `activated abilities cost an additional "sacrifice a swamp" to activate for each black mana symbol in their activation costs`
-- **Iceberg**
-  - `this enchantment enters with x ice counters on it`
 - **Infinite Hourglass**
   - `all creatures get +1/+0 for each time counter on this artifact`
 - **Justice**

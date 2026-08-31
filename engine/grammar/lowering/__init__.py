@@ -68,9 +68,11 @@ from ._common import (
     _stamp_x_from_count,
 )
 from ._amounts import (
+    _READABLE_COST_SACRIFICE_CHARACTERISTICS,
     _SWAMPS_THEY_CONTROL,
     _BOARD_COUNT_DAMAGE,
     _damaged_player_is,
+    _lower_cost_sacrifice_damage,
     _lower_counted_damage,
     _lower_board_count_damage,
     count_spec,
@@ -315,6 +317,8 @@ __all__ = [
     "_SWAMPS_THEY_CONTROL",
     "_BOARD_COUNT_DAMAGE",
     "_damaged_player_is",
+    "_READABLE_COST_SACRIFICE_CHARACTERISTICS",
+    "_lower_cost_sacrifice_damage",
     "_lower_counted_damage",
     "_lower_board_count_damage",
     "_lower_damage_unless_pay",

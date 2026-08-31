@@ -54,6 +54,54 @@ _ATTACHED_TO_REFERENTS = {("that", "creature"): "target", ("it",): "source"}
 _ZONE_NOUNS = frozenset({"graveyard", "hand", "library", "exile"})
 
 
+def _accept_back_referenced_controller(stream: TokenStream) -> bool:
+    """``that player|opponent [or that <type>'s controller] control[s]`` — True
+    with the phrase consumed, or False with the cursor unmoved.
+
+    One reader for both spellings, because they are one referent. Goblin Lyre
+    targets "target opponent **or planeswalker**" (CR 115.4 without the creature
+    half) and then counts "the number of creatures **that opponent or that
+    planeswalker's controller** controls" — a seat either way, and the same seat
+    the earlier sentence chose. So the disjunction is a *spelling* of
+    `that_player`, the way `references.py` already reads Chain Lightning's "that
+    player or that permanent's controller"; a kind of its own would be one
+    card's private address for a referent every consumer already has.
+
+    Read inline rather than through `parse_player_ref`: that reader is in
+    `references`, two layers above this file, which sits below `nouns` so the
+    recursion can run one way.
+    """
+    mark = stream.mark()
+    if stream.accept_phrase("that", "player") or stream.accept_phrase(
+        "that", "opponent"
+    ):
+        _accept_same_seat_disjunct(stream)
+        if stream.accept_word("controls", "control"):
+            return True
+    stream.reset(mark)
+    return False
+
+
+def _accept_same_seat_disjunct(stream: TokenStream) -> None:
+    """The optional ``or that <type>'s controller`` arm, consumed only when it
+    really names the same seat as the arm in front of it.
+
+    Any other "or" is left where it is, for whatever production reads a
+    disjunction of two *different* things — consuming it here would silently
+    merge them.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("or"):
+        return
+    if stream.accept_word("that", "this", "the"):
+        noun = stream.peek_word()
+        if noun is not None and _singular(noun) in CARD_TYPES:
+            stream.advance()
+            if stream.accept_phrase("'s", "controller"):
+                return
+    stream.reset(mark)
+
+
 def _parse_keyword_list(stream: TokenStream) -> tuple[str, ...]:
     """Parse one or more keyword names ("flying", "first strike and trample").
 
@@ -223,7 +271,12 @@ def _parse_postmodifiers(
             d.could_attack_this_turn = True
             continue
         stream.reset(except_mark)
-        if stream.accept_phrase("that", "player", "controls"):
+        # "…creatures **that player** controls" and "…the number of creatures
+        # **that opponent or that planeswalker's controller** controls" (Goblin
+        # Lyre) are one reader: both name the seat the sentence in front of this
+        # one already chose, which is exactly what `that_player` means to every
+        # consumer downstream.
+        if _accept_back_referenced_controller(stream):
             d.controller = "that_player"
             continue
         if stream.accept_phrase("they", "control"):

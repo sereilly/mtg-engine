@@ -2015,9 +2015,18 @@ def test_karma_counts_swamps_through_the_dedicated_handler():
         # not the Aura controller's.
         "This enchantment deals damage to that player equal to the number of "
         "Swamps you control.",
-        # A different victim: the handler damages the upkeep player.
-        "This enchantment deals damage to you equal to the number of Swamps "
-        "they control.",
+        # A different victim: the handler damages the upkeep player, and no
+        # branch counts one seat's board once per seat off *another* seat's.
+        #
+        # It used to be "…to **you** equal to the number of Swamps they
+        # control", which is Goblin Lyre's second sentence with the land type
+        # changed — a fixed recipient with the count scoped to the seat the
+        # effect chose. That now lowers, onto the generic counted damage with
+        # ``owner: that_player`` rather than onto the Swamp handler, so it is no
+        # longer a near-miss for this kind at all; the test below it is where
+        # that shape is pinned.
+        "This enchantment deals damage to each player equal to the number of "
+        "Swamps you control.",
     ],
 )
 def test_counted_damage_refuses_anything_the_swamp_handler_does_not_compute(line):
@@ -2027,6 +2036,35 @@ def test_counted_damage_refuses_anything_the_swamp_handler_does_not_compute(line
     result = compile_line(line, card_name="Test")
 
     assert result.parsed and not result.lowered
+
+
+def test_counted_damage_to_a_fixed_seat_scopes_the_count_to_the_chosen_one():
+    """"…deals damage to **you** equal to the number of creatures **that
+    opponent** controls." (Goblin Lyre.)
+
+    Neither a loop nor the Swamp handler: the damage lands on one fixed seat and
+    the counted board belongs to the seat the sentence in front of it chose. So
+    the phrase is a *scope* on the count rather than a filter on it, and
+    ``owner: that_player`` is the spelling every other spec already uses for
+    that seat — the one ``count_from_payload`` resolves off the resolution's
+    chosen target.
+    """
+    assert _instructions(
+        "This artifact deals damage to you equal to the number of creatures "
+        "that opponent or that planeswalker's controller controls.",
+        "Test",
+    ) == [(
+        "deal_damage",
+        {
+            "amount": "x",
+            "recipient": "caster",
+            "x_from_count": {
+                "filter": {"type_filter": "creature"},
+                "owner": "that_player",
+                "zone": "battlefield",
+            },
+        },
+    )]
 
 
 # ---------------------------------------------------------------------------
