@@ -1099,6 +1099,40 @@ def return_chosen_cards_from_graveyard_to_hand(
 REANIMATED_PERMANENTS = "reanimated_permanents"
 
 
+def _holds_a_reanimable_card(player, index, card_filter) -> bool:
+    """Whether *player*'s graveyard holds a creature card this effect may take.
+
+    With *index* given, the question is only about that slot — the announced
+    target — because a named target that is legal settles where the card comes
+    from and no search happens at all.
+    """
+    graveyard = getattr(player, "graveyard", ())
+
+    def eligible(card) -> bool:
+        return card.primary_type == "creature" and (
+            card_filter is None or card_filter(card)
+        )
+
+    if isinstance(index, int):
+        return 0 <= index < len(graveyard) and eligible(graveyard[index])
+    return any(eligible(card) for card in graveyard)
+
+
+def _reanimable_slot(player, card_filter):
+    """The first slot of *player*'s graveyard this effect may take, or nothing.
+
+    A generator so the caller can write one ``next`` over seats and slots
+    together: an empty pile contributes no slot rather than a None to filter
+    out afterwards.
+    """
+    for index, card in enumerate(getattr(player, "graveyard", ())):
+        if card.primary_type == "creature" and (
+            card_filter is None or card_filter(card)
+        ):
+            yield index
+            return
+
+
 @effect_handler("reanimate_creature")
 def reanimate_creature(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster
@@ -1109,8 +1143,9 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     # _reanimate_creature_to_battlefield puts it into play for the caster.
     idx = context.target_permanent_index
     idx = idx if isinstance(idx, int) else None
+    any_graveyard = bool(instruction.payload.get("any_graveyard"))
     source_player = caster
-    if instruction.payload.get("any_graveyard") and context.target is not None:
+    if any_graveyard and context.target is not None:
         source_player = context.target
     # "target **white or black** creature card" (Dreams of the Dead). Applied
     # here as well as at announcement, through the one predicate the picker and
@@ -1123,6 +1158,30 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
     if colors:
         spec = {"graveyard_colors": list(colors)}
         card_filter = lambda card: graveyard_card_matches(spec, card)
+    if any_graveyard and not _holds_a_reanimable_card(source_player, idx, card_filter):
+        # **No card was named, and the seat that was named holds none.** The
+        # index fallback below searches the *caster's* graveyard, which is right
+        # for "from your graveyard" and blind for "from a graveyard": an AI seat
+        # announces the effect without picking a slot, so Hymn of Rebirth
+        # resolved and put nothing onto the battlefield whenever the only
+        # creature card was in someone else's pile. The order is the Aura
+        # printing's, which has searched this way all along
+        # (``mixins/oracle_instructions.py``): the named seat, then the caster,
+        # then everyone else.
+        found = next(
+            (
+                (player, slot)
+                for player in (source_player, caster, *game.players)
+                for slot in _reanimable_slot(player, card_filter)
+            ),
+            None,
+        )
+        if found is not None:
+            # The slot travels with the seat. The fallback one level down
+            # searches the *caster's* pile by construction — right for every
+            # other reanimation, and the reason the seat alone would not have
+            # been enough here.
+            source_player, idx = found
     reanimated = game._reanimate_creature_to_battlefield(
         caster, source_player, idx, card_filter=card_filter
     )

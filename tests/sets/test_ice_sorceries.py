@@ -1830,4 +1830,26 @@ def test_hymn_of_rebirth_still_only_takes_a_creature_card(set_pool):
     assert not result.supported
     assert result.details == "no valid target for Hymn of Rebirth"
     assert [c.name for c in p2.graveyard] == ["Black Lotus"]
+
+
+def test_hymn_of_rebirth_with_no_slot_named_still_finds_the_only_pile(set_pool):
+    """An announcement that names no slot at all — an AI seat, or any caller
+    that leaves the choice to the resolution.
+
+    The resolution's fallback searches the *caster's* graveyard, which is right
+    for every "from your graveyard" reanimation and blind for this one: with the
+    widened target and the only creature card in the opponent's pile, the spell
+    resolved and put nothing onto the battlefield. The search order is the Aura
+    printing's, which has looked this way all along — the named seat, then the
+    caster, then everyone else.
+    """
+    game, p1, p2 = _hymn_board(set_pool, their_graveyard=["Serra Angel"])
+
+    result = game.cast_from_hand(0, "Hymn of Rebirth", target_player_index=0)
+    game._settle()
+
+    assert result.supported, result.details
+    assert [p.card.name for p in game.controlled_by(p1)] == ["Serra Angel"]
+
+
 # --- end LeadA ---
