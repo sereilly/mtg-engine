@@ -41,8 +41,13 @@ def coin_flip_remove_attacker_and_tap(game: Game, instruction: OracleInstruction
     if flip_coin():
         game.log.append(f"{context.card.name} won the coin flip")
         return True, "resolved"
-    game.combat_attackers.pop(idx, None)
-    game.combat_bands = [band for band in game.combat_bands if idx not in band]
+    # Through the one transition rather than by popping the attacker map.
+    # CR 506.4: "a creature that's removed from combat stops being an attacking,
+    # blocking, blocked, and/or unblocked creature" — and popping the map alone
+    # left `permanent.attacking` stamped True, its `defending_player_index` set
+    # and any blocker still holding its slot. Every filter asking "attacking"
+    # went on admitting it for the rest of the turn.
+    _take_permanent_out_of_combat(game, permanent)
     game.become_tapped(permanent)
     game.log.append(f"{context.card.name} lost the coin flip: removed from combat and tapped")
     return True, "resolved"
