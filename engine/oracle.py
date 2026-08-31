@@ -2358,7 +2358,8 @@ _DELAYED_ATTACK_RE = re.compile(
 # different tribe, keyword or stat needs no code.
 _DELAYED_ATTACK_UNTIL_RE = re.compile(
     r"^until end of turn, whenever (?P<attacker_subject>.+?) "
-    r"(?P<event>attacks|deals combat damage to a player), (?P<effect>.+)$"
+    r"(?P<event>attacks and isn't blocked|attacks"
+    r"|deals combat damage to a player), (?P<effect>.+)$"
 )
 
 # The same delayed trigger over a **cast** rather than a combat event: "Until
@@ -2392,6 +2393,12 @@ _DELAYED_EVENT_PHRASES: dict[str, str] = {
     "block": "creature_blocks",
     "blocks": "creature_blocks",
     "deals combat damage to a player": "creature_deals_combat_damage_to_player",
+    # "…**attacks and isn't blocked**" (Gaze of Pain). Read before the bare
+    # "attacks" it begins with — the alternation in the pattern above is
+    # ordered, and the short spelling matching first would leave "and isn't
+    # blocked" in front of the comma and fail the line. Which is the safe
+    # failure, and is why the ordering is the whole of the difference here.
+    "attacks and isn't blocked": "creature_attacks_unblocked",
 }
 
 
