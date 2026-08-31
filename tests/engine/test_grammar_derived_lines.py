@@ -170,6 +170,15 @@ def test_combat_restrictions_match_the_derivation_table_exactly():
         "max_attackers_each_combat", "max_blockers_each_combat",
         # Marble Priest: "All Walls able to block this creature do so."
         "must_be_blocked_by_all_able",
+        # Chaos Lord's "can attack as though it had haste unless it entered
+        # this turn" — a CR 609.4 *permission* rather than a restriction, in
+        # the same table for the same reason and in the same position: the
+        # declare-attackers step dispatches on it and the grammar has no
+        # production, so the line fails the parser. Listed now rather than at
+        # ICE's promotion, since `load_catalog()` is the shipped pool and this
+        # card is in a measured set — the row is what keeps the promotion from
+        # turning a silent absence into a red suite.
+        "attacks_as_though_hasty_unless_it_entered",
     }
 
     compared = 0

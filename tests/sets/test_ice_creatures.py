@@ -2009,4 +2009,105 @@ def test_w3g2_barbarian_guides_returns_its_target_at_the_end_step(set_pool):
     assert "Barbarian Guides" in [
         perm.card.name for perm in game.controlled_by(game.players[0])
     ]
+def test_w3g2_chaos_lord_is_supported(set_pool):
+    """Two lines, both required: the upkeep hand-over and the attack
+    permission that exists because of it."""
+    program = compile_card_oracle(set_pool("ICE")["Chaos Lord"])
+
+    assert program.supported
+    assert [
+        (t.condition.kind, t.instruction.kind) for t in program.triggered_abilities
+    ] == [("upkeep_self", "if_then")]
+
+
+def _w3g2_chaos_upkeep(game):
+    game.resolve_upkeep(game.active_player_index)
+    _w3g2_settle(game)
+
+
+def test_w3g2_chaos_lord_changes_hands_only_on_an_even_board(set_pool):
+    """"…if the number of permanents is even." A parity, not a threshold —
+    which is why the comparison had to be answered before the evaluator's
+    absent-number default, whose reading is "at least one"."""
+    game, (lord,), _ = _w3g2_board(set_pool, "Chaos Lord")
+    game.start_turn(0)
+
+    _w3g2_chaos_upkeep(game)
+    assert game.controller_index_of(lord) == 0, "one permanent is an odd board"
+
+    game.players[1].battlefield.append(Permanent(card=set_pool("ICE")["Balduvian Bears"]))
+    game._settle()
+    game.turn += 1
+    game.start_turn(0)
+    _w3g2_chaos_upkeep(game)
+
+    assert game.controller_index_of(lord) == 1
+
+
+def test_w3g2_chaos_lord_can_attack_after_changing_hands(set_pool):
+    """The reason the permission is printed at all. CR 302.6 would stop the new
+    controller attacking with a creature that came under their control this
+    turn, and the hand-over happens in their upkeep — so without this the
+    creature could never attack for anybody it was given to."""
+    game, (lord,), _ = _w3g2_board(set_pool, "Chaos Lord")
+    # A control change re-stamps the sickness record, which is exactly the
+    # state this permission has to see through.
+    lord.metadata["summoning_sickness_turn"] = game.turn
+
+    assert game._is_summoning_sick(lord), "the control change made it sick"
+    assert not game.entered_this_turn(lord)
+    assert game.can_attack(lord, 1)
+
+
+def test_w3g2_chaos_lord_still_cannot_attack_the_turn_it_arrives(set_pool):
+    """The printed exception, and the half that only a separate record can
+    answer: reading "entered this turn" off the summoning-sickness stamp would
+    say yes because of the control change the card exists to cause, and the
+    permission would never once apply."""
+    from engine.enter_effects import ENTERED_BATTLEFIELD_TURN
+
+    game, (lord,), _ = _w3g2_board(set_pool, "Chaos Lord")
+    lord.metadata[ENTERED_BATTLEFIELD_TURN] = game.turn
+    lord.metadata["summoning_sickness_turn"] = game.turn
+
+    assert not game.can_attack(lord, 1)
+
+
+def test_w3g2_the_permission_is_chaos_lords_and_not_every_creatures(set_pool):
+    """The control: an ordinary summoning-sick creature beside it still cannot
+    attack, so the permission is the printed line rather than a hole the
+    change opened in CR 302.6."""
+    game, (lord, bears), _ = _w3g2_board(
+        set_pool, "Chaos Lord", "Balduvian Bears",
+    )
+    bears.metadata["summoning_sickness_turn"] = game.turn
+
+    assert not game.can_attack(bears, 1)
+
+
+def test_w3g2_a_permanent_records_the_turn_it_entered(set_pool):
+    """The record itself, through the entry path rather than by hand: it is a
+    plain fact about arrival and nothing rewrites it, which is what tells it
+    apart from the summoning-sickness stamp beside it."""
+    from engine.enter_effects import ENTERED_BATTLEFIELD_TURN
+
+    game, (lord,), _ = _w3g2_board(set_pool, "Chaos Lord")
+    arriving = Permanent(card=set_pool("ICE")["Balduvian Bears"])
+    game.players[0].battlefield.append(arriving)
+    game._initialize_permanent_state(arriving, 0, 0)
+
+    entered_at = arriving.metadata[ENTERED_BATTLEFIELD_TURN]
+    assert entered_at == game.turn
+    assert game.entered_this_turn(arriving)
+
+    # The whole reason for a second record: a control change re-stamps the
+    # sickness one and does not touch this.
+    game.take_control(arriving, 1, source=lord)
+
+    assert arriving.metadata["summoning_sickness_turn"] == game.turn
+    assert arriving.metadata[ENTERED_BATTLEFIELD_TURN] == entered_at
+
+    game.turn += 1
+
+    assert not game.entered_this_turn(arriving)
 # --- end W3G2 ---

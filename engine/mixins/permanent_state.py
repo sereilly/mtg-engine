@@ -4,6 +4,7 @@ import re
 
 
 from ..enter_effects import (
+    ENTERED_BATTLEFIELD_TURN,
     entry_exile_requirement,
     sacrifice_any_number_on_enter,
     CHOOSE_COLOR_AND_OPPONENT_ON_ENTER,
@@ -264,6 +265,14 @@ class PermanentStateMixin:
             # Living Lands) it must respect summoning sickness based on when it came
             # under control (CR 302.6). The marker is ignored for non-creature lands.
             permanent.metadata["summoning_sickness_turn"] = self.turn
+        # …and, separately, the turn it *entered the battlefield*. The stamp
+        # above is CR 302.6's "since their most recent turn began", which a
+        # control change re-writes (`_sync_control`) and a passing turn carries
+        # forward (`_advance_summoning_sickness`) — so it cannot answer "did
+        # this permanent enter this turn?", the question Chaos Lord's "unless it
+        # entered this turn" asks. Written once here and never again; anything
+        # that leaves and returns is a new object with a new stamp (CR 400.7).
+        permanent.metadata[ENTERED_BATTLEFIELD_TURN] = self.turn
         program = compile_card_oracle(permanent.card)
         text = program.normalized_text
 

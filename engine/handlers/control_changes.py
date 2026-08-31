@@ -142,6 +142,57 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
+@effect_handler("give_control_of_source_to_player")
+def give_control_of_source_to_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target opponent gains control of this creature." (Chaos Lord.)
+
+    The mirror of every steal in this file: the source hands *itself* over
+    rather than taking something. Same mechanism — one CR 613 layer-2
+    contribution through ``take_control``, with the permanent as its own source
+    — and no lifetime at all (CR 611.2b), so nothing sweeps it back. Chaos Lord
+    fires this every upkeep, and re-recording replaces the previous
+    contribution and takes a fresh timestamp, which is what lets the creature
+    keep moving between seats turn after turn.
+
+    A source that has left takes nobody with it, and a seat the spell never
+    chose is a resolution with nothing to name: both log and stop rather than
+    guessing a player, for the reason the sacrifice payer above fails on an
+    unrecognized ``who`` — handing a creature to the wrong seat is the same
+    wrong direction as sacrificing the wrong player's.
+    """
+    source = context.source_permanent
+    if source is None or not game.is_on_battlefield(source):
+        game.log.append(f"{context.card.name}: it is no longer on the battlefield")
+        return True, "resolved"
+    who = str(instruction.payload.get("who") or "")
+    if who == "you":
+        recipient = context.caster
+    elif who in ("target_opponent", "target_player"):
+        recipient = context.target
+    else:
+        return False, f"unsupported control recipient {who!r}"
+    if recipient is None or recipient not in game.players:
+        game.log.append(f"{context.card.name}: no player to hand it to")
+        return True, "resolved"
+    seat = game.players.index(recipient)
+    if seat == game.controller_index_of(source):
+        # Already theirs — the same seat was chosen twice, or an earlier
+        # contribution has already moved it. Recording again would be a no-op
+        # with a fresh timestamp; saying so is more useful than doing it.
+        game.log.append(
+            f"{context.card.name} is already controlled by {recipient.name}"
+        )
+        return True, "resolved"
+    if not game.take_control(source, seat, source=source):
+        # `take_control` refuses CR 614.17's prohibition (Guardian Beast) and a
+        # permanent on no battlefield. Both are "the control change does not
+        # happen", which is a legal outcome and not a failure of the ability.
+        game.log.append(f"{context.card.name}: control can't change")
+        return True, "resolved"
+    game.log.append(f"{recipient.name} gains control of {context.card.name}")
+    return True, "resolved"
+
+
 @effect_handler("steal_creature_while_tapped_and_weaker")
 def steal_creature_while_tapped_and_weaker(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Old Man of the Sea: "Gain control of target creature with power less

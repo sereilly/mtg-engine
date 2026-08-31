@@ -15,7 +15,7 @@ from ..amounts import (accept_fraction_head, accept_rounding, expect_pt,
 from ..errors import GrammarError
 from ..lexer import (GToken, PT, PUNCT, QUOTE, SELF, WORD, tokenize)
 from ..nouns import parse_object_filter
-from ..references import parse_recipient
+from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS,
                           LAND_TYPES, SUBTYPE_INDEX,
@@ -125,8 +125,34 @@ def _parse_gets(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
 
 
 def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
-    """``<subject> gains <keywords|life> [duration]``."""
+    """``<subject> gains <keywords|life|control of …> [duration]``."""
     stream.expect_word("gains", "gain")
+
+    # "**Target opponent** gains control of this creature …" (Chaos Lord.) The
+    # same control change ``effects/control_changes._parse_gain_control``
+    # reads, printed with its seat in front of the verb instead of implied —
+    # so it is read here, where the subject has already been consumed, and
+    # handed to the same node.
+    #
+    # Only a *player* may gain control of something, so the branch is gated on
+    # the subject rather than on the words: "this creature gains control" is
+    # not a sentence, and letting the words alone decide would build a node
+    # whose gainer is a permanent.
+    #
+    # No duration is read. CR 611.2b makes an untimed control change one that
+    # lasts indefinitely, which is what this printing is; a card printing a
+    # duration behind this spelling would leave it unconsumed and fail the line
+    # loudly rather than being silently given the wrong lifetime.
+    if isinstance(subject, ast.PlayerRef):
+        control_mark = stream.mark()
+        if stream.accept_phrase("control", "of"):
+            try:
+                what = parse_target_spec(stream)
+            except GrammarError:
+                what = None
+            if what is not None:
+                return ast.GainControl(what, "indefinite", gainer=subject)
+        stream.reset(control_mark)
 
     # "you gain 3 life" / "you gain life equal to the damage dealt"
     mark = stream.mark()

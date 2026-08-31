@@ -135,6 +135,16 @@ class GainControl:
     subject: Recipient
     duration: str
     tap_when_lost: bool = False
+    #: Who gains control, when the sentence names them ("**target opponent**
+    #: gains control of this creature", Chaos Lord). ``None`` is the ability's
+    #: own controller, which is what every "gain control of …" spelling above
+    #: means and what every reader written before this field assumed — so the
+    #: default keeps them exactly as they were.
+    #:
+    #: A field rather than a second node because the two sentences differ in one
+    #: word: everything else about a control change — the timestamp, the
+    #: contribution, what ends it — is the same rule whoever the seat is.
+    gainer: "PlayerRef | None" = None
 
 
 @dataclass(frozen=True)

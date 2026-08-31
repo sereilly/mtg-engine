@@ -125,6 +125,49 @@ def _linked_steal_filter(node: ast.GainControl, subject: ast.TargetSpec) -> dict
     return described
 
 
+#: The seats a control change may be handed to by name. Each is one
+#: ``engine/handlers/_common.resolve_target_player`` already answers, which is
+#: the whole of what makes this list a claim rather than a filter: a seat word
+#: nobody resolves would hand the permanent to whichever player an empty lookup
+#: defaults to, which is the ability doing something the card never said.
+_NAMED_GAINERS = frozenset({"target_opponent", "target_player", "you"})
+
+
+def _lower_another_seat_gains_control(
+    node: ast.GainControl, subject: ast.TargetSpec
+) -> tuple[OracleInstruction, ...]:
+    """"Target opponent gains control of this creature." (Chaos Lord.)
+
+    CR 611.2b's untimed control change, handed to a seat the sentence names.
+    Its own branch rather than a duration row beside the four linked ones,
+    because what those four have in common is a *link* — something the sweep
+    re-checks — and this has none: nothing ends it but a later contribution.
+
+    Narrow on both axes, and deliberately. The subject must be the ability's own
+    source: a card handing away something it *chose* would need the target
+    picker and the CR 608.2b re-check every steal above carries, and none of
+    that is exercised by a sentence no card in the pool prints. And the seat
+    must be one the resolution can name.
+    """
+    if not _is_source(subject):
+        raise LoweringError(
+            "only a permanent handing itself over is implemented", node=node
+        )
+    if _restrictions_beyond(subject.filter, frozenset({"card_types", "is_source"})):
+        raise LoweringError(
+            "the source of a control change carries no narrowing", node=node
+        )
+    assert node.gainer is not None
+    who = node.gainer.kind
+    if who not in _NAMED_GAINERS:
+        raise LoweringError(
+            f"no handler gives control to {who!r}", node=node
+        )
+    return (
+        OracleInstruction("give_control_of_source_to_player", "", {"who": who}),
+    )
+
+
 def _lower_gain_control(
     node: ast.GainControl, produced: frozenset[str]
 ) -> tuple[OracleInstruction, ...]:
@@ -162,6 +205,8 @@ def _lower_gain_control(
     subject = node.subject
     if not isinstance(subject, ast.TargetSpec):
         raise LoweringError("the linked-control handler needs a named target", node=node)
+    if node.gainer is not None:
+        return _lower_another_seat_gains_control(node, subject)
     if node.duration == "until_end_of_turn":
         if subject.quantifier in ("that", "it"):
             # "Gain control of **that creature** until end of turn."

@@ -13,6 +13,7 @@ from ..control import (
     set_base_controller,
 )
 from ..delayed_triggers import fire_delayed_triggers
+from ..enter_effects import ENTERED_BATTLEFIELD_TURN
 from ..events import emit
 from ..layer_bridge import computed_controller
 from ..land_types import end_land_type_change
@@ -108,6 +109,24 @@ class GameHelpersMixin:
         answered "no" purely because an artifact is not a creature.
         """
         return permanent.metadata.get("summoning_sickness_turn") != self.turn
+
+    def entered_this_turn(self, permanent: Permanent) -> bool:
+        """Whether *permanent* entered the battlefield during the current turn.
+
+        A different question from :meth:`_controlled_since_turn_start`, and the
+        pair is why both records exist: that one is CR 302.6's "since their most
+        recent turn began", which a control change resets and a passing turn
+        carries forward, while this is a plain fact about arrival that nothing
+        rewrites. A permanent that changed hands this turn has not been
+        controlled since the turn began and did *not* enter this turn, and Chaos
+        Lord is the card that tells them apart.
+
+        A permanent with no stamp did not enter through the entry path at all —
+        a test fixture placed straight onto a battlefield — and answers no,
+        which is the reading that leaves such a fixture behaving like a
+        permanent that has been there all along.
+        """
+        return permanent.metadata.get(ENTERED_BATTLEFIELD_TURN) == self.turn
 
     def _is_summoning_sick(self, permanent: Permanent) -> bool:
         if not self._is_creature(permanent):

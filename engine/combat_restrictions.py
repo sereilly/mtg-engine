@@ -66,6 +66,8 @@ class CombatRestriction:
 #                                   + declare_attackers (the charge)
 #   cant_block                      phases/declare_blockers_step
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
+#   attacks_as_though_hasty_unless_it_entered
+#                                   phases/declare_attackers_step.can_attack
 #   cant_be_blocked_by              phases/declare_blockers_step
 #   cant_be_blocked_except_by       phases/declare_blockers_step
 #   cant_block_power_n_or_greater   phases/declare_blockers_step
@@ -244,6 +246,30 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # would have to know which cards are tokens.
     (re.compile(r"^this (?:creature|token) can't block$"), "cant_block"),
     (re.compile(r"^this creature attacks each combat if able$"), "must_attack_each_combat"),
+    # "This creature can attack as though it had haste unless it entered this
+    # turn." (Chaos Lord.) A *permission* rather than a restriction, and here
+    # for the reason `combat_permissions.CANT_BLOCK_UNTIL_EOT` lives beside a
+    # permission in its own file: this is a printed clause on a creature, read
+    # by the declare-attackers step and gated by the same support gate as every
+    # row around it, and which direction it points does not change any of that.
+    #
+    # CR 302.6 is what it lifts, and only its attack half — the creature still
+    # cannot use a {T} ability the turn it changes hands, which is what makes
+    # this an "as though" permission (CR 609.4) and not a haste grant.
+    #
+    # The exception is the whole reason the clause is on this card: Chaos Lord
+    # hands itself to an opponent every upkeep, and CR 302.6 would leave the new
+    # controller unable to attack with it. Reading "entered this turn" off the
+    # sickness stamp would answer yes because of that very control change, so it
+    # is read off `enter_effects.ENTERED_BATTLEFIELD_TURN`, which nothing
+    # rewrites.
+    (
+        re.compile(
+            r"^this creature can attack as though it had haste "
+            r"unless it entered this turn$"
+        ),
+        "attacks_as_though_hasty_unless_it_entered",
+    ),
     # "…can't be blocked by **Walls**" (Invisibility's mirror, Ali Baba's
     # targets) and "…can't be blocked by **artifact creatures**" (Argothian
     # Pixies, Artifact Ward). One restriction: what differs is the noun phrase,
