@@ -896,3 +896,118 @@ def test_mudslide_reads_the_complement_of_the_same_phrase(set_pool):
     assert restriction.blocked == {
         "type_filter": "creature", "without_keywords": ["flying"],
     }
+
+
+# --- W1G4: library, hand and graveyard ---
+def _renewal_board(set_pool, library, opponent_library=()):
+    pool = set_pool("ICE")
+    renewal = Permanent(card=pool["Enduring Renewal"])
+    p1 = PlayerState(
+        name="P1", battlefield=[renewal],
+        library=[pool[name] for name in library], life=20,
+    )
+    p2 = PlayerState(
+        name="P2", library=[pool[name] for name in opponent_library], life=20
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return pool, p1, p2, game
+
+
+def test_enduring_renewal_bins_a_drawn_creature_card(set_pool):
+    """"If you would draw a card, reveal the top card of your library instead.
+    If it's a creature card, put it into your graveyard. Otherwise, draw a
+    card." — CR 614, one draw at a time."""
+    pool, p1, p2, game = _renewal_board(set_pool, ["Balduvian Bears", "Dark Ritual"])
+
+    drawn = game._draw_with_replacements(p1, 1)
+
+    assert drawn == 0, "the draw was replaced, not made"
+    assert p1.hand == []
+    assert [card.name for card in p1.graveyard] == ["Balduvian Bears"]
+    assert [card.name for card in p1.library] == ["Dark Ritual"]
+
+
+def test_enduring_renewal_draws_a_noncreature_card(set_pool):
+    """"Otherwise, draw a card." — a new draw of the card just revealed, which
+    is why it must not replace itself into a loop (CR 614.5)."""
+    pool, p1, p2, game = _renewal_board(set_pool, ["Dark Ritual", "Balduvian Bears"])
+
+    drawn = game._draw_with_replacements(p1, 1)
+
+    assert drawn == 1
+    assert [card.name for card in p1.hand] == ["Dark Ritual"]
+    assert p1.graveyard == []
+
+
+def test_enduring_renewal_replaces_each_draw_of_a_multi_card_draw(set_pool):
+    """CR 121.2: "draw two cards" is two draws, each replaceable on its own."""
+    pool, p1, p2, game = _renewal_board(
+        set_pool, ["Balduvian Bears", "Dark Ritual", "Brown Ouphe"]
+    )
+
+    game._draw_with_replacements(p1, 2)
+
+    assert [card.name for card in p1.graveyard] == ["Balduvian Bears"]
+    assert [card.name for card in p1.hand] == ["Dark Ritual"]
+    assert [card.name for card in p1.library] == ["Brown Ouphe"]
+
+
+def test_enduring_renewal_does_not_replace_an_opponents_draw(set_pool):
+    """"If **you** would draw a card" — the controller's own draws. A scan over
+    every board would make a one-sided drawback symmetric."""
+    pool, p1, p2, game = _renewal_board(
+        set_pool, ["Dark Ritual"], opponent_library=["Balduvian Bears"]
+    )
+
+    drawn = game._draw_with_replacements(p2, 1)
+
+    assert drawn == 1
+    assert [card.name for card in p2.hand] == ["Balduvian Bears"]
+    assert p2.graveyard == []
+
+
+def test_enduring_renewal_returns_a_dead_creature_to_hand(set_pool):
+    """"Whenever a creature is put into your graveyard from the battlefield,
+    return it to your hand." — the loop the card is famous for: the creature
+    comes back, and drawing it again bins it again."""
+    pool, p1, p2, game = _renewal_board(set_pool, [])
+    # Through the entry point, not by appending: CR 404.1 sends a permanent to
+    # its *owner's* graveyard, and the owner is recorded as it enters.
+    bear = Permanent(card=pool["Balduvian Bears"])
+    game._put_permanent_onto_battlefield(0, bear, None)
+
+    game.sacrifice_permanent(bear)
+    game._settle()
+
+    assert [card.name for card in p1.hand] == ["Balduvian Bears"]
+    assert not any(c.name == "Balduvian Bears" for c in p1.graveyard)
+
+
+def test_enduring_renewal_ignores_a_creature_dying_under_the_opponent(set_pool):
+    """"…into **your** graveyard" — CR 404.1 sends a permanent to its owner's
+    graveyard, so whose graveyard it landed in is a question about the owner
+    and not about who controlled it. Dropping the word would hand this seat
+    every creature that dies."""
+    pool, p1, p2, game = _renewal_board(set_pool, [])
+    theirs = Permanent(card=pool["Balduvian Bears"])
+    game._put_permanent_onto_battlefield(1, theirs, None)
+
+    game.sacrifice_permanent(theirs)
+    game._settle()
+
+    assert p1.hand == []
+    assert [card.name for card in p2.graveyard] == ["Balduvian Bears"]
+
+
+def test_enduring_renewal_reveals_only_its_controllers_hand(set_pool):
+    """"Play with **your** hand revealed" is one seat's, where Revelation's
+    "Players play with their hands revealed" is everyone's."""
+    from engine.revealed_hands import hand_revealed_to
+
+    pool, p1, p2, game = _renewal_board(set_pool, [])
+
+    assert hand_revealed_to(game, owner_seat=0, viewer_seat=1)
+    assert not hand_revealed_to(game, owner_seat=1, viewer_seat=0)
+# --- end W1G4 ---

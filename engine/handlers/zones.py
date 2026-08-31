@@ -1109,13 +1109,25 @@ def return_bound_card_to_owners_hand(game: Game, instruction: OracleInstruction,
     context.results["returned_bound_card"] = False
     if card is None:
         return True, "resolved"
+    # "…to **your** hand" (Enduring Renewal) rather than "…to its owner's hand"
+    # (Puppet Master). Two seats, and which one the card names is payload: on
+    # Enduring Renewal they coincide, because the trigger only fires on a card
+    # put into the controller's own graveyard — but reading them as one would
+    # put an opponent's dead creature in the wrong hand the moment another card
+    # printed the other word.
+    recipient = (
+        context.caster if instruction.payload.get("to_seat") == "controller" else None
+    )
     for player in game.players:
         for index, held in enumerate(player.graveyard):
             if held is card:
                 player.graveyard.pop(index)
-                if game.put_card_into_hand(player, card):
+                lands_with = recipient if recipient is not None else player
+                if game.put_card_into_hand(lands_with, card):
                     context.results["returned_bound_card"] = True
-                    game.log.append(f"{card.name} returned to {player.name}'s hand")
+                    game.log.append(
+                        f"{card.name} returned to {lands_with.name}'s hand"
+                    )
                 return True, "resolved"
     # CR 603.6: the ability looks for the object in the zone it moves it out of.
     game.log.append(f"{card.name} was no longer in a graveyard")

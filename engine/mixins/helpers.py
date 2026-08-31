@@ -1784,6 +1784,16 @@ class GameHelpersMixin:
                     source=observer,
                 ):
                     continue
+                # "…is put into **your** graveyard from the battlefield"
+                # (Enduring Renewal). Which graveyard it landed in, which
+                # CR 404.1 makes a question about the card's **owner** and not
+                # about who controlled the permanent — so it is asked here
+                # rather than folded into the filter above, where
+                # `subject_matches` has no owner to read.
+                if trig.condition.payload.get("dying_graveyard_owner") == "your":
+                    owner_index = self.owner_index_of(dead_permanent)
+                    if owner_index != controller_index:
+                        continue
                 # "…if it wasn't sacrificed" (Urza's Miter). CR 603.4's
                 # intervening-if, checked when the trigger would fire — and the
                 # only thing that can answer it is the record the sacrifice
@@ -1796,7 +1806,18 @@ class GameHelpersMixin:
                     continue
                 events.append(make_trigger_event(
                     controller_index, observer, trig,
-                    trigger_context={"dead_name": dead_permanent.card.name},
+                    trigger_context={
+                        "dead_name": dead_permanent.card.name,
+                        # The card itself, for "return **it** to your hand"
+                        # (Enduring Renewal). The name cannot answer: a
+                        # graveyard is a list of `CardDefinition` and two copies
+                        # of a card are the same immutable object, so a name
+                        # match finds whichever entry came first. The same key
+                        # the creature-death context has carried since Puppet
+                        # Master, recorded here because this fire site is where
+                        # a non-creature permanent's death is announced.
+                        "dead_card": dead_permanent.card,
+                    },
                 ))
         self._enqueue_triggered_batch(events)
 

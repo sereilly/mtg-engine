@@ -109,6 +109,14 @@ def _lower_put_source_into_zone(node) -> tuple[OracleInstruction, ...]:
         )
     return (OracleInstruction("put_self_into_zone", "", {"zone": "graveyard"}),)
 
+#: The trigger events whose fire site records the dying card, so "that card" /
+#: "it" in the effect behind them names something the handler can find. Written
+#: as a set rather than one literal because two fire sites stamp ``dead_card``
+#: and a third would only have to be added here — where an event *not* listed
+#: refuses the sentence rather than resolving to nothing.
+_BOUND_CARD_EVENTS = frozenset({"attached_creature_dies", "permanent_dies"})
+
+
 def _lower_return_to_zone(
     node: ast.ReturnToZone,
     event: str | None = None,
@@ -244,25 +252,51 @@ def _lower_return_to_zone(
     # supported and do nothing, which is the whole failure this gate exists for.
     if (
         isinstance(subject, ast.TargetSpec)
-        and subject.quantifier == "that"
-        and subject.filter.is_card
+        and subject.quantifier in ("that", "it")
+        and (subject.filter.is_card or subject.quantifier == "it")
     ):
-        if event != "attached_creature_dies":
+        # Which events record the object the pronoun names. Both fire sites
+        # stamp ``dead_card``; under anything else the words name a card nobody
+        # wrote down, and the honest answer is a refusal — the handler would
+        # find nothing and the card would compile supported and do nothing.
+        if event not in _BOUND_CARD_EVENTS:
             raise LoweringError(
                 "'that card' names the firing event's object, and this event "
                 "records none",
                 node=node,
             )
-        if node.to.name != "hand" or node.to.owner is None or node.to.owner.kind != "owner":
+        if node.to.name != "hand" or node.to.owner is None:
             raise LoweringError(
-                "the bound card returns to its owner's hand alone", node=node
+                "the bound card returns to a hand alone", node=node
             )
-        leftovers = _restrictions_beyond(subject.filter, frozenset({"is_card", "zone"}))
+        # "…to **its owner's** hand" (Puppet Master) and "…to **your** hand"
+        # (Enduring Renewal) are two seats, and the handler is told which.
+        # Reading them as one would put an opponent's dead creature into the
+        # wrong player's hand the moment a card printed the other word.
+        if node.to.owner.kind not in ("owner", "you"):
+            raise LoweringError(
+                f"no bound-card return reaches {node.to.owner.kind!r}'s hand",
+                node=node,
+            )
+        honoured = frozenset({"is_card", "zone"})
+        if subject.quantifier == "it":
+            # "Return **it**" carries the event's own subject filter, which the
+            # pronoun reader copied off the condition — it re-states the set the
+            # trigger already narrowed rather than narrowing this step further,
+            # so it is not a restriction to honour. Every *other* field still
+            # refuses below.
+            honoured = honoured | {"card_types", "controller"}
+        leftovers = _restrictions_beyond(subject.filter, honoured)
         if leftovers:
             raise LoweringError(
                 f"the bound-card return does not honour {leftovers[0]!r}", node=node
             )
-        return (OracleInstruction("return_bound_card_to_owners_hand", "", {}),)
+        payload: dict[str, object] = {}
+        if node.to.owner.kind == "you":
+            payload["to_seat"] = "controller"
+        return (
+            OracleInstruction("return_bound_card_to_owners_hand", "", payload),
+        )
     # "Return **this card** to its owner's hand." (Puppet Master's rider.) The
     # ability's own source, and by the time this resolves the Aura is in its
     # owner's graveyard — CR 704.5m put it there the moment the creature it
