@@ -33,8 +33,7 @@ from .paragraphs import (
 from .references import parse_recipient
 from .stream import TokenStream
 from .phrases import (_accept_mana_alternatives, _parse_can_attack_as_though,
-                      _parse_duration, _parse_mana_payment, _parse_pay_life,
-                      parse_bound_subject)
+                      _parse_duration, _parse_mana_payment, _parse_pay_life, parse_bound_subject)
 from .vocabulary import NUMBER_WORDS
 from .effects import (
     _parse_force_chosen_creature_to_attack,
@@ -867,18 +866,15 @@ def parse_subject_verb(
                 stream.advance()
                 try:
                     cost = _parse_mana_payment(stream, allow_variable=True)
-                    # "…its controller may pay {1} **or {2}**." (Winter's
-                    # Chill.) CR 118.8's alternative in the offered-cost
-                    # spelling, read through the same fragment the "unless they
-                    # pay {B} or {3}" penalty uses (Lim-Dûl's Hex) — one offer
-                    # the payer covers whichever way they choose, never two
-                    # prompts. What each way *buys* is the sentences after this
-                    # one; ``sentence_clauses._accept_graded_toll_outcomes``
-                    # reads them onto ``option_effects``.
-                    return ast.May(
-                        source_spec, cost=cost,
-                        cost_alternatives=_accept_mana_alternatives(stream),
-                    )
+                    # "…may pay {1} **or {2}**" (Winter's Chill): CR 118.8's
+                    # alternative in the offered-cost position, through the
+                    # fragment the "unless they pay {B} or {3}" penalty uses.
+                    # It must be consumed here — `_parse_optional_action`'s own
+                    # "or" is next and would read "{2}" as a second *action*.
+                    # What each way buys is read behind the sentence, by
+                    # `sentence_clauses._accept_graded_toll_outcomes`.
+                    return ast.May(source_spec, cost=cost,
+                                   cost_alternatives=_accept_mana_alternatives(stream))
                 except GrammarError:
                     stream.reset(mark_pay)
             # "…its controller **may add** an additional {U}." (Snowfall.) The
