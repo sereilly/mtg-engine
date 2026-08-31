@@ -231,6 +231,62 @@ def _kind_for_type_filter(type_filter) -> str | None:
     return _TYPE_FILTER_TO_KIND.get(type_filter)
 
 
+#: The instruction kinds whose ``type_filter`` describes **the object the
+#: caster picks**, rather than the class the effect sweeps.
+#:
+#: The third kind-keyed evidence table in this module, beside
+#: :data:`_KIND_TO_SPEC_FROM_PAYLOAD` and :data:`_KIND_TO_SPEC`, and it exists
+#: because ``type_filter`` is the one payload key that means two different
+#: things. "Destroy target permanent" and "destroy all black creatures" both
+#: carry ``{"type_filter": "creature"}``: on the first it is the target
+#: description (CR 115.1a's "target [something]"), on the second it is the
+#: class the sweep affects, and the payload alone cannot tell them apart.
+#:
+#: :func:`_from_instruction` used to read the key on *any* kind, which is this
+#: module's one guess — the thing its docstring says it does not do. Six mass
+#: spells (Cleanse, Jokulhaups, Tivadar's Crusade, Riptide, Battle Cry, Reset)
+#: and five more whose sweep sits on a trigger reported a target they never
+#: choose, and the client refused to cast four of them at all: its picker
+#: aborts a cast when the candidate list comes back empty, so "Destroy all
+#: black creatures" was uncastable on a board with no creatures. Wrath of God
+#: was the accidental control — "destroy all creatures" has a kind of its own
+#: (``destroy_all_creatures``) with the class baked into the *name* and so no
+#: filter for the reader to misread.
+#:
+#: One entry today, and that is the measurement rather than an oversight: every
+#: other targeted line in the pool carries the lowering's own ``targets``
+#: description, which is deliberate evidence and is read first. A kind that
+#: needs to be here and is not answers None, and the ratchet in
+#: `tests/engine/test_targeting.py` fails on the card that targets and derives
+#: no prompt — the loud direction. A sweep needs no entry at all, so the defect
+#: cannot come back by omission.
+_TYPE_FILTER_NAMES_THE_TARGET = frozenset({
+    # "Destroy target permanent", narrowed by a printed noun the lowering
+    # carries as payload rather than as a `targets` description
+    # (`lowering/destruction.py`). Hooded Blightfang's "destroy that
+    # planeswalker" is the pool's only one; the same kind's ordinary printed
+    # forms describe their target and never reach here.
+    "destroy_target_permanent",
+})
+
+
+def _spec_from_type_filter(payload: dict) -> dict | None:
+    """The picker *payload*'s ``type_filter`` describes, or None for none.
+
+    Only reached for a kind :data:`_TYPE_FILTER_NAMES_THE_TARGET` lists. A
+    filter no picker matches answers None rather than short-circuiting the
+    whole derivation, so the kind's own :data:`_KIND_TO_SPEC` row still gets
+    its say.
+    """
+    type_filter = payload.get("type_filter")
+    if not type_filter:
+        return None
+    kind = _kind_for_type_filter(type_filter)
+    if kind is None:
+        return None
+    return {"kind": kind, **_narrowing_flags(payload)}
+
+
 def _narrowing_flags(source: dict) -> dict:
     """The picker-narrowing flags *source* (a filter or a payload) carries.
 
@@ -1238,12 +1294,18 @@ def _from_instruction(instruction) -> dict | None:
                 instruction.payload.get("amount_bonus", 0) or 0
             )
         return described
-    type_filter = instruction.payload.get("type_filter")
-    if type_filter:
-        kind = _kind_for_type_filter(type_filter)
-        if kind is None:
-            return None
-        return {"kind": kind, **_narrowing_flags(instruction.payload)}
+    # **A ``type_filter`` is only a picker for a kind that picks.** The key
+    # names the class an instruction is *about*, and what that class is for
+    # depends entirely on the kind holding it: "destroy target permanent"
+    # narrows the one object the caster chooses, while "destroy all black
+    # creatures" names every object the effect touches and chooses none of them
+    # (CR 115.1a — an instant or sorcery is targeted only where its ability
+    # says "target"). Read unkeyed, the two are the same payload, so the reader
+    # guessed "picker" and a sweep reported a target it never chooses.
+    if instruction.kind in _TYPE_FILTER_NAMES_THE_TARGET:
+        spec = _spec_from_type_filter(instruction.payload)
+        if spec is not None:
+            return spec
     by_kind = _KIND_TO_SPEC.get(instruction.kind)
     return dict(by_kind) if by_kind is not None else None
 
