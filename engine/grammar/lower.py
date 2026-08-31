@@ -404,9 +404,8 @@ def lower_statement(
         # Authority, whose "destroy the other creature at end of combat" is the
         # first of a trigger's *two* sentences and so lowers under a `Sequence`.
         return _lower_destroy(statement, event, event_subject, produced)
-    # In the chain rather than the name-only table above, both of them: each
-    # acts on what an earlier step of the same effect recorded, and `produced`
-    # is the whole gate — it refuses when nothing did.
+    # In the chain rather than the name-only table, both: each acts on what an
+    # earlier step recorded, and `produced` refuses when nothing did.
     if isinstance(statement, ast.GainAbilityText):
         return _lower_gain_ability_text(statement, produced)
     if isinstance(statement, (ast.DoesntUntapNextStep, ast.DoesntUntapWhileCounter)):
