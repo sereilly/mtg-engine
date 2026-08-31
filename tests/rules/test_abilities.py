@@ -1081,3 +1081,141 @@ def test_113_7a_the_ability_exists_independently_of_its_source():
     game.resolve_top_of_stack()
 
     assert p2.life == 19
+
+
+# --- FixA: "of their choice" is the affected player's ---
+#
+# 603.3d routes a triggered ability's choices through 601.2c — *its controller*
+# announces them. CR 101.1 is what lets a card say otherwise, and "destroy
+# target <noun> that player controls of their choice" does: the pick belongs to
+# the player the trigger's own condition named.
+
+
+_THEIR_CHOICE_TEXT = (
+    "At the beginning of each player's upkeep, destroy target nonartifact "
+    "creature that player controls of their choice. It can't be regenerated."
+)
+
+
+def _their_choice_board(seats: int = 2, interactive=frozenset()):
+    """A "that player … of their choice" destroyer on seat 0, and two creatures
+    apiece on every other seat."""
+    world = _mk_card("Choice Engine", "Enchantment", _THEIR_CHOICE_TEXT)
+    forest = _mk_card("Woods", "Land")
+    players = [PlayerState(
+        name="P0", battlefield=[Permanent(card=world)], library=[forest] * 5,
+    )]
+    for seat in range(1, seats):
+        first, second = _bear(f"First {seat}"), _bear(f"Second {seat}")
+        players.append(PlayerState(
+            name=f"P{seat}", library=[forest] * 5,
+            battlefield=[Permanent(card=first), Permanent(card=second)],
+        ))
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    for permanent in game.all_permanents():
+        permanent.metadata["summoning_sickness_turn"] = -99
+    return game, players
+
+
+@pytest.mark.cr("101.1", "603.3d")
+def test_101_1_a_printed_of_their_choice_overrides_who_announces_the_choice():
+    """601.2c (reached through 603.3d) makes the ability's *controller* announce
+    every choice. A card that prints "of their choice" contradicts that rule for
+    its own ability, and CR 101.1 says the card wins — so the seat the condition
+    named is the one asked, and the controller is not."""
+    game, _players = _their_choice_board(seats=2, interactive={0, 1})
+
+    game.start_turn(1)
+    game._settle()
+
+    prompt = game.waiting_prompt()
+    assert prompt is not None
+    assert prompt.player_index == 1, "the affected player, not the ability's controller"
+
+
+@pytest.mark.cr("608.2", "117.3b")
+def test_608_2_the_resolution_waits_while_the_named_player_owes_the_choice():
+    """A resolution is not over until its last instruction is done, and nobody
+    receives priority until then — so the ability stays on the stack while the
+    seat it asked has not answered, and finishes when they do."""
+    game, players = _their_choice_board(seats=2, interactive={0, 1})
+
+    game.start_turn(1)
+    game._settle()
+    assert game.stack, "the ability is still resolving"
+
+    offered = game.live_permanent_choices(game.pending_choices[0])
+    second = next(p for p in offered if p.card.name == "Second 1")
+    assert game.confirm_permanent_choice(1, second.permanent_id)
+    game._settle()
+
+    assert not game.stack
+    assert [c.name for c in players[1].graveyard] == ["Second 1"]
+
+
+@pytest.mark.cr("603.10")
+def test_603_10_that_player_is_the_seat_the_firing_event_froze():
+    """"Each player's upkeep" is one ability with a different seat every firing,
+    and by the time it resolves the only seat still readable off the board is its
+    controller's. So the seat is frozen as the ability goes on the stack — three
+    players, because with two the wrong answer and the right one coincide."""
+    game, players = _their_choice_board(seats=3)
+
+    game.start_turn(2)
+    game._settle()
+
+    assert [c.name for c in players[2].graveyard] == ["First 2"]
+    assert players[1].graveyard == [], "the seat the event did not name keeps everything"
+
+
+@pytest.mark.cr("603.2")
+def test_603_2_each_players_upkeep_destroys_exactly_one_creature():
+    """One matching event, one trigger, one creature — not one per seat and not
+    one per creature."""
+    game, players = _their_choice_board(seats=3)
+
+    game.start_turn(1)
+    game._settle()
+
+    destroyed = sum(len(player.graveyard) for player in players)
+    assert destroyed == 1
+    assert [c.name for c in players[1].graveyard] == ["First 1"]
+
+
+@pytest.mark.cr("701.19c")
+def test_701_19c_cant_be_regenerated_stops_the_shield_being_applied():
+    """The rider travels to the step that destroys, not to the step that
+    chooses — so a regeneration shield on the chosen creature is not applied."""
+    game, players = _their_choice_board(seats=2)
+    shielded = next(iter(game.controlled_by(1)))
+    shielded.regeneration_shield = 1
+
+    game.start_turn(1)
+    game._settle()
+
+    assert [c.name for c in players[1].graveyard] == [shielded.card.name]
+
+
+@pytest.mark.cr("701.8a")
+def test_701_8a_a_board_with_no_legal_choice_destroys_nothing():
+    """"No legal choice" is an outcome, not a failure: the ability resolves and
+    the sentence behind the prompt acts on nothing."""
+    world = _mk_card("Choice Engine", "Enchantment", _THEIR_CHOICE_TEXT)
+    forest = _mk_card("Woods", "Land")
+    p0 = PlayerState(
+        name="P0", battlefield=[Permanent(card=world)], library=[forest] * 5,
+    )
+    p1 = PlayerState(name="P1", library=[forest] * 5)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+
+    game.start_turn(1)
+    game._settle()
+
+    assert not game.stack
+    assert p1.graveyard == []
+
+
+# --- end FixA ---
