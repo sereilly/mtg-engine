@@ -114,14 +114,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "your library in a random order, then draw a card. x can't be 0":
             _line("arm_lamp_draw_replacement", "activated_draw"),
     },
-    'Animate Dead': {
-        'when this aura enters, if it\'s on the battlefield, it loses "enchant '
-        'creature card in a graveyard" and gains "enchant creature put onto the '
-        'battlefield with this aura." return enchanted creature card to the '
-        'battlefield under your control and attach this aura to it. when this '
-        "aura leaves the battlefield, that creature's controller sacrifices it":
-            _line('reanimate_creature', 'spell_pattern'),
-    },
     'Balance': {
         'each player chooses a number of lands they control equal to the number '
         'of lands controlled by the player who controls the fewest, then '

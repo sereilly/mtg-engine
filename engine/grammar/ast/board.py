@@ -280,6 +280,40 @@ class Regenerate:
 
 
 @dataclass(frozen=True)
+class ReanimateEnchantedCard:
+    """The reanimation Aura's entry line, whole (Animate Dead, Dance of the Dead).
+
+    ``When this Aura enters, if it's on the battlefield, it loses "enchant
+    creature card in a graveyard" and gains "enchant creature put onto the
+    battlefield with this Aura." Return|Put enchanted creature card
+    to|onto the battlefield [tapped] under your control and attach this Aura to
+    it. When this Aura leaves the battlefield, that creature's controller
+    sacrifices it.``
+
+    One node for the whole line because the sentences are not separable: the
+    quoted rewrite exists only so the Aura may legally stay attached once its
+    enchanted *card* has become a permanent (CR 400.7 makes it a new object),
+    the attach is what performs that rewrite's whole consequence, and the
+    trailing trigger is the price of the deal. Read as three statements they
+    would be three effects on three different objects, two of which nothing
+    could name.
+
+    ``tapped`` is the one word that separates the two printings, and the word
+    the rest of Dance of the Dead is built around — the +1/+1 and the "doesn't
+    untap" line only matter because the creature arrives tapped.
+
+    What carries it out is ``mixins/oracle_instructions._apply_aura_effect``,
+    which reads the Aura's own text for the details (see
+    ``engine/auras.AURA_REANIMATION_PHRASES``). This node exists so the line has
+    an *instruction* — a trigger the compiler produces with none behind it is a
+    card that reports supported with a silent ability part, which is exactly
+    what the hollow-line probe counts.
+    """
+
+    tapped: bool = False
+
+
+@dataclass(frozen=True)
 class ReturnToZone:
     subject: Recipient
     to: Zone

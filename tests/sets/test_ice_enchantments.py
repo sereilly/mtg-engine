@@ -1462,3 +1462,99 @@ def test_aggression_cannot_be_put_on_a_wall(set_pool, catalog_by_name):
 
 
 # --- end W2G4 ---
+
+# --- W3G1: granted abilities in quotes ---
+def _dance_game(pool, corpse: str = "Balduvian Bears", swamps: int = 0):
+    """Seat 0 holding Dance of the Dead with *corpse* in its graveyard."""
+    p1 = PlayerState(
+        name="P1",
+        battlefield=[Permanent(card=pool["Swamp"]) for _ in range(swamps)],
+        life=20,
+        hand=[pool["Dance of the Dead"]], graveyard=[pool[corpse]],
+    )
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game._settle()
+    p1.mana_pool["B"] = 1
+    p1.mana_pool["C"] = 1
+    result = game.cast_from_hand(
+        0, "Dance of the Dead", target_player_index=0, target_permanent_index=0
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+    return game, p1, result
+
+
+def _named(player, name):
+    return next((perm for perm in player.battlefield if perm.card.name == name), None)
+
+
+def test_dance_of_the_dead_reanimates_tapped_and_attached(set_pool):
+    """"Put enchanted creature card onto the battlefield **tapped** under your
+    control and attach this Aura to it."
+
+    One word separates this printing from Animate Dead's, and it is the word
+    the rest of the card is built around — the +1/+1 and the "doesn't untap"
+    line only matter because the creature arrives tapped.
+    """
+    pool = set_pool("ICE")
+    game, p1, result = _dance_game(pool)
+
+    assert result.supported
+    bear = _named(p1, "Balduvian Bears")
+    aura = _named(p1, "Dance of the Dead")
+    assert bear is not None and aura is not None
+    assert bear.tapped
+    assert aura.metadata.get("attached_to") is bear
+    # "Enchanted creature gets +1/+1" — the Aura's own layer-7c static, which
+    # only applies because the attach above happened.
+    assert (bear.effective_power, bear.effective_toughness) == (3, 3)
+
+
+def test_dance_of_the_dead_holds_the_creature_down_through_the_untap_step(set_pool):
+    """"…and doesn't untap during its controller's untap step." Without it the
+    tapped arrival would cost its controller nothing past one turn."""
+    pool = set_pool("ICE")
+    game, p1, _ = _dance_game(pool)
+
+    game.start_turn(0)
+    game._settle()
+
+    assert _named(p1, "Balduvian Bears").tapped
+
+
+def test_dance_of_the_dead_sacrifices_the_creature_when_the_aura_leaves(set_pool):
+    """"When this Aura leaves the battlefield, that creature's controller
+    sacrifices it." The linked half of the deal, and the one an unattached
+    reanimation would silently skip."""
+    pool = set_pool("ICE")
+    game, p1, _ = _dance_game(pool)
+    aura = _named(p1, "Dance of the Dead")
+
+    game.remove_from_battlefield(aura)
+    game._remove_aura_effects(aura)
+    game._permanent_to_graveyard(p1, aura)
+    game._settle()
+
+    assert _named(p1, "Balduvian Bears") is None
+    assert "Balduvian Bears" in [card.name for card in p1.graveyard]
+
+
+def test_dance_of_the_dead_offers_its_controller_the_untap_payment(set_pool):
+    """"At the beginning of the upkeep of enchanted creature's controller, that
+    player may pay {1}{B}." The offer is a queued choice, so what this asserts
+    is that the upkeep really arms it."""
+    pool = set_pool("ICE")
+    game, p1, _ = _dance_game(pool, swamps=2)
+
+    game.start_turn(0)
+
+    assert any(
+        choice.kind == "optional_pay"
+        and choice.data.get("card_name") == "Dance of the Dead"
+        for choice in game.pending_choices
+    )
+
+
+# --- end W3G1 ---

@@ -102,6 +102,26 @@ _TYPE_ADDITION_GRANT = _LazyPattern(_build_type_addition_grant)
 # Templates. Several of these genuinely repeat across the pool (the P/T
 # modifications, the keyword grants, the protection cycle, the upkeep damage
 # family), which is why they are written as patterns rather than listed.
+#: The two printings of the reanimation Aura's entry line — the sentence
+#: ``mixins/oracle_instructions._apply_aura_effect`` performs by reading the
+#: card's own words. Named here, beside the gate, because the gate and that
+#: method have to be looking at the same sentence: the pattern in ``_TEMPLATES``
+#: is built out of this tuple, so a printing one of them reads and the other
+#: does not is not expressible.
+#:
+#: Animate Dead prints the first and Dance of the Dead the second, which is what
+#: makes this a template rather than a card: the difference between the two
+#: sentences is one verb and one word of timing.
+AURA_REANIMATION_PHRASES: tuple[str, ...] = (
+    "return enchanted creature card to the battlefield",
+    "put enchanted creature card onto the battlefield",
+)
+
+#: The word that separates them. "…onto the battlefield **tapped** under your
+#: control" (Dance of the Dead) — read by the same method, off the same text.
+AURA_REANIMATION_TAPPED = "onto the battlefield tapped"
+
+
 _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
     # --- static modifications to the enchanted permanent -------------------
     # Everything from here down to the `_TRIGGER_TEMPLATES` boundary is a
@@ -264,8 +284,9 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], str], ...] = (
         # and this one, which is the entry line's own half. A claim is asked per
         # line, so this pattern carries the half a line can answer for.
         re.compile(
-            r"^when this (?:aura|enchantment) enters.*"
-            r"return enchanted creature card to the battlefield"
+            r"^when this (?:aura|enchantment) enters.*(?:"
+            + "|".join(re.escape(phrase) for phrase in AURA_REANIMATION_PHRASES)
+            + r")"
         ),
         "enters-the-battlefield Aura trigger — _apply_aura_effect",
     ),

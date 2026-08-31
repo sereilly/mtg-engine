@@ -143,6 +143,7 @@ from .zones import (
 )
 from .returns import (
     _reads_no_return_restriction,
+    _lower_reanimate_enchanted_card,
     _lower_return_to_zone,
     _lower_put_source_into_zone,
 )
@@ -370,6 +371,7 @@ __all__ = [
     "_lower_put_on_library_bottom",
     "_lower_put_on_library_top",
     "_lower_put_onto_battlefield",
+    "_lower_reanimate_enchanted_card",
     "_lower_return_to_zone",
     "_lower_put_source_into_zone",
     "_lower_reveal_top",

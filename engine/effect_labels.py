@@ -340,6 +340,11 @@ TRIGGERED_LABELS: dict[str, str] = {
     # reported before the grammar took the template over — the reason
     # this table exists.
     "destroy_creatures_in_combat_with_source": "spell_pattern",
+    # Animate Dead and Dance of the Dead, whose whole entry line the grammar
+    # now reads as one template. Declared for the same reason the row above is:
+    # Animate Dead reported `spell_pattern` from its card hook, and retiring
+    # that hook must not re-bucket a shipped card.
+    "reanimate_creature": "spell_pattern",
     "deal_damage_each_matching": "triggered_damage",
     "deal_damage_to_those_damaged_this_game": "triggered_damage",
     "add_corpse_counters_for_each_creature_died": "triggered_counter",

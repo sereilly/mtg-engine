@@ -10,7 +10,8 @@ from ..handlers import EFFECT_HANDLERS
 from ..handlers._common import count_from_payload
 from ..oracle_types import X_FROM_COUNT
 from ..models import CardDefinition, Permanent, PlayerState
-from ..auras import attach_aura, aura_animates_artifact, aura_keyword_grants
+from ..auras import (AURA_REANIMATION_PHRASES, AURA_REANIMATION_TAPPED,
+                     attach_aura, aura_animates_artifact, aura_keyword_grants)
 from ..auras import aura_enchant_clause, aura_enchants
 from ..mixins.stack import aura_enchant_noun, permanent_matches_enchant_noun
 from ..oracle import OracleInstruction, compile_card_oracle
@@ -366,7 +367,10 @@ class OracleInstructionsMixin:
             # graveyard to the caster's battlefield and attaching the Aura.
             # Prefer the parsed instruction if available
             has_reanimate = any(instr.kind == "reanimate_creature" for instr in program.instructions)
-            if has_reanimate or ("creature card in a graveyard" in text and "return enchanted creature card to the battlefield" in text):
+            if has_reanimate or (
+                "creature card in a graveyard" in text
+                and any(phrase in text for phrase in AURA_REANIMATION_PHRASES)
+            ):
                 revived_card = None
                 revived_owner_index = None
                 caster_player = self.players[caster_index]
@@ -404,16 +408,30 @@ class OracleInstructionsMixin:
                 if revived_owner_index is not None and revived_owner_index != caster_index:
                     revived_perm.metadata["owner_player_index"] = revived_owner_index
                 self._put_permanent_onto_battlefield(caster_index, revived_perm, None)
+                # "**Put** enchanted creature card onto the battlefield
+                # **tapped** under your control" (Dance of the Dead). The one
+                # word that separates the two printings of this template, and
+                # the one the sister card does not print — dropped, Dance of
+                # the Dead gives its controller an untapped creature the turn
+                # it lands, which is the whole of what the tapped clause and
+                # the "doesn't untap" line beside it are for.
+                if AURA_REANIMATION_TAPPED in text:
+                    revived_perm.tapped = True
                 # Attach the Aura to the revived permanent (store references in metadata)
                 attach_aura(aura_permanent, revived_perm)
                 # "When this Aura leaves the battlefield, that creature's
                 # controller sacrifices it." — honored by _remove_aura_effects.
                 if "that creature's controller sacrifices it" in text:
                     aura_permanent.metadata["sacrifice_attached_on_leave"] = True
-                # Apply the -1/-0 penalty from Animate Dead's text if present
-                if "enchanted creature gets -1/-0" in text or "enchanted creature gets -1/ -0" in text:
-                    revived_perm.power_bonus += -1
-
+                # Animate Dead's "-1/-0" is **not** applied here. It is an
+                # ordinary Aura static (CR 613 layer 7c), derived from the
+                # attached Aura's own text on every recompute by
+                # `auras.aura_static_pt_grant` — and this branch has just
+                # attached the Aura, so adding a second copy by hand made the
+                # reanimated creature two power smaller than the card says.
+                # Dance of the Dead's "+1/+1" was already going through the
+                # derived path alone, so the two printings of one template did
+                # not even agree with each other.
                 self.log.append(f"{aura_permanent.card.name} reanimated {revived_card.name} and attached to aura")
                 ran_entry_text = True
                 return ran_entry_text

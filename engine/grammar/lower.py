@@ -159,6 +159,7 @@ from .lowering import (
     _lower_reveal_top,
     _lower_reveal_until,
     _lower_remove_counter,
+    _lower_reanimate_enchanted_card,
     _lower_return_to_zone,
     _lower_sacrifice,
     _lower_sacrifice_expansion_permanents,
@@ -455,6 +456,9 @@ def lower_statement(
 
     if isinstance(statement, ast.Discard):
         return _lower_discard(statement, event)
+
+    if isinstance(statement, ast.ReanimateEnchantedCard):
+        return _lower_reanimate_enchanted_card(statement)
 
     if isinstance(statement, ast.ReturnToZone):
         # `produced` is what makes "…for each card discarded this way" legal:

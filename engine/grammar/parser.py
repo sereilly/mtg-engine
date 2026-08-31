@@ -742,6 +742,50 @@ _ASSIGN_UNBLOCKED_LINE_RE = re.compile(
 )
 
 
+#: The reanimation Aura's entry line, whole (Animate Dead, Dance of the Dead).
+#: A whole-line pattern for the reason the emblem shape below is one: the
+#: sentence's own quotation marks are part of what it says, and the three
+#: sentences are one effect on one object rather than three statements.
+#:
+#: The two printings differ by one verb and one word of timing, which is what
+#: makes this a template rather than a card — and what retired the name-keyed
+#: hook that used to claim the first of them.
+#:
+#: Deliberately exact. The quoted rewrite is what lets the Aura stay attached
+#: once its enchanted *card* has become a permanent, and the trailing trigger is
+#: the price of the deal; a card printing one of the three sentences and not the
+#: others is a different card and must keep refusing here.
+_REANIMATION_AURA_LINE_RE = re.compile(
+    r'^\s*when this (?:aura|enchantment) enters, if it.s on the battlefield, '
+    r'it loses ["“]enchant creature card in a graveyard["”] and gains '
+    r'["“]enchant creature put onto the battlefield with this '
+    r'(?:aura|enchantment)\.?["”]\.?\s*'
+    r'(?:return|put) enchanted creature card (?:to|onto) the battlefield '
+    r'(?P<tapped>tapped )?under your control and attach this '
+    r'(?:aura|enchantment) to it\.\s*'
+    r'when this (?:aura|enchantment) leaves the battlefield, '
+    r'that creature.s controller sacrifices it\.?\s*$',
+    re.IGNORECASE,
+)
+
+
+def _parse_reanimation_aura_line(line: str) -> "ast.TriggeredAbilityNode | None":
+    """The reanimation Aura's entry line as one triggered ability, or None.
+
+    Read off the raw text rather than token by token, exactly as the emblem
+    shape below is: what the pattern has to pin down is the quoted rewrite and
+    the sentence order, and both are punctuation the token stream has already
+    thrown away.
+    """
+    match = _REANIMATION_AURA_LINE_RE.match(line.strip())
+    if match is None:
+        return None
+    return ast.TriggeredAbilityNode(
+        ast.TriggerEvent(kind="enters_battlefield", word="when"),
+        ast.ReanimateEnchantedCard(tapped=bool(match.group("tapped"))),
+    )
+
+
 def _parse_emblem_line(line: str) -> "ast.CreateEmblem | None":
     """The whole-line emblem shape, read off the raw text.
 
@@ -813,6 +857,14 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
         emblem = _parse_emblem_line(line)
         if emblem is not None:
             return ast.SpellEffectLine(emblem)
+        # The reanimation Aura's whole entry line (Animate Dead, Dance of the
+        # Dead). Read before the token paths below, which see three sentences
+        # where the card states one deal — and would in any case refuse the
+        # quoted rewrite, which is what left the first of these two cards on a
+        # name-keyed hook.
+        reanimation = _parse_reanimation_aura_line(lexed.source)
+        if reanimation is not None:
+            return reanimation
         if _ASSIGN_UNBLOCKED_LINE_RE.match(line.strip()):
             return ast.SpellEffectLine(
                 ast.RawEffect("grant_team_assign_unblocked_until_eot")
