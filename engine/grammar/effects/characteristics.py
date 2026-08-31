@@ -10,8 +10,9 @@ change a characteristic; where it sits is incidental.
 """
 
 from .. import ast
-from ..amounts import (accept_fraction_head, accept_rounding, expect_pt,
-                       parse_amount, parse_equal_to)
+from ..amounts import (accept_fraction_head, accept_life_gain_cap,
+                       accept_rounding, expect_pt, parse_amount,
+                       parse_equal_to)
 from ..errors import GrammarError
 from ..lexer import (GToken, PT, PUNCT, QUOTE, SELF, WORD, tokenize)
 from ..nouns import parse_object_filter
@@ -163,7 +164,13 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
             stream.reset(mark)
         else:
             player = subject if isinstance(subject, ast.PlayerRef) else ast.PlayerRef("you")
-            return ast.GainLife(player, amount)
+            # "…, but not more life than the player's life total before the
+            # damage was dealt, …" (Drain Life, Soul Burn). Read here rather
+            # than folded as a rider by the sentence layer because it is not a
+            # separate effect: it is part of how much life this gain is, and a
+            # rider that failed to attach would leave the gain uncapped —
+            # strictly better than the printed card.
+            return ast.GainLife(player, amount, capped_by=accept_life_gain_cap(stream))
     else:
         try:
             amount = parse_amount(stream)

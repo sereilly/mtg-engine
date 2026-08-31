@@ -388,8 +388,54 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
                 or any(perm.has_type(t) for t in wanted_types if t != "creature"))
             and all(game._has_keyword(perm, kw) for kw in wanted_keywords)
         )
+    life_gain = _capped_life_gain(context, instruction, life_gain)
     game._gain_life(gainer, life_gain, card.name)
     return True, "resolved"
+
+
+def _capped_life_gain(context, instruction, life_gain: int) -> int:
+    """"…but not more life than A, B, or C" (Drain Life, Soul Burn).
+
+    The cap is the second half of one sentence, so it belongs to the gain and
+    not to the damage: ``deal_damage`` returns what was **dealt**, which lifelink
+    and every damage trigger read, and only the life gained is limited. That is
+    the same distinction Ali from Cairo draws between the damage dealt and the
+    life lost, and getting it backwards would silently shrink the damage too.
+
+    Each printed term is asked in turn and the smallest wins. A term whose
+    record is missing caps the gain at zero rather than being skipped: the
+    alternative is a gain the card never authorised, and "gained less than it
+    should" is a bug that a game reports where "gained more" is one nobody
+    notices.
+    """
+    terms = instruction.payload.get("capped_by") or ()
+    if not terms:
+        return life_gain
+    for term in terms:
+        kind = term.get("kind")
+        if kind == "recipient_capacity":
+            # Whom the damage went to and what they could absorb before it,
+            # recorded by the damage step. The kinds are checked because the
+            # printed terms are per kind of recipient — a card naming only
+            # "the creature's toughness" does not cap a gain from damaging a
+            # player, and reading the number without the kind would.
+            recorded = (context.results or {}).get("damage_recipient")
+            if not isinstance(recorded, dict):
+                return 0
+            if recorded.get("kind") not in (term.get("recipients") or ()):
+                continue
+            life_gain = min(life_gain, max(0, int(recorded.get("capacity", 0))))
+        elif kind == "mana_spent_on_x":
+            # "the amount of {B} spent on X" (Soul Burn) — the split the cast
+            # chose (CR 601.2g), carried on the stack item because the pool it
+            # came out of is emptied at the end of the step (CR 500.4).
+            spent = (context.choices or {}).get("x_mana_spent") or {}
+            life_gain = min(life_gain, max(0, int(spent.get(term.get("symbol"), 0))))
+        else:
+            # An unreadable term is the same failure as a missing record, and
+            # the lowering refuses to emit one — this is the belt to its braces.
+            return 0
+    return max(0, life_gain)
 
 
 @effect_handler("arm_draw_step_life_loss_unless_pay")

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from . import ast
 from .errors import GrammarError
-from .lexer import NUMBER, PT, SELF, WORD
+from .lexer import MANA, NUMBER, PT, SELF, WORD
 from .stream import TokenStream
 from .vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS, singular as _singular
 
@@ -697,3 +697,79 @@ def _parse_for_each_this_way(stream: TokenStream) -> ast.ThatMuch | None:
         stream.reset(mark)
         return None
     return ast.ThatMuch(key)
+
+
+# ---------------------------------------------------------------------------
+# Caps on a quantity
+# ---------------------------------------------------------------------------
+
+#: The printed terms of a life-gain cap, as word tuples, and what each one is
+#: about. Three of them name a *kind of damage recipient* and one names mana
+#: spent on X, which is why the node keeps them apart rather than folding them
+#: into a single "the cap".
+_LIFE_GAIN_CAP_TERMS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("the", "player", "'s", "life", "total", "before", "the", "damage",
+      "was", "dealt"), "player"),
+    (("the", "planeswalker", "'s", "loyalty", "before", "the", "damage",
+      "was", "dealt"), "planeswalker"),
+    (("the", "creature", "'s", "toughness"), "creature"),
+)
+
+
+def _accept_life_gain_cap_term(stream: TokenStream) -> "ast.LifeGainCap | None":
+    """One term of the cap list, or None with the cursor put back."""
+    for phrase, recipient in _LIFE_GAIN_CAP_TERMS:
+        if stream.accept_phrase(*phrase):
+            return ast.LifeGainCap("recipient_capacity", recipient=recipient)
+    mark = stream.mark()
+    # "the amount of {B} spent on X" (Soul Burn). The symbol is payload, not
+    # part of the term: a card printing {R} here reads the same sentence.
+    if stream.accept_phrase("the", "amount", "of"):
+        token = stream.peek()
+        if token is not None and token.kind == MANA:
+            stream.advance()
+            if stream.accept_phrase("spent", "on", "x"):
+                return ast.LifeGainCap(
+                    "mana_spent_on_x", symbol=token.text.strip("{}").upper()
+                )
+    stream.reset(mark)
+    return None
+
+
+def accept_life_gain_cap(stream: TokenStream) -> tuple["ast.LifeGainCap", ...]:
+    """``, but not more [life] than <term>[, <term>]… [, or <term>]``.
+
+    An empty tuple with the cursor put back when the words are not there, so
+    the ordinary "you gain N life" is untouched.
+
+    A *list* of terms rather than one, because the card prints a list and only
+    one of its members can be the binding one: Drain Life and Soul Burn name a
+    term per kind of thing "any target" admits, and Soul Burn names one more
+    that is about the cast rather than the target. Any unrecognized term takes
+    the whole clause down (the cursor is restored and the line then fails for
+    unconsumed text) rather than being dropped -- a cap silently narrowed to
+    the terms this table happens to know would make the card gain more life
+    than it prints, which is the direction that never fails loudly.
+    """
+    mark = stream.mark()
+    if not stream.accept_punct(","):
+        return ()
+    if not stream.accept_phrase("but", "not", "more"):
+        stream.reset(mark)
+        return ()
+    # Drain Life prints "but not more **life** than"; Soul Burn drops the noun.
+    stream.accept_word("life")
+    if not stream.accept_word("than"):
+        stream.reset(mark)
+        return ()
+    terms: list[ast.LifeGainCap] = []
+    while True:
+        term = _accept_life_gain_cap_term(stream)
+        if term is None:
+            stream.reset(mark)
+            return ()
+        terms.append(term)
+        if not stream.accept_punct(","):
+            break
+        stream.accept_word("or")
+    return tuple(terms)
