@@ -377,6 +377,23 @@ def _lower_may(
             f"no offer names {node.actor.kind!r} as its payer", node=node
         )
     payload: dict[str, object] = {"actor": node.actor.kind}
+    if node.actor.kind == "target_opponent":
+        # "**Target opponent** may ante the top card of their library."
+        # (Amulet of Quoz.) The seat being offered is the ability's *target*,
+        # chosen as it is activated (CR 601.2c / 602.2b), so it is described
+        # here the way every other target is — a ``targets`` payload the picker
+        # reads through ``_from_targets_payload``. The actor stays beside it:
+        # it is what ``_offered_seats`` asks, and the two answer different
+        # questions ("who is offered?" and "what did this choose?").
+        #
+        # Exactly this kind and no other. The reference reader spells the bare
+        # article ``opponent`` and only the printed word "target" reaches
+        # ``target_opponent``, which is the distinction it was split to keep —
+        # so an offer made to "an opponent" describes no target and none is
+        # invented for it.
+        payload["targets"] = {
+            "quantifier": "target", "kind": "player", "opponents_only": True,
+        }
     if node.cost is not None:
         if not isinstance(node.cost, ast.ManaCost):
             raise LoweringError("only mana costs can be offered optionally", node=node)

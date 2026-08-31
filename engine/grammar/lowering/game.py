@@ -865,7 +865,22 @@ def _lower_coin_flip_stakes_loop(
     return (
         OracleInstruction(
             "coin_flip_stakes_loop", "",
-            {"stake": int(node.stake.value), "doubling": bool(node.doubling)},
+            {
+                "stake": int(node.stake.value),
+                "doubling": bool(node.doubling),
+                # "…and **target opponent** loses N life". The production reads
+                # those two words as fixed text, so the target was consumed and
+                # then dropped: the handler asks ``context.target`` for the seat
+                # it stakes against, and nothing described the choice, so the
+                # picker never ran and a free-for-all staked whichever opponent
+                # the resolution happened to carry. One target, chosen at
+                # announcement (CR 601.2c), described here the way every other
+                # target is.
+                "targets": {
+                    "quantifier": "target", "kind": "player",
+                    "opponents_only": True,
+                },
+            },
         ),
     )
 

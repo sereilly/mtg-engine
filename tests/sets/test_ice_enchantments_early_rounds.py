@@ -1,9 +1,9 @@
 """Ice Age (ICE) enchantment cards — the serial rounds and wave 1.
 
-ICE is a *measured* set, mid-implementation: cards land here with the round
-that buys them (tests/sets/README.md, SET_PLAYBOOK.md Phase 3), and the pool
-resolves through ``set_pool("ICE")`` even though the set is not shipped —
-reading a card file is not shipping it. The round each section names is
+ICE **ships** (SET_PLAYBOOK.md Phase 4 moved it from ``measured`` to ``sets``).
+It was measured while these tests were written, and the pool resolves through
+``set_pool("ICE")`` either way — that fixture is about which cards a test may
+name, not about which a player may deck. The round each section names is
 written up in ROADMAP.md; a round's cards are split across these files by the
 printed type of the card each test is about.
 

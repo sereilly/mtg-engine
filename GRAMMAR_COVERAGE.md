@@ -25,13 +25,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | LEG | 310 | 431 | 89.1% | 87.9% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | 4ED | 368 | 520 | 90.0% | 89.6% | 53.5% | 244 |
+| ICE | 373 | 601 | 89.4% | 88.7% | 63.4% | 301 |
 | M21 | 285 | 503 | 87.3% | 86.7% | 60.8% | 237 |
-| ICE *(measured)* | 373 | 601 | 89.5% | 88.9% | 63.6% | 302 |
-| **All (shipped)** | **2415** | **3404** | **86.8%** | **85.8%** | **53.4%** | **1575** |
+| **All (shipped)** | **2788** | **4005** | **87.2%** | **86.2%** | **54.9%** | **1876** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
-
-*(measured)* — ICE are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
 ## Backlog — failure reasons
 
@@ -41,7 +39,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 230 | 92 | expected a subject |  |
 | 114 | 47 | unrecognized effect verb |  |
-| 51 | 23 | unconsumed text |  |
+| 52 | 24 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 16 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -67,7 +65,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-1575 cards, 1819 lines.
+1876 cards, 2200 lines.
 
 - **Abomination**
   - `Whenever this creature blocks or becomes blocked by a green or white creature, destroy that creature at end of combat.`
@@ -1350,8 +1348,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Permanents you control gain hexproof and indestructible until end of turn.`
 - **Hidden Path**
   - `Green creatures have forestwalk. (They can't be blocked as long as defending player controls a Forest.)`
-- **Hipparion**
-  - `This creature can't block creatures with power 3 or greater unless you pay {1}.`
 - **Historian of Zhalfir**
   - `Whenever this creature attacks, if you control a Teferi planeswalker, draw a card.`
 - **Hoar Shade**

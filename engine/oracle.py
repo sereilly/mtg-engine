@@ -43,6 +43,7 @@ from .oracle_types import (
     _COLOR_WORD_TO_SYMBOL,
     _MANA_TOKEN_RE,
     _NUMBER_WORDS,
+    compilation_cache,
     strip_ability_word,
 )
 from .characteristic_defining import dynamic_pt_for
@@ -2357,6 +2358,7 @@ def _planeswalker_static_line(line: str, card_name: str | None) -> str | None:
     return None
 
 
+@compilation_cache
 @lru_cache(maxsize=None)
 def compile_emblem_text(emblem_name: str, text: str) -> tuple[ParsedTriggeredAbility, ...]:
     """The triggered abilities an emblem's quoted text carries (CR 114.4).
@@ -3907,6 +3909,7 @@ def _carries_no_behaviour(instruction: OracleInstruction) -> bool:
 # Unbounded cache: card definitions are immutable and the pool is finite, so
 # every distinct card compiles exactly once per process — even with thousands
 # of cards the programs are tiny compared to recompilation cost.
+@compilation_cache
 @lru_cache(maxsize=None)
 def _compile_card_oracle(
     name: str,

@@ -173,17 +173,36 @@ def test_the_gate_is_the_shipped_pool_and_measured_sets_are_reported():
 
     Gating on a measured set instead would make every ingest red on arrival,
     which is why `GRAMMAR_COVERAGE.md`'s floors and `HOOK_RELIANCE.md`'s
-    ceilings exclude the same sets. So both halves are asserted: the measured
-    cards are analysed and collected, and none of them reaches the gate.
-    """
-    pc = _load_parse_coverage()
-    coverages = pc.analyze_pool(run_probe=False)
+    ceilings exclude the same sets. So both halves are asserted: the instrument
+    reads the measured role, and nothing in that role reaches the gate.
 
-    measured = [c for c in coverages if not c.shipped]
-    assert measured, (
-        "no measured card was analysed — CARD_PATHS lost include_measured=True, "
-        "and this guard is back to watching only what it always watched"
+    **The first half is asserted directly rather than through a measured card**,
+    because the `measured` role is legitimately empty between sets — it was
+    empty before Ice Age was ingested and it is empty again now that Ice Age
+    ships. This guard used to look for a card that is not shipped and fail when
+    it found none, which reads "the instrument stopped watching" when the truth
+    is "there is nothing to watch". That is the proxy trap SET_PLAYBOOK.md
+    records from the 4ED promotion: a guard that checks a symptom needs the
+    symptom's availability asserted too, and the fix is to assert the invariant
+    instead. The invariant is that `CARD_PATHS` is built over both manifest
+    roles, which is checkable whatever those roles contain.
+    """
+    from engine.card_loader import manifest_set_paths
+
+    pc = _load_parse_coverage()
+
+    assert set(pc.CARD_PATHS) == set(manifest_set_paths(include_measured=True)), (
+        "parse coverage stopped reading both manifest roles — CARD_PATHS lost "
+        "include_measured=True, and the instrument is back to watching only "
+        "the shipped pool"
     )
+
+    coverages = pc.analyze_pool(run_probe=False)
+    measured = [c for c in coverages if not c.shipped]
+    if not measured:
+        # No set is being measured right now. The invariant above still holds,
+        # and the assertions below have nothing to range over.
+        return
 
     unclaimed, _stale_ack, _new_probe, _stale_probe = pc.collect_findings(coverages)
     gated = {name for name, _ in unclaimed}

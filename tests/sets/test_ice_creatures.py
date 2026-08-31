@@ -1,9 +1,9 @@
 """Ice Age (ICE) creature cards — parallel waves 1 and 2.
 
-ICE is a *measured* set, mid-implementation: cards land here with the round
-that buys them (tests/sets/README.md, SET_PLAYBOOK.md Phase 3), and the pool
-resolves through ``set_pool("ICE")`` even though the set is not shipped —
-reading a card file is not shipping it. The round each section names is
+ICE **ships** (SET_PLAYBOOK.md Phase 4 moved it from ``measured`` to ``sets``).
+It was measured while these tests were written, and the pool resolves through
+``set_pool("ICE")`` either way — that fixture is about which cards a test may
+name, not about which a player may deck. The round each section names is
 written up in ROADMAP.md; a round's cards are split across these files by the
 printed type of the card each test is about.
 
@@ -1877,3 +1877,77 @@ def test_the_mount_carries_nobody_until_its_ability_is_activated(set_pool):
 
     assert mount in list(game.controlled_by(game.players[0]))
 # --- end W2G4 ---
+
+
+# --- Phase 4: the ability the promotion's targeting ratchet found inert ---
+def test_barbarian_guides_grants_the_landwalk_to_a_creature_you_chose(set_pool):
+    """"Choose a land type. **Target creature you control** gains snow landwalk
+    of the chosen type until end of turn. Return that creature to its owner's
+    hand at the beginning of the next end step."
+
+    The ability was **wholly inert** until the promotion caught it, and the
+    reason is a shape rather than a missing handler. The land type is what
+    varies, so the lowering emits one ``choose_one`` mode per type — eighteen of
+    them, each carrying the *same* target description — and the spec derivation
+    stopped at the wrapper. With no spec the client could offer no target, and
+    the handler enforces the printed "you control" against the target it was
+    given, so every activation logged "no valid creature target" and did
+    nothing: no landwalk, no bounce.
+
+    Run rather than asserted off the payload, because the payload was right the
+    whole time and the card still did nothing.
+    """
+    from tests.helpers import CARDS_BY_NAME as LEA
+
+    pool = set_pool("ICE")
+    guides = _nosick(Permanent(card=pool["Barbarian Guides"]))
+    bears = _nosick(Permanent(card=LEA["Grizzly Bears"]))
+    giant = _nosick(Permanent(card=LEA["Hill Giant"]))
+    me = PlayerState(name="P1", battlefield=[guides, bears, giant])
+    game = Game(players=[me, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "main"
+    game.current_step = "precombat_main"
+
+    spec = game.activation_target_spec(0, game.battlefield_index_of(guides))
+    assert spec["kind"] == "creature"
+    assert sorted(t.get("name") for t in spec["valid_targets"]) == [
+        "Barbarian Guides", "Grizzly Bears", "Hill Giant",
+    ]
+
+    game.activate_permanent_ability(
+        0, "Barbarian Guides",
+        target_permanent_ids=[bears.permanent_id], target_player_index=0,
+    )
+    game.resolve_top_of_stack()
+
+    # The creature the player named, and only it: the bounce rider rides the
+    # same target, so an auto-picked one would have returned the wrong creature.
+    assert game._has_keyword(bears, "snow cavewalk")
+    assert "bounce_at_next_end_step" in bears.metadata
+    assert not game._has_keyword(giant, "snow cavewalk")
+    assert "bounce_at_next_end_step" not in giant.metadata
+
+
+def test_every_land_type_barbarian_guides_offers_targets_the_same_creature(set_pool):
+    """Why reading the modes is sound, stated as the property it rests on.
+
+    ``targeting._from_instructions`` descends into a ``choose_one`` only when
+    every mode derives the *same* spec, because CR 601.2b settles the mode
+    before the targets — a modal card whose modes choose differently must pick
+    the mode first, and Essence Filter and Relic Bind still answer None for
+    exactly that reason. This card is safe to collapse because the choice is a
+    land *type*, which changes the keyword granted and not the creature it is
+    granted to.
+    """
+    from engine.targeting import _from_instructions
+
+    program = compile_card_oracle(set_pool("ICE")["Barbarian Guides"])
+    steps = program.activated_abilities[0].instruction.payload["steps"]
+    modes = next(s for s in steps if s.kind == "choose_one").payload["modes"]
+
+    assert len(modes) > 1
+    assert {
+        repr(_from_instructions((mode["instruction"],))) for mode in modes
+    } == {repr({"kind": "creature", "own_only": True})}

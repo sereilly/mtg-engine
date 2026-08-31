@@ -18,6 +18,7 @@ import re
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+from .oracle_types import compilation_cache
 from .banding import band_quality
 from .auras import (
     animating_auras,
@@ -271,6 +272,7 @@ def _printed_abilities(card) -> set[str]:
     ))
 
 
+@compilation_cache
 @lru_cache(maxsize=None)
 def _printed_abilities_cached(
     name: str, type_line: str, oracle_text: str, keywords: tuple[str, ...]
