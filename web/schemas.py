@@ -58,6 +58,7 @@ ActionKind = Literal[
     "name_and_strip_confirm",
     "name_and_random_reveal_confirm",
     "name_then_reveal_top_confirm",
+    "name_then_consult_confirm",
     "reorder_library_confirm",
     "scry_confirm",
     "discard_confirm",

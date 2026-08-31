@@ -30,7 +30,7 @@ from __future__ import annotations
 from ..auras import aura_continuous_claim
 from ..cast_restrictions import CAST_RESTRICTIONS
 from ..cost_modifiers import cost_modifier_claims_line
-from ..draw_step_modifiers import draw_step_bonus_for
+from ..draw_step_modifiers import draw_step_bonus_for, skips_own_draw_step
 from ..enter_effects import enter_effect_line
 from ..named_counters import CAP_CLAIM, counter_cap_line
 from ..extra_triggers import extra_trigger_line
@@ -127,6 +127,11 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # engine/draw_step_modifiers.py — CR 504 symmetric bonus draw (Howling
     # Mine), read by phases/draw_step.py. Also ^…$ anchored per line.
     if draw_step_bonus_for(line) is not None:
+        return "draw_step_modifiers"
+    # engine/draw_step_modifiers.py — CR 614.10's mandatory skip ("Skip your
+    # draw step.", Necropotence), read by phases/draw_step.py off the
+    # permanent's own text.
+    if skips_own_draw_step(line):
         return "draw_step_modifiers"
 
     # engine/cost_modifiers.py — CR 601.2f cost taxes (Gloom), applied by

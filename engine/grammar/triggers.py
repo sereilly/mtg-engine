@@ -59,6 +59,8 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("creature_dealt_damage_by_self_dies",
      ("a", "creature", "dealt", "damage", "by", "this", "creature", "this", "turn", "dies")),
     ("creature_dies", ("a", "creature", "dies")),
+    # "Whenever you discard a card" (Necropotence).
+    ("you_discard_card", ("you", "discard", "a", "card")),
     # "Whenever **equipped** creature dies" (Malefic Scythe) / "When
     # **enchanted** creature dies" (Creature Bond). One condition for both
     # words: an Equipment and an Aura attach the same way here, and the trigger
@@ -740,9 +742,20 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
             dying = parse_object_filter(stream)
         except GrammarError:
             dying = None
-        if dying is not None and stream.accept_phrase(
-            "is", "put", "into", "a", "graveyard", "from", "the", "battlefield"
-        ):
+        # "…is put into **a**/**your** graveyard from the battlefield". Whose
+        # graveyard is a narrowing on the condition, which this front end does
+        # not carry — `engine/oracle.py`'s table supplies the condition and this
+        # one supplies the effect. The word still has to be *consumed* or the
+        # line fails full-token consumption and the card loses its ability.
+        dying_grave = (
+            stream.accept_phrase(
+                "is", "put", "into", "a", "graveyard", "from", "the", "battlefield"
+            )
+            or stream.accept_phrase(
+                "is", "put", "into", "your", "graveyard", "from", "the", "battlefield"
+            )
+        )
+        if dying is not None and dying_grave:
             # "…**, if it wasn't sacrificed**" (Urza's Miter). CR 603.4's
             # intervening-if, consumed here so the sentence is read whole —
             # left for the effect parser it would be an imperative nobody can

@@ -15,7 +15,7 @@ from ...lord_buffs import (LORD_BUFF_KIND)
 from ...enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
 from ...land_animation import LAND_ANIMATION_KIND
 from ...land_types import STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND
-from ...oracle_types import OracleInstruction
+from ...oracle_types import HAND_CARDS_TO_LIBRARY, OracleInstruction
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       CREATED_TOKEN, EXILED_THIS_WAY)
 INSTRUCTION_CATEGORIES: dict[str, str] = {
@@ -121,6 +121,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_self_ability_text": "pump",
     # The negative twin ("It loses indestructible until end of turn", Soul Sear).
     "remove_target_keyword_until_eot": "pump",
+    # The board-wide negative twin ("All creatures lose flying until end of
+    # turn", Whiteout), beside `grant_team_keyword_until_eot`.
+    "remove_team_keyword_until_eot": "pump",
     # The durationless half of the same effect, on the ability's own source
     # (Elder Land Wurm). Same family: what changes is how long the removal
     # lasts, not what kind of effect it is.
@@ -433,6 +436,14 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # does is look at the top of a library and move that card somewhere, and
     # the name is only what decides which somewhere.
     "name_then_reveal_top": "zones",
+    # Demonic Consultation, beside it: the same guess, taken against your own
+    # library and paid for with its top cards.
+    "name_then_consult": "zones",
+    # Necropotence, exiling what its controller just discarded.
+    "exile_bound_card_from_graveyard": "zones",
+    # Necropotence again, the other half: what its own exile put aside comes
+    # back at its controller\'s next end step.
+    "put_exiled_cards_into_hand": "zones",
     "exile_all_matching": "zones",
     "grant_team_keyword_until_eot": "pump",
     # A durationless keyword grant to the enchanted creature (Cocoon's hatch):
@@ -734,6 +745,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # it and the conditionals after it read the record, rather than each
     # sentence flipping a coin of its own.
     "flip_coin": "coin_flip",
+    # "Target opponent puts the cards from their hand on top of their library.
+    # Search that player's library for **that many** cards." (Jester's Mask.)
+    # How many went is the only place the search behind it can read its count:
+    # by then the hand is empty and the library has grown by an amount nothing
+    # else records.
+    "put_hand_cards_on_library": HAND_CARDS_TO_LIBRARY,
     # "Return that card to its owner's hand. **If that card is returned to
     # its owner's hand this way**, …" (Puppet Master.) The return records
     # whether it actually took place, which is what the rider after it asks —

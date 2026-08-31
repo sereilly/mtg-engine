@@ -18,7 +18,8 @@ matched — did nothing whatsoever.
 """
 
 from ..card_hooks import DRAW_STEP_MODIFIERS
-from ..draw_step_modifiers import draw_step_bonus_for, draw_step_skip_for
+from ..draw_step_modifiers import (draw_step_bonus_for, draw_step_skip_for,
+                                   skips_own_draw_step)
 from ..game_types import OracleExecutionContext
 from ..handlers.control_flow import evaluate_condition
 from ..mana_payment import generic_cost
@@ -201,6 +202,20 @@ class DrawStepMixin:
         if has_sanctuary and sanctuary_choice is not False:
             player.island_sanctuary_protected = True
             self.log.append(f"{player.name} skipped draw (Island Sanctuary active)")
+            self._close_or_defer_step(phase, step, defer_priority)
+            return 0
+
+        # "Skip your draw step." (Necropotence.) CR 614.10's mandatory skip,
+        # asked before the offer below because there is nothing to offer: a step
+        # a static ability already skips is not a step anybody may choose to
+        # take. Derived from the permanent's own text, so a source that has left
+        # stops skipping with no flag to clear.
+        for permanent in self.controlled_by(player_index):
+            if not skips_own_draw_step(permanent.effective_card.oracle_text):
+                continue
+            self.log.append(
+                f"{player.name} skips their draw step ({permanent.card.name})"
+            )
             self._close_or_defer_step(phase, step, defer_priority)
             return 0
 

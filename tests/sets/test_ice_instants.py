@@ -794,3 +794,68 @@ def test_sacred_boon_places_nothing_when_nothing_was_prevented(set_pool):
 
     assert bears.toughness_bonus == 0
 # --- end W1G1 ---
+
+
+# --- W1G4: library, hand and graveyard ---
+def test_whiteout_strips_flying_from_every_creature_on_both_boards(set_pool):
+    """"All creatures lose flying until end of turn."
+
+    The subject names no controller, so it is every seat's board — the team
+    *grant* beside it refuses that reading, and a removal scoped to the caster
+    would leave the half of the board the card names still flying.
+    """
+    pool = set_pool("ICE")
+    mine = Permanent(card=pool["Sabretooth Tiger"])
+    theirs = Permanent(card=pool["Kjeldoran Skyknight"])
+    assert theirs.has_keyword("flying"), "the fixture creature flies to begin with"
+    p1 = PlayerState(name="P1", battlefield=[mine], hand=[pool["Whiteout"]], life=20)
+    p2 = PlayerState(name="P2", battlefield=[theirs], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.cast_from_hand(0, "Whiteout")
+    game._settle()
+
+    assert not theirs.has_keyword("flying"), "the opponent's flier is in the set"
+
+
+def test_whiteout_returns_itself_from_the_graveyard_for_a_snow_land(set_pool):
+    """"Sacrifice a snow land: Return this card from your graveyard to your
+    hand." — CR 113.6m: the ability functions only from the graveyard, so the
+    cost is paid and the card comes back to hand.
+    """
+    pool = set_pool("ICE")
+    snow = Permanent(card=pool["Snow-Covered Forest"])
+    p1 = PlayerState(name="P1", battlefield=[snow], graveyard=[pool["Whiteout"]], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    result = game.activate_from_graveyard(0, "Whiteout")
+    assert result.supported, result.details
+    game._settle()
+
+    assert [card.name for card in p1.hand] == ["Whiteout"]
+    assert p1.graveyard[-1].name == "Snow-Covered Forest", "the land paid the cost"
+    assert not any(perm.card.name == "Snow-Covered Forest" for perm in p1.battlefield)
+
+
+def test_whiteouts_graveyard_ability_needs_a_snow_land_to_sacrifice(set_pool):
+    """CR 602.5c: an unpayable cost makes the ability unactivatable, and
+    nothing is spent trying. An ordinary Forest is not a snow land."""
+    pool = set_pool("ICE")
+    plain_forest = Permanent(card=pool["Forest"])
+    p1 = PlayerState(
+        name="P1", battlefield=[plain_forest], graveyard=[pool["Whiteout"]], life=20
+    )
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    result = game.activate_from_graveyard(0, "Whiteout")
+
+    assert not result.supported
+    assert p1.hand == []
+    assert any(perm.card.name == "Forest" for perm in p1.battlefield)
+# --- end W1G4 ---

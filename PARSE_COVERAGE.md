@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**39 unclaimed sentence(s) across 27 supported card(s).**
+**38 unclaimed sentence(s) across 26 supported card(s).**
 
 - **Battle Cry**
   - `whenever a creature blocks this turn, it gets +0/+1 until end of turn`
@@ -60,8 +60,6 @@ anything anyone did, and every ingest would arrive red.
   - `if a land is tapped for mana, it produces {b} instead of any other type`
 - **Infinite Hourglass**
   - `all creatures get +1/+0 for each time counter on this artifact`
-- **Jester's Mask**
-  - `{1}, {t}, sacrifice this artifact: target opponent puts the cards from their hand on top of their library. search that player's library for that many cards. that player puts those cards into their hand, then shuffles`
 - **Justice**
   - `whenever a red creature or spell deals damage, this enchantment deals that much damage to that creature's or spell's controller`
 - **Leshrac's Sigil**

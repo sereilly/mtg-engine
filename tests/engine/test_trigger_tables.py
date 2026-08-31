@@ -52,6 +52,10 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "creature's toughness to the creature's controller.",
     ),
     "creature_dies": "whenever a creature dies",
+    # Necropotence. CR 701.9a's discard, watched from the battlefield —
+    # a different question from the discarded card's own ability
+    # (`discarded_by_opponent_effect`), which watches from the hand.
+    "you_discard_card": "whenever you discard a card",
     # CR 120.4b's event, once. Every printed narrowing of it is a named group
     # on one pattern, so each spelling is checked against every earlier pattern
     # of every other kind — which is the whole reason a kind may hold several

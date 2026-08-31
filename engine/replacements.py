@@ -83,6 +83,7 @@ from .damage_redirects import (
     live_recipient,
 )
 from .hand_locks import lock_card_in_hand
+from .search_filters import card_has_type
 from .models import PlayerState
 from .replacement_choices import (
     ReplacementChoice,
@@ -175,6 +176,12 @@ DRAW_LOOKING_AT_TOP = 20  # Aladdin's Lamp
 # Aladdin's Lamp first consumes the draw and this never applies — which is the
 # order the player would pick, and the rule permits.
 DRAW_DISCARD_INSTEAD = 30  # Chains of Mephistopheles
+# Beside it, and last for the same reason: this one takes the draw away too.
+# Between the two the order is arbitrary — no card in the pool prints both, and
+# CR 616.1e would put the choice to the affected player if one ever did — so
+# they are ordered by the number that keeps each of them behind every
+# replacement the player armed for their own benefit.
+DRAW_REVEALS_TOP = 31  # Enduring Renewal
 EXTRA_PLUS1_COUNTER = 10  # Conclave Mentor
 EXILE_INSTEAD_OF_ENTERING = 10  # Containment Priest
 # Before it, and before every other entry replacement. CR 614.17c: an event that
@@ -1799,6 +1806,114 @@ def _chains_sources(game, payload: dict) -> list:
     ]
 
 
+#: Enduring Renewal, all three printed sentences. The constant is the whole
+#: line because the interceptor performs the whole line — the reveal, the
+#: graveyard for a creature card and the draw for anything else. A claim
+#: stopping at the first sentence would admit the card with two-thirds of it
+#: doing nothing.
+REVEAL_TOP_INSTEAD_OF_DRAW_TEXT = (
+    "if you would draw a card, reveal the top card of your library instead. "
+    "if it's a creature card, put it into your graveyard. otherwise, draw a card"
+)
+
+
+def _reveal_top_sources(game, payload: dict) -> list:
+    """Every permanent whose text is this replacement, on the **drawing
+    player's** board, that has not already had its opportunity on this event
+    (CR 614.5).
+
+    One seat's board and not every board, because the sentence says "**you**":
+    an Enduring Renewal an opponent controls replaces *their* draws. Chains of
+    Mephistopheles one function down scans every board for exactly the opposite
+    reason — it says "a player" — which is why the scope is written per card
+    rather than shared.
+
+    The exclusion is what stops the "otherwise, draw a card" branch from
+    replacing the draw it just created and looping forever. A *second* Enduring
+    Renewal is a different effect and does apply, which is why it names the
+    source rather than the wording.
+    """
+    exclude = set(payload.get("exclude_sources") or ())
+    seat = game.players.index(payload["player"])
+    return [
+        perm
+        for perm in game.controlled_by(seat)
+        if REVEAL_TOP_INSTEAD_OF_DRAW_TEXT in (perm.effective_card.oracle_text or "").lower()
+        and perm.permanent_id not in exclude
+    ]
+
+
+def _applies_reveal_top_instead_of_draw(game, payload: dict) -> bool:
+    return int(payload.get("count", 0)) > 0 and bool(
+        _reveal_top_sources(game, payload)
+    )
+
+
+@replacement_effect(
+    "draw", DRAW_REVEALS_TOP, applies=_applies_reveal_top_instead_of_draw
+)
+def _reveal_top_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
+    """Enduring Renewal: "If you would draw a card, reveal the top card of your
+    library instead. If it's a creature card, put it into your graveyard.
+    Otherwise, draw a card."
+
+    One draw at a time, because that is what the sentence replaces (CR 121.2
+    makes an N-card draw N individual draws). The event is consumed and the
+    draws queued behind it are made through the seam again, so a second
+    replacement armed alongside still gets its own.
+
+    The "otherwise" branch is a **new draw**, not a resumption of the replaced
+    one, and it goes back through the seam carrying this source in
+    ``exclude_sources`` — CR 614.5 gives a replacement one opportunity per
+    event, so it must not replace the draw it just created and loop. A second
+    Enduring Renewal is a different effect and does apply, which is why the
+    exclusion names the source rather than the wording.
+
+    An empty library reveals nothing and draws nothing: CR 704.5b fires on an
+    *attempted* draw, and the attempt was replaced.
+    """
+    player = payload["player"]
+    count = int(payload["count"])
+    source = min(
+        _reveal_top_sources(game, payload), key=lambda perm: perm.permanent_id
+    )
+    excludes = tuple(payload.get("exclude_sources") or ()) + (source.permanent_id,)
+    drawn = 0
+    if player.library:
+        revealed = player.library[0]
+        game.record_reveal(game.players.index(player), [revealed.name])
+        if card_has_type(revealed, "creature"):
+            player.library.pop(0)
+            player.graveyard.append(revealed)
+            game.log.append(
+                f"{player.name} revealed {revealed.name} and put it into their "
+                f"graveyard ({source.card.name})"
+            )
+        else:
+            game.log.append(
+                f"{player.name} revealed {revealed.name} and draws it "
+                f"({source.card.name})"
+            )
+            drawn += game._draw_with_replacements(
+                player, 1, exclude_sources=excludes
+            )
+    else:
+        game.log.append(
+            f"{player.name} has no card to reveal ({source.card.name})"
+        )
+    # The draws queued behind this one are their own events (CR 121.2) and get
+    # their own trip through the seam — including this replacement again, which
+    # is what a two-card draw under Enduring Renewal is.
+    if count > 1:
+        drawn += game._draw_with_replacements(
+            player, count - 1,
+            turn_based=False,
+            exclude_sources=tuple(payload.get("exclude_sources") or ()),
+        )
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
+
+
 def _chains_affected_draws(payload: dict) -> int:
     """How many of this event's draws the exemption leaves.
 
@@ -1958,6 +2073,10 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # stopping at the first sentence would admit the card with half its text
     # doing nothing.
     (RETURN_TO_HAND_INSTEAD_TEXT, ""),
+    # _reveal_top_instead_of_drawing (Enduring Renewal): the constant is all
+    # three printed sentences, because the interceptor performs all three — the
+    # reveal, the graveyard for a creature card and the draw for anything else.
+    (REVEAL_TOP_INSTEAD_OF_DRAW_TEXT, ""),
     # _lands_cannot_enter (Worms of the Earth): the phrase is the whole line,
     # and every land entering from anywhere is refused — the interceptor tests
     # the type through layer 4 rather than the printed one, so the claim covers

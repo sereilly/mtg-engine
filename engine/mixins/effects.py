@@ -961,6 +961,50 @@ class EffectsMixin:
         if not consumed:
             player.graveyard.append(card)
         self._announce_discard_triggers(player, card)
+        self.announce_discard(player, card)
+
+    def announce_discard(self, player: PlayerState, card) -> None:
+        """CR 701.9a: a discard happened, for the permanents that watch one.
+
+        "Whenever **you** discard a card, exile that card from your graveyard."
+        (Necropotence.) Separate from ``_announce_discard_triggers`` beside it,
+        which is CR 113.6d's ability *of the discarded card* and asks a
+        different question of a different object — this one walks the board.
+
+        Both discard seams call it, and that is the whole point: a discard is
+        either taken from the player (``_discard_card``) or chosen by them
+        (``_resolve_one_discard``), and a watcher announced on one path only
+        fires for half the cards that discard.
+
+        The card itself rides the context, because "**that** card" is the one
+        just discarded and a graveyard is a list of ``CardDefinition`` where two
+        copies of a card are the same object — a name match would find whichever
+        entry came first.
+        """
+        seat = next(
+            (i for i, seated in enumerate(self.players) if seated is player), None
+        )
+        if seat is None:
+            return
+        events: list[dict] = []
+        for controller_index, observer in self.permanents_with_controller():
+            if controller_index != seat:
+                # "…**you** discard a card" is the ability's controller
+                # (CR 109.5), so an opponent's copy watches their own discards.
+                continue
+            for trig in matching_triggers(
+                observer.effective_card, condition_kinds={"you_discard_card"},
+            ):
+                if trig.instruction is None:
+                    continue
+                events.append(make_trigger_event(
+                    controller_index, observer, trig,
+                    trigger_context={
+                        "discarded_card": card,
+                        "discarded_name": card.name,
+                    },
+                ))
+        self._enqueue_triggered_batch(events)
 
     def _announce_discard_triggers(
         self, player: PlayerState, card, cause_seat: int | None = None

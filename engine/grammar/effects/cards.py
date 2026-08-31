@@ -21,7 +21,8 @@ from ..lexer import (MANA, render)
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import _accept_self_reference, _parse_card_alternatives, _parse_zone
+from ..phrases import (_accept_self_reference, _parse_card_alternatives,
+                       _parse_duration, _parse_zone)
 
 
 def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
@@ -255,6 +256,47 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     return None
 
 
+def _parse_put_exiled_card_into_hand(
+    stream: TokenStream,
+) -> "ast.PutExiledCardIntoHand | None":
+    """``Put that card into your hand.`` (Necropotence.)
+
+    Refuses without consuming, like every other "put" production beside it, so
+    the counter reading keeps its own refusal site. "That card" is the one an
+    earlier step of this same effect exiled; lowering demands the producer.
+    """
+    mark = stream.mark()
+    stream.expect_word("put")
+    if not stream.accept_phrase("that", "card", "into"):
+        stream.reset(mark)
+        return None
+    zone = _parse_zone(stream)
+    if zone.name != "hand" or zone.owner is None:
+        stream.reset(mark)
+        return None
+    return ast.PutExiledCardIntoHand(zone.owner)
+
+
+def _parse_exile_bound_card(stream: TokenStream) -> "ast.ExileBoundCard | None":
+    """``Exile that card from your graveyard.`` (Necropotence.)
+
+    Refuses without consuming, like the other exile productions beside it, so
+    an ordinary exile keeps its own refusal. The zone is required: "exile that
+    card" alone names an object that could be anywhere, and this handler looks
+    in exactly one place.
+    """
+    mark = stream.mark()
+    stream.expect_word("exile")
+    if not stream.accept_phrase("that", "card"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("from"):
+        stream.reset(mark)
+        return None
+    zone = _parse_zone(stream)
+    return ast.ExileBoundCard(zone)
+
+
 def _parse_exile_cost_sacrifices(stream: TokenStream) -> ast.Statement | None:
     """``Exile this <noun> and those <noun> cards.`` (Sword of the Ages.)
 
@@ -369,11 +411,22 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
     """
     mark = stream.mark()
     until_eot = False
+    next_upkeep = False
     if stream.at_word("until"):
-        if not stream.accept_phrase("until", "end", "of", "turn"):
+        # Through the shared duration table, so the phrase this sentence may
+        # open with is the same set of phrases every other effect reads — a
+        # second literal here is how one family comes to accept a wording
+        # another refuses. A kind the permission cannot *end* refuses the line
+        # rather than being read as the nearest one it can.
+        leading = _parse_duration(stream)
+        if leading.kind == "until_end_of_turn":
+            until_eot = True
+        elif leading.kind == "until_your_next_upkeep":
+            next_upkeep = True
+        else:
+            stream.reset(mark)
             return None
         stream.accept_punct(",")
-        until_eot = True
     if not stream.accept_phrase("you", "may"):
         stream.reset(mark)
         return None
@@ -423,6 +476,7 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         return ast.CastPermission(
             mode=mode, what="exiled_this_way", until_end_of_turn=until_eot,
             until_source_grants_again=regrant,
+            until_your_next_upkeep=next_upkeep,
         )
     # "spells from your hand without paying their mana costs" — a cost waiver.
     # The waiver clause is required: a bare "you may cast spells from your
@@ -435,6 +489,7 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         return ast.CastPermission(
             mode=mode, what="spells_from_hand",
             until_end_of_turn=until_eot, free=True,
+            until_your_next_upkeep=next_upkeep,
         )
     # "target red instant or sorcery card from your graveyard" — the noun
     # parser reads the zone and its owner onto the filter, and lowering
@@ -443,7 +498,8 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
     if spec is not None and spec.quantifier == "target":
         _trailing_duration()
         return ast.CastPermission(
-            mode=mode, what="target_card", target=spec, until_end_of_turn=until_eot
+            mode=mode, what="target_card", target=spec, until_end_of_turn=until_eot,
+            until_your_next_upkeep=next_upkeep,
         )
     stream.reset(mark)
     return None
@@ -543,22 +599,26 @@ def _parse_discard_revealed_unless_pay_life(
 
 
 def _accept_hand_to_library_tail(
-    stream: TokenStream, possessive: str
+    stream: TokenStream, possessive: str, *, ordered: bool = True
 ) -> bool:
-    """``… on top of <possessive> library in any order``, consumed whole.
+    """``… on top of <possessive> library[ in any order]``, consumed whole.
 
-    Shared by the two printed spellings so they cannot come to disagree about
-    the destination. Every word is required. Dropping "on top of" would let a
+    Shared by the printed spellings so they cannot come to disagree about the
+    destination. Every word is required. Dropping "on top of" would let a
     sentence putting cards on the *bottom* read as this one, and dropping "in
     any order" would silently discard the ordering the card gives the player —
     the rider bug this grammar refuses by construction. The possessive is the
     caller's, because it agrees with the subject the sentence already named:
     "**your** hand … **your** library", "**their** hand … **their** library".
+
+    *ordered* is False for the one printing that omits the rider — Jester's
+    Mask's "puts the cards from their hand on top of their library" — and is a
+    parameter rather than an ``accept`` so the two spellings cannot drift into
+    each other: a card that prints the words must still have them read.
     """
-    return bool(
-        stream.accept_phrase("on", "top", "of", possessive, "library")
-        and stream.accept_phrase("in", "any", "order")
-    )
+    if not stream.accept_phrase("on", "top", "of", possessive, "library"):
+        return False
+    return bool(stream.accept_phrase("in", "any", "order")) or not ordered
 
 
 def _parse_put_hand_cards_on_library(
@@ -612,6 +672,29 @@ def _parse_player_puts_hand_cards_on_library(
         stream.reset(mark)
         return None
     return ast.PutHandCardsOnLibrary(player, count)
+
+
+def _parse_player_puts_whole_hand_on_library(
+    stream: TokenStream, player: ast.PlayerRef
+) -> "ast.PutHandCardsOnLibrary | None":
+    """``<player> puts the cards from their hand on top of their library.``
+    (Jester's Mask.)
+
+    The same move Stunted Growth prints with a number, so the same node — what
+    differs is that there is no *choice* of which cards, only of the order they
+    land in. Refuses without consuming, so every other "puts" sentence keeps
+    the reading it has.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("puts", "put"):
+        return None
+    if not stream.accept_phrase("the", "cards", "from", "their", "hand"):
+        stream.reset(mark)
+        return None
+    if not _accept_hand_to_library_tail(stream, "their", ordered=False):
+        stream.reset(mark)
+        return None
+    return ast.PutHandCardsOnLibrary(player, ast.Fixed(0), whole_hand=True)
 
 
 def _accept_hand_card_count(stream: TokenStream) -> "ast.Amount | None":

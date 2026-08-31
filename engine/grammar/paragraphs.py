@@ -451,6 +451,64 @@ _REVEAL_DESTINATIONS: tuple[str, ...] = ("hand", "graveyard")
 _RANDOM_REVEAL_ZONES: tuple[str, ...] = ("hand", "library")
 
 
+def _parse_name_then_consult(stream: TokenStream) -> "ast.Statement | None":
+    """Demonic Consultation's whole four-sentence effect.
+
+    ``Choose a card name. Exile the top <N> cards of your library, then reveal
+    cards from the top of your library until you reveal a card with the chosen
+    name. Put that card into your hand and exile all other cards revealed this
+    way.``
+
+    Refuses without consuming, so every other sentence opening with "choose"
+    keeps the reading it has — Nebuchadnezzar's paragraph is tried after this
+    one and Necromentia's after that.
+
+    Every word is required, and the exile of the top cards especially: it is
+    the whole cost of the card, and a line that dropped it would be a tutor.
+    """
+    mark = stream.mark()
+    for word in ("choose", "a", "card", "name"):
+        if not stream.accept_word(word):
+            stream.reset(mark)
+            return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("exile", "the", "top"):
+        stream.reset(mark)
+        return None
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(count, ast.Fixed) or count.value < 1:
+        stream.reset(mark)
+        return None
+    for word in ("cards", "of", "your", "library"):
+        if not stream.accept_word(word):
+            stream.reset(mark)
+            return None
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    for word in ("then", "reveal", "cards", "from", "the", "top", "of", "your",
+                 "library", "until", "you", "reveal", "a", "card", "with",
+                 "the", "chosen", "name"):
+        if not stream.accept_word(word):
+            stream.reset(mark)
+            return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    for word in ("put", "that", "card", "into", "your", "hand", "and", "exile",
+                 "all", "other", "cards", "revealed", "this", "way"):
+        if not stream.accept_word(word):
+            stream.reset(mark)
+            return None
+    return ast.NameThenConsult(count)
+
+
 def _parse_name_then_random_reveal(stream: TokenStream) -> "ast.Statement | None":
     """Nebuchadnezzar's whole three-sentence effect.
 
@@ -544,17 +602,49 @@ def _parse_name_then_reveal_top(
     stream.advance()
     if not stream.accept_punct("."):
         raise stream.error("expected the miss sentence after the hit")
-    for word in ("if", "it", "doesn't"):
-        stream.expect_word(word)
+    # Two printed spellings of one complement. Petra Sphinx says "If it
+    # doesn't", Vexing Arcanix says "Otherwise" — the same branch, so the same
+    # reading rather than a second production. Both are consumed rather than
+    # skipped, for the reason the docstring gives: a line omitting the miss
+    # sentence is a card whose miss does nothing.
+    if stream.accept_word("otherwise"):
+        subject_words = ("they",)
+    else:
+        for word in ("if", "it", "doesn't"):
+            stream.expect_word(word)
+        subject_words = ("the", "player")
     if not stream.accept_punct(","):
         raise stream.error("expected the comma before the miss's destination")
-    for word in ("the", "player", "puts", "it", "into", "their"):
+    for word in subject_words:
+        stream.expect_word(word)
+    # Singular "they" takes the plural verb, so the two spellings of this
+    # sentence differ by one letter: "the player **puts**" and "they **put**".
+    if not stream.accept_word("puts", "put"):
+        raise stream.error("expected the verb that moves the revealed card")
+    for word in ("it", "into", "their"):
         stream.expect_word(word)
     miss_zone = stream.peek_word()
     if miss_zone not in _REVEAL_DESTINATIONS:
         raise stream.error("expected the zone a non-matching card goes to")
     stream.advance()
-    return ast.NameThenRevealTop(who, match_zone, miss_zone)
+    # "…**and this artifact deals 2 damage to them**." (Vexing Arcanix.) The
+    # rest of the miss branch, read here because "them" is the player this
+    # paragraph has been about throughout — a sentence of its own would have no
+    # antecedent and no way to know the guess missed.
+    miss_damage = 0
+    mark_damage = stream.mark()
+    if stream.accept_word("and"):
+        if accept_source_reference(stream) and stream.accept_word("deals"):
+            amount = stream.peek()
+            if amount is None or not str(amount.text).isdigit():
+                raise stream.error("expected how much damage the miss deals")
+            stream.advance()
+            miss_damage = int(amount.text)
+            for word in ("damage", "to", "them"):
+                stream.expect_word(word)
+        else:
+            stream.reset(mark_damage)
+    return ast.NameThenRevealTop(who, match_zone, miss_zone, miss_damage)
 
 
 def _parse_exchange_greatest_mana_value(stream: TokenStream) -> ast.Statement | None:

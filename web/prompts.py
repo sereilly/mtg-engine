@@ -295,6 +295,23 @@ def _name_then_reveal_top(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("name_then_consult")
+def _name_then_consult(ctx: PromptContext, choices: list) -> dict:
+    """Demonic Consultation's "choose a card name".
+
+    No suggestion list, for Petra Sphinx's reason turned around: the cards this
+    will reveal are in the chooser's **own** library, and a list built over it
+    would hand them the order they are betting against. How many cards the
+    exile costs *is* shown — it is the printed number and the whole risk.
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "exile_count": choice.data.get("exile_count", 0),
+    }
+
+
 @prompt_renderer("name_and_random_reveal")
 def _name_and_random_reveal(ctx: PromptContext, choices: list) -> dict:
     """Nebuchadnezzar's "choose a card name".

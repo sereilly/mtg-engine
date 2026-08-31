@@ -26,6 +26,7 @@ from .paragraphs import (
     _parse_force_chosen_creature_to_attack,
     _parse_exchange_greatest_mana_value, _parse_exile_graveyard_until_leaves,
     _parse_exile_until_leaves_or_untaps, _parse_name_and_strip,
+    _parse_name_then_consult,
     _parse_name_then_random_reveal, _parse_name_then_reveal_top,
     _parse_ownership_exchange_unless_paid, _parse_random_reveal_ownership_exchange,
     _parse_transmute_by_sacrifice,
@@ -57,12 +58,15 @@ from .effects import (
     _parse_gain_control, _parse_gains, _parse_game_is_a_draw, _parse_gets,
     _parse_exchange_life_totals,
     _parse_has, _parse_life_total_becomes, _parse_look_at_hand, _parse_loses,
+    _parse_exile_bound_card,
+    _parse_put_exiled_card_into_hand,
     _parse_exile_cost_sacrifices,
     _parse_mill, _parse_modal_head, _parse_player_adds_mana,
     _parse_prevent, _parse_put_iterated_card_on_library,
     _parse_put_counter, _parse_put_exiled_with_source,
     _parse_put_hand_cards_on_library,
     _parse_player_puts_hand_cards_on_library,
+    _parse_player_puts_whole_hand_on_library,
     _parse_put_source_into_zone, _parse_remove_counter,
     _parse_remove_from_combat, _parse_return, _parse_reveal_hand, _parse_reveal_top,
     _parse_sacrifice,
@@ -359,6 +363,13 @@ def parse_subject_verb(
         from_hand = _parse_put_hand_cards_on_library(stream)
         if from_hand is not None:
             return from_hand
+        # "Put that card into your hand." (Necropotence, inside its delay.)
+        # Same treatment and same reason as the three above: the counter
+        # production reads "that" as a counter kind and refuses with a site
+        # naming counters.
+        exiled_back = _parse_put_exiled_card_into_hand(stream)
+        if exiled_back is not None:
+            return exiled_back
         # "Put it into your graveyard." (All Hallow's Eve.) The ability moving
         # its own source; same treatment and same reason as the two above.
         moved = _parse_put_source_into_zone(stream)
@@ -476,6 +487,12 @@ def parse_subject_verb(
         cost_sacrifices = _parse_exile_cost_sacrifices(stream)
         if cost_sacrifices is not None:
             return cost_sacrifices
+        # "Exile **that card** from your graveyard." (Necropotence.) The object
+        # the firing event named, which the recipient parser below cannot read —
+        # it reads permanents and chosen cards, and this is neither.
+        bound_card = _parse_exile_bound_card(stream)
+        if bound_card is not None:
+            return bound_card
         stream.advance()
         subject = parse_recipient(stream)
         if subject is None:
@@ -582,6 +599,13 @@ def parse_subject_verb(
         hand_pick = _parse_choose_cards_in_hand(stream)
         if hand_pick is not None:
             return hand_pick
+        # Demonic Consultation's naming paragraph. Tried before the two below
+        # it because all three open with the same four words and this one is
+        # the only one whose fifth token is a full stop followed by "exile" —
+        # it declines without consuming, so nothing else loses a reading.
+        consulted = _parse_name_then_consult(stream)
+        if consulted is not None:
+            return consulted
         # Nebuchadnezzar's naming paragraph. Tried before Necromentia's, which
         # is the last resort here and raises rather than refusing — the two
         # differ from the fifth word on, and this one declines without
@@ -764,6 +788,14 @@ def parse_subject_verb(
         # carried its player since it was written; only the *bare* imperative
         # ("Sacrifice a creature", which means you) had a production, so a
         # printed subject was an unrecognized verb.
+        # "Target opponent **puts the cards from their hand on top of their
+        # library**." (Jester's Mask.) Dispatched on the verb like every other
+        # player action; the production declines without consuming, so the
+        # subject-verb table below still sees every other "puts" sentence.
+        if token.text in ("puts", "put") and isinstance(source_spec, ast.PlayerRef):
+            whole_hand = _parse_player_puts_whole_hand_on_library(stream, source_spec)
+            if whole_hand is not None:
+                return whole_hand
         if token.text in ("sacrifices", "sacrifice") and isinstance(source_spec, ast.PlayerRef):
             stream.advance()
             return _parse_sacrifice(stream, source_spec)

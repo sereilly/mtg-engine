@@ -1194,6 +1194,51 @@ def remove_target_keyword_until_eot(game: Game, instruction: OracleInstruction, 
     return True, "resolved"
 
 
+@effect_handler("remove_team_keyword_until_eot")
+def remove_team_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"All creatures lose flying until end of turn." (Whiteout.)
+
+    The mirror of ``grant_team_keyword_until_eot`` and deliberately its shape:
+    the affected set locks in at resolution (CR 611.2c), so this walks the board
+    now rather than contributing a derived effect, and the same three payload
+    keys say how wide it reaches. ``remove_keyword`` writes into layer 6, so a
+    creature granted flying *later* in the turn keeps it — the timestamp
+    decides, not this handler.
+    """
+    from ..subject_filters import subject_matches
+
+    caster_index = game.players.index(context.caster)
+    keywords = tuple(instruction.payload.get("keywords") or ())
+    every_permanent = bool(instruction.payload.get("every_permanent"))
+    described = instruction.payload.get("filter")
+    seats = (
+        range(len(game.players))
+        if instruction.payload.get("every_seat")
+        else (caster_index,)
+    )
+    lifetime = grant_lifetime(game, instruction, context)
+    stripped = 0
+    for seat in seats:
+        for perm in game.controlled_by(seat):
+            if not every_permanent and not perm.is_creature:
+                continue
+            if described and not subject_matches(
+                game, perm, described, observer=caster_index,
+                source=context.source_permanent,
+            ):
+                continue
+            for keyword in keywords:
+                remove_keyword(perm, keyword, **lifetime)
+            stripped += 1
+    game._recompute_continuous_effects()
+    noun = "permanent(s)" if every_permanent else "creature(s)"
+    game.log.append(
+        f"{context.card.name}: {stripped} {noun} lose {', '.join(keywords)}"
+        + DURATION_WORDS.get(lifetime["duration"], "")
+    )
+    return True, "resolved"
+
+
 @effect_handler("remove_self_keyword")
 def remove_self_keyword(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"When this creature blocks, it loses defender." (Elder Land Wurm.)

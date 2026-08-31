@@ -22,6 +22,7 @@ from ..copies import RECOPY_EACH_UPKEEP, grants_ability
 from ..land_types import MIRE_COUNTER, end_land_type_change
 from ..layer_bridge import GAINED_TYPES
 from ..models import Permanent
+from ..cast_permissions import expire_at_upkeep as expire_upkeep_permissions
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities, matching_triggers
 from ..mixins._constants import _UPKEEP_PAY_KINDS
@@ -691,6 +692,11 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # for a third answer. The hook is gone; both grant channels take the
         # sweep's name, so a card printing this duration over any keyword or
         # any quoted line ends here without an edit.
+        # The same printed duration over a *permission* rather than a
+        # characteristic (Elkin Bottle), swept at the same moment and for the
+        # same reason: it ends as the upkeep begins, before this turn's own
+        # triggers get a chance to grant a fresh one.
+        expire_upkeep_permissions(self, player_index)
         for perm in self.all_permanents():
             clear_granted_keywords(perm, "your_next_upkeep", seat=player_index)
             clear_granted_ability_lines(perm, "your_next_upkeep", seat=player_index)

@@ -96,6 +96,11 @@ DELAYED_EVENTS: dict[str, str] = {
     # one end step per turn, and the next one is whoever's turn it falls in — so
     # the site announces it for every seat rather than for the creator's.
     "next_end_step": "the end step",
+    # "At the beginning of **your** next end step, …" (Necropotence). The
+    # controller's own end step rather than the next one there is — see the
+    # `next_end_step` row above, and the two upkeep rows below, for why that is
+    # a separate event and not a second spelling.
+    "controllers_next_end_step": "the end step",
     # "At the beginning of your next upkeep, …" (Hazezon Tamar, Giant Slug).
     # The controller's own upkeep, however many turns away it is — so unlike
     # the "this turn" rows it survives the turn and is removed only by firing.

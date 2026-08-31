@@ -19,7 +19,7 @@ from ._common import (
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
 from ..oracle_types import (DISCARDED_BY_SEAT, EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
-                            PER_OBJECT_SEAT_RECORDS)
+                            HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS)
 from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..resumption import run_resumable
 from ..search_filters import search_matches
@@ -349,10 +349,41 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
             # to its controller rather than guessing a seat.
             continue
         seats[key] = int(seat)
+    # "Search **target player's** library …" (Jester's Cap, Jester's Mask). The
+    # seat is the ability's own target rather than a record an earlier trigger
+    # wrote, so it is asked here and not through the loop above — a chosen
+    # target is not something the trigger context holds. Whose battlefield or
+    # hand receives follows it by default (`search_filters.landing_seat`), which
+    # is what makes "that player puts those cards into their hand" land in the
+    # searched player's hand and not the searcher's.
+    if instruction.payload.get("zone_owner_target") and context.target is not None:
+        if context.target in game.players:
+            seats["zone_seat"] = game.players.index(context.target)
+    # "…for **that many** cards" — the number an earlier step of this same
+    # resolution recorded (Jester's Mask's emptied hand). Read here rather than
+    # baked into the payload, because the count is a fact about the board.
+    counted_from = instruction.payload.get("amount_from")
+    count = (
+        max(0, int(context.results.get(counted_from, 0) or 0))
+        if counted_from is not None
+        else int(instruction.payload.get("count", 1))
+    )
+    destinations = list(instruction.payload.get("destinations") or ())
+    if not destinations and count > 1:
+        # A search for several cards that all go to one place (Jester's Cap's
+        # three exiles). The counted flow is driven by one entry per find, so
+        # the list is built here where the number is known — Cultivate's
+        # printing carries its own, because its finds go to different places.
+        destinations = [instruction.payload.get("destination", "hand")] * count
+    if counted_from is not None and count <= 0:
+        game.log.append(
+            f"{context.card.name}: nothing was recorded to search for"
+        )
+        return True, "resolved"
     game.arm_pending_choice(
         "search_library", caster_index,
         **seats,
-        count=instruction.payload.get("count", 1),
+        count=count,
         card_type=instruction.payload.get("card_type", "any"),
         zones=zones,
         restrictions=dict(instruction.payload.get("restrictions") or {}),
@@ -362,7 +393,7 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         # search is answered whole — every find in one pick list — and which
         # find fills which slot is then its own question, asked through the
         # `search_destination` prompt when the slots differ.
-        destinations=list(instruction.payload.get("destinations") or ()),
+        destinations=destinations,
         tapped=list(instruction.payload.get("tapped") or ()),
         # The searching card's name, for the prompts' labels — data, not
         # dispatch.
@@ -541,6 +572,10 @@ def _resolve_one_discard(game: Game, player_index: int, hand_index: int, to_libr
         player, card,
         cause_seat=(choice.data.get("_cause_seat") if choice is not None else None),
     )
+    # …and the board's watchers (Necropotence). The second of the two discard
+    # seams: a watcher announced on one path only would fire for a random
+    # discard and not for a chosen one, which is half the cards in the pool.
+    game.announce_discard(player, card)
     return True
 
 
@@ -1093,13 +1128,25 @@ def return_bound_card_to_owners_hand(game: Game, instruction: OracleInstruction,
     context.results["returned_bound_card"] = False
     if card is None:
         return True, "resolved"
+    # "…to **your** hand" (Enduring Renewal) rather than "…to its owner's hand"
+    # (Puppet Master). Two seats, and which one the card names is payload: on
+    # Enduring Renewal they coincide, because the trigger only fires on a card
+    # put into the controller's own graveyard — but reading them as one would
+    # put an opponent's dead creature in the wrong hand the moment another card
+    # printed the other word.
+    recipient = (
+        context.caster if instruction.payload.get("to_seat") == "controller" else None
+    )
     for player in game.players:
         for index, held in enumerate(player.graveyard):
             if held is card:
                 player.graveyard.pop(index)
-                if game.put_card_into_hand(player, card):
+                lands_with = recipient if recipient is not None else player
+                if game.put_card_into_hand(lands_with, card):
                     context.results["returned_bound_card"] = True
-                    game.log.append(f"{card.name} returned to {player.name}'s hand")
+                    game.log.append(
+                        f"{card.name} returned to {lands_with.name}'s hand"
+                    )
                 return True, "resolved"
     # CR 603.6: the ability looks for the object in the zone it moves it out of.
     game.log.append(f"{card.name} was no longer in a graveyard")
@@ -1256,6 +1303,17 @@ def return_self_from_graveyard(game: Game, instruction: OracleInstruction, conte
         # of. Gone (exiled in response, shuffled away) means the ability does
         # nothing, rather than conjuring a second copy of the card.
         game.log.append(f"{card.name} was no longer in the graveyard")
+        return True, "resolved"
+    # "…to your **hand**." (Whiteout.) The destination is payload rather than a
+    # second handler, because everything above it — the object is the ability's
+    # own source, found by identity in the graveyard the ability functions from
+    # — is the same work either way. Absent means the battlefield, which is what
+    # every payload written before the hand spelling existed says.
+    if instruction.payload.get("to") == "hand":
+        # Through the write seam, so CR 903.9b rides it like every other
+        # put-into-a-hand.
+        if game.put_card_into_hand(caster, card):
+            game.log.append(f"{card.name} returned from the graveyard to hand")
         return True, "resolved"
     tapped = bool(instruction.payload.get("tapped"))
     game._put_permanent_onto_battlefield(
@@ -1886,17 +1944,41 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         for index, held in enumerate(victim.hand)
         if search_matches(held, {"exclude_types": exclude_types})
     ]
+    # CR 701.20 makes a reveal public where CR 701.16's look shows the chooser
+    # alone, so the line says which happened rather than saying "revealed" for
+    # both.
+    looked_at = bool(instruction.payload.get("looked_at"))
     game.log.append(
-        f"{victim.name} revealed their hand ({len(victim.hand)} card(s)) to {card.name}"
+        f"{victim.name}"
+        + (
+            f" showed their hand ({len(victim.hand)} card(s)) to {context.caster.name}"
+            if looked_at
+            else f" revealed their hand ({len(victim.hand)} card(s))"
+        )
+        + f" to {card.name}"
     )
     if not legal:
         game.log.append(f"{card.name}: no card in that hand can be chosen")
+        return True, "resolved"
+    # "…choose **X** cards from it" (Mind Warp). Capped at what the hand holds:
+    # CR 608.2 does as much as it can, and a prompt asking for a card that is
+    # not there would never be answerable.
+    wanted = min(
+        resolve_amount(instruction.payload.get("count", 1), context.x_value),
+        len(legal),
+    )
+    if wanted <= 0:
+        game.log.append(f"{card.name}: no cards are chosen")
         return True, "resolved"
     game.arm_pending_choice(
         "revealed_hand_pick", caster_index,
         card_name=card.name,
         victim_index=victim_index,
         legal_indices=legal,
+        remaining=wanted,
+        # Carried so the picks after the first can recompute what is legal
+        # against the hand as it then stands.
+        exclude_types=exclude_types,
         fate=str(instruction.payload.get("fate", "discard")),
         # "…until **this creature** leaves the battlefield" (Kitesail
         # Freebooter): the source holds the exiled card, so which permanent it
@@ -2106,13 +2188,29 @@ def look_at_target_hand(game: Game, instruction: OracleInstruction, context: Ora
     # Only the most recent reveal is shown, so a second look replaces the first
     # rather than queueing behind it.
     game.clear_pending_choices("hand_reveal", viewer_index)
+    # "…**a card at random** in target player's hand" (Urza's Bauble): one card,
+    # picked by nobody. Through the module RNG the rest of the engine seeds, so
+    # a given seed replays the look exactly. An empty hand shows nothing rather
+    # than failing — CR 608.2 does as much as it can.
+    if instruction.payload.get("random_card"):
+        shown = (
+            [random.choice(target.hand).name] if target.hand else []
+        )
+    else:
+        shown = [c.name for c in target.hand]
     game.arm_pending_choice(
         "hand_reveal", viewer_index,
         target_index=game.players.index(target),
-        card_names=[c.name for c in target.hand],
+        card_names=shown,
     )
-    seen = len(target.hand)
-    game.log.append(f"{card.name}: {viewer.name} looked at {target.name}'s hand ({seen} cards)")
+    game.log.append(
+        f"{card.name}: {viewer.name} looked at "
+        + (
+            f"{len(shown)} card(s) at random in {target.name}'s hand"
+            if instruction.payload.get("random_card")
+            else f"{target.name}'s hand ({len(shown)} cards)"
+        )
+    )
     return True, "resolved"
 
 
@@ -2861,6 +2959,16 @@ def exile_until_leaves_or_untaps(
     return True, "resolved"
 
 
+#: How each permission duration reads in the log, so the line says what the
+#: card said rather than what the first card to print the sentence happened to
+#: say. Absent means an unbounded grant, which reads as nothing at all.
+_PERMISSION_DURATION_WORDS = {
+    "end_of_turn": " this turn",
+    "your_next_upkeep": " until their next upkeep",
+    "until_source_grants_again": " until it exiles another card",
+}
+
+
 @effect_handler("grant_cast_permission")
 def grant_cast_permission(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """A cast-or-play permission (CR 601.3) over cards in a named zone —
@@ -2888,7 +2996,8 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
         )
         game.log.append(
             f"{caster.name} may {payload.get('mode', 'cast')} "
-            f"{', '.join(card.name for card in cards)} from exile this turn"
+            f"{', '.join(card.name for card in cards)} from exile"
+            + _PERMISSION_DURATION_WORDS.get(duration, "")
         )
         return True, "resolved"
 
@@ -3305,8 +3414,124 @@ def name_then_reveal_top(game: Game, instruction: OracleInstruction, context: Or
         default_name=_commonest_visible_name(
             game, seat, ("library",), exclude_basics=False
         ),
+        # "…and this artifact deals 2 damage to them" (Vexing Arcanix): the
+        # miss branch's second half. The source travels with it because by the
+        # time the prompt is answered this resolution has returned, and a
+        # damage event needs to know what dealt it (colour-scoped prevention,
+        # CR 702.16i protection, "a source you control").
+        miss_damage=int(instruction.payload.get("miss_damage", 0) or 0),
+        _damage_source=context.source_permanent or context.card,
     )
     return True, "pending_name_then_reveal_top"
+
+
+@effect_handler("put_exiled_cards_into_hand")
+def put_exiled_cards_into_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Necropotence: "Put that card into your hand at the beginning of your next
+    end step."
+
+    The cards a step of the same effect exiled, read out of the resolution
+    scratchpad — which for a *delayed* ability is the copy frozen when it was
+    created (CR 603.7d, ``DelayedTrigger.captured``). Nothing else could name
+    them: by the time the end step arrives the exile zone holds whatever else
+    has gone there since, and a card in it is not distinguishable by name.
+
+    Located by identity and only in the caster's own exile, so a card that has
+    already left is not conjured back.
+    """
+    # Two places one record can be, and which one depends on how far the
+    # sentence travelled. Inside a single resolution it is the scratchpad; a
+    # *delayed* ability's creation froze the whole scratchpad into the entry
+    # (CR 603.7d) and it arrives as the trigger's captured context. Reading only
+    # the first is why this fired at the end step and found nothing.
+    cards = list(
+        (context.trigger_context or {}).get("exiled_cards")
+        or context.results.get("exiled_cards")
+        or ()
+    )
+    caster = context.caster
+    moved: list = []
+    for card in cards:
+        for index, held in enumerate(caster.exile):
+            if held is card:
+                caster.exile.pop(index)
+                # Through the write seam, so CR 903.9b rides it.
+                if game.put_card_into_hand(caster, card):
+                    moved.append(card)
+                break
+    if moved:
+        game.log.append(
+            f"{caster.name} put {', '.join(card.name for card in moved)} "
+            "into their hand from exile"
+        )
+    else:
+        game.log.append(f"{context.card.name}: nothing was left in exile to take")
+    return True, "resolved"
+
+
+@effect_handler("exile_bound_card_from_graveyard")
+def exile_bound_card_from_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Necropotence: "Whenever you discard a card, exile that card from your
+    graveyard."
+
+    The card the discard announced, located by **identity** in the graveyard it
+    was put into. A name match would find the wrong copy: a graveyard is a list
+    of ``CardDefinition`` and every copy of a card in a deck is the same
+    immutable object.
+
+    Gone by the time this resolves — exiled in response, or moved by a
+    replacement that sent the discard somewhere other than the graveyard
+    (Library of Leng) — means the ability does nothing, which is CR 603.6's
+    answer rather than a failure.
+    """
+    card = (context.trigger_context or {}).get("discarded_card")
+    if card is None:
+        return True, "resolved"
+    owner = context.caster
+    for index, held in enumerate(owner.graveyard):
+        if held is card:
+            owner.graveyard.pop(index)
+            owner.exile.append(card)
+            game.log.append(
+                f"{card.name} was exiled from {owner.name}'s graveyard "
+                f"({context.card.name})"
+            )
+            return True, "resolved"
+    game.log.append(f"{card.name} was no longer in {owner.name}'s graveyard")
+    return True, "resolved"
+
+
+@effect_handler("name_then_consult")
+def name_then_consult(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Demonic Consultation: "Choose a card name. Exile the top six cards of
+    your library, then reveal cards from the top of your library until you
+    reveal a card with the chosen name. Put that card into your hand and exile
+    all other cards revealed this way."
+
+    Nothing happens here but the question. **The order is the card**: the six
+    cards are exiled after the name is fixed and without being looked at, so
+    the name may be among them — which is why the exile lives in the answer
+    rather than here, where it would happen before the chooser had spoken.
+
+    Unlike Petra Sphinx's guess, an empty library is not a reason to skip the
+    prompt: exiling nothing and revealing nothing is a legal outcome of this
+    spell, and the player has still cast it.
+    """
+    caster = context.caster
+    seat = game.players.index(caster)
+    game.arm_pending_choice(
+        "name_then_consult", seat,
+        card_name=context.card.name if context.card is not None else "",
+        exile_count=int(instruction.payload.get("exile_count", 0) or 0),
+        # A player knows what is in their own library, only not its order
+        # (CR 400.2), so naming its commonest remaining card is a choice a human
+        # at the table could make — and it is deterministic, which is what a
+        # seeded replay needs.
+        default_name=_commonest_visible_name(
+            game, seat, ("library",), exclude_basics=False
+        ),
+    )
+    return True, "pending_name_then_consult"
 
 
 @effect_handler("name_and_random_reveal")
@@ -3816,8 +4041,19 @@ def put_hand_cards_on_library(game: Game, instruction: OracleInstruction, contex
     if player is None or player not in game.players:
         game.log.append(f"{context.card.name}: no player to put cards back")
         return True, "resolved"
-    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
-    actual = min(amount, len(player.hand))
+    if instruction.payload.get("whole_hand"):
+        # "**the cards from** their hand" (Jester's Mask) — every one of them,
+        # counted now rather than printed on the card. There is still an order
+        # to choose (CR 401.4), which is what the prompt is for.
+        actual = len(player.hand)
+    else:
+        amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+        actual = min(amount, len(player.hand))
+    # How many actually went, recorded for the step that reads it back:
+    # "Search that player's library for **that many** cards." Written before the
+    # prompt is armed and whatever the answer is, because the number is settled
+    # here — the prompt only decides the order.
+    context.results[HAND_CARDS_TO_LIBRARY] = actual
     if actual <= 0:
         game.log.append(f"{player.name} has no cards to put back")
         return True, "resolved"

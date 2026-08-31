@@ -419,6 +419,55 @@ def _check_grantable(keyword: str, node) -> None:
         )
 
 
+def _team_removal_payload(node: ast.LoseKeyword) -> dict[str, object] | None:
+    """The payload for a board-wide keyword removal, or None when the subject
+    is not one.
+
+    Written against the same three facts the team *grant* reads — the
+    quantifier, the card types and the controller — because "all creatures" and
+    "creatures you control" are one sentence with one word changed, and the
+    difference is which seats the handler walks.
+
+    A narrowing the subject matcher cannot test refuses rather than being
+    dropped. Dropping it on the grant side gives a keyword to more creatures
+    than the card names; dropping it here takes one away from more creatures
+    than the card names, which is the same error and just as silent.
+    """
+    subject = node.subject
+    if not isinstance(subject, ast.TargetSpec):
+        return None
+    if subject.targeted or subject.quantifier not in ("all", "each"):
+        return None
+    if subject.filter.card_types not in ((), ("creature",)):
+        return None
+    if subject.filter.controller not in ("you", None):
+        return None
+    leftover = _restrictions_beyond(
+        subject.filter, frozenset({"card_types", "controller"})
+    )
+    described = _filter_payload(subject.filter)
+    if leftover and untestable_filter_keys(described):
+        raise LoweringError(
+            "the team keyword removal cannot narrow by: " + ", ".join(leftover),
+            node=node,
+        )
+    payload: dict[str, object] = {
+        "keywords": tuple(node.keywords), "duration": "end_of_turn",
+    }
+    if not subject.filter.card_types:
+        # "Permanents lose …" — the same removal over a wider board, which is
+        # the one key that changes. The handler defaults to creatures, so every
+        # payload written for the narrower reading stays what it was.
+        payload["every_permanent"] = True
+    if leftover:
+        payload["filter"] = described
+    # No controller word is every seat's board: "all creatures" is not "creatures
+    # you control", and a removal scoped to the caster would leave the half of
+    # the board the card names untouched.
+    payload["every_seat"] = subject.filter.controller is None
+    return payload
+
+
 def _lower_lose_keyword(
     node: ast.LoseKeyword, event: str | None = None
 ) -> tuple[OracleInstruction, ...]:
@@ -489,6 +538,16 @@ def _lower_lose_keyword(
         raise LoweringError(
             f"no handler removes a keyword for {node.duration.kind!r}", node=node
         )
+    # "**All creatures** lose flying until end of turn." (Whiteout.) The mirror
+    # of the team *grant* above, and the same reading of CR 611.2c: the set is
+    # locked in at resolution, so the handler walks the board once rather than
+    # contributing a derived effect. The width is payload — which seats' boards
+    # and which permanents on them — for the reason the grant's is: a card
+    # printing "creatures you control lose flying" is the same instruction with
+    # one key different.
+    team = _team_removal_payload(node)
+    if team is not None:
+        return (OracleInstruction("remove_team_keyword_until_eot", "", team),)
     if not _is_target(node.subject):
         raise LoweringError("no handler removes a keyword from this subject", node=node)
     payload: dict[str, object] = {"keywords": tuple(node.keywords)}

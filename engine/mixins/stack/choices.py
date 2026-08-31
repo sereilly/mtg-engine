@@ -609,11 +609,20 @@ class PendingChoicesMixin:
                     self.log.append(
                         f"{card.name} untaps ({held} counted)"
                     )
+        elif destination == "exile":
+            # CR 400.3: the card goes to its owner's exile, and its owner is the
+            # player whose library it came out of — which is `caster` here, the
+            # *searched* seat rather than the searching one.
+            caster.exile.append(card)
         else:
             self.put_card_into_hand(caster, card)
         self.log.append(
             f"{caster.name} searched {zone} and put {card.name} "
-            + ("onto the battlefield" if destination == "battlefield" else "into hand")
+            + (
+                "onto the battlefield" if destination == "battlefield"
+                else "into exile" if destination == "exile"
+                else "into hand"
+            )
         )
         # Only a library search shuffles (CR 701.23h, and the printed "If you
         # search your library this way, shuffle"): a graveyard is an open zone,
@@ -648,7 +657,12 @@ class PendingChoicesMixin:
             return self._resolve_search_library(choice, -1, "none")
         if len(picks) > len(slots):
             return False
-        caster = self.players[choice.player_index]
+        # Whose zones are looked in, which is not always the seat answering:
+        # Jester's Cap's controller searches the *target's* library. The
+        # single-find path beside this one has asked since Reincarnation; this
+        # one read `choice.player_index`, which was latent only because no card
+        # had yet combined a counted search with somebody else's zone.
+        caster = self.players[searched_seat(choice.data, choice.player_index)]
         zones = tuple(choice.data.get("zones", ("library",)))
         working = dict(choice.data)
         seen: set[tuple[str, int]] = set()
@@ -707,6 +721,7 @@ class PendingChoicesMixin:
         self._place_or_ask_destinations(choice.player_index, cards, slots, choice.data)
         return True
 
+
     def _search_destination_slots(self, data: dict) -> list[tuple[str, bool]]:
         """The printed places a counted search's finds go, as (destination,
         enters-tapped) pairs in the printed order."""
@@ -729,10 +744,14 @@ class PendingChoicesMixin:
         """
         if not cards:
             return
+        # Where a find *lands* is its own seat: "that player puts those cards
+        # into their hand" (Jester's Mask) is the searched player's hand, not
+        # the searcher's. Defaulted to the chooser, which is every other card.
+        landing = landing_seat(data, seat)
         if len(set(slots)) <= 1:
             for card in cards:
                 destination, tapped = slots[0]
-                self._place_found_card(seat, card, destination, tapped)
+                self._place_found_card(landing, card, destination, tapped)
             return
         self.arm_pending_choice(
             "search_destination", seat,
@@ -742,12 +761,22 @@ class PendingChoicesMixin:
                 {"destination": destination, "tapped": tapped}
                 for destination, tapped in slots
             ],
+            # Carried onto the next prompt because that prompt's own payload has
+            # no zone seats on it, and the seat that answers "which card goes
+            # where" is still not necessarily the seat the cards go to.
+            landing_seat=landing,
             _cards=list(cards),
         )
 
     def _place_found_card(self, seat: int, card, destination: str, tapped: bool) -> None:
-        """One found card landing where the print sent it — the same two
-        destinations the search flow has always had."""
+        """One found card landing where the print sent it.
+
+        *seat* is whose zone receives it, which is not always the seat that
+        chose — "Search target player's library for three cards and exile
+        them" (Jester's Cap) puts them in that player's exile, because CR 400.3
+        sends an object to its **owner's** zone and the owner is the player
+        whose library it came out of.
+        """
         caster = self.players[seat]
         if destination == "battlefield":
             from ...models import Permanent as _Permanent
@@ -755,11 +784,14 @@ class PendingChoicesMixin:
             self._put_permanent_onto_battlefield(
                 seat, _Permanent(card=card, tapped=tapped), None
             )
+        elif destination == "exile":
+            caster.exile.append(card)
         else:
             self.put_card_into_hand(caster, card)
         where = (
             "onto the battlefield tapped" if destination == "battlefield" and tapped
             else "onto the battlefield" if destination == "battlefield"
+            else "into exile" if destination == "exile"
             else "into hand"
         )
         self.log.append(f"{caster.name} put {card.name} {where}")
@@ -784,10 +816,11 @@ class PendingChoicesMixin:
             return False
         if len(set(assignments)) != len(assignments):
             return False
+        landing = int(choice.data.get("landing_seat", choice.player_index))
         for card, slot_index in zip(cards, assignments):
             slot = slots[slot_index]
             self._place_found_card(
-                choice.player_index, card, slot["destination"], bool(slot.get("tapped"))
+                landing, card, slot["destination"], bool(slot.get("tapped"))
             )
         self.discard_pending_choice(choice)
         return True
@@ -1370,6 +1403,7 @@ class PendingChoicesMixin:
         if not self._apply_revealed_hand_fate(choice, victim_index, hand_index):
             return False
         self.discard_pending_choice(choice)
+        self._rearm_revealed_hand_pick(choice, victim_index)
         return True
 
     def _default_revealed_hand_pick(self, choice: PendingChoice) -> None:
@@ -1381,11 +1415,50 @@ class PendingChoicesMixin:
         """
         legal = list(choice.data.get("legal_indices") or [])
         victim_index = int(choice.data["victim_index"])
+        taken = False
         if legal and 0 <= victim_index < len(self.players):
             hand = self.players[victim_index].hand
             legal.sort(key=lambda i: (-(hand[i].cmc if i < len(hand) else 0), i))
-            self._apply_revealed_hand_fate(choice, victim_index, legal[0])
+            taken = self._apply_revealed_hand_fate(choice, victim_index, legal[0])
         self.discard_pending_choice(choice)
+        if taken:
+            self._rearm_revealed_hand_pick(choice, victim_index)
+
+    def _rearm_revealed_hand_pick(self, choice: PendingChoice, victim_index: int) -> None:
+        """"…choose **X** cards from it" (Mind Warp) — the picks after the first.
+
+        A chain of one-card prompts rather than one multi-select, because
+        taking a card renumbers the hand behind it: the legal indices have to be
+        recomputed against the hand as it now stands, and a set answered all at
+        once against stale indices is the bug the counted search's atomic answer
+        exists to avoid. The pending-choice queue is built for this — a prompt
+        armed by *answering* an earlier one keeps the same resolution open.
+
+        The chooser sees the whole hand each time, so nothing is decided with
+        less information than the printed simultaneous choice gives.
+        """
+        remaining = int(choice.data.get("remaining", 1)) - 1
+        if remaining <= 0 or not 0 <= victim_index < len(self.players):
+            return
+        exclude_types = list(choice.data.get("exclude_types") or ())
+        victim = self.players[victim_index]
+        legal = [
+            index
+            for index, held in enumerate(victim.hand)
+            if search_matches(held, {"exclude_types": exclude_types})
+        ]
+        if not legal:
+            return
+        self.arm_pending_choice(
+            "revealed_hand_pick", choice.player_index,
+            card_name=choice.data.get("card_name", ""),
+            victim_index=victim_index,
+            legal_indices=legal,
+            remaining=min(remaining, len(legal)),
+            fate=str(choice.data.get("fate", "discard")),
+            exclude_types=exclude_types,
+            source_id=choice.data.get("source_id"),
+        )
 
     def _apply_revealed_hand_fate(
         self, choice: PendingChoice, victim_index: int, hand_index: int
@@ -1783,10 +1856,88 @@ class PendingChoicesMixin:
             f"{player.name} named {named or 'nothing'} and revealed "
             f"{revealed.name} — it goes to their {zone_name}"
         )
+        # "…and this artifact deals 2 damage to them" (Vexing Arcanix). Only on
+        # a miss, and after the card has moved, because that is the printed
+        # order. Through the one damage entry point, so the shields, the CR 614
+        # replacements and the "dealt damage" triggers all see it.
+        miss_damage = 0 if hit else int(data.get("miss_damage", 0) or 0)
+        if miss_damage:
+            self._deal_damage_to_player(
+                player, miss_damage, source=data.get("_damage_source"),
+                then=lambda dealt: self.log.append(
+                    f"{player.name} is dealt {dealt} damage for the miss"
+                ),
+            )
         return True
 
     def _default_name_then_reveal_top(self, choice: PendingChoice) -> None:
         if not self._resolve_name_then_reveal_top(
+            choice, choice.data.get("default_name", "")
+        ):
+            self.discard_pending_choice(choice)
+
+    # -- "Choose a card name, then consult your own library" -----------------
+
+    def confirm_name_then_consult(self, player_index: int, card_name: str) -> bool:
+        """Answer Demonic Consultation's "choose a card name" prompt."""
+        return self.resolve_pending_choice(
+            "name_then_consult", player_index, card_name=card_name
+        )
+
+    def _resolve_name_then_consult(
+        self, choice: PendingChoice, card_name: str
+    ) -> bool:
+        """Exile the top N, then reveal down to the named card.
+
+        Everything happens **after** the name is fixed, which is the whole
+        card: the six exiled cards are never looked at, so the name may be
+        among them and the reveal may then run the library out. That is not a
+        failure and not a loss — CR 704.5b only fires when a player actually
+        attempts to draw from an empty library, so the spell finishes and the
+        next draw step is what kills them.
+
+        CR 202.1 lets a player name any card at all and this spell prints no
+        restriction, so no name is refused. The comparison is against the
+        card's printed name: nothing in a library is a permanent, so nothing
+        there can be copying anything (CR 706.2).
+        """
+        player = self.players[choice.player_index]
+        named = (card_name or "").strip()
+        exile_count = int(choice.data.get("exile_count", 0) or 0)
+        paid = [player.library.pop(0) for _ in range(min(exile_count, len(player.library)))]
+        player.exile.extend(paid)
+        revealed: list = []
+        found = None
+        while player.library:
+            card = player.library.pop(0)
+            revealed.append(card)
+            if named and card.name == named:
+                found = card
+                break
+        # "…and exile all other cards revealed this way" — everything the
+        # reveal turned over except the find, in the order it was turned over.
+        for card in revealed:
+            if card is found:
+                continue
+            player.exile.append(card)
+        if found is not None:
+            # Through the CR 614 seam every "put this card into a hand" uses,
+            # so a commander headed for a hand goes to the command zone instead
+            # (CR 903.9b).
+            self.put_card_into_hand(player, found)
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{player.name} named {named or 'nothing'}, exiled {len(paid)} card(s) "
+            + (
+                f"and revealed down to {found.name}"
+                if found is not None
+                else f"and revealed their whole library ({len(revealed)} card(s)) without finding it"
+            )
+        )
+        return True
+
+    def _default_name_then_consult(self, choice: PendingChoice) -> None:
+        if not self._resolve_name_then_consult(
             choice, choice.data.get("default_name", "")
         ):
             self.discard_pending_choice(choice)
@@ -4336,6 +4487,17 @@ register_choice(
     action="name_then_reveal_top_confirm",
     prompt_key="name_then_reveal_top",
     blocked_detail="name a card before other actions",
+)
+
+register_choice(
+    "name_then_consult",
+    resolve=lambda game, choice, r: game._resolve_name_then_consult(
+        choice, r["card_name"]
+    ),
+    default=lambda game, choice: game._default_name_then_consult(choice),
+    action="name_then_consult_confirm",
+    prompt_key="name_then_consult",
+    blocked_detail="name a card for the consultation before other actions",
 )
 
 register_choice(

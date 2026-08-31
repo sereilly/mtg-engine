@@ -2177,15 +2177,27 @@ def test_two_copies_in_one_graveyard_both_return(set_pool):
 
 
 def test_the_self_return_refuses_a_destination_no_handler_moves_to():
-    """The rider is only a sentence for the battlefield. "To your hand tapped"
-    is not one, and silently dropping the word is the bug class this grammar
-    refuses by construction."""
+    """Two destinations have a handler — the battlefield (Silversmote Ghoul)
+    and the card's own controller's hand (Whiteout). A third refuses rather
+    than landing the card in the wrong zone."""
     result = compile_line(
-        "Return this card from your graveyard to your hand.", card_name="Test"
+        "Return this card from your graveyard to your library.", card_name="Test"
     )
 
     assert result.parsed and not result.lowered
-    assert "graveyard to the hand" in result.failure_reason
+    assert "graveyard to the library" in result.failure_reason
+
+
+def test_the_self_return_to_a_hand_refuses_the_battlefield_rider():
+    """The "tapped" rider is only a sentence for the battlefield: a card in a
+    hand is not a permanent and cannot be tapped. Silently dropping the word is
+    the bug class this grammar refuses by construction, so the line fails full
+    token consumption instead."""
+    result = compile_line(
+        "Return this card from your graveyard to your hand tapped.", card_name="Test"
+    )
+
+    assert not result.parsed
 
 
 # --- Round 78: what a card *was*, read after it stopped being there ---------

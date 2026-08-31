@@ -99,6 +99,13 @@ class DrawStepSkip:
 _SKIP_STEP = re.compile(
     r"^if you would begin your draw step, you may skip that step instead$"
 )
+#: "Skip your draw step." (Necropotence.) The **mandatory** twin of the offer
+#: above, and its own line rather than a flag on that one: nothing is offered
+#: and nothing is bought, so there is no rider to read and no choice to answer.
+#: A static ability of the permanent (CR 614.10 — a skip is a replacement
+#: effect), so like every other derivation table here the step reads the
+#: permanent's own text and there is nothing to arm or clear.
+_SKIP_DRAW_STEP = re.compile(r"^skip your draw step$")
 #: The rider sentences this module can carry out. A rider outside it refuses.
 _SKIP_RIDER_LIFE = re.compile(rf"^if you do, you gain (?P<count>\d+|{_COUNT_WORD}) life$")
 
@@ -136,6 +143,22 @@ def draw_step_skip_for(oracle_text: str) -> DrawStepSkip | None:
     return None
 
 
+def skips_own_draw_step(oracle_text: str) -> bool:
+    """Whether *oracle_text* makes its controller skip their draw step.
+
+    Read by ``phases/draw_step.py`` and by the support gate, so what is
+    enforced and what is claimed cannot drift — the same pairing every other
+    table here uses.
+    """
+    lowered = oracle_text.lower()
+    if "draw step" not in lowered:
+        return False
+    return any(
+        _SKIP_DRAW_STEP.match(line.strip().rstrip("."))
+        for line in lowered.split("\n")
+    )
+
+
 def draw_step_skip_line(normalized_line: str) -> bool:
     """Whether *normalized_line* is one of the two sentences the template owns.
 
@@ -144,4 +167,8 @@ def draw_step_skip_line(normalized_line: str) -> bool:
     `enter_effect_line` uses.
     """
     line = normalized_line.strip().lower().rstrip(".")
-    return bool(_SKIP_STEP.match(line) or _SKIP_RIDER_LIFE.match(line))
+    return bool(
+        _SKIP_STEP.match(line)
+        or _SKIP_RIDER_LIFE.match(line)
+        or _SKIP_DRAW_STEP.match(line)
+    )

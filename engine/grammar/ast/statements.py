@@ -132,7 +132,11 @@ from .cards import (
     RandomRevealOwnershipExchange,
     SearchAndExile,
     TransmuteBySacrifice,
+    ExileBoundCard,
+    PutExiledCardIntoHand,
+    NameThenConsult,
     SearchLibrary,
+    SearchPlayerLibrary,
     Shuffle,
 )
 from .stack import (
@@ -195,7 +199,9 @@ Effect = Union[
     AddManaForTappedLand, NoteManaSpent, ProducesManaInstead, SpendManaAsThough, PreventDamage,
     RedirectDamage, DamageCantBePreventedOrRedirected, DamageReducedByPaidMana,
     UpkeepDamageUnlessCost,
-    SearchLibrary, SearchAndExile, TransmuteBySacrifice, OwnershipExchangeUnlessPaid,
+    ExileBoundCard, PutExiledCardIntoHand, NameThenConsult,
+    SearchLibrary, SearchPlayerLibrary, SearchAndExile, TransmuteBySacrifice,
+    OwnershipExchangeUnlessPaid,
     RandomRevealOwnershipExchange,
     ExileTopOfLibrary, PutExiledWithSource, ExileGraveyard, ExileCostSacrifices,
     CastPermission, LookTopExileRandom, LookTopPickToHand,

@@ -76,6 +76,42 @@ class PutHandCardsOnLibrary:
     """
     player: PlayerRef
     count: Amount = field(default_factory=lambda: Fixed(1))
+    #: "Target opponent puts **the cards from their hand** on top of their
+    #: library." (Jester's Mask.) The whole hand rather than a printed number,
+    #: which is not a count the parser can write down: how many there are is a
+    #: fact about the board at resolution. Its own flag rather than a magic
+    #: ``count``, because only this spelling can never be short — CR 608.2's
+    #: "as much as it can" has nothing to trim.
+    whole_hand: bool = False
+
+
+@dataclass(frozen=True)
+class SearchPlayerLibrary:
+    """``Search target player's library for three cards and exile them. Then
+    that player shuffles.`` (Jester's Cap.)
+
+    ``Search that player's library for that many cards. That player puts those
+    cards into their hand, then shuffles.`` (Jester's Mask.)
+
+    A different effect from :class:`SearchLibrary`, which that node's own
+    production has said since it was written: "the engine's search flow only
+    ever opens the searcher's own library, so 'search target player's
+    library' is a different card, not a wording of this one". Two seats are
+    involved rather than one — CR 608.2c makes the ability's controller the
+    chooser and the library is somebody else's — and both have to reach the
+    flow, which is what this node carries and :class:`SearchLibrary` has no
+    field for.
+
+    ``count`` is an amount rather than a number because Jester's Mask prints
+    "for **that many** cards", the quantity being the size of a hand the step
+    in front of it emptied. ``to`` is where every find goes: the pool's two
+    printings send them all to one place, so there is one zone rather than the
+    per-find list Cultivate needs.
+    """
+    player: PlayerRef
+    count: Amount
+    filter: ObjectFilter
+    to: Zone
 
 
 @dataclass(frozen=True)
@@ -316,6 +352,47 @@ class RevealHandAndChoose:
     player: PlayerRef
     filter: ObjectFilter
     fate: str = "discard"
+    #: "…and choose **X** cards from it" (Mind Warp). How many are chosen, which
+    #: the family varies as freely as it varies the fate. One rather than none
+    #: is the default because that is what every printing before this one says.
+    count: Amount = field(default_factory=lambda: Fixed(1))
+    #: Whether the hand was **revealed** (Duress) or only **looked at** (Mind
+    #: Warp). CR 701.20 makes a reveal public and CR 701.16 makes a look
+    #: private, so the two sentences give different information to everyone who
+    #: is not the chooser — the same choice, made from a zone the rest of the
+    #: table can or cannot see.
+    revealed: bool = True
+
+
+@dataclass(frozen=True)
+class PutExiledCardIntoHand:
+    """``Put that card into your hand.`` (Necropotence, inside its delay.)
+
+    "That card" is the one an earlier step of the **same effect** exiled, so
+    this reads the resolution's own record rather than choosing anything —
+    the same back-reference "you may play cards exiled this way" makes, and
+    demanded of its producer for the same reason: a sentence with nothing
+    behind it is the sentence read wrong.
+
+    The zone is fixed by the node: only a hand is printed, and a card printing
+    another destination is a different sentence this production refuses.
+    """
+    player: PlayerRef
+
+
+@dataclass(frozen=True)
+class ExileBoundCard:
+    """``Exile that card from your graveyard.`` (Necropotence.)
+
+    The card the firing event named, exiled out of the zone that event put it
+    in. Not an :class:`Exile` of a permanent: nothing is on the battlefield and
+    nothing is chosen — "that card" is the discard the trigger watched, and the
+    only place it can be read is the event's own captured context.
+
+    ``from_zone`` is read rather than assumed, because "exile that card" with no
+    zone would be a different sentence about an object that may be anywhere.
+    """
+    from_zone: Zone
 
 
 @dataclass(frozen=True)
@@ -502,6 +579,13 @@ class CastPermission:
     #: leaves, or no end step finds a creature with power 4), and then the
     #: permission lasts, which is what the card says.
     until_source_grants_again: bool = False
+    #: "**Until the beginning of your next upkeep**, you may play that card."
+    #: (Elkin Bottle.) A third stated duration (CR 611.2a), and its own field
+    #: rather than a wider ``until_end_of_turn`` because reading it as either of
+    #: the other two is wrong in a stated direction: end-of-turn throws the
+    #: exiled card away at this turn's cleanup, and no-duration leaves it
+    #: playable for the rest of the game.
+    until_your_next_upkeep: bool = False
     free: bool = False
     # "If that spell would be put into your graveyard, exile it instead." —
     # attached by the rider parser, so a wording carrying it cannot shed it.
@@ -612,6 +696,35 @@ class NameThenRevealTop:
     who: PlayerRef
     match_zone: str
     miss_zone: str
+    #: "…and this artifact **deals 2 damage to them**." (Vexing Arcanix.) The
+    #: miss branch's second half, payload on the same node because it is a
+    #: consequence of the same guess: nothing outside this paragraph knows
+    #: whether the name was hit. 0 is the honest "no such rider" — CR 120.8
+    #: makes a 0-damage event no event at all, so the two cannot be confused.
+    miss_damage: int = 0
+
+
+@dataclass(frozen=True)
+class NameThenConsult:
+    """``Choose a card name. Exile the top six cards of your library, then
+    reveal cards from the top of your library until you reveal a card with the
+    chosen name. Put that card into your hand and exile all other cards
+    revealed this way.`` (Demonic Consultation.)
+
+    One node for the whole paragraph, for the reason :class:`NameThenRevealTop`
+    is one: every sentence after the first reads the name it chose, and the last
+    reads the pile the third turned over. Parsed apart, three of the four would
+    have nothing to look at.
+
+    **The order is the card.** Naming before the exile is what makes this a
+    gamble rather than a tutor: the six cards go without being looked at, and
+    the named card may be among them. A reading that searched for the name
+    first would be Demonic Tutor with extra words.
+
+    ``exile_count`` is the only number the sentence carries, so it is the only
+    field — a card printing "the top three cards" is this same paragraph.
+    """
+    exile_count: Amount
 
 
 @dataclass(frozen=True)
@@ -677,6 +790,13 @@ class LookAtHand:
     content of the clause.
     """
     player: PlayerRef
+    #: "Look at **a card at random** in target player's hand." (Urza's Bauble.)
+    #: How much of the hand is seen, which is the other half of the clause's
+    #: content: one card chosen by nobody, rather than all of them. A flag and
+    #: not a count because "at random" is what makes it uncountable — a card
+    #: printing "two cards at random" would need the number, and would refuse
+    #: here until it had it.
+    random_card: bool = False
 
 
 @dataclass(frozen=True)

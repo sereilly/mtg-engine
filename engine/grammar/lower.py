@@ -177,6 +177,7 @@ from .lowering import (
     _lower_look_top_exile_random,
     _lower_look_top_pick,
     _lower_search_and_exile,
+    _lower_search_player_library,
     _lower_graveyard_pick_onto_battlefield,
     _lower_search_library,
     _lower_change_base_pt,
@@ -482,6 +483,13 @@ def lower_statement(
     if isinstance(statement, ast.CastPermission):
         return _lower_cast_permission(statement, produced)
 
+    # "Search that player's library for **that many** cards" (Jester's Mask):
+    # the count is a back-reference, so this lowering needs the record of what
+    # the steps before it produced — which is why it is dispatched here rather
+    # than from the node table below.
+    if isinstance(statement, ast.SearchPlayerLibrary):
+        return _lower_search_player_library(statement, produced)
+
     if isinstance(statement, ast.NameAndStrip):
         return (
             OracleInstruction(
@@ -521,6 +529,54 @@ def lower_statement(
             ),
         )
 
+    if isinstance(statement, ast.PutExiledCardIntoHand):
+        # The producer gate every back-reference makes: "that card" names what
+        # a step of this same effect exiled, and a sentence with no exile behind
+        # it would put nothing anywhere while the card compiled supported.
+        if "exiled_cards" not in produced:
+            raise LoweringError(
+                "'that card' names a card no step of this effect exiled",
+                node=statement,
+            )
+        if statement.player.kind != "you":
+            raise LoweringError(
+                f"no handler puts an exiled card into {statement.player.kind!r}'s "
+                "hand",
+                node=statement,
+            )
+        return (OracleInstruction("put_exiled_cards_into_hand", "", {}),)
+
+    if isinstance(statement, ast.ExileBoundCard):
+        # "Exile **that card** from your graveyard." (Necropotence.) The object
+        # the firing event named, so the event has to be one whose fire site
+        # records it — under anything else the words name a card nobody wrote
+        # down, and the handler would find nothing while the card compiled
+        # supported.
+        if event != "you_discard_card":
+            raise LoweringError(
+                "'that card' names the firing event's object, and this event "
+                "records none",
+                node=statement,
+            )
+        if statement.from_zone.name != "graveyard" or (
+            statement.from_zone.owner is None
+            or statement.from_zone.owner.kind != "you"
+        ):
+            raise LoweringError(
+                "the bound-card exile reaches the discarding player's own "
+                "graveyard",
+                node=statement,
+            )
+        return (OracleInstruction("exile_bound_card_from_graveyard", "", {}),)
+
+    if isinstance(statement, ast.NameThenConsult):
+        return (
+            OracleInstruction(
+                "name_then_consult", "",
+                {"exile_count": _amount_payload(statement.exile_count)},
+            ),
+        )
+
     if isinstance(statement, ast.NameThenRevealTop):
         # "Target player chooses…" is the only subject printed on this
         # paragraph, and it is the whole shape of the effect: the chooser, the
@@ -533,16 +589,16 @@ def lower_statement(
                 "the guess is made by the player the spell targets",
                 node=statement,
             )
-        return (
-            OracleInstruction(
-                "name_then_reveal_top", "",
-                {
-                    "match_zone": statement.match_zone,
-                    "miss_zone": statement.miss_zone,
-                    "targets": _targets_payload(statement.who),
-                },
-            ),
-        )
+        payload: dict[str, object] = {
+            "match_zone": statement.match_zone,
+            "miss_zone": statement.miss_zone,
+            "targets": _targets_payload(statement.who),
+        }
+        if statement.miss_damage:
+            # Emitted only when the card prints it, so Petra Sphinx's payload
+            # stays byte-identical and no behaviour signature moves.
+            payload["miss_damage"] = statement.miss_damage
+        return (OracleInstruction("name_then_reveal_top", "", payload),)
 
     if isinstance(statement, ast.RevealUntil):
         return _lower_reveal_until(statement, produced)

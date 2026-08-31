@@ -75,6 +75,9 @@ class EndStepMixin:
         # one there is rather than one of its controller's — so no seat narrows
         # this, unlike the upkeep announcement, which names "your" next upkeep.
         fire_delayed_triggers(self, "next_end_step")
+        # "At the beginning of **your** next end step, …" (Necropotence). The
+        # controller's own, so this one is seated where the line above is not.
+        fire_delayed_triggers(self, "controllers_next_end_step", seat=player_index)
 
         def _delayed_eot_removal(permanent: Permanent) -> bool:
             # Nettling Imp / Siren's Call: destroy creatures that were

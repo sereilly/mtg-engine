@@ -399,6 +399,13 @@ _MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")
 EXILED_THIS_WAY = "exiled_this_way"
 EXILED_THIS_WAY_OBJECTS = "exiled_this_way_objects"
 
+#: How many cards a "puts the cards from their hand on top of their library"
+#: step moved (Jester's Mask). The ``results`` key the handler writes and the
+#: ``produced`` marker the "search that player's library for **that many**
+#: cards" behind it is gated on — here for ``EXILED_THIS_WAY``'s reason, that
+#: the two readers sit at opposite ends of the pipeline.
+HAND_CARDS_TO_LIBRARY = "hand_cards_to_library"
+
 
 PER_OBJECT_SEAT_RECORDS: dict[str, str] = {
     "controller_when_blocked": "blocked_controller_seats",

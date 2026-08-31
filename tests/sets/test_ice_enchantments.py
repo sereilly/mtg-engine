@@ -1471,3 +1471,221 @@ def test_chromatic_armors_ability_records_a_new_colour(set_pool):
     game._mark_damage_on_permanent(bears, 2, source=green)
     assert bears.damage_marked == 0
 # --- end W1G1 ---
+
+
+# --- W1G4: library, hand and graveyard ---
+def _renewal_board(set_pool, library, opponent_library=()):
+    pool = set_pool("ICE")
+    renewal = Permanent(card=pool["Enduring Renewal"])
+    p1 = PlayerState(
+        name="P1", battlefield=[renewal],
+        library=[pool[name] for name in library], life=20,
+    )
+    p2 = PlayerState(
+        name="P2", library=[pool[name] for name in opponent_library], life=20
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    return pool, p1, p2, game
+
+
+def test_enduring_renewal_bins_a_drawn_creature_card(set_pool):
+    """"If you would draw a card, reveal the top card of your library instead.
+    If it's a creature card, put it into your graveyard. Otherwise, draw a
+    card." — CR 614, one draw at a time."""
+    pool, p1, p2, game = _renewal_board(set_pool, ["Balduvian Bears", "Dark Ritual"])
+
+    drawn = game._draw_with_replacements(p1, 1)
+
+    assert drawn == 0, "the draw was replaced, not made"
+    assert p1.hand == []
+    assert [card.name for card in p1.graveyard] == ["Balduvian Bears"]
+    assert [card.name for card in p1.library] == ["Dark Ritual"]
+
+
+def test_enduring_renewal_draws_a_noncreature_card(set_pool):
+    """"Otherwise, draw a card." — a new draw of the card just revealed, which
+    is why it must not replace itself into a loop (CR 614.5)."""
+    pool, p1, p2, game = _renewal_board(set_pool, ["Dark Ritual", "Balduvian Bears"])
+
+    drawn = game._draw_with_replacements(p1, 1)
+
+    assert drawn == 1
+    assert [card.name for card in p1.hand] == ["Dark Ritual"]
+    assert p1.graveyard == []
+
+
+def test_enduring_renewal_replaces_each_draw_of_a_multi_card_draw(set_pool):
+    """CR 121.2: "draw two cards" is two draws, each replaceable on its own."""
+    pool, p1, p2, game = _renewal_board(
+        set_pool, ["Balduvian Bears", "Dark Ritual", "Brown Ouphe"]
+    )
+
+    game._draw_with_replacements(p1, 2)
+
+    assert [card.name for card in p1.graveyard] == ["Balduvian Bears"]
+    assert [card.name for card in p1.hand] == ["Dark Ritual"]
+    assert [card.name for card in p1.library] == ["Brown Ouphe"]
+
+
+def test_enduring_renewal_does_not_replace_an_opponents_draw(set_pool):
+    """"If **you** would draw a card" — the controller's own draws. A scan over
+    every board would make a one-sided drawback symmetric."""
+    pool, p1, p2, game = _renewal_board(
+        set_pool, ["Dark Ritual"], opponent_library=["Balduvian Bears"]
+    )
+
+    drawn = game._draw_with_replacements(p2, 1)
+
+    assert drawn == 1
+    assert [card.name for card in p2.hand] == ["Balduvian Bears"]
+    assert p2.graveyard == []
+
+
+def test_enduring_renewal_returns_a_dead_creature_to_hand(set_pool):
+    """"Whenever a creature is put into your graveyard from the battlefield,
+    return it to your hand." — the loop the card is famous for: the creature
+    comes back, and drawing it again bins it again."""
+    pool, p1, p2, game = _renewal_board(set_pool, [])
+    # Through the entry point, not by appending: CR 404.1 sends a permanent to
+    # its *owner's* graveyard, and the owner is recorded as it enters.
+    bear = Permanent(card=pool["Balduvian Bears"])
+    game._put_permanent_onto_battlefield(0, bear, None)
+
+    game.sacrifice_permanent(bear)
+    game._settle()
+
+    assert [card.name for card in p1.hand] == ["Balduvian Bears"]
+    assert not any(c.name == "Balduvian Bears" for c in p1.graveyard)
+
+
+def test_enduring_renewal_ignores_a_creature_dying_under_the_opponent(set_pool):
+    """"…into **your** graveyard" — CR 404.1 sends a permanent to its owner's
+    graveyard, so whose graveyard it landed in is a question about the owner
+    and not about who controlled it. Dropping the word would hand this seat
+    every creature that dies."""
+    pool, p1, p2, game = _renewal_board(set_pool, [])
+    theirs = Permanent(card=pool["Balduvian Bears"])
+    game._put_permanent_onto_battlefield(1, theirs, None)
+
+    game.sacrifice_permanent(theirs)
+    game._settle()
+
+    assert p1.hand == []
+    assert [card.name for card in p2.graveyard] == ["Balduvian Bears"]
+
+
+def test_enduring_renewal_reveals_only_its_controllers_hand(set_pool):
+    """"Play with **your** hand revealed" is one seat's, where Revelation's
+    "Players play with their hands revealed" is everyone's."""
+    from engine.revealed_hands import hand_revealed_to
+
+    pool, p1, p2, game = _renewal_board(set_pool, [])
+
+    assert hand_revealed_to(game, owner_seat=0, viewer_seat=1)
+    assert not hand_revealed_to(game, owner_seat=1, viewer_seat=0)
+def _necro_board(set_pool, library=(), hand=()):
+    pool = set_pool("ICE")
+    necro = Permanent(card=pool["Necropotence"])
+    p1 = PlayerState(
+        name="P1",
+        library=[pool[name] for name in library],
+        hand=[pool[name] for name in hand],
+        life=20,
+    )
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    # Past the first turn, whose draw step CR 103.8a skips anyway.
+    game.turn = 3
+    game._put_permanent_onto_battlefield(0, necro, None)
+    return pool, p1, p2, game
+
+
+def test_necropotence_skips_its_controllers_draw_step(set_pool):
+    """"Skip your draw step." — CR 614.10's mandatory skip, which is not the
+    optional one beside it in the table: nothing is offered and nothing is
+    bought."""
+    pool, p1, p2, game = _necro_board(set_pool, library=["Balduvian Bears"])
+
+    drawn = game.resolve_draw_step(0)
+
+    assert drawn == 0
+    assert p1.hand == []
+    assert [card.name for card in p1.library] == ["Balduvian Bears"]
+
+
+def test_necropotence_does_not_skip_the_opponents_draw_step(set_pool):
+    """"**Your** draw step" — the controller's own, so a scan over every seat
+    would turn a one-sided drawback into a Stasis."""
+    pool, p1, p2, game = _necro_board(set_pool)
+    p2.library = [pool["Balduvian Bears"]]
+
+    drawn = game.resolve_draw_step(1)
+
+    assert drawn == 1
+    assert [card.name for card in p2.hand] == ["Balduvian Bears"]
+
+
+def test_necropotence_exiles_what_its_controller_discards(set_pool):
+    """"Whenever you discard a card, exile that card from your graveyard."
+
+    CR 701.9a's discard is an action abilities watch, and the card is located
+    by identity: a graveyard is a list of card definitions and two copies of a
+    card are the same object.
+    """
+    pool, p1, p2, game = _necro_board(set_pool, hand=["Balduvian Bears"])
+    discarded = p1.hand[0]
+    assert game.take_card_from_hand(p1, discarded)
+
+    game._discard_card(p1, discarded)
+    game._settle()
+
+    assert p1.graveyard == []
+    assert [card.name for card in p1.exile] == ["Balduvian Bears"]
+
+
+def test_necropotence_ignores_an_opponents_discard(set_pool):
+    """"…**you** discard a card" is CR 109.5's answer: the ability's
+    controller. An opponent's discard stays in their graveyard."""
+    pool, p1, p2, game = _necro_board(set_pool)
+    theirs = pool["Balduvian Bears"]
+    p2.hand.append(theirs)
+    assert game.take_card_from_hand(p2, theirs)
+
+    game._discard_card(p2, theirs)
+    game._settle()
+
+    assert [card.name for card in p2.graveyard] == ["Balduvian Bears"]
+    assert p2.exile == []
+
+
+def test_necropotence_pays_life_and_returns_the_card_at_its_next_end_step(set_pool):
+    """"Pay 1 life: Exile the top card of your library face down. Put that card
+    into your hand at the beginning of your next end step."
+
+    Two steps and a delay: the exile is now, the hand is a delayed triggered
+    ability (CR 603.7) that reads what this resolution recorded (CR 603.7d).
+    """
+    pool, p1, p2, game = _necro_board(set_pool, library=["Balduvian Bears", "Brown Ouphe"])
+
+    result = game.activate_permanent_ability(0, "Necropotence")
+    assert result.supported, result.details
+    game._settle()
+
+    assert p1.life == 19, "the life is the cost"
+    assert [card.name for card in p1.exile] == ["Balduvian Bears"]
+    assert p1.hand == [], "not yet — the card comes back at the end step"
+
+    # An opponent's end step is not this seat's.
+    game.resolve_end_step(1)
+    game._settle()
+    assert p1.hand == []
+
+    game.resolve_end_step(0)
+    game._settle()
+
+    assert [card.name for card in p1.hand] == ["Balduvian Bears"]
+    assert p1.exile == []
+# --- end W1G4 ---

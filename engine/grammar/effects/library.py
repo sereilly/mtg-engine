@@ -167,6 +167,17 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
     """
     stream.expect_word("look")
     stream.expect_word("at")
+    # "Look at **a card at random in** target player's hand." (Urza's Bauble.)
+    # Read before the count branches below, because it opens with an article
+    # rather than with "the top" and would otherwise fall through to the player
+    # reference and fail the line on the word "a".
+    if stream.accept_phrase("a", "card", "at", "random", "in"):
+        who = parse_player_ref(stream)
+        if who is None:
+            raise stream.error("expected the player whose hand is looked at")
+        stream.expect_word("'s")
+        stream.expect_word("hand")
+        return ast.LookAtHand(who, random_card=True)
     # "Look at the top three cards of your library. Put one of those cards
     # into your hand and the rest on the bottom of your library in any order.
     # If this spell was cast from anywhere other than your hand, put each of
@@ -290,7 +301,56 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
     # be consumed or the line fails full-token consumption.
     stream.expect_word("'s")
     stream.expect_word("hand")
+    # "Look at target player's hand **and choose X cards from it. That player
+    # discards those cards.**" (Mind Warp.) Duress's template with the hand
+    # looked at instead of revealed, so it is that node rather than a second
+    # one — and read here, from the sentence it actually opens, because the
+    # choice is over the hand *this* clause opened and a statement after it
+    # would be a pick from a zone nobody had looked in.
+    picked = _accept_look_and_choose(stream, player)
+    if picked is not None:
+        return picked
     return ast.LookAtHand(player)
+
+
+def _accept_look_and_choose(
+    stream: TokenStream, player: ast.PlayerRef
+) -> "ast.RevealHandAndChoose | None":
+    """The tail of ``Look at <player>'s hand **and choose <N> cards from it.
+    That player discards those cards.**`` (Mind Warp.)
+
+    Refuses without consuming, so "Look at target player's hand." on its own
+    (Glasses of Urza) keeps the reading it has. Every word of the discard
+    sentence is required: a line that looks and chooses but never says what
+    becomes of the cards is a card that does nothing, and dropping the sentence
+    would make the two indistinguishable.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("and", "choose"):
+        return None
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("cards", "card"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("from", "it"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "that", "player", "discards", "those", "cards"
+    ) and not stream.accept_phrase("that", "player", "discards", "that", "card"):
+        stream.reset(mark)
+        return None
+    return ast.RevealHandAndChoose(
+        player, ast.ObjectFilter(is_card=True), fate="discard",
+        count=count, revealed=False,
+    )
 
 
 def _parse_search_library(stream: TokenStream) -> ast.Statement:
@@ -325,7 +385,13 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     """
     stream.expect_word("search")
     if not stream.accept_word("your"):
-        raise stream.error("only searching your own library has a search flow")
+        # "Search **target player's** library …" (Jester's Cap) — a different
+        # effect, as the paragraph above says, so a different node rather than
+        # a branch widening this one. Read from here and not as a production of
+        # its own, so the word "search" keeps one entry point: two productions
+        # racing for it would make which reading a card gets depend on their
+        # order.
+        return _parse_search_other_library(stream)
     # "Search your graveyard and library for any number of <filter> cards,
     # exile them, then shuffle." (Chandra, Heart of Fire's −9.) A different
     # effect, not a wording of the tutor below: any number rather than one,
@@ -450,6 +516,71 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
         untap_found_if=condition, untap_found_filter=counted,
         reveal=reveal,
     )
+
+
+def _parse_search_other_library(stream: TokenStream) -> ast.Statement:
+    """``Search <player>'s library for <count> cards and exile them. Then that
+    player shuffles.`` (Jester's Cap.)
+
+    ``Search <player>'s library for <count> cards. That player puts those cards
+    into their hand, then shuffles.`` (Jester's Mask.)
+
+    Three things are read rather than skipped, each for the reason the
+    own-library production reads its three:
+
+    * **whose library** — the seat the flow opens, which is not the seat that
+      chooses (CR 608.2c);
+    * **where the finds go** — exile and the searched player's hand are
+      different effects. The sentence naming the hand is printed *after* the
+      search and is still consumed here, because it is about the cards this
+      search found: left to the sequence parser it would run before the prompt
+      this arms had been answered, and would have nothing to move.
+    * **the shuffle** — CR 701.19d ends a library search with one, so deleting
+      the word refuses the line rather than claiming a search that leaves the
+      library ordered.
+    """
+    player = parse_player_ref(stream)
+    if player is None:
+        raise stream.error("expected whose library is searched")
+    # The lexer splits "player's" into "player" + "'s".
+    stream.expect_word("'s")
+    stream.expect_word("library")
+    stream.expect_word("for")
+    count = parse_amount(stream)
+    if isinstance(count, ast.Fixed) and count.value < 1:
+        raise stream.error("expected how many cards the search may find")
+    filt = parse_object_filter(stream)
+    if not filt.is_card:
+        raise stream.error("a library holds cards, not permanents")
+    to: ast.Zone | None = None
+    if stream.accept_phrase("and", "exile", "them"):
+        to = ast.Zone("exile")
+    if not stream.accept_punct("."):
+        raise stream.error("expected the sentence that ends this search")
+    if to is not None:
+        # "**Then that player shuffles.**"
+        stream.accept_word("then")
+        shuffler = parse_player_ref(stream)
+        if shuffler is None:
+            raise stream.error("expected who shuffles after this search")
+        stream.expect_word("shuffles")
+        return ast.SearchPlayerLibrary(player, count, filt, to)
+    # "**That player puts those cards into their hand, then shuffles.**"
+    holder = parse_player_ref(stream)
+    if holder is None:
+        raise stream.error("expected who takes the cards this search found")
+    for word in ("puts", "those", "cards", "into"):
+        stream.expect_word(word)
+    # "into **their** hand" — the possessive names the player this same clause
+    # just named. `_parse_zone` has no reading for it (its possessives are
+    # "your", "its owner's" and "its controller's"), and widening it there would
+    # give every zone destination in the grammar a pronoun with no antecedent.
+    stream.expect_word("their")
+    stream.expect_word("hand")
+    stream.accept_punct(",")
+    stream.expect_word("then")
+    stream.expect_word("shuffles")
+    return ast.SearchPlayerLibrary(player, count, filt, ast.Zone("hand", holder))
 
 
 def _parse_search_untap_rider(stream: TokenStream):
