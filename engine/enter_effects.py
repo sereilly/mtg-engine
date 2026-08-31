@@ -46,13 +46,34 @@ CHOOSE_COLOR_AND_OPPONENT_ON_ENTER = (
     "as this enchantment enters, choose a color and an opponent"
 )
 
-# "As this enchantment enters, choose a color." (Psychic Allergy.) The colour
-# half alone. A separate constant from the pair above because the mixin
-# branches on which seats are asked: this one records no player at all, so the
-# prompt it arms offers a colour and nothing else. It is also a *prefix* of the
-# pair's phrase, which is why every probe for it has to ask the pair first —
-# the ordering rule the trigger tables follow for the same reason.
-CHOOSE_COLOR_ON_ENTER = "as this enchantment enters, choose a color"
+# "As this enchantment enters, choose a color." (Psychic Allergy.) / "As this
+# **Aura** enters, choose a color." (Prismatic Ward, Chromatic Armor.) The
+# colour half alone, and the noun is *data*: an Aura is an enchantment, and the
+# card that spells the subtype is printing the same sentence.
+#
+# A pattern rather than a constant for exactly that reason — the literal read
+# "enchantment" and nothing else, so the two Ice Age Auras printing this
+# sentence about themselves reached nothing at all.
+#
+# Separate from the colour-and-opponent pair above because the mixin branches on
+# which seats are asked: this one records no player, so the prompt it arms
+# offers a colour and nothing else. The pair's phrase *starts* with this one,
+# which is what the negative lookahead is for — without it Jihad's line would be
+# claimed here and the opponent it names dropped.
+_CHOOSE_COLOR_ON_ENTER_RE = re.compile(
+    r"as this [a-z]+ enters, choose a color(?!s| and)"
+)
+
+
+def chooses_color_on_enter(text: str) -> bool:
+    """Whether *text* asks its controller for a colour as the permanent enters.
+
+    A substring probe like the mixin's own, because the mixin asks it of the
+    card's whole normalized text; :func:`enter_effect_line` asks the whole-line
+    question through this same matcher, so what is performed and what is
+    claimed cannot drift.
+    """
+    return bool(_CHOOSE_COLOR_ON_ENTER_RE.search(text or ""))
 
 # "As this enchantment enters, choose a card name." (Runed Halo.) A *name*
 # rather than a quality: nothing on any board constrains it, and the choice is
@@ -497,7 +518,6 @@ _ENTRY_LINES: tuple[tuple[str, str], ...] = (
     (ENTERS_TAPPED, ""),
     (CHOOSE_OPPONENT_ON_ENTER, ""),
     (CHOOSE_COLOR_AND_OPPONENT_ON_ENTER, ""),
-    (CHOOSE_COLOR_ON_ENTER, ""),
     (CHOOSE_CARD_NAME_ON_ENTER, ""),
     (COPY_CREATURE_ON_ENTER, ""),
     # CR 707.9b — the mixin builds the copied type line with "Enchantment"
@@ -587,6 +607,8 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "enters with P/T counters"
     if enters_with_x_pt_counters(normalized) is not None:
         return "enters with X P/T counters"
+    if chooses_color_on_enter(normalized):
+        return "chooses a color as it enters"
     if choose_number_on_enter(normalized) is not None:
         return "chooses a number as it enters"
     if sacrifice_any_number_on_enter(normalized) is not None:
@@ -608,6 +630,7 @@ __all__ = [
     "CHOOSE_CARD_NAME_ON_ENTER",
     "CHOOSE_COLOR_AND_OPPONENT_ON_ENTER",
     "CHOOSE_OPPONENT_ON_ENTER",
+    "chooses_color_on_enter",
     "COPY_ARTIFACT_ON_ENTER",
     "COPY_CREATURE_ON_ENTER",
     "ENTERS_TAPPED",

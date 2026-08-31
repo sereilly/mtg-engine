@@ -867,6 +867,15 @@ _PREVENT_ALL_FROM_SOURCE_TYPE_RE = re.compile(
     # pattern is anchored, so neither can be shadowed, and the order says
     # which reading is the narrow one.
     r"|creatures"
+    # "…by **sources of the chosen color**." (Prismatic Ward.) / "…of the
+    # **last** chosen color." (Chromatic Armor, which lets its controller
+    # re-choose.) The property is one the *holder* recorded as it entered
+    # (CR 614.1c), not one the phrase names outright — so it is resolved
+    # against the permanent carrying the line before the source is tested, and
+    # a holder that recorded nothing shields against nothing rather than
+    # against everything. Both printings are one alternative: "last" says which
+    # of several choices counts, and only the latest is kept either way.
+    r"|sources of the (?:last )?chosen color"
     r")$"
 )
 
@@ -905,7 +914,38 @@ _SOURCE_CLASSES: dict[str, dict[str, object]] = {
     # shielded against. A fourth kind of narrowing beside the three above, which
     # is why the value is a dict rather than a type word.
     "spells that target it": {"spell_targets_recipient": True},
+    # Resolved against the holder before the source is tested — see
+    # :func:`_resolved_chosen_color`. The key is deliberately not `color`: a
+    # class that reached the matcher unresolved must answer *nothing* rather
+    # than every source, and a key no branch of `_source_shield_matches` reads
+    # would do the opposite.
+    "sources of the chosen color": {"chosen_color": True},
+    "sources of the last chosen color": {"chosen_color": True},
 }
+
+
+def _resolved_chosen_color(wanted: dict, holder) -> dict | None:
+    """*wanted* with a chosen-colour class turned into the colour the holder
+    recorded, or None when it recorded none.
+
+    CR 614.1c puts the choice at entry and ``engine/mixins/permanent_state.py``
+    stamps it, so the answer lives on the permanent whose text carried the line
+    — which is why it is resolved here, where that permanent is in hand, rather
+    than in the pure matcher below. The same shape
+    ``handlers/_common._resolve_chosen_color`` gives the noun-phrase side.
+
+    None rather than an unnarrowed shield: a holder with no colour recorded has
+    named no property for CR 615.9 to recheck, and a shield answering to every
+    source is the widest possible reading of a sentence that names one colour.
+    """
+    if not wanted.get("chosen_color"):
+        return wanted
+    color = (getattr(holder, "metadata", {}) or {}).get("chosen_color")
+    if not color:
+        return None
+    resolved = {k: v for k, v in wanted.items() if k != "chosen_color"}
+    resolved["color"] = color
+    return resolved
 
 
 def _source_shield_matches(game, source, recipient, wanted: dict) -> bool:
@@ -928,6 +968,16 @@ def _source_shield_matches(game, source, recipient, wanted: dict) -> bool:
 
         if not hasattr(source, "metadata") or not auras_attached_to(source):
             return False
+    color = wanted.get("color")
+    if color and color not in source_colors(source):
+        # CR 615.9 rechecks the recorded property when the damage would be
+        # dealt, so a source that has changed colour since the Aura entered is
+        # tested by what it is now.
+        return False
+    if wanted.get("chosen_color"):
+        # Unresolved: nothing was recorded, so the class names no source at all.
+        # Answering True here would shield against every source in the game.
+        return False
     if wanted.get("spell_targets_recipient") and not _spell_targets_recipient(
         game, source, recipient
     ):
@@ -1056,13 +1106,21 @@ def _source_type_shielded_by(game, event: dict) -> dict | None:
         return None
     for line in getattr(recipient, "effective_card", recipient.card).oracle_text.splitlines():
         wanted = prevent_all_from_source_type(line)
-        if wanted is not None and _condition_holds(game, wanted, recipient):
-            return wanted
+        if wanted is None or not _condition_holds(game, wanted, recipient):
+            continue
+        resolved = _resolved_chosen_color(wanted, recipient)
+        if resolved is not None:
+            return resolved
     for attached in auras_attached_to(recipient):
         for line in attached.effective_card.oracle_text.splitlines():
             wanted = attached_prevent_all_from_source_type(line)
-            if wanted is not None and _condition_holds(game, wanted, attached):
-                return wanted
+            if wanted is None or not _condition_holds(game, wanted, attached):
+                continue
+            # The colour is the **Aura's**, recorded as it entered — not the
+            # enchanted creature's, which has none of its own.
+            resolved = _resolved_chosen_color(wanted, attached)
+            if resolved is not None:
+                return resolved
     return None
 
 

@@ -997,4 +997,81 @@ def test_power_leak_still_reduces_its_damage_after_losing_its_hook(
     game._settle()
 
     assert p0.life == 19, "one of the two points paid off"
+
+
+def test_prismatic_ward_prevents_only_the_chosen_colour(set_pool):
+    """"As this Aura enters, choose a color. Prevent all damage that would be
+    dealt to enchanted creature by sources of the chosen color." (CR 615.9 —
+    the recorded property is rechecked when the damage would be dealt.)
+
+    The colour is the **Aura's**, recorded as it entered; the enchanted creature
+    has none of its own.
+    """
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    ward = Permanent(card=pool["Prismatic Ward"])
+    red = Permanent(card=pool["Balduvian Barbarians"])
+    green = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(name="P0", battlefield=[bears, ward], life=20)
+    p1 = PlayerState(name="P1", battlefield=[red, green], life=20)
+    game = Game(players=[p0, p1])
+    attach_aura(ward, bears)
+    ward.metadata["chosen_color"] = "R"
+
+    game._mark_damage_on_permanent(bears, 3, source=red)
+    assert bears.damage_marked == 0
+
+    game._mark_damage_on_permanent(bears, 2, source=green)
+    assert bears.damage_marked == 2, "a source of another colour goes through"
+
+
+def test_prismatic_ward_records_a_colour_as_it_enters(set_pool):
+    """"As this **Aura** enters" is the same sentence Psychic Allergy prints
+    about an enchantment — the noun is the card's own type word, so the reader
+    holds it as data. Spelled out as a literal it read "enchantment" and
+    nothing else, and this card reached nothing at all."""
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    red = Permanent(card=pool["Balduvian Barbarians"])
+    p0 = PlayerState(
+        name="P0", battlefield=[bears], hand=[pool["Prismatic Ward"]], life=20
+    )
+    p1 = PlayerState(name="P1", battlefield=[red], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+
+    result = game.cast_from_hand(
+        0, "Prismatic Ward", target_player_index=0, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    ward = next(p for p in p0.battlefield if p.card.name == "Prismatic Ward")
+    assert ward.metadata["chosen_color"] == "R", (
+        "the default names the colour the opponents hold most of"
+    )
+    assert ward.metadata["attached_to"] is bears
+
+
+def test_a_ward_that_recorded_no_colour_shields_nothing(set_pool):
+    """A property nobody recorded is not a property CR 615.9 can recheck, so the
+    shield names no source — the opposite of the widest reading, which would
+    stop every point of damage in the game."""
+    from engine.auras import attach_aura
+
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    ward = Permanent(card=pool["Prismatic Ward"])
+    red = Permanent(card=pool["Balduvian Barbarians"])
+    p0 = PlayerState(name="P0", battlefield=[bears, ward], life=20)
+    p1 = PlayerState(name="P1", battlefield=[red], life=20)
+    game = Game(players=[p0, p1])
+    attach_aura(ward, bears)
+    ward.metadata.pop("chosen_color", None)
+
+    game._mark_damage_on_permanent(bears, 3, source=red)
+
+    assert bears.damage_marked == 3
 # --- end W1G1 ---

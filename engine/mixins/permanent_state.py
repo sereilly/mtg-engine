@@ -7,7 +7,7 @@ from ..enter_effects import (
     entry_exile_requirement,
     sacrifice_any_number_on_enter,
     CHOOSE_COLOR_AND_OPPONENT_ON_ENTER,
-    CHOOSE_COLOR_ON_ENTER,
+    chooses_color_on_enter,
     CHOOSE_CARD_NAME_ON_ENTER,
     CHOOSE_OPPONENT_ON_ENTER,
     COPY_ARTIFACT_ON_ENTER,
@@ -367,7 +367,7 @@ class PermanentStateMixin:
         # makes every "choose a color" effect inert, which is a legal choice no
         # player would make and an AI seat would be stuck with.
         if (
-            CHOOSE_COLOR_ON_ENTER in text
+            chooses_color_on_enter(text)
             and CHOOSE_COLOR_AND_OPPONENT_ON_ENTER not in text
         ):
             opponents = [
