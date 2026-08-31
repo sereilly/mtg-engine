@@ -1929,7 +1929,19 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
     caster on a prompt they cannot satisfy.
     """
     card = context.card
-    victim = context.target if context.target is not None else context.caster
+    if instruction.payload.get("victim") == "event_subject_player":
+        # "Look at **that player's** hand …" (Leshrac's Sigil). Nothing was
+        # targeted, so the seat is the one the firing event froze (CR 603.10)
+        # rather than whatever this resolution is carrying. An absent key is a
+        # trigger nobody froze a seat for; the lowering's gate is what keeps
+        # that from arriving, and reading nothing here is the right answer if
+        # it ever does.
+        seat = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return False, "no seat was frozen for 'that player'"
+        victim = game.players[seat]
+    else:
+        victim = context.target if context.target is not None else context.caster
     victim_index = next(
         (i for i, seated in enumerate(game.players) if seated is victim), None
     )

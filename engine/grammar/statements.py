@@ -47,6 +47,7 @@ from .phrases import (
 )
 from .effects import (
     _accept_life_alternative,
+    _parse_untap_chosen_by_paying,
     _parse_for_each_destroy_unless_paid,
     _parse_have_source_deal_damage,
     _parse_add_mana,
@@ -459,6 +460,17 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     unless_paid = _parse_unless_player_pays(stream)
     if unless_paid is not None:
         return unless_paid
+    # "That player may choose any number of tapped creatures without flying
+    # they control **and pay {2} for each creature chosen this way**." A toll
+    # whose number of payments the payer chooses, so it spans both printed
+    # sentences (Mudslide). Read here rather than from the subject-verb reader
+    # because the sentence opens with a player and the verb is "may" — the
+    # opening the offer productions below already own — and it has to be tried
+    # before them, whose "may" branch would take the offer and leave the
+    # per-object cost stranded.
+    per_object_toll = _parse_untap_chosen_by_paying(stream)
+    if per_object_toll is not None:
+        return per_object_toll
     # "**For as long as this creature remains tapped,** gain control of …"
     # (Preacher.) A linked duration (CR 611.2b) printed in front of the verb.
     # Read here for the reason the leading duration below is read here — it

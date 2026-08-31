@@ -146,7 +146,15 @@ LOWER_LAYERS = ["lowering", "statics", "lower"]
 # consequence rather than the counter itself. The one fragment the two families
 # shared, `_expect_counter_kind`, went down into `phrases` rather than staying
 # with either — a production two families need has no home inside one of them.
-EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "control_changes", "prevention", "counters"]
+# `tapping` split out of `effects/board.py` at the thousand-line guard, reusing
+# the name `lowering/tapping.py` has carried since it left `lowering/board.py`
+# — the mirror re-forming, which is what these names are for. The CR's own
+# line: everything in it is about whether a permanent is *tapped* (CR 110.5,
+# 701.20, 701.26), where the rest of `board` destroys, bounces, sacrifices or
+# re-controls one. The two halves shared no helper; what they both read
+# (`_parse_that_object`, the mana payment, the noun phrases) already lives one
+# layer down in `phrases`.
+EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "control_changes", "prevention", "counters", "tapping"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -221,9 +229,16 @@ LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", 
 # `PlayerGetsCounters` are three nodes beside the characteristics ones, and the
 # guards that made `counters` a family on the other two sides fired on the
 # lowerings and then, a set later, on the productions — never on the inventory.
+# `tapping` is the fifth, and the same reason a fifth time: `Tap`, `Untap`,
+# `TapOrUntap`, the two untap restrictions and the untap toll are six nodes
+# that sit perfectly well beside the board ones, and the guard that made
+# `tapping` a family on the other two sides fired on the lowerings and then, a
+# set later, on the productions — never on the inventory.
 AST_FAMILIES = [
     family for family in EFFECT_FAMILIES
-    if family not in ("library", "control_changes", "prevention", "counters")
+    if family not in (
+        "library", "control_changes", "prevention", "counters", "tapping",
+    )
 ]
 
 

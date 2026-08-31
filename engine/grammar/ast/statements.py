@@ -91,6 +91,7 @@ from .board import (
     TapOrUntap,
     DoesntUntapNextStep,
     Untap,
+    UntapChosenByPaying,
 )
 from .mana import (
     AddMana,
@@ -188,7 +189,7 @@ Effect = Union[
     GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, Mill, PutHandCardsOnLibrary, Scry, Destroy, Sacrifice,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, ShuffleHandIntoLibrary, Exile,
     ExileUntilLeavesOrUntaps, PutSourceIntoZone, Tap, Untap,
-    TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped,
+    TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped, UntapChosenByPaying,
     DelayedSelfAction, Attach, ExchangeControl, ExchangeGreatestManaValue,
     Regenerate, ChangeTarget, ChooseTarget, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,

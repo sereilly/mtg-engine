@@ -494,8 +494,11 @@ def _untap_up_to(ctx: PromptContext, choices: list) -> dict:
     re-validates each id, so the candidate list is a hint."""
     from engine.handlers._common import permanent_matches_filter
 
+    from engine.subject_filters import subject_matches
+
     choice = choices[0]
     filt = dict(choice.data.get("filter") or {})
+    observer = choice.data.get("observer")
     candidates = [
         {
             "seat": seat,
@@ -506,12 +509,23 @@ def _untap_up_to(ctx: PromptContext, choices: list) -> dict:
         }
         for seat, player in enumerate(ctx.game.players)
         for index, perm in enumerate(player.battlefield)
-        if permanent_matches_filter(perm, filt)
+        # The same question the engine re-asks when the answer comes back
+        # (`_resolve_untap_up_to`), so the list offered and the list accepted
+        # cannot disagree: "creatures without flying **they control**" narrows
+        # by a keyword and by a seat, neither of which the pure matcher tests.
+        if subject_matches(
+            ctx.game, perm, filt,
+            observer=observer if isinstance(observer, int) else choice.player_index,
+        )
     ]
     return {
         "player_seat": choice.player_index,
         "amount": choice.data.get("amount", 0),
         "card_name": choice.data.get("card_name", ""),
+        # "…pay {2} for **each** creature chosen this way" (Mudslide): the
+        # price of one pick, so the client can show what a selection costs.
+        # Absent (empty) for a free untap, which is what Rewind prints.
+        "cost_each": dict(choice.data.get("cost_each") or {}),
         "candidates": candidates,
     }
 

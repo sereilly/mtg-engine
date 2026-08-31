@@ -1068,9 +1068,19 @@ class PendingChoicesMixin:
 
     def _resolve_untap_up_to(self, choice: PendingChoice, permanent_ids: list) -> bool:
         """Validated whole before anything untaps: one bad id rejects the
-        answer and leaves the prompt queued, matching the exile search."""
+        answer and leaves the prompt queued, matching the exile search.
+
+        ``cost_each`` is Mudslide's price per pick — charged once for the whole
+        answer, because the payer chose the count and the price together
+        (CR 601.2h asks whether they are *able* to pay what they chose). An
+        answer they cannot afford is rejected whole, exactly as a bad id is:
+        untapping half of it would be a card charging for what it did not do.
+        """
+        from ...subject_filters import subject_matches
+
         amount = int(choice.data.get("amount", 0))
         filt = dict(choice.data.get("filter") or {})
+        observer = choice.data.get("observer")
         ids = [pid for pid in (permanent_ids or []) if isinstance(pid, int)]
         if len(ids) != len(permanent_ids or []) or len(set(ids)) != len(ids):
             return False
@@ -1079,11 +1089,33 @@ class PendingChoicesMixin:
         chosen = []
         for pid in ids:
             perm = self.permanent_by_id(pid)
-            if perm is None or not permanent_matches_filter(perm, filt):
+            # Through `subject_matches`, not the pure matcher: "tapped
+            # creatures **without flying they control**" narrows by a keyword
+            # (layer 6) and by a seat, and neither is answerable from the
+            # object alone — handed to the pure matcher both keys would be
+            # silently ignored, which is a strictly larger set than the card
+            # names.
+            if perm is None or not subject_matches(
+                self, perm, filt,
+                observer=observer if isinstance(observer, int) else choice.player_index,
+            ):
                 return False
             chosen.append(perm)
+        payer = self.players[choice.player_index]
+        plan = None
+        cost_each = dict(choice.data.get("cost_each") or {})
+        if cost_each and chosen:
+            total = {
+                symbol: count * len(chosen)
+                for symbol, count in cost_each.items() if count
+            }
+            plan = self._optional_pay_plan(payer, {"cost": total})
+            if plan is None:
+                return False
         for perm in chosen:
             self.become_untapped(perm)
+        if plan is not None:
+            self._spend_payment_plan(payer, plan)
         names = ", ".join(perm.card.name for perm in chosen) if chosen else "nothing"
         self.log.append(
             f"{self.players[choice.player_index].name} untapped {names} "
@@ -1095,13 +1127,30 @@ class PendingChoicesMixin:
     def _default_untap_up_to(self, choice: PendingChoice) -> None:
         """A non-interactive seat untaps its own tapped matching permanents,
         oldest first — its own because untapping an opponent's land is a gift,
-        and tapped ones because untapping an untapped land is a wasted pick."""
+        and tapped ones because untapping an untapped land is a wasted pick.
+
+        With a price on each pick (Mudslide), the count is capped by what the
+        *floating* mana covers — the same stated policy `_default_optional_pay`
+        takes, and for its reason: tapping a land for an optional cost is a
+        real decision about the rest of the turn, and it belongs to the seat
+        that was actually asked.
+        """
         amount = int(choice.data.get("amount", 0))
         filt = dict(choice.data.get("filter") or {})
         own = [
             perm for perm in self.controlled_by(choice.player_index)
             if perm.tapped and permanent_matches_filter(perm, filt)
         ]
+        cost_each = {k: v for k, v in (choice.data.get("cost_each") or {}).items() if v}
+        if cost_each:
+            payer = self.players[choice.player_index]
+            affordable = 0
+            while affordable < min(amount, len(own)):
+                total = {s: c * (affordable + 1) for s, c in cost_each.items()}
+                if plan_payment(payer.mana_pool, (), total) is None:
+                    break
+                affordable += 1
+            amount = affordable
         picks = [self.permanent_id_of(perm) for perm in own[:amount]]
         if not self._resolve_untap_up_to(choice, [p for p in picks if p is not None]):
             self._resolve_untap_up_to(choice, [])
@@ -2886,6 +2935,20 @@ class PendingChoicesMixin:
             produces=self._land_payment_colors,
         )
 
+    def _spend_payment_plan(self, player, plan) -> None:
+        """Carry out a :func:`plan_payment` answer: spend the floating mana it
+        names and tap the lands it names.
+
+        One writer, because a plan is *how* a cost is paid and a second
+        spelling of it is a second answer — the untap toll (Mudslide) collects
+        the same plan the optional-pay prompt does, and a payment that tapped
+        the lands but forgot the pool would be a cost half charged.
+        """
+        for symbol, amount in plan.from_pool.items():
+            player.mana_pool[symbol] = int(player.mana_pool.get(symbol, 0)) - amount
+        for land in plan.tapped:
+            self.become_tapped(land)
+
     def _player_can_pay_optional(self, player, entry: dict) -> bool:
         """CR 601.2h, for an optional cost: whether it *could* be paid.
 
@@ -2948,10 +3011,7 @@ class PendingChoicesMixin:
                     f"({entry.get('card_name', '')})"
                 )
             else:
-                for symbol, amount in plan.from_pool.items():
-                    player.mana_pool[symbol] = int(player.mana_pool.get(symbol, 0)) - amount
-                for land in plan.tapped:
-                    self.become_tapped(land)
+                self._spend_payment_plan(player, plan)
         # A grammar-lowered "may" carries its consequence as instructions rather
         # than as one of the three fixed fields above, so any effect can sit
         # behind an optional cost.

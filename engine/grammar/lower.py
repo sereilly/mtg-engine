@@ -183,6 +183,7 @@ from .lowering import (
     _lower_change_base_pt,
     _lower_set_base_pt,
     _lower_doesnt_untap_next_step,
+    _lower_untap_chosen_by_paying,
     _lower_delayed_self_action,
     _lower_damage_reduced_by_paid_mana,
     _lower_upkeep_damage_unless_cost,
@@ -271,7 +272,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ShuffleHandIntoLibrary: _lower_shuffle_hand_into_library,
     ast.RevealHand: _lower_reveal_hand,
     ast.RevealRandomFromHand: _lower_reveal_random_from_hand,
-    ast.RevealHandAndChoose: _lower_reveal_hand_and_choose,
     ast.ExileCostSacrifices: _lower_exile_cost_sacrifices,
     ast.ExileGraveyard: _lower_exile_graveyard,
     ast.LookAtHand: _lower_look_at_hand,
@@ -359,6 +359,18 @@ def lower_statement(
     if lowering is not None:
         return lowering(statement)
 
+    if isinstance(statement, ast.UntapChosenByPaying):
+        # The raw `event`, for `_lower_reveal_hand_and_choose`'s reason one
+        # branch down: the payer can be the seat the firing event froze.
+        return _lower_untap_chosen_by_paying(statement, event)
+    if isinstance(statement, ast.RevealHandAndChoose):
+        # In the chain rather than in the table above because the seat it acts
+        # on can be the one the *firing event* froze — "look at **that
+        # player's** hand" (Leshrac's Sigil), where nothing was targeted and
+        # there is no choice to read. The raw `event`, not `dispatch_event`:
+        # this clause is printed inside an offer's "if you do" branch, which is
+        # not the ability's whole effect and would see no event at all.
+        return _lower_reveal_hand_and_choose(statement, event)
     if isinstance(statement, ast.DealDamage):
         return _lower_damage(statement, event, produced)
     if isinstance(statement, ast.Fight):

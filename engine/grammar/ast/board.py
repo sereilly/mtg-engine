@@ -233,6 +233,28 @@ class DoesntUntapNextStep:
 
 
 @dataclass(frozen=True)
+class UntapChosenByPaying:
+    """"…that player may choose any number of tapped creatures without flying
+    they control and **pay {2} for each creature chosen this way**. If the
+    player does, untap those creatures." (Mudslide.)
+
+    A toll whose *number of payments* the payer chooses. Its own node rather
+    than a :class:`May` around an untap, because a ``May``'s cost is fixed when
+    the offer is made and this one is not known until the picking is done — the
+    player is choosing the set and the price in one decision, and the effect
+    lands on exactly what they paid for.
+
+    ``subject`` is the printed noun phrase the choice is made from, carried as
+    a filter rather than as chosen objects: nothing is chosen when the ability
+    resolves either, so the set is described here and picked at the prompt.
+    """
+
+    payer: PlayerRef
+    subject: ObjectFilter
+    cost_each: "ManaCost"
+
+
+@dataclass(frozen=True)
 class TapOrUntap:
     """"Tap or untap target artifact, creature, or land." (Twiddle.)
 

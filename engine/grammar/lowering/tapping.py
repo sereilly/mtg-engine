@@ -34,7 +34,8 @@ from ._common import (
     _restrictions_beyond,
     _targets_payload,
 )
-from ._events import names_attached_permanent
+from ._events import (_EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER,
+                      names_attached_permanent)
 
 #: The scratchpad key a tap records what it chose under, so a later sentence
 #: ("**it** doesn't untap…") can name the same permanents.
@@ -266,6 +267,57 @@ def _lower_tap(
     untap_payload = dict(payload)
     _describe_targets(untap_payload, spec)
     return (OracleInstruction("untap_target_permanent", "", untap_payload),)
+
+
+def _lower_untap_chosen_by_paying(
+    node: ast.UntapChosenByPaying, event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
+    """"…may choose any number of tapped creatures without flying they control
+    and pay {2} for each creature chosen this way. If the player does, untap
+    those creatures." (Mudslide.)
+
+    Onto ``untap_up_to_matching`` — the prompt that already picks any subset of
+    a described set by id and untaps it — with two payload keys rather than a
+    kind of its own: *how many* may be chosen (here, however many there are)
+    and *what each one costs*. That is the whole difference from Rewind, and a
+    second kind would be a second prompt, a second renderer and a second
+    action for one added price.
+
+    Two refusals, each a way the sentence could otherwise mean more than it
+    says:
+
+    * the noun phrase must be one the picker can test. A narrowing it cannot
+      would be handed over and ignored, and "any tapped creature" is a strictly
+      larger set than "any tapped creature **without flying**".
+    * the payer must be a seat something froze. "That player" under a trigger
+      that recorded nobody is a prompt armed on whichever seat the resolution
+      happened to carry.
+    """
+    described = _filter_payload(node.subject)
+    if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+        raise LoweringError(
+            "the untap picker cannot test this restriction", node=node
+        )
+    payload: dict[str, object] = {
+        # "**Any number**", so the cap is however many the board holds — a
+        # number only the resolution can know. The string says so; the handler
+        # counts them.
+        "amount": "any",
+        "filter": described,
+        "cost_each": _full_mana_payload(node.cost_each),
+    }
+    if node.payer.kind == "that_player":
+        if event not in _EVENT_SUBJECT_PLAYERS:
+            raise LoweringError(
+                f"no event named {event!r} freezes the seat 'that player' names",
+                node=node,
+            )
+        payload["who"] = EVENT_SUBJECT_PLAYER
+    elif not _is_you(node.payer):
+        raise LoweringError(
+            f"no untap toll is offered to the {node.payer.kind}", node=node
+        )
+    return (OracleInstruction("untap_up_to_matching", "", payload),)
 
 
 def _lower_doesnt_untap_next_step(

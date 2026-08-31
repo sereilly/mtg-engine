@@ -1958,4 +1958,92 @@ def test_icy_prison_gives_the_exiled_creature_back_when_it_leaves(set_pool):
     assert [p.card.name for p in p1.battlefield] == ["Balduvian Bears"], (
         "back under its owner's control, not the Prison controller's"
     )
+
+
+def test_mudslide_untaps_only_what_the_player_pays_for(set_pool):
+    """"At the beginning of each player's upkeep, that player may choose any
+    number of tapped creatures without flying they control and pay {2} for each
+    creature chosen this way. If the player does, untap those creatures."
+
+    A toll whose *number of payments* the payer picks, so the price is not
+    known until the picking is done — which is why it is one production and not
+    a ``May`` around an untap. Magnetic Mountain prints the same template with
+    a colour where this one has a keyword, and was a card hook until it did.
+    """
+    pool = set_pool("ICE")
+    slide = Permanent(card=pool["Mudslide"])
+    one = Permanent(card=pool["Balduvian Bears"], tapped=True)
+    two = Permanent(card=pool["Balduvian Bears"], tapped=True)
+    lands = [Permanent(card=pool["Snow-Covered Forest"]) for _ in range(4)]
+    p0 = PlayerState(name="P0", battlefield=[slide], life=20)
+    p1 = PlayerState(name="P1", battlefield=[one, two, *lands], life=20)
+    game = Game(players=[p0, p1])
+    game.active_player_index = 1
+
+    game.resolve_upkeep(1)
+    owed = [c for c in game.pending_choices if c.kind == "untap_up_to"]
+    assert [c.player_index for c in owed] == [1], "the chooser is the upkeep player"
+    assert owed[0].data["amount"] == 2, "any number, capped at what is there"
+
+    assert game.confirm_untap_up_to(1, [game.permanent_id_of(one)])
+
+    assert one.tapped is False
+    assert two.tapped is True, "unchosen, so unpaid for and still tapped"
+    assert sum(1 for land in lands if land.tapped) == 2, "{2}, once"
+
+
+def test_mudslide_does_not_offer_a_flyer_or_an_opponents_creature(set_pool):
+    """"tapped creatures **without flying** **they control**" — a keyword
+    (layer 6) and a seat, neither of which the pure matcher can test. Handed to
+    it, both keys would be silently ignored, and the offer would be a strictly
+    larger set than the card names.
+    """
+    pool = set_pool("ICE")
+    slide = Permanent(card=pool["Mudslide"])
+    flyer = Permanent(card=pool["Silver Erne"], tapped=True)
+    ground = Permanent(card=pool["Balduvian Bears"], tapped=True)
+    theirs = Permanent(card=pool["Balduvian Bears"], tapped=True)
+    p0 = PlayerState(name="P0", battlefield=[slide, theirs], life=20)
+    p1 = PlayerState(name="P1", battlefield=[flyer, ground], life=20)
+    game = Game(players=[p0, p1])
+    game.active_player_index = 1
+
+    game.resolve_upkeep(1)
+    owed = [c for c in game.pending_choices if c.kind == "untap_up_to"]
+
+    assert owed[0].data["amount"] == 1, "only the grounded creature they control"
+    assert not game.confirm_untap_up_to(1, [game.permanent_id_of(flyer)])
+    assert not game.confirm_untap_up_to(1, [game.permanent_id_of(theirs)])
+
+
+def test_leshracs_sigil_looks_at_the_casters_hand_and_takes_a_card(set_pool):
+    """"Whenever an opponent casts a green spell, you may pay {B}{B}. If you do,
+    look at that player's hand and choose a card from it. The player discards
+    that card."
+
+    Duress's template with the hand looked at instead of revealed, and with the
+    seat named by the *firing event* rather than by a target — so the frozen
+    key is what says whose hand, not whatever the resolution was carrying.
+    """
+    pool = set_pool("ICE")
+    sigil = Permanent(card=pool["Leshrac's Sigil"])
+    p0 = PlayerState(name="P0", battlefield=[sigil], life=20, mana_pool={"B": 2})
+    p1 = PlayerState(
+        name="P1", life=20,
+        hand=[pool["Balduvian Bears"], pool["Icy Prison"]],
+    )
+    game = Game(players=[p0, p1])
+
+    game.cast_from_hand(1, "Balduvian Bears")
+    game.auto_resolve_pending_optional_pays()
+    game._settle()
+
+    owed = [c for c in game.pending_choices if c.kind == "revealed_hand_pick"]
+    assert len(owed) == 1
+    assert owed[0].player_index == 0, "the Sigil's controller chooses"
+    assert owed[0].data["victim_index"] == 1, "out of the caster's hand"
+
+    game.auto_resolve_pending_choices()
+    game._settle()
+    assert [c.name for c in p1.graveyard] == ["Icy Prison"]
 # --- end W2G1 ---

@@ -1027,20 +1027,43 @@ def test_magnetic_mountain_does_not_block_other_colors(all_cards, arn_by_name):
 
 
 def test_magnetic_mountain_pays_to_untap_at_upkeep(all_cards, arn_by_name):
+    """"…that player may **choose** any number of tapped blue creatures they
+    control and pay {4} for each creature chosen this way."
+
+    The choice is the player's, so it is a prompt rather than something the
+    upkeep step does for them. This was a card hook that untapped greedily —
+    every affordable creature, in battlefield order, with nobody asked — until
+    Mudslide printed the same template and the two became one production.
+    """
     mountain = arn_by_name["Magnetic Mountain"]
     flyer = _get(all_cards, "Air Elemental")
     blocked = Permanent(card=flyer, tapped=True)
-    p1 = PlayerState(name="P1", battlefield=[Permanent(card=mountain), blocked], mana_pool={"C": 4})
+    # Four untapped lands rather than floating mana: an offer made inside a
+    # resolution gives its player no priority window to produce mana in, so
+    # `plan_payment` collects the cost off the board — which is the same rule
+    # every other "you may pay" in the engine follows.
+    lands = [Permanent(card=_get(all_cards, "Plains")) for _ in range(4)]
+    p1 = PlayerState(
+        name="P1", battlefield=[Permanent(card=mountain), blocked, *lands]
+    )
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
     game.resolve_upkeep(0)
+    owed = [c for c in game.pending_choices if c.kind == "untap_up_to"]
+    assert [c.player_index for c in owed] == [0]
+    assert owed[0].data["cost_each"]["generic"] == 4
+
+    assert game.confirm_untap_up_to(0, [game.permanent_id_of(blocked)])
 
     assert blocked.tapped is False
-    assert sum(p1.mana_pool.values()) == 0
+    assert all(land.tapped for land in lands), "the {4} came off the board"
 
 
 def test_magnetic_mountain_no_untap_without_mana(all_cards, arn_by_name):
+    """An answer the payer cannot afford is rejected whole and the prompt
+    stays owed — untapping half of it would be a card charging for what it did
+    not do (CR 601.2h)."""
     mountain = arn_by_name["Magnetic Mountain"]
     flyer = _get(all_cards, "Air Elemental")
     blocked = Permanent(card=flyer, tapped=True)
@@ -1049,6 +1072,7 @@ def test_magnetic_mountain_no_untap_without_mana(all_cards, arn_by_name):
     game = Game(players=[p1, p2])
 
     game.resolve_upkeep(0)
+    assert not game.confirm_untap_up_to(0, [game.permanent_id_of(blocked)])
 
     assert blocked.tapped is True
 
