@@ -351,6 +351,9 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # without the row the ability answered None and the guard could not tell
     # the two apart.
     "recolor_enchanted_chosen_color": {"kind": "none"},
+    # Shyft: the same positive "nothing to point at" — the sentence names
+    # the source itself, so no picker is offered and none is missing.
+    "recolor_self_chosen_color": {"kind": "none"},
     "tap_or_untap_target": {"kind": "permanent"},
     "drain_target_lands_mana": {"kind": "player"},
     "tap_target_player_lands_and_drain_mana": {"kind": "player"},

@@ -2167,4 +2167,70 @@ def test_krovikan_vampire_changing_hands_sacrifices_what_it_returned(set_pool):
 
     assert "Balduvian Bears" not in [p.card.name for p in game.controlled_by(0)]
     assert [card.name for card in p1.graveyard] == ["Balduvian Bears"]
+
+
+# Shyft — "At the beginning of your upkeep, you may have this creature become
+# the color or colors of your choice. (This effect lasts indefinitely.)"
+
+
+def _w3g5_shyft(set_pool, interactive=(), opponent=("Abyssal Specter",)):
+    pool = set_pool("ICE")
+    shyft = Permanent(card=pool["Shyft"])
+    p0 = PlayerState(name="P0", battlefield=[shyft])
+    p1 = PlayerState(
+        name="P1", battlefield=[Permanent(card=pool[name]) for name in opponent]
+    )
+    game = Game(players=[p0, p1])
+    game.active_player_index = 0
+    game.interactive_seats = set(interactive)
+    game.resolve_upkeep(0)
+    for _ in range(6):
+        if game.stack and not game.pending_choices:
+            game.resolve_top_of_stack()
+            continue
+        break
+    game._settle()
+    return game, shyft
+
+
+def test_shyft_takes_a_deterministic_colour_for_a_seat_nobody_asks(set_pool):
+    """The stated default: the colour the opponents hold least of among
+    nontoken permanents — a creature sharing a colour with the board is the one
+    every colour-hoser reaches. Ties break on the printed WUBRG order, so a
+    seeded run reproduces."""
+    game, shyft = _w3g5_shyft(set_pool)
+
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert not game.pending_choices
+    assert game._effective_colors(shyft) == {"W"}, "the opponent's board is black"
+
+
+def test_shyft_lets_an_interactive_seat_name_two_colours(set_pool):
+    """CR 105.2: "the color **or colors**" offers a set, and a two-coloured
+    object is one object of two colours. Layer 5 has taken a tuple since Dream
+    Coat; what did not exist was a way for a player to name one."""
+    game, shyft = _w3g5_shyft(set_pool, interactive=(0,))
+
+    assert game.confirm_optional_pay(0, card_name="Shyft", accept=True)
+    game._settle()
+    assert [c.kind for c in game.pending_choices] == ["color_set_choice"]
+
+    assert game.confirm_color_set_choice(0, ["W", "R"])
+    game._settle()
+
+    assert game._effective_colors(shyft) == {"W", "R"}
+
+
+def test_shyft_declined_stays_the_colour_it_was_printed(set_pool):
+    """"You **may**" — a declined offer changes nothing, and the creature is
+    still the blue it was printed."""
+    game, shyft = _w3g5_shyft(set_pool, interactive=(0,))
+
+    assert game.confirm_optional_pay(0, card_name="Shyft", accept=False)
+    game._settle()
+
+    assert not game.pending_choices
+    assert game._effective_colors(shyft) == {"U"}
 # --- end W3G5 ---

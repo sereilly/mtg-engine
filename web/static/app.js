@@ -1109,7 +1109,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getRevealedDrawBuyoutInfo(state) || getColorSetChoiceInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2324,6 +2324,16 @@ function getPayLifeToSaveInfo(state = currentState) {
   return info;
 }
 
+// Shyft: "you may have this creature become the color or colors of your
+// choice." A set, so the picker toggles rather than choosing one.
+function getColorSetChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.color_set_choice;
+  if (!info) return null;
+  if (info.player_index !== seat) return null;
+  return info;
+}
+
 // Zur's Weirding: "If a player would draw a card, they reveal it instead. Then
 // any other player may pay 2 life." The offer goes round every other seat in
 // turn order and the first to pay bins the card.
@@ -3236,7 +3246,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getRevealedDrawBuyoutInfo(state) || getColorSetChoiceInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getCastChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -4240,6 +4250,70 @@ function applyPayLifeToSavePrompt(info) {
       });
     });
   });
+}
+
+// Shyft: pick the colour, or the set of colours, the creature becomes.
+let colorSetSelection = [];
+function applyColorSetChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+
+  panel.classList.remove("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  okBtn.classList.remove("hidden");
+
+  const several = !!info.several;
+  const name = info.permanent_name || "that permanent";
+  title.textContent = several ? "Choose Colors" : "Choose a Color";
+  body.textContent =
+    `${info.card_name || "An effect"}: ${name} becomes the color` +
+    (several ? "s" : "") + " of your choice.";
+  colorSetSelection = colorSetSelection.filter((c) => (info.colors || []).includes(c));
+  const render = () => {
+    steps.innerHTML =
+      `<div class="prompt-choice-row">` +
+      (info.colors || [])
+        .map(
+          (c) =>
+            `<button type="button" class="prompt-choice-btn` +
+            (colorSetSelection.includes(c) ? " selected" : "") +
+            `" data-color-set="${escapeHtml(c)}">${escapeHtml(c)}</button>`
+        )
+        .join("") +
+      `</div>`;
+    steps.querySelectorAll("[data-color-set]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const picked = btn.dataset.colorSet;
+        if (!several) {
+          colorSetSelection = [picked];
+        } else if (colorSetSelection.includes(picked)) {
+          colorSetSelection = colorSetSelection.filter((c) => c !== picked);
+        } else {
+          colorSetSelection = colorSetSelection.concat([picked]);
+        }
+        render();
+      });
+    });
+    okBtn.disabled = colorSetSelection.length === 0;
+  };
+  render();
+  okBtn.onclick = async () => {
+    if (!colorSetSelection.length) return;
+    const chosen = colorSetSelection.slice();
+    colorSetSelection = [];
+    await sendAction({
+      seat,
+      action: "color_set_choice_confirm",
+      mana_colors: chosen,
+    });
+  };
 }
 
 // Zur's Weirding: the card the drawing player is about to draw is face up on
@@ -7276,6 +7350,12 @@ function renderActivationPrompt() {
   const revealedDrawBuyoutInfo = getRevealedDrawBuyoutInfo();
   if (revealedDrawBuyoutInfo) {
     applyRevealedDrawBuyoutPrompt(revealedDrawBuyoutInfo);
+    return;
+  }
+
+  const colorSetChoiceInfo = getColorSetChoiceInfo();
+  if (colorSetChoiceInfo) {
+    applyColorSetChoicePrompt(colorSetChoiceInfo);
     return;
   }
 

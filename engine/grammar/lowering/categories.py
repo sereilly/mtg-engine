@@ -304,6 +304,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Dream Coat: the same effect on an Aura's own host rather than on a
     # target, and on the set of colours the card offers rather than one.
     "recolor_enchanted_chosen_color": "recolor",
+    "recolor_self_chosen_color": "recolor",
     # CR 701.12b, an atomic swap of two layer-2 contributions.
     "exchange_control_of_targets": "control",
     "exchange_control_of_bound": "control",

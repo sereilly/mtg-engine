@@ -399,6 +399,38 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
     return True, "resolved"
 
 
+@effect_handler("recolor_self_chosen_color")
+def recolor_self_chosen_color(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You may have this creature become the color or colors of your choice."
+    (Shyft.)
+
+    The third subject in the chosen-colour family, and the only one whose choice
+    is made during a *triggered* ability's resolution — the other two are
+    activated, so their colour rides the activation on ``choices["new_color"]``
+    and is in hand by the time the handler runs. Nothing announces a trigger's
+    colour, so this one asks: the standing ``color_set_choice`` prompt, on the
+    ability's controller.
+
+    The prompt takes a **set**, because "the color **or colors**" offers one
+    (CR 105.2 makes a two-coloured object one object). Layer 5 has written a
+    tuple since Dream Coat; what did not exist was a way for a player to name
+    more than one.
+    """
+    source_permanent = context.source_permanent
+    if source_permanent is None:
+        return False, "ability not implemented"
+    seat = game.controller_index_of(source_permanent)
+    if seat is None:
+        return True, "resolved"
+    game.arm_color_set_choice(
+        seat,
+        permanent=source_permanent,
+        card_name=context.card.name,
+        several=bool(instruction.payload.get("several")),
+    )
+    return True, "resolved"
+
+
 @effect_handler("recolor_enchanted_chosen_color")
 def recolor_enchanted_chosen_color(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Enchanted creature becomes the color or colors of your choice."

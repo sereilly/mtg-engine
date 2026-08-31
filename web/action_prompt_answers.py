@@ -441,6 +441,15 @@ def _action_pay_life_to_save_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="no pay-to-save offer pending for you")
 
+@action_handler("color_set_choice_confirm")
+def _action_color_set_choice_confirm(session, req, seat_type):
+    # Shyft: "become the color or colors of your choice."
+    if not req.mana_colors:
+        raise HTTPException(status_code=400, detail="mana_colors is required")
+    ok = session.game.confirm_color_set_choice(req.seat, list(req.mana_colors))
+    if not ok:
+        raise HTTPException(status_code=400, detail="that colour choice is not open")
+
 @action_handler("revealed_draw_buyout_confirm")
 def _action_revealed_draw_buyout_confirm(session, req, seat_type):
     # Zur's Weirding: "Then any other player may pay 2 life." One offer at a

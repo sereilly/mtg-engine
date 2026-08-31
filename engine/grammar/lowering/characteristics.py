@@ -809,9 +809,30 @@ def _lower_become_color(
                     "recolor_enchanted_chosen_color", "", {"several": several}
                 ),
             )
+        if _is_source(node.subject):
+            # "You may have **this creature** become the color or colors of your
+            # choice." (Shyft.) The third subject the phrase is printed on, and
+            # the one nobody chooses at all: an object the sentence names
+            # outright. Its own kind rather than the Aura's, because which
+            # permanent is recoloured is the whole difference and reading the
+            # source off an ``attached_to`` that is never there would recolour
+            # nothing.
+            #
+            # No duration: "(This effect lasts indefinitely.)" is CR 611.2's
+            # default said out loud, so a printed one would be a different card.
+            if node.duration.kind is not None:
+                raise LoweringError(
+                    f"no handler recolours for {node.duration.kind!r}", node=node
+                )
+            return (
+                OracleInstruction(
+                    "recolor_self_chosen_color", "", {"several": several}
+                ),
+            )
         if several:
             raise LoweringError(
-                "only an Aura's own host may be given a set of chosen colours",
+                "only an Aura's own host or the source itself may be given a "
+                "set of chosen colours",
                 node=node,
             )
         # "Target permanent you control becomes the color of your choice."

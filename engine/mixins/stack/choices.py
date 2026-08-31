@@ -3789,6 +3789,103 @@ class PendingChoicesMixin:
             choice, mine and self.players[choice.player_index].life > life
         )
 
+    # -- Becoming the colour or colours of your choice (Shyft) --------------
+
+    def arm_color_set_choice(
+        self, player_index: int, *, permanent, card_name: str, several: bool
+    ) -> None:
+        """Ask *player_index* which colour or colours *permanent* becomes.
+
+        The colour a *triggered* ability sets has nowhere else to come from: an
+        activated one carries it on the activation (``choices["new_color"]``),
+        and nothing announces a trigger. So the question is put here, on the
+        standing queue, and CR 609.3 is why it is put at resolution rather than
+        when the trigger goes on the stack.
+
+        A deterministic default is stamped before the prompt, the discipline
+        every entry choice follows: the colour the *opponents* hold least of
+        among nontoken permanents, which is the choice a player makes with this
+        card — a creature that shares a colour with the board is the one every
+        colour-hoser reaches. The same reasoning ``_default_terrain_land_types``
+        writes down, one card over.
+        """
+        colors = ["W", "U", "B", "R", "G"]
+        default = self._least_common_opponent_color(player_index)
+        self.arm_pending_choice(
+            "color_set_choice", player_index,
+            card_name=card_name,
+            permanent=permanent,
+            several=bool(several),
+            colors=colors,
+            default_colors=[default],
+        )
+
+    def _least_common_opponent_color(self, seat: int) -> str:
+        """The colour *seat*'s opponents control fewest of, among nontoken
+        permanents. Ties break on the printed WUBRG order, so a seeded run
+        reproduces."""
+        counts = {color: 0 for color in ("W", "U", "B", "R", "G")}
+        for other, player in enumerate(self.players):
+            if other == seat or player.lost:
+                continue
+            for perm in self.controlled_by(other):
+                if perm.metadata.get("is_token"):
+                    continue
+                for color in self._effective_colors(perm):
+                    if color in counts:
+                        counts[color] += 1
+        order = list(counts)
+        return min(order, key=lambda color: (counts[color], order.index(color)))
+
+    def confirm_color_set_choice(self, player_index: int, colors) -> bool:
+        """Answer "become the color or colors of your choice"."""
+        return self.resolve_pending_choice(
+            "color_set_choice", player_index, colors=colors
+        )
+
+    def _resolve_color_set_choice(self, choice: PendingChoice, colors) -> bool:
+        """Write the chosen set as this permanent's colour (CR 613 layer 5).
+
+        Refused rather than silently narrowed when the card offered one colour
+        and the answer names several — "the color of your choice" is one, and a
+        prompt that took two would be a card nobody printed.
+        """
+        data = choice.data
+        wanted = list(colors) if isinstance(colors, (list, tuple)) else [colors]
+        symbols = []
+        for entry in wanted:
+            try:
+                symbol = self._normalize_mana_color(entry)
+            except ValueError:
+                return False
+            if symbol and symbol not in symbols:
+                symbols.append(symbol)
+        if not symbols:
+            return False
+        if len(symbols) > 1 and not data.get("several"):
+            return False
+        permanent = data["permanent"]
+        self.discard_pending_choice(choice)
+        if not self.is_on_battlefield(permanent):
+            # It left while the prompt was owed; there is nothing to recolour
+            # and the prompt still clears.
+            return True
+        # A tuple whenever the card offered a set, so layer 5 writes every
+        # colour rather than the first — the shape `collect_color_effects`
+        # already reads, and a bare symbol otherwise.
+        permanent.metadata["color_override"] = (
+            tuple(symbols) if data.get("several") else symbols[0]
+        )
+        self._recalculate_lord_buffs()
+        self.log.append(
+            f"{permanent.card.name} became {'/'.join(symbols)} "
+            f"({data.get('card_name', '')})"
+        )
+        return True
+
+    def _default_color_set_choice(self, choice: PendingChoice) -> None:
+        self._resolve_color_set_choice(choice, choice.data.get("default_colors") or [])
+
     # -- Buying a revealed draw out of a hand (Zur's Weirding) --------------
 
     def offer_revealed_draw_buyout(
@@ -4571,6 +4668,22 @@ register_choice(
     # deterministic answer before the flag is set — so headless and AI play run
     # exactly as they did.
     suspends=True,
+)
+
+register_choice(
+    "color_set_choice",
+    resolve=lambda game, choice, r: game._resolve_color_set_choice(
+        choice, r.get("colors")
+    ),
+    default=lambda game, choice: game._default_color_set_choice(choice),
+    action="color_set_choice_confirm",
+    prompt_key="color_set_choice",
+    blocked_detail="choose the colour or colours before other actions",
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The colour is the whole of what this resolution does; nothing after it in
+    # the same trigger reads the answer, so the loop has nothing to wait for.
+    default_at_arm=True,
 )
 
 register_choice(
