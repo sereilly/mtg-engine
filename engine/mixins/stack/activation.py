@@ -22,7 +22,8 @@ from ...activation_restrictions import (
     mark_activated_this_turn,
 )
 from ...auras import attached_ability_cost_reduction, aura_restriction_active
-from ...cost_modifiers import ability_cost_tax, ability_self_reduction_amount
+from ...cost_modifiers import (ability_cost_tax, ability_self_reduction_amount,
+                                sacrifice_taxes)
 from ...cost_x_definitions import cost_x_is_defined, cost_x_value
 from ...mana_payment import is_mana_ability
 from ...events import emit
@@ -882,6 +883,25 @@ class AbilityActivationMixin:
             required_cost["generic"] = (
                 required_cost.get("generic", 0) + int(x_value) * x_symbols
             )
+        # "Activated abilities cost an additional "Sacrifice a Swamp" to
+        # activate for each black mana symbol in their activation costs."
+        # (Drought.) The cast path's twin, asked of the *printed* activation
+        # cost — CR 601.2f determines an additional cost from the cost as
+        # printed, before any of the increases and reductions below touch the
+        # generic part. Refused with nothing paid when it cannot be met, which
+        # is CR 602.2b routing through CR 601.2h.
+        sacrifice_demands = sacrifice_taxes(
+            self, controller_index, ability.cost.mana, "activate"
+        )
+        sacrifice_tax_victims = self._sacrifice_tax_victims(
+            controller_index, sacrifice_demands
+        )
+        if isinstance(sacrifice_tax_victims, str):
+            details = (
+                f"{permanent.card.name}: {sacrifice_tax_victims} (CR 601.2h)"
+            )
+            self.log.append(details)
+            return SimulationResult(permanent.card.name, False, "unsupported", details)
         # Ability cost taxes (Gloom: "Activated abilities of white enchantments
         # cost {3} more to activate"; the white-spell cast tax is applied
         # separately in cast_from_hand).
@@ -1090,6 +1110,12 @@ class AbilityActivationMixin:
                 f"{permanent.card.name}"
             )
 
+        # Drought's imposed sacrifices, paid with the printed ones and at the
+        # same moment (CR 602.2b). Picked before any mana left the pool, so a
+        # board unchanged since pays exactly what the gate measured.
+        self._pay_sacrifice_tax(
+            sacrifice_tax_victims, f"to activate {permanent.card.name}"
+        )
         # Pay the chosen sacrifice (CR 601.2h) — the creature is gone before the
         # ability goes on the stack, so Hobblefiend's counter lands on a board
         # that has already lost it.

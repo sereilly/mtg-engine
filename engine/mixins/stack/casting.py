@@ -27,8 +27,8 @@ from ...damage_ledger import record_cast
 from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...classifier import classify_card
 from ...cost_modifiers import (
-    CostReduction, cost_reduction_for_cast, reduce_cost, spell_cost_tax,
-    spell_life_tax,
+    CostReduction, cost_reduction_for_cast, reduce_cost, sacrifice_taxes,
+    spell_cost_tax, spell_life_tax,
 )
 from ...game_types import SimulationResult, StackItem
 from ...handlers._common import graveyard_card_matches, permanent_matches_filter
@@ -653,6 +653,21 @@ class SpellCastingMixin:
             self.log.append(unpayable)
             return SimulationResult(card.name, False, classification.effect_kind, unpayable)
 
+        # "Spells cost an additional "Sacrifice a Swamp" to cast for each black
+        # mana symbol in their mana costs." (Drought.) An additional cost
+        # imposed from a *board* rather than printed on the spell, so it is
+        # asked here beside the printed ones and at the same moment (CR 601.2f
+        # determines it, CR 601.2h pays it), and refused rather than clamped:
+        # CR 118.4 makes an unpayable cost an uncastable spell, not a free one.
+        sacrifice_demands = sacrifice_taxes(
+            self, caster_index, card.mana_cost or "", "cast"
+        )
+        owed = self._sacrifice_tax_victims(caster_index, sacrifice_demands)
+        if isinstance(owed, str):
+            details = f"{card.name} can't be cast: {owed} (CR 601.2h)"
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
+
         # A cost waiver ("cast spells from your hand without paying their mana
         # costs", Chandra, Flame's Catalyst's −8). An X spell defaults to
         # *paying*, because a waived {X} is locked to 0 (CR 107.3b) and paying
@@ -710,6 +725,10 @@ class SpellCastingMixin:
             cost_hand_card=cost_hand_card,
             x_value=resolved_x_value,
         )
+        # Drought's imposed sacrifices, paid with the printed ones and at the
+        # same moment. The victims were picked before the mana was spent, so a
+        # board that has not changed since pays exactly what the gate measured.
+        self._pay_sacrifice_tax(owed, f"to cast {card.name}")
         if permission is not None:
             consume_permission(self, permission, card)
         if from_zone == "command":
@@ -821,6 +840,49 @@ class SpellCastingMixin:
                 self, perm, cost.sacrifice_filter, observer=caster_index
             )
         ]
+
+    def _sacrifice_tax_victims(
+        self, payer_index: int, demands: tuple
+    ) -> "list[Permanent] | str":
+        """The permanents that will pay every imposed sacrifice, or the reason
+        they cannot (CR 601.2h).
+
+        Picked once, across *all* the demands together: two Droughts want two
+        Swamps each and one Swamp cannot pay both, which is what asking each
+        demand its own question would have said. The picks are removed from the
+        pool as they are made, and the payer's own deterministic order is the
+        one every other sacrifice cost uses.
+
+        Shared by the cast path and the activation path, because CR 601.2b and
+        CR 602.2b are the same announcement step — the same reason
+        ``AdditionalCost.sacrifice_filter`` is one vocabulary.
+        """
+        chosen: list[Permanent] = []
+        for demand in demands:
+            for _ in range(demand.count):
+                available = [
+                    perm
+                    for perm in self.controlled_by(payer_index)
+                    if subject_matches(
+                        self, perm, demand.described, observer=payer_index
+                    )
+                    and not any(taken is perm for taken in chosen)
+                ]
+                if not available:
+                    return (
+                        f"no {demand.noun.title()} left to sacrifice for "
+                        f"{demand.source_name}"
+                    )
+                chosen.append(self.default_sacrifice_pick(available))
+        return chosen
+
+    def _pay_sacrifice_tax(self, victims: "list[Permanent]", why: str) -> None:
+        """Sacrifice what ``_sacrifice_tax_victims`` picked. By identity, never
+        by slot: each removal renumbers the battlefield behind it."""
+        for victim in victims:
+            name = victim.card.name
+            if self.sacrifice_permanent(victim) is not None:
+                self.log.append(f"{name} was sacrificed {why}")
 
     def _unpayable_additional_cost(
         self,

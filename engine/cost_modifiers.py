@@ -31,6 +31,7 @@ would find it.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -80,6 +81,21 @@ class CostModifier:
     controller: str | None = None
     life: bool = False
     targets_source: bool = False
+    #: "Spells cost an additional \"Sacrifice a Swamp\" to cast for each black
+    #: mana symbol in their mana costs." (Drought.) The payment is a
+    #: **sacrifice** rather than mana or life — a third resource on the same
+    #: table, for the reason the life tax is on it: what changes is what the
+    #: additional cost is paid *with*, not that there is one (CR 601.2f).
+    #: The noun phrase is in the same filter vocabulary
+    #: ``AdditionalCost.sacrifice_filter`` uses, so what may pay is described
+    #: once for a card's own cost and for a cost imposed on it.
+    sacrifice_filter: dict | None = None
+    #: The mana symbol counted in the affected object's cost, once per
+    #: occurrence. Drought is the first tax in the pool whose *size* is read off
+    #: the thing being taxed rather than printed, and it is payload for the
+    #: reason every other parameter here is: a card printing the same sentence
+    #: about a red symbol needs no code.
+    per_symbol: str | None = None
 
 
 @dataclass(frozen=True)
@@ -123,6 +139,33 @@ _TARGETING_MANA_TAX = re.compile(
     r"\{(?P<amount>\d+)\} more to cast"
 )
 
+# "Spells cost an additional "Sacrifice a Swamp" to cast for each black mana
+# symbol in their mana costs." / the same sentence about activated abilities and
+# their activation costs (Drought). One pattern for both halves, because they
+# are one printed template with the object and the two matching nouns changed —
+# and the pairing is checked rather than assumed, so "spells … to activate" is
+# not read as either.
+#
+# The quoted clause is a *cost*, not a granted ability: CR 601.2b's additional
+# cost is printed in quotes here the way CR 702's keyword abilities are, and the
+# grammar refuses the shape ("granted ability in quotes") precisely so a table
+# that implements it can claim it instead.
+_SACRIFICE_SYMBOL_TAX = re.compile(
+    r"(?P<what>spells|activated abilities) cost an additional "
+    r'"sacrifice (?:a|an) (?P<noun>[a-z]+)" to (?P<verb>cast|activate) '
+    rf"for each (?P<colour>{_COLOURS}) mana symbol in their "
+    r"(?P<costs>mana|activation) costs"
+)
+
+#: Which nouns the halves must pair with. A sentence naming a spell and then an
+#: activation cost describes nothing this engine can charge, and reading it as
+#: either half would charge the wrong objects.
+_SACRIFICE_TAX_HALVES = {
+    ("spells", "cast", "mana"): "cast",
+    ("activated abilities", "activate", "activation"): "activate",
+}
+
+
 # "activated abilities of <colour>? <type>s cost {N} more to activate"
 _ABILITY_TAX = re.compile(
     rf"activated abilities of (?:(?P<colour>{_COLOURS}) )?(?P<type>{_TYPE_LIST})s? cost "
@@ -140,6 +183,7 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
         "more to" not in text
         and "less to" not in text
         and "life to cast" not in text
+        and "an additional" not in text
     ):
         return ()
     modifiers: list[CostModifier] = []
@@ -183,7 +227,35 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
                 card_types=_types_named(match.group("type")),
             )
         )
+    for match in _SACRIFICE_SYMBOL_TAX.finditer(text):
+        modifier = _sacrifice_symbol_modifier(match)
+        if modifier is not None:
+            modifiers.append(modifier)
     return tuple(modifiers)
+
+
+def _sacrifice_symbol_modifier(match: "re.Match[str]") -> CostModifier | None:
+    """Drought's clause as a modifier, or None when the sentence's halves do not
+    pair — see ``_SACRIFICE_TAX_HALVES``.
+
+    ``amount`` is 0: the *number* of sacrifices is read off the taxed object's
+    cost rather than printed, and a non-zero amount here would also add generic
+    mana through ``_tax``, which the card does not say.
+    """
+    applies_to = _SACRIFICE_TAX_HALVES.get(
+        (match.group("what"), match.group("verb"), match.group("costs"))
+    )
+    if applies_to is None:
+        return None
+    symbol = _COLOR_WORD_TO_SYMBOL.get(match.group("colour") or "")
+    if symbol is None:
+        return None
+    return CostModifier(
+        amount=0,
+        applies_to=applies_to,
+        sacrifice_filter={"subtype_filter": match.group("noun")},
+        per_symbol=symbol,
+    )
 
 
 def cost_modifier_claims_line(line: str) -> bool:
@@ -209,6 +281,16 @@ def cost_modifier_claims_line(line: str) -> bool:
         for pattern in (
             _SPELL_TAX, _ABILITY_TAX, _TARGETING_LIFE_TAX, _TARGETING_MANA_TAX,
         )
+    ):
+        return True
+    # Claimed only when the halves pair, for `_sacrifice_symbol_modifier`'s
+    # reason: an unpaired sentence produces no modifier, and a claim over a line
+    # nothing charges is the drift this seam exists to prevent.
+    sacrifice = _SACRIFICE_SYMBOL_TAX.match(text)
+    if (
+        sacrifice is not None
+        and sacrifice.end() == len(text)
+        and _sacrifice_symbol_modifier(sacrifice) is not None
     ):
         return True
     return self_reduction_claims_line(line)
@@ -275,6 +357,13 @@ def _tax(
             # here it would be added to the generic cost, which is a different
             # resource and a different rule (CR 118.3b).
             if modifier.life:
+                continue
+            # A sacrifice tax is not mana either, and is charged by
+            # ``sacrifice_taxes``. Skipped rather than left to add its zero,
+            # because this function also collects the taxing permanents' *names*
+            # for the log — a Drought listed beside a Gloom would report a mana
+            # tax it does not impose.
+            if modifier.sacrifice_filter is not None:
                 continue
             if modifier.applies_to != applies_to or not _matches(modifier, card):
                 continue
@@ -361,6 +450,84 @@ def spell_cost_reduction(game, caster_index: int, card) -> tuple[CostReduction, 
         game, card, "cast", wanted="less", controller_index=caster_index
     )
     return CostReduction(generic), names
+
+
+def _symbols_in(cost, symbol: str) -> int:
+    """How many mana symbols in *cost* are *symbol* (CR 107.4).
+
+    Two spellings of a cost reach this, because the engine really has two: a
+    **symbol dict** is what every cost inside the engine is (an activation cost,
+    a payment plan), and a card's *printed* mana cost is still the string
+    Scryfall gave it. One reader for both, so what Drought counts on a spell and
+    what it counts on an ability cannot come to be two questions.
+
+    The string is read per printed symbol rather than by counting "{B}"
+    literally, because a hybrid or Phyrexian symbol containing B **is** a black
+    mana symbol (CR 107.4e/107.4f) and a literal count would miss it. Nothing in
+    the pool prints one yet; the rule is what the card says.
+    """
+    if isinstance(cost, Mapping):
+        return max(0, int(cost.get(symbol.upper(), 0) or 0))
+    return sum(
+        1
+        for printed in re.findall(r"\{([^}]*)\}", str(cost).upper())
+        if symbol.upper() in printed.split("/")
+    )
+
+
+@dataclass(frozen=True)
+class SacrificeDemand:
+    """One imposed "Sacrifice a <noun>" cost, sized for one object.
+
+    ``described`` is the payload ``subject_matches`` tests; ``noun`` is the word
+    the card printed, kept beside it because a filter's *head noun* is
+    "permanent" for anything narrowed by a subtype — true, and useless in the
+    refusal a player reads.
+    """
+
+    described: dict
+    count: int
+    noun: str
+    source_name: str
+
+
+def sacrifice_taxes(
+    game, payer_index: int, cost, applies_to: str
+) -> tuple[SacrificeDemand, ...]:
+    """Every "cost an additional \"Sacrifice a …\"" demand on an object whose
+    cost is *cost*.
+
+    One entry per taxing permanent, because each is its own ability — two
+    Droughts charge twice — and the scan covers every battlefield, for the
+    reason ``_tax`` gives: a cost modifier is not scoped to its controller's
+    side unless the card says so.
+
+    Returned as demands rather than performed here, because the two payers ask
+    at different moments in their own announcement (CR 601.2h against
+    CR 602.2b) and both need the *gate* before anything is spent.
+    """
+    demands: list[SacrificeDemand] = []
+    for _seat, permanent in game.permanents_with_controller():
+        for modifier in cost_modifiers_for(permanent.effective_card.oracle_text):
+            if modifier.sacrifice_filter is None or modifier.per_symbol is None:
+                continue
+            if modifier.applies_to != applies_to:
+                continue
+            count = _symbols_in(cost, modifier.per_symbol)
+            if count:
+                demands.append(
+                    SacrificeDemand(
+                        described=dict(modifier.sacrifice_filter),
+                        count=count,
+                        noun=str(
+                            modifier.sacrifice_filter.get("subtype_filter")
+                            or modifier.sacrifice_filter.get("type_filter")
+                            or "permanent"
+                        ),
+                        source_name=permanent.effective_card.name,
+                    )
+                )
+    return tuple(demands)
 
 
 def ability_cost_tax(game, controller_index: int, source) -> tuple[int, list[str]]:
