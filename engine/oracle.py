@@ -3644,7 +3644,7 @@ def _derived_static_claims(
     """
     from .card_hooks import DRAW_STEP_MODIFIERS
     from .cost_modifiers import cost_modifier_claims_line
-    from .cost_x_definitions import cast_x_definition_line
+    from .cost_x_definitions import cast_x_ceiling_line, cast_x_definition_line
     from .damage_source_colors import CLAIM as DAMAGE_SOURCE_COLORS_CLAIM
     from .damage_source_colors import colorless_source_line
     from .draw_step_modifiers import (draw_step_bonus_for, draw_step_skip_for,
@@ -3715,6 +3715,16 @@ def _derived_static_claims(
     # rather than leave the caster announcing X freely.
     if any(
         cast_x_definition_line(line) for line in (oracle_text or "").splitlines()
+    ):
+        claims.append("cast_x_definitions")
+    # "X can't be greater than the number of snow lands you control."
+    # (Winter's Chill, CR 601.2b.) The bound half of the same rule: the caster
+    # still announces X and the cast path refuses one above the board's number,
+    # so there is no instruction — and a bound no row can count must make the
+    # card unsupported rather than leave the announcement unbounded.
+    if any(
+        cast_x_ceiling_line(line) is not None
+        for line in (oracle_text or "").splitlines()
     ):
         claims.append("cast_x_definitions")
     if draw_step_bonus_for(oracle_text) is not None:

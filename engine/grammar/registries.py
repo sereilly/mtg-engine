@@ -30,7 +30,7 @@ from __future__ import annotations
 from ..auras import aura_continuous_claim
 from ..cast_restrictions import CAST_RESTRICTIONS, cast_condition_line
 from ..cost_modifiers import cost_modifier_claims_line
-from ..cost_x_definitions import cast_x_definition_line
+from ..cost_x_definitions import cast_x_ceiling_line, cast_x_definition_line
 from ..damage_source_colors import colorless_source_line
 from ..draw_step_modifiers import draw_step_bonus_for, skips_own_draw_step
 from ..enter_effects import enter_effect_line
@@ -119,6 +119,16 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # implements leaves the card unsupported rather than admitted with the
     # caster free to announce any X they like.
     if cast_x_definition_line(line):
+        return "cost_x_definitions"
+
+    # engine/cost_x_definitions.py — "X can't be greater than the number of
+    # snow lands you control." (Winter's Chill.) CR 601.2b's announcement still
+    # belongs to the caster; this bounds it, so there is no effect to lower —
+    # the cast path refuses an X above the board's number and the picker never
+    # offers one. Claimed through the module that counts it, so a bound no row
+    # can read leaves the card unsupported rather than admitted with the caster
+    # free to announce past it.
+    if cast_x_ceiling_line(line) is not None:
         return "cost_x_definitions"
 
     # engine/damage_source_colors.py — "Black and/or red permanents and spells

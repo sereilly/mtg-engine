@@ -23,7 +23,8 @@ from ...auras import aura_enchant_clause
 from ...cast_costs import AdditionalCost, additional_costs
 from ...auras import controller_cast_ban
 from ...cast_restrictions import check_cast_timing
-from ...cost_x_definitions import cast_x_value, defines_cast_x
+from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling,
+                                   cast_x_value, defines_cast_x)
 from ...damage_ledger import record_cast
 from ...divided_damage import (
     EVENLY, divided_description, divided_entry, division_refusal,
@@ -673,6 +674,27 @@ class SpellCastingMixin:
                 caster, card.mana_cost, extra_generic_tax, x_color=x_color,
                 reduction=cost_reduction,
             )
+
+        # CR 601.2b's *bound*: "X can't be greater than the number of snow
+        # lands you control." (Winter's Chill.) Unlike a definition the caster
+        # still announces X, so this is checked against whatever they announced
+        # — after the inference above, which is where an unstated X becomes a
+        # number, and before any cost is paid so CR 601.2e can return the game
+        # to the moment before an illegal proposal. A bound the board cannot be
+        # counted for refuses too, for the definition's reason one block up:
+        # the alternative is announcing past a limit the card prints.
+        if caps_cast_x(card.oracle_text):
+            bound = cast_x_ceiling(self, caster_index, card.oracle_text)
+            if bound is None or int(resolved_x_value or 0) > bound[0]:
+                allowed = "none" if bound is None else str(bound[0])
+                printed = "" if bound is None else f" ({bound[1]})"
+                refusal = (
+                    f"{card.name}: X can't be greater than {allowed}{printed}"
+                )
+                self.log.append(refusal)
+                return SimulationResult(
+                    card.name, False, classification.effect_kind, refusal,
+                )
 
         # CR 601.2d, after X is announced (601.2b) and before any cost is paid:
         # the division is part of *proposing* the spell, and CR 601.2e returns

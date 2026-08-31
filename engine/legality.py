@@ -38,7 +38,8 @@ import re
 from .handlers._common import (graveyard_card_matches, permanent_matches_filter,
                                state_holds)
 from .models import CardDefinition, Permanent
-from .cost_x_definitions import cast_x_value, defines_cast_x
+from .cost_x_definitions import (caps_cast_x, cast_x_ceiling,
+                                 cast_x_value, defines_cast_x)
 from .oracle import compile_card_oracle, expand_ability_lines
 from .static_bonuses import conditional_static_holds
 from .subject_filters import card_matches_any, subject_matches
@@ -454,6 +455,14 @@ class LegalityMixin:
             defined = cast_x_value(self, caster_index, card.oracle_text)
             if defined is not None:
                 spec["defined_x"] = defined
+        # CR 601.2b's bound, the other half of the same question: the caster
+        # still announces X and this is the largest legal answer (Winter's
+        # Chill). Reported here for ``defined_x``'s reason — the number counts
+        # a board only the game can read — so the picker offers what the cast
+        # path would accept rather than a range it will then refuse.
+        if caps_cast_x(card.oracle_text):
+            bound = cast_x_ceiling(self, caster_index, card.oracle_text)
+            spec["max_x"] = 0 if bound is None else bound[0]
         if spec["kind"] == ROLES_TARGET_KIND:
             # A spell whose targets are of *different kinds*, chosen in
             # dependency order (CR 601.2c). ``valid_targets`` is role 0's list —

@@ -8067,7 +8067,10 @@ function renderActivationPrompt() {
     } else {
       if (pendingCastX.costString !== undefined) {
         const liveMax = getMaxAffordableX(me?.mana_pool, pendingCastX.costString, pendingCastX.costCard);
-        pendingCastX.maxX = Math.max(0, liveMax - Math.max(0, pendingCastX.extraTargetTax || 0));
+        pendingCastX.maxX = castXCeiling(
+          pendingCastX.card,
+          Math.max(0, liveMax - Math.max(0, pendingCastX.extraTargetTax || 0)),
+        );
       }
       const xColor = xSpendColorForCard(pendingCastX.card);
       const xColorName = xColor ? { W: "white", U: "blue", B: "black", R: "red", G: "green" }[xColor] : null;
@@ -10070,6 +10073,17 @@ function startActivationXPrompt(card, cardName, targetSeat, permanentIndex, abil
   renderActivationPrompt();
 }
 
+// CR 601.2b's printed bound: "X can't be greater than the number of snow lands
+// you control." (Winter's Chill.) The caster still announces X, so this narrows
+// the range of choices rather than removing the prompt the way `defined_x` does
+// — and the number is the *engine's*, reported on the target spec, because
+// counting a board is not something this browser can do. Returns the affordable
+// ceiling unchanged for every card that prints no bound.
+function castXCeiling(card, affordable) {
+  const bound = targetSpecOf(card)?.max_x;
+  return Number.isInteger(bound) ? Math.min(affordable, bound) : affordable;
+}
+
 function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAction = "cast", targetStackIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
@@ -10085,7 +10099,10 @@ function startCastXPrompt(card, targetSeat, targetPermanentIndex = null, castAct
     manaRequirement: parseManaCostSymbols(card.mana_cost || ""),
     costString: card.mana_cost || "",
     costCard: card,
-    maxX: getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || "", card),
+    maxX: castXCeiling(
+      card,
+      getMaxAffordableX(getCurrentPlayerState()?.mana_pool, card.mana_cost || "", card),
+    ),
     awaitingCustomValue: false,
   };
   renderActivationPrompt();
