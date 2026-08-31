@@ -326,6 +326,12 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # resolution, and the second reshapes the hand and the library the
         # first filled, so nothing after it may read either.
         "hand_to_library",
+        # "Then any other player may pay 2 life. If a player does, put that card
+        # into its owner's graveyard. Otherwise, that player draws a card."
+        # (Zur's Weirding.) The answer decides what happens to the card on top
+        # of the library — and, one step earlier, whether the seat behind this
+        # one is offered it at all.
+        "revealed_draw_buyout",
     }, suspending
 
 

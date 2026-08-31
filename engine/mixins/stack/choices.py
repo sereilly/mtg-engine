@@ -3789,6 +3789,164 @@ class PendingChoicesMixin:
             choice, mine and self.players[choice.player_index].life > life
         )
 
+    # -- Buying a revealed draw out of a hand (Zur's Weirding) --------------
+
+    def offer_revealed_draw_buyout(
+        self,
+        drawing_seat: int,
+        *,
+        card_name: str,
+        source_name: str,
+        queued_draws: int,
+        exclude_sources: tuple[int, ...],
+        queued_exclude_sources: tuple[int, ...] = (),
+        remaining_seats: list[int] | None = None,
+    ) -> None:
+        """Put "any other player may pay 2 life" to the next seat that owes an
+        answer, or finish the replaced draw when nobody is left.
+
+        CR 101.4: the offer goes round **every other player** in turn order
+        starting with the active player, and the first to pay ends the round.
+        The rest of the round rides in the prompt's own data rather than in a
+        loop here, because a human seat's answer arrives on a later request and
+        a loop would have to survive that; the resolver arms the next seat.
+
+        A seat that has left the game is nobody (CR 800.4a), and it is filtered
+        on every pass rather than once, so a player who lost while the poll was
+        open is not asked.
+        """
+        from ...replacements import REVEAL_DRAW_LIFE_COST
+
+        if remaining_seats is None:
+            count = len(self.players)
+            active = self.active_player_index or 0
+            remaining_seats = sorted(
+                (
+                    index for index, player in enumerate(self.players)
+                    if index != drawing_seat and not player.lost
+                ),
+                key=lambda index: ((index - active) % count, index),
+            )
+        live = [
+            seat for seat in remaining_seats
+            if 0 <= seat < len(self.players) and not self.players[seat].lost
+        ]
+        if not live:
+            self._finish_revealed_draw(
+                drawing_seat, bought=False,
+                queued_draws=queued_draws,
+                exclude_sources=exclude_sources,
+                queued_exclude_sources=queued_exclude_sources,
+                source_name=source_name,
+            )
+            return
+        self.arm_pending_choice(
+            "revealed_draw_buyout", live[0],
+            card_name=source_name,
+            revealed_name=card_name,
+            drawing_seat=drawing_seat,
+            drawing_player=self.players[drawing_seat].name,
+            life=REVEAL_DRAW_LIFE_COST,
+            _remaining_seats=live[1:],
+            _queued_draws=int(queued_draws),
+            _exclude_sources=tuple(exclude_sources),
+            _queued_exclude_sources=tuple(queued_exclude_sources),
+        )
+
+    def confirm_revealed_draw_buyout(self, player_index: int, accept: bool = True) -> bool:
+        """Answer "any other player may pay 2 life" for the revealed card."""
+        return self.resolve_pending_choice(
+            "revealed_draw_buyout", player_index, accept=bool(accept)
+        )
+
+    def _resolve_revealed_draw_buyout(self, choice: PendingChoice, accept: bool) -> bool:
+        """Pay and bin the revealed card, or decline and pass the offer on."""
+        data = choice.data
+        player = self.players[choice.player_index]
+        life = int(data.get("life", 2))
+        drawing_seat = int(data["drawing_seat"])
+        self.discard_pending_choice(choice)
+        # CR 119.4: a player may pay N life only with at least N to pay. Down to
+        # exactly 0 is legal and the state-based check that follows ends the
+        # game -- this is a refusal to pay what is not there.
+        if accept and player.life >= life:
+            player.life -= life
+            self.log.append(
+                f"{player.name} paid {life} life ({data.get('card_name', '')})"
+            )
+            self._finish_revealed_draw(
+                drawing_seat, bought=True,
+                queued_draws=int(data.get("_queued_draws", 0)),
+                exclude_sources=tuple(data.get("_exclude_sources") or ()),
+                queued_exclude_sources=tuple(
+                    data.get("_queued_exclude_sources") or ()
+                ),
+                source_name=str(data.get("card_name", "")),
+            )
+            return True
+        self.log.append(
+            f"{player.name} declined to pay {life} life "
+            f"({data.get('card_name', '')})"
+        )
+        self.offer_revealed_draw_buyout(
+            drawing_seat,
+            card_name=str(data.get("revealed_name", "")),
+            source_name=str(data.get("card_name", "")),
+            queued_draws=int(data.get("_queued_draws", 0)),
+            exclude_sources=tuple(data.get("_exclude_sources") or ()),
+            queued_exclude_sources=tuple(data.get("_queued_exclude_sources") or ()),
+            remaining_seats=list(data.get("_remaining_seats") or ()),
+        )
+        return True
+
+    def _default_revealed_draw_buyout(self, choice: PendingChoice) -> None:
+        """The stated policy for a seat nobody is asking: **decline**.
+
+        Not a valuation (``engine/ai_valuation.py`` is where one would go) but a
+        policy, and one the shape of the offer forces: this is put to every
+        other player on *every* draw for as long as the enchantment is on the
+        battlefield, so a default that paid would spend a seat's whole life
+        total inside a few turns of somebody else's draw steps. Declining costs
+        nothing and leaves the card doing to a table of humans what it does.
+        """
+        self._resolve_revealed_draw_buyout(choice, False)
+
+    def _finish_revealed_draw(
+        self, drawing_seat: int, *, bought: bool, queued_draws: int,
+        exclude_sources: tuple[int, ...],
+        queued_exclude_sources: tuple[int, ...],
+        source_name: str,
+    ) -> None:
+        """The two branches the poll ends in, plus the draws queued behind it.
+
+        "If a player does, put that card into its owner's graveyard. Otherwise,
+        that player draws a card." The card has been on top of the library all
+        along (see the interceptor), so the payment moves it and a declined
+        offer simply lets the draw happen -- through the seam, carrying this
+        source in ``exclude_sources``, because CR 614.5 gives a replacement one
+        opportunity per event and the draw this one just created must not be
+        replaced by it again.
+        """
+        player = self.players[drawing_seat]
+        if bought and player.library:
+            card = player.library.pop(0)
+            player.graveyard.append(card)
+            self.log.append(
+                f"{card.name} was put into {player.name}'s graveyard "
+                f"({source_name})"
+            )
+        elif not bought:
+            self._draw_with_replacements(
+                player, 1, exclude_sources=exclude_sources
+            )
+        if queued_draws > 0:
+            # CR 121.2: the draws behind this one are their own events and get
+            # their own trip through the seam -- including this replacement
+            # again, which is what a two-card draw under Zur's Weirding is.
+            self._draw_with_replacements(
+                player, queued_draws, exclude_sources=queued_exclude_sources
+            )
+
     # -- Which permanent receives a loyalty counter (Liliana's Scrounger) ----
 
     def confirm_loyalty_recipient(self, player_index: int, permanent_id: int) -> bool:
@@ -4413,6 +4571,26 @@ register_choice(
     # deterministic answer before the flag is set — so headless and AI play run
     # exactly as they did.
     suspends=True,
+)
+
+register_choice(
+    "revealed_draw_buyout",
+    resolve=lambda game, choice, r: game._resolve_revealed_draw_buyout(
+        choice, r["accept"]
+    ),
+    default=lambda game, choice: game._default_revealed_draw_buyout(choice),
+    action="revealed_draw_buyout_confirm",
+    prompt_key="revealed_draw_buyout",
+    blocked_detail="answer the revealed-card offer before other actions",
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The answer decides what happens to the card the drawing player is about to
+    # draw -- and whether the seat behind you is asked at all -- so the replaced
+    # draw genuinely stops here.
+    suspends=True,
+    # A non-interactive seat never queues it: the draw it replaced has to
+    # finish, so the stated default is taken where the offer stands.
+    default_at_arm=True,
 )
 
 register_choice(
