@@ -158,6 +158,17 @@ class Shield:
     half: str | None = None
     lifetime: str = END_OF_TURN
     source_name: str | None = None
+    #: CR 615.5's "the amount of damage prevented this way" — the running total
+    #: this shield has absorbed. Sacred Boon's delayed ability reads it at the
+    #: end step, a whole turn of damage events after the shield was armed, which
+    #: is why it lives here rather than in the resolution that armed it: nothing
+    #: else survives from the arming to the reading, and the shield is the one
+    #: object the sentence means by "this way".
+    #:
+    #: Kept on the shield even once it is spent and dropped from its recipient
+    #: (:func:`drop_spent`), because whoever holds a reference is exactly whoever
+    #: the card gave the number to.
+    prevented: int = 0
 
     @property
     def color(self) -> str | None:
@@ -202,6 +213,11 @@ class Shield:
             self.amount -= prevented
         if self.uses is not None:
             self.uses -= 1
+        # CR 615.5: what this shield prevented, totalled here because here is
+        # the one place that knows. A card whose rider reads the number
+        # (Sacred Boon) is then reading the shield rather than re-deriving a
+        # figure from damage nobody recorded.
+        self.prevented += prevented
 
 
 # ---------------------------------------------------------------------------

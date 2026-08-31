@@ -28,16 +28,21 @@ if TYPE_CHECKING:
     from ..oracle import OracleInstruction
 
 
-def _grant_pool(recipient, amount: int, source_name: str | None) -> None:
-    """Arm one CR 615.7 numeric shield on *recipient*.
+def _grant_pool(recipient, amount: int, source_name: str | None):
+    """Arm one CR 615.7 numeric shield on *recipient* and return it.
 
     A shield rather than an addition to a running total: several "prevent the
     next N damage" effects on one recipient are several effects, each with its
     own granting card for the badge. What they hold together is still the one
     number ``damage_prevention_pool`` reports.
+
+    Returned so the resolution that armed it can record it — Sacred Boon's
+    second sentence reads back what *this* shield prevented, and only the object
+    survives from here to the end step.
     """
-    if amount > 0:
-        add_shield(recipient, make_numeric_pool(amount, source_name))
+    if amount <= 0:
+        return None
+    return add_shield(recipient, make_numeric_pool(amount, source_name))
 
 
 def apply_prevention_shield(
@@ -46,6 +51,7 @@ def apply_prevention_shield(
     target_permanent_index: object,
     amount: int,
     source_name: str | None = None,
+    context: OracleExecutionContext | None = None,
 ) -> str:
     """Grant `amount` prevention shields to a chosen creature, or otherwise to the
     target player. Records `source_name` (the granting card) so the UI can show
@@ -56,12 +62,36 @@ def apply_prevention_shield(
         and target.battlefield[target_permanent_index].is_creature
     ):
         permanent = target.battlefield[target_permanent_index]
-        _grant_pool(permanent, amount, source_name)
+        _record_shield(context, _grant_pool(permanent, amount, source_name), permanent)
         game.log.append(f"{permanent.card.name} gains prevention shield for {amount} damage")
         return permanent.card.name
-    _grant_pool(target, amount, source_name)
+    _record_shield(context, _grant_pool(target, amount, source_name), None)
     game.log.append(f"{target.name} gains prevention shield for {amount} damage")
     return target.name
+
+
+#: The resolution-scratchpad key a granted shield is recorded under, and the id
+#: of the permanent it protects. Named once because the step that writes them
+#: and the delayed ability that reads them are a whole turn apart — see
+#: ``lowering/categories._PRODUCES``.
+PREVENTION_SHIELD_RESULT = "prevention_shield"
+PREVENTION_SHIELD_TARGET_RESULT = "prevention_shield_target"
+
+
+def _record_shield(context, shield, permanent) -> None:
+    """Record the shield this step armed, for a later sentence of the same
+    effect to read back (CR 615.5's "prevented this way").
+
+    The shield **object**, not a number: what it prevents is not known yet, and
+    by the time the reader runs the shield may have been spent and dropped from
+    its recipient. Nothing serialises a resolution's scratchpad or a delayed
+    ability's captured values, so the reference is the record.
+    """
+    if shield is None or context is None:
+        return
+    context.results[PREVENTION_SHIELD_RESULT] = shield
+    if permanent is not None:
+        context.results[PREVENTION_SHIELD_TARGET_RESULT] = permanent.permanent_id
 
 
 def _sized_for_recipient(
@@ -170,7 +200,7 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         return True, "resolved"
 
     if instruction.payload.get("to_self"):
-        _grant_pool(caster, amount, source_name)
+        _record_shield(context, _grant_pool(caster, amount, source_name), None)
         game.log.append(f"{caster.name} gains prevention shield for {amount} damage")
         return True, "resolved"
 
@@ -182,7 +212,7 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     if instruction.payload.get("to_attached"):
         host = attached_host(game, context.source_permanent)
         if host is not None:
-            _grant_pool(host, amount, source_name)
+            _record_shield(context, _grant_pool(host, amount, source_name), host)
             game.log.append(
                 f"{host.card.name} gains prevention shield for {amount} damage"
             )
@@ -194,7 +224,9 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     if instruction.payload.get("to_source"):
         source_perm = context.source_permanent
         if source_perm is not None:
-            _grant_pool(source_perm, amount, source_name)
+            _record_shield(
+                context, _grant_pool(source_perm, amount, source_name), source_perm
+            )
             game.log.append(
                 f"{source_perm.card.name} gains prevention shield for {amount} damage"
             )
@@ -204,7 +236,52 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     # Salve's prevention mode, Samite Healer, …): the target may be a creature,
     # in which case the shield protects that creature rather than its controller.
     amount = _sized_for_recipient(game, context, instruction, target, amount)
-    apply_prevention_shield(game, target, context.target_permanent_index, amount, source_name)
+    apply_prevention_shield(
+        game, target, context.target_permanent_index, amount, source_name,
+        context=context,
+    )
+    return True, "resolved"
+
+
+@effect_handler("add_pt_counters_per_damage_prevented")
+def add_pt_counters_per_damage_prevented(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Sacred Boon: "…At the beginning of the next end step, put a +0/+1 counter
+    on that creature for each 1 damage prevented this way."
+
+    A delayed triggered ability (CR 603.7) firing a whole turn after the spell
+    resolved, so both of the things it names come from what that resolution
+    recorded: the shield it armed and the creature it armed it on. The shield is
+    the object rather than a number because the number did not exist yet — the
+    total goes on accumulating for the rest of the turn, which is the whole
+    reason the counters are placed at the end step and not at once.
+
+    Nothing is placed when the shield absorbed nothing: "for each 1 damage
+    prevented" over zero points is zero counters, which is the card and not a
+    failure. Nor when the creature has left — CR 603.7c's object is addressed by
+    the id that survives it, and a permanent that came back is a different one
+    (CR 400.7).
+    """
+    recorded = context.trigger_context or {}
+    shield = recorded.get(PREVENTION_SHIELD_RESULT)
+    prevented = int(getattr(shield, "prevented", 0) or 0)
+    permanent_id = recorded.get(PREVENTION_SHIELD_TARGET_RESULT)
+    card_name = getattr(context.card, "name", "an effect")
+    if prevented <= 0 or not isinstance(permanent_id, int):
+        game.log.append(f"{card_name}: no damage was prevented this way")
+        return True, "resolved"
+    permanent = game.permanent_by_id(permanent_id)
+    if permanent is None:
+        game.log.append(f"{card_name}: the creature it shielded is gone")
+        return True, "resolved"
+    counter = str(instruction.payload.get("counter", "+0/+1"))
+    placed = game.place_pt_counters(permanent, counter, prevented)
+    if placed:
+        game.log.append(
+            f"{card_name}: {permanent.card.name} gets {placed} {counter} "
+            f"counter{'s' if placed != 1 else ''}"
+        )
     return True, "resolved"
 
 

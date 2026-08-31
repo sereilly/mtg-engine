@@ -12,8 +12,10 @@ counter itself. Everything about the *P/T* stays next door.
 
 from __future__ import annotations
 
+import dataclasses
+
 from .. import ast
-from ..amounts import parse_amount
+from ..amounts import _parse_for_each_this_way, parse_amount
 from ..errors import GrammarError
 from ..lexer import GToken, PT, WORD
 from ..nouns import parse_object_filter
@@ -130,9 +132,26 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     # ASTs — the legacy registry told them apart only by giving the per-death
     # rule a lower order number than the plain one.
     iterated = _parse_for_each(stream)
-    if iterated is None:
+    if iterated is not None:
+        return ast.ForEach(iterated, placement)
+    # "…**for each 1 damage prevented this way**." (Sacred Boon.) A *count*
+    # rather than a set — what an earlier step of the same effect recorded, one
+    # counter per unit of it — so it replaces the placement's number instead of
+    # wrapping it in an iteration. Read after the set clause above, which
+    # declines without consuming, so the two "for each" sentences keep their
+    # own readings.
+    #
+    # Only over a placement of one: "put **two** counters … for each" is a
+    # multiplication this node cannot carry, and reading the clause while
+    # dropping the printed count would place one where the card says two.
+    counted = _parse_for_each_this_way(stream)
+    if counted is None:
         return placement
-    return ast.ForEach(iterated, placement)
+    if up_to or not isinstance(count, ast.Fixed) or count.value != 1:
+        raise stream.error(
+            "a counter placed per recorded unit is placed one at a time"
+        )
+    return dataclasses.replace(placement, count=counted)
 
 
 def _parse_remove_counter(stream: TokenStream) -> ast.RemoveCounter | None:

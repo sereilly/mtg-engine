@@ -39,6 +39,14 @@ from ._events import (
 # than a silently wider effect.
 _LOYALTY_PICKER_HONOURED = frozenset({"card_types", "subtypes", "controller"})
 
+#: The scratchpad key a granted CR 615 shield is recorded under
+#: (``handlers/prevention.PREVENTION_SHIELD_RESULT``), spelled here rather than
+#: imported because a lowering may not reach into the handlers. The two are held
+#: together by ``lowering/categories._PRODUCES``, which is what the ``produced``
+#: check below reads — a key that stopped being written would take the gate with
+#: it rather than leaving a back-reference pointing at nothing.
+PREVENTION_SHIELD_RECORD = "prevention_shield"
+
 
 def _amount_value(amount) -> int:
     """A fixed Amount as a plain int, for a payload that carries a number."""
@@ -368,6 +376,41 @@ def _lower_put_counter(
         if placed_on_self != 1:
             payload["count"] = placed_on_self
         return (OracleInstruction("add_counter_to_self", "", payload),)
+    # "…put a +0/+1 counter on **that creature** for each 1 damage prevented
+    # this way." (Sacred Boon.) A CR 122.1a counter on the object an earlier
+    # step of the same effect shielded, one per point that shield absorbed. Read
+    # before the "+1/+1 only" refusal below, which was written for a printed
+    # count and would report the pair as unimplemented.
+    #
+    # ``produced`` is the whole gate on the back-reference: the words "this way"
+    # name what an earlier step recorded, and with no such step they name
+    # nothing — a zero the card never printed.
+    if (
+        is_pt_counter(node.counter)
+        and not node.up_to
+        and isinstance(node.count, ast.ThatMuch)
+        and node.count.source == PREVENTION_SHIELD_RECORD
+    ):
+        if PREVENTION_SHIELD_RECORD not in produced:
+            raise LoweringError(
+                "no earlier step of this effect armed a shield to count",
+                node=node,
+            )
+        if (
+            not isinstance(node.subject, ast.TargetSpec)
+            or node.subject.quantifier != "that"
+            or _restrictions_beyond(node.subject.filter, frozenset({"card_types"}))
+        ):
+            raise LoweringError(
+                "the counters land on the creature the shield was armed on",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "add_pt_counters_per_damage_prevented", "",
+                {"counter": node.counter},
+            ),
+        )
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)
     if isinstance(node.count, ast.ThatMuch) and _is_source(node.subject):

@@ -480,3 +480,89 @@ def accept_exiled_for_cost(stream: "TokenStream") -> "ast.ExiledForCost | None":
                     return ast.ExiledForCost(str(characteristic))
     stream.reset(mark)
     return None
+
+
+# ---------------------------------------------------------------------------
+# "…for each <noun> <participle> this way" — a count an earlier step recorded
+# ---------------------------------------------------------------------------
+#
+# Here rather than in ``phrases`` because what it produces is an
+# :class:`ast.ThatMuch` — a quantity, which is this module's whole subject —
+# while its look-alike ``phrases._parse_for_each`` produces a *set*. The two
+# read the same four opening words and answer different questions, and keeping
+# the count beside the other counts is what says which is which. It moved when
+# ``phrases`` crossed the thousand-line guard, along the line the two clauses
+# already differed on.
+
+# "for each card **discarded this way**" — the printed participles that name a
+# set an *earlier step of this same effect* produced, and the resolution
+# scratchpad key that step records its size under. Data rather than branches for
+# this file's stated reason, and narrow on purpose: the noun and the participle
+# are checked together, so "for each creature discarded this way" is a sentence
+# nobody printed and refuses instead of quietly counting cards.
+_THIS_WAY_COUNTS: dict[tuple[str, str], str] = {
+    ("card", "discarded"): "discarded_count",
+    # "…for each 1 **damage prevented** this way." (Sacred Boon.) What the
+    # earlier step recorded here is the *shield*, not a number — the total is
+    # not known when the spell resolves and goes on accumulating all turn — so
+    # the key names the shield and the lowering that reads it is the one that
+    # knows to ask it for its total.
+    ("damage", "prevented"): "prevention_shield",
+}
+
+
+def _parse_for_each_this_way(stream: TokenStream) -> ast.ThatMuch | None:
+    """``for each <noun> <participle> this way`` — a trailing repetition clause
+    whose number is one earlier step's result.
+
+    A *count*, not a set, which is why it produces :class:`ast.ThatMuch` rather
+    than the ``ObjectFilter`` / :class:`ast.DiedThisTurn` that
+    :func:`_parse_for_each` above returns. The two clauses look alike and ask
+    different questions: "for each creature that died this turn" iterates a
+    window of the turn's history that anything may have contributed to, and this
+    one counts exactly what the sentence in front of it did.
+
+    "This way" is required rather than defaulted, for :func:`_parse_for_each`'s
+    reason: without the words the clause would name some other set, and letting
+    them be absent would let them be *deleted* with no change to the parse.
+    Lowering then refuses unless a step of the same effect really records the
+    key — with no producer the words name nothing, and a zero is a number the
+    card never printed.
+
+    Returning None leaves the cursor where it was, so a caller that does not
+    find the clause still owes the rest of its line to full-token consumption.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    # "for each **1** damage prevented this way" (Sacred Boon) — the printed
+    # unit. Only one, because the clause is a rate and the count beside it is
+    # what is placed per unit: "for each 2 damage" would be a division this
+    # produces no node for, and reading the number and dropping it would place
+    # twice what the card says. So it is read and checked rather than skipped.
+    unit = stream.peek()
+    if unit is not None and unit.kind == NUMBER:
+        if unit.text != "1":
+            stream.reset(mark)
+            return None
+        stream.next()
+    noun = stream.peek()
+    if noun is None or noun.kind != WORD:
+        stream.reset(mark)
+        return None
+    singular = noun.text[:-1] if noun.text.endswith("s") else noun.text
+    stream.next()
+    participle = stream.peek()
+    key = (
+        _THIS_WAY_COUNTS.get((singular, participle.text))
+        if participle is not None and participle.kind == WORD
+        else None
+    )
+    if key is None:
+        stream.reset(mark)
+        return None
+    stream.next()
+    if not stream.accept_phrase("this", "way"):
+        stream.reset(mark)
+        return None
+    return ast.ThatMuch(key)

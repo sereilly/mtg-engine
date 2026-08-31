@@ -633,6 +633,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # different questions, and one switch must not be able to gate half of
     # either off.
     "choose_color": "chosen_colors",
+    # "…put a +0/+1 counter on that creature for each 1 damage prevented
+    # this way." (Sacred Boon.) A counter placement whose number is what an
+    # earlier step's shield absorbed, so it sits in the counters family with
+    # every other placement.
+    "add_pt_counters_per_damage_prevented": "counters",
     # "Choose a player who cast one or more sorcery spells this turn."
     # (Backdraft.) Its own category for the reason the number above has one: the
     # choice is a *value* a player picks and the sentence that reads it back has
@@ -822,6 +827,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # (CR 608.2h, last-known information) — a condition asking what the land
     # *was* has nothing on the board left to look at.
     "destroy_target_permanent": ("its_mana_value", "destroyed_target"),
+    # "Prevent the next 3 damage … **for each 1 damage prevented this way**."
+    # (Sacred Boon.) The shield object itself, because what it prevents is
+    # not a number when it is armed — the total goes on accumulating for the
+    # rest of the turn, and the reader is a delayed ability at the end step.
+    "grant_prevention_shield": "prevention_shield",
 }
 
 

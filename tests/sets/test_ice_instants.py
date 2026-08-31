@@ -395,3 +395,71 @@ def test_the_targeted_restriction_is_not_the_blanket_one(set_pool):
     assert "targets" in targeted.instructions[0].payload
     assert blanket.instructions[0].kind == "cant_block_until_eot"
     assert "filter" in blanket.instructions[0].payload
+
+
+# --- W1G1: prevention and damage shields ---
+def _w1g1_boon(set_pool):
+    """Sacred Boon cast on its caster's own Bears."""
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    p0 = PlayerState(
+        name="P0", battlefield=[bears], hand=[pool["Sacred Boon"]], life=20
+    )
+    game = Game(players=[p0, PlayerState(name="P1", life=20)])
+    game.enforce_mana_costs = False
+    result = game.cast_from_hand(
+        0, "Sacred Boon", target_player_index=0, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game._settle()
+    return game, bears
+
+
+def test_sacred_boon_shields_three_and_counts_what_it_prevented(set_pool):
+    """"Prevent the next 3 damage that would be dealt to target creature this
+    turn. At the beginning of the next end step, put a +0/+1 counter on that
+    creature for each 1 damage prevented this way."
+
+    Two sentences and one shield: the counters are placed at the end step
+    because the number does not exist before then — CR 615.5's "prevented this
+    way" goes on accumulating for the rest of the turn.
+    """
+    game, bears = _w1g1_boon(set_pool)
+    assert bears.damage_prevention_pool == 3
+
+    game._mark_damage_on_permanent(bears, 2)
+    assert bears.damage_marked == 0
+    assert bears.damage_prevention_pool == 1
+
+    game.resolve_end_step(0)
+    game._settle()
+
+    assert bears.toughness_bonus == 2
+    assert bears.power_bonus == 0, "a +0/+1 counter is not a +1/+1 counter"
+
+
+def test_sacred_boon_counts_every_event_not_just_the_first(set_pool):
+    """The total is the shield's, so two damage events this turn add up — and a
+    shield spent to nothing still carries the number it absorbed."""
+    game, bears = _w1g1_boon(set_pool)
+
+    game._mark_damage_on_permanent(bears, 1)
+    game._mark_damage_on_permanent(bears, 3)
+
+    assert bears.damage_marked == 1, "one point got through once the pool ran out"
+    game.resolve_end_step(0)
+    game._settle()
+
+    assert bears.toughness_bonus == 3, "one point then two"
+
+
+def test_sacred_boon_places_nothing_when_nothing_was_prevented(set_pool):
+    """"For each 1 damage prevented" over zero points is zero counters, which is
+    the card rather than a failure."""
+    game, bears = _w1g1_boon(set_pool)
+
+    game.resolve_end_step(0)
+    game._settle()
+
+    assert bears.toughness_bonus == 0
+# --- end W1G1 ---
