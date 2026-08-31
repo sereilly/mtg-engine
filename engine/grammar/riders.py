@@ -163,10 +163,13 @@ def _parse_conditional_instead_rider(
     # The statement kinds this rider can replace. `AddMana` joins `GainLife`
     # for the Antiquities land cycle — "{T}: Add {C}. If you control an Urza's
     # Power-Plant and an Urza's Tower, add {C}{C} instead." — which is the same
-    # sentence pair with a different verb. The replacement must be the *same*
-    # kind as what it replaces (checked below), so widening the set cannot let
-    # one kind silently stand in for another.
-    _REPLACEABLE = (ast.GainLife, ast.AddMana)
+    # sentence pair with a different verb. `DealDamage` joins them for
+    # Gangrenous Zombies — "…deals 1 damage to each creature and each player.
+    # If you control a snow Swamp, this creature deals 2 damage to each
+    # creature and each player instead." — which is the same pair again. The
+    # replacement must be the *same* kind as what it replaces (checked below),
+    # so widening the set cannot let one kind silently stand in for another.
+    _REPLACEABLE = (ast.GainLife, ast.AddMana, ast.DealDamage)
 
     last = steps[-1] if steps else None
     if not isinstance(last, _REPLACEABLE):
