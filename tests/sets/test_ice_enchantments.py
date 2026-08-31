@@ -2243,4 +2243,27 @@ def test_snowblind_ignores_a_nonsnow_land(set_pool):
     assert (bear.effective_power, bear.effective_toughness) == (2, 2)
 
 
+def test_aggression_cannot_be_put_on_a_wall(set_pool, catalog_by_name):
+    """"Enchant **non-Wall** creature" (CR 702.5). The negation is a prefix on
+    a noun the enchant table already knows, and without it the whole phrase
+    missed the table and the permissive fallback said yes — so the restriction
+    the card prints was enforced by nothing at all.
+    """
+    from engine.auras import enchant_card_refusal
+
+    pool = set_pool("ICE")
+    wall = Permanent(card=catalog_by_name["Wall of Stone"])
+    bear = Permanent(card=pool["Balduvian Bears"])
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[wall, bear], life=20),
+            PlayerState(name="P2", life=20),
+        ]
+    )
+    game._settle()
+
+    assert enchant_card_refusal(game, pool["Aggression"], 0, wall) is not None
+    assert enchant_card_refusal(game, pool["Aggression"], 0, bear) is None
+
+
 # --- end W2G4 ---
