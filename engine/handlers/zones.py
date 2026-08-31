@@ -1553,17 +1553,15 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
         game.log.append(f"{perm.card.name} returned to {owner.name}'s hand")
         return True, "resolved"
     target = context.target
-    index = context.target_permanent_index
-    returned = (
-        game.permanent_at(game.players.index(target), index)
-        if isinstance(index, int) else None
-    )
-    # By id, not by slot: an earlier removal renumbers the battlefield under a
-    # recorded index (CR 400.7), so the unnarrowed bounce used to return
-    # whichever creature slid into the vacated place.
-    bounced = game._bounce_target_creature(
-        resolve_target_permanent(game, context, player=target)
-    )
+    # Resolved **once**, by id, and used for both the bounce and the record.
+    # An earlier removal renumbers the battlefield under a recorded index
+    # (CR 400.7), so the slot names whichever creature slid into the vacated
+    # place — and this site used to read it twice, once here for
+    # "…equal to that creature's mana value" and once inside the bounce. Two
+    # reads of one choice are free to disagree: the life could be gained for a
+    # creature other than the one returned.
+    returned = resolve_target_permanent(game, context, player=target)
+    bounced = game._bounce_target_creature(returned)
     if bounced and returned is not None:
         context.results["returned_mana_value"] = _mana_value_of(returned.card)
     game.log.append("Returned creature to hand" if bounced else "No creature to return")

@@ -15,6 +15,8 @@ text do what the card says.
 
 from __future__ import annotations
 
+import pytest  # LeadB: the block at the end of this file parametrizes
+
 from engine import Game
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
@@ -1631,3 +1633,105 @@ def test_amulet_of_quoz_asks_which_opponent_it_dares(set_pool):
         "kind": "player", "opponents_only": True,
     }
     assert ability.instruction.payload["actor"] == "target_opponent"
+
+
+# --- LeadB: an index is not a target ---
+#
+# The Talisman cycle is the live case of the defect closed in
+# ``tests/regressions/test_target_survives_renumbering.py``. "Untap target
+# permanent" reaches a handler tail that resolved its target from a battlefield
+# *slot*, and these five are the only cards in the pool that reach it from
+# something other than an instant — so they are the only ones the engine's
+# CR 608.2b gate (instants and sorceries only) was not accidentally covering.
+
+_TALISMANS = (
+    "Hematite Talisman", "Lapis Lazuli Talisman", "Malachite Talisman",
+    "Nacre Talisman", "Onyx Talisman",
+)
+
+
+def _talisman_untap(set_pool, name):
+    """The ``untap_target_permanent`` instruction inside the Talisman's trigger.
+
+    The printed line is "Whenever a player casts a <colour> spell, you may pay
+    {3}. If you do, untap target permanent." — so the untap sits under the
+    ``may``'s ``then``, which is the branch that runs once the {3} is paid.
+    """
+    program = compile_card_oracle(set_pool("ICE")[name])
+    trigger = program.triggered_abilities[0]
+    return trigger.instruction.payload["then"][0]
+
+
+def _talisman_board(set_pool, name):
+    game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    source = Permanent(card=set_pool("ICE")[name])
+    game._put_permanent_onto_battlefield(0, source, 0)
+    chosen = _nosick(Permanent(card=set_pool("ICE")["Balduvian Bears"]))
+    game._put_permanent_onto_battlefield(1, chosen, 1)
+    neighbour = _nosick(Permanent(card=set_pool("ICE")["Balduvian Bears"]))
+    game._put_permanent_onto_battlefield(1, neighbour, 1)
+    chosen.tapped = neighbour.tapped = True
+    return game, source, chosen, neighbour
+
+
+def _talisman_resolve(game, set_pool, name, source, index, permanent_id):
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers import EFFECT_HANDLERS
+
+    instruction = _talisman_untap(set_pool, name)
+    EFFECT_HANDLERS[instruction.kind](
+        game, instruction,
+        OracleExecutionContext(
+            caster=game.players[0], target=game.players[1],
+            card=set_pool("ICE")[name],
+            target_permanent_index=index, target_permanent_id=permanent_id,
+            source_permanent=source,
+        ),
+    )
+
+
+@pytest.mark.parametrize("name", _TALISMANS)
+def test_a_talisman_untaps_the_permanent_its_trigger_named(set_pool, name):
+    """The card working: the named permanent untaps and its neighbour does not.
+
+    Two copies of one card on purpose — the neighbour is a look-alike, so an
+    engine matching by value rather than identity would be caught here too.
+    """
+    game, source, chosen, neighbour = _talisman_board(set_pool, name)
+
+    _talisman_resolve(
+        game, set_pool, name, source,
+        game.battlefield_index_of(chosen), chosen.permanent_id,
+    )
+
+    assert not chosen.tapped, f"{name} did not untap the permanent it targeted"
+    assert neighbour.tapped, f"{name} untapped a look-alike as well"
+
+
+@pytest.mark.parametrize("name", _TALISMANS)
+def test_a_talisman_whose_target_left_untaps_nothing(set_pool, name):
+    """The card *not* working, which is the bug this pins.
+
+    The trigger goes on the stack with its target chosen (CR 603.3d) and then
+    waits — for the {3}, for responses, for everything above it. A permanent
+    leaving in that window renumbers every later slot (CR 400.7), so the
+    recorded index comes to name its neighbour. Before the fix this cycle
+    untapped that neighbour and logged "Untapped target permanent"; nothing
+    above it could object, because the engine's CR 608.2b gate declines every
+    ability.
+    """
+    game, source, chosen, neighbour = _talisman_board(set_pool, name)
+    index = game.battlefield_index_of(chosen)
+    chosen_id = chosen.permanent_id
+
+    chosen.damage_marked = 99
+    game.check_state_based_actions()
+    assert game.battlefield_index_of(neighbour) == index
+
+    _talisman_resolve(game, set_pool, name, source, index, chosen_id)
+
+    assert neighbour.tapped, (
+        f"{name} untapped the permanent that inherited its target's slot"
+    )
+# --- end LeadB ---
