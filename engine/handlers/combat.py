@@ -603,7 +603,7 @@ def grant_unblockable_to_self(game: Game, instruction: OracleInstruction, contex
 
 
 #: The scratchpad key the unblockable grant records its creatures under. One
-#: name, because the handler writes it and ``lowering/categories._PRODUCES``
+#: name, because the handler writes it and ``lowering/_records._PRODUCES``
 #: declares it, and a second spelling would make the lowering's gate vacuous
 #: while the record sat unread.
 UNBLOCKABLE_PERMANENTS = "unblockable_permanents"

@@ -849,7 +849,14 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # the gated scan inferred "your" for every card that reached it.
     # Must precede its own prefix, per the ordering rule.
     ("end_step_self",       r"at the beginning of your end(?: step)?"),
-    ("end_step",            r"at the beginning of (?:the |each )?end(?: step)?"),
+    # "each **player's** end step" (Monsoon) names the same set as the bare
+    # "each end step": CR 513.1 gives every turn exactly one end step, so every
+    # end step is some player's. So it is a spelling and not a scope — unlike
+    # upkeep_each's `upkeep_scope`, which exists because "each **opponent's**
+    # upkeep" really is a narrower set and the dispatcher enforces it. A card
+    # printing "each opponent's end step" refuses here rather than being
+    # admitted with the narrowing dropped.
+    ("end_step",            r"at the beginning of (?:the |each )?(?:player's )?end(?: step)?"),
     # "…of combat on your turn" narrows the bare form to the active player's
     # combat (Adherent of Hope); must precede its own prefix below.
     ("combat_your_turn",    r"at the beginning of combat on your turn"),

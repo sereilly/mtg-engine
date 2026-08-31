@@ -131,7 +131,14 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
 #: seat *varies* need freezing, and `upkeep_each` is the one the ordinary
 #: (non-registry) upkeep path admits — see `_ORDINARY_UPKEEP_SEATS`.
 _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
-    "upkeep_each",                       # Spiritual Sanctuary, Storm World
+    "upkeep_each",
+    # "At the beginning of each player's end step, … **that player** …"
+    # (Monsoon.) The upkeep row's twin one step of the turn later, and admitted
+    # for the same reason: the seat varies per firing and the end-step
+    # announcement now freezes it. ``end_step_self`` stays out, exactly as
+    # ``upkeep_self`` does — "your end step" has one seat and it is spelled
+    # "you".
+    "end_step",                       # Spiritual Sanctuary, Storm World
     # "Whenever an opponent draws a card, this enchantment deals 1 damage to
     # **that player**" (Underworld Dreams). CR 121.2 makes a draw a per-card
     # event about one seat, and which seat varies per firing — an opponent in a
@@ -264,7 +271,7 @@ _EVENT_QUANTITIES: dict[str, str] = {
 # **it** from combat", "gain control of **that creature**" — Disharmony). One
 # name in one place, shared by the ``board`` and ``combat`` lowering families,
 # because a fragment two families need lives here rather than in either of
-# them — and because ``categories._PRODUCES`` writes the same string, so a
+# them — and because ``_records._PRODUCES`` writes the same string, so a
 # second spelling would make the producer gate vacuous while the handler read
 # an empty record.
 _UNTAPPED_PERMANENTS = "untapped_permanents"
@@ -273,7 +280,7 @@ _UNTAPPED_PERMANENTS = "untapped_permanents"
 # same creature: "This creature deals damage equal to its power to target
 # creature. **That creature** deals damage equal to its power to this creature."
 # (Tracker.) Named here for the reason the key above is - the `damage` lowering
-# family and ``categories._PRODUCES`` both write the string, and a second
+# family and ``_records._PRODUCES`` both write the string, and a second
 # spelling would make the producer gate vacuous while the handler read an empty
 # record.
 _DAMAGED_PERMANENTS = "damaged_permanents"
@@ -282,7 +289,7 @@ _DAMAGED_PERMANENTS = "damaged_permanents"
 # records, and the number "the damage dealt by one of those sorcery spells this
 # turn" records once one of them is chosen (Backdraft). Named here beside the
 # two above and for their reason: the `game` and `damage` lowering families and
-# ``categories._PRODUCES`` all write these strings, so a second spelling would
+# ``_records._PRODUCES`` all write these strings, so a second spelling would
 # make one producer gate vacuous while the handler read an empty record — and
 # on this card that is a spell that reports itself resolved and deals nothing.
 CHOSEN_PLAYER = "chosen_player"
@@ -291,13 +298,13 @@ CHOSEN_PLAYER = "chosen_player"
 # sentences behind it read — "attach it to **that** permanent" (Enchantment
 # Alteration), "return this card … **attached to that creature**"
 # (Takklemaggot). Named here for the reason every other key on this page is:
-# the ``board`` and ``zones`` lowering families and ``categories._PRODUCES``
+# the ``board`` and ``zones`` lowering families and ``_records._PRODUCES``
 # all write the string, and a second spelling would make one producer gate
 # vacuous while the handler read an empty record.
 CHOSEN_PERMANENT = "attach_host"
 CHOSEN_CAST_DAMAGE = "damage_dealt_by_chosen_cast"
 
-# The scratchpad keys that are *quantities*. `categories._PRODUCES` also records
+# The scratchpad keys that are *quantities*. `_records._PRODUCES` also records
 # things no amount can read — a controller's seat, a list of exiled cards — so
 # a bare back-reference resolves against this narrower set. A producer added
 # there and not here fails safe: the bare reading refuses rather than reading a
@@ -321,7 +328,7 @@ _PRODUCED_QUANTITIES: frozenset[str] = frozenset({
 # missing from here refuses the words rather than reading a mana value out of
 # something that is not a permanent.
 #: The tap half of the pair, named for the same reason ``_UNTAPPED_PERMANENTS``
-#: is: two lowering families and ``categories._PRODUCES`` all write this string,
+#: is: two lowering families and ``_records._PRODUCES`` all write this string,
 #: and a second spelling would make one of the producer gates vacuous while the
 #: handler read an empty record.
 _TAPPED_PERMANENTS = "tapped_permanents"

@@ -324,6 +324,13 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
     # two share their first two words and differ only in what follows them.
     if stream.accept_phrase("that", "died", "this", "way"):
         return ast.CountOfDeathsThisWay(filt)
+    # "…the number of Islands **tapped this way**" (Monsoon). The same
+    # back-reference one verb over, and read here rather than as an adjective on
+    # the noun phrase because "this way" is about the effect, not about the
+    # permanent. No leading "that": the participle attaches straight to the
+    # noun, which is how the card prints it.
+    if stream.accept_phrase("tapped", "this", "way"):
+        return ast.CountOfTapsThisWay(filt)
     # "…the number of creatures **that died under your control this turn**"
     # (Liliana's Standard Bearer). A history, and the opposite set from the one
     # the bare filter names: these are exactly the creatures the battlefield no

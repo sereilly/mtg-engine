@@ -58,7 +58,7 @@ from .lowering import (
     INSTRUCTION_CATEGORIES,
     categories_of,
     # The scratchpad-producer registry and the wrapper walkers moved to
-    # `lowering/categories.py` and `lowering/_common.py`; the dispatch
+    # `lowering/_records.py` and `lowering/_common.py`; the dispatch
     # below still reads them, and callers outside the package keep this
     # address.
     _PRODUCES,

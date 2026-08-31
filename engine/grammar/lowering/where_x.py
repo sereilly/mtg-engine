@@ -26,6 +26,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
+from ._records import produced_keys
 from ._common import (
     _mentions_x,
     _restrictions_beyond,
@@ -57,6 +58,8 @@ def lower_where_x(
         return _lower_where_x_characteristic(node, inner, produced)
     if isinstance(node.definition, ast.CountOfDeathsThisWay):
         return _lower_where_x_this_way(node, inner, produced)
+    if isinstance(node.definition, ast.CountOfTapsThisWay):
+        return _lower_where_x_tapped_this_way(node, inner, produced)
     if isinstance(node.definition, ast.ExiledForCost):
         return _lower_where_x_exiled_for_cost(node, inner)
     if isinstance(node.definition, ast.SacrificedForCost):
@@ -452,6 +455,71 @@ def _lower_where_x_this_way(
     if not _mentions_x(inner):
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
     return _stamp_x_from_count(inner, {"back_reference": "destroyed_this_way"})
+
+
+def _records_within(instructions: tuple[OracleInstruction, ...]) -> frozenset[str]:
+    """Every scratchpad key *instructions* and their nested steps record.
+
+    "This way" names an earlier step of the **same effect**, and *produced* — the
+    set threaded between the sentences of a paragraph — cannot see inside the
+    sentence the where-clause wraps. Hellfire prints the sweep and the count in
+    two sentences, so the thread carried it; Monsoon prints "tap all untapped
+    Islands … **and** this enchantment deals X damage …, where X is the number
+    of Islands tapped this way" as one, and the producer is a step of the very
+    tuple being stamped.
+
+    Read through ``_PRODUCES`` like every other question about what a step
+    records, so a producer has one declaration however deeply it is nested.
+    """
+    keys: set[str] = set()
+    for instruction in instructions:
+        keys |= produced_keys(instruction.kind)
+        for key in ("steps", "then", "else", "otherwise", "action"):
+            nested = instruction.payload.get(key)
+            if (
+                isinstance(nested, tuple) and nested
+                and isinstance(nested[0], OracleInstruction)
+            ):
+                keys |= _records_within(nested)
+    return frozenset(keys)
+
+
+def _lower_where_x_tapped_this_way(
+    node: ast.WhereX,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"…, where X is the number of Islands **tapped this way**." (Monsoon.)
+
+    ``_lower_where_x_this_way`` one verb over, and refused on the same three
+    questions. What the sweep tapped is not what the board now holds tapped —
+    an Island that was already tapped is not one this effect turned, and CR
+    611.2c fixed the set when the effect began — so the number can only come
+    from the record the sweep wrote.
+
+    Only the bare head noun is admitted, for the reason the death form states:
+    the record is a *number*, not the set, so a narrower noun phrase would be
+    counted as though the narrowing were not there. The sweep's own narrowings
+    ("untapped", "that player controls") are exactly the ones the card leaves
+    off the where-clause, which is why the head noun is enough.
+    """
+    filt = node.definition.filter
+    described = filt.to_payload()
+    if filt.zone != "battlefield" or set(described) - {
+        "type_filter", "subtype_filter"
+    } or len(described) != 1:
+        raise LoweringError(
+            "'tapped this way' counts what the earlier step tapped and cannot "
+            "be narrowed further", node=node,
+        )
+    if "tapped_this_way" not in (produced | _records_within(inner)):
+        raise LoweringError(
+            "'tapped this way' with no earlier step in this effect that tapped "
+            "anything", node=node,
+        )
+    if not _mentions_x(inner):
+        raise LoweringError("a where-clause defined an X nothing reads", node=node)
+    return _stamp_x_from_count(inner, {"back_reference": "tapped_this_way"})
 
 
 def _damage_dealt_definition(definition) -> "tuple[ast.DamageDealtThisTurn, int] | None":

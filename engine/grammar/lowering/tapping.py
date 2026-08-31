@@ -174,9 +174,19 @@ def _lower_tap(
         # It reaches the payload as `subtype_filter`, which the matcher tests
         # through layer 4 like every other computed type — the same read
         # `supertypes` beside it already relied on.
+        # "Tap all **untapped** Islands that player controls" (Monsoon) is why
+        # `tapped` is here. It reaches the payload as `untapped_only` — the
+        # tri-state's False half, which had no key at all until Enthralling Hold
+        # — and `subject_matches` tests it like any other state word. For a tap
+        # the narrowing looks harmless (tapping a tapped permanent does
+        # nothing), but the *count* behind it is the card, and dropping the word
+        # would have counted Islands that were already tapped.
         leftovers = _restrictions_beyond(
             spec.filter,
-            frozenset({"card_types", "supertypes", "subtypes", "colors", "controller"}),
+            frozenset({
+                "card_types", "supertypes", "subtypes", "colors", "controller",
+                "tapped",
+            }),
         )
         if leftovers:
             raise LoweringError(

@@ -73,7 +73,7 @@ def apply_prevention_shield(
 #: The resolution-scratchpad key a granted shield is recorded under, and the id
 #: of the permanent it protects. Named once because the step that writes them
 #: and the delayed ability that reads them are a whole turn apart — see
-#: ``lowering/categories._PRODUCES``.
+#: ``lowering/_records._PRODUCES``.
 PREVENTION_SHIELD_RESULT = "prevention_shield"
 PREVENTION_SHIELD_TARGET_RESULT = "prevention_shield_target"
 

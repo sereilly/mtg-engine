@@ -227,6 +227,10 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("end_step_self", ("the", "beginning", "of", "your", "end", "step")),
     ("end_step", ("the", "beginning", "of", "the", "end", "step")),
     ("end_step", ("the", "beginning", "of", "each", "end", "step")),
+    # "each **player's** end step" (Monsoon) — the same set, because CR 513.1
+    # gives every turn one end step; a spelling, not a scope. The oracle regex
+    # table carries the same alternative, for the reason stated above it.
+    ("end_step", ("the", "beginning", "of", "each", "player", "'s", "end", "step")),
     # The narrowed form precedes its own prefix, per the rule above.
     ("combat_your_turn", ("the", "beginning", "of", "combat", "on", "your", "turn")),
     ("combat", ("the", "beginning", "of", "combat")),

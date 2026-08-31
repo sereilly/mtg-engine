@@ -20,7 +20,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._events import _DEFENDING_PLAYER_EVENTS
-from .categories import _PRODUCES, primary_produced, produced_keys
+from ._records import _PRODUCES, primary_produced, produced_keys
 
 
 def _lower_one_of(

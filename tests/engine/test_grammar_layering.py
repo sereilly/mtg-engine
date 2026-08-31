@@ -341,7 +341,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_events", "_amounts", "_sacrifices", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_events", "_amounts", "_sacrifices", "_records", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -571,6 +571,14 @@ FAMILY_SHARED = {
     # itself be one, and the alternative was `board` and `damage` importing
     # each other.
     "_sacrifices",
+    # `_records` split out of `categories` when *that* module crossed the guard:
+    # it carried two registries with two different keys — which family a kind
+    # belongs to, and what a kind writes into the resolution scratchpad — and
+    # only the first is what the module is named for. Shared for `_events`'
+    # reason: two lowering families read it (`control_flow` threads what each
+    # step records forward, `where_x` asks whether "this way" has a producer),
+    # so it cannot live in either.
+    "_records",
 }
 
 
