@@ -452,6 +452,42 @@ class GameHelpersMixin:
             # cleanup, the combat remap this choke point exists to host — must
             # not fire here. The pair of statements is one operation and is
             # written open so that is visible.
+            # CR 506.4: **a permanent is removed from combat … if its
+            # controller changes.** One of the clauses of the numbered rule
+            # itself, not 506.4c (which is about attacking a planeswalker, and
+            # is the number several comments in this engine cite for a plain
+            # removal). A different rule from the leave-the-battlefield one the
+            # comment above declines, and it fires exactly here — this is the
+            # one place a control change becomes a change of hands.
+            #
+            # Both halves are needed and each is wrong without the other. The
+            # index-keyed maps are pruned through the same renumbering the
+            # removal transition uses (an attacker's slot is the active player's
+            # and a blocker's is its own defender's, which is what that function
+            # already knows), and the per-permanent state is cleared so a filter
+            # asking "attacking" agrees with the maps. Left as it was, an
+            # attacker stolen mid-combat stayed stamped `attacking` under its
+            # new controller while its old slot named whichever creature slid
+            # into it.
+            if permanent.attacking or self._is_blocking_creature(permanent):
+                slot = next(
+                    (
+                        i for i, other
+                        in enumerate(self.players[holding].battlefield)
+                        if other is permanent
+                    ),
+                    None,
+                )
+                permanent.attacking = False
+                permanent.defending_player_index = None
+                permanent.blocked = False
+                permanent.blocking_attacker_controller = None
+                permanent.blocking_attacker_index = None
+                self.log.append(
+                    f"{permanent.card.name} left combat (it changed controllers)"
+                )
+                if slot is not None:
+                    self._renumber_combat_after_removal({holding: [slot]})
             self.players[holding].battlefield = [
                 p for p in self.players[holding].battlefield if p is not permanent
             ]
