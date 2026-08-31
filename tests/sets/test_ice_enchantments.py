@@ -1462,3 +1462,84 @@ def test_aggression_cannot_be_put_on_a_wall(set_pool, catalog_by_name):
 
 
 # --- end W2G4 ---
+
+
+# --- W3G4: coin flips, ante, noted mana ---
+def test_iceberg_enters_with_the_announced_x_in_ice_counters(set_pool):
+    """"This enchantment enters with **X ice** counters on it."
+
+    Round 18 made the counter *kind* data for the X form (Balduvian Hydra) and
+    the *number* data for the named form (Rasputin), and the crossing case fell
+    between the two: the named reader matched Iceberg's shape and then refused
+    "x" as a number word. The card compiled supported, entered with an empty
+    counter store, and could never pay for its own second ability — which is
+    the whole card.
+    """
+    from engine.named_counters import counters_on
+
+    pool = set_pool("ICE")
+    p0 = PlayerState(name="P0", hand=[pool["Iceberg"]], life=20)
+    game = Game(players=[p0, PlayerState(name="P1", life=20)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+
+    game.cast_from_hand(0, "Iceberg", x_value=3)
+    game._settle()
+
+    berg = p0.battlefield[0]
+    assert counters_on(berg, "ice") == 3
+
+    # And the counters are spendable: "Remove an ice counter from this
+    # enchantment: Add {C}" is the ability the entry state exists to feed.
+    berg.metadata["summoning_sickness_turn"] = -99
+    game.activate_permanent_ability(0, "Iceberg", permanent_index=0, ability_index=1)
+    game._settle()
+
+    assert counters_on(berg, "ice") == 2
+    assert p0.mana_pool["C"] == 1
+
+
+def test_iceberg_cast_for_no_x_enters_with_nothing(set_pool):
+    """X is the value announced on casting (CR 601.2b), not a printed number, so
+    an Iceberg cast for zero really does arrive empty. Asserted because the loop
+    that places the counters has to read a *missing* X the same way — a default
+    of one would be a card nobody printed."""
+    from engine.named_counters import counters_on
+
+    pool = set_pool("ICE")
+    p0 = PlayerState(name="P0", hand=[pool["Iceberg"]], life=20)
+    game = Game(players=[p0, PlayerState(name="P1", life=20)])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+
+    game.cast_from_hand(0, "Iceberg", x_value=0)
+    game._settle()
+
+    assert counters_on(p0.battlefield[0], "ice") == 0
+
+
+def test_the_x_named_counter_reader_declines_the_printed_number_form(set_pool):
+    """The two readers are separate on purpose and must stay disjoint: a printed
+    count is read off the line and X is read off the cast, at different times.
+    A reader that answered both would place one counter where Rasputin prints
+    seven, or seven where Iceberg's X was three."""
+    from engine.enter_effects import (
+        enters_with_named_counter, enters_with_x_named_counters,
+    )
+
+    assert enters_with_x_named_counters(
+        "this enchantment enters with x ice counters on it"
+    ) == "ice"
+    assert enters_with_named_counter(
+        "this enchantment enters with x ice counters on it"
+    ) is None
+    assert enters_with_x_named_counters(
+        "this creature enters with seven dream counters on it"
+    ) is None
+    # A P/T counter is the other X reader's, not this one's.
+    assert enters_with_x_named_counters(
+        "this creature enters with x +1/+1 counters on it"
+    ) is None
+# --- end W3G4 ---

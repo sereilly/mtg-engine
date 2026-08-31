@@ -921,3 +921,93 @@ def test_time_bomb_counts_the_counters_at_resolution(set_pool):
 
     assert (p0.life, p1.life) == (19, 19)
 # --- end W2G1 ---
+
+
+# --- W3G4: coin flips, ante, noted mana ---
+def _lyre_board(set_pool, mine=2, theirs=3):
+    """Goblin Lyre with *mine* creatures beside it and *theirs* opposite."""
+    pool = set_pool("ICE")
+    lyre = _nosick(Permanent(card=pool["Goblin Lyre"]))
+    p0 = PlayerState(
+        name="P0", life=20,
+        battlefield=[lyre, *(_nosick(Permanent(card=pool["Balduvian Bears"]))
+                             for _ in range(mine))],
+    )
+    p1 = PlayerState(
+        name="P1", life=20,
+        battlefield=[_nosick(Permanent(card=pool["Balduvian Bears"]))
+                     for _ in range(theirs)],
+    )
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = game.current_step = "precombat_main"
+    return game, p0, p1
+
+
+def test_goblin_lyre_wins_its_flip_and_counts_your_own_creatures(set_pool):
+    """"If you win the flip, this artifact deals damage to target opponent or
+    planeswalker equal to the number of creatures **you** control."
+
+    The union is Eternal Flame's, and this engine has no planeswalkers — so the
+    player half is the whole of the target, which is the honest reading rather
+    than a dropped word: the picker offers exactly the seats the union admits
+    and no planeswalker exists to be offered.
+    """
+    from unittest.mock import patch
+
+    game, p0, p1 = _lyre_board(set_pool)
+
+    with patch("engine.handlers._common.random.random", return_value=0.0):
+        game.queue_permanent_ability(
+            0, "Goblin Lyre", target_player_index=1, permanent_index=0
+        )
+        game._settle()
+
+    assert (p0.life, p1.life) == (20, 18)
+
+
+def test_goblin_lyre_loses_its_flip_and_counts_the_targets_creatures(set_pool):
+    """"If you lose the flip, this artifact deals damage to **you** equal to the
+    number of creatures **that opponent or that planeswalker's controller**
+    controls."
+
+    Both halves are the same seat — the one the ability targeted — so the
+    disjunction is a spelling of "that player" rather than a second referent.
+    The damage lands on a fixed seat while the count is *scoped* to the chosen
+    one, which is neither the per-seat loop nor Karma's fused kind; the boards
+    are deliberately different sizes so a lowering that counted the wrong one
+    would show.
+    """
+    from unittest.mock import patch
+
+    game, p0, p1 = _lyre_board(set_pool)
+
+    with patch("engine.handlers._common.random.random", return_value=0.99):
+        game.queue_permanent_ability(
+            0, "Goblin Lyre", target_player_index=1, permanent_index=0
+        )
+        game._settle()
+
+    assert (p0.life, p1.life) == (17, 20)
+
+
+def test_goblin_lyre_flips_once_for_both_of_its_sentences(set_pool):
+    """CR 705.2: only the player who flipped wins or loses that flip, so one
+    printed "Flip a coin" is one draw and both conditionals read it. The RNG is
+    rigged to win-then-lose: with one flip the opponent takes two and nobody
+    else is touched, and with two the artifact would both win and lose."""
+    from unittest.mock import patch
+
+    game, p0, p1 = _lyre_board(set_pool)
+
+    with patch(
+        "engine.handlers._common.random.random", side_effect=[0.0, 0.99, 0.99, 0.99]
+    ):
+        game.queue_permanent_ability(
+            0, "Goblin Lyre", target_player_index=1, permanent_index=0
+        )
+        game._settle()
+
+    assert (p0.life, p1.life) == (20, 18)
+# --- end W3G4 ---
