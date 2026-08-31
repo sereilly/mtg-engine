@@ -1484,6 +1484,31 @@ class LegalityMixin:
             perm, {"enchanted_only": True}
         ):
             return False
+        # **Colour is not about the head noun.** "Target **black** creature"
+        # (Exorcist, Spinal Villain) restricts exactly what "target **blue**
+        # permanent" (Flash Flood) does, so it is asked once, before the switch,
+        # for the reason the two tests above it are: a restriction asked inside
+        # one branch is a restriction the other branches drop. It lived in the
+        # ``permanent`` branch alone, so a colour-narrowed *creature* target was
+        # offered in every colour by any caller with no instruction to delegate
+        # to — a cast, a reflexive trigger (CR 603.12) and a trigger choosing
+        # its own target all enumerate without one.
+        #
+        # Layer 5, not the printed line. Deathlace makes a Grizzly Bears black;
+        # the *resolution* accepted it and this enumerator did not, so the
+        # picker offered nothing while a script could kill it — one question
+        # about one permanent with two answers.
+        color_filter = spec.get("color_filter")
+        if color_filter and color_filter not in perm.effective_colors:
+            return False
+        # "a black **or red** source of your choice" — the disjunction
+        # ``ObjectFilter.any_colors`` spells the same way, asked of the same
+        # layer-5 answer as the single-colour test above.
+        any_colors = spec.get("any_colors")
+        if any_colors and not any(
+            colour in perm.effective_colors for colour in any_colors
+        ):
+            return False
         if kind == "player_or_planeswalker":
             # "Target player or planeswalker" (Chandra's Magmutt): the only
             # permanents in the union are planeswalkers — the player faces were
@@ -1575,19 +1600,8 @@ class LegalityMixin:
                     return False
             return True
         if kind == "permanent":
-            color_filter = spec.get("color_filter")
-            if color_filter:
-                # Layer 5, not the printed line. Deathlace makes a Grizzly Bears
-                # black; the *resolution* accepted it and this enumerator did
-                # not, so the picker offered nothing while a script could kill
-                # it — one question about one permanent with two answers.
-                return color_filter in perm.effective_colors
-            any_colors = spec.get("any_colors")
-            if any_colors:
-                # "a black **or red** source of your choice" — the disjunction
-                # ``ObjectFilter.any_colors`` spells the same way, asked of the
-                # same layer-5 answer as the single-colour branch above.
-                return any(colour in perm.effective_colors for colour in any_colors)
+            # Colour is settled above the switch; what is left here is the one
+            # narrowing only this branch has.
             if spec.get("enchant_enchantment"):
                 return "enchantment" in type_line
             return True
