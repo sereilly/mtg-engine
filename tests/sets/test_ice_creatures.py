@@ -1870,3 +1870,143 @@ def test_the_mount_carries_nobody_until_its_ability_is_activated(set_pool):
 
     assert mount in list(game.controlled_by(game.players[0]))
 # --- end W2G4 ---
+
+
+# --- W3G2: combat control and attack requirements ---
+def _w3g2_board(set_pool, *names, opponent=()):
+    """A two-seat game with *names* under seat 0 and *opponent* under seat 1,
+    every permanent able to act."""
+    pool = set_pool("ICE")
+    mine = [Permanent(card=pool[name]) for name in names]
+    theirs = [Permanent(card=pool[name]) for name in opponent]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=mine, life=20),
+        PlayerState(name="P2", battlefield=theirs, life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._settle()
+    for perm in mine + theirs:
+        _nosick(perm)
+    return game, mine, theirs
+
+
+def _w3g2_settle(game):
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+
+def test_w3g2_goblin_ski_patrol_is_supported(set_pool):
+    """Three sentences and every one of them had to land: an indefinite pump
+    and keyword grant (CR 611.2b, no duration printed), the delayed sacrifice,
+    and a lifetime activation cap."""
+    program = compile_card_oracle(set_pool("ICE")["Goblin Ski Patrol"])
+
+    assert program.supported
+
+
+def test_w3g2_ski_patrol_needs_a_snow_mountain_to_activate(set_pool):
+    """The refusing half. An ordinary Mountain is a Mountain and is not snow,
+    so the clause is unmet and nothing happens — which is the direction an
+    unenforced "Activate only if" gets wrong."""
+    game, (patrol, _mountain), _ = _w3g2_board(
+        set_pool, "Goblin Ski Patrol", "Mountain",
+    )
+
+    result = game.activate_permanent_ability(0, "Goblin Ski Patrol")
+
+    assert not result.supported
+    assert (patrol.effective_power, patrol.effective_toughness) == (1, 1)
+    assert not patrol.has_keyword("flying")
+
+
+def test_w3g2_ski_patrol_pumps_and_flies_off_a_snow_mountain(set_pool):
+    """The permitting half, so the restriction is a gate rather than a wall."""
+    game, (patrol, _snow), _ = _w3g2_board(
+        set_pool, "Goblin Ski Patrol", "Snow-Covered Mountain",
+    )
+
+    result = game.activate_permanent_ability(0, "Goblin Ski Patrol")
+    _w3g2_settle(game)
+
+    assert result.supported
+    assert (patrol.effective_power, patrol.effective_toughness) == (3, 1)
+    assert patrol.has_keyword("flying")
+
+
+def test_w3g2_ski_patrol_activates_once_and_never_again(set_pool):
+    """"Activate only **once**" — not once each turn. The tally the engine
+    already kept was turn-scoped, so a cap read off it would come back every
+    untap step: the ability working more often than the card allows."""
+    game, (patrol, _snow), _ = _w3g2_board(
+        set_pool, "Goblin Ski Patrol", "Snow-Covered Mountain",
+    )
+
+    assert game.activate_permanent_ability(0, "Goblin Ski Patrol").supported
+    _w3g2_settle(game)
+    again = game.activate_permanent_ability(0, "Goblin Ski Patrol")
+
+    assert not again.supported
+    # …and still refused a turn later, which is the whole difference from
+    # Dream Coat's clause.
+    game.turn += 2
+    assert not game.activate_permanent_ability(0, "Goblin Ski Patrol").supported
+    assert patrol.effective_power == 3
+
+
+def test_w3g2_ski_patrol_is_sacrificed_at_the_next_end_step(set_pool):
+    """"Its controller sacrifices it at the beginning of the next end step."
+    The pump lasting indefinitely is what the card prints; the creature not
+    lasting is what makes the two readings agree at the table."""
+    game, (patrol, _snow), _ = _w3g2_board(
+        set_pool, "Goblin Ski Patrol", "Snow-Covered Mountain",
+    )
+
+    game.activate_permanent_ability(0, "Goblin Ski Patrol")
+    _w3g2_settle(game)
+    assert patrol.metadata["sacrifice_at_next_end_step"] is True
+
+    game.resolve_end_step(0)
+
+    assert "Goblin Ski Patrol" not in [
+        perm.card.name for perm in game.controlled_by(game.players[0])
+    ]
+
+
+def test_w3g2_barbarian_guides_is_supported(set_pool):
+    """The one gap was the last sentence: "Return **that creature**" is the
+    same referent "Return **it**" already named, and the production read only
+    the pronoun."""
+    program = compile_card_oracle(set_pool("ICE")["Barbarian Guides"])
+
+    assert program.supported
+
+
+def test_w3g2_barbarian_guides_returns_its_target_at_the_end_step(set_pool):
+    """The bounce is aimed at the creature the ability targeted, not at the
+    Guides — which is what "that creature" says and what the source-referent
+    reading would have got wrong."""
+    game, (guides, bears), _ = _w3g2_board(
+        set_pool, "Barbarian Guides", "Balduvian Bears",
+    )
+
+    result = game.activate_permanent_ability(
+        0, "Barbarian Guides",
+        target_player_index=0,
+        permanent_index=game.battlefield_index_of(guides),
+        target_permanent_index=game.battlefield_index_of(bears),
+    )
+    _w3g2_settle(game)
+
+    assert result.supported
+    assert bears.has_keyword("snow cavewalk")
+    assert bears.metadata.get("bounce_at_next_end_step") is True
+    assert not guides.metadata.get("bounce_at_next_end_step")
+
+    game.resolve_end_step(0)
+
+    assert "Balduvian Bears" in [c.name for c in game.players[0].hand]
+    assert "Barbarian Guides" in [
+        perm.card.name for perm in game.controlled_by(game.players[0])
+    ]
+# --- end W3G2 ---

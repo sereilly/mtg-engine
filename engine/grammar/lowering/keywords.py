@@ -133,6 +133,30 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
                     "grant_keyword_to_attached", "", {"keyword": keyword}
                 ),
             )
+        # "{1}{R}: This creature … gains flying." (Goblin Ski Patrol.) The
+        # keyword half of the same sentence the pump lowering admits one module
+        # over, and indefinite for the same CR 611.2b reason: a resolved
+        # ability's grant with no printed duration is not the *static* ability's
+        # continuous contribution the refusal below is about — that one is
+        # refused a layer up, in `_lower_static_ability`.
+        #
+        # Through the very kinds a durated self-grant already uses, with the
+        # duration named as ``None``. ``engine/keywords.grant_keyword`` has
+        # always meant "no sweep takes this away" by that value, so the
+        # difference between this card and Fetid Imp is one payload entry
+        # rather than a second channel.
+        if _is_source(node.subject):
+            for keyword in node.keywords:
+                _check_grantable(keyword, node)
+            if len(node.keywords) == 1:
+                kind = _KEYWORD_GRANTS.get((node.keywords[0], "self"))
+                if kind is not None:
+                    return (OracleInstruction(kind, "", {"duration": None}),)
+            return (
+                OracleInstruction("grant_self_keyword_until_eot", "", {
+                    "keywords": tuple(node.keywords), "duration": None,
+                }),
+            )
         reason = _durationless_reason(node.subject)
         if reason.startswith("continuous pump"):
             reason = "continuous keyword grant needs the CR 613 layers engine"

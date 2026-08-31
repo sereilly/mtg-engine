@@ -767,7 +767,8 @@ def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | Non
 def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:
     """``Destroy this artifact at the beginning of the next end step.`` /
     ``Return this artifact to its owner's hand at the beginning of the next end
-    step.``
+    step.`` / ``Return that creature to its owner's hand at the beginning of
+    the next end step.``
 
     The whole sentence, delay included, because the action on its own is
     performed *now* — an artifact that destroys itself the moment its ability
@@ -805,6 +806,23 @@ def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:
     # chose a target or the ability is its own subject.
     subject = "source"
     if stream.accept_word("it"):
+        subject = "bound"
+    elif stream.at_word("that"):
+        # "Return **that creature** to its owner's hand at the beginning of the
+        # next end step." (Barbarian Guides.) The same referent "it" names,
+        # written out: the object an earlier sentence of this same ability
+        # chose. The noun is read rather than skipped, and only the generic
+        # nouns are admitted — a printed narrowing ("that Wall") would be a
+        # word this production has nowhere to put, and a narrowing dropped on a
+        # delayed bounce returns a permanent the card never named.
+        probe = stream.mark()
+        stream.advance()
+        if not stream.accept_word(
+            "artifact", "creature", "enchantment", "land", "permanent"
+        ):
+            stream.reset(probe)
+            stream.reset(mark)
+            return None
         subject = "bound"
     else:
         if not stream.accept_word("this"):

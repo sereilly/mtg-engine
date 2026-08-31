@@ -395,6 +395,15 @@ def _controlled_since_your_last_turn(game: "Game", controller_index: int, source
 #: says "Activate no more than **twice** each turn", and a stamp that can only
 #: record *that* it happened cannot answer how often. Both entries are plain
 #: ints, so the value survives the Debug Menu's raw-state round trip.
+#:
+#: A third entry, ``"ever"``, is the same count with no turn on it: "Activate
+#: only **once**" (Goblin Ski Patrol) is a cap on the permanent's whole life on
+#: the battlefield rather than on a turn, and a tally that resets cannot answer
+#: it. One key rather than two, because both numbers are written by the same
+#: stamp at the same moment and a second key is a second chance to write only
+#: one of them. A permanent that leaves and comes back is a new object
+#: (CR 400.7) and its metadata goes with the old one, which is exactly the
+#: reading CR 602.5's "only once" has.
 ACTIVATION_TALLY_MARK = "ability_activations_this_turn"
 
 #: How a printed frequency reads as a number. Two irregular spellings and a
@@ -447,6 +456,12 @@ class ActivationCap:
     printed: int | None = None
     #: The noun phrase the cap counts, controlled by the activating seat.
     counted: str | None = None
+    #: Whether the cap is over the permanent's whole life rather than over one
+    #: turn ("Activate only once", Goblin Ski Patrol). It changes *which tally*
+    #: the cap is compared against, never how the number is read — which is why
+    #: it is a field here rather than a second cap class: `resolve` answers the
+    #: same question either way, and only :func:`at_activation_limit` cares.
+    lifetime: bool = False
 
     def resolve(self, game=None, controller_index=None, source=None) -> int | None:
         """This cap as a number on the board in front of it, or None.
@@ -504,6 +519,14 @@ _ACTIVATION_LIMIT_SHAPES: tuple[
         _printed_frequency_cap,
     ),
     (re.compile(_COUNTED_LIMIT), _counted_board_cap),
+    # "Activate only **once**." (Goblin Ski Patrol.) Anchored where the row at
+    # the top of this tuple is searched, and that is the whole difference
+    # between the two sentences: "once each turn" is a cap that comes back every
+    # turn and this one never does. Anchoring is what keeps this row off Dream
+    # Coat's clause, and the missing "each turn" is what keeps that row off this
+    # one.
+    (re.compile(r"^activate only once$"),
+     lambda match: ActivationCap(printed=1, lifetime=True)),
 )
 
 
@@ -541,7 +564,12 @@ def activations_allowed_each_turn(
     """
     limits = [
         value
-        for cap in printed_activation_caps(ability_text)
+        # A lifetime cap is not a per-turn one and this function's name is the
+        # contract: folding "only once" in here would report Goblin Ski Patrol
+        # as a once-a-turn ability, which is what the denial message beside the
+        # caller would then say. :func:`at_activation_limit` is where both kinds
+        # are compared, each against its own tally.
+        for cap in printed_activation_caps(ability_text) if not cap.lifetime
         if (value := cap.resolve(game, controller_index, source)) is not None
     ]
     return min(limits) if limits else None
@@ -563,9 +591,30 @@ def activations_this_turn(game: "Game", source) -> int:
     return int(tally.get("count", 0))
 
 
+def activations_ever(game: "Game", source) -> int:
+    """How many capped activations *source* has made since it entered.
+
+    The turn-free twin of :func:`activations_this_turn`, off the same stamp:
+    "Activate only once" is a cap on the permanent, and CR 400.7 makes a
+    permanent that left and returned a different one — so a fresh object with
+    no metadata has made none, which is the rule rather than a shortcut.
+    """
+    if source is None:
+        return 0
+    tally = source.metadata.get(ACTIVATION_TALLY_MARK)
+    if not isinstance(tally, dict):
+        return 0
+    return int(tally.get("ever", 0))
+
+
 def already_activated_this_turn(game: "Game", source) -> bool:
     """Whether *source* has used a capped ability at all this turn."""
     return activations_this_turn(game, source) >= 1
+
+
+def already_activated_ever(game: "Game", source) -> bool:
+    """Whether *source* has used a capped ability at all since it entered."""
+    return activations_ever(game, source) >= 1
 
 
 def at_activation_limit(
@@ -577,10 +626,22 @@ def at_activation_limit(
     the line, a counted one is measured on the seat's board, and the tally is
     state on the permanent.
     """
-    limit = activations_allowed_each_turn(
-        ability_text, game, controller_index, source
-    )
-    return limit is not None and activations_this_turn(game, source) >= limit
+    for cap in printed_activation_caps(ability_text):
+        limit = cap.resolve(game, controller_index, source)
+        if limit is None:
+            continue
+        # Each cap against its own tally. A single ``min`` over both kinds was
+        # the shape before "only once" existed, and it cannot survive one: a
+        # lifetime cap of 1 compared against the per-turn count would come back
+        # unspent every new turn, which is the ability working more often than
+        # the card allows — this module's own failure mode.
+        spent = (
+            activations_ever(game, source) if cap.lifetime
+            else activations_this_turn(game, source)
+        )
+        if spent >= limit:
+            return True
+    return False
 
 
 def _not_yet_activated_this_turn(game: "Game", controller_index: int, source) -> bool:
@@ -592,6 +653,17 @@ def _not_yet_activated_this_turn(game: "Game", controller_index: int, source) ->
     already used its ability.
     """
     return not already_activated_this_turn(game, source)
+
+
+def _not_yet_activated_ever(game: "Game", controller_index: int, source) -> bool:
+    """"Activate only once." (Goblin Ski Patrol.)
+
+    Per-*permanent* state with no turn on it, so it answers off the lifetime
+    half of the tally — and a source that is gone answers yes for the reason
+    `_not_yet_activated_this_turn` does: there is no permanent to have used its
+    ability.
+    """
+    return not already_activated_ever(game, source)
 
 
 def _below_printed_activation_limit(
@@ -634,6 +706,10 @@ def mark_activated_this_turn(game: "Game", source) -> None:
     already = activations_this_turn(game, source)
     source.metadata[ACTIVATION_TALLY_MARK] = {
         "turn": game.turn, "count": already + 1,
+        # Written by the same stamp rather than by a second one: the two numbers
+        # are the same activation counted two ways, and a caller that had to
+        # remember both would eventually remember one.
+        "ever": activations_ever(game, source) + 1,
     }
 
 
@@ -950,6 +1026,16 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         _not_yet_activated_this_turn,
         "only once each turn",
     ),
+    # "Activate only once." (Goblin Ski Patrol.) One word shorter than the row
+    # above and a different rule: that cap comes back every untap step and this
+    # one never does. Anchored, so neither row can read the other's sentence —
+    # which is the prefix hazard this module's docstring names, in the one place
+    # in the table where two clauses really are a prefix apart.
+    ActivationRestriction(
+        re.compile(r"^activate only once$"),
+        _not_yet_activated_ever,
+        "only once",
+    ),
     # "Activate no more than twice each turn." (Vampire Bats.) The *only* clause
     # in the pool that does not begin "Activate only", and the one that showed
     # `_clauses` was collecting by that prefix rather than by the verb: the
@@ -1198,13 +1284,15 @@ def activation_denial(game, controller_index: int, source, ability_text: str) ->
 
 __all__ = [
     "ACTIVATION_RESTRICTIONS",
-    "ONCE_EACH_TURN_MARK",
+    "ACTIVATION_TALLY_MARK",
     "ActivationCap",
     "ActivationRestriction",
     "activation_denial",
     "activation_restriction_line",
+    "activations_ever",
+    "already_activated_ever",
     "already_activated_this_turn",
-    "limits_to_once_each_turn",
+    "at_activation_limit",
     "mark_activated_this_turn",
     "printed_activation_caps",
     "unreadable_activation_clauses",
