@@ -154,6 +154,14 @@ DELAYED_EVENTS: dict[str, str] = {
 #: an ability that names a future step waits for that step however many turns
 #: away it is, so it can only be removed by firing.
 END_OF_TURN = "end_of_turn"
+#: "…**this combat**" (Melee). CR 603.7b's stated duration again, over a
+#: shorter window: a turn may hold several combat phases, so an entry armed for
+#: one of them must not still be waiting in the next. Its own sweep at the end
+#: of combat (:func:`expire_combat_delayed_triggers`) and, belt and braces, the
+#: turn sweep drops it too — a combat-scoped ability cannot outlive the turn its
+#: combat was in, and a phase the game never reached is exactly when the
+#: narrower sweep does not run.
+END_OF_COMBAT = "end_of_combat"
 UNTIL_IT_TRIGGERS = "until_it_triggers"
 
 
@@ -405,10 +413,33 @@ def fire_delayed_triggers(
     return len(fired)
 
 
+#: The durations a turn ends. Both are CR 603.7b's "stated duration"; neither
+#: can outlive the turn it was armed in, and the shorter one is listed here as
+#: well as swept at end of combat because a combat that never happened (a turn
+#: with no combat phase entered, an effect that skipped it) never runs the
+#: narrower sweep.
+_TURN_SCOPED = frozenset({END_OF_TURN, END_OF_COMBAT})
+
+
 def expire_delayed_triggers(game: "Game") -> None:
     """CR 603.7b: a delayed ability scoped to "this turn" that never triggered
     goes away with the turn. One scoped to a future step does not — it is
     waiting for a moment that has not come yet, and only firing removes it."""
     game.delayed_triggers = [
-        entry for entry in game.delayed_triggers if entry.duration != END_OF_TURN
+        entry for entry in game.delayed_triggers
+        if entry.duration not in _TURN_SCOPED
+    ]
+
+
+def expire_combat_delayed_triggers(game: "Game") -> None:
+    """CR 603.7b for the shorter window: "…this combat" (Melee) ends where every
+    other until-end-of-combat effect does, in the end of combat step (CR 511).
+
+    Its own sweep rather than a branch of the turn one, because they are two
+    moments: a turn may hold several combat phases, and an entry left waiting
+    would fire again in the next one on a declaration the card never saw.
+    """
+    game.delayed_triggers = [
+        entry for entry in game.delayed_triggers
+        if entry.duration != END_OF_COMBAT
     ]

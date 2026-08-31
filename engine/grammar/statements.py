@@ -17,6 +17,7 @@ from .lexer import (NUMBER, SELF, WORD)
 from .nouns import parse_object_filter
 from .paragraphs import (
     _parse_random_reveal_ownership_exchange,
+    _parse_reassign_blockers_between_attackers,
     _parse_exchange_greatest_mana_value,
     _parse_cast_from_exiled_with,
     _parse_ownership_exchange_unless_paid,
@@ -102,6 +103,7 @@ from .effects import (
     _parse_put_counter,
     _parse_remove_counter,
     _parse_remove_from_combat,
+    _parse_choose_blocks_for_defenders,
     _parse_return,
     _parse_reveal_top,
     _parse_sacrifice,
@@ -347,6 +349,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     hand_shuffle = _parse_shuffle_hand_into_library(stream)
     if hand_shuffle is not None:
         return hand_shuffle
+    # "Choose two target blocked attacking creatures. If each of those
+    # creatures could be blocked by …" (General Jarkeld.) A whole paragraph,
+    # read before every other production that opens with "choose": the counted
+    # noun phrase after it is not a target *this* sentence acts on, and the
+    # single-target reader below would decline on the count and leave the line
+    # to fail on a word that is only the paragraph's opening.
+    reassigned_blocks = _parse_reassign_blockers_between_attackers(stream)
+    if reassigned_blocks is not None:
+        return reassigned_blocks
     # "Choose target creature." (Reincarnation, Glyph of Life) — the targeting
     # half of a two-sentence spell. Read before anything else that opens with
     # "choose", and it declines unless the sentence binding what it chose
@@ -532,6 +543,15 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
                 stream.reset(mark)
         else:
             stream.reset(mark)
+
+    # "You choose which creatures block this combat and how those creatures
+    # block." (Melee.) Read here, in front of the "you may" branch and the
+    # subject-verb reader below: both take "You" as a subject and then want a
+    # verb, and neither has this one — the sentence would fail on "choose"
+    # rather than on anything it says.
+    substituted_blocks = _parse_choose_blocks_for_defenders(stream)
+    if substituted_blocks is not None:
+        return substituted_blocks
 
     # "you may <pay a cost | take an action>"
     if stream.at_word("you"):

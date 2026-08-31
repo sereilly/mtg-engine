@@ -53,10 +53,36 @@ class DeclareBlockersStepMixin:
         controller_index: int,
         blocker_to_attacker: dict[int, int | list[int]],
         *,
+        acting_index: int | None = None,
         _camouflage_resolution: bool = False,
     ) -> tuple[bool, str]:
+        """CR 509.1: *controller_index*'s declare-blockers turn-based action.
+
+        ``acting_index`` is who is *making the choices* (CR 509.1a), which is
+        normally the defending player and is another seat while "You choose
+        which creatures block this combat and how those creatures block"
+        (Melee) is in effect. It defaults to the declarer, so every caller that
+        does not know about the substitution keeps meaning what it meant.
+
+        The gate is here rather than only in the web action because a
+        restriction the engine does not enforce is one that works more often
+        than the card allows: the substituted seat must be the one
+        ``block_chooser_index`` names, and while Melee is out the *defender*
+        may no longer declare their own blocks.
+        """
         if self.current_turn_phase != "combat" or self.current_step != "declare_blockers":
             return False, "blockers can only be declared during declare_blockers"
+        if acting_index is None:
+            acting_index = controller_index
+        # A Camouflage resolution is exempt because it is not a declaration at
+        # all: the piles were matched at random (CR 509.1a is replaced
+        # wholesale), so there is no choice for another seat to be making.
+        chooser_index = self.block_chooser_index(controller_index)
+        if acting_index != chooser_index and not _camouflage_resolution:
+            if not (0 <= chooser_index < len(self.players)):
+                return False, "only defending player may declare blockers"
+            chooser = self.players[chooser_index]
+            return False, f"{chooser.name} chooses which creatures block this combat"
         if self.combat_attackers:
             if controller_index not in self.combat_defending_players():
                 return False, "only defending player may declare blockers"
@@ -1047,7 +1073,10 @@ class DeclareBlockersStepMixin:
                             perm, seat, self.seat_turn_counts.get(seat, 0)
                         )
 
-    def _fire_creature_blocks_triggers(self, controller_index: int, assignments: dict[int, list[int]]) -> None:
+    def _fire_creature_blocks_triggers(
+        self, controller_index: int, assignments: dict[int, list[int]],
+        *, already_blocking: bool = False,
+    ) -> None:
         """Put each blocker's own "whenever this creature blocks" triggers on
         the stack (e.g. Ydwen Efreet's coin flip) — once per blocking
         creature declared this call, regardless of how many attackers it
@@ -1058,6 +1087,17 @@ class DeclareBlockersStepMixin:
         the filter admits. The unnarrowed form keeps its once-per-blocker
         firing — CR 509.3c/509.3d draw exactly that line, and the filter's
         presence is what tells the two apart.
+
+        *already_blocking* is the blocking side's twin of
+        ``_fire_becomes_blocked_triggers``' ``already_blocked``, and CR 509.3a
+        is why it exists: an effect that makes a creature block triggers the
+        bare wording "only if it wasn't a blocking creature at that time".
+        General Jarkeld's reassignment moves a creature from one attacker to
+        another without it ever ceasing to be a blocking creature, so the bare
+        half must not fire again — while CR 509.3b's "blocks **a creature**"
+        half does, because it was not already blocking *that* attacker. Sorrow's
+        Path is the other case and leaves the flag alone: its creatures are
+        removed from combat first, so they really do start blocking again.
         """
         from ..auras import attached_subject_triggers
         from ..events import trigger_subject_matches
@@ -1106,7 +1146,9 @@ class DeclareBlockersStepMixin:
                 # is about every attacker this blocker blocks; a narrowed
                 # firing is about the one attacker that admitted it.
                 if not trig.condition.payload.get("blocked_filter"):
-                    firing_contexts: list[dict] = [{
+                    # CR 509.3a's once-per-creature half, silent when the
+                    # creature was already a blocking creature.
+                    firing_contexts: list[dict] = [] if already_blocking else [{
                         "blocked_permanent_ids": [
                             attacker.permanent_id for _, attacker in blocked
                         ],
@@ -1144,8 +1186,11 @@ class DeclareBlockersStepMixin:
             # declare_attackers_step. Something attached to the blocker, not
             # the blocker itself: an Aura's ability is the Aura's (CR 113.7a),
             # so it is on no `effective_card` the scan above reads.
-            for seat, attachment, trig in attached_subject_triggers(
-                self, blocker, {"creature_attacks_or_blocks"}, "combatant_attached",
+            for seat, attachment, trig in (
+                () if already_blocking else attached_subject_triggers(
+                    self, blocker, {"creature_attacks_or_blocks"},
+                    "combatant_attached",
+                )
             ):
                 self._stack_push(
                     StackItem(

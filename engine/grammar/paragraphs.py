@@ -785,3 +785,64 @@ def _parse_random_reveal_ownership_exchange(
         stream.reset(mark)
         return None
     return ast.RandomRevealOwnershipExchange(life)
+
+
+def _parse_reassign_blockers_between_attackers(
+    stream: TokenStream,
+) -> "ast.ReassignBlockersBetweenAttackers | None":
+    """``Choose two target blocked attacking creatures. If each of those
+    creatures could be blocked by all creatures that the other is blocked by,
+    each creature that's blocking exactly one of those attacking creatures stops
+    blocking it and is blocking the other attacking creature.`` (General
+    Jarkeld.)
+
+    Two sentences, one effect, for this module's reason: the second names
+    "those creatures" and "the other", and only the first supplies them. Read
+    apart, the first would announce two targets and do nothing with them and the
+    second would have nothing to read at all.
+
+    The noun phrase is *parsed*, not matched as words — "two target blocked
+    attacking creatures" is an ordinary counted recipient the filter parser
+    already reads — so a card printing the same relation about a narrower kind
+    of attacker is payload. Everything after it is fixed, because every word of
+    it is a way the sentence could mean something smaller: the hypothetical
+    (drop it and the swap happens between creatures that could never have been
+    declared that way), "exactly one" (drop it and a creature blocking *both*
+    chosen attackers is moved off one of them), and "is blocking the other
+    attacking creature" (drop it and the blockers are removed rather than
+    reassigned).
+
+    Refuses without consuming when the words are not this paragraph, so every
+    other sentence opening "Choose …" keeps its own reading.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("choose"):
+        stream.reset(mark)
+        return None
+    try:
+        subject = parse_recipient(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if subject is None or not isinstance(subject, ast.TargetSpec):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "if", "each", "of", "those", "creatures", "could", "be", "blocked",
+        "by", "all", "creatures", "that", "the", "other", "is", "blocked", "by",
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "each", "creature", "that", "'s", "blocking", "exactly", "one", "of",
+        "those", "attacking", "creatures", "stops", "blocking", "it", "and",
+        "is", "blocking", "the", "other", "attacking", "creature",
+    ):
+        raise stream.error(
+            "expected the reassignment that closes the blocked-attacker swap"
+        )
+    return ast.ReassignBlockersBetweenAttackers(subject)

@@ -192,6 +192,19 @@ class Game(
     # turn, the defending player's blocks are assigned randomly by pile (CR — the
     # spell replaces the declare-blockers step) instead of chosen.
     camouflage_active_turn: int | None = None
+    # "**You** choose which creatures block this combat and how those creatures
+    # block." (Melee.) CR 509.1a's chooser, substituted: the declaration is
+    # still the defending player's turn-based action and their creatures still
+    # block, but every choice inside it is made by this seat. None is the
+    # ordinary game, where each defender chooses for themselves — read through
+    # ``block_chooser_index`` rather than directly, so "who is asked?" has one
+    # answer for the engine, the AI and the web layer.
+    #
+    # Combat-scoped, like the pile fields above it: cleared by
+    # ``_reset_combat_state``, which runs as the combat phase begins and again
+    # when it ends. Melee is cast during combat before blockers are declared,
+    # so the window it is set in is exactly the window the printed words name.
+    combat_block_chooser: int | None = None
     # Raging River (CR 702 left/right division). When active, each defending player
     # splits their non-flying creatures into a "left" and a "right" pile, and the
     # attacking player labels each attacker; an attacker may then only be blocked by

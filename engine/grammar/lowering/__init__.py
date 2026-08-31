@@ -32,7 +32,7 @@ cannot do.
 """
 
 from .categories import INSTRUCTION_CATEGORIES, categories_of
-from ._records import _PRODUCES
+from ._records import _COST_PRODUCES, _PRODUCES
 from .where_x import lower_where_x
 from .conditions import _lower_condition, pronoun_target_referent
 from ._events import (CREATED_TOKEN, 
@@ -258,6 +258,8 @@ from .combat import (
     _lower_assigns_no_combat_damage,
     _lower_attacking_doesnt_tap,
     _lower_force_chosen_creature_to_attack,
+    _lower_choose_blocks_for_defenders,
+    _lower_reassign_blockers_between_attackers,
     _lower_remove_from_combat,
 )
 from .game import (
@@ -286,6 +288,7 @@ __all__ = [
     "_lower_condition",
     "pronoun_target_referent",
     "INSTRUCTION_CATEGORIES",
+    "_COST_PRODUCES",
     "_PRODUCES",
     "categories_of",
     "_mentions_x",
@@ -464,6 +467,8 @@ __all__ = [
     "_lower_attack_as_though",
     "_lower_assigns_no_combat_damage",
     "_lower_attacking_doesnt_tap",
+    "_lower_choose_blocks_for_defenders",
+    "_lower_reassign_blockers_between_attackers",
     "_lower_remove_from_combat",
     "_lower_ante",
     "_lower_repeat_process",

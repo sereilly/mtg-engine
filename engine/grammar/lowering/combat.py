@@ -705,3 +705,74 @@ def _lower_force_chosen_creature_to_attack(
             "otherwise": (requirement,),
         }),
     )
+
+
+def _lower_choose_blocks_for_defenders(
+    node: ast.ChooseBlocksForDefenders,
+) -> tuple[OracleInstruction, ...]:
+    """"You choose which creatures block this combat and how those creatures
+    block." (Melee.) CR 509.1a's chooser, substituted for this combat.
+
+    Refuses the turn-scoped printing ("this turn", Master Warcraft): the
+    substitution is *combat*-scoped state, cleared when the combat phase begins
+    and again when it ends, and a turn-scoped one would either have to survive
+    that reset or quietly stop applying at the second combat of a turn. Neither
+    is what the words say, so the card refuses naming its clause rather than
+    working for one combat out of two.
+    """
+    if node.duration.kind != "until_end_of_combat":
+        raise LoweringError(
+            "a block-chooser substitution is combat-scoped; nothing carries "
+            "one across a combat boundary",
+            node=node,
+        )
+    return (OracleInstruction("choose_blocks_for_defenders", "", {}),)
+
+
+def _lower_reassign_blockers_between_attackers(
+    node: ast.ReassignBlockersBetweenAttackers,
+) -> tuple[OracleInstruction, ...]:
+    """"Choose two target blocked attacking creatures. If each of those
+    creatures could be blocked by all creatures that the other is blocked by,
+    …" (General Jarkeld.)
+
+    Two targets of one kind, so the description is the homogeneous one rather
+    than Sorrow's Path's ordered roles: neither slot's legal set depends on what
+    was chosen for the other. The *relation* between them is a condition the
+    handler checks at resolution (CR 608.2b), not a narrowing the picker could
+    apply — "could be blocked by all creatures that the other is blocked by" is
+    a question about a pair, and a picker that tried to enforce it would have to
+    answer it before the pair existed.
+
+    Both printed narrowings are carried and both are testable
+    (``TESTABLE_SUBJECT_FILTER_KEYS``): an attacker that is not blocked has no
+    blockers to hand over, and one that is not attacking is not in this combat
+    at all. A narrowing the matcher could not test would be a restriction the
+    dispatcher then ignored, which is the wider-than-printed reading this file
+    refuses everywhere.
+    """
+    subject = node.subject
+    if not _names_several_targets(subject) or subject.count != 2:
+        raise LoweringError(
+            "this reassignment is announced with exactly two chosen attackers",
+            node=node,
+        )
+    filter_payload = _filter_payload(subject.filter)
+    untestable = untestable_filter_keys(filter_payload)
+    if untestable:
+        raise LoweringError(
+            f"nothing tests {sorted(untestable)!r} on a chosen attacker",
+            node=node,
+        )
+    if not (filter_payload.get("attacking_only") and filter_payload.get("blocked_only")):
+        raise LoweringError(
+            "the reassignment moves blockers between *blocked attacking* "
+            "creatures; a wider phrase would move blockers off creatures the "
+            "sentence never named",
+            node=node,
+        )
+    payload: dict[str, object] = dict(filter_payload)
+    _describe_several_targets(payload, subject)
+    return (
+        OracleInstruction("reassign_blockers_between_attackers", "", payload),
+    )

@@ -84,6 +84,19 @@ def _during_combat_before_blockers(game: "Game", caster_index: int) -> bool:
     )
 
 
+def _own_combat_before_blockers(game: "Game", caster_index: int) -> bool:
+    # Melee: the window `_during_combat_before_blockers` names, plus the seat
+    # its line prints and that one's does not ("during combat **on your turn**
+    # before blockers are declared"). The same pairing `_during_own_declare_attackers`
+    # and `_during_declare_attackers` already are a few rows up: one clause says
+    # whose turn and the other deliberately does not, so the seat is read in one
+    # and never consulted in the other.
+    return (
+        game.active_player_index == caster_index
+        and _during_combat_before_blockers(game, caster_index)
+    )
+
+
 def _before_combat_damage_step(game: "Game", caster_index: int) -> bool:
     # Berserk: illegal once the turn has reached the combat damage step —
     # during it, after it (end of combat, postcombat main), or in the ending phase.
@@ -167,6 +180,11 @@ CAST_RESTRICTIONS: tuple[CastRestriction, ...] = (
         "cast this spell only during combat before blockers are declared",
         _during_combat_before_blockers,
         "can only be cast during combat before blockers are declared",
+    ),
+    CastRestriction(
+        "cast this spell only during combat on your turn before blockers are declared",
+        _own_combat_before_blockers,
+        "can only be cast during combat on your turn before blockers are declared",
     ),
     CastRestriction(
         "cast this spell only before the combat damage step",

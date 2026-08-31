@@ -61,6 +61,7 @@ from .lowering import (
     # `lowering/_records.py` and `lowering/_common.py`; the dispatch
     # below still reads them, and callers outside the package keep this
     # address.
+    _COST_PRODUCES,
     _PRODUCES,
     _fused_upkeep_pay_to_untap,
     _mentions_x,
@@ -172,7 +173,9 @@ from .lowering import (
     _lower_cast_from_exiled_with,
     _lower_cast_permission,
     _lower_exile_graveyard_until_leaves,
+    _lower_choose_blocks_for_defenders,
     _lower_force_chosen_creature_to_attack,
+    _lower_reassign_blockers_between_attackers,
     _lower_transmute_by_sacrifice,
     _lower_exile_until_leaves_or_untaps,
     _lower_ownership_exchange_unless_paid,
@@ -303,6 +306,8 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.AssignsNoCombatDamage: _lower_assigns_no_combat_damage,
     ast.AttackingDoesntTap: _lower_attacking_doesnt_tap,
     ast.ChooseTarget: _lower_choose_target,
+    ast.ChooseBlocksForDefenders: _lower_choose_blocks_for_defenders,
+    ast.ReassignBlockersBetweenAttackers: _lower_reassign_blockers_between_attackers,
     ast.PutSourceIntoZone: _lower_put_source_into_zone,
 }
 
@@ -863,18 +868,6 @@ def lower_statement(
         return (OracleInstruction("grant_team_assign_unblocked_until_eot", "", {}),)
 
     raise LoweringError(f"no lowering for {type(statement).__name__}", node=statement)
-
-
-#: Which scratchpad key an activation **cost** writes when it is paid. The twin
-#: of ``_PRODUCES`` for the cost side of a colon, and separate from it for the
-#: same reason the two sides are separate: a cost is charged by
-#: ``engine/mixins/stack/activation.py`` rather than by an instruction, so there
-#: is no instruction kind to key it on. Land's Edge's "the discarded card" reads
-#: the record this names; a cost added here needs the activation path to record
-#: it under the same key, or the condition would compile and read nothing.
-_COST_PRODUCES: dict[type, str] = {
-    ast.DiscardCost: "discarded_cards",
-}
 
 
 def _lower_line_statement(

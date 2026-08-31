@@ -550,6 +550,18 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "assign_no_combat_damage_until_eot": "combat_restrictions",
     "exempt_from_attack_tapping": "combat_restrictions",
     "remove_from_combat": "combat_restrictions",
+    # "You choose which creatures block this combat and how those creatures
+    # block." (Melee.) CR 509.1a's chooser substituted for the declare-blockers
+    # turn-based action — a restriction on how that declaration is made rather
+    # than an effect on any permanent, so it files with the other CR 506/509
+    # clauses and GRAMMAR_CATEGORIES is unchanged.
+    "choose_blocks_for_defenders": "combat_restrictions",
+    # "…each creature that's blocking exactly one of those attacking creatures
+    # stops blocking it and is blocking the other attacking creature."
+    # (General Jarkeld.) A one-shot rewrite of an existing block (CR 509.1g),
+    # filed beside Sorrow's Path's mirror of it for the same reason
+    # `remove_from_combat` is here: the family whose steps dispatch it.
+    "reassign_blockers_between_attackers": "combat_restrictions",
     "mark_non_wall_target_to_attack": "combat_restrictions",
     "counter_top_stack_spell": "counterspells",
     # CR 115.7a, changing a spell's target. Its own category rather than the

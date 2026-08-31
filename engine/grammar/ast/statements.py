@@ -159,7 +159,9 @@ from .combat import (
     CantBe,
     AttackAsThough,
     CombatRestriction,
+    ChooseBlocksForDefenders,
     ForceChosenCreatureToAttack,
+    ReassignBlockersBetweenAttackers,
     RemoveFromCombat,
 )
 from .game import (
@@ -220,7 +222,7 @@ Effect = Union[
     SacrificeUnlessPay, DestroyUnlessPay, DestroyEachUnlessPaid, DamageUnlessPay, Fight, LookAtHand, LookAtLibraryTop,
     CantBe, AttackAsThough, CombatRestriction, AttackingDoesntTap,
     AssignsNoCombatDamage,
-    RemoveFromCombat,
+    RemoveFromCombat, ChooseBlocksForDefenders, ReassignBlockersBetweenAttackers,
     ChangeText, GainControl, RawEffect,
 ]
 # `CombatRestriction` was absent from this union for as long as it existed: it

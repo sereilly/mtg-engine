@@ -193,3 +193,55 @@ class ForceChosenCreatureToAttack:
     """
 
     unless_controller_pays_mana_value: bool = False
+
+
+@dataclass(frozen=True)
+class ChooseBlocksForDefenders:
+    """``You choose which creatures block this combat and how those creatures
+    block.`` (Melee.)
+
+    CR 509.1a's *chooser*, substituted. The declaration stays the defending
+    player's turn-based action and their creatures are still the ones that
+    block — what moves is every decision inside it: which of them block, and
+    which attacker each one is assigned to. The two halves of the printed
+    sentence are exactly CR 509.1a's two sentences, which is why one node
+    carries both rather than a second node for "and how those creatures block".
+
+    ``duration`` is carried for the reason every node in this module carries
+    one: "this combat" and "this turn" are the same substitution over different
+    windows, and a card printing the second (Master Warcraft) is a payload
+    change rather than a second node. Only the combat-scoped window is parsed
+    today — the lowering refuses the other, because a turn-scoped one would have
+    to survive a combat reset it has no state to survive.
+    """
+
+    duration: Duration = field(default_factory=Duration)
+
+
+@dataclass(frozen=True)
+class ReassignBlockersBetweenAttackers:
+    """``Choose two target blocked attacking creatures. If each of those
+    creatures could be blocked by all creatures that the other is blocked by,
+    each creature that's blocking exactly one of those attacking creatures stops
+    blocking it and is blocking the other attacking creature.`` (General
+    Jarkeld.)
+
+    Two printed sentences and one effect, which is why it is a paragraph: the
+    second names "those creatures" and "the other", both of which only the first
+    sentence supplies, and the first on its own would choose two targets and do
+    nothing with them.
+
+    It is the **mirror** of Sorrow's Path, not a second spelling of it. That
+    card chooses two *blocking* creatures and swaps what each blocks; this one
+    chooses two *blocked attacking* creatures and swaps who blocks each. The
+    hypothetical is the same question asked from the other end — "could be
+    blocked by all creatures that the other is blocked by" against "could block
+    all creatures that the other is blocking" — and both are answered by the one
+    gate a real declaration passes.
+
+    "**exactly one** of those attacking creatures" is the clause that keeps this
+    from being a plain swap: a creature blocking *both* chosen attackers is
+    blocking neither of them exactly once and stays where it is.
+    """
+
+    subject: Recipient

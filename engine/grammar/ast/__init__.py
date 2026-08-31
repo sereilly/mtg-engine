@@ -253,6 +253,8 @@ from .combat import (
     AssignsNoCombatDamage,
     AttackingDoesntTap,
     CantBe,
+    ChooseBlocksForDefenders,
+    ReassignBlockersBetweenAttackers,
     AttackAsThough,
     CombatRestriction,
     ForceChosenCreatureToAttack,
@@ -510,6 +512,8 @@ __all__ = [
     "ModalNode",
     # combat
     "CantBe",
+    "ChooseBlocksForDefenders",
+    "ReassignBlockersBetweenAttackers",
     "AttackAsThough",
     "AssignsNoCombatDamage",
     "AttackingDoesntTap",
