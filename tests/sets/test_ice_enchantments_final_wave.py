@@ -1,9 +1,9 @@
 """Ice Age (ICE) enchantment cards — the final wave.
 
-ICE is a *measured* set, mid-implementation: cards land here with the round
-that buys them (tests/sets/README.md, SET_PLAYBOOK.md Phase 3), and the pool
-resolves through ``set_pool("ICE")`` even though the set is not shipped —
-reading a card file is not shipping it.
+ICE **ships** (SET_PLAYBOOK.md Phase 4 moved it from ``measured`` to ``sets``).
+It was measured while these tests were written, and the pool resolves through
+``set_pool("ICE")`` either way — that fixture is about which cards a test may
+name, not about which a player may deck.
 
 The third file of the printed type, and the split is the one
 ``test_ice_creatures_final_wave.py`` already made: tests/sets/README.md's axis

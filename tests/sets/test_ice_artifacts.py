@@ -1,9 +1,9 @@
 """Ice Age (ICE) artifact cards.
 
-ICE is a *measured* set, mid-implementation: cards land here with the round
-that buys them (tests/sets/README.md, SET_PLAYBOOK.md Phase 3), and the pool
-resolves through ``set_pool("ICE")`` even though the set is not shipped —
-reading a card file is not shipping it. The round each section names is
+ICE **ships** (SET_PLAYBOOK.md Phase 4 moved it from ``measured`` to ``sets``).
+It was measured while these tests were written, and the pool resolves through
+``set_pool("ICE")`` either way — that fixture is about which cards a test may
+name, not about which a player may deck. The round each section names is
 written up in ROADMAP.md; a round's cards are split across these files by the
 printed type of the card each test is about.
 
@@ -1555,3 +1555,79 @@ def test_a_scaled_anthem_with_a_keyword_refuses_rather_than_dropping_the_scale(s
         "all creatures get +1/+0 and have flying for each time counter on this artifact"
     ) is None
 # --- end W3G3 ---
+
+
+# --- Phase 4: two abilities the promotion's targeting ratchet caught ---
+def test_pentagram_of_the_ages_shields_against_the_chosen_source_only(set_pool):
+    """"The next time **a source of your choice** would deal damage to you this
+    turn, prevent that damage."
+
+    The choice is CR 609.7a's — a source of damage, chosen when the effect is
+    created — and the handler has always honoured one. What was missing was the
+    picker: the ability's instruction kind had no entry in
+    ``targeting._KIND_TO_SPEC_FROM_PAYLOAD``, so the client was never offered a
+    source, and with nothing chosen the handler fell through to a shield
+    answering to **every** source. The card was strictly stronger than printed.
+
+    Asserted as the difference it makes rather than as the spec: a ping from a
+    source that was *not* chosen must still land.
+    """
+    from engine.damage_events import deal_damage
+
+    pool = set_pool("ICE")
+    from tests.helpers import CARDS_BY_NAME as LEA
+
+    pentagram = _nosick(Permanent(card=pool["Pentagram of the Ages"]))
+    giant = _nosick(Permanent(card=LEA["Hill Giant"]))
+    goblin = _nosick(Permanent(card=LEA["Mons's Goblin Raiders"]))
+    me = PlayerState(name="P1", battlefield=[pentagram])
+    them = PlayerState(name="P2", battlefield=[giant, goblin])
+    game = Game(players=[me, them])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "main"
+    game.current_step = "precombat_main"
+
+    spec = game.activation_target_spec(0, game.battlefield_index_of(pentagram))
+    assert spec["kind"] == "permanent"
+    assert "Hill Giant" in [t.get("name") for t in spec["valid_targets"]]
+
+    game.activate_permanent_ability(
+        0, "Pentagram of the Ages",
+        target_permanent_ids=[giant.permanent_id], target_player_index=1,
+    )
+    game.resolve_top_of_stack()
+
+    # The chosen source is stopped...
+    assert deal_damage(
+        game, {"recipient": me, "amount": 3, "source": giant, "combat": False}
+    ).dealt == 0
+    # ...and nothing else is. This is the assertion the missing spec cost: with
+    # no source chosen the shield answered to the goblin too.
+    assert deal_damage(
+        game, {"recipient": me, "amount": 3, "source": goblin, "combat": False}
+    ).dealt == 3
+
+
+def test_amulet_of_quoz_asks_which_opponent_it_dares(set_pool):
+    """"**Target opponent** may ante the top card of their library."
+
+    A player target, chosen as the ability is activated (CR 602.2b / 601.2c),
+    and it reached the payload as an ``actor`` alone — a field naming who is
+    *offered* the choice, which no picker reads. In a duel the one opponent was
+    right by luck; a free-for-all dared whichever seat the resolution carried.
+
+    The distinction the payload rests on is real and already made: the reference
+    reader spells "an opponent" ``opponent`` and only the printed word "target"
+    reaches ``target_opponent``, so no offer made to an unchosen seat picks up a
+    target from this.
+    """
+    from engine.targeting import derive_activation_spec
+
+    program = compile_card_oracle(set_pool("ICE")["Amulet of Quoz"])
+    ability = program.activated_abilities[0]
+
+    assert derive_activation_spec(ability) == {
+        "kind": "player", "opponents_only": True,
+    }
+    assert ability.instruction.payload["actor"] == "target_opponent"
