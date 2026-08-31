@@ -1482,8 +1482,15 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
         for perm in chosen:
             owner_idx = game.owner_index_of(perm)
             owner = game.players[owner_idx] if owner_idx is not None else context.caster
-            game.put_card_into_hand(owner, perm.card, from_battlefield=perm)
-            if owner_idx is not None:
+            arrived = game.put_card_into_hand(
+                owner, perm.card, from_battlefield=perm
+            )
+            # Only when it actually arrived. The seam answers False for a token
+            # ceasing to exist (CR 111.7), a commander diverted to the command
+            # zone (CR 903.9b) and a CR 614 replacement sending the card
+            # elsewhere — and "a permanent was put into your hand from the
+            # battlefield this turn" (Barrin) is false in every one of them.
+            if arrived and owner_idx is not None:
                 game.permanents_to_hand_this_turn[owner_idx] = (
                     game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
                 )
@@ -1530,8 +1537,8 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
             return True, "resolved"
         owner_idx = game.owner_index_of(perm)
         owner = game.players[owner_idx] if owner_idx is not None else context.caster
-        game.put_card_into_hand(owner, perm.card, from_battlefield=perm)
-        if owner_idx is not None:
+        arrived = game.put_card_into_hand(owner, perm.card, from_battlefield=perm)
+        if arrived and owner_idx is not None:
             game.permanents_to_hand_this_turn[owner_idx] = (
                 game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
             )
@@ -1640,8 +1647,8 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
             continue
         owner_idx = game.owner_index_of(perm)
         owner = game.players[owner_idx] if owner_idx is not None else context.caster
-        game.put_card_into_hand(owner, perm.card, from_battlefield=perm)
-        if owner_idx is not None:
+        arrived = game.put_card_into_hand(owner, perm.card, from_battlefield=perm)
+        if arrived and owner_idx is not None:
             game.permanents_to_hand_this_turn[owner_idx] = (
                 game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
             )
