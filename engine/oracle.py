@@ -562,6 +562,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # type narrowing again, on the opponent-scoped kind. Before the bare row.
     ("opponent_casts_spell",
      r"whenever an opponent casts an? (?P<cast_type>noncreature|nonartifact|creature|artifact|enchantment|instant|sorcery|land) spell"),
+    # The colour narrowing on the opponent-scoped kind (Freyalise's Charm,
+    # Leshrac's Sigil), captured into the same `color_word` payload the
+    # player-scoped row above uses — one narrowing read by one helper
+    # (`events._cast_narrowing_admits`), not a second spelling of the question.
+    # Before the bare row, which is its strict prefix.
+    ("opponent_casts_spell",
+     r"whenever an opponent casts a (?P<color_word>white|blue|black|red|green) spell"),
     ("opponent_casts_spell",        r"whenever an opponent casts a spell"),
     # A colour-list narrowing ("…a spell that's white, blue, black, or red",
     # Quirion Dryad). The list is condition payload, read by the you_cast_spell
@@ -643,6 +650,12 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # replacements have had the amount, so what the trigger sees is the life
     # that actually arrived — the same reading `life_gained_this_turn` takes.
     ("you_gain_life",               r"whenever you gain life"),
+    # "Whenever you lose life …" (Oath of Lim-Dûl). Announced by the
+    # state-based sweep off each seat's life total rather than from a call
+    # site, because life leaves a player by half a dozen routes and a list of
+    # them is only ever as complete as the last card that touched it — the
+    # argument `draws_card` is dispatched with, one record over.
+    ("you_lose_life",               r"whenever you lose life"),
     # "Whenever you sacrifice a permanent …" (Havoc Jester). Emitted from
     # ``Game.sacrifice_permanent``, the one place CR 701.21a happens — which is
     # why this row could be added without hunting for a fire site: there are

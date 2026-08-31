@@ -113,6 +113,18 @@ OFFERABLE_ACTORS: frozenset[str] = frozenset(
 #: announcement chooses nobody, so each opponent is asked in turn until one pays.
 _OPPONENT_PAYERS = frozenset({"target_opponent", "each_opponent", "opponent"})
 
+#: Every payer reference this clause can enumerate, and which seat set the
+#: handler asks for it. "**Any player** pays {3}" (Icy Prison) reaches the AST
+#: as ``each_player`` — the reference reader's one spelling for that set — and
+#: names the whole table, the ability's own controller included: an offer the
+#: controller may take is the difference between a prison they can keep and one
+#: only an opponent can save. A payload key rather than a second kind, because
+#: what differs is which seats are asked and nothing else about the chain.
+_ENUMERATED_PAYERS: dict[str, str] = {
+    **{kind: "opponent" for kind in _OPPONENT_PAYERS},
+    "each_player": "any_player",
+}
+
 
 def _lower_unless_player_pays(
     node: ast.UnlessPlayerPays, produced: frozenset[str],
@@ -136,9 +148,12 @@ def _lower_unless_player_pays(
     * the branch must lower to something. A clause bought off with nothing
       behind it is a payment charged for no reason.
     """
-    if node.payer.kind not in _OPPONENT_PAYERS:
+    payer = _ENUMERATED_PAYERS.get(node.payer.kind)
+    if payer is None:
         raise LoweringError(
-            "the only payer this clause can enumerate is an opponent", node=node
+            "this clause enumerates an opponent or any player, not "
+            f"{node.payer.kind!r}",
+            node=node,
         )
     unpaid = lower_statement(
         node.otherwise, produced, event=event, event_subject=event_subject,
@@ -150,7 +165,7 @@ def _lower_unless_player_pays(
         OracleInstruction(
             "unless_player_pays", "",
             {
-                "payer": "opponent",
+                "payer": payer,
                 "cost": {symbol: count for symbol, count in node.cost.pips},
                 # ``unpaid``, never ``otherwise`` and never ``steps``: the first
                 # is the offer's *declined* branch, which every reader that
@@ -176,6 +191,88 @@ def _lower_unless_player_pays(
 #: player" compiles to and the handler decides which seat it resolves against,
 #: and the two answering differently is the offer burning the wrong player.
 _SEAT_SET_ACTORS = frozenset({"each_player", "each_opponent", "defending_player"})
+
+
+def _lower_for_each_player(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each player,** this enchantment deals 1 damage to that player
+    unless they pay {B} or {3}." (Lim-Dûl's Hex.)
+
+    A loop over *seats* rather than over objects. The same ``for_each`` the
+    object loops lower onto, with the seat set as the iterator — and the
+    handler binds each seat as "that player" while its iteration runs, which is
+    what the printed back-reference means and the only way one sentence can
+    name a different player each time round.
+
+    Refused for any other player reference: "for each opponent" is a real set
+    and lowers here too, but a reference naming *one* seat is not a loop at all
+    and would repeat the sentence once against a seat nobody chose.
+    """
+    if node.iterator.kind not in _LOOPED_SEAT_SETS:
+        raise LoweringError(
+            f"no loop repeats an effect over the {node.iterator.kind}", node=node
+        )
+    if not inner:
+        raise LoweringError("a per-player loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {"iterator": {"players": node.iterator.kind}, "effect": inner},
+        ),
+    )
+
+
+#: The player references that name a *set* of seats a loop can walk. The same
+#: two ``handlers/control_flow._offered_seats`` enumerates, and deliberately no
+#: more: a reference naming one seat is not a loop.
+_LOOPED_SEAT_SETS = frozenset({"each_player", "each_opponent"})
+
+
+def _lower_for_each_life_lost(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+    event: str | None,
+) -> tuple[OracleInstruction, ...]:
+    """"**For each 1 life you lost,** sacrifice a permanent other than this
+    enchantment unless you discard a card." (Oath of Lim-Dûl.)
+
+    A loop whose iterator is a *number*, not a set — so the same ``for_each``
+    the three "this way" sets lower onto, with the count coming off the firing
+    event's frozen context instead of off the resolution scratchpad.
+
+    Three refusals, each a way the sentence could otherwise mean more than it
+    says:
+
+    * the event must be one that freezes a life loss. Under any other trigger
+      the phrase names a number nobody recorded, and an unwritten quantity
+      reads as zero — a loop that runs no times on a card reporting supported.
+    * the unit must be the printed 1. "For each **2** life you lost" is half as
+      many repetitions, and the handler divides by nothing.
+    * the body must lower to something, for ``_lower_for_each_chosen``'s
+      reason: an empty loop is a sentence that reports supported and does not
+      run.
+    """
+    if event != "you_lose_life":
+        raise LoweringError(
+            f"no event named {event!r} records the life this loop counts",
+            node=node,
+        )
+    if node.iterator.per != 1:
+        raise LoweringError(
+            "this loop repeats once per 1 life lost, not per "
+            f"{node.iterator.per}",
+            node=node,
+        )
+    if not inner:
+        raise LoweringError("a per-life loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {"iterator": {"repeat_from_trigger": "life_lost"}, "effect": inner},
+        ),
+    )
 
 
 def _lower_may(
@@ -280,6 +377,21 @@ def _lower_may(
         # a {B} had nothing to collect it with. `engine/mana_payment.py` is what
         # made the refusal unnecessary.
         payload["cost"] = _may_cost_payload(node)
+    if node.cost_alternatives:
+        # "…unless they pay {B} **or {3}**" (Lim-Dûl's Hex). CR 118.8's second
+        # way to cover the *same* offer, so it rides the one prompt rather than
+        # arming a second one — and it needs the first cost beside it, because
+        # a list of alternatives with nothing to be alternative *to* is just a
+        # cost written oddly.
+        if node.cost is None:
+            raise LoweringError(
+                "an alternative payment needs the cost it is an alternative to",
+                node=node,
+            )
+        payload["cost_alternatives"] = [
+            {symbol: count for symbol, count in alternative.pips}
+            for alternative in node.cost_alternatives
+        ]
     if node.life_cost is not None:
         # "… unless its controller **pays life equal to its toughness**."
         # (Essence Vortex.) Its own payload key rather than a reading of

@@ -109,6 +109,15 @@ PARSE_LAYERS = [
     # below, and under it: `statements` hands it `parse_optional_action` rather
     # than being imported back, the same inversion `delayed` makes.
     "subject_verb",
+    # The clauses `parse_statement` reads *around* a body — the leading "For
+    # each …," and linked-duration openers, the trailing "unless <player> pays
+    # <cost>" toll and alternative sweep, and the rounding that distributes
+    # across a chain. Split out of `statements` at the guard below when a
+    # parallel wave's toll production crossed it, along the boundary
+    # `parse_statement` already drew in its own shape: frame, body, frame.
+    # Below `statements` and handed `_parse_statement_body` rather than
+    # importing it back — the same inversion `subject_verb` and `delayed` make.
+    "sentence_clauses",
     "statements",
     # A sentence whose subject is a pronoun pointing at the sentence before it
     # ("It gains …", "Untap that creature", "It loses \"enchant creature\""). Split
@@ -251,10 +260,10 @@ LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", 
 # guards that made `counters` a family on the other two sides fired on the
 # lowerings and then, a set later, on the productions — never on the inventory.
 # `tapping` is the fifth, and the same reason a fifth time: `Tap`, `Untap`,
-# `TapOrUntap`, `DoesntUntapNextStep` and `DoesntUntapWhileSourceTapped` are
-# five nodes that sit perfectly well beside the board ones, and the guard that
-# made `tapping` a family on the other two sides fired on the lowerings and
-# then, four sets later, on the productions - never on the inventory.
+# `TapOrUntap`, the two untap restrictions and the untap toll are six nodes
+# that sit perfectly well beside the board ones, and the guard that made
+# `tapping` a family on the other two sides fired on the lowerings and then, a
+# set later, on the productions — never on the inventory.
 AST_FAMILIES = [
     family for family in EFFECT_FAMILIES
     if family not in (

@@ -455,6 +455,13 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Necropotence again, the other half: what its own exile put aside comes
     # back at its controller\'s next end step.
     "put_exiled_cards_into_hand": "zones",
+    # Forgotten Lore: an opponent picks out of your graveyard, again for
+    # each payment, and the pick the loop stopped on is the one you keep.
+    "repeated_graveyard_pick": "zones",
+    # The sentence that ends that loop. Its own kind because it is reached
+    # from two places — the decline branch and an exhausted graveyard — and
+    # a handler cannot be half a handler.
+    "finish_repeated_graveyard_pick": "zones",
     "exile_all_matching": "zones",
     "grant_team_keyword_until_eot": "pump",
     # A durationless keyword grant to the enchanted creature (Cocoon's hatch):

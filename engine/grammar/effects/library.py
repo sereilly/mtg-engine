@@ -342,9 +342,21 @@ def _accept_look_and_choose(
     if not stream.accept_punct("."):
         stream.reset(mark)
         return None
-    if not stream.accept_phrase(
-        "that", "player", "discards", "those", "cards"
-    ) and not stream.accept_phrase("that", "player", "discards", "that", "card"):
+    # Whose discard, read as a reference rather than as the literal words
+    # "that player": Leshrac's Sigil prints "**The player** discards that
+    # card", which `parse_player_ref` already reads as the same back-reference
+    # (it is an alias, like "they"). The referent is *required* to be that
+    # back-reference — a sentence naming somebody else would be a card that
+    # looks in one hand and empties another.
+    discarder = parse_player_ref(stream) if stream.at_word(
+        "that", "the", "they"
+    ) else None
+    if discarder is None or discarder.kind != "that_player":
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("discards", "those", "cards") and not (
+        stream.accept_phrase("discards", "that", "card")
+    ):
         stream.reset(mark)
         return None
     return ast.RevealHandAndChoose(

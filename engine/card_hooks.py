@@ -373,13 +373,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
                 damage=7,
             ),
     },
-    'Magnetic Mountain': {
-        "at the beginning of each player's upkeep, that player may choose any "
-        'number of tapped blue creatures they control and pay {4} for each '
-        'creature chosen this way. if the player does, untap those creatures':
-            _line('upkeep_pay_per_creature_untap_color', 'upkeep_effect', color='U',
-                cost_per=4),
-    },
     'Mana Short': {
         'tap all lands target player controls and that player loses all unspent '
         'mana':

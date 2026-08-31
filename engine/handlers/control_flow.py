@@ -1030,8 +1030,16 @@ def _offer_to_seat(
     # evaluator every other resolution-time count goes through, so "its
     # toughness" means here what it means anywhere else.
     life_cost = _resolved_life_cost(game, instruction.payload.get("life_cost"), context)
+    # "…unless they pay {B} **or {3}**" (Lim-Dûl's Hex). Resolved like the cost
+    # itself, so a printed {X} in an alternative means what it means in the
+    # first one.
+    alternatives = [
+        _resolved_cost(alternative, context)
+        for alternative in (instruction.payload.get("cost_alternatives") or ())
+    ]
     if (cost or life_cost) and not game._player_can_pay_optional(player, {
         "cost": cost,
+        "cost_alternatives": alternatives,
         "life_cost": life_cost,
         "life_alternative": int(instruction.payload.get("life_alternative", 0) or 0),
     }):
@@ -1059,6 +1067,7 @@ def _offer_to_seat(
     entry = {
         "card_name": context.card.name,
         "cost": cost,
+        "cost_alternatives": alternatives,
         "life_cost": life_cost,
         "life": 0,
         "_source_permanent": context.source_permanent,
@@ -1076,10 +1085,13 @@ def _offer_to_seat(
     if life_alternative:
         entry["life_alternative"] = life_alternative
     if cost:
+        printed = " or ".join(
+            mana_cost_label(option) for option in (cost, *alternatives)
+        )
         entry["prompt"] = (
-            f"Pay {mana_cost_label(cost)} or {life_alternative} life?"
+            f"Pay {printed} or {life_alternative} life?"
             if life_alternative
-            else f"Pay {mana_cost_label(cost)}?"
+            else f"Pay {printed}?"
         )
     elif life_cost:
         entry["prompt"] = f"Pay {life_cost} life?"
@@ -1117,12 +1129,25 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
     if caster is None or caster not in game.players:
         return True, "resolved"
     caster_index = game.players.index(caster)
-    # Every seat the printed reference names, in seat order. A player who has
-    # left the game is not one of them (CR 800.4a), read off the engine's own
-    # state-based-action flag.
+    # Every seat the printed reference names, in the order they are asked. CR
+    # 101.4 orders a multi-seat offer from the active player, so the chain
+    # starts there rather than at seat 0 — the same order ``_offered_seats``
+    # gives "each player may …", and the same order the queue drains.
+    #
+    # "**Any player** pays {3}" (Icy Prison) names the table, the ability's own
+    # controller included; "an opponent pays {2}" (Scarwood Bandits) excludes
+    # them. That is the only difference between the two, which is why it is a
+    # payload key and not a second handler. A player who has left the game is
+    # nobody (CR 800.4a), read off the engine's own state-based-action flag.
+    count = len(game.players)
+    active = game.active_player_index or 0
     seats = [
-        index for index in range(len(game.players))
-        if index != caster_index and not getattr(game.players[index], "lost", False)
+        index
+        for index in sorted(
+            range(count), key=lambda i: ((i - active) % count, i)
+        )
+        if not getattr(game.players[index], "lost", False)
+        and (payload.get("payer") == "any_player" or index != caster_index)
     ]
     asked = int(payload.get("asked_seats", 0))
     if asked >= len(seats):
@@ -1262,6 +1287,21 @@ def choose_one(game: Game, instruction: OracleInstruction, context: OracleExecut
     return True, "resolved"
 
 
+@dataclasses.dataclass(frozen=True)
+class _Seat:
+    """One turn of a loop over *players* — "for each player, …" (Lim-Dûl's
+    Hex). A wrapper rather than a bare index, so the loop body can tell a seat
+    from a permanent without asking what type it is."""
+
+    index: int
+
+
+#: One turn of a **counted** loop — "for each 1 life you lost" (Oath of
+#: Lim-Dûl). A sentinel rather than None, because None is a legitimate absent
+#: object elsewhere in this file and the two must not collapse: one is "run the
+#: body again", the other is "there was nothing here".
+_A_REPETITION = object()
+
 #: The last item :func:`for_each` walks: not a permanent, the *end* of the loop.
 #: It exists because the restore of ``iteration_target`` has to be a step of the
 #: loop rather than a line after it — see the handler's docstring.
@@ -1298,7 +1338,27 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
     filters = instruction.payload.get("iterator") or {}
     steps = _steps(instruction, "effect")
     produced_by = filters.get("produced_by")
-    if produced_by is not None:
+    # "For each **1 life you lost**" (Oath of Lim-Dûl) — an iterator that is a
+    # *number*, not a set: the loop has no objects, only the count the firing
+    # event froze. Read first, because the two branches below both build a list
+    # of permanents and this one has none to build.
+    repeat_key = filters.get("repeat_from_trigger")
+    # "**For each player,** …" (Lim-Dûl's Hex) — a loop over *seats*. Read
+    # beside the counted form and before the two object branches for the same
+    # reason: neither of them has a board to scan for this.
+    seat_set = filters.get("players")
+    if repeat_key is not None:
+        times = int((context.trigger_context or {}).get(repeat_key, 0) or 0)
+        matched = [_A_REPETITION] * max(0, times)
+    elif seat_set is not None:
+        # Through the same reader every multi-seat offer uses, so "each player"
+        # names the same seats in the same order here as it does there — CR
+        # 101.4's turn order from the active player, minus anyone who has left
+        # the game (CR 800.4a).
+        matched = [
+            _Seat(index) for index in _offered_seats(game, str(seat_set), context)
+        ]
+    elif produced_by is not None:
         # The printed noun rides beside the record's name and is applied to it.
         # "For each **land** destroyed this way" after a sweep that destroyed
         # lands is a restatement — but a restatement checked is a restatement,
@@ -1327,6 +1387,24 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
         if item is _END_OF_ITERATION:
             context.iteration_target = previous
             context.iteration_seats = previous_seats
+            return
+        if item is _A_REPETITION:
+            # A counted repetition names no object, so nothing rebinds: the
+            # body means what it would mean written once, run again.
+            _run(game, steps, context)
+            return
+        if isinstance(item, _Seat):
+            # The seat this iteration is about becomes "that player" for the
+            # length of it — the same rebinding ``_offer_to_seat`` makes for a
+            # multi-seat offer, and the only way one printed sentence can name
+            # a different player each time round. ``caster`` moves with it, for
+            # that function's stated reason: a bare imperative inside the loop
+            # means the seat the loop is on.
+            seated = game.players[item.index]
+            _run(
+                game, steps,
+                dataclasses.replace(context, target=seated, caster=seated),
+            )
             return
         context.iteration_target = item
         context.iteration_seats = {

@@ -73,6 +73,12 @@ _SIMULATED_CHOICES = (
     # it suspends, so a seat left owing it would wedge every later resumable
     # loop, which is what the guard beside this list checks for.
     "hand_to_library",
+    # "Target opponent chooses a card in your graveyard" (Forgotten Lore).
+    # Appended for the reason the three above are: no seed builds a deck that
+    # arms it today, so the position cannot change an existing run - and it
+    # suspends, because the sentence after it reads the pick and the round
+    # after that may not choose it again.
+    "graveyard_pick_for_price",
 )
 
 

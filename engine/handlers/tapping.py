@@ -626,16 +626,55 @@ def untap_up_to_matching(game: Game, instruction: OracleInstruction, context: Or
     was chosen at cast: the controller picks the permanents now, on
     resolution, through the pending-choice queue — the shape round 15's census
     said this clause needed, as distinct from the targeted "up to N" family."""
-    caster_index = game.players.index(context.caster)
+    seat = game.players.index(context.caster)
+    # "…**that player** may choose any number of tapped creatures … they
+    # control" (Mudslide). The chooser is the seat the firing event froze
+    # (CR 603.10), not the source's controller — which is the wrong seat on
+    # every upkeep but their own. The lowering only emits the key under an
+    # event that stamps it, so an absent one is a bug rather than a card.
+    if instruction.payload.get("who") == "event_subject_player":
+        frozen = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(frozen, int) or not (0 <= frozen < len(game.players)):
+            return False, "no seat was frozen for 'that player'"
+        seat = frozen
+    # Imported here rather than at module scope: `engine/subject_filters.py`
+    # imports this package's `_common`, so a top-level import would close the
+    # cycle at load time.
+    from ..subject_filters import subject_matches
+
+    filt = dict(instruction.payload.get("filter") or {})
+    # "…**they** control", where "they" is the chooser. `subject_matches`
+    # refuses `that_player` outright and says why: the seat is known only to
+    # the resolution holding the trigger's context, which is here. Rewritten
+    # into the relative key the matcher does answer, against this seat.
+    if filt.get("controller") == "that_player":
+        filt["controller"] = "you"
+    printed = instruction.payload.get("amount", 0)
+    if printed == "any":
+        # "**Any number**" — the cap is however many the board holds for that
+        # seat right now (CR 608.2 counts at resolution).
+        amount = sum(
+            1 for perm in game.all_permanents()
+            if subject_matches(game, perm, filt, observer=seat)
+        )
+    else:
+        amount = resolve_amount(printed, context.x_value)
     game.arm_pending_choice(
-        "untap_up_to", caster_index,
-        amount=resolve_amount(instruction.payload.get("amount", 0), context.x_value),
-        filter=dict(instruction.payload.get("filter") or {}),
+        "untap_up_to", seat,
+        amount=amount,
+        filter=filt,
+        # "…and **pay {2} for each creature chosen this way**" (Mudslide). The
+        # price of one pick; the prompt multiplies it by how many were made.
+        # Absent for Rewind, whose untap is free.
+        cost_each=dict(instruction.payload.get("cost_each") or {}),
+        # The seat "you control" is relative to, so the picker asks the same
+        # question the lowering's gate admitted.
+        observer=seat,
         card_name=context.card.name,
     )
     game.log.append(
-        f"{context.caster.name} may untap up to "
-        f"{instruction.payload.get('amount', 0)} matching permanents"
+        f"{game.players[seat].name} may untap up to "
+        f"{amount} matching permanents"
     )
     return True, "pending_untap_up_to"
 

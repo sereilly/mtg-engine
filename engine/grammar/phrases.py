@@ -661,6 +661,32 @@ def _parse_mana_payment(stream: TokenStream, *, allow_variable: bool = False) ->
     return ast.ManaCost(tuple(sorted(pips.items())))
 
 
+def _accept_mana_alternatives(stream: TokenStream) -> tuple["ast.ManaCost", ...]:
+    """``or <mana>`` runs trailing a mana payment — "…unless they pay {B} **or
+    {3}**" (Lim-Dûl's Hex). CR 118.8's alternative cost.
+
+    One offer the payer may cover either way, so the alternatives ride the same
+    payment rather than arming a second prompt: two prompts would be two
+    decisions and two penalties, and declining the first would deal the damage
+    before the second was ever made.
+
+    Whole costs, where ``_accept_life_alternative`` carries only an amount: the
+    other currency there is life, which has exactly one number, and this one is
+    mana, which is a symbol dict. Refuses without consuming, so any other "or"
+    in the sentence keeps the reading it had.
+    """
+    alternatives: list[ast.ManaCost] = []
+    while True:
+        mark = stream.mark()
+        if not stream.accept_word("or"):
+            return tuple(alternatives)
+        try:
+            alternatives.append(_parse_mana_payment(stream))
+        except GrammarError:
+            stream.reset(mark)
+            return tuple(alternatives)
+
+
 def _parse_card_alternatives(
     stream: TokenStream,
 ) -> tuple[ast.ObjectFilter, ...] | None:

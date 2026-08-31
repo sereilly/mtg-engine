@@ -836,6 +836,31 @@ class GameEndingMixin:
                 # freezes it, because by resolution the turn may have moved on).
                 emit(self, "draws_card", seat=seat, event_subject_player=seat)
 
+        # "Whenever you lose life" (Oath of Lim-Dûl) — the same sweep off the
+        # one record every path already writes: the life total itself.
+        #
+        # A *derived* event, and deliberately so. Life leaves a player by more
+        # routes than anything else here — damage (CR 120.3c), a cost paid
+        # (CR 118.8), a "lose N life" effect, a life total set lower (CR 118.5
+        # makes that a loss of the difference) — and a per-site announcement
+        # would be as complete as the last card that touched it, which is the
+        # argument the draw triggers above are written with. Comparing totals
+        # is what makes it complete by construction: every one of those routes
+        # ends at ``player.life``.
+        #
+        # First sight of a seat records the total and announces nothing: the
+        # starting life total is not a loss.
+        for seat, player in enumerate(self.players):
+            before = self.life_totals_seen.get(seat)
+            self.life_totals_seen[seat] = player.life
+            if before is None or player.lost or player.life >= before:
+                continue
+            emit(
+                self, "you_lose_life", seat=seat,
+                life_lost=before - player.life,
+                event_subject_player=seat,
+            )
+
         # "When you remove the last intervention counter from this enchantment,
         # the game is a draw." (Divine Intervention.) An *event* trigger, not a
         # state one — but the event has four call sites (the removal handler, an

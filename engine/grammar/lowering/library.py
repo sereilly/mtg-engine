@@ -26,6 +26,8 @@ from ._common import (
     _targets_only,
 )
 from ._events import (
+    _EVENT_SUBJECT_PLAYERS,
+    EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
 )
 
@@ -162,7 +164,7 @@ def _lower_discard_revealed_unless_pay_life(
 
 
 def _lower_reveal_hand_and_choose(
-    node: ast.RevealHandAndChoose,
+    node: ast.RevealHandAndChoose, event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"Target opponent reveals their hand. You choose a noncreature, nonland
     card from it. That player discards that card." (Duress.)
@@ -187,7 +189,26 @@ def _lower_reveal_hand_and_choose(
         payload["count"] = amount
     if not node.revealed:
         payload["looked_at"] = True
+    if node.player.kind == "that_player":
+        # "Look at **that player's** hand …" (Leshrac's Sigil). Nothing was
+        # targeted, so there is no choice to read the seat off: it is the one
+        # the firing event froze (CR 603.10), on the key its fire site stamps.
+        # Refused under any other event rather than left to `context.target`,
+        # which for a trigger that chose nothing is whatever the resolution
+        # happened to be carrying — an opponent's hand emptied by accident.
+        if event not in _EVENT_SUBJECT_PLAYERS:
+            raise LoweringError(
+                f"no event named {event!r} freezes the seat 'that player' names",
+                node=node,
+            )
+        payload["victim"] = EVENT_SUBJECT_PLAYER
+        return (OracleInstruction("reveal_hand_and_choose", "", payload),)
     _describe_targets(payload, node.player)
+    if "targets" not in payload:
+        raise LoweringError(
+            f"the revealed-hand picker cannot name the {node.player.kind}",
+            node=node,
+        )
     return (OracleInstruction("reveal_hand_and_choose", "", payload),)
 
 

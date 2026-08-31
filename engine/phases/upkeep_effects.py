@@ -26,7 +26,6 @@ this seam.
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable
 
-from ..handlers._common import permanent_effective_colors
 
 if TYPE_CHECKING:
     from ..models import Permanent, PlayerState
@@ -345,38 +344,6 @@ class UpkeepEffectsMixin:
         amount = max(0, len(controller.hand) - floor)
         if amount:
             self._gain_life(controller, amount, ctx.permanent.card.name)
-
-    @upkeep_effect("upkeep_each", "upkeep_pay_per_creature_untap_color")
-    def _on__upkeep_each__upkeep_pay_per_creature_untap_color(self, ctx: UpkeepContext) -> None:
-        controller = ctx.controller
-        permanent = ctx.permanent
-        player_index = ctx.player_index
-        trig = ctx.trig
-        # Magnetic Mountain: "that player" is whoever's upkeep
-        # is currently resolving (player_index), not this
-        # enchantment's controller. No interactive per-creature
-        # selection channel exists, so as many affordable
-        # tapped creatures of the color are untapped as
-        # possible (greedy, battlefield order) — not an
-        # all-or-nothing simplification.
-        color = str(trig.instruction.payload.get("color", ""))
-        cost_per = int(trig.instruction.payload.get("cost_per", 0))
-        victim = self.players[player_index]
-        untapped_names = []
-        for perm in self.controlled_by(player_index):
-            if not (perm.is_creature and perm.tapped):
-                continue
-            if color not in permanent_effective_colors(perm):
-                continue
-            if not self.can_pay_upkeep_mana(victim, {"generic": cost_per}):
-                continue
-            self._spend_upkeep_mana(victim, {"generic": cost_per})
-            ctx.game.become_untapped(perm)
-            untapped_names.append(perm.card.name)
-        if untapped_names:
-            self.log.append(
-                f"{victim.name} paid to untap {', '.join(untapped_names)} ({permanent.card.name})"
-            )
 
     @upkeep_effect("upkeep_each", "deal_damage_equal_to_swamps")
     def _on__upkeep_each__deal_damage_equal_to_swamps(self, ctx: UpkeepContext) -> None:

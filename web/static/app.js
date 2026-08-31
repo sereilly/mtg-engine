@@ -2441,6 +2441,16 @@ function getNameThenRevealTopInfo(state = currentState) {
   return info;
 }
 
+// Forgotten Lore: the targeted opponent picks a card out of the caster's
+// graveyard, again for each {G} the caster pays.
+function getGraveyardPickForPriceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.graveyard_pick_for_price;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.options) || info.options.length === 0) return null;
+  return info;
+}
+
 // Demonic Consultation: the caster names a card, then pays the top of their
 // own library to go looking for it.
 function getNameThenConsultInfo(state = currentState) {
@@ -5010,6 +5020,52 @@ function applyNameThenRevealTopPrompt(info) {
   steps.querySelector("[data-name-then-reveal-confirm]")?.addEventListener("click", submit);
 }
 
+// Forgotten Lore's pick. A graveyard is a public zone (CR 400.2), so every
+// option can be shown by name — and the list is already the printed exclusion,
+// because the engine drops the cards earlier rounds chose.
+function applyGraveyardPickForPricePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Choose a card";
+  body.textContent =
+    `${info.card_name || "The spell"}: choose a card in that graveyard. ` +
+    "Its owner may pay to make you choose again.";
+  const buttons = (info.options || [])
+    .map((option) => {
+      const label = escapeHtml((option.card && option.card.name) || "Card");
+      return `<button type="button" class="prompt-choice-btn" data-graveyard-index="${Number(option.index)}">${label}</button>`;
+    })
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+  steps.querySelectorAll("[data-graveyard-index]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try {
+        await sendAction({
+          seat,
+          action: "graveyard_pick_for_price_confirm",
+          graveyard_index: Number(btn.dataset.graveyardIndex),
+        });
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    });
+  });
+}
+
 // Demonic Consultation's naming prompt. No suggestion list either, and for the
 // mirror-image reason: the cards it will turn over are in this seat's *own*
 // library, and a list of them would hand the player the order they are betting
@@ -7268,6 +7324,12 @@ function renderActivationPrompt() {
   const nameThenRevealTopInfo = getNameThenRevealTopInfo();
   if (nameThenRevealTopInfo) {
     applyNameThenRevealTopPrompt(nameThenRevealTopInfo);
+    return;
+  }
+
+  const graveyardPickInfo = getGraveyardPickForPriceInfo();
+  if (graveyardPickInfo) {
+    applyGraveyardPickForPricePrompt(graveyardPickInfo);
     return;
   }
 

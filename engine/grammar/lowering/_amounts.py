@@ -30,7 +30,8 @@ from ...oracle_types import (
 from .. import ast
 from ..errors import LoweringError
 from ._common import _describe_targets, _is_target, dropped_narrowings
-from ._events import CHOSEN_CAST_DAMAGE, CHOSEN_PLAYER
+from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PLAYER,
+                      EVENT_SUBJECT_PLAYER, _EVENT_SUBJECT_PLAYERS)
 
 
 # Counted damage whose arithmetic a dedicated handler performs in full. Keyed
@@ -122,7 +123,9 @@ def _damaged_player_is(recipients: tuple[ast.Recipient, ...], kind: str) -> bool
     )
 
 
-def _lower_counted_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
+def _lower_counted_damage(
+    node: ast.DealDamage, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     """"…deals damage to that player equal to the number of Swamps they control."
     (Karma.)
 
@@ -153,6 +156,32 @@ def _lower_counted_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]
     if isinstance(recipient, ast.PlayerRef):
         per_recipient = _per_recipient_count(node)
         if per_recipient is not None:
+            # "At the beginning of **each player's** upkeep, this enchantment
+            # deals damage to **that player** equal to the number of snow lands
+            # **they** control." (Cold Snap.) Not a loop at all: the recipient
+            # and the counted board are the *same single seat*, the one the
+            # firing event froze (CR 603.10), so there is one number and it is
+            # taken on that seat's battlefield. The two halves are checked
+            # together for `_lower_counted_damage`'s own stated reason — a
+            # clause counting one player's board while damaging another's face
+            # has no handler, and admitting it is how a supported card hits the
+            # wrong seat.
+            if (
+                recipient.kind == "that_player"
+                and event in _EVENT_SUBJECT_PLAYERS
+            ):
+                return (
+                    OracleInstruction(
+                        "deal_damage", "",
+                        {
+                            "amount": "x",
+                            "recipient": EVENT_SUBJECT_PLAYER,
+                            X_FROM_COUNT: {
+                                **per_recipient, "owner": EVENT_SUBJECT_PLAYER,
+                            },
+                        },
+                    ),
+                )
             if recipient.kind not in _LOOPED_PLAYER_RECIPIENTS:
                 raise LoweringError(
                     "no handler counts this damage per recipient", node=node

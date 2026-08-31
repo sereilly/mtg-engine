@@ -38,7 +38,9 @@ from ._common import (
 )
 from ._events import (
     _RECORDED_PERMANENTS,
+    _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
+    EVENT_SUBJECT_CONTROLLER,
     EVENT_SUBJECT_PLAYER,
     binds_block_pair,
     names_attached_permanent,
@@ -268,12 +270,22 @@ def _lower_sacrifice(
             # An event that freezes no such seat refuses the line: reading an
             # absent key would sacrifice the *source controller's* land on
             # every upkeep, which is a different card that happens to work.
-            if event not in _EVENT_SUBJECT_PLAYERS:
+            # "Whenever a creature dies, **that creature's controller**
+            # sacrifices a land of their choice." (Earthlink.) The possessive
+            # reaches the AST as the same `that_player`, so the two tables are
+            # read in turn exactly as the damage lowering reads them: one
+            # freezes the seat the event was *about*, the other the seat that
+            # *controlled* what it was about, and they name disjoint events —
+            # so the order is documentation rather than precedence.
+            if event in _EVENT_SUBJECT_PLAYERS:
+                payload["who"] = EVENT_SUBJECT_PLAYER
+            elif event in _EVENT_SUBJECT_CONTROLLERS:
+                payload["who"] = EVENT_SUBJECT_CONTROLLER
+            else:
                 raise LoweringError(
                     f"no event named {event!r} freezes the seat 'that player' names",
                     node=node,
                 )
-            payload["who"] = EVENT_SUBJECT_PLAYER
         elif node.player.kind != "you":
             payload["who"] = node.player.kind
         return (OracleInstruction("sacrifice_matching_permanent", "", payload),)

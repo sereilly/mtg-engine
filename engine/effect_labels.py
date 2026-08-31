@@ -317,6 +317,14 @@ TRIGGERED_LABELS: dict[str, str] = {
     # so the support report does not silently re-bucket a shipped card — which
     # is the reason this table exists.
     "upkeep_damage_unless_cost": "upkeep_effect",
+    # Mudslide and Magnetic Mountain: "that player may choose any number of
+    # tapped <creatures> they control and pay <cost> for each creature chosen
+    # this way." A toll whose number of payments the payer picks, and the same
+    # bucket Magnetic Mountain's retired card hook reported — kept across the
+    # retirement for this table's own reason. Rewind's untap of the same kind
+    # is a *spell*, so no triggered label reads it and there is no ambiguity to
+    # resolve by condition.
+    "untap_up_to_matching": "upkeep_effect",
     # --- The Dark ---
     # Each names what the ability is *for*, which is the question the support
     # report and `SimulationResult` ask. The `may` wrappers among this set's new

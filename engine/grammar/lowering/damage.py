@@ -43,7 +43,9 @@ from ._common import (
 from ._events import (
     _chosen_cast_amount,
     _EVENT_SUBJECT_CONTROLLERS,
+    _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
+    EVENT_SUBJECT_CONTROLLER,
     EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
     _DAMAGED_PERMANENTS,
@@ -184,7 +186,25 @@ def _lower_damage_unless_pay(
         # Which seat is offered the cost, as payload rather than a second kind:
         # same prompt, same damage, same decline — only the player differs, and
         # the handler reads the seat off the trigger's frozen context.
-        payload["payer"] = "event_subject_player"
+        #
+        # **Which** frozen key depends on the event, and this branch used to
+        # name one without asking. "That player" is the seat the event was
+        # *about* under an upkeep or a cast; under a tap it is the seat that
+        # controlled the object the event was about, stamped under a different
+        # key by a different fire site. Seizures ("whenever enchanted creature
+        # becomes tapped, this Aura deals 3 damage to **that creature's
+        # controller** unless that player pays {3}") compiled to the first key
+        # under an event that stamps the second, so the handler found no seat
+        # and the Aura did nothing at all — on every tap, since it was printed.
+        if event in _EVENT_SUBJECT_PLAYERS:
+            payload["payer"] = EVENT_SUBJECT_PLAYER
+        elif event in _EVENT_SUBJECT_CONTROLLERS:
+            payload["payer"] = EVENT_SUBJECT_CONTROLLER
+        else:
+            raise LoweringError(
+                f"no event named {event!r} freezes the seat 'that player' names",
+                node=node,
+            )
     return (OracleInstruction("self_damage_unless_pay", "", payload),)
 
 
@@ -356,7 +376,7 @@ def _lower_damage_shape(
     if isinstance(node.amount, ast.Half):
         return _lower_halved_damage(node, event, produced)
     if isinstance(node.amount, ast.CountOf):
-        return _lower_counted_damage(node)
+        return _lower_counted_damage(node, event)
     if isinstance(node.amount, ast.BoardCount):
         return _lower_board_count_damage(node, produced)
     # "Target creature you control deals damage equal to its power to another
@@ -516,13 +536,17 @@ def _lower_damage_shape(
 
     sweep = _sweep_kind(node.recipients)
     if sweep is not None:
-        # The sweep handlers take a plain number. A back-reference reaching one
-        # would be dropped here and dealt as zero — visible nowhere, since the
-        # card would still report supported — so it refuses instead.
-        if back_reference or bonus:
+        # The sweep handlers read a printed number, an announced X, or the
+        # counters on the ability's own source (`handlers/damage._sweep_amount`,
+        # the one reader all four share). Every *other* computed amount would be
+        # dropped here and dealt as zero — visible nowhere, since the card would
+        # still report supported — so it refuses instead.
+        if bonus or set(back_reference) - {"amount_from_named_counters"}:
             raise LoweringError(
                 "a board sweep cannot carry a computed damage amount", node=node
             )
+        if back_reference:
+            return (OracleInstruction(sweep, "", dict(back_reference)),)
         return (OracleInstruction(sweep, "", {"amount": amount}),)
 
     if len(node.recipients) != 1:
@@ -619,7 +643,7 @@ def _lower_damage_shape(
             # froze (CR 603.10), not whatever the resolution context is
             # carrying. The same reading `_lower_lose_life` takes of the same
             # words, from the same table.
-            payload["recipient"] = "event_subject_controller"
+            payload["recipient"] = EVENT_SUBJECT_CONTROLLER
         elif not recipient.or_planeswalker:
             payload["recipient"] = "target_player"
     elif isinstance(recipient, ast.PlayerRef):

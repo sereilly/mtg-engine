@@ -597,10 +597,28 @@ def simulacrum_redirect(game: Game, instruction: OracleInstruction, context: Ora
     return True, "resolved"
 
 
+def _sweep_amount(instruction: OracleInstruction, context: OracleExecutionContext) -> int:
+    """How much a board sweep deals — a printed number, an announced X, or the
+    counters on the ability's own source.
+
+    The third is Time Bomb's ("deals damage equal to the number of time
+    counters on it to each creature and each player"), and it is here rather
+    than in one of the four sweep handlers because the question is the *amount*
+    and not the shape of the sweep. `deal_damage` reads the same key one
+    function up; a sweep that could not read it refused the whole line, which
+    is what left Time Bomb's only ability doing nothing.
+    """
+    named = instruction.payload.get("amount_from_named_counters")
+    if named is not None:
+        source = context.source_permanent
+        return counters_on(source, str(named)) if source is not None else 0
+    return resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+
+
 @effect_handler("deal_damage_each_creature_and_player")
 def deal_damage_each_creature_and_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
-    amount = resolve_amount(instruction.payload.get("amount", 1), context.x_value)
+    amount = _sweep_amount(instruction, context)
     _mass_damage_players_and_creatures(game, card, amount, lambda perm: True)
     game.log.append(f"{card.name} dealt {amount} damage to each creature and each player")
     return True, "resolved"
@@ -703,7 +721,7 @@ def _mass_damage_players_and_creatures(game: Game, card, damage: int, creature_p
 @effect_handler("earthquake_damage")
 def earthquake_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
-    damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    damage = _sweep_amount(instruction, context)
     _mass_damage_players_and_creatures(game, card, damage, lambda perm: not _has_flying(perm))
     game.log.append(f"{card.name} dealt {damage} earthquake damage to each non-flying creature and each player")
     return True, "resolved"
@@ -712,7 +730,7 @@ def earthquake_damage(game: Game, instruction: OracleInstruction, context: Oracl
 @effect_handler("hurricane_damage")
 def hurricane_damage(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
-    damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    damage = _sweep_amount(instruction, context)
     _mass_damage_players_and_creatures(game, card, damage, _has_flying)
     game.log.append(f"{card.name} dealt {damage} hurricane damage to each flying creature and each player")
     return True, "resolved"
@@ -774,7 +792,7 @@ def deal_damage_each_attacking_creature(
     sweep across every battlefield — no player damage — resolved as one SBA
     batch so simultaneous lethal damage kills together."""
     card = context.card
-    damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    damage = _sweep_amount(instruction, context)
     struck = 0
     for player in game.players:
         for perm in list(player.battlefield):
@@ -953,6 +971,18 @@ def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: 
         # safe one — a prompt aimed at a guessed seat is a card doing something
         # it never says.
         recorded = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(recorded, int) or not (0 <= recorded < len(game.players)):
+            game.log.append(f"{card.name}: no recorded player, nothing offered")
+            return True, "resolved"
+        seat = recorded
+    elif instruction.payload.get("payer") == "event_subject_controller":
+        # "…deals 3 damage to **that creature's controller** unless that player
+        # pays {3}" (Seizures). The branch above one question over: the seat
+        # that controlled the object the event was about, frozen by the tap
+        # announcement under its own key. Read the same way, and refused the
+        # same way — a prompt aimed at a guessed seat is a card doing something
+        # it never says.
+        recorded = (context.trigger_context or {}).get("event_subject_controller")
         if not isinstance(recorded, int) or not (0 <= recorded < len(game.players)):
             game.log.append(f"{card.name}: no recorded player, nothing offered")
             return True, "resolved"

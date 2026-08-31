@@ -2529,3 +2529,29 @@ def test_hooded_blightfang_ignores_a_walker_damaged_by_a_spell(set_pool):
 
     assert game.is_on_battlefield(walker)
     assert walker.metadata["loyalty_counters"] == 3
+
+
+# --- W2G1: pay-or-consequence tolls ---
+def test_massacre_wurm_drains_on_a_targeted_destruction_too(set_pool):
+    """The death dispatcher froze "who controlled it" by reading the live
+    board, and half the destruction paths have already taken the permanent off
+    it by then.
+
+    So this trigger fired for a creature the lethal-damage sweep killed — the
+    path its own tests use — and not for one a spell destroyed. CR 603.10 wants
+    the last-known information either way, and the seat the graveyard move is
+    being made for is what supplies it.
+    """
+    pool = set_pool("M21")
+    wurm = Permanent(card=pool["Massacre Wurm"])
+    theirs = Permanent(card=pool["Alpine Watchdog"])
+    p1 = PlayerState(name="P1", battlefield=[wurm], life=20)
+    p2 = PlayerState(name="P2", battlefield=[theirs], life=20)
+    game = Game(players=[p1, p2])
+
+    game._destroy_target_permanent(p2, target_permanent_index=0)
+    game._settle()
+
+    assert p2.life == 18, "that creature's controller, read off the last-known seat"
+    assert p1.life == 20
+# --- end W2G1 ---

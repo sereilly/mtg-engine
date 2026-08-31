@@ -289,6 +289,11 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # interactive seat ever queues it — `default_at_arm` answers for
         # everyone else before the flag is set.
         "permanent_choice",
+        # "Target opponent chooses a card in your graveyard. You may pay {G}.
+        # If you do, **repeat this process** …" (Forgotten Lore): the pick is
+        # what the payment offer behind it is about, and the set of picks is
+        # what the round after that may not choose again.
+        "graveyard_pick_for_price",
         # "Starting with you, each player may put a permanent card from their
         # hand onto the battlefield. **Repeat this process until no one puts a
         # card onto the battlefield.**" (Eureka): the answers are what decides

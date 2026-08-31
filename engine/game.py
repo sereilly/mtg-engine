@@ -386,6 +386,17 @@ class Game(
     # "whenever you draw a card" fires once per card (CR 121.2) where the
     # second-card trigger above fires once per turn. Reset with it.
     draws_announced_this_turn: dict = field(default_factory=dict)
+    # Each seat's life total as the state-based sweep last saw it, so a *drop*
+    # can be announced as "whenever you lose life" (Oath of Lim-Dûl).
+    #
+    # The total itself rather than a per-turn tally, because life leaves a
+    # player by more routes than anything else in this engine — damage, a cost,
+    # a "lose N life" effect, a life total set lower (CR 118.5 makes that a
+    # loss of the difference) — and a tally would need every one of them to
+    # remember. The one thing all of them write is ``player.life``, so the
+    # sweep reads that and nothing can forget to feed it. Not per-turn: a life
+    # total does not reset, so neither does this.
+    life_totals_seen: dict = field(default_factory=dict)
     # Global statics whose source has left but whose effect continues
     # until end of turn (Titania's Song). Cleared at cleanup.
     lingering_global_statics: list = field(default_factory=list)

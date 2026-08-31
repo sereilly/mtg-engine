@@ -40,6 +40,7 @@ from ._events import (CREATED_TOKEN,
     _DAMAGED_PLAYER_EVENTS,
     _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
+    EVENT_SUBJECT_CONTROLLER,
     EVENT_SUBJECT_PLAYER,
 )
 from ._common import (
@@ -183,6 +184,7 @@ from .control_changes import (
 from .tapping import (
     _lower_tap,
     _lower_doesnt_untap_next_step,
+    _lower_untap_chosen_by_paying,
     _lower_tap_or_untap,
     _fused_upkeep_pay_to_untap,
     _lower_doesnt_untap_while_source_tapped,
@@ -299,6 +301,7 @@ __all__ = [
     "_is_created_token",
     "_EVENT_SUBJECT_CONTROLLERS",
     "_EVENT_SUBJECT_PLAYERS",
+    "EVENT_SUBJECT_CONTROLLER",
     "EVENT_SUBJECT_PLAYER",
     "_is_enchanted",
     "_is_target",
@@ -358,6 +361,7 @@ __all__ = [
     "_lower_for_each_destroyed",
     "_lower_delayed_destroy",
     "_lower_doesnt_untap_next_step",
+    "_lower_untap_chosen_by_paying",
     "_lower_delayed_self_action",
     "_lower_doesnt_untap_while_source_tapped",
     "_lower_tap",

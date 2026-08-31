@@ -296,6 +296,29 @@ def _name_then_reveal_top(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("graveyard_pick_for_price")
+def _graveyard_pick_for_price(ctx: PromptContext, choices: list) -> dict:
+    """Forgotten Lore's "target opponent chooses a card in your graveyard".
+
+    A graveyard is a public zone (CR 400.2), so the cards this offers are ones
+    the chooser may already look at — the list is the whole zone minus the
+    picks the loop has already made, which is exactly the printed exclusion.
+    """
+    choice = choices[0]
+    owner_index = int(choice.data.get("owner_index", 0))
+    graveyard = ctx.game.players[owner_index].graveyard
+    legal = [i for i in (choice.data.get("legal_indices") or []) if i < len(graveyard)]
+    return {
+        "player_seat": choice.player_index,
+        "owner_seat": owner_index,
+        "card_name": choice.data.get("card_name", ""),
+        "options": [
+            {"index": index, "card": ctx.serialize_card(graveyard[index])}
+            for index in legal
+        ],
+    }
+
+
 @prompt_renderer("name_then_consult")
 def _name_then_consult(ctx: PromptContext, choices: list) -> dict:
     """Demonic Consultation's "choose a card name".
@@ -495,8 +518,11 @@ def _untap_up_to(ctx: PromptContext, choices: list) -> dict:
     re-validates each id, so the candidate list is a hint."""
     from engine.handlers._common import permanent_matches_filter
 
+    from engine.subject_filters import subject_matches
+
     choice = choices[0]
     filt = dict(choice.data.get("filter") or {})
+    observer = choice.data.get("observer")
     candidates = [
         {
             "seat": seat,
@@ -507,12 +533,23 @@ def _untap_up_to(ctx: PromptContext, choices: list) -> dict:
         }
         for seat, player in enumerate(ctx.game.players)
         for index, perm in enumerate(player.battlefield)
-        if permanent_matches_filter(perm, filt)
+        # The same question the engine re-asks when the answer comes back
+        # (`_resolve_untap_up_to`), so the list offered and the list accepted
+        # cannot disagree: "creatures without flying **they control**" narrows
+        # by a keyword and by a seat, neither of which the pure matcher tests.
+        if subject_matches(
+            ctx.game, perm, filt,
+            observer=observer if isinstance(observer, int) else choice.player_index,
+        )
     ]
     return {
         "player_seat": choice.player_index,
         "amount": choice.data.get("amount", 0),
         "card_name": choice.data.get("card_name", ""),
+        # "…pay {2} for **each** creature chosen this way" (Mudslide): the
+        # price of one pick, so the client can show what a selection costs.
+        # Absent (empty) for a free untap, which is what Rewind prints.
+        "cost_each": dict(choice.data.get("cost_each") or {}),
         "candidates": candidates,
     }
 

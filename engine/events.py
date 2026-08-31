@@ -380,11 +380,6 @@ def _spell_cast_filter(
     card = _cast_card(event)
     if card is None:
         return False
-    # The compiler captures the colour word from the trigger's own text
-    # ("…casts a *blue* spell") into the condition payload.
-    colour_word = trig.condition.payload.get("color_word")
-    if colour_word and _COLOR_SYMBOLS.get(colour_word) not in card.colors:
-        return False
     # The type narrowing goes through the shared helper below, which the
     # ordinal-counting path already used. This branch used to read a
     # `card_type` key **no pattern in the compiler ever emitted** — a
@@ -412,6 +407,15 @@ def _cast_narrowing_admits(
     function exists to prevent.
     """
     type_line = card.type_line.lower()
+    # The compiler captures the colour word from the trigger's own text
+    # ("…casts a *blue* spell") into the condition payload. Read here rather
+    # than in one fire site, for this function's own reason: the three cast
+    # kinds ask one narrowing, and a colour tested only under "a player casts"
+    # is a colour the opponent-scoped spelling silently ignores — Freyalise's
+    # Charm and Leshrac's Sigil would have fired on an opponent's every spell.
+    colour_word = trig.condition.payload.get("color_word")
+    if colour_word and _COLOR_SYMBOLS.get(colour_word) not in (card.colors or ()):
+        return False
     cast_types = trig.condition.payload.get("cast_types")
     if cast_types and not any(word in type_line for word in cast_types.split(" or ")):
         return False
@@ -856,6 +860,10 @@ def _counters_put_on_filter(
 # coincidence, three is a rule that had been written down three times.
 _SEAT_SCOPED_EVENTS = frozenset({
     "you_gain_life",
+    # "Whenever **you** lose life" (Oath of Lim-Dûl). The mirror of the gain
+    # above and scoped the same way: an opponent's life leaving them is not
+    # this enchantment's controller losing any.
+    "you_lose_life",
     "draws_second_card",
     "you_sacrifice_permanent",
 })

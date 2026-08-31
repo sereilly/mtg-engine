@@ -23,7 +23,8 @@ from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (_accept_self_reference, _parse_card_alternatives,
-                       _parse_duration, _parse_zone)
+                       _parse_duration, _parse_mana_payment, _parse_zone)
+from ..readers import accept_source_reference
 
 
 def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
@@ -402,14 +403,27 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
     # its owner's control". Same linked pile (CR 610.3), same drain, same
     # handler — the difference is which zone the cards are going to and the
     # preposition English wants in front of it.
+    names_source = True
     if stream.accept_phrase("put", "all", "cards", "exiled", "with"):
         preposition = "into"
     elif stream.accept_phrase("return", "each", "card", "exiled", "with"):
         preposition = "to"
+    elif stream.accept_phrase("return", "the", "exiled", "card"):
+        # "…**the exiled card**…" (Icy Prison). The same linked pile with no
+        # possessive on it: CR 610.3 makes the two abilities linked, so "the
+        # exiled card" is the one *this* permanent's other ability exiled and
+        # can be nothing else. The definite article is doing the work the
+        # phrase "exiled with this enchantment" does above, which is why the
+        # self-reference below is not required here rather than optional —
+        # there is no wording of this spelling that could name another pile.
+        preposition = "to"
+        names_source = False
     else:
         stream.reset(mark)
         return None
-    if not (stream.accept_word("it") or _accept_self_reference(stream)):
+    if names_source and not (
+        stream.accept_word("it") or _accept_self_reference(stream)
+    ):
         stream.reset(mark)
         return None
     stream.expect_word(preposition)
@@ -701,6 +715,66 @@ def _parse_player_puts_hand_cards_on_library(
         stream.reset(mark)
         return None
     return ast.PutHandCardsOnLibrary(player, count)
+
+
+def _parse_repeated_graveyard_pick(
+    stream: TokenStream, who: ast.PlayerRef
+) -> "ast.RepeatedGraveyardPick | None":
+    """Forgotten Lore's whole four-sentence effect. The subject has already
+    been read, so this starts at the verb.
+
+    Refuses without consuming, so "chooses a card name…" (Petra Sphinx) and
+    "chooses a creature…" (Takklemaggot) keep their own productions.
+
+    Every word is required, the exclusion clause included: without it the loop
+    would let one card be chosen forever, which is a different card — and the
+    self-reference at the end of it is the lexer's SELF token, because the
+    sentence names the spell by name.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("chooses", "a", "card", "in", "your", "graveyard"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("you", "may", "pay"):
+        stream.reset(mark)
+        return None
+    try:
+        cost = _parse_mana_payment(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("if", "you", "do"):
+        stream.reset(mark)
+        return None
+    # The comma is a token of its own to the lexer, so it is consumed on its
+    # own rather than as a word inside the phrase.
+    if not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "repeat", "this", "process", "except", "that", "opponent", "can't",
+        "choose", "a", "card", "already", "chosen", "for",
+    ):
+        stream.reset(mark)
+        return None
+    if not accept_source_reference(stream):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "then", "put", "the", "last", "chosen", "card", "into", "your", "hand"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.RepeatedGraveyardPick(who, cost)
 
 
 def _parse_player_puts_whole_hand_on_library(

@@ -37,6 +37,8 @@ from ...resumption import resume_after_answer, run_resumable
 from ...mana_payment import (generic_cost, mana_cost_label, plan_payment,
                             untapped_mana_lands)
 from ...search_filters import landing_seat, search_matches, searched_seat
+from ...handlers.zones import FORGOTTEN_PICKS
+from ...oracle_types import OracleInstruction
 from ...subject_filters import subject_matches
 
 class PendingChoicesMixin:
@@ -1069,9 +1071,19 @@ class PendingChoicesMixin:
 
     def _resolve_untap_up_to(self, choice: PendingChoice, permanent_ids: list) -> bool:
         """Validated whole before anything untaps: one bad id rejects the
-        answer and leaves the prompt queued, matching the exile search."""
+        answer and leaves the prompt queued, matching the exile search.
+
+        ``cost_each`` is Mudslide's price per pick — charged once for the whole
+        answer, because the payer chose the count and the price together
+        (CR 601.2h asks whether they are *able* to pay what they chose). An
+        answer they cannot afford is rejected whole, exactly as a bad id is:
+        untapping half of it would be a card charging for what it did not do.
+        """
+        from ...subject_filters import subject_matches
+
         amount = int(choice.data.get("amount", 0))
         filt = dict(choice.data.get("filter") or {})
+        observer = choice.data.get("observer")
         ids = [pid for pid in (permanent_ids or []) if isinstance(pid, int)]
         if len(ids) != len(permanent_ids or []) or len(set(ids)) != len(ids):
             return False
@@ -1080,11 +1092,33 @@ class PendingChoicesMixin:
         chosen = []
         for pid in ids:
             perm = self.permanent_by_id(pid)
-            if perm is None or not permanent_matches_filter(perm, filt):
+            # Through `subject_matches`, not the pure matcher: "tapped
+            # creatures **without flying they control**" narrows by a keyword
+            # (layer 6) and by a seat, and neither is answerable from the
+            # object alone — handed to the pure matcher both keys would be
+            # silently ignored, which is a strictly larger set than the card
+            # names.
+            if perm is None or not subject_matches(
+                self, perm, filt,
+                observer=observer if isinstance(observer, int) else choice.player_index,
+            ):
                 return False
             chosen.append(perm)
+        payer = self.players[choice.player_index]
+        plan = None
+        cost_each = dict(choice.data.get("cost_each") or {})
+        if cost_each and chosen:
+            total = {
+                symbol: count * len(chosen)
+                for symbol, count in cost_each.items() if count
+            }
+            plan = self._optional_pay_plan(payer, {"cost": total})
+            if plan is None:
+                return False
         for perm in chosen:
             self.become_untapped(perm)
+        if plan is not None:
+            self._spend_payment_plan(payer, plan)
         names = ", ".join(perm.card.name for perm in chosen) if chosen else "nothing"
         self.log.append(
             f"{self.players[choice.player_index].name} untapped {names} "
@@ -1096,13 +1130,30 @@ class PendingChoicesMixin:
     def _default_untap_up_to(self, choice: PendingChoice) -> None:
         """A non-interactive seat untaps its own tapped matching permanents,
         oldest first — its own because untapping an opponent's land is a gift,
-        and tapped ones because untapping an untapped land is a wasted pick."""
+        and tapped ones because untapping an untapped land is a wasted pick.
+
+        With a price on each pick (Mudslide), the count is capped by what the
+        *floating* mana covers — the same stated policy `_default_optional_pay`
+        takes, and for its reason: tapping a land for an optional cost is a
+        real decision about the rest of the turn, and it belongs to the seat
+        that was actually asked.
+        """
         amount = int(choice.data.get("amount", 0))
         filt = dict(choice.data.get("filter") or {})
         own = [
             perm for perm in self.controlled_by(choice.player_index)
             if perm.tapped and permanent_matches_filter(perm, filt)
         ]
+        cost_each = {k: v for k, v in (choice.data.get("cost_each") or {}).items() if v}
+        if cost_each:
+            payer = self.players[choice.player_index]
+            affordable = 0
+            while affordable < min(amount, len(own)):
+                total = {s: c * (affordable + 1) for s, c in cost_each.items()}
+                if plan_payment(payer.mana_pool, (), total) is None:
+                    break
+                affordable += 1
+            amount = affordable
         picks = [self.permanent_id_of(perm) for perm in own[:amount]]
         if not self._resolve_untap_up_to(choice, [p for p in picks if p is not None]):
             self._resolve_untap_up_to(choice, [])
@@ -1875,6 +1926,84 @@ class PendingChoicesMixin:
         if not self._resolve_name_then_reveal_top(
             choice, choice.data.get("default_name", "")
         ):
+            self.discard_pending_choice(choice)
+
+    # -- An opponent picking out of your graveyard, again for each payment ---
+
+    def confirm_graveyard_pick_for_price(
+        self, player_index: int, graveyard_index: int
+    ) -> bool:
+        """Answer Forgotten Lore's "target opponent chooses a card"."""
+        return self.resolve_pending_choice(
+            "graveyard_pick_for_price", player_index,
+            graveyard_index=graveyard_index,
+        )
+
+    def _resolve_graveyard_pick_for_price(
+        self, choice: PendingChoice, graveyard_index: int
+    ) -> bool:
+        """Record the pick, then offer its price to the *other* seat.
+
+        Two seats answer alternately, which is why the loop is a chain of
+        prompts and not a Python loop: the payment is the caster's decision and
+        the pick is the opponent's, and neither is available while the other is
+        being asked.
+
+        The legal indices are re-checked against the record armed with the
+        choice rather than trusted from the wire — a client offering the whole
+        graveyard would otherwise let one card be chosen twice, which is the
+        exclusion clause deleted.
+        """
+        if graveyard_index not in (choice.data.get("legal_indices") or []):
+            return False
+        owner = self.players[int(choice.data["owner_index"])]
+        if not 0 <= graveyard_index < len(owner.graveyard):
+            return False
+        context = choice.data.get("_context")
+        instruction = choice.data.get("_instruction")
+        if context is None or instruction is None:
+            return False
+        chosen = owner.graveyard[graveyard_index]
+        context.results.setdefault(FORGOTTEN_PICKS, []).append(chosen)
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{self.players[choice.player_index].name} chose {chosen.name} "
+            f"({choice.data.get('card_name', '')})"
+        )
+        # "You may pay {G}. **If you do**, repeat this process." The offer goes
+        # to the caster through the ordinary optional-cost prompt, with the same
+        # instruction as its accept branch — so paying re-arms the pick with the
+        # exclusion set the shared context has just grown, and declining runs
+        # the sentence that ends the process.
+        cost = dict(choice.data.get("cost") or {})
+        self.arm_pending_choice(
+            "optional_pay", self.players.index(context.caster),
+            card_name=choice.data.get("card_name", ""),
+            cost=cost,
+            life=0,
+            prompt=f"Pay {mana_cost_label(cost)} to repeat?",
+            _on_accept=(instruction,),
+            _on_decline=(
+                OracleInstruction("finish_repeated_graveyard_pick", "", {}),
+            ),
+            _context=context,
+        )
+        return True
+
+    def _default_graveyard_pick_for_price(self, choice: PendingChoice) -> None:
+        """A non-interactive opponent gives up the cheapest card there is.
+
+        A stated policy, like every other default here: mana value is the one
+        ranking every card in the pool answers, and the chooser is the player
+        who does *not* want the caster to get anything back.
+        """
+        legal = list(choice.data.get("legal_indices") or [])
+        owner = self.players[int(choice.data["owner_index"])]
+        if not legal:
+            self.discard_pending_choice(choice)
+            return
+        legal.sort(key=lambda i: ((owner.graveyard[i].cmc or 0), i))
+        if not self._resolve_graveyard_pick_for_price(choice, legal[0]):
             self.discard_pending_choice(choice)
 
     # -- "Choose a card name, then consult your own library" -----------------
@@ -2908,12 +3037,34 @@ class PendingChoicesMixin:
         holds both halves of that question; asking it once here is what makes
         "can they pay?" and "pay it" the same answer.
         """
-        return plan_payment(
-            player.mana_pool,
-            untapped_mana_lands(self.controlled_by(player)),
-            entry.get("cost") or {},
-            produces=self._land_payment_colors,
-        )
+        # "…unless they pay {B} **or {3}**" (Lim-Dûl's Hex). CR 118.8's
+        # alternatives are readings of the *same* offer, so they are tried
+        # here rather than at a second prompt — in printed order, which is the
+        # stated policy the life alternative below already takes.
+        lands = untapped_mana_lands(self.controlled_by(player))
+        printed = entry.get("cost") or {}
+        for cost in (printed, *(entry.get("cost_alternatives") or ())):
+            plan = plan_payment(
+                player.mana_pool, lands, cost,
+                produces=self._land_payment_colors,
+            )
+            if plan is not None:
+                return plan
+        return None
+
+    def _spend_payment_plan(self, player, plan) -> None:
+        """Carry out a :func:`plan_payment` answer: spend the floating mana it
+        names and tap the lands it names.
+
+        One writer, because a plan is *how* a cost is paid and a second
+        spelling of it is a second answer — the untap toll (Mudslide) collects
+        the same plan the optional-pay prompt does, and a payment that tapped
+        the lands but forgot the pool would be a cost half charged.
+        """
+        for symbol, amount in plan.from_pool.items():
+            player.mana_pool[symbol] = int(player.mana_pool.get(symbol, 0)) - amount
+        for land in plan.tapped:
+            self.become_tapped(land)
 
     def _player_can_pay_optional(self, player, entry: dict) -> bool:
         """CR 601.2h, for an optional cost: whether it *could* be paid.
@@ -2977,10 +3128,7 @@ class PendingChoicesMixin:
                     f"({entry.get('card_name', '')})"
                 )
             else:
-                for symbol, amount in plan.from_pool.items():
-                    player.mana_pool[symbol] = int(player.mana_pool.get(symbol, 0)) - amount
-                for land in plan.tapped:
-                    self.become_tapped(land)
+                self._spend_payment_plan(player, plan)
         # A grammar-lowered "may" carries its consequence as instructions rather
         # than as one of the three fixed fields above, so any effect can sit
         # behind an optional cost.
@@ -3479,7 +3627,11 @@ class PendingChoicesMixin:
         player_index = choice.player_index
         entry = choice.data
         self.discard_pending_choice(choice)
-        if accept and self._player_can_pay_optional(self.players[player_index], entry):
+        if (
+            accept
+            and self._player_can_pay_optional(self.players[player_index], entry)
+            and self._optional_action_still_takeable(player_index, entry)
+        ):
             self._pay_optional(player_index, entry)
         else:
             self._apply_optional_pay_decline(player_index, entry)
@@ -3491,6 +3643,32 @@ class PendingChoicesMixin:
         # answered too.
         self._release_stack_item(entry.get("_stack_item"))
         return True
+
+    def _optional_action_still_takeable(self, player_index: int, entry: dict) -> bool:
+        """Whether the accept branch's *action* can still be performed.
+
+        CR 601.2b: a player chooses among the alternatives they are **able** to
+        take, and able is measured when the choice is made rather than when the
+        prompt was armed. ``handlers/control_flow._offer_to_seat`` already asks
+        this before offering, and asking it once was enough while one offer was
+        armed at a time — Oath of Lim-Dûl arms one per point of life lost, all
+        of them before any is answered, so a hand with one card in it offered
+        two discards and the second accept discarded nothing and skipped the
+        sacrifice the card prints for not paying.
+
+        The same predicate the offer narrows through, so what may be accepted
+        and what may be offered cannot come apart.
+        """
+        from ...handlers.control_flow import _narrow_to_takeable_actions
+
+        context = entry.get("_context")
+        steps = tuple(entry.get("_on_accept") or ())
+        if context is None or not steps:
+            return True
+        _, offerable = _narrow_to_takeable_actions(
+            self, self.players[player_index], steps, context
+        )
+        return offerable
 
     def _default_optional_pay(self, choice: PendingChoice) -> None:
         """Pay when the floating mana is already there; an unpayable "unless you
@@ -3510,7 +3688,18 @@ class PendingChoicesMixin:
         floating = (
             (True if player.life > life_cost else None)
             if life_cost
-            else plan_payment(player.mana_pool, (), entry.get("cost") or {})
+            else next(
+                (
+                    plan
+                    for cost in (
+                        entry.get("cost") or {},
+                        *(entry.get("cost_alternatives") or ()),
+                    )
+                    for plan in (plan_payment(player.mana_pool, (), cost),)
+                    if plan is not None
+                ),
+                None,
+            )
         )
         # The same policy for CR 118.8's alternative: floating mana first, and
         # the life only when there is none — and never down to zero, which is
@@ -3519,7 +3708,9 @@ class PendingChoicesMixin:
         if floating is None and alternative and player.life > alternative:
             floating = True
         self.discard_pending_choice(choice)
-        if floating is not None:
+        if floating is not None and self._optional_action_still_takeable(
+            choice.player_index, entry
+        ):
             self._pay_optional(choice.player_index, entry)
         elif int(entry.get("damage", 0) or 0) > 0 or entry.get("_on_decline"):
             # A decline is an *answer*, and an answer with a consequence has to
@@ -4516,6 +4707,25 @@ register_choice(
     action="name_then_reveal_top_confirm",
     prompt_key="name_then_reveal_top",
     blocked_detail="name a card before other actions",
+)
+
+register_choice(
+    "graveyard_pick_for_price",
+    resolve=lambda game, choice, r: game._resolve_graveyard_pick_for_price(
+        choice, r["graveyard_index"]
+    ),
+    default=lambda game, choice: game._default_graveyard_pick_for_price(choice),
+    action="graveyard_pick_for_price_confirm",
+    prompt_key="graveyard_pick_for_price",
+    blocked_detail="choose a card in that graveyard before other actions",
+    # A graveyard is a public zone (CR 400.2), so a spectator sees the offer
+    # exactly as the choosing seat does.
+    spectator_visible=True,
+    hidden_for_ai=False,
+    # The sentence after this one reads the pick, and the one after that reads
+    # the whole set of them: nothing behind this prompt may run until it is
+    # answered (CR 608.2).
+    suspends=True,
 )
 
 register_choice(

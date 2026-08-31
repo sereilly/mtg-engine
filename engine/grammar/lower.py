@@ -42,6 +42,8 @@ from .lowering._events import CHOSEN_PLAYER
 from .lowering.where_x import lower_where_x
 from .statics import _lower_static_ability
 from .lowering.control_flow import (
+    _lower_for_each_life_lost,
+    _lower_for_each_player,
     _lower_may, _lower_one_of, _lower_steps, _lower_unless_player_pays,
 )
 from .lowering import (
@@ -184,6 +186,7 @@ from .lowering import (
     _lower_change_base_pt,
     _lower_set_base_pt,
     _lower_doesnt_untap_next_step,
+    _lower_untap_chosen_by_paying,
     _lower_delayed_self_action,
     _lower_damage_reduced_by_paid_mana,
     _lower_upkeep_damage_unless_cost,
@@ -273,7 +276,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ShuffleHandIntoLibrary: _lower_shuffle_hand_into_library,
     ast.RevealHand: _lower_reveal_hand,
     ast.RevealRandomFromHand: _lower_reveal_random_from_hand,
-    ast.RevealHandAndChoose: _lower_reveal_hand_and_choose,
     ast.ExileCostSacrifices: _lower_exile_cost_sacrifices,
     ast.ExileGraveyard: _lower_exile_graveyard,
     ast.LookAtHand: _lower_look_at_hand,
@@ -361,6 +363,16 @@ def lower_statement(
     if lowering is not None:
         return lowering(statement)
 
+    # Both act on a seat that can be the one the *firing event* froze — "look
+    # at **that player's** hand" (Leshrac's Sigil), "**that player** may
+    # choose … and pay" (Mudslide) — so they are in the chain rather than in
+    # the name-only table above. The raw `event`, not `dispatch_event`: both
+    # are printed inside an offer's branch, which is not the ability's whole
+    # effect and would see no event at all.
+    if isinstance(statement, ast.UntapChosenByPaying):
+        return _lower_untap_chosen_by_paying(statement, event)
+    if isinstance(statement, ast.RevealHandAndChoose):
+        return _lower_reveal_hand_and_choose(statement, event)
     if isinstance(statement, ast.DealDamage):
         return _lower_damage(statement, event, produced)
     if isinstance(statement, ast.Fight):
@@ -530,6 +542,22 @@ def lower_statement(
                 },
             ),
         )
+
+    if isinstance(statement, ast.RepeatedGraveyardPick):
+        # "**Target opponent** chooses" — a chosen seat, which the picker has to
+        # offer and the handler has to read. Any other reference names a seat
+        # nothing chose.
+        if statement.chooser.kind != "target_opponent":
+            raise LoweringError(
+                "the repeated graveyard pick is made by the opponent this "
+                "spell targets",
+                node=statement,
+            )
+        payload: dict[str, object] = {
+            "cost": {symbol: count for symbol, count in statement.cost.pips},
+            "targets": _targets_payload(statement.chooser),
+        }
+        return (OracleInstruction("repeated_graveyard_pick", "", payload),)
 
     if isinstance(statement, ast.PutExiledCardIntoHand):
         # The producer gate every back-reference makes: "that card" names what
@@ -709,44 +737,32 @@ def lower_statement(
         )
 
     if isinstance(statement, ast.ForEach):
-        # Two iterators, two lowerings, and the split is the *set* rather than
-        # the effect: "that died this turn" is a tally the engine keeps and the
-        # counter lowering reads as a multiplier, while "that died this way" is
-        # the objects an earlier step of this same effect destroyed and has to
-        # be walked one at a time. The inner statement is lowered here, as
-        # `ast.WhereX`'s is — the lowering below only repeats it.
+        # Five iterators, five lowerings, and the split is the *set* rather
+        # than the effect. Three of them name a set an earlier step of this
+        # same effect produced and are refused without that producer; one is a
+        # count off the firing event and is refused without the event; one is
+        # the seats. The tally form ("that died this **turn**") reads no inner
+        # instructions at all — the counter lowering turns it into a
+        # multiplier — which is why the body is lowered lazily here.
+        def repeated() -> tuple[OracleInstruction, ...]:
+            return lower_statement(
+                statement.effect, produced,
+                event=event, event_subject=event_subject, whole_effect=False,
+            )
+
         if isinstance(statement.iterator, ast.DiedThisWay):
-            return _lower_for_each_destroyed(
-                statement,
-                lower_statement(
-                    statement.effect, produced,
-                    event=event, event_subject=event_subject, whole_effect=False,
-                ),
-                produced,
-            )
-        # "For each creature **exiled this way**" — the exile family's set,
-        # walked the same way and refused the same way when nothing exiled one.
+            return _lower_for_each_destroyed(statement, repeated(), produced)
         if isinstance(statement.iterator, ast.ExiledThisWay):
-            return _lower_for_each_exiled(
-                statement,
-                lower_statement(
-                    statement.effect, produced,
-                    event=event, event_subject=event_subject, whole_effect=False,
-                ),
-                produced,
-            )
-        # "For each of **those cards**" — the third iterator, and the same
-        # split: a set an earlier step of this effect chose, walked one at a
-        # time, and refused when nothing chose one.
+            return _lower_for_each_exiled(statement, repeated(), produced)
         if isinstance(statement.iterator, ast.ChosenThisWay):
-            return _lower_for_each_chosen(
-                statement,
-                lower_statement(
-                    statement.effect, produced,
-                    event=event, event_subject=event_subject, whole_effect=False,
-                ),
-                produced,
-            )
+            return _lower_for_each_chosen(statement, repeated(), produced)
+        # "For each **1 life you lost**" (Oath of Lim-Dûl).
+        if isinstance(statement.iterator, ast.EachLifeLost):
+            return _lower_for_each_life_lost(statement, repeated(), event)
+        # "**For each player,** …" (Lim-Dûl's Hex) — a loop over seats, whose
+        # iteration binds "that player" the way an object loop binds "it".
+        if isinstance(statement.iterator, ast.PlayerRef):
+            return _lower_for_each_player(statement, repeated())
         return _lower_for_each(statement)
 
     # The offer-round loop takes the recursion back as an argument: its lowering
@@ -838,18 +854,6 @@ def lower_statement(
         return (OracleInstruction("grant_team_assign_unblocked_until_eot", "", {}),)
 
     raise LoweringError(f"no lowering for {type(statement).__name__}", node=statement)
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 #: Which scratchpad key an activation **cost** writes when it is paid. The twin

@@ -204,6 +204,25 @@ class ChosenThisWay:
 
 
 @dataclass(frozen=True)
+class EachLifeLost:
+    """"**for each 1 life you lost**, sacrifice a permanent …" (Oath of
+    Lim-Dûl.)
+
+    An iterator that is a *count* rather than a set: the loop has no objects,
+    only a number, and the number is the firing event's — the life the
+    state-based sweep measured leaving that seat. Its own node beside the three
+    "this way" sets above for the reason they are three nodes: what a loop
+    repeats over decides where the number comes from, and reading a count as a
+    set would walk an empty board.
+
+    The printed unit is required to be 1 and carried anyway: "for each **2**
+    life you lost" would be half as many repetitions, and a production that
+    dropped the number would run the wrong count while reporting supported.
+    """
+    per: int = 1
+
+
+@dataclass(frozen=True)
 class LifeGainedThisTurn:
     """"if you gained 3 or more life this turn" (CR 603.4 intervening-if).
 

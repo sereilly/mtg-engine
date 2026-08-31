@@ -47,6 +47,7 @@ from .prevention import (
 from .tapping import (
     _parse_doesnt_untap_next_step,
     _parse_tap_untap,
+    _parse_untap_chosen_by_paying,
 )
 from .counters import (
     _expect_counter_kind,
@@ -69,6 +70,7 @@ from .characteristics import (
     _parse_no_longer_supertype,
 )
 from .board import (
+    _accept_life_alternative,
     _parse_for_each_destroy_unless_paid,
     _parse_sacrifice,
     _parse_counted_sacrifice,
@@ -114,6 +116,7 @@ from .cards import (
     _parse_put_exiled_with_source,
     _parse_put_hand_cards_on_library,
     _parse_player_puts_whole_hand_on_library,
+    _parse_repeated_graveyard_pick,
     _parse_player_puts_hand_cards_on_library,
 )
 from .library import (
@@ -161,6 +164,7 @@ __all__ = [
     "_parse_damage",
     "_parse_damage_unless_pay",
     "_parse_have_source_deal_damage",
+    "_accept_life_alternative",
     "_parse_for_each_destroy_unless_paid",
     "_parse_damage_rider_sentence",
     "_parse_prevent",
@@ -195,6 +199,7 @@ __all__ = [
     "_parse_that_object",
     "_parse_doesnt_untap_next_step",
     "_parse_tap_untap",
+    "_parse_untap_chosen_by_paying",
     "_parse_attach",
     "_parse_exchange_control",
     "_parse_draw",
@@ -223,6 +228,7 @@ __all__ = [
     "_parse_put_exiled_with_source",
     "_parse_put_hand_cards_on_library",
     "_parse_player_puts_whole_hand_on_library",
+    "_parse_repeated_graveyard_pick",
     "_parse_player_puts_hand_cards_on_library",
     "_parse_player_adds_mana",
     "_parse_produces_instead",

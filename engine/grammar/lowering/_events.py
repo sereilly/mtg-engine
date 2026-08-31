@@ -58,6 +58,13 @@ _DEFENDING_PLAYER_EVENTS: frozenset[str] = frozenset({"creature_attacks"})
 # side's `phrases.py` follows.
 _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     "creature_opponent_controls_dies",   # Massacre Wurm — the dead creature's
+    # Earthlink — the dead creature's, from the same stamp
+    # (`_fire_creature_dies_triggers` freezes one `died_context` for every
+    # death condition it announces). The unscoped spelling of the row above:
+    # "whenever **a** creature dies" watches every battlefield, and "that
+    # creature's controller" is still the seat that controlled the one that
+    # died — which under a control-change effect is not its owner.
+    "creature_dies",
     "creature_becomes_blocked",          # Gloom Sower — the blocker's
     # Backfire — the damager's. The subject of a damage event is whatever dealt
     # it, so "that creature's controller" is the seat `deal_damage` derives for
@@ -192,6 +199,12 @@ EVENT_SUBJECT_OWNER = "event_subject_owner"
 #: come apart.
 EVENT_SUBJECT_PLAYER = "event_subject_player"
 
+#: And the seat that *controlled* what the event was about, from
+#: `_EVENT_SUBJECT_CONTROLLERS` above. A constant for `EVENT_SUBJECT_PLAYER`'s
+#: reason, one table over: the fire site writes it, the damage lowering and the
+#: sacrifice lowering both emit it, and three handlers read it.
+EVENT_SUBJECT_CONTROLLER = "event_subject_controller"
+
 
 # What a bare "that much" names when the effect is a *triggered ability*: the
 # quantity the firing event carried, frozen into the trigger's context by the
@@ -201,6 +214,11 @@ EVENT_SUBJECT_PLAYER = "event_subject_player"
 # empty context.
 _EVENT_QUANTITIES: dict[str, str] = {
     "you_gain_life": "life_gained",
+    # The mirror, from the state-based sweep that announces it: "for each 1
+    # life you lost" (Oath of Lim-Dûl) counts the drop the sweep measured, not
+    # the amount an effect set out to take — a life loss that a replacement
+    # reduced is the smaller number, exactly as the gain above is.
+    "you_lose_life": "life_lost",
     # "Whenever another creature you control enters, this creature deals damage
     # equal to **that creature's** power…" (Terror of the Peaks). The entering
     # creature's power, frozen by the fire site — by the time the trigger

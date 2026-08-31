@@ -23,7 +23,8 @@ from dataclasses import dataclass, field
 from typing import Union
 
 from .conditions import Condition
-from .conditions import ChosenThisWay, DiedThisTurn, DiedThisWay, ExiledThisWay
+from .conditions import (ChosenThisWay, DiedThisTurn, DiedThisWay,
+                         EachLifeLost, ExiledThisWay)
 from .costs import Cost
 from ._core import (
     Duration,
@@ -92,6 +93,7 @@ from .board import (
     TapOrUntap,
     DoesntUntapNextStep,
     Untap,
+    UntapChosenByPaying,
 )
 from .mana import (
     AddMana,
@@ -135,6 +137,7 @@ from .cards import (
     TransmuteBySacrifice,
     ExileBoundCard,
     PutExiledCardIntoHand,
+    RepeatedGraveyardPick,
     NameThenConsult,
     SearchLibrary,
     SearchPlayerLibrary,
@@ -189,7 +192,7 @@ Effect = Union[
     GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, Mill, PutHandCardsOnLibrary, Scry, Destroy, Sacrifice,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, ShuffleHandIntoLibrary, Exile,
     ExileUntilLeavesOrUntaps, PutSourceIntoZone, Tap, Untap,
-    TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped,
+    TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped, UntapChosenByPaying,
     DelayedSelfAction, Attach, ExchangeControl, ExchangeGreatestManaValue,
     Regenerate, ChangeTarget, ChooseTarget, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
@@ -200,7 +203,7 @@ Effect = Union[
     AddManaForTappedLand, NoteManaSpent, ProducesManaInstead, SpendManaAsThough, PreventDamage,
     RedirectDamage, DamageCantBePreventedOrRedirected, DamageReducedByPaidMana,
     UpkeepDamageUnlessCost,
-    ExileBoundCard, PutExiledCardIntoHand, NameThenConsult,
+    ExileBoundCard, PutExiledCardIntoHand, RepeatedGraveyardPick, NameThenConsult,
     SearchLibrary, SearchPlayerLibrary, SearchAndExile, TransmuteBySacrifice,
     OwnershipExchangeUnlessPaid,
     RandomRevealOwnershipExchange,
@@ -306,6 +309,12 @@ class May:
     #: other second cost should grow the field into a cost union rather than
     #: reuse this one for something it cannot say.
     life_alternative: int | None = None
+    #: "…unless they pay {B} **or {3}**." (Lim-Dûl's Hex.) CR 118.8's
+    #: alternative again, in the spelling where the second currency is also
+    #: mana — so whole costs rather than ``life_alternative``'s single number.
+    #: A tuple because the rule puts no limit on how many a card may print, and
+    #: the payer covers the offer with whichever of them they can.
+    cost_alternatives: tuple["ManaCost", ...] = ()
     #: "…unless its controller **pays life equal to its toughness**." (Essence
     #: Vortex.) A life cost with no mana alternative at all, which is a
     #: different field from ``life_alternative`` above for the reason
@@ -373,7 +382,7 @@ class ForEach:
     — a different number, and one that moves in the opposite direction.
     """
     iterator: (ObjectFilter | PlayerRef | DiedThisTurn | DiedThisWay
-                | ExiledThisWay | ChosenThisWay)
+                | ExiledThisWay | ChosenThisWay | EachLifeLost)
     effect: "Statement"
 
 

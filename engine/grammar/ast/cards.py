@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .costs import ManaCost
 from ._core import (
     Amount,
     Comparison,
@@ -362,6 +363,26 @@ class RevealHandAndChoose:
     #: is not the chooser — the same choice, made from a zone the rest of the
     #: table can or cannot see.
     revealed: bool = True
+
+
+@dataclass(frozen=True)
+class RepeatedGraveyardPick:
+    """Forgotten Lore's whole four-sentence effect.
+
+    ``Target opponent chooses a card in your graveyard. You may pay {G}. If you
+    do, repeat this process except that opponent can't choose a card already
+    chosen for <this card>. Then put the last chosen card into your hand.``
+
+    One node for the paragraph, for the reason every other paragraph node here
+    is one: no sentence after the first can be read alone. "This process" is
+    the first sentence, "a card already chosen" is the set the repetitions
+    built, and "the last chosen card" is whichever pick the loop stopped on.
+
+    ``cost`` is what buys another repetition, and it is the only thing that
+    varies: a card printing the same loop for {1} needs no code.
+    """
+    chooser: PlayerRef
+    cost: ManaCost
 
 
 @dataclass(frozen=True)

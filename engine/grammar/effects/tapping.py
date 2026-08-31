@@ -12,8 +12,11 @@ and Mind Whip all print them in one sentence.
 """
 
 from .. import ast
-from ..phrases import parse_bound_subject
-from ..references import parse_recipient
+from ..errors import GrammarError
+from ..phrases import (
+    _parse_mana_payment, parse_bound_subject, parse_subject_filter_at,
+)
+from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import NUMBER_WORDS
 
@@ -112,3 +115,83 @@ def _parse_tap_untap(stream: TokenStream) -> ast.Statement:
     if either_way:
         return ast.TapOrUntap(subject)
     return ast.Tap(subject) if verb == "tap" else ast.Untap(subject)
+
+
+def _parse_untap_chosen_by_paying(stream: TokenStream) -> "ast.Statement | None":
+    """``<player> may choose any number of <objects> and pay <cost> for each
+    <noun> chosen this way. If the player does, untap those <nouns>.``
+    (Mudslide.)
+
+    A toll the payer chooses how many times to pay: the cost is per chosen
+    object, so the count is the payer's own decision and the effect lands on
+    exactly what they paid for. That is why it is one production rather than a
+    ``May`` wrapping a choice — a ``May``'s cost is fixed when the offer is
+    made, and here it is not known until the picking is done.
+
+    Both sentences are read, interior full stop included, and the second one is
+    required: a line that chooses and charges but never says what the payment
+    bought is a card that takes mana and does nothing, and dropping the
+    sentence would make the two indistinguishable.
+
+    Returns None with the cursor untouched on anything else, so an ordinary
+    "may" keeps its own reading.
+    """
+    mark = stream.mark()
+    payer = parse_player_ref(stream)
+    if payer is None or not stream.accept_phrase(
+        "may", "choose", "any", "number", "of"
+    ):
+        stream.reset(mark)
+        return None
+    # The counted position: a bare plural names a *kind* here, so the noun
+    # phrase is read as one rather than as a quantified single object.
+    subject = parse_subject_filter_at(stream, plural=True)
+    if subject is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("and", "pay"):
+        stream.reset(mark)
+        return None
+    try:
+        cost = _parse_mana_payment(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if cost is None or not stream.accept_phrase("for", "each"):
+        stream.reset(mark)
+        return None
+    # The repeated noun is compared against the set the choice named rather
+    # than skipped: "pay {2} for each **land** chosen this way" after choosing
+    # creatures is a card charging for something else, and a production that
+    # accepted any word there would read it as this one.
+    noun = stream.peek_word()
+    if noun is None or noun not in subject.card_types:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase("chosen", "this", "way"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    # "If the player does, untap those creatures." The payment's consequence,
+    # required in full — including the plural noun, for the reason the singular
+    # one above is read.
+    if not stream.accept_word("if"):
+        stream.reset(mark)
+        return None
+    doer = parse_player_ref(stream)
+    if doer is None or doer.kind != payer.kind:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("does"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("untap", "those"):
+        stream.reset(mark)
+        return None
+    if stream.peek_word() != noun + "s":
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.UntapChosenByPaying(payer, subject, cost)
