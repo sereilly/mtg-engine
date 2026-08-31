@@ -19,23 +19,26 @@ from engine import Game
 from engine.cumulative_upkeep import cumulative_upkeep_cost
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
+from engine.turn_state import record_attack
 from tests.helpers import _nosick
 
 
 # --- Round 1: cumulative upkeep (CR 702.24) ---
-def test_halls_of_mist_still_reports_its_unread_static_line(set_pool):
-    """A land whose cumulative upkeep now compiles, and whose *other* line the
-    engine does not implement.
+def test_halls_of_mist_carries_its_static_line_as_an_instruction(set_pool):
+    """A land whose cumulative upkeep compiles *and* whose static line does.
 
     The land support gate used to skip the static check for any land carrying
     an ability, so implementing the keyword would have turned this card
     supported with "Creatures that attacked … can't attack" doing nothing. The
-    gate reads every land now and names the line it cannot claim.
+    gate reads every land now — and passing the gate is not doing the thing, so
+    the line is carried as the instruction ``can_attack`` scans for (W2G3).
     """
     program = compile_card_oracle(set_pool("ICE")["Halls of Mist"])
 
-    assert not program.supported
-    assert "can't attack" in (program.reason or "")
+    assert program.supported
+    assert [i.kind for i in program.instructions] == [
+        "creatures_that_attacked_last_turn_cant_attack"
+    ]
 # --- Round 6: snow as a supertype the rules already knew how to read ---
 def _combat(game: Game, attacker_indices: list[int]) -> None:
     """Advance seat 0's turn to the declare-blockers step with those attackers."""
@@ -182,3 +185,80 @@ def test_glacial_chasm_shields_only_its_own_controller(set_pool):
     game._deal_damage_to_player(p2, 6)
     assert p2.life == 14
 # --- end W1G1 ---
+
+
+# --- W2G3: combat restrictions and requirements ---
+def _w2g3_attack_last_turn(game: Game, permanent: Permanent, seat: int) -> None:
+    """Stamp *permanent* as having attacked on *seat*'s previous turn.
+
+    Written through ``record_attack`` rather than poked into metadata: the
+    stamp's shape is the declare-attackers step's, and a test that spelled it
+    out by hand would keep passing after the step changed it.
+    """
+    record_attack(permanent, seat, game.seat_turn_counts.get(seat, 0) - 1)
+
+
+def test_halls_of_mist_stops_a_creature_that_attacked_last_turn(set_pool):
+    """"Creatures that attacked during their controller's last turn can't
+    attack." (CR 506.3, 508.1c.)
+
+    Giant Turtle's restriction printed about the board, so it reaches a
+    creature whose own text says nothing — and it reaches it from the *other*
+    side of the table, since the sentence names no controller.
+    """
+    pool = set_pool("ICE")
+    bears = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    halls = Permanent(card=pool["Halls of Mist"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bears], life=20),
+        PlayerState(name="P2", battlefield=[halls], life=20),
+    ])
+    game._sync_control()
+    game.active_player_index = 0
+    game.seat_turn_counts[0] = 2
+
+    # Nothing recorded: the Bears attacked no turn at all and are free.
+    assert game.can_attack(bears, 1)
+
+    _w2g3_attack_last_turn(game, bears, 0)
+    assert not game.can_attack(bears, 1)
+
+
+def test_halls_of_mist_leaves_a_creature_that_attacked_two_turns_ago_alone(set_pool):
+    """"Their controller's **last** turn" is one ordinal, not "ever". A stamp
+    two of the seat's turns old says nothing about this combat."""
+    pool = set_pool("ICE")
+    bears = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    halls = Permanent(card=pool["Halls of Mist"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bears], life=20),
+        PlayerState(name="P2", battlefield=[halls], life=20),
+    ])
+    game._sync_control()
+    game.active_player_index = 0
+    game.seat_turn_counts[0] = 3
+    record_attack(bears, 0, 1)
+
+    assert game.can_attack(bears, 1)
+
+
+def test_halls_of_mist_restriction_ends_with_the_land(set_pool):
+    """The restriction is read off the board every declaration, never stamped
+    on the creature — so removing the Halls frees the attack at once."""
+    pool = set_pool("ICE")
+    bears = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    halls = Permanent(card=pool["Halls of Mist"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bears], life=20),
+        PlayerState(name="P2", battlefield=[halls], life=20),
+    ])
+    game._sync_control()
+    game.active_player_index = 0
+    game.seat_turn_counts[0] = 2
+    _w2g3_attack_last_turn(game, bears, 0)
+    assert not game.can_attack(bears, 1)
+
+    game.remove_from_battlefield(halls)
+
+    assert game.can_attack(bears, 1)
+# --- end W2G3 ---

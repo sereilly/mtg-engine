@@ -17,6 +17,7 @@ from ..combat_permissions import CANT_BLOCK_UNTIL_EOT
 from ..combat_restrictions import declaration_company_required, participation_cap
 from ..evasion_negation import negated_evasion_abilities
 from ..landwalk import LANDWALK, land_satisfies, landwalk_requirement
+from ..mana_payment import mana_cost_label, plan_payment, untapped_mana_lands
 from ..layer_bridge import computed_abilities
 from ..subject_filters import subject_matches
 from ..models import Permanent
@@ -183,6 +184,16 @@ class DeclareBlockersStepMixin:
                     continue
                 if not self._can_block_attacker(blocker, attacker):
                     continue
+                # CR 509.1c, last clause: "If a creature can't block unless a
+                # player pays a cost, that player is not required to pay that
+                # cost, even if blocking with that creature would increase the
+                # number of requirements being obeyed." So a Hipparion that
+                # *could* pay is still not compelled by Lure. Asked of the one
+                # cost reader rather than of `_can_block_attacker`, which
+                # answers the restriction question (may it?) and must keep
+                # saying yes to a block the defender chooses to pay for.
+                if self._block_mana_costs_of(blocker, attacker):
+                    continue
                 if compelled and not subject_matches(
                     self, blocker, compelled, observer=controller_index, source=attacker
                 ):
@@ -213,6 +224,10 @@ class DeclareBlockersStepMixin:
                 blocker.is_creature
                 and not blocker.tapped
                 and self._can_block_attacker(blocker, attacker)
+                # CR 509.1c: a creature that owes a cost to block is never
+                # compelled by a requirement, whether or not its controller
+                # could pay.
+                and not self._block_mana_costs_of(blocker, attacker)
                 and not self._left_right_block_illegal(attacker_idx, blocker_idx, blocker)
                 for blocker_idx, blocker in enumerate(self.controlled_by(defender))
             )
@@ -236,6 +251,10 @@ class DeclareBlockersStepMixin:
                     continue
                 attacker = attacker_controller.battlefield[attacker_idx]
                 if not self._can_block_attacker(blocker, attacker):
+                    continue
+                # CR 509.1c again: a cost to block lifts every requirement,
+                # this one included.
+                if self._block_mana_costs_of(blocker, attacker):
                     continue
                 if self._left_right_block_illegal(attacker_idx, blocker_idx, blocker):
                     continue
@@ -289,6 +308,21 @@ class DeclareBlockersStepMixin:
                         f"{blocker.card.name} needs at least {needed} other "
                         "blocking creature(s)"
                     )
+
+        # CR 509.1d-f: the total cost to block, locked in and paid before the
+        # chosen creatures become blockers. Last of the legality checks and
+        # first of the commitments, because a declaration this rejects must
+        # leave nothing spent - the same order the attack side takes at
+        # CR 508.1g.
+        if not _camouflage_resolution:
+            block_total, block_plan = self._block_declaration_mana_plan(
+                controller_index, assignments, resolved_blockers, resolved_attackers
+            )
+            if block_total and block_plan is None:
+                return False, (
+                    f"can't pay {mana_cost_label(block_total)} to declare those blockers"
+                )
+            self._pay_block_declaration_mana(controller_index, block_total, block_plan)
 
         # Nested by defender (CR 802): only this defender's own entry is replaced,
         # so an earlier defender's declaration in the same combat survives.
@@ -653,6 +687,26 @@ class DeclareBlockersStepMixin:
         if power_block is not None and attacker.effective_power >= int(power_block.payload["power"]):
             return False
 
+        # "...can't block creatures with power 3 or greater **unless you pay
+        # {1}**." (Hipparion.) CR 509.1b's restriction with CR 509.1d's cost
+        # hung off it. This is the *gate* half - a cost the defender cannot
+        # cover makes the block illegal - and `_block_mana_costs_of` is the one
+        # reader, shared with the charge in `declare_blockers`, so a block can
+        # never be accepted and then left unpaid.
+        #
+        # Per-creature, which is all a per-pair predicate can honestly say: the
+        # declaration-wide check adds several blockers' costs together, the way
+        # `_declaration_mana_plan` does on the attack side.
+        blocker_seat = self.controller_index_of(blocker)
+        if blocker_seat is not None:
+            for cost in self._block_mana_costs_of(blocker, attacker):
+                if plan_payment(
+                    self.players[blocker_seat].mana_pool,
+                    untapped_mana_lands(self.controlled_by(blocker_seat)),
+                    cost,
+                ) is None:
+                    return False
+
         # "This creature can block only creatures with flying." (Shacklegeist.)
         # The mirror of the restriction above: that one names what may not be
         # blocked, this names the only thing that may — so an attacker *without*
@@ -677,6 +731,103 @@ class DeclareBlockersStepMixin:
             return False
 
         return True
+
+    def _block_mana_costs_of(
+        self, blocker: Permanent, attacker: Permanent
+    ) -> list[dict[str, int]]:
+        """The mana *blocker* owes to be declared against *attacker* (CR 509.1d).
+
+        "This creature can't block creatures with power 3 or greater unless you
+        pay {1}." (Hipparion.) The cost is owed **per attacker blocked**, not
+        per blocker: CR 509.1d totals the costs of the creatures chosen to
+        block, and a creature that can block two attackers is disobeying the
+        restriction twice if it pays once.
+
+        Whether the restriction bites is a question about the *attacker* - its
+        effective power, so a pumped 2/2 costs the same {1} a printed 3/3 does
+        - which is why this takes the pair rather than the blocker alone.
+
+        One reader for the gate in ``_can_block_attacker`` and the charge in
+        ``declare_blockers``, exactly as ``_attack_mana_costs_of`` is on the
+        other side: a cost checked by one rule and paid by another is how a
+        declaration gets accepted and then left unpaid.
+        """
+        costs: list[dict[str, int]] = []
+        for instruction in compile_card_oracle(blocker.effective_card).instructions:
+            if instruction.kind != "cant_block_power_n_or_greater_unless_pay":
+                continue
+            if attacker.effective_power < int(instruction.payload.get("power", 0)):
+                continue
+            cost = {
+                symbol: int(amount)
+                for symbol, amount in (instruction.payload.get("mana") or {}).items()
+            }
+            if cost:
+                costs.append(cost)
+        return costs
+
+    def _block_declaration_mana_plan(
+        self,
+        controller_index: int,
+        assignments: dict[int, list[int]],
+        resolved_blockers: dict[int, Permanent],
+        resolved_attackers: dict[int, Permanent],
+    ):
+        """How the whole block declaration's CR 509.1d mana is paid, or None.
+
+        The costs of *every* chosen blocker add into one total, which is the
+        difference between this and ``_can_block_attacker``: a per-pair
+        predicate can say "you could pay {1} for this block" and cannot say
+        "and {1} again for the next", so a defender with one mana would declare
+        two Hipparions and be charged for one.
+
+        Nothing is excluded from what may pay, unlike the attack side: CR 509.1g
+        does not tap blockers, so an animated land that is also blocking is
+        still a land its controller may tap. The plan is made before anything is
+        spent, so the gate and the charge read one board.
+        """
+        total: dict[str, int] = {}
+        for blocker_idx, attacker_indices in assignments.items():
+            blocker = resolved_blockers.get(blocker_idx)
+            if blocker is None:
+                continue
+            for attacker_idx in attacker_indices:
+                attacker = resolved_attackers.get(attacker_idx)
+                if attacker is None:
+                    continue
+                for cost in self._block_mana_costs_of(blocker, attacker):
+                    for symbol, amount in cost.items():
+                        total[symbol] = total.get(symbol, 0) + amount
+        if not total:
+            return {}, None
+        defender = self.players[controller_index]
+        return total, plan_payment(
+            defender.mana_pool,
+            untapped_mana_lands(self.controlled_by(controller_index)),
+            total,
+        )
+
+    def _pay_block_declaration_mana(
+        self, controller_index: int, total: dict[str, int], plan
+    ) -> None:
+        """Spend the plan :meth:`_block_declaration_mana_plan` made (CR 509.1f).
+
+        Floating mana first and then untapped lands - the stated policy every
+        cost with no priority window behind it takes in this engine. CR 509.1e
+        does give the defender a window to activate mana abilities; the engine
+        takes it on their behalf rather than pausing the turn-based action,
+        which is the same shortcut the attack side takes at CR 508.1g.
+        """
+        if plan is None:
+            return
+        defender = self.players[controller_index]
+        for symbol, amount in plan.from_pool.items():
+            defender.mana_pool[symbol] = int(defender.mana_pool.get(symbol, 0)) - amount
+        for land in plan.tapped:
+            self.become_tapped(land)
+        self.log.append(
+            f"{defender.name} paid {mana_cost_label(total)} to declare blockers"
+        )
 
     def _negated_evasion_abilities(self) -> frozenset[str]:
         """Evasion abilities that currently restrict no block at all, because

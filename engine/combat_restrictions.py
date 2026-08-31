@@ -69,6 +69,10 @@ class CombatRestriction:
 #   cant_be_blocked_by              phases/declare_blockers_step
 #   cant_be_blocked_except_by       phases/declare_blockers_step
 #   cant_block_power_n_or_greater   phases/declare_blockers_step
+#   cant_block_power_n_or_greater_unless_pay  phases/declare_blockers_step
+#                                   + declare_blockers (the charge)
+#   creatures_that_attacked_last_turn_cant_attack
+#                                   phases/declare_attackers_step.can_attack
 #   can_block_only_with_keyword     phases/declare_blockers_step
 #   must_be_blocked                 phases/declare_blockers_step
 #   must_be_blocked_by_all_able     phases/declare_blockers_step
@@ -318,6 +322,49 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "cant_block_power_n_or_greater",
     ),
     (
+        # "This creature can't block creatures with power 3 or greater **unless
+        # you pay {1}**." (Hipparion.) CR 509.1b's restriction with CR 509.1a's
+        # cost hung off it — the blocking twin of Brainwash's
+        # `cant_attack_unless_pay`, and its own kind for the reason that one is
+        # not a flag on `cant_attack`: the row above forbids the block outright
+        # and this one merely prices it, so a payload key meaning "and there is
+        # a way out" would make every unread cost an unconditional ban.
+        #
+        # It must sit **before** the unconditional row: that pattern is anchored
+        # and would not match this sentence, but the ordering is the thing a
+        # future edit could break, and a widened `$` there would silently turn
+        # Hipparion into a creature that can never block a 3-power attacker.
+        #
+        # The threshold and the cost are both payload, for the reasons written
+        # on their unconditional siblings.
+        re.compile(
+            r"^this creature can't block creatures with power (?P<power>\d+) or "
+            r"greater unless (?:you pay|its controller pays) "
+            r"(?P<block_mana>(?:\{[^}]+\})+)$"
+        ),
+        "cant_block_power_n_or_greater_unless_pay",
+    ),
+    (
+        # "Creatures that attacked during their controller's last turn can't
+        # attack." (Halls of Mist.) Giant Turtle's restriction printed about the
+        # **board** instead of about itself, so it is its own kind rather than
+        # the self row's payload: that one is read off the attacker's own
+        # program and this one has to be found by scanning every permanent, and
+        # a single kind read by both loops would ground every creature the
+        # moment one Turtle was in play.
+        #
+        # No parameters: the sentence names no seat, no type and no number. The
+        # record it reads is the attack stamp `declare_attackers` already
+        # writes, asked of each attacker's own controller — which is the active
+        # player for anything being declared, so "their controller" and "you"
+        # coincide at the only moment the question is asked.
+        re.compile(
+            r"^creatures that attacked during their controller's last turn "
+            r"can't attack$"
+        ),
+        "creatures_that_attacked_last_turn_cant_attack",
+    ),
+    (
         # "This creature can block only creatures with flying." (Shacklegeist.)
         # The mirror of the restrictions above: those name what may *not* be
         # blocked, this names the only thing that may. The keyword is payload for
@@ -480,7 +527,12 @@ def combat_restriction_for(
         # `mana_cost_from_symbols` cannot spend refuses the whole line — a cost
         # read as smaller than it is charges less than the card says, and the
         # widening direction is a creature that attacks for free.
-        printed_cost = payload.pop("attack_mana", None)
+        # Both spellings reach the same `mana` key: what a printed symbol run
+        # means does not depend on whether the sentence was about attacking or
+        # about blocking, and one key is what lets the two enforcement sites
+        # share `mana_cost_label` and `plan_payment` without either knowing the
+        # other's regex.
+        printed_cost = payload.pop("attack_mana", None) or payload.pop("block_mana", None)
         if printed_cost is not None:
             cost = mana_cost_from_symbols(printed_cost)
             if cost is None:

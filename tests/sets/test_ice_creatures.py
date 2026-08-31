@@ -22,10 +22,12 @@ text do what the card says.
 from __future__ import annotations
 
 from engine import Game
+from engine.auras import attach_aura
 from engine.cumulative_upkeep import cumulative_upkeep_cost
 from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
+from engine.pt import add_pt_modifier
 from tests.helpers import _nosick
 
 # --- W1G3: mana, additional costs, cost restrictions ---
@@ -1157,3 +1159,181 @@ def test_ashen_ghoul_is_refused_outside_your_upkeep(set_pool):
     assert not result.supported
     assert p1.battlefield == []
 # --- end W1G4 ---
+
+
+# --- W2G3: combat restrictions and requirements ---
+def _w2g3_block_board(set_pool, attacker_name, *defender_lands, blocker="Hipparion"):
+    """Seat 0 attacking with *attacker_name*; seat 1 holding *blocker* and lands.
+
+    Returns ``(game, attacker, blocker, lands)``. The declaration is left to the
+    test: whether the block is *legal* and whether it is *paid for* are the two
+    halves this section is about, and one helper that declared both would hide
+    which one failed.
+    """
+    pool = set_pool("ICE")
+    attacker = _nosick(Permanent(card=pool[attacker_name]))
+    defender = _nosick(Permanent(card=pool[blocker]))
+    lands = [Permanent(card=pool[name]) for name in defender_lands]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker], life=20),
+        PlayerState(name="P2", battlefield=[defender, *lands], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    ok, msg = game.declare_attackers(0, [0], 1)
+    assert ok, msg
+    game._set_phase_and_step("combat", "declare_blockers")
+    return game, attacker, defender, lands
+
+
+def test_hipparion_compiles_its_block_cost_as_payload(set_pool):
+    """"This creature can't block creatures with power 3 or greater unless you
+    pay {1}." (CR 509.1b with CR 509.1d's cost.)
+
+    Its own kind rather than a flag on the unconditional row beside it: that
+    one forbids the block outright, and a payload key meaning "and there is a
+    way out" would make every unread cost an unconditional ban.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Hipparion"])
+
+    assert program.supported
+    (instruction,) = program.instructions
+    assert instruction.kind == "cant_block_power_n_or_greater_unless_pay"
+    assert instruction.payload["power"] == 3
+    assert instruction.payload["mana"] == {"generic": 1}
+
+
+def test_hipparion_blocks_a_small_creature_for_nothing(set_pool):
+    """Below the threshold the restriction says nothing, and no mana moves — a
+    cost charged on every block would be the same bug in the other direction."""
+    game, _attacker, _hipparion, (land,) = _w2g3_block_board(
+        set_pool, "Balduvian Bears", "Snow-Covered Plains"
+    )
+
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert ok, msg
+    assert game.combat_blockers[1] == {0: [0]}
+    assert not land.tapped
+
+
+def test_hipparion_cannot_block_a_big_creature_with_no_mana(set_pool):
+    """The gate half: a defender who cannot pay cannot make the block, and the
+    declaration is refused before anything is committed."""
+    game, attacker, _hipparion, _lands = _w2g3_block_board(set_pool, "Tor Giant")
+    assert attacker.effective_power >= 3
+
+    ok, msg = game.declare_blockers(1, {0: 0})
+
+    assert not ok
+    assert "cannot block" in msg
+    assert 1 not in game.combat_blockers
+
+
+def test_hipparion_pays_to_block_a_big_creature(set_pool):
+    """The charge half: with a land to tap the block is legal, and the land is
+    actually tapped. A restriction whose cost nobody collects is the failure
+    this table exists to prevent."""
+    game, _attacker, _hipparion, (land,) = _w2g3_block_board(
+        set_pool, "Tor Giant", "Snow-Covered Plains"
+    )
+
+    ok, msg = game.declare_blockers(1, {0: 0})
+
+    assert ok, msg
+    assert game.combat_blockers[1] == {0: [0]}
+    assert land.tapped
+
+
+def test_hipparion_reads_the_attackers_effective_power(set_pool):
+    """"Power 3 or greater" is CR 613 layer 7, not the printed number: a pumped
+    2/2 is what the Horse suddenly cannot block for free."""
+    game, attacker, _hipparion, _lands = _w2g3_block_board(
+        set_pool, "Balduvian Bears"
+    )
+    assert game.declare_blockers(1, {0: 0})[0]
+
+    game.combat_blockers.clear()
+    game.combat_blockers_declared_by.clear()
+    game.combat_blockers_locked = False
+    game._set_phase_and_step("combat", "declare_blockers")
+    add_pt_modifier(attacker, 1, 0)
+    assert attacker.effective_power == 3
+
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert not ok
+    assert "cannot block" in msg
+
+
+def test_two_hipparions_each_owe_their_own_block_cost(set_pool):
+    """CR 509.1d totals the declaration's costs. One land pays for one blocker;
+    the second is what a per-pair gate alone would let through free."""
+    pool = set_pool("ICE")
+    giants = [_nosick(Permanent(card=pool["Tor Giant"])) for _ in range(2)]
+    horses = [_nosick(Permanent(card=pool["Hipparion"])) for _ in range(2)]
+    land = Permanent(card=pool["Snow-Covered Plains"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=list(giants), life=20),
+        PlayerState(name="P2", battlefield=[*horses, land], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0, 1], 1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+
+    ok, msg = game.declare_blockers(1, {0: 0, 1: 1})
+
+    assert not ok
+    assert "declare those blockers" in msg
+    assert not land.tapped
+
+    # One of them alone is affordable, and the land pays for exactly that one.
+    ok, msg = game.declare_blockers(1, {0: 0})
+    assert ok, msg
+    assert land.tapped
+
+
+def test_hipparion_is_never_compelled_to_block_by_lure(set_pool):
+    """CR 509.1c's last clause: "If a creature can't block unless a player pays
+    a cost, that player is not required to pay that cost, even if blocking with
+    that creature would increase the number of requirements being obeyed."
+
+    So a Lure on a 3-power attacker does not drag the Horse in, even with the
+    mana to pay — while the Bears beside it are still compelled.
+    """
+    pool = set_pool("ICE")
+    giant = _nosick(Permanent(card=pool["Tor Giant"]))
+    lure = Permanent(card=pool["Lure"])
+    hipparion = _nosick(Permanent(card=pool["Hipparion"]))
+    bears = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    land = Permanent(card=pool["Snow-Covered Plains"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[giant, lure], life=20),
+        PlayerState(name="P2", battlefield=[hipparion, bears, land], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    attach_aura(lure, giant)
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], 1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+
+    # Leaving both home is illegal: the Bears owe nothing and are compelled.
+    ok, msg = game.declare_blockers(1, {})
+    assert not ok
+    assert "Lure" in msg
+
+    # The Bears alone satisfy it; the Horse stays home and nothing is spent.
+    game.combat_blockers.clear()
+    game.combat_blockers_declared_by.clear()
+    game.combat_blockers_locked = False
+    game._set_phase_and_step("combat", "declare_blockers")
+    ok, msg = game.declare_blockers(1, {1: 0})
+
+    assert ok, msg
+    assert not land.tapped
+# --- end W2G3 ---
