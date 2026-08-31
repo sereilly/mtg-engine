@@ -28,7 +28,7 @@ instruction, the entry goes with it.
 from __future__ import annotations
 
 from ..auras import aura_continuous_claim
-from ..cast_restrictions import CAST_RESTRICTIONS
+from ..cast_restrictions import CAST_RESTRICTIONS, cast_condition_line
 from ..cost_modifiers import cost_modifier_claims_line
 from ..draw_step_modifiers import draw_step_bonus_for, skips_own_draw_step
 from ..enter_effects import enter_effect_line
@@ -70,6 +70,13 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # equality here is deliberately stricter, so a line that is a timing
     # restriction *plus something else* stays unaccounted for.
     if any(restriction.phrase == normalized for restriction in CAST_RESTRICTIONS):
+        return "cast_restrictions"
+
+    # engine/cast_restrictions.py — the board half of CR 601.3: "Cast this
+    # spell only if you control a snow land." (Blizzard.) A row whose noun
+    # phrase is payload, so the claim asks the reader that answers it rather
+    # than comparing against a literal the table would be free to drift from.
+    if cast_condition_line(normalized) is not None:
         return "cast_restrictions"
 
     # engine/untap_restrictions.py — CR 502 "don't untap" templates (Stasis,

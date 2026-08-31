@@ -1818,4 +1818,55 @@ def test_ritual_of_subdual_line_is_claimed_by_the_replacement_registry(set_pool)
             if text.lower().startswith("if ")
         ][0]
         assert registry_for_line(line) == "replacements", name
+
+def _blizzard_game(set_pool, lands):
+    """Blizzard in hand over a board of *lands*, named out of ICE or LEA."""
+    ice, lea = set_pool("ICE"), set_pool("LEA")
+    perms = [Permanent(card=ice.get(name) or lea[name]) for name in lands]
+    p1 = PlayerState(name="P1", battlefield=perms, hand=[ice["Blizzard"]])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, p1
+
+
+def test_blizzard_refuses_a_board_with_no_snow_land(set_pool):
+    """"Cast this spell only if you control a snow land." (CR 601.3.)
+
+    A printed restriction is only done when something enforces it: the line was
+    read and dropped, so the spell cast off any board at all.
+    """
+    game, p1 = _blizzard_game(set_pool, ["Forest"])
+
+    result = game.cast_from_hand(0, "Blizzard")
+
+    assert not result.supported
+    assert "snow land" in result.details
+    assert [card.name for card in p1.hand] == ["Blizzard"], "nothing was spent"
+
+
+def test_blizzard_casts_over_a_snow_land(set_pool):
+    game, _p1 = _blizzard_game(set_pool, ["Snow-Covered Forest"])
+
+    assert game.cast_from_hand(0, "Blizzard").supported
+
+
+def test_blizzard_wants_a_snow_land_and_not_merely_something_snow(set_pool):
+    """The noun phrase is read by the grammar's own noun parser, so "snow"
+    qualifies the *land* — a snow permanent that is not one does not answer."""
+    game, _p1 = _blizzard_game(set_pool, ["Forest"])
+    assert not game.cast_from_hand(0, "Blizzard").supported
+
+
+def test_blizzard_reads_snow_through_the_layers(set_pool):
+    """"All lands are no longer snow." (Melting.) The condition asks
+    ``subject_matches``, which resolves the supertype through layer 4 — so a
+    board Melting has thawed stops answering."""
+    game, p1 = _blizzard_game(set_pool, ["Snow-Covered Forest"])
+    p1.battlefield.append(Permanent(card=set_pool("ICE")["Melting"]))
+    game._refresh_dynamic_creatures()
+
+    result = game.cast_from_hand(0, "Blizzard")
+
+    assert not result.supported, result.details
 # --- end W2G2 ---
