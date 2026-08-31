@@ -334,29 +334,43 @@ class EffectsMixin:
         return None
 
     def _tap_or_untap_target(
-        self, target: PlayerState, make_tapped: bool, target_permanent_index: int | None = None
+        self, permanent: "Permanent | None", make_tapped: bool
     ) -> "Permanent | None":
-        """The permanent this tapped or untapped, or None if there was none.
+        """Tap or untap the permanent the caller resolved; echo it back, or None.
 
         The object rather than a bare success flag, because the sentence after
         this one may be about it ("Tap target creature. **It** doesn't untap
         …", Telekinesis) and the caller has no other way to name what was
         chosen — reconstructing it would be a second copy of the choice, free
         to disagree with the first.
+
+        **It takes the permanent, not a seat and a slot.** It used to resolve
+        the target itself, from ``(player, index)``, through
+        ``pick_target_permanent`` — but without the ``game``/``permanent_id``
+        keywords that arm that resolver's id lookup, so it got the index-only
+        half of a function whose whole point is the id. An index is not a
+        target: a permanent leaving renumbers every later slot (CR 400.7), so
+        the recorded index comes to name whichever permanent slid into the
+        vacated place. Hematite Talisman's trigger untapped that stranger and
+        logged "Untapped target permanent".
+
+        Threading an id in would have fixed those callers and left the trap
+        armed for the next one — which is exactly how this happened, since the
+        resolver grew its id keywords and these callers silently kept the old
+        behaviour with nothing failing. Taking the ``Permanent`` removes the
+        index from the signature, so there is no stale slot to follow and no
+        keyword to forget. Resolving is the caller's job, through
+        ``resolve_target_permanent``, which is where the context and its
+        recorded id already are.
         """
-        # Honor an explicitly chosen permanent (Twiddle: "tap or untap target
-        # artifact, creature, or land" — the player picks which one, on either
-        # battlefield). Fall back to the first permanent only when no explicit
-        # choice was supplied (AI/headless).
-        chosen = pick_target_permanent(target, target_permanent_index, predicate=lambda p: True)
-        if chosen is None:
+        if permanent is None:
             return None
-        chosen.tapped = make_tapped
+        permanent.tapped = make_tapped
         if make_tapped:
             # Illusionary Mask: a face-down creature that becomes tapped is
             # turned face up (no-op for everything else).
-            self._turn_face_up(chosen)
-        return chosen
+            self._turn_face_up(permanent)
+        return permanent
 
     def _match_chosen_damage_source(self, chosen_sources, source):
         """The entry of *chosen_sources* matching this damage's source, or None.
@@ -1382,18 +1396,28 @@ class EffectsMixin:
                 return arrival
         return None
 
-    def _bounce_target_creature(
-        self, target: PlayerState, target_permanent_index: int | None = None
-    ) -> bool:
-        # Respect the chosen target when one was declared; otherwise fall back to
-        # the first creature so AI / legacy callers still resolve.
-        chosen = pick_target_permanent(target, target_permanent_index)
+    def _bounce_target_creature(self, permanent: "Permanent | None") -> bool:
+        """Return the permanent the caller resolved to its owner's hand.
+
+        Takes the ``Permanent`` rather than ``(player, index)`` for the reason
+        ``_tap_or_untap_target`` above does: it resolved its own target through
+        ``pick_target_permanent`` without the keywords that arm the id lookup,
+        so a target that had left the battlefield bounced whichever permanent
+        had slid into its slot (CR 400.7). The caller resolves, through
+        ``resolve_target_permanent``, where the recorded id is.
+        """
+        chosen = permanent
         if chosen is None:
             return False
         # CR 400.3: the card returns to its owner's hand, not its controller's
         # (they differ when the creature was stolen, e.g. by Control Magic).
         owner_idx = self.owner_index_of(chosen)
-        owner = self.players[owner_idx] if owner_idx is not None else target
+        owner = (
+            self.players[owner_idx] if owner_idx is not None
+            # No recorded owner: fall back to whoever controls it now, which is
+            # the seat the old signature's ``target`` argument named anyway.
+            else self.players[self.controller_index_of(chosen) or 0]
+        )
         # Only when it actually arrived: the seam answers False for a token, a
         # commander diverted to the command zone and a CR 614 replacement that
         # sent the card elsewhere, and none of those is a permanent put into a
@@ -1426,17 +1450,17 @@ class EffectsMixin:
         return self.sacrifice_permanent(chosen)
 
     def _apply_color_override(
-        self,
-        target: PlayerState,
-        symbol: str,
-        target_permanent_index: int | None = None,
+        self, permanent: "Permanent | None", symbol: str
     ) -> bool:
-        if not symbol:
+        """Recolour the permanent the caller resolved (the Lace cycle's channel).
+
+        Takes the ``Permanent`` for the reason the two helpers above do — it
+        picked its own target off a seat and a slot, which is a choice an
+        earlier removal has already renumbered (CR 400.7).
+        """
+        if not symbol or permanent is None:
             return False
-        chosen = pick_target_permanent(target, target_permanent_index, predicate=lambda p: True)
-        if chosen is None:
-            return False
-        chosen.metadata["color_override"] = symbol
+        permanent.metadata["color_override"] = symbol
         return True
 
     def _process_land_enters(self, land_controller_index: int) -> None:

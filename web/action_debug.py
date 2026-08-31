@@ -178,9 +178,10 @@ def _action_debug_tap_permanent(session, req, seat_type):
     # write — the menu sets up a board rather than playing a turn — and it is
     # the *only* reason those triggers stay quiet here: the engine stopped
     # scoping them to the tap-for-mana path, so any real tap does fire them.
-    session.game._tap_or_untap_target(
-        session.game.players[controller_seat], make_tapped, req.target_permanent_index
-    )
+    # `_debug_target_permanent` already resolved the permanent, so hand it over
+    # rather than making the helper find it again off a seat and a slot — a
+    # second read of one choice is free to disagree with the first.
+    session.game._tap_or_untap_target(permanent, make_tapped)
     session.game.log.append(
         f"[Debug] {permanent.card.name} {'tapped' if make_tapped else 'untapped'}."
     )

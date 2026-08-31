@@ -406,9 +406,16 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
         if not recoloured:
             game.log.append(f"{context.card.name}: no creature to recolour")
         return True, "resolved"
-    target = context.target
-    perm_idx = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
-    changed = game._apply_color_override(target, symbol, target_permanent_index=perm_idx) if symbol else False
+    # The Lace cycle's permanent half, resolved by id — "target permanent", so
+    # the predicate is every permanent rather than the resolver's creature
+    # default. The index it used to pass named a slot, and a slot is not a
+    # target once anything has left the battlefield (CR 400.7).
+    changed = game._apply_color_override(
+        resolve_target_permanent(
+            game, context, player=context.target, predicate=lambda p: True,
+        ),
+        symbol,
+    ) if symbol else False
     game.log.append("Changed target color" if changed else "No valid permanent to recolor")
     return True, "resolved"
 

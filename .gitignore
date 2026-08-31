@@ -40,3 +40,4 @@ logs/
 # Patch/merge backups — never source.
 *.orig
 *.rej
+.scratch_leadb/

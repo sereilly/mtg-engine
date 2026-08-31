@@ -1558,7 +1558,12 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
         game.permanent_at(game.players.index(target), index)
         if isinstance(index, int) else None
     )
-    bounced = game._bounce_target_creature(target, context.target_permanent_index)
+    # By id, not by slot: an earlier removal renumbers the battlefield under a
+    # recorded index (CR 400.7), so the unnarrowed bounce used to return
+    # whichever creature slid into the vacated place.
+    bounced = game._bounce_target_creature(
+        resolve_target_permanent(game, context, player=target)
+    )
     if bounced and returned is not None:
         context.results["returned_mana_value"] = _mana_value_of(returned.card)
     game.log.append("Returned creature to hand" if bounced else "No creature to return")
@@ -3570,7 +3575,9 @@ def return_spell_or_creature_to_hand(game: Game, instruction: OracleInstruction,
             f"to {owner.name}'s hand"
         )
         return True, "resolved"
-    bounced = game._bounce_target_creature(context.target, context.target_permanent_index)
+    bounced = game._bounce_target_creature(
+        resolve_target_permanent(game, context)
+    )
     game.log.append(
         "Returned creature to hand" if bounced else f"{context.card.name}: nothing was returned"
     )
