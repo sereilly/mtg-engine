@@ -1567,4 +1567,22 @@ def test_winters_chill_shield_ends_with_the_combat_it_names(set_pool):
     assert not attacking[0].metadata.get(
         "prevent_combat_damage_direction_until_eot"
     ), "the shield expired with the combat phase, not with the turn"
+def test_winters_chill_refuses_an_option_the_payer_cannot_cover(set_pool):
+    """CR 601.2b: a player chooses among the options they are **able** to take.
+
+    With one untapped land the {2} half is not one of them, and naming it is not
+    an answer -- the offer is still owed. Consuming it would leave the creature
+    neither shielded nor destroyed, which is the one outcome the card does not
+    have.
+    """
+    pool = set_pool("ICE")
+    game, p0, _, attacking = _chill_game(pool, payer_lands=1)
+    assert _cast_chill(game, [0], 1).supported
+
+    assert not game.confirm_optional_pay(0, accept=True, option=1)
+    assert len(game.pending_choices_of("optional_pay", 0)) == 1
+
+    assert game.confirm_optional_pay(0, accept=True, option=0)
+    game._settle()
+    assert attacking[0].metadata.get("prevent_combat_damage_direction_until_eot")
 # --- end W4G4 ---

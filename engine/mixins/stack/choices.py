@@ -3843,6 +3843,22 @@ class PendingChoicesMixin:
     ) -> bool:
         player_index = choice.player_index
         entry = choice.data
+        # CR 601.2b: a player chooses among the options they are **able** to
+        # take. A named option they cannot cover is not an answer, so the prompt
+        # stands rather than being consumed — the alternative is an answer that
+        # pays nothing, buys nothing and does not decline either, which on
+        # Winter's Chill is a creature that is neither shielded nor destroyed.
+        # A graded offer answered with no option at all is not this case: that
+        # is the stated policy, and `_graded_option_taken` supplies it.
+        if (
+            accept
+            and option is not None
+            and self.graded_pay_options(entry) is not None
+            and self._graded_option_taken(
+                self.players[player_index], entry, option
+            ) is None
+        ):
+            return False
         self.discard_pending_choice(choice)
         if (
             accept
