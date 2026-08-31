@@ -5,12 +5,12 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**340 / 612 tracked rules covered (55%)** — 1701 tests, 0 unannotated.
+**341 / 612 tracked rules covered (55%)** — 1710 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
 | [100. General](#100-general) | 0/7 | 0% |
-| [101. The Magic Golden Rules](#101-the-magic-golden-rules) | 2/4 | 50% |
+| [101. The Magic Golden Rules](#101-the-magic-golden-rules) | 3/4 | 75% |
 | [102. Players](#102-players) | 1/4 | 25% |
 | [103. Starting the Game](#103-starting-the-game) | 4/8 | 50% |
 | [104. Ending the Game](#104-ending-the-game) | 5/5 | 100% |
@@ -113,7 +113,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 101. The Magic Golden Rules
 
-- [ ] **101.1** Whenever a card’s text directly contradicts these rules, the card takes precedence. The card over...
+- [x] **101.1** Whenever a card’s text directly contradicts these rules, the card takes precedence. The card over... *(1 tests)*
 - [x] **101.2** When a rule or effect allows or directs something to happen, and another effect states that it ca... *(1 tests)*
 - [ ] **101.3** Any part of an instruction that’s impossible to perform is ignored. (In many cases the card will ...
 - [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(2 tests)*
@@ -262,7 +262,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 115. Targets
 
-- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(11 tests, subrules bcd)*
+- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(14 tests, subrules abcd)*
 - [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(3 tests)*
 - [ ] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe...
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(2 tests)*
@@ -283,7 +283,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **117.1** Unless a spell or ability is instructing a player to take an action, which player can take action... *(2 tests)*
 - [x] **117.2** Other kinds of abilities and actions are automatically generated or performed by the game rules, ... *(1 tests, subrules c)*
-- [x] **117.3** Which player has priority is determined by the following rules: *(13 tests, subrules abcd)*
+- [x] **117.3** Which player has priority is determined by the following rules: *(14 tests, subrules abcd)*
 - [x] **117.4** If all players pass in succession (that is, if all players pass without taking any actions in bet... *(3 tests)*
 - [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(1 tests)*
 - [x] **117.7** If a player with priority casts a spell or activates an activated ability while another spell or ... *(1 tests)*
@@ -680,15 +680,15 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 603. Handling Triggered Abilities
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(1 tests)*
-- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(15 tests, subrules bd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(27 tests, subrules bcd)*
+- [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(16 tests, subrules bd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(28 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(4 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(1 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(2 tests, subrules c)*
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(17 tests, subrules bcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(3 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
-- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(3 tests)*
+- [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(4 tests)*
 - [ ] **603.11** Some objects have a static ability that’s linked to one or more triggered abilities. (See rule 60...
 - [x] **603.12** A resolving spell or ability may allow or instruct a player to take an action and create a trigge... *(2 tests)*
 
@@ -730,7 +730,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(35 tests, subrules bcdhn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(36 tests, subrules bcdhn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -850,14 +850,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.5** Cast *(4 tests, subrules a)*
 - [x] **701.6** Counter *(3 tests, subrules ab)*
 - [x] **701.7** Create *(3 tests, subrules a)*
-- [x] **701.8** Destroy *(3 tests, subrules ab)*
+- [x] **701.8** Destroy *(4 tests, subrules ab)*
 - [x] **701.9** Discard *(4 tests, subrules ac)*
 - [x] **701.12** Exchange *(6 tests, subrules ab)*
 - [x] **701.13** Exile *(7 tests, subrules a)*
 - [x] **701.14** Fight *(4 tests, subrules abd)*
 - [x] **701.17** Mill *(5 tests, subrules a)*
 - [x] **701.18** Play *(4 tests, subrules a)*
-- [x] **701.19** Regenerate *(23 tests, subrules abc)*
+- [x] **701.19** Regenerate *(24 tests, subrules abc)*
 - [x] **701.20** Reveal *(2 tests, subrules a)*
 - [x] **701.21** Sacrifice *(10 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
