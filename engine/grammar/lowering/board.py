@@ -850,10 +850,11 @@ def _lower_for_each_destroyed(
             "destroyed anything", node=node,
         )
     filt = node.iterator.filter
-    if filt.to_payload() != {"type_filter": "creature"} or filt.zone != "battlefield":
+    narrowing = filt.to_payload()
+    if set(narrowing) - {"type_filter"} or filt.zone != "battlefield":
         raise LoweringError(
-            "'died this way' iterates what the earlier step destroyed and "
-            "cannot be narrowed further", node=node,
+            "'died this way' iterates what the earlier step destroyed and is "
+            "narrowed by its printed card type and nothing else", node=node,
         )
     if not inner:
         raise LoweringError("a per-object loop with no effect in it", node=node)
@@ -864,7 +865,17 @@ def _lower_for_each_destroyed(
                 # Named rather than implied: the loop reads the objects an
                 # earlier step recorded under this key, and the key is what
                 # ties the two halves of the sentence together.
-                "iterator": {"produced_by": "destroyed_this_way_objects"},
+                #
+                # The printed card type rides beside it. It is normally a
+                # restatement of what the sweep destroyed — "for each
+                # **creature** that died this way" after a creature sweep, "for
+                # each **land** destroyed this way" after a land sweep — but a
+                # restatement is only ever as reliable as the reader that checks
+                # it, and the loop applies it to the record rather than
+                # assuming the two agree.
+                "iterator": {
+                    "produced_by": "destroyed_this_way_objects", **narrowing,
+                },
                 "effect": inner,
             },
         ),

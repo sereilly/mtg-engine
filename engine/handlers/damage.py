@@ -957,6 +957,23 @@ def self_damage_unless_pay(game: Game, instruction: OracleInstruction, context: 
             game.log.append(f"{card.name}: no recorded player, nothing offered")
             return True, "resolved"
         seat = recorded
+    record = instruction.payload.get("payer_seat_record")
+    if record is not None:
+        # "For each land destroyed this way, <source> deals 1 damage to **that
+        # land's controller** unless they pay {2}." (Stench of Evil.) The seat
+        # an earlier step of this same resolution wrote down about the object
+        # the loop is currently on — `for_each` resolves the record to this
+        # iteration's entry before running the step, so the lookup is by the
+        # record's name and never by the object.
+        #
+        # No entry means the loop is not running or recorded nothing about this
+        # object, and nothing is offered: the same rule the frozen-event branch
+        # above follows, and the safe one.
+        found = context.iteration_seats.get(str(record))
+        if not isinstance(found, int) or not (0 <= found < len(game.players)):
+            game.log.append(f"{card.name}: no recorded controller, nothing offered")
+            return True, "resolved"
+        seat = found
     payer = game.players[seat]
     game.arm_pending_choice(
         "optional_pay", seat,

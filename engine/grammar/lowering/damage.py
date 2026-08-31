@@ -18,7 +18,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
-from ...oracle_types import X_FROM_COUNT
+from ...oracle_types import PER_OBJECT_SEAT_RECORDS, X_FROM_COUNT
 from ._amounts import (
     _damaged_player_is,
     _lower_board_count_damage,
@@ -90,7 +90,9 @@ def _sweep_kind(recipients: tuple[ast.Recipient, ...]) -> str | None:
 
 
 def _lower_damage_unless_pay(
-    node: ast.DamageUnlessPay, event: str | None
+    node: ast.DamageUnlessPay,
+    event: str | None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"<source> deals N damage to you unless you pay <cost>."
 
@@ -130,6 +132,33 @@ def _lower_damage_unless_pay(
     if not isinstance(amount, int):
         raise LoweringError("a pay-or-else flow needs a fixed damage amount", node=node)
 
+    # "For each land destroyed this way, <source> deals 1 damage to **that
+    # land's controller** unless **they** pay {2}." (Stench of Evil.) The seat
+    # is neither the ability's controller nor a trigger's frozen event subject:
+    # it is a fact an earlier *step of this same spell* recorded about the
+    # object the loop is currently on, which is the third channel
+    # `PER_OBJECT_SEAT_RECORDS` exists for. Admitted only when a step really
+    # wrote that record, which is what `produced` is; without one the words
+    # name nobody and the clause keeps the refusal below.
+    #
+    # The printed possessive collapses to `that_player` in the AST — "that
+    # land's controller", "that player" and "they" are one referent to every
+    # consumer — so what distinguishes this reading is the record, not the
+    # spelling. A card printing a bare "that player" behind such a sweep would
+    # reach it too; the handler finds no seat for the loop it is not in, and
+    # does nothing, which is the safe direction.
+    controller_record = PER_OBJECT_SEAT_RECORDS["controller"]
+    if on_event_player and controller_record in produced:
+        return (
+            OracleInstruction(
+                "self_damage_unless_pay", "",
+                {
+                    "amount": amount,
+                    "cost": _generic_only(node.cost, node),
+                    "payer_seat_record": controller_record,
+                },
+            ),
+        )
     if event is None:
         raise LoweringError(
             "a pay-or-else damage prompt exists only as a trigger's own effect",
@@ -148,21 +177,32 @@ def _lower_damage_unless_pay(
             ),
         )
 
-    # `self_damage_unless_pay` puts a single generic number on the prompt, so a
-    # coloured cost would be silently charged as {0}.
-    pips = dict(node.cost.pips)
-    generic = int(pips.pop("generic", 0))
-    if pips:
-        raise LoweringError(
-            "the optional-pay prompt reads one generic cost, not coloured mana", node=node
-        )
-    payload: dict[str, object] = {"amount": amount, "cost": generic}
+    payload: dict[str, object] = {
+        "amount": amount, "cost": _generic_only(node.cost, node),
+    }
     if on_event_player:
         # Which seat is offered the cost, as payload rather than a second kind:
         # same prompt, same damage, same decline — only the player differs, and
         # the handler reads the seat off the trigger's frozen context.
         payload["payer"] = "event_subject_player"
     return (OracleInstruction("self_damage_unless_pay", "", payload),)
+
+
+def _generic_only(cost, node) -> int:
+    """The one generic number ``self_damage_unless_pay``'s prompt can charge.
+
+    Refuses a coloured pip rather than dropping it: the prompt puts a single
+    generic number on screen, so a coloured cost would be charged as {0} and the
+    card would be strictly easier to buy off than it is printed.
+    """
+    pips = dict(cost.pips)
+    generic = int(pips.pop("generic", 0))
+    if pips:
+        raise LoweringError(
+            "the optional-pay prompt reads one generic cost, not coloured mana",
+            node=node,
+        )
+    return generic
 
 
 def _lower_halved_damage(

@@ -398,8 +398,37 @@ def destroy_all_lands_of_type(game: Game, instruction: OracleInstruction, contex
         # only way every reader agrees about that.
         return perm.has_type(land_type)
 
+    # Who controlled each victim, read **before** the sweep (CR 608.2h / CR
+    # 400.7): "For each land destroyed this way, this spell deals 1 damage to
+    # that land's controller" (Stench of Evil) asks about a permanent that is a
+    # card in a graveyard by the time the loop runs, and no board read can
+    # answer for it.
+    controllers = {
+        perm.permanent_id: seat
+        for player in game.players
+        for perm in game.controlled_by(player)
+        if _matches(perm)
+        for seat in (game.controller_index_of(perm),)
+        if seat is not None
+    }
+    died: list[Permanent] = []
     for player in game.players:
-        game._destroy_swept_permanents(player, _matches, allow_regeneration=False)
+        died.extend(
+            game._destroy_swept_permanents(player, _matches, allow_regeneration=False)
+        )
+    # The record every other destroy sweep keeps, and this one did not: what a
+    # later sentence of the same spell counts or iterates. `destroy_all_lands`
+    # and `destroy_all_matching` have written it since Hellfire; the by-type
+    # sweep beside them was the sweep that recorded nothing, which is invisible
+    # until a card asks — the second sentence reads an empty set and the card
+    # reports itself supported having done half of what it says.
+    context.results["destroyed_this_way_objects"] = died
+    context.results["destroyed_this_way"] = len(died)
+    context.results[PER_OBJECT_SEAT_RECORDS["controller"]] = {
+        perm.permanent_id: controllers[perm.permanent_id]
+        for perm in died
+        if perm.permanent_id in controllers
+    }
     game.log.append(f"All {land_type}s were destroyed")
     return True, "resolved"
 

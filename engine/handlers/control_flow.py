@@ -1281,7 +1281,18 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
     steps = _steps(instruction, "effect")
     produced_by = filters.get("produced_by")
     if produced_by is not None:
-        matched = list(context.results.get(produced_by) or ())
+        # The printed noun rides beside the record's name and is applied to it.
+        # "For each **land** destroyed this way" after a sweep that destroyed
+        # lands is a restatement — but a restatement checked is a restatement,
+        # and one taken on trust is a loop over whatever the earlier step
+        # happened to record.
+        narrowing = {
+            key: value for key, value in filters.items() if key != "produced_by"
+        }
+        matched = [
+            item for item in (context.results.get(produced_by) or ())
+            if not narrowing or permanent_matches_filter(item, narrowing)
+        ]
     else:
         matched = [
             permanent

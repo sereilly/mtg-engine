@@ -631,4 +631,103 @@ def test_essence_filter_takes_the_first_option_headless(set_pool):
     assert game.pending_choice_of("mode_choice", 0) is None
     assert justice not in p1.battlefield
     assert snowfall not in p2.battlefield
+
+def _w2g5_stench_game(set_pool, *, interactive):
+    """Seat 0 holds Stench of Evil; seat 1 has two Plains and a Forest out."""
+    pool = set_pool("ICE")
+    plains = Permanent(card=pool["Plains"])
+    snowy = Permanent(card=pool["Snow-Covered Plains"])
+    forest = Permanent(card=pool["Forest"])
+    p1 = PlayerState(name="P1", hand=[pool["Stench of Evil"]], life=20)
+    p2 = PlayerState(name="P2", battlefield=[plains, snowy, forest], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.interactive_seats = {0, 1} if interactive else set()
+    game._sync_control()
+    return pool, p1, p2, (plains, snowy, forest), game
+
+
+def test_stench_of_evil_destroys_every_plains_and_nothing_else(set_pool):
+    """"Destroy all Plains." A Snow-Covered Plains is a Plains (CR 305.6), and
+    a Forest is not — the sweep has to hit exactly the first two."""
+    pool, p1, p2, (plains, snowy, forest), game = _w2g5_stench_game(
+        set_pool, interactive=True
+    )
+
+    result = game.cast_from_hand(0, "Stench of Evil")
+    game._settle()
+
+    assert result.supported, result.details
+    assert plains not in p2.battlefield
+    assert snowy not in p2.battlefield
+    assert forest in p2.battlefield
+
+
+def test_stench_of_evil_offers_the_land_controller_one_choice_per_land(set_pool):
+    """"For each land destroyed this way, Stench of Evil deals 1 damage to that
+    land's controller unless they pay {2}."
+
+    The sweep records what it destroyed and whose it was — before this round it
+    recorded nothing at all, so the loop would have found an empty set and the
+    card would have reported itself supported having done half its text. Two
+    lands died, so two offers, both to their controller and not to the caster.
+    """
+    pool, p1, p2, _lands, game = _w2g5_stench_game(set_pool, interactive=True)
+
+    game.cast_from_hand(0, "Stench of Evil")
+    game._settle()
+
+    assert len(game.pending_choices_of("optional_pay", 1)) == 2
+    assert not game.pending_choices_of("optional_pay", 0), "the caster owes nothing"
+
+
+def test_stench_of_evil_deals_one_damage_per_declined_offer(set_pool):
+    """Declining both offers takes 2 damage — one point per land, not one for
+    the whole sweep and not one for every land on the board."""
+    pool, p1, p2, _lands, game = _w2g5_stench_game(set_pool, interactive=True)
+    game.cast_from_hand(0, "Stench of Evil")
+    game._settle()
+
+    while game.pending_choices_of("optional_pay", 1):
+        assert game.confirm_optional_pay(1, accept=False)
+    game._settle()
+
+    assert p2.life == 18
+    assert p1.life == 20, "the caster is not the land's controller"
+
+
+def test_stench_of_evil_spares_a_controller_who_pays(set_pool):
+    """And the offer is a real offer: paying the {2} once costs one point of
+    the two."""
+    pool, p1, p2, _lands, game = _w2g5_stench_game(set_pool, interactive=True)
+    p2.mana_pool["C"] = 2
+    game.cast_from_hand(0, "Stench of Evil")
+    game._settle()
+
+    assert game.confirm_optional_pay(1, accept=True)
+    assert game.confirm_optional_pay(1, accept=False)
+    game._settle()
+
+    assert p2.life == 19
+
+
+def test_stench_of_evil_over_a_board_with_no_plains_asks_nothing(set_pool):
+    """An empty sweep is an empty loop, not a loop over the whole board: the
+    Forest's controller is never offered anything."""
+    pool = set_pool("ICE")
+    forest = Permanent(card=pool["Forest"])
+    p1 = PlayerState(name="P1", hand=[pool["Stench of Evil"]], life=20)
+    p2 = PlayerState(name="P2", battlefield=[forest], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game._sync_control()
+
+    game.cast_from_hand(0, "Stench of Evil")
+    game._settle()
+
+    assert forest in p2.battlefield
+    assert not game.pending_choices_of("optional_pay", 1)
+    assert p2.life == 20
 # --- end W2G5 ---
