@@ -30,6 +30,7 @@ from __future__ import annotations
 from ..auras import aura_continuous_claim
 from ..cast_restrictions import CAST_RESTRICTIONS, cast_condition_line
 from ..cost_modifiers import cost_modifier_claims_line
+from ..damage_source_colors import colorless_source_line
 from ..draw_step_modifiers import draw_step_bonus_for, skips_own_draw_step
 from ..enter_effects import enter_effect_line
 from ..named_counters import CAP_CLAIM, counter_cap_line
@@ -108,6 +109,14 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # stays unclaimed and visible in the backlog.
     if enchant_line_subject(line) is not None:
         return "auras"
+
+    # engine/damage_source_colors.py — "Black and/or red permanents and spells
+    # are colorless sources of damage." (Ghostly Flame.) CR 609.7b's recheck
+    # reads the board at the moment a source's colour matters, so there is no
+    # instruction to lower and one would be a layer-5 colour change instead —
+    # a strictly different card, because the permanent stays black.
+    if colorless_source_line(line) is not None:
+        return "damage_source_colors"
 
     # engine/regeneration.py — "If this creature would be destroyed, regenerate
     # it." (Clergy of the Holy Nimbus.) CR 701.19b's static form: both

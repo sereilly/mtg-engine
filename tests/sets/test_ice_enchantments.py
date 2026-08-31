@@ -1498,7 +1498,7 @@ def test_justice_answers_a_red_creatures_damage(set_pool):
     assert p1.life == 17, "the damage comes back at the red creature's controller"
 
 
-def test_justice_answers_a_red_spells_damage(set_pool, catalog_by_name):
+def test_justice_answers_a_red_spells_damage(set_pool):
     """"…or **spell**". A spell's source is the printed card (CR 109.5), which
     the damage dispatcher had refused outright — a noun phrase describes
     permanents. The union is the one shape that names the spell half, and the
@@ -1511,7 +1511,7 @@ def test_justice_answers_a_red_spells_damage(set_pool, catalog_by_name):
     p0 = PlayerState(name="P0", battlefield=[justice], life=20)
     p1 = PlayerState(name="P1", life=20)
     game = Game(players=[p0, p1])
-    bolt = catalog_by_name["Lightning Bolt"]
+    bolt = set_pool("LEA")["Lightning Bolt"]
     assert bolt.colors == ("R",)
 
     game.resolving_seats.append(1)
@@ -1557,4 +1557,122 @@ def test_a_colourless_creature_or_spell_union_refuses_the_condition():
         "whenever a red creature you control or spell deals damage, you gain 1 life"
     )
     assert untestable is None, "a spell has no controller a noun phrase can test"
+
+
+def _flame_and_circle(set_pool, *, with_flame):
+    """Seat 0 holds Circle of Protection: Red (and maybe Ghostly Flame); seat 1
+    holds a red creature."""
+    pool = set_pool("ICE")
+    board = [Permanent(card=set_pool("LEA")["Circle of Protection: Red"])]
+    if with_flame:
+        board.append(Permanent(card=pool["Ghostly Flame"]))
+    p0 = PlayerState(name="P0", battlefield=board, life=20, mana_pool={"C": 5})
+    red = Permanent(card=pool["Goblin Mutant"])
+    p1 = PlayerState(name="P1", battlefield=[red], life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game._recompute_continuous_effects()
+    return game, p0, red
+
+
+def test_ghostly_flame_makes_a_red_creature_a_colorless_damage_source(set_pool):
+    """"Black and/or red permanents and spells are colorless sources of damage."
+
+    CR 609.7b: when the source would deal damage, the shield rechecks the
+    source's properties. A Circle of Protection: Red answers to a red source,
+    and under Ghostly Flame the red creature is not one.
+    """
+    from engine.damage_events import deal_damage
+
+    game, p0, red = _flame_and_circle(set_pool, with_flame=False)
+    assert game.activate_permanent_ability(0, "Circle of Protection: Red").supported
+    game._settle()
+    assert deal_damage(
+        game, {"recipient": p0, "amount": 3, "source": red, "combat": True}
+    ).dealt == 0
+
+    game, p0, red = _flame_and_circle(set_pool, with_flame=True)
+    assert game.activate_permanent_ability(0, "Circle of Protection: Red").supported
+    game._settle()
+    assert deal_damage(
+        game, {"recipient": p0, "amount": 3, "source": red, "combat": True}
+    ).dealt == 3, "the shield answers to a colour the source no longer has"
+
+
+def test_ghostly_flame_lets_a_black_attacker_through_protection_from_black(set_pool):
+    """CR 702.16e prevents damage from a source with the stated quality, and
+    Ghostly Flame is what decides whether the source has it.
+
+    The black half of the sentence, because ICE's own protection creature is
+    Order of the White Shield — one card exercising both halves of "black
+    and/or red" would need a source that is both.
+    """
+    pool = set_pool("ICE")
+
+    def combat(with_flame):
+        smith = _nosick(Permanent(card=pool["Order of the White Shield"]))
+        board = [smith]
+        if with_flame:
+            board.append(Permanent(card=pool["Ghostly Flame"]))
+        p0 = PlayerState(name="P0", battlefield=board, life=20)
+        red = _nosick(Permanent(card=set_pool("LEA")["Scathe Zombies"]))
+        p1 = PlayerState(name="P1", battlefield=[red], life=20)
+        game = Game(players=[p0, p1])
+        game.enforce_mana_costs = False
+        game._recompute_continuous_effects()
+        game.start_turn(1)
+        game._close_current_priority_step()
+        game.advance_combat_phase()
+        game.advance_combat_phase()
+        assert game.declare_attackers(1, [0])[0]
+        game.advance_combat_phase()
+        assert game.declare_blockers(0, {0: [0]})[0]
+        game.advance_combat_phase()
+        game._settle()
+        return game, smith
+
+    protected, smith = combat(False)
+    assert protected.is_on_battlefield(smith), "CR 702.16e prevents the damage"
+
+    unprotected, smith = combat(True)
+    assert not unprotected.is_on_battlefield(smith)
+
+
+def test_ghostly_flame_does_not_change_what_colour_the_permanent_is(set_pool):
+    """"…are colorless **sources of damage**", not "are colorless".
+
+    A layer-5 reading of this sentence would make the creature an illegal target
+    for "target red permanent" and drop it out of every red lord's set, which is
+    a strictly different card. The rewrite is asked only where a damage event
+    asks what colour its source is.
+    """
+    pool = set_pool("ICE")
+    from engine.damage_source_colors import damage_source_colors, source_colors
+
+    red = Permanent(card=pool["Goblin Mutant"])
+    p0 = PlayerState(name="P0", battlefield=[Permanent(card=pool["Ghostly Flame"])])
+    p1 = PlayerState(name="P1", battlefield=[red])
+    game = Game(players=[p0, p1])
+    game._recompute_continuous_effects()
+
+    assert red.effective_colors == {"R"}, "the creature is still red"
+    assert source_colors(red) == ("R",)
+    assert damage_source_colors(game, red) == ()
+
+
+def test_a_damage_sources_colour_is_read_through_the_layers(set_pool, catalog_by_name):
+    """A creature turned red **until end of turn** is a red source of damage.
+
+    ``prevention.source_colors`` used to read the printed colours plus one
+    hand-checked ``color_override`` metadata key — the indefinite lace's channel
+    and not the turn-long one — so a Circle of Protection: Red let a reddened
+    creature through. Read through the layer system it is one question with one
+    answer (CR 613, layer 5).
+    """
+    from engine.damage_source_colors import source_colors
+
+    green = Permanent(card=set_pool("ICE")["Balduvian Bears"])
+    assert source_colors(green) == ("G",)
+    green.metadata["color_override_until_eot"] = "R"
+    assert source_colors(green) == ("R",)
 # --- end W3G3 ---

@@ -2802,6 +2802,16 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if evasion_negation_for(normalized) is not None:
         return True
+    # "Black and/or red permanents and spells are colorless sources of damage."
+    # (Ghostly Flame.) Asked of the reader every damage-colour question goes
+    # through, so a wording the table cannot read is a card reported unsupported
+    # rather than one admitted with the rewrite absent — which for an
+    # enchantment whose whole text is this sentence is a permanent that enters
+    # play and does nothing.
+    from .damage_source_colors import colorless_source_line
+
+    if colorless_source_line(normalized) is not None:
+        return True
     # "This token can't be enchanted." (Tetravus's Tetravites.) Asked of the
     # reader both attachment predicates use, so the claim and the enforcement
     # are one rule.
@@ -3595,6 +3605,8 @@ def _derived_static_claims(
     """
     from .card_hooks import DRAW_STEP_MODIFIERS
     from .cost_modifiers import cost_modifier_claims_line
+    from .damage_source_colors import CLAIM as DAMAGE_SOURCE_COLORS_CLAIM
+    from .damage_source_colors import colorless_source_line
     from .draw_step_modifiers import (draw_step_bonus_for, draw_step_skip_for,
                                       skips_own_draw_step)
     from .enter_effects import enter_effect_line
@@ -3647,6 +3659,16 @@ def _derived_static_claims(
     # card reports unsupported however well the effect works.
     if negated_evasion_abilities(oracle_text):
         claims.append("evasion_negation")
+    # "Black and/or red permanents and spells are colorless sources of damage."
+    # (Ghostly Flame.) The damage paths ask the board for this at the moment a
+    # source's colour matters (CR 609.7b), so there is no instruction — and on
+    # an enchantment whose whole text is the sentence, no instruction means the
+    # card reports unsupported however well the rewrite works.
+    if any(
+        colorless_source_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(DAMAGE_SOURCE_COLORS_CLAIM)
     if draw_step_bonus_for(oracle_text) is not None:
         claims.append("draw_step_modifiers")
     # "Skip your draw step." (Necropotence.) The draw step reads the

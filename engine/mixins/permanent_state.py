@@ -1761,11 +1761,33 @@ class PermanentStateMixin:
             if kind == "color"
         }
 
-    def _permanent_has_quality(self, source: Permanent, quality: tuple[str, str]) -> bool:
+    def _permanent_has_quality(
+        self, source: Permanent, quality: tuple[str, str], *,
+        as_damage_source: bool = False,
+    ) -> bool:
+        """Whether *source* has *quality* (CR 702.16e/f).
+
+        *as_damage_source* asks the colour half of the question about the source
+        **as a source of damage** (CR 609.7b) rather than about the object:
+        Ghostly Flame makes a red creature a colorless source of damage and
+        leaves the creature red, so its combat damage is not prevented by
+        protection from red while the creature is still an illegal target for
+        "enchant red creature". Only the damage paths pass it.
+        """
         kind, value = quality
         if kind == "color":
+            if as_damage_source:
+                from ..damage_source_colors import damage_source_colors
+
+                return value in damage_source_colors(self, source)
             return value in self._effective_colors(source)
         if kind == "multicolored":
+            # Deliberately not rewritten by a damage-source static: "colorless
+            # sources of damage" says what colour the source is, and a
+            # colourless object is not multicoloured either — but no card in
+            # this pool prints protection from multicoloured *and* meets one, so
+            # widening the rewrite to a quality nothing exercises would be a
+            # claim with nothing behind it.
             return len(self._effective_colors(source)) >= 2
         if kind in ("card_type", "subtype"):
             # has_type resolves through the layer system, so a granted or
@@ -1785,11 +1807,23 @@ class PermanentStateMixin:
             return value in (card.type_line or "").lower().split()
         return False
 
-    def _is_protected_from(self, victim: Permanent, source: Permanent) -> bool:
+    def _is_protected_from(
+        self, victim: Permanent, source: Permanent, *, as_damage_source: bool = False,
+    ) -> bool:
         """True if *victim* has protection from a quality *source* has
-        (CR 702.16e/f)."""
+        (CR 702.16e/f).
+
+        *as_damage_source* is passed by the damage half of protection
+        (CR 702.16e, the combat damage step) and **not** by the blocking half
+        (CR 702.16d/509.1b, the declare-blockers step): a static that rewrites a
+        source's colour *for damage* changes which damage is prevented and not
+        which creatures may block, and reading it at both would be a strictly
+        different card.
+        """
         return any(
-            self._permanent_has_quality(source, quality)
+            self._permanent_has_quality(
+                source, quality, as_damage_source=as_damage_source
+            )
             for quality in self._protection_qualities(victim)
         )
 
