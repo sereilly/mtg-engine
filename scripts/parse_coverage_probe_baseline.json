@@ -418,13 +418,6 @@
   ]
  },
  {
-  "card": "Siren's Call",
-  "clause": "at the beginning of the next end step, destroy all non-wall creatures that player controls that didn't attack this turn",
-  "ignored": [
-   "all"
-  ]
- },
- {
   "card": "Spitting Slug",
   "clause": "you may pay {1}{g}. if you do, this creature gains first strike until end of turn. otherwise, each creature blocking or blocked by this creature gains first strike until end of turn",
   "ignored": [

@@ -1052,7 +1052,18 @@ class DeclareAttackersStepMixin:
         ``combat_attackers`` at the filter: the trigger is about the declaration
         as it was announced, and a later removal renumbers that map.
         """
-        emit(self, "attackers_declared", seat=controller_index, attackers=list(declared))
+        emit(
+            self, "attackers_declared",
+            seat=controller_index, attackers=list(declared),
+            # Who attacked, under the key every "that player" in this engine
+            # reads (`lowering/_events.EVENT_SUBJECT_PLAYER`). "Whenever a
+            # player attacks …, destroy all creatures **that player** controls"
+            # (Total War) is the seat the *event* picked, and the seat-narrowed
+            # readings of this same announcement have always had it implicitly
+            # in `seat` — spelled under the shared name so the effect half can
+            # find it without knowing which fire site it came from.
+            event_subject_player=controller_index,
+        )
         # "Whenever an **opponent** attacks with creatures" (Mangara). The same
         # declaration asked from the other side, so it is announced here rather
         # than given a site of its own — and it carries, per seat, how many of

@@ -212,6 +212,15 @@ def _parse_postmodifiers(
         if stream.accept_phrase("that", "didn't", "attack", "this", "turn"):
             d.attacked_this_turn = False
             continue
+        # "…creatures that player controls **that didn't attack**" (Total War).
+        # The same narrowing with the two words the card does not print, and
+        # the same record answers it: `attacked_this_turn` is stamped at the
+        # declaration, so "didn't attack" asked during the combat it fired in
+        # names exactly the creatures left at home. Read *after* the longer
+        # spelling above, which it is a strict prefix of.
+        if stream.accept_phrase("that", "didn't", "attack"):
+            d.attacked_this_turn = False
+            continue
         if stream.accept_phrase("that", "attacked", "this", "turn"):
             d.attacked_this_turn = True
             continue
@@ -221,6 +230,22 @@ def _parse_postmodifiers(
             "except", "for", "creatures", "that", "couldn't", "attack"
         ):
             d.could_attack_this_turn = True
+            continue
+        # "…**except for creatures the player hasn't controlled continuously
+        # since the beginning of the turn**" (Total War). The second printed
+        # exemption in the pool and the same shape as Season of the Witch's
+        # above: an exception clause narrowing the noun phrase, so the sweep
+        # takes exactly what the phrase names and no verb has to re-apply it.
+        #
+        # Stored as the *positive* — controlled that long — because that is the
+        # set the sentence leaves behind, and an inversion carried downstream is
+        # an inversion each reader has to get right.
+        if stream.accept_phrase(
+            "except", "for", "creatures", "the", "player", "hasn't",
+            "controlled", "continuously", "since", "the", "beginning",
+            "of", "the", "turn",
+        ):
+            d.controlled_since_turn_start = True
             continue
         stream.reset(except_mark)
         if stream.accept_phrase("that", "player", "controls"):

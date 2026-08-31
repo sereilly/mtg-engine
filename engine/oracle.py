@@ -359,6 +359,23 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # group is read by the noun parser (see `_resolve_subject_groups`), and the
     # comma bound is load-bearing: a trigger condition ends at one, so `[^,]+`
     # can never reach into the effect clause.
+    # "Whenever **a player** attacks with one or more creatures, …" (Total
+    # War.) The same declaration read from every seat rather than from the
+    # ability's own controller — which is a question about the event, not a
+    # different event, so it shares the kind the two "you attack" rows below
+    # use and says so in the payload. `engine/events.py`'s filter is what reads
+    # the marker; the empty group is the `_includes_source` spelling, present
+    # in the groupdict exactly when this row matched and carrying no text of
+    # its own to re-read.
+    #
+    # **Above** the per-creature row, which it is not a prefix of but which
+    # claims it anyway: "a player attacks" answers `(?:a|another) [^,]+ attacks`
+    # with "player" as the noun phrase, and a phrase the noun parser cannot
+    # read refuses the whole condition rather than falling through to a later
+    # pattern — so ordering is the only thing that gets this line to its row.
+    ("attackers_declared",
+     r"whenever (?P<any_attacking_seat>)a player attacks with "
+     r"(?P<attackers_count>[a-z]+) or more (?P<attacker_subjects>[^,]+)"),
     ("matching_creature_attacks",
      r"whenever (?P<attacker_subject>(?:a|another) [^,]+) attacks"),
     # Two spellings of one event: the *declaration* (CR 508.1), which is the
