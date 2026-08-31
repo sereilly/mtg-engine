@@ -195,3 +195,238 @@ def test_the_id_is_what_makes_it_work_not_the_index():
         "slot 1 is empty now — the index alone has no answer, which is the "
         "whole reason the id is recorded"
     )
+
+
+# --- LeadB: an index is not a target ---
+#
+# The five handler tails that reached a permanent through
+# ``Game._tap_or_untap_target`` / ``_bounce_target_creature`` /
+# ``_apply_color_override``. Those helpers called ``pick_target_permanent``
+# *without* its ``game``/``permanent_id`` keywords, so they got the index-only
+# half of the resolver whose whole point is the id — and an index names
+# whichever permanent slid into the vacated slot once anything has left
+# (CR 400.7).
+#
+# Every probe below drives an **activated** ability, because
+# ``legality.illegal_targets_refusal`` (CR 608.2b) is instants and sorceries
+# only: it returns None for every ability, so the fizzle has to happen at the
+# resolver or not at all. The Ice Age Talisman cycle reaches one of these tails
+# off a *trigger* and is the live case — it is tested on the card, in
+# ``tests/sets/test_ice_artifacts.py``.
+
+_LEADB_PROBES = {
+    "bounce_target_creature": "{T}: Return target creature to its owner's hand.",
+    "return_spell_or_creature_to_hand":
+        "{T}: Return target spell or creature to its owner's hand.",
+    "recolor_target_from_text": "{T}: Target permanent becomes blue.",
+    "tap_target_permanent": "{T}: Tap target permanent.",
+    "untap_target_permanent": "{T}: Untap target permanent.",
+}
+
+
+def _leadb_ability(oracle_text):
+    """An invented artifact's activated ability, compiled.
+
+    Inventing the card is the point: no *printed* card reaches four of these
+    five tails from an ability, so a regression written only against the pool
+    would assert nothing about the four. The grammar reads these lines on any
+    card, which is what makes the hole reachable the moment such a card is
+    printed — and one already is (the Talismans).
+    """
+    from engine.oracle import compile_card_oracle
+    from tests.helpers import _mk_card
+
+    card = _mk_card("LeadB Probe", "{2}", "Artifact", oracle_text)
+    program = compile_card_oracle(card)
+    assert program.supported, oracle_text
+    return card, program.activated_abilities[0].instruction
+
+
+def _leadb_run(kind, *, depart):
+    """Resolve *kind*'s tail against a target that has (or has not) departed.
+
+    Returns ``(game, decoy, intended)``. The decoy sits in the slot the chosen
+    permanent vacates, so an index-only resolver hits it and an id-aware one
+    finds nothing.
+    """
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers import EFFECT_HANDLERS
+
+    card, instruction = _leadb_ability(_LEADB_PROBES[kind])
+    game = _game(PlayerState(name="A"), PlayerState(name="B"))
+    source = _put(game, 0, "Black Lotus")
+    intended = _put(game, 1, "Grizzly Bears")   # slot 0 — the chosen target
+    decoy = _put(game, 1, "Hill Giant")         # slot 1 — slides into slot 0
+    # The untap probe needs something to undo, so both start tapped there.
+    if kind == "untap_target_permanent":
+        intended.tapped = decoy.tapped = True
+
+    chosen_index = game.battlefield_index_of(intended)
+    chosen_id = intended.permanent_id
+    if depart:
+        _kill(game, intended)
+        assert game.battlefield_index_of(decoy) == chosen_index, (
+            "the decoy must inherit the chosen slot, or the test proves nothing"
+        )
+
+    EFFECT_HANDLERS[instruction.kind](
+        game, instruction,
+        OracleExecutionContext(
+            caster=game.players[0], target=game.players[1], card=card,
+            target_permanent_index=chosen_index, target_permanent_id=chosen_id,
+            source_permanent=source,
+        ),
+    )
+    return game, decoy, intended
+
+
+def _leadb_untouched(kind, game, perm):
+    """Whether *perm* was left alone by *kind*'s effect."""
+    if kind in ("bounce_target_creature", "return_spell_or_creature_to_hand"):
+        # Its own card, not an empty hand: in the present-target direction the
+        # *intended* creature is legitimately in that hand.
+        return game.is_on_battlefield(perm) and not any(
+            card is perm.card for card in game.players[1].hand
+        )
+    if kind == "recolor_target_from_text":
+        return "color_override" not in perm.metadata
+    if kind == "tap_target_permanent":
+        return not perm.tapped
+    return perm.tapped  # untap: still tapped means it was not untapped
+
+
+def _leadb_affected(kind, game, perm):
+    """Whether *perm* was the one the effect acted on."""
+    if kind in ("bounce_target_creature", "return_spell_or_creature_to_hand"):
+        return (not game.is_on_battlefield(perm)) and any(
+            card is perm.card for card in game.players[1].hand
+        )
+    if kind == "recolor_target_from_text":
+        return perm.metadata.get("color_override") == "U"
+    if kind == "tap_target_permanent":
+        return perm.tapped
+    return not perm.tapped
+
+
+@pytest.mark.parametrize("kind", sorted(_LEADB_PROBES))
+def test_a_departed_target_does_not_slide_onto_its_neighbour(kind):
+    """The regression. Each of the five tails, against a target that has left.
+
+    Fails on b31acb69: the index the ability recorded now names the decoy, so
+    the effect lands on a permanent nobody chose and the log says it resolved.
+    """
+    game, decoy, intended = _leadb_run(kind, depart=True)
+
+    assert not game.is_on_battlefield(intended), "the chosen target really left"
+    assert _leadb_untouched(kind, game, decoy), (
+        f"{kind} acted on the permanent that inherited the chosen slot. The "
+        "target had left the battlefield, so there is no permanent the choice "
+        "can still mean (CR 400.7) and the effect must do nothing (CR 608.2b)"
+    )
+
+
+@pytest.mark.parametrize("kind", sorted(_LEADB_PROBES))
+def test_a_present_target_is_still_affected(kind):
+    """The other direction, so the fix is a fizzle and not a lobotomy.
+
+    Without this, "resolve nothing, ever" would pass the test above.
+    """
+    game, decoy, intended = _leadb_run(kind, depart=False)
+
+    assert _leadb_affected(kind, game, intended), (
+        f"{kind} must still affect the permanent it named"
+    )
+    assert _leadb_untouched(kind, game, decoy), (
+        f"{kind} affected a bystander as well as its target"
+    )
+
+
+def test_the_helpers_no_longer_take_a_slot_at_all():
+    """Pin the mechanism, not just the outcome.
+
+    The three helpers resolved their own target from ``(player, index)``. The
+    fix is that they no longer resolve anything — they take the ``Permanent``
+    the caller resolved by id — so there is no index to go stale and no
+    ``permanent_id`` keyword a future caller can forget. Threading the id in
+    instead would have left that second failure mode armed, which is how the
+    original hole opened: ``pick_target_permanent`` grew the keywords and these
+    three callers silently kept the old behaviour with nothing failing.
+    """
+    import inspect
+
+    from engine.mixins.effects import EffectsMixin
+
+    for name in (
+        "_tap_or_untap_target", "_bounce_target_creature", "_apply_color_override",
+    ):
+        parameters = inspect.signature(getattr(EffectsMixin, name)).parameters
+        assert "target_permanent_index" not in parameters, (
+            f"{name} takes a slot again — an index is not a target (CR 400.7)"
+        )
+        assert "permanent" in parameters, (
+            f"{name} must take the Permanent its caller resolved"
+        )
+def _leadb_assassin(depart):
+    """Royal Assassin ("{T}: Destroy target tapped creature.") against a target
+    that has, or has not, left the battlefield."""
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers import EFFECT_HANDLERS
+    from engine.oracle import compile_card_oracle
+
+    game = _game(PlayerState(name="A"), PlayerState(name="B"))
+    assassin = _put(game, 0, "Royal Assassin")
+    intended = _put(game, 1, "Grizzly Bears")
+    decoy = _put(game, 1, "Hill Giant")
+    intended.tapped = decoy.tapped = True   # both legal targets for the filter
+
+    index = game.battlefield_index_of(intended)
+    chosen_id = intended.permanent_id
+    if depart:
+        _kill(game, intended)
+        assert game.battlefield_index_of(decoy) == index
+
+    instruction = compile_card_oracle(CARDS["Royal Assassin"]).activated_abilities[0].instruction
+    EFFECT_HANDLERS[instruction.kind](
+        game, instruction,
+        OracleExecutionContext(
+            caster=game.players[0], target=game.players[1],
+            card=CARDS["Royal Assassin"],
+            target_permanent_index=index, target_permanent_id=chosen_id,
+            source_permanent=assassin,
+        ),
+    )
+    return game, decoy, intended
+
+
+def test_royal_assassin_does_not_kill_the_creature_that_inherited_the_slot():
+    """The same defect one handler over, and the one that was worst.
+
+    ``destroy_target_permanent`` resolved its victim **twice**: by id, for the
+    "its controller" / "its mana value" riders, and then by raw index again
+    inside ``Game._destroy_target_permanent``. Both followed the slot once the
+    id stopped answering, so an ability whose target left destroyed whichever
+    creature had slid into its place — and the riders then described *that*
+    creature as though it had been named.
+
+    Royal Assassin is one of 28 activated and triggered abilities reaching this
+    handler, none of which ``legality.illegal_targets_refusal`` covers. The 55
+    spells that reach it were never exposed, which is why this went unnoticed.
+    """
+    game, decoy, intended = _leadb_assassin(depart=True)
+
+    assert not game.is_on_battlefield(intended)
+    assert game.is_on_battlefield(decoy), (
+        "Royal Assassin destroyed the creature that inherited its target's "
+        "slot — a creature nobody named (CR 400.7 / CR 608.2b)"
+    )
+
+
+def test_royal_assassin_still_kills_the_creature_it_named():
+    """The other direction."""
+    game, decoy, intended = _leadb_assassin(depart=False)
+
+    assert not game.is_on_battlefield(intended), "its actual target must die"
+    assert game.is_on_battlefield(decoy), "and only its target"
+
+
+# --- end LeadB ---

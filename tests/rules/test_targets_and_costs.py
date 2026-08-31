@@ -945,3 +945,112 @@ def test_602_2b_an_activation_that_named_no_target_still_means_its_own_source(
     assert patrol.metadata.get("sacrifice_at_next_end_step") is True, game.log
     assert not p2.battlefield[0].metadata.get("sacrifice_at_next_end_step"), game.log
 # --- end FixB ---
+
+
+# --- LeadB: an index is not a target ---
+
+
+def _leadb_board(oracle_text):
+    """A game, an invented artifact's activated ability, and two targets.
+
+    The ability is invented because the rule under test is about *abilities*,
+    and ``legality.illegal_targets_refusal`` — the engine's CR 608.2b gate —
+    covers instants and sorceries only. A spell probe would be checked by the
+    gate and would say nothing about the resolver underneath it.
+    """
+    from engine.oracle import compile_card_oracle
+
+    from ..helpers import _mk_card
+
+    card = _mk_card("Rules Probe", "{2}", "Artifact", oracle_text)
+    program = compile_card_oracle(card)
+    assert program.supported
+
+    game = _two_player_game(PlayerState(name="A"), PlayerState(name="B"))
+    source = Permanent(card=card)
+    game._put_permanent_onto_battlefield(0, source, 0)
+    chosen = Permanent(card=_mk_creature("Chosen"))
+    game._put_permanent_onto_battlefield(1, chosen, 1)
+    neighbour = Permanent(card=_mk_creature("Neighbour"))
+    game._put_permanent_onto_battlefield(1, neighbour, 1)
+    return game, card, program.activated_abilities[0].instruction, source, chosen, neighbour
+
+
+def _mk_creature(name):
+    return _mk_card(name, "{1}{G}", "Creature — Bear", "")
+
+
+def _leadb_resolve(game, card, instruction, source, index, permanent_id):
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers import EFFECT_HANDLERS
+
+    EFFECT_HANDLERS[instruction.kind](
+        game, instruction,
+        OracleExecutionContext(
+            caster=game.players[0], target=game.players[1], card=card,
+            target_permanent_index=index, target_permanent_id=permanent_id,
+            source_permanent=source,
+        ),
+    )
+
+
+@pytest.mark.cr("608.2b", "400.7", "115.1c")
+def test_608_2b_an_abilitys_target_that_left_is_not_replaced_by_its_slots_new_tenant():
+    """A target that has left the battlefield is gone, not "whatever is there now".
+
+    CR 115.1c fixes an activated ability's targets when it is activated;
+    CR 400.7 makes the permanent that left a new object with no relation to
+    what it was; CR 608.2b says an ability whose every target is illegal does
+    nothing. Between them there is no reading on which the effect lands on the
+    permanent that inherited the vacated list slot — but the battlefield *is* a
+    list, so an engine holding the index rather than the identity lands there
+    every time.
+
+    The engine's 608.2b gate (``legality.illegal_targets_refusal``) is instants
+    and sorceries only and returns None for every ability, so this has to be
+    answered by the resolver.
+    """
+    game, card, instruction, source, chosen, neighbour = _leadb_board(
+        "{T}: Untap target permanent."
+    )
+    chosen.tapped = neighbour.tapped = True
+    index = game.battlefield_index_of(chosen)
+    chosen_id = chosen.permanent_id
+
+    chosen.damage_marked = 99
+    game.check_state_based_actions()
+    assert game.battlefield_index_of(neighbour) == index, (
+        "the neighbour inherited the slot — that is the whole hazard"
+    )
+
+    _leadb_resolve(game, card, instruction, source, index, chosen_id)
+
+    assert neighbour.tapped, (
+        "the ability untapped the permanent that inherited its target's slot"
+    )
+
+
+@pytest.mark.cr("115.1c", "400.7")
+def test_115_1c_the_ability_still_affects_a_target_that_merely_moved_slots():
+    """The identity is what is remembered, so a *surviving* target is still hit
+    even though its index has changed underneath it (CR 400.7 is about objects
+    that changed zone; this one never did)."""
+    game, card, instruction, source, chosen, neighbour = _leadb_board(
+        "{T}: Untap target permanent."
+    )
+    chosen.tapped = neighbour.tapped = True
+    # Choose the *later* slot, then remove the earlier one so the choice slides.
+    index = game.battlefield_index_of(neighbour)
+    neighbour_id = neighbour.permanent_id
+
+    chosen.damage_marked = 99
+    game.check_state_based_actions()
+    assert game.battlefield_index_of(neighbour) != index, "the slot really moved"
+
+    _leadb_resolve(game, card, instruction, source, index, neighbour_id)
+
+    assert not neighbour.tapped, (
+        "the ability must still untap the permanent it named, whatever slot it "
+        "has slid to — the id is the choice (CR 115.1c)"
+    )
+# --- end LeadB ---

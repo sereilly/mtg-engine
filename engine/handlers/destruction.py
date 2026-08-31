@@ -674,36 +674,60 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     # ("Destroy target creature. Its controller loses 2 life." — Liliana,
     # Death Mage), and by then the permanent is gone — record it now
     # (CR 608.2h, last-known information).
-    if isinstance(context.target_permanent_index, int):
-        victim = game.chosen_permanent(
-            target, context.target_permanent_index, context.target_permanent_id
+    chosen_index = context.target_permanent_index
+    if isinstance(chosen_index, int):
+        # Resolved **once**, by id, and the slot re-derived from what came back.
+        # This site used to resolve twice: `chosen_permanent` here for the
+        # last-known-information records, and the raw index again inside
+        # `_destroy_target_permanent`. Both followed the slot when the id no
+        # longer answered, so an ability whose target left destroyed whichever
+        # permanent had slid into its place -- Royal Assassin killing a creature
+        # nobody named, and the "its controller" / "its mana value" riders then
+        # describing that creature as though it had been chosen.
+        #
+        # Strictly, with no fallback scan: an index was supplied, so this is a
+        # named target, and CR 608.2b's answer to a target that has left is that
+        # nothing happens -- not that the next legal permanent is substituted.
+        # `predicate` is every permanent because the printed noun phrase is
+        # `_destroy_target_permanent`'s own `_is_legal_target`; the resolver's
+        # creature default would refuse "destroy target artifact" outright.
+        #
+        # Spells never reach this with a departed target -- `illegal_targets_refusal`
+        # removes them from the stack first -- so what changes here is the 28
+        # activated and triggered abilities that gate has always declined.
+        victim = resolve_target_permanent(
+            game, context, player=target,
+            predicate=lambda p: True, fallback_players=(),
         )
-        if victim is not None:
-            seat = game.controller_index_of(victim)
-            if seat is not None:
-                context.results["last_target_controller_index"] = seat
-            # "You gain life equal to **its** mana value." (Divine Offering.)
-            # Recorded here, before the destruction, for two reasons: the
-            # permanent is gone by the time the next step runs (CR 608.2h), and
-            # the words name the object rather than the outcome — a regenerated
-            # or indestructible artifact still has a mana value to gain.
-            # Through `effective_card` so a copy effect's cost is the one read
-            # (CR 707.2), which is the same reading Crumble's fused kind takes.
-            context.results["its_mana_value"] = int(victim.effective_card.cmc or 0)
-            # "**If that land was a snow land**, …" (Icequake, Thermokarst).
-            # The permanent itself, recorded here for the same reason its mana
-            # value is and one moment earlier than it would survive: after the
-            # destroy it is a card in a graveyard with no characteristics at all
-            # (CR 613.1), so a condition asking what it *was* has to read the
-            # object it was (CR 608.2h). The `Permanent` keeps its state after
-            # leaving the battlefield, which is exactly what last-known
-            # information means.
-            context.results["destroyed_target"] = victim
+        if victim is None:
+            game.log.append(f"{card.name}: its target is gone (608.2b)")
+            return True, "resolved"
+        chosen_index = game.battlefield_index_of(victim)
+        seat = game.controller_index_of(victim)
+        if seat is not None:
+            context.results["last_target_controller_index"] = seat
+        # "You gain life equal to **its** mana value." (Divine Offering.)
+        # Recorded here, before the destruction, for two reasons: the
+        # permanent is gone by the time the next step runs (CR 608.2h), and
+        # the words name the object rather than the outcome — a regenerated
+        # or indestructible artifact still has a mana value to gain.
+        # Through `effective_card` so a copy effect's cost is the one read
+        # (CR 707.2), which is the same reading Crumble's fused kind takes.
+        context.results["its_mana_value"] = int(victim.effective_card.cmc or 0)
+        # "**If that land was a snow land**, …" (Icequake, Thermokarst).
+        # The permanent itself, recorded here for the same reason its mana
+        # value is and one moment earlier than it would survive: after the
+        # destroy it is a card in a graveyard with no characteristics at all
+        # (CR 613.1), so a condition asking what it *was* has to read the
+        # object it was (CR 608.2h). The `Permanent` keeps its state after
+        # leaving the battlefield, which is exactly what last-known
+        # information means.
+        context.results["destroyed_target"] = victim
     destroyed = game._destroy_target_permanent(
         target,
         type_filter=instruction.payload.get("type_filter"),
         color_filter=instruction.payload.get("color_filter"),
-        target_permanent_index=context.target_permanent_index,
+        target_permanent_index=chosen_index,
         exclude_colors=instruction.payload.get("exclude_colors"),
         exclude_types=instruction.payload.get("exclude_types"),
         bypass_regeneration=instruction.payload.get("bypass_regeneration", False),

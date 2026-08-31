@@ -164,8 +164,19 @@ def untap_target_permanent(game: Game, instruction: OracleInstruction, context: 
         )
         return True, "resolved"
     target = context.target
+    # "Untap target permanent", unnarrowed — through the same id-aware resolver
+    # every branch above uses. It used to hand the seat and the slot to
+    # `_tap_or_untap_target`, which followed the index alone: a target that left
+    # while the ability waited renumbered the slot under it (CR 400.7) and the
+    # untap landed on whichever permanent slid in. Hematite Talisman and its
+    # four siblings fire this off a *trigger*, which CR 608.2b's gate does not
+    # cover, so nothing above caught it. `predicate` stays "any permanent" —
+    # the printed noun is "permanent", not "creature".
     untapped = game._tap_or_untap_target(
-        target, make_tapped=False, target_permanent_index=context.target_permanent_index
+        resolve_target_permanent(
+            game, context, player=target, predicate=lambda p: True,
+        ),
+        make_tapped=False,
     )
     game.log.append(
         "Untapped target permanent" if untapped is not None else "No valid permanent to untap"
@@ -363,8 +374,14 @@ def tap_target_permanent(game: Game, instruction: OracleInstruction, context: Or
             game.log.append("No valid permanent to tap")
         _record_tapped(context, [perm] if perm is not None else [])
         return True, "resolved"
+    # The unnarrowed "tap target permanent" (Twiddle's first mode), resolved by
+    # id like the narrowed branch above it — see the untap twin for why the
+    # index alone was wrong.
     tapped = game._tap_or_untap_target(
-        target, make_tapped=True, target_permanent_index=context.target_permanent_index
+        resolve_target_permanent(
+            game, context, player=target, predicate=lambda p: True,
+        ),
+        make_tapped=True,
     )
     game.log.append(
         "Tapped target permanent" if tapped is not None else "No valid permanent to tap"

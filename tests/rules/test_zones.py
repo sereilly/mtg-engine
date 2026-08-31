@@ -505,9 +505,10 @@ def test_400_3_stolen_creature_dies_into_owners_graveyard():
 def test_400_3_stolen_creature_bounces_to_owners_hand():
     """A stolen creature returned to hand goes to its owner's hand (400.3)."""
     game, p1, p2, creature = _steal_setup()
-    index = p1.battlefield.index(creature)
 
-    assert game._bounce_target_creature(p1, index)
+    # The helper takes the permanent, not a seat and a slot: it no longer
+    # resolves a target of its own, so there is no index to go stale under it.
+    assert game._bounce_target_creature(creature)
 
     assert all(card.name != "Stolen Bear" for card in p1.hand)
     assert any(card.name == "Stolen Bear" for card in p2.hand)

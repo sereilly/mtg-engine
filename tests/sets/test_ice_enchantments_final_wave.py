@@ -177,7 +177,7 @@ def test_w4g1_a_bounce_exiles_it_too(set_pool):
     revived = _reanimate(game)
     assert revived is not None
 
-    game._bounce_target_creature(p1, p1.battlefield.index(revived))
+    game._bounce_target_creature(revived)
     game._settle()
 
     assert [card.name for card in p1.hand] == []
@@ -225,7 +225,7 @@ def test_w4g1_an_ordinary_creature_beside_it_is_untouched(set_pool):
     p1.battlefield.append(twin)
     game._initialize_permanent_state(twin, 0, 0)
 
-    game._bounce_target_creature(p1, p1.battlefield.index(twin))
+    game._bounce_target_creature(twin)
     game._settle()
 
     assert [card.name for card in p1.hand] == ["Kjeldoran Skycaptain"]
