@@ -679,24 +679,56 @@ def deal_damage_and_gain_life(game: Game, instruction: OracleInstruction, contex
     # Drain Life is an "any target" spell — it may hit a creature. Deal to the
     # chosen creature and gain life equal to the damage actually dealt (capped by
     # its toughness, mirroring the card's life-gain limit).
+    # "…but not more life than the player's life total before the damage was
+    # dealt, the planeswalker's loyalty before the damage was dealt, or the
+    # creature's toughness."
+    #
+    # **The cap is the second half of the sentence and it was not applied.** The
+    # docstring above this function used to claim the creature branch was
+    # "capped by its toughness, mirroring the card's life-gain limit"; the code
+    # gained `dealt` and nothing capped anything, so Drain Life for 10 at a 2/2
+    # gained 10 life and at a player on 3 life gained 10. A strictly better card
+    # than the printed one, in the direction this repo's gates exist to catch —
+    # and the exact failure W3G3's brief names for Soul Burn, which prints the
+    # same sentence with one more term in the list.
+    #
+    # Read **before** the damage, because that is what the card says: a player's
+    # life total and a planeswalker's loyalty are both "before the damage was
+    # dealt", and both are exactly what the damage is about to change. The
+    # creature's toughness carries no such qualifier and is read at the same
+    # moment for want of a difference — nothing in this pool changes a
+    # creature's toughness as part of being dealt damage to it.
     target_perm = game.chosen_permanent(
         target, target_perm_idx, context.target_permanent_id
     )
-    if target_perm is not None:
-        if target_perm.is_creature:
-            apply_damage_to_creature(
-                game, target_perm, damage, card,
-                log_message=lambda dealt: f"{card.name} dealt {dealt} damage to {target_perm.card.name}",
-                then=lambda dealt: game._gain_life(caster, dealt, card.name),
-                asks=True,
-            )
-            return True, "resolved"
+    if target_perm is not None and target_perm.is_creature:
+        cap = max(0, target_perm.effective_toughness)
+        apply_damage_to_creature(
+            game, target_perm, damage, card,
+            log_message=lambda dealt: f"{card.name} dealt {dealt} damage to {target_perm.card.name}",
+            then=lambda dealt: game._gain_life(caster, min(dealt, cap), card.name),
+            asks=True,
+        )
+        return True, "resolved"
+    if target_perm is not None and target_perm.has_type("planeswalker"):
+        # A planeswalker is not a player, and the branch below would have
+        # damaged its controller instead — "any target" (CR 115.4) admits one
+        # and this handler had no arm for it.
+        loyalty = max(0, int(target_perm.metadata.get("loyalty_counters", 0) or 0))
+        game._mark_damage_on_permanent(
+            target_perm, damage, source=card, asks=True,
+            then=lambda dealt: game._gain_life(caster, min(dealt, loyalty), card.name),
+        )
+        return True, "resolved"
+
+    life_before = max(0, int(target.life))
+
     def _report(damage: int) -> None:
         game.log.append(f"{card.name} dealt {damage} damage to {target.name}")
         # "You gain life equal to the damage dealt" is part of this damage
         # event's consequences, so it has to be inside it: a suspended event
         # would otherwise gain life equal to nothing and never come back to it.
-        game._gain_life(caster, damage, card.name)
+        game._gain_life(caster, min(damage, life_before), card.name)
 
     game._deal_damage_to_player(target, damage, source=card, then=_report, asks=True)
     return True, "resolved"

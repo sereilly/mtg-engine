@@ -803,3 +803,64 @@ def test_darkpact_with_nothing_owned_in_the_ante_does_nothing(all_cards):
     assert result.supported
     assert [c.name for c in p1.library] == ["Swamp"]
     assert not p1.ante
+
+
+# --- W3G3: X spells, multiple targets, damage sources ---
+def _drain_life_game(set_pool, *, victim_life=20, creature=None):
+    pool = set_pool("LEA")
+    p0 = PlayerState(name="P0", hand=[pool["Drain Life"]], life=20)
+    p1 = PlayerState(
+        name="P1", life=victim_life,
+        battlefield=[Permanent(card=pool[creature])] if creature else [],
+    )
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, p0, p1
+
+
+def test_drain_life_gains_no_more_than_the_creatures_toughness(set_pool):
+    """"You gain life equal to the damage dealt, **but not more life than** …
+    the creature's toughness."
+
+    The cap is the second half of the printed sentence and nothing applied it:
+    the handler gained the damage dealt, and its own docstring claimed to be
+    capping by toughness while the code did no such thing. Six damage at a 2/2
+    gained six life.
+    """
+    game, p0, _p1 = _drain_life_game(set_pool, creature="Grizzly Bears")
+
+    result = game.cast_from_hand(
+        0, "Drain Life", x_value=6, target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert p0.life == 22, "six damage on a 2/2 gains two"
+
+
+def test_drain_life_gains_no_more_than_the_life_total_before_the_damage(set_pool):
+    """The player half of the same cap, and the reason it is read *before*: the
+    damage is exactly what changes the number the card measures against."""
+    game, p0, p1 = _drain_life_game(set_pool, victim_life=3)
+
+    assert game.cast_from_hand(
+        0, "Drain Life", x_value=6, target_player_index=1,
+    ).supported
+    game._settle()
+
+    assert p0.life == 23, "the victim had three life to drain"
+    assert p1.life == -3, "the damage itself is not capped — only the life gain"
+
+
+def test_drain_life_still_gains_the_whole_amount_when_nothing_caps_it(set_pool):
+    """The boundary the two caps need: with a big enough victim the gain is the
+    damage dealt, so the tests above are measuring a cap rather than a
+    coincidence."""
+    game, p0, _p1 = _drain_life_game(set_pool, victim_life=20)
+
+    assert game.cast_from_hand(0, "Drain Life", x_value=6, target_player_index=1).supported
+    game._settle()
+
+    assert p0.life == 26
+# --- end W3G3 ---
