@@ -452,6 +452,51 @@ def describe_target_roles(
     return True
 
 
+def describe_independent_target_roles(
+    payload: dict[str, object], specs: "tuple[ast.TargetSpec, ...]"
+) -> None:
+    """Describe several targeted phrases of **one** announcement as ordered roles.
+
+    "Destroy target creature **and target land**." (Fumarole.) The sibling of
+    :func:`describe_target_roles` with the dependency taken out: there the
+    second slot's legal set is decided by what was chosen for the first, and
+    here the two phrases narrow nothing but themselves. Same shape, because it
+    is the same question — a spell whose slots are *differently* restricted, so
+    the picker has to walk them in order and ask for each one separately
+    (CR 601.2c chooses every target as part of one announcement).
+
+    The role name is the printed noun, which is what the picker shows the
+    caster ("Choose the land for Fumarole (2 of 2)"). Two slots naming the same
+    noun refuse: "target creature and target creature" is "two target
+    creatures", a homogeneous count this shape would describe as two pickers
+    over one list and then be unable to tell apart at resolution.
+
+    A phrase with no type at all refuses for the same reason
+    :func:`describe_target_roles` refuses an unnarrowed role — a slot offering
+    every permanent is a slot the caster cannot be asked a meaningful question
+    about, and its name would collide with the next such slot.
+    """
+    roles: list[dict[str, object]] = []
+    for spec in specs:
+        filter_payload = _filter_payload(spec.filter)
+        noun = filter_payload.get("type_filter")
+        if not isinstance(noun, str):
+            raise LoweringError(
+                "a target role needs a printed noun to be asked for", node=spec
+            )
+        if any(role["role"] == noun for role in roles):
+            raise LoweringError(
+                f"two target roles both named {noun!r}", node=spec
+            )
+        roles.append({
+            "role": noun,
+            "kind": "object",
+            "count": 1,
+            "filter": filter_payload,
+        })
+    payload["targets"] = {"kind": "roles", "roles": roles}
+
+
 def _describe_several_card_targets(
     payload: dict[str, object], recipient: ast.TargetSpec
 ) -> None:

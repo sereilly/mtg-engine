@@ -235,7 +235,10 @@ def _parse_return(
 
 
 def _parse_further_subjects(
-    stream: TokenStream, first: "ast.Recipient | None" = None
+    stream: TokenStream,
+    first: "ast.Recipient | None" = None,
+    *,
+    several_targets: bool = False,
 ) -> list[ast.Recipient]:
     """The rest of ``<noun phrase>, <noun phrase>, and <noun phrase>``.
 
@@ -314,20 +317,30 @@ def _parse_further_subjects(
         ):
             stream.reset(mark)
             return extra
-        # **At most one targeted phrase in the union**, counting *first*. The
-        # cast picker asks a spell for one target (``targeting.derive_cast_spec``
-        # answers with one ``kind``), so a sentence naming two — "Destroy target
-        # creature and target land" (Fumarole) — would compile supported and
-        # then be uncastable, its second target picked by nobody. Refusing here
-        # keeps the card visibly unsupported, which is the direction this
-        # grammar fails in by construction.
+        # **At most one targeted phrase in the union, unless the caller can
+        # describe several.** The reason used to be flat: the cast picker asks a
+        # spell for one target, so "Destroy target creature and target land"
+        # (Fumarole) would compile supported and then be uncastable, its second
+        # target picked by nobody. That is still true of a union the caller
+        # lowers to a ``Conjunction`` — a sequence of instructions whose spec is
+        # derived from the first one that describes targets, leaving the rest
+        # unasked — and it is *not* true of a caller that folds the phrases into
+        # one statement with an ordered ``roles`` description, which the picker,
+        # the cast gate and the AI have all read since Glyph of Delusion.
         #
-        # The two cards this round buys are unaffected because their first
-        # phrase is the source: "Exile **this creature** and target creature …"
-        # names one target, not two.
-        if nxt.quantifier == "target" and any(
-            isinstance(prior, ast.TargetSpec) and prior.quantifier == "target"
-            for prior in ((first,) if first is not None else ()) + tuple(extra)
+        # So the refusal moves to the callers that cannot: ``several_targets``
+        # is the claim "my lowering describes every one of these", and only the
+        # destroy production makes it.
+        #
+        # The unions whose first phrase is the source are unaffected either way:
+        # "Exile **this creature** and target creature …" names one target.
+        if (
+            not several_targets
+            and nxt.quantifier == "target"
+            and any(
+                isinstance(prior, ast.TargetSpec) and prior.quantifier == "target"
+                for prior in ((first,) if first is not None else ()) + tuple(extra)
+            )
         ):
             raise stream.error(
                 "no spell picks two targets from one verb"
@@ -405,7 +418,7 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     # creatures your opponents control" (Remove Enchantments). One verb, three
     # noun phrases; see `_parse_further_subjects` for why the union is a shape
     # and not a filter.
-    further = _parse_further_subjects(stream, subject)
+    further = _parse_further_subjects(stream, subject, several_targets=True)
 
     # "…at end of combat" (CR 603.7). Only this one delay: a destruction
     # deferred to the next end step is a different handler, so leaving those
@@ -498,6 +511,28 @@ def _parse_destroy(stream: TokenStream) -> ast.Statement:
     else:
         stream.reset(mark)
     if further:
+        targeted = [
+            each for each in (subject, *further)
+            if isinstance(each, ast.TargetSpec) and each.quantifier == "target"
+        ]
+        if len(targeted) > 1:
+            # "Destroy target creature **and target land**." (Fumarole.) Two
+            # targets of one spell are one announcement (CR 601.2c), so they are
+            # one statement — see ``ast.Destroy.also_targets``. A conjunction
+            # here would be two instructions, and only the first would be given
+            # a picker. Every phrase must be targeted: a union mixing a target
+            # with a swept set is two different things happening, and the sweep
+            # half has nothing to ask a caster.
+            if len(targeted) != len(further) + 1:
+                raise stream.error(
+                    "a union naming a target and a sweep is not one announcement"
+                )
+            return ast.Destroy(
+                subject,
+                no_regen=no_regen,
+                delay=delay,
+                also_targets=tuple(targeted[1:]),
+            )
         return ast.Conjunction(tuple(
             ast.Destroy(each, no_regen=no_regen, delay=delay)
             for each in (subject, *further)

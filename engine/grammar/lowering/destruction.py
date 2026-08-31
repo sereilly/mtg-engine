@@ -23,6 +23,7 @@ from ..errors import LoweringError
 from ._amounts import halved_count_spec
 from ._sacrifices import _SACRIFICE_CARRIED, _forced_sacrifice_filter
 from ._common import (
+    describe_independent_target_roles,
     _describe_several_targets,
     _describe_targets,
     _filter_payload,
@@ -98,6 +99,22 @@ def _lower_destroy(
         raise LoweringError("destroy needs an object target", node=node)
     spec = node.subject
     filt = spec.filter
+
+    if node.also_targets:
+        # "Destroy target creature **and target land**." (Fumarole.) Several
+        # targeted phrases of one announcement, described as ordered roles so
+        # the picker asks for each in turn (CR 601.2c). One instruction, because
+        # one announcement — see ``ast.Destroy.also_targets``.
+        #
+        # Above every branch below, and carrying **no** top-level filter keys:
+        # those describe one target, and a payload holding both would let the
+        # single-target tail read the first role's noun as though it were the
+        # whole spell.
+        payload: dict[str, object] = {}
+        if node.no_regen:
+            payload["bypass_regeneration"] = True
+        describe_independent_target_roles(payload, (spec, *node.also_targets))
+        return (OracleInstruction("destroy_target_permanent", "", payload),)
 
     if spec.quantifier in ("all", "each"):
         # "Destroy all Plains" — a basic land type, not a creature subtype.

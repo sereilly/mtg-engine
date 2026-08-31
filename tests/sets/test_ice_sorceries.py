@@ -290,42 +290,37 @@ def test_a_several_target_destroy_used_to_describe_no_targets_at_all(set_pool):
 
 
 # --- W1G3: mana, additional costs, cost restrictions ---
-def test_w1g3_fumarole_is_declined_on_its_second_target_not_its_cost(set_pool):
+def test_w1g3_fumarole_names_two_targets_and_pays_for_them(set_pool):
     """"As an additional cost to cast this spell, pay 3 life." / "Destroy target
-    creature and target land."
+    creature and target land." (W3G3 — the refusal this test used to pin.)
 
-    The cost half already works — ``cast_costs``'s preamble-plus-clause table
-    names Fumarole in its own docstring, and the refusal report's "expected a
-    subject" on that line is the *grammar* declining a sentence the cost table
-    claims, not a gap. What is missing is the second target, and it is missing
-    in four places rather than one:
+    Three of the four pieces W1G3 named turned out to be already built. The
+    engine has carried an ordered **roles** target description since Glyph of
+    Delusion: ``targeting.roles_spec`` answers with a list rather than one
+    ``kind``, ``legality.role_target_options`` enumerates role *n* with roles
+    0…n−1 settled, ``casting._validate_cast_targets`` gates the whole
+    announcement, and the wire's ``target_permanent_ids`` is already the
+    ordered cross-battlefield channel. Only the *union parse* refused, and its
+    stated reason — "the cast picker asks a spell for one target" — had stopped
+    being true.
 
-    1. ``effects/board._parse_further_subjects`` raises "no spell picks two
-       targets from one verb" on purpose;
-    2. ``targeting.derive_cast_spec`` answers with a single ``kind``, so the
-       picker has no way to ask for a creature *and* a land;
-    3. the wire carries one ``target_permanent_index`` per cast, and
-       ``target_permanent_ids`` is a list of ids for *one* described set;
-    4. ``legality.cast_target_refusal`` and ``illegal_targets_refusal`` are
-       written around one target list from one instruction (CR 601.2c,
-       CR 608.2b), and two heterogeneous targets need both checked separately.
-
-    Landing the parse alone would compile the card supported and leave it
-    uncastable, its second target picked by nobody.
+    So the refusal moved to the callers that genuinely cannot describe several:
+    a union lowered to a ``Conjunction`` is a sequence of instructions whose
+    spec comes from the first one, and the rest would be picked by nobody.
     """
     from engine.cast_costs import additional_costs
-    from engine.grammar import compile_line
 
     fumarole = set_pool("ICE")["Fumarole"]
-    assert not compile_card_oracle(fumarole).supported
+    program = compile_card_oracle(fumarole)
+    assert program.supported
 
-    # The cost is read and would be charged.
     (cost,) = additional_costs(fumarole)
     assert cost.pay_life == 3
 
-    refused = compile_line("Destroy target creature and target land.")
-    assert not refused.parsed
-    assert "two targets" in (refused.parse_error or "")
+    (instruction,) = [i for i in program.instructions if i.kind != "spell_pattern"]
+    assert instruction.kind == "destroy_target_permanent"
+    roles = instruction.payload["targets"]["roles"]
+    assert [role["role"] for role in roles] == ["creature", "land"]
 
 
 def test_w1g3_soul_burn_is_declined_and_says_which_pieces_are_missing(set_pool):
@@ -452,18 +447,24 @@ def test_mind_warp_for_zero_asks_nothing(set_pool):
 
 
 # --- Misfiled from test_ice_creatures.py: the card this test names is a Sorcery ---
-def test_a_union_of_two_targeted_phrases_is_refused(set_pool):
+def test_a_union_of_two_targeted_phrases_is_one_announcement(set_pool):
     """"Destroy target creature and target land." (Fumarole.)
 
-    The union reads it, and the *picker* cannot: a spell is asked for one
-    target (``targeting.derive_cast_spec`` answers with one kind), so admitting
-    this would compile a card that is supported and uncastable, its second
-    target chosen by nobody. It refuses naming that, and the two cards above are
-    unaffected because their first phrase is the source rather than a target.
+    This test pinned the refusal. CR 601.2c chooses every target of a spell as
+    part of one announcement, so the union is **one** statement with an ordered
+    roles description rather than two statements — and the picker walks the
+    roles in order. The two cards above are unaffected either way: their first
+    phrase is the source rather than a target.
     """
-    program = compile_card_oracle(set_pool("ICE")["Fumarole"])
+    from engine.targeting import derive_cast_spec, spec_roles
 
-    assert not program.supported
+    fumarole = set_pool("ICE")["Fumarole"]
+    program = compile_card_oracle(fumarole)
+
+    assert program.supported
+    assert [role["kind"] for role in spec_roles(derive_cast_spec(fumarole, program))] == [
+        "creature", "land",
+    ]
 
 
 # --- W2G5: mass effects and X-spells ---
@@ -1002,3 +1003,97 @@ def test_forgotten_lore_on_an_empty_graveyard_chooses_nothing(set_pool):
     assert game.pending_choice_of("graveyard_pick_for_price", 1) is None
     assert p1.hand == []
 # --- end W2G1 ---
+
+
+# --- W3G3: X spells, multiple targets, damage sources ---
+def _fumarole_board(set_pool, *, lands=("Forest",)):
+    """Seat 0 holds Fumarole; seat 1 holds a creature and the named lands."""
+    pool = set_pool("ICE")
+    bears = Permanent(card=pool["Balduvian Bears"])
+    theirs = [bears] + [Permanent(card=pool[name]) for name in lands]
+    p0 = PlayerState(name="P0", hand=[pool["Fumarole"]], life=20)
+    p1 = PlayerState(name="P1", battlefield=theirs, life=20)
+    game = Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, p0, p1, bears, theirs[1:]
+
+
+def test_fumarole_destroys_both_of_its_targets_and_pays_the_life(set_pool):
+    """One announcement, two targets, and the additional cost charged once."""
+    game, p0, _p1, bears, (forest,) = _fumarole_board(set_pool)
+
+    result = game.cast_from_hand(
+        0, "Fumarole",
+        target_permanent_ids=[bears.permanent_id, forest.permanent_id],
+    )
+    assert result.supported, result.details
+    game._settle()
+
+    assert not game.is_on_battlefield(bears)
+    assert not game.is_on_battlefield(forest)
+    assert p0.life == 17, "CR 601.2b: the additional cost is paid once, on the cast"
+
+
+def test_fumarole_asks_for_the_creature_then_the_land(set_pool):
+    """The picker walks the roles in order, and each role offers only its own
+    noun — a land is not an answer to the creature slot (CR 601.2c)."""
+    game, _p0, _p1, _bears, _lands = _fumarole_board(
+        set_pool, lands=("Forest", "Mountain")
+    )
+    pool = set_pool("ICE")
+
+    spec = game.cast_target_spec(0, pool["Fumarole"])
+    assert [role["kind"] for role in spec["roles"]] == ["creature", "land"]
+    first = spec["valid_targets"]
+    assert [option["name"] for option in first] == ["Balduvian Bears"]
+    assert sorted(option["name"] for option in first[0]["next"]) == ["Forest", "Mountain"]
+
+
+def test_fumarole_cannot_be_cast_with_no_land_to_name(set_pool):
+    """CR 601.2c: every target is chosen as part of one announcement, so a role
+    with nothing legal in it is not "the spell resolves half way" — the spell
+    cannot be announced at all."""
+    game, _p0, _p1, bears, _lands = _fumarole_board(set_pool, lands=())
+
+    refused = game.cast_from_hand(
+        0, "Fumarole", target_permanent_ids=[bears.permanent_id],
+    )
+    assert not refused.supported
+    assert "target" in refused.details.lower()
+
+
+def test_fumarole_destroys_the_target_that_is_still_there(set_pool):
+    """CR 608.2b: the spell leaves the stack unresolved only when **every**
+    target is illegal. One of two gone is one still destroyed — an all-or-
+    nothing re-check would have Fumarole fizzle whole."""
+    game, _p0, p1, bears, (forest,) = _fumarole_board(set_pool)
+
+    result = game.queue_from_hand(
+        0, "Fumarole",
+        target_permanent_ids=[bears.permanent_id, forest.permanent_id],
+    )
+    assert result.supported, result.details
+    game.remove_from_battlefield(forest)
+    game._settle()
+
+    assert not game.is_on_battlefield(bears)
+
+
+def test_a_union_mixing_targets_and_a_sweep_is_refused():
+    """Two targets plus a swept set is not one announcement.
+
+    A single target beside a sweep is unchanged — that is still a conjunction of
+    two statements, and only the first names anything for a picker to ask about.
+    What refuses is the shape whose roles description would have to leave the
+    sweep out: "target creature, target land, and all artifacts" would compile
+    supported and quietly destroy no artifacts.
+    """
+    from engine.grammar import compile_line
+
+    assert compile_line("Destroy target creature and target land.").parsed
+    assert compile_line("Destroy target creature and all lands.").parsed
+    mixed = compile_line("Destroy target creature, target land, and all artifacts.")
+    assert not mixed.parsed
+    assert "one announcement" in (mixed.parse_error or "")
+# --- end W3G3 ---
