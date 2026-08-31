@@ -513,20 +513,28 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                             "counters_put_on_creature", "whenever", subject=filt,
                         )
         stream.reset(mark)
-        # "…casts a *blue* spell" (the Rod/Cup/Sphere cycle). The colour is part
-        # of the condition rather than a per-card hook, which is what lets one
-        # dispatcher serve every card written this way.
-        mark = stream.mark()
-        if stream.accept_phrase("a", "player", "casts", "a"):
-            colour = stream.peek_word()
-            if colour in COLOR_WORDS:
-                stream.advance()
-                if stream.accept_word("spell"):
-                    return ast.TriggerEvent(
-                        "spell_cast", "whenever",
-                        subject=ast.ObjectFilter(colors=(COLOR_WORDS[colour],)),
-                    )
-        stream.reset(mark)
+        # "…casts a *blue* spell" (the Rod/Cup/Sphere cycle, Freyalise's Charm,
+        # Leshrac's Sigil). The colour is part of the condition rather than a
+        # per-card hook, which is what lets one dispatcher serve every card
+        # written this way — and both printed scopes are read here for the
+        # reason the type-word loop below reads both: a scope with no colour
+        # reading is a card whose colour word strands the line, and the
+        # narrowing itself is already one helper on the dispatch side.
+        for scope, opener in (
+            ("spell_cast", ("a", "player", "casts", "a")),
+            ("opponent_casts_spell", ("an", "opponent", "casts", "a")),
+        ):
+            mark = stream.mark()
+            if stream.accept_phrase(*opener):
+                colour = stream.peek_word()
+                if colour in COLOR_WORDS:
+                    stream.advance()
+                    if stream.accept_word("spell"):
+                        return ast.TriggerEvent(
+                            scope, "whenever",
+                            subject=ast.ObjectFilter(colors=(COLOR_WORDS[colour],)),
+                        )
+            stream.reset(mark)
         # "…casts an **artifact** spell" (Urza's Chalice, Citanul Druid). The
         # type narrowing beside the colour one above, and for the same reason:
         # one dispatcher for every card printed this way. Both scopes are read
@@ -543,7 +551,17 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                 stream.accept_word("a") or stream.accept_word("an")
             ):
                 type_word = stream.peek_word()
-                if type_word in CARD_TYPES:
+                # "…casts a **noncreature** spell" (Mystic Remora). The negated
+                # spellings are not card types, so they live in the same table
+                # the "you cast" productions below read — asked first, because
+                # a scope that knew only `CARD_TYPES` refused the printed word
+                # and took the whole line with it. `CARD_TYPES` still answers
+                # for the words that table does not carry ("enchantment",
+                # "land"), which is why both are consulted rather than one.
+                narrowed = _CAST_TYPE_FILTERS.get(type_word or "")
+                if narrowed is None and type_word in CARD_TYPES:
+                    narrowed = ast.ObjectFilter(card_types=(type_word,))
+                if narrowed is not None:
                     stream.advance()
                     if stream.accept_word("spell"):
                         # "…**that doesn't share a color with a creature you
@@ -576,7 +594,7 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                             break
                         return ast.TriggerEvent(
                             scope, "whenever",
-                            subject=ast.ObjectFilter(card_types=(type_word,)),
+                            subject=narrowed,
                             narrowings=(
                                 () if unshared is None
                                 else (("unshared_color", unshared),)

@@ -113,6 +113,18 @@ OFFERABLE_ACTORS: frozenset[str] = frozenset(
 #: announcement chooses nobody, so each opponent is asked in turn until one pays.
 _OPPONENT_PAYERS = frozenset({"target_opponent", "each_opponent", "opponent"})
 
+#: Every payer reference this clause can enumerate, and which seat set the
+#: handler asks for it. "**Any player** pays {3}" (Icy Prison) reaches the AST
+#: as ``each_player`` — the reference reader's one spelling for that set — and
+#: names the whole table, the ability's own controller included: an offer the
+#: controller may take is the difference between a prison they can keep and one
+#: only an opponent can save. A payload key rather than a second kind, because
+#: what differs is which seats are asked and nothing else about the chain.
+_ENUMERATED_PAYERS: dict[str, str] = {
+    **{kind: "opponent" for kind in _OPPONENT_PAYERS},
+    "each_player": "any_player",
+}
+
 
 def _lower_unless_player_pays(
     node: ast.UnlessPlayerPays, produced: frozenset[str],
@@ -136,9 +148,12 @@ def _lower_unless_player_pays(
     * the branch must lower to something. A clause bought off with nothing
       behind it is a payment charged for no reason.
     """
-    if node.payer.kind not in _OPPONENT_PAYERS:
+    payer = _ENUMERATED_PAYERS.get(node.payer.kind)
+    if payer is None:
         raise LoweringError(
-            "the only payer this clause can enumerate is an opponent", node=node
+            "this clause enumerates an opponent or any player, not "
+            f"{node.payer.kind!r}",
+            node=node,
         )
     unpaid = lower_statement(
         node.otherwise, produced, event=event, event_subject=event_subject,
@@ -150,7 +165,7 @@ def _lower_unless_player_pays(
         OracleInstruction(
             "unless_player_pays", "",
             {
-                "payer": "opponent",
+                "payer": payer,
                 "cost": {symbol: count for symbol, count in node.cost.pips},
                 # ``unpaid``, never ``otherwise`` and never ``steps``: the first
                 # is the offer's *declined* branch, which every reader that

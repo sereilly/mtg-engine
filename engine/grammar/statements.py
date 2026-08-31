@@ -46,6 +46,7 @@ from .phrases import (
     _parse_mana_payment,
 )
 from .effects import (
+    _accept_life_alternative,
     _parse_for_each_destroy_unless_paid,
     _parse_have_source_deal_damage,
     _parse_add_mana,
@@ -136,8 +137,23 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
     gave the definition to the gain, and the loss silently lost nothing.
     """
     statement = _parse_statement_body(stream)
+    # "<statement> **unless <player> pays <cost>**." The toll, in its trailing
+    # printed position. Read around the body rather than inside each verb,
+    # because the clause is the same sentence whatever the verb was: Icy Prison
+    # sacrifices, Mystic Remora draws, Lim-Dûl's Hex damages, and every one of
+    # them is "this happens unless somebody pays". The verbs that fuse their own
+    # "unless you pay" (Cosmic Horror's destroy, the upkeep sacrifice) have
+    # already consumed the word by the time this runs, so this reader sees only
+    # what nothing else claimed.
+    #
+    # Top level only, and that is the whole of what the recursion gets wrong: a
+    # nested body reading the clause would attach it to the *inner* statement,
+    # so "you may draw a card unless that player pays {4}" became an offer to
+    # draw whose action was the opponent's toll — the two seats' decisions
+    # nested the wrong way round.
     if not top_level:
         return statement
+    statement = _accept_trailing_toll(stream, statement) or statement
     # "…**at the beginning of your next upkeep**, where X is …" (Hazezon
     # Tamar): the delay printed after its effect rather than in front of it.
     # Read before the where-clause and wrapped *around* it, because the delay
@@ -341,6 +357,70 @@ def _parse_unless_player_pays(stream: TokenStream) -> "ast.UnlessPlayerPays | No
         stream.reset(mark)
         return None
     return ast.UnlessPlayerPays(payer, cost, _parse_statement_body(stream))
+
+
+#: Payer references naming a *set* of seats one payment satisfies. "Any player
+#: pays {3}" (Icy Prison) is one toll the whole table is offered and the first
+#: acceptance ends — which is exactly :class:`ast.UnlessPlayerPays`, a chain,
+#: and not one prompt per seat. Every other reference names a single seat, whose
+#: offer is the ``May`` an "unless" already is.
+_ENUMERATED_PAYERS = frozenset({"each_player", "each_opponent", "target_opponent"})
+
+
+def _accept_trailing_toll(
+    stream: TokenStream, body: ast.Statement
+) -> "ast.Statement | None":
+    """``<body> unless <player> pays <cost>`` — the toll, trailing its effect.
+
+    One production for four printed cost shapes, because what varies between
+    the cards printing this sentence is the payer, the cost and the consequence
+    and never the shape: an "unless" is an offer with a penalty, which is what
+    :class:`ast.May` already says.
+
+    Returns None with the cursor untouched for anything else opening with
+    "unless" — a trailing condition, or a clause a verb's own production means
+    to read — so this reader can sit around every sentence without claiming
+    one it does not understand. A cost it half-recognizes is rewound whole
+    rather than dropped: a toll nobody is charged is the effect happening
+    unconditionally, which is the card without its clause.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("unless"):
+        return None
+    payer = parse_player_ref(stream)
+    if payer is None:
+        stream.reset(mark)
+        return None
+    # "…unless you **discard a card**" (Oath of Lim-Dûl). A cost mana cannot
+    # express, and the same decomposition the board family's "unless you
+    # sacrifice" tails take: the discard is the offer's *action*, so the
+    # takeability check that already knows an empty hand cannot pay it applies
+    # unchanged.
+    if stream.accept_word("discards", "discard"):
+        discard = _parse_discard(stream, payer)
+        if discard is None or payer.kind in _ENUMERATED_PAYERS:
+            stream.reset(mark)
+            return None
+        return ast.May(actor=payer, action=discard, otherwise=body)
+    if not stream.accept_word("pays", "pay"):
+        stream.reset(mark)
+        return None
+    try:
+        cost = _parse_mana_payment(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if cost is None:
+        stream.reset(mark)
+        return None
+    if payer.kind in _ENUMERATED_PAYERS:
+        return ast.UnlessPlayerPays(payer, cost, body)
+    return ast.May(
+        actor=payer,
+        cost=cost,
+        life_alternative=_accept_life_alternative(stream),
+        otherwise=body,
+    )
 
 
 def _parse_statement_body(stream: TokenStream) -> ast.Statement:

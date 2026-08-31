@@ -1099,12 +1099,25 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
     if caster is None or caster not in game.players:
         return True, "resolved"
     caster_index = game.players.index(caster)
-    # Every seat the printed reference names, in seat order. A player who has
-    # left the game is not one of them (CR 800.4a), read off the engine's own
-    # state-based-action flag.
+    # Every seat the printed reference names, in the order they are asked. CR
+    # 101.4 orders a multi-seat offer from the active player, so the chain
+    # starts there rather than at seat 0 — the same order ``_offered_seats``
+    # gives "each player may …", and the same order the queue drains.
+    #
+    # "**Any player** pays {3}" (Icy Prison) names the table, the ability's own
+    # controller included; "an opponent pays {2}" (Scarwood Bandits) excludes
+    # them. That is the only difference between the two, which is why it is a
+    # payload key and not a second handler. A player who has left the game is
+    # nobody (CR 800.4a), read off the engine's own state-based-action flag.
+    count = len(game.players)
+    active = game.active_player_index or 0
     seats = [
-        index for index in range(len(game.players))
-        if index != caster_index and not getattr(game.players[index], "lost", False)
+        index
+        for index in sorted(
+            range(count), key=lambda i: ((i - active) % count, i)
+        )
+        if not getattr(game.players[index], "lost", False)
+        and (payload.get("payer") == "any_player" or index != caster_index)
     ]
     asked = int(payload.get("asked_seats", 0))
     if asked >= len(seats):
