@@ -344,3 +344,50 @@ def test_122_1a_the_upkeep_decay_reads_its_pair_off_the_counter_name():
     game.resolve_upkeep(1)
     game.resolve_stack()
     assert (host.effective_power, host.effective_toughness) == (3, 1)
+
+
+# --- W2G3: combat restrictions and requirements ---
+@pytest.mark.cr("122.1a", "613.4c")
+def test_removing_a_pt_counter_takes_its_power_and_toughness_with_it():
+    """CR 122.1a runs in both directions.
+
+    ``named_counters.remove_counters`` used to decrement the record and leave
+    the P/T channel alone, with a docstring telling callers to reach for
+    ``pt.remove_plus1_counters`` instead — which is a rule two call sites can
+    each be unaware of, and both of the ones that could be handed a P/T counter
+    were. The seam moves both channels now.
+    """
+    from engine.named_counters import remove_counters
+    from engine.pt import add_pt_counters
+
+    perm = Permanent(card=_mk_creature("Grower", 1, 1))
+    game = Game(players=[PlayerState(name="P1", battlefield=[perm]),
+                         PlayerState(name="P2")])
+    game._sync_control()
+    add_pt_counters(perm, "+1/+1", 3)
+    assert (perm.effective_power, perm.effective_toughness) == (4, 4)
+
+    remove_counters(perm, "+1/+1")
+
+    assert counters_on(perm, "+1/+1") == 2
+    assert (perm.effective_power, perm.effective_toughness) == (3, 3)
+
+
+@pytest.mark.cr("122.1a")
+def test_removing_more_pt_counters_than_are_there_takes_only_what_is_there():
+    """CR 608.2b's "as much as possible", and the P/T has to agree with it: a
+    channel that subtracted the *asked* amount would leave a 1/1 at -2/-2."""
+    from engine.named_counters import remove_counters
+    from engine.pt import add_pt_counters
+
+    perm = Permanent(card=_mk_creature("Grower", 1, 1))
+    game = Game(players=[PlayerState(name="P1", battlefield=[perm]),
+                         PlayerState(name="P2")])
+    game._sync_control()
+    add_pt_counters(perm, "+1/+1", 2)
+
+    remove_counters(perm, "+1/+1", 5)
+
+    assert counters_on(perm, "+1/+1") == 0
+    assert (perm.effective_power, perm.effective_toughness) == (1, 1)
+# --- end W2G3 ---

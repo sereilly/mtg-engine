@@ -26,6 +26,7 @@ from ..oracle import compile_card_oracle
 from ..pt import add_pt_modifier
 from ..static_bonuses import conditional_static_holds
 from ..trigger_utils import matching_triggers
+from ..turn_state import record_block_involvement
 
 # Landwalk is not a fixed word list any more: what the defender must control is
 # the ability's printed **quality**, and CR 702.14a lets that quality be a land
@@ -1032,6 +1033,19 @@ class DeclareBlockersStepMixin:
                 )
                 if blocker.permanent_id not in mirror:
                     mirror.append(blocker.permanent_id)
+                # "…if it has blocked or been blocked **since your last
+                # upkeep**" (Wiitigo). A window that spans the opponents' turns
+                # in between, so neither record above can answer it: both are
+                # swept with the turn. This one is an ordinal stamp beside the
+                # attack stamp in ``turn_state``, written for both sides of the
+                # pair here because "blocked or been blocked" is one question
+                # asked of whichever creature is doing the asking.
+                for perm in (blocker, attacker):
+                    seat = self.controller_index_of(perm)
+                    if seat is not None:
+                        record_block_involvement(
+                            perm, seat, self.seat_turn_counts.get(seat, 0)
+                        )
 
     def _fire_creature_blocks_triggers(self, controller_index: int, assignments: dict[int, list[int]]) -> None:
         """Put each blocker's own "whenever this creature blocks" triggers on

@@ -1319,7 +1319,17 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # ability Life Matrix grants with its own counter's word. Read out of the
     # phrase rather than listed, for the reason CR 122.1 gives: the kinds are
     # open, and a card - or a grant - may invent one.
-    removal_cost = re.search(r"\bremove an? ([a-z]+) counter from ", cost_lower)
+    # A P/T counter is spelled in symbols, not letters (CR 122.1a), so
+    # ``[a-z]+`` matched nothing at all for it — and an activation cost that
+    # matches nothing is not a refused ability, it is a **free** one. Triskelion
+    # ("Remove a +1/+1 counter from this creature: It deals 1 damage to any
+    # target.") pinged for one damage per activation forever, with its three
+    # counters untouched; Balduvian Hydra's "+1/+0" prevention shield did the
+    # same. Both compiled clean, and nothing could have caught it but reading
+    # the parsed cost.
+    removal_cost = re.search(
+        r"\bremove an? ([a-z]+|[+-]\d+/[+-]\d+) counter from ", cost_lower
+    )
     remove_counter = removal_cost.group(1) if removal_cost else None
     remove_counter_count: int | str = 1
     if remove_counter is None:

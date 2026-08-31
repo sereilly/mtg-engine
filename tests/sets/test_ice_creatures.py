@@ -1336,4 +1336,108 @@ def test_hipparion_is_never_compelled_to_block_by_lure(set_pool):
 
     assert ok, msg
     assert not land.tapped
+
+
+def _w2g3_wiitigo(set_pool):
+    """Wiitigo cast onto seat 0's battlefield, with a bear for seat 1.
+
+    Cast rather than placed: the card is a printed 0/0 and its six +1/+1
+    counters arrive as it enters (CR 614.1c), so a Permanent dropped straight
+    onto a battlefield dies to CR 704.5f before the entry effect runs.
+    """
+    pool = set_pool("ICE")
+    bears = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", hand=[pool["Wiitigo"]], life=20)
+    p2 = PlayerState(name="P2", battlefield=[bears], life=20)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game.cast_from_hand(0, "Wiitigo")
+    game._settle()
+    wiitigo = p1.battlefield[0]
+    _nosick(wiitigo)
+    return game, wiitigo, bears
+
+
+def test_wiitigo_compiles_its_upkeep_choice(set_pool):
+    """"At the beginning of your upkeep, put a +1/+1 counter on this creature if
+    it has blocked or been blocked since your last upkeep. Otherwise, remove a
+    +1/+1 counter from it."
+
+    The whole shape was already there — a trailing "if", an "Otherwise" arm, a
+    counter on the source. What was missing was the *condition*: a window that
+    spans the opponents' turns, which no per-turn combat record can answer.
+    """
+    program = compile_card_oracle(set_pool("ICE")["Wiitigo"])
+
+    assert program.supported
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "upkeep_self"
+    assert trigger.instruction.kind == "if_then"
+    assert trigger.instruction.payload["condition"] == {
+        "kind": "in_a_block_since_your_last_upkeep"
+    }
+
+
+def test_wiitigo_shrinks_when_it_has_been_in_no_block(set_pool):
+    """The "Otherwise" arm, and both channels of it: the counter comes off the
+    record *and* the creature gets smaller. A removal that moved only the record
+    left a 6/6 with five counters on it."""
+    game, wiitigo, _bears = _w2g3_wiitigo(set_pool)
+    assert (wiitigo.effective_power, wiitigo.effective_toughness) == (6, 6)
+
+    game.start_turn(0)
+    game._settle()
+
+    assert (wiitigo.effective_power, wiitigo.effective_toughness) == (5, 5)
+    assert counters_on(wiitigo, "+1/+1") == 5
+
+
+def test_wiitigo_grows_after_a_block_on_an_opponents_turn(set_pool):
+    """"Since your last upkeep" spans the turns in between, which is the whole
+    difficulty: the block happens on the opponent's turn and every per-turn
+    combat record of it is swept before the upkeep that reads it."""
+    game, wiitigo, _bears = _w2g3_wiitigo(set_pool)
+    game.start_turn(0)
+    game._settle()
+    assert wiitigo.effective_power == 5
+
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning_of_combat
+    game.advance_combat_phase()  # declare_attackers
+    assert game.declare_attackers(1, [0], 0)[0]
+    game.advance_combat_phase()  # declare_blockers
+    assert game.declare_blockers(0, {0: 0})[0]
+    game._settle()
+
+    game.start_turn(0)
+    game._settle()
+
+    assert (wiitigo.effective_power, wiitigo.effective_toughness) == (6, 6)
+
+
+def test_wiitigo_stops_growing_the_upkeep_after_that(set_pool):
+    """"**Your last** upkeep" is one seat-turn ordinal back, not "ever": the
+    same block does not feed it twice."""
+    game, wiitigo, _bears = _w2g3_wiitigo(set_pool)
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(1, [0], 0)[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(0, {0: 0})[0]
+    game._settle()
+
+    game.start_turn(0)
+    game._settle()
+    assert wiitigo.effective_power == 7
+
+    game.start_turn(1)
+    game._settle()
+    game.start_turn(0)
+    game._settle()
+
+    assert wiitigo.effective_power == 6
 # --- end W2G3 ---

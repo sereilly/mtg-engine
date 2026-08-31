@@ -511,6 +511,23 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # condition. The duration is required rather than optional — "dealt damage"
     # with no window is a different claim, and admitting it would answer a
     # question the record cannot ask.
+    # "if **it has blocked or been blocked since your last upkeep**" (Wiitigo).
+    # A history over a window that spans the opponents' turns, so no board read
+    # answers it: the declare-blockers step stamps a seat-turn ordinal and
+    # `turn_state.in_a_block_since_seats_last_upkeep` does the arithmetic.
+    #
+    # Every word is required. "Blocked or been blocked" is CR 509.1a's relation
+    # from both ends and the stamp is written for both, so reading only the
+    # first half would be a narrower condition than the card prints — and the
+    # window is what makes the question answerable at all, so a sentence with a
+    # different one has to fail here rather than borrow this one.
+    block_mark = stream.mark()
+    if accept_source_reference(stream) and stream.accept_phrase(
+        "has", "blocked", "or", "been", "blocked", "since", "your", "last", "upkeep"
+    ):
+        return ast.InABlockSinceLastUpkeep(_SOURCE_SPEC)
+    stream.reset(block_mark)
+
     damage_mark = stream.mark()
     if accept_source_reference(stream) and stream.accept_phrase("dealt", "damage", "to"):
         for phrase, recipient in _DAMAGE_HISTORY_RECIPIENTS:

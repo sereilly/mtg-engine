@@ -9,6 +9,7 @@ from __future__ import annotations
 from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
+from tests.helpers import _nosick
 
 
 # ---------------------------------------------------------------------------
@@ -728,3 +729,44 @@ def test_a_victim_who_cannot_pay_loses_the_permanent(set_pool):
 
     assert p2.life == 6
     assert [card.name for card in p1.exile] == ["Su-Chi"]
+
+
+# --- W2G3: combat restrictions and requirements ---
+def test_triskelion_pays_a_counter_for_each_ping(set_pool):
+    """"Remove a +1/+1 counter from this creature: It deals 1 damage to any
+    target." (CR 602.5, CR 122.1a.)
+
+    The cost was **unparsed**: the activation-cost reader matched a counter kind
+    with ``[a-z]+``, and a P/T counter is spelled in symbols — so the regex
+    matched nothing, and a cost that matches nothing is not a refused ability,
+    it is a free one. Triskelion pinged once a turn forever with its three
+    counters untouched, and the card compiled clean.
+
+    Both halves are asserted: three activations that shrink the creature, and a
+    fourth the engine refuses.
+    """
+    pool = set_pool("ATQ")
+    p1 = PlayerState(name="P1", hand=[pool["Triskelion"]], life=20)
+    game = Game(players=[p1, PlayerState(name="P2", life=20)])
+    game.enforce_mana_costs = False
+    game.cast_from_hand(0, "Triskelion")
+    game._settle()
+    trike = p1.battlefield[0]
+    _nosick(trike)
+    assert (trike.effective_power, trike.effective_toughness) == (4, 4)
+
+    for expected in (3, 2, 1):
+        result = game.activate_permanent_ability(
+            0, "Triskelion", permanent_index=0, target_player_index=1
+        )
+        game._settle()
+        assert result.supported, result.reason
+        assert (trike.effective_power, trike.effective_toughness) == (expected, expected)
+
+    assert game.players[1].life == 17
+    refused = game.activate_permanent_ability(
+        0, "Triskelion", permanent_index=0, target_player_index=1
+    )
+    assert not refused.supported
+    assert game.players[1].life == 17
+# --- end W2G3 ---
