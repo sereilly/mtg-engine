@@ -19,6 +19,8 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import card_only_filter
 from .. import ast
 from ..errors import LoweringError
+from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
+from ._events import BOUND_CARD_EVENTS
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
     dropped_narrowings,
@@ -147,8 +149,10 @@ def _lower_graveyard_cards_on_library_top(
     )
 
 
-def _lower_put_onto_battlefield(node: ast.PutOntoBattlefield) -> tuple[OracleInstruction, ...]:
-    """The two "put … onto the battlefield" shapes the pool prints:
+def _lower_put_onto_battlefield(
+    node: ast.PutOntoBattlefield, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
+    """The three "put … onto the battlefield" shapes the pool prints:
 
     * "Put up to seven permanent cards from your hand onto the battlefield."
       (Ugin, the Spirit Dragon's −10) — an up-to-N sweep of the caster's own
@@ -162,6 +166,49 @@ def _lower_put_onto_battlefield(node: ast.PutOntoBattlefield) -> tuple[OracleIns
     if not isinstance(target, ast.TargetSpec):
         raise LoweringError("no handler puts that onto the battlefield", node=node)
     filt = target.filter
+    if target.quantifier == "that" and filt.is_card:
+        # "Put **that card** onto the battlefield under your control." (Seraph,
+        # Krovikan Vampire.) The bound object, not a choice: the firing event
+        # named the creature that died, and by the time this resolves its card
+        # is in a graveyard. So the handler reads it out of the trigger's
+        # context by identity rather than off a target index or a zone scan —
+        # the arrangement ``return_bound_card_to_owners_hand`` already uses for
+        # the same phrase and the same reason.
+        #
+        # Gated on the event recording one, exactly as the bound-card return is:
+        # under any other event these words name a card nobody wrote down, and
+        # the handler would find nothing while the card compiled supported.
+        from_ledger = event == DAMAGED_BY_SOURCE_DIED
+        if not from_ledger and event not in BOUND_CARD_EVENTS:
+            raise LoweringError(
+                "'that card' names the firing event's object, and this event "
+                "records none",
+                node=node,
+            )
+        if not node.under_your_control:
+            raise LoweringError(
+                "the bound-card reanimation only puts it under your control",
+                node=node,
+            )
+        if _restrictions_beyond(filt, frozenset({"is_card"})) or node.gains:
+            raise LoweringError(
+                "the bound-card reanimation honours no further narrowing",
+                node=node,
+            )
+        payload: dict[str, object] = {}
+        if from_ledger:
+            # Krovikan Vampire's "that card" is not one the fire site froze — no
+            # end step freezes a card — but the one its own intervening-if
+            # found, in the ledger on the ability's source. Payload, so one
+            # handler reads either record rather than two kinds doing the same
+            # move from two places.
+            payload["from_damage_deaths"] = True
+        if node.sacrifice_when_control_lost:
+            # The rider is carried out by the instruction that makes the
+            # permanent, because there is no permanent to link until it does
+            # (``engine/linked_sacrifice.py``).
+            payload["sacrifice_when_control_lost"] = True
+        return (OracleInstruction("reanimate_bound_card", "", payload),)
     if filt.zone == "hand":
         if filt.zone_owner is None or filt.zone_owner.kind not in ("you", "owner"):
             raise LoweringError("only your own hand has a handler here", node=node)

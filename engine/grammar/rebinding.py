@@ -167,3 +167,64 @@ def _names_a_target(node) -> bool:
     if isinstance(node, (tuple, list)):
         return any(_names_a_target(item) for item in node)
     return False
+
+
+#: The intervening-if conditions that name a card for a "that card" behind them.
+#: A table rather than a shape test, because the question a reader has is "which
+#: conditions carry a card?" — and because a second one would be a row here.
+_CONDITIONS_NAMING_A_CARD: dict[type, str] = {
+    ast.DamagedBySourceDiedThisTurn: "damaged_by_source_died_this_turn",
+}
+
+
+def bind_recorded_card(event_kind: str, condition, statement):
+    """*statement* with every bound-card entry told which event recorded it.
+
+    "Put **that card** onto the battlefield under your control" names an object
+    the ability did not choose, and the lowering refuses it unless something
+    really wrote one down. Under an ordinary trigger that something is the
+    trigger's own event — but two printings put it somewhere else, and both are
+    facts about the *whole line*, which is why they are read here rather than
+    threaded down through the lowering:
+
+    * "…at the beginning of the next end step" (Seraph) makes the entry a
+      **delayed** ability. CR 608.2h freezes what the creating ability knew, so
+      the card is the death trigger's and not the end step's.
+    * "…**if** a creature dealt damage by this creature this turn died"
+      (Krovikan Vampire) fires on an end step that records nothing at all. The
+      intervening-if is what names the record, so it is what admits the phrase.
+
+    A structural walk, for the reason ``_walk_specs`` above is one: the entry can
+    be a step, a conjunct, or the effect of a delay, and a list of the shapes it
+    has been seen in goes stale.
+    """
+    record = _CONDITIONS_NAMING_A_CARD.get(type(condition), event_kind)
+    return _stamp_bound_card(statement, record)
+
+
+def _stamp_bound_card(node, record: str):
+    if isinstance(node, ast.PutOntoBattlefield):
+        target = node.target
+        if (
+            isinstance(target, ast.TargetSpec)
+            and target.quantifier == "that"
+            and target.filter.is_card
+            and node.bound_card_from is None
+        ):
+            return replace(node, bound_card_from=record)
+        return node
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        changed = {}
+        for field in dataclasses.fields(node):
+            value = getattr(node, field.name)
+            if isinstance(value, tuple):
+                walked = tuple(_stamp_bound_card(item, record) for item in value)
+                if any(a is not b for a, b in zip(walked, value)):
+                    changed[field.name] = walked
+                continue
+            walked = _stamp_bound_card(value, record)
+            if walked is not value:
+                changed[field.name] = walked
+        if changed:
+            return replace(node, **changed)
+    return node

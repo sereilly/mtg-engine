@@ -474,7 +474,12 @@ def lower_statement(
         picked = _lower_graveyard_pick_onto_battlefield(statement)
         if picked is not None:
             return picked
-        return _lower_put_onto_battlefield(statement)
+        # ``bound_card_from`` over ``event``: which event recorded the card
+        # "that card" names is a fact about the whole printed line, and the
+        # parser is what reads one (``rebinding.bind_recorded_card``).
+        return _lower_put_onto_battlefield(
+            statement, statement.bound_card_from or event
+        )
 
     if isinstance(statement, ast.RevealTop):
         # CR 701.20b: revealing shows a card and moves nothing, so the whole

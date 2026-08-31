@@ -1168,6 +1168,86 @@ def return_bound_card_to_owners_hand(game: Game, instruction: OracleInstruction,
     return True, "resolved"
 
 
+@effect_handler("reanimate_bound_card")
+def reanimate_bound_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put that card onto the battlefield under your control." (Seraph,
+    Krovikan Vampire.)
+
+    ``return_bound_card_to_owners_hand`` with a different destination, and the
+    same three reasons for every line of it: the bound object is the card of the
+    creature whose death fired the trigger, the fire site froze the card itself
+    (CR 603.10) because by resolution nothing else could name it, and it is
+    located by identity and removed with ``pop`` at the found index — a name
+    match finds the wrong entry in a graveyard holding two copies.
+
+    Under **your** control, which CR 400.3 lets an effect say; ownership does
+    not move, so the card goes back to its owner's graveyard when it next dies.
+
+    "Sacrifice the creature when you lose control of this creature" is the same
+    sentence's second half, and it is recorded here rather than lowered as a
+    step of its own: the rider names a permanent that does not exist until this
+    instruction makes one. ``engine/linked_sacrifice.py`` holds the record and
+    the state-based sweep re-checks it.
+    """
+    from ..damage_deaths import creatures_it_damaged_that_died
+    from ..linked_sacrifice import link_sacrifice_to_source
+    from ..models import Permanent
+
+    if instruction.payload.get("from_damage_deaths"):
+        # Krovikan Vampire's "that card" is the one its own intervening-if
+        # found. **Every** one of them, when the ledger holds several: the
+        # trigger fires once per end step and its condition asks whether *a*
+        # creature died, so with two deaths the sentence names two cards and
+        # nothing in it says which one to prefer. Reanimating the first would be
+        # a choice the card never offers anybody.
+        cards = creatures_it_damaged_that_died(context.source_permanent)
+    else:
+        card = (context.trigger_context or {}).get("dead_card")
+        cards = [card] if card is not None else []
+    context.results["reanimated_bound_card"] = False
+    if not cards:
+        game.log.append(
+            f"{context.card.name}: no recorded card to put onto the battlefield"
+        )
+        return True, "resolved"
+    seat = game.players.index(context.caster)
+    for card in cards:
+        for player in game.players:
+            found = next(
+                (i for i, held in enumerate(player.graveyard) if held is card), None
+            )
+            if found is None:
+                continue
+            owner_seat = game.players.index(player)
+            player.graveyard.pop(found)
+            permanent = Permanent(card=card)
+            # CR 400.3: "under your control" moves control, never ownership, so
+            # the card goes to its **owner's** graveyard when it next leaves.
+            # Recorded on the permanent for the reason Animate Dead's
+            # reanimation records it: the base controller is the owner
+            # everywhere else in this pool, and here the two differ by
+            # construction.
+            if owner_seat != seat:
+                permanent.metadata["owner_player_index"] = owner_seat
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            context.results["reanimated_bound_card"] = True
+            if instruction.payload.get("sacrifice_when_control_lost"):
+                source = context.source_permanent
+                if source is not None:
+                    link_sacrifice_to_source(permanent, source, seat)
+            game.log.append(
+                f"{card.name} entered the battlefield under "
+                f"{context.caster.name}'s control ({context.card.name})"
+            )
+            break
+        else:
+            # CR 603.6: the ability looks for the object in the zone it moves it
+            # out of. Exiled in response, or already reanimated by an earlier
+            # firing of this same ability.
+            game.log.append(f"{card.name} was no longer in a graveyard")
+    return True, "resolved"
+
+
 @effect_handler("return_source_card_to_owners_hand")
 def return_source_card_to_owners_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Return this card to its owner's hand." (Puppet Master's paid rider.)

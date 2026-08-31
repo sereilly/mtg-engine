@@ -20,6 +20,7 @@ payload the evaluator would answer False to forever.
 
 from __future__ import annotations
 
+from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import untestable_filter_keys
@@ -433,6 +434,10 @@ def _lower_condition(
         # Named rather than implied, exactly as the loop over "died this way"
         # names its key: the record is what ties the two sentences together.
         return {"kind": "destroyed_this_way", "key": "end_of_combat_destruction"}
+    if isinstance(condition, ast.DamagedBySourceDiedThisTurn):
+        # No filter and no event: the relation is to the ability's own source,
+        # and the evaluator reads the ledger that permanent carries.
+        return {"kind": DAMAGED_BY_SOURCE_DIED}
     if isinstance(condition, ast.DiedThisTurn):
         return {"kind": "died_this_turn", "filter": condition.filter.to_payload()}
     if isinstance(condition, ast.ReturnedToHandThisTurn):

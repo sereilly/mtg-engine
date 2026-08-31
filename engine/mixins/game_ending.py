@@ -270,6 +270,24 @@ class GameEndingMixin:
                         changed = True
                         break
 
+            # "Sacrifice the creature when you lose control of this creature."
+            # (Seraph, Krovikan Vampire.) CR 603.7's delayed trigger over an
+            # event with no single fire site — a permanent leaves, a control
+            # effect hands it away, one that had handed it to you ends — so it
+            # is a record the sweep re-checks, the arrangement the linked
+            # control changes above already use. ``engine/linked_sacrifice.py``
+            # states why the link is by seat and by id.
+            from ..linked_sacrifice import LINKED_SACRIFICE, linked_sacrifices_owed
+
+            for permanent in linked_sacrifices_owed(self):
+                permanent.metadata.pop(LINKED_SACRIFICE, None)
+                self.sacrifice_permanent(permanent)
+                self.log.append(
+                    f"{permanent.card.name} sacrificed (its keeper lost control "
+                    "of the creature that returned it)"
+                )
+                changed = True
+
             # Jihad: "When the chosen player controls no nontoken permanents of
             # the chosen color, sacrifice this enchantment." Call to Arms: the
             # same trigger over the same choices, asking a census instead. A

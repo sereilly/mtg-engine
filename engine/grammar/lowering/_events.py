@@ -115,6 +115,32 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
 })
 
 
+#: The trigger events whose fire site records the dying card, so "that card" /
+#: "it" in the effect behind them names something the handler can find. Written
+#: as a set rather than one literal because three fire sites stamp ``dead_card``
+#: and a fourth would only have to be added here — where an event *not* listed
+#: refuses the sentence rather than resolving to nothing.
+#:
+#: Public, because it is not this family's question: ``zones`` asks it too, for
+#: "put **that card** onto the battlefield under your control" (Seraph,
+#: Krovikan Vampire). One set, so a fire site taught to record the card reaches
+#: both readings of the phrase at once — two copies would let a card be returned
+#: to a hand and refused onto the battlefield under the same trigger.
+BOUND_CARD_EVENTS = frozenset({
+    "attached_creature_dies",
+    "permanent_dies",
+    # "Whenever a creature dealt damage by this creature this turn dies, …"
+    # (Seraph, Krovikan Vampire, Sengir Vampire). The scan in
+    # ``mixins/helpers._fire_creature_dies_triggers`` stamps the same
+    # ``dead_card`` its three sibling scans do — it did not until Seraph asked,
+    # which is why the set is what says an event is admitted rather than the
+    # condition table that merely names it.
+    "creature_dealt_damage_by_self_dies",
+})
+
+#: The private spelling this module used before ``zones`` needed the same set.
+
+
 #: Trigger conditions whose subject **is a player** rather than an object, so
 #: "that player" (and its pronoun "they") names the seat the event was about
 #: directly — there is no object in between to take a controller from.

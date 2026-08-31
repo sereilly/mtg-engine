@@ -134,7 +134,16 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
     # not one of those objects is still where it was. Frozen whole rather than
     # key by key, because a list of which values a delayed ability might read
     # is a list that goes stale the moment a new one prints.
-    captured = dict(context.results or {})
+    # What the *creating* ability knew is both halves: its own scratchpad and
+    # the context its fire site froze. "Whenever a creature dealt damage by this
+    # creature this turn dies, put that card onto the battlefield … at the
+    # beginning of the next end step" (Seraph) reads the dead card out of the
+    # second half, and only the second half — a trigger's context is not a
+    # resolution record and nothing had ever carried it across a delay.
+    #
+    # The trigger context goes *under* the scratchpad, so a value this
+    # resolution actually produced wins over one the event merely reported.
+    captured = {**(context.trigger_context or {}), **(context.results or {})}
     arm_delayed_trigger(game, DelayedTrigger(
         controller_index=seat,
         event=payload.get("event", "creatures_attack"),

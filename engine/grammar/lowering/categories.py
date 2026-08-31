@@ -613,6 +613,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # cast time. Same category, so GRAMMAR_CATEGORIES is unchanged.
     "return_chosen_cards_from_graveyard_to_hand": "zones",
     "reanimate_creature": "zones",
+    "reanimate_bound_card": "zones",
     # A card returning *itself* from the graveyard (Silversmote Ghoul). Same
     # category as every other zone change: what differs is which object moves,
     # not what kind of effect it is — so GRAMMAR_CATEGORIES is unchanged and one

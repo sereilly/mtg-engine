@@ -679,6 +679,24 @@ class GameHelpersMixin:
             )
 
         if permanent.card.primary_type == "creature":
+            # "…if a creature dealt damage by this creature this turn **died**"
+            # (Krovikan Vampire). The ledger the intervening-if reads, written
+            # here rather than at the fire site below it: this is the one place
+            # a death and its damagers are both in hand, and the question is
+            # asked a whole end step later, when the permanent is gone and its
+            # `damaged_by_sources_this_turn` record has gone with it.
+            #
+            # On each damager, by identity, holding the *card* — which is what
+            # "that card" names and the only part of a dead creature that
+            # survives (CR 400.7). A damager that itself leaves takes its ledger
+            # with it, which is correct: the permanent that comes back is a new
+            # object and never dealt that damage.
+            for damager in permanent.metadata.get(
+                "damaged_by_sources_this_turn", []
+            ):
+                damager.metadata.setdefault(
+                    "damaged_creatures_that_died_this_turn", []
+                ).append(permanent.card)
             # The seat this move is being made for, handed down because the
             # layer-2 read below cannot always answer: the destruction paths
             # disagree about whether the permanent is removed from the
@@ -1992,7 +2010,19 @@ class GameHelpersMixin:
                     # By identity: ``in`` compares Permanent by value, and a
                     # look-alike of the killer is not the killer (CR 400.7).
                     if any(entry is observer for entry in damagers):
-                        events.append(make_trigger_event(controller_index, observer, trig))
+                        # The dying card travels with the trigger, exactly as
+                        # the three scans above already send it. Seraph's "put
+                        # **that card** onto the battlefield under your control"
+                        # has nowhere else to read it — by resolution the
+                        # permanent is gone and its card is in a graveyard — and
+                        # this branch was the one scan of the four that dropped
+                        # the context, so the lowering gate refused the sentence
+                        # for an event whose fire site had simply never been
+                        # asked to carry it.
+                        events.append(make_trigger_event(
+                            controller_index, observer, trig,
+                            trigger_context=died_context,
+                        ))
                     continue
                 if trig.condition.kind != "creature_dies" or trig.instruction is None:
                     continue
