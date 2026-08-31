@@ -46,6 +46,7 @@ from .costs import _parse_costs
 from .registries import registry_for_line
 from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
                        _parse_conditional_pronoun_grant_rider,
+                       _parse_conditional_quoted_grant_rider,
                        _parse_pronoun_grant_rider, _parse_pronoun_verb_rider)
 from .riders import (_attach_destroyed_this_way, _attach_exchanged_this_way, _attach_if_that_card_was_returned, _attach_if_you_cant, _attach_if_you_do, _attach_otherwise, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_unpaid_penalty, _attach_when_you_do, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
 from .phrases import accept_member_state_clause
@@ -437,6 +438,14 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             conditional_grant = _parse_conditional_pronoun_grant_rider(stream, steps)
             if conditional_grant is not None:
                 steps.append(conditional_grant)
+                continue
+            # "If it doesn't have "<ability>," it gains that ability."
+            # (Musician.) The quoted twin of the rider above, read after it
+            # because that one's condition parser would refuse a quote and
+            # rewind — leaving this sentence to fail the whole line.
+            quoted_grant = _parse_conditional_quoted_grant_rider(stream, steps)
+            if quoted_grant is not None:
+                steps.append(quoted_grant)
                 continue
             who_cant = _parse_who_cant_rider(stream, steps)
             if who_cant is not None:

@@ -580,6 +580,11 @@ def _lower_destroy_unless_pay(
     payload: dict[str, object] = {"mana": _full_mana_payload(node.cost)}
     if node.damage_if_destroyed is not None:
         payload["damage_if_destroyed"] = node.damage_if_destroyed
+    # "…{1} for each music counter on it" — the same `per_counter` key
+    # `engine/cumulative_upkeep.scaled_cost` already reads, so the escalation is
+    # one implementation rather than a second multiplier beside it.
+    if node.per_counter is not None:
+        payload["per_counter"] = node.per_counter
     return (OracleInstruction("upkeep_pay_or_destroy_self", "", payload),)
 
 

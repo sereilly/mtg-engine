@@ -1075,10 +1075,24 @@ def _grant_ability_texts(game, permanent, instruction, context) -> None:
     permanent's *rules text*, which the UI shows — the same reason the
     line-derived keyword grant capitalises. The compiler normalises it again.
     """
-    from ..keywords import grant_ability_line
+    from ..keywords import grant_ability_line, normalized_ability_line
 
     lifetime = grant_lifetime(game, instruction, context)
     texts = tuple(instruction.payload.get("abilities") or ())
+    if instruction.payload.get("only_if_absent"):
+        # "If it doesn't have "<ability>," it gains that ability." (Musician.)
+        # Asked of the permanent's *effective* text, which is where a grant
+        # already made and a printed one both read from — a check against the
+        # printed card alone would grant Musician's ability a second time on
+        # the second activation, and the creature would then owe the upkeep
+        # payment twice for one set of counters.
+        present = {
+            normalized_ability_line(line)
+            for line in (permanent.effective_card.oracle_text or "").splitlines()
+        }
+        texts = tuple(
+            text for text in texts if normalized_ability_line(text) not in present
+        )
     for text in texts:
         line = text.strip()
         if not line:

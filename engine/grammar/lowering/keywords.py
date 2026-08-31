@@ -333,6 +333,13 @@ def _lower_gain_ability_text(node: ast.GainAbilityText) -> tuple[OracleInstructi
         # rather than assuming one answer.
         "duration": _GRANT_DURATIONS.get(node.duration.kind),
     }
+    # "If it doesn't have "<ability>," it gains that ability." (Musician.) The
+    # printed condition is about the very sentence being granted, so it rides
+    # on the grant rather than wrapping it: CR 611.2c allows a permanent to
+    # hold one ability twice, and a second copy of Musician's would ask for the
+    # upkeep payment a second time.
+    if node.only_if_absent:
+        payload["only_if_absent"] = True
     if _is_source(node.subject):
         return (OracleInstruction("grant_self_ability_text", "", payload),)
     # "Put a matrix counter on target creature and **that creature** gains …"

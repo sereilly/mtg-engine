@@ -1943,4 +1943,100 @@ def test_bone_shaman_stops_denying_regeneration_when_the_grant_expires(set_pool)
     game.check_state_based_actions()
 
     assert victim in list(game.controlled_by(game.players[1]))
+
+
+def _musician_game(pool, lands: int = 0):
+    """Musician for seat 0, a Bear (and *lands* Forests) for seat 1."""
+    musician = _nosick(Permanent(card=pool["Musician"]))
+    bear = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    p1 = PlayerState(name="P1", battlefield=[musician], life=20)
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[bear] + [Permanent(card=pool["Forest"]) for _ in range(lands)],
+        life=20,
+    )
+    game = Game(players=[p1, p2])
+    game._settle()
+    return game, musician, bear
+
+
+def _play_musician(game, musician):
+    musician.tapped = False
+    result = game.activate_permanent_ability(
+        0, "Musician", target_player_index=1, target_permanent_index=0
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+    return result
+
+
+def test_musician_grants_the_quoted_upkeep_ability_with_the_counter(set_pool):
+    """"{T}: Put a music counter on target creature. If it doesn't have "At the
+    beginning of your upkeep, destroy this creature unless you pay {1} for each
+    music counter on it," it gains that ability."
+
+    The grant and the counter are one activation, and the granted ability
+    counts the counters this ability is putting there.
+    """
+    pool = set_pool("ICE")
+    game, musician, bear = _musician_game(pool)
+
+    assert _play_musician(game, musician).supported
+    assert counters_on(bear, "music") == 1
+    assert "destroy this creature unless you pay {1}" in (
+        bear.effective_card.oracle_text
+    )
+
+
+def test_musician_does_not_grant_the_ability_a_second_time(set_pool):
+    """"**If it doesn't have** …" — CR 611.2c lets a permanent hold one ability
+    twice, so a dropped condition here would be two upkeep triggers asking for
+    the same counters."""
+    pool = set_pool("ICE")
+    game, musician, bear = _musician_game(pool)
+
+    _play_musician(game, musician)
+    _play_musician(game, musician)
+
+    assert counters_on(bear, "music") == 2
+    text = bear.effective_card.oracle_text
+    assert text.count("destroy this creature unless you pay {1}") == 1
+
+
+def test_musicians_granted_upkeep_destroys_a_creature_that_cannot_pay(set_pool):
+    """The grant is only done when the granted ability *fires*: two counters is
+    {2}, and one Forest does not cover it."""
+    pool = set_pool("ICE")
+    game, musician, bear = _musician_game(pool, lands=1)
+    _play_musician(game, musician)
+    _play_musician(game, musician)
+
+    game.start_turn(1)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+    assert bear not in list(game.controlled_by(game.players[1]))
+    assert [card.name for card in game.players[1].graveyard] == ["Balduvian Bears"]
+
+
+def test_musicians_granted_upkeep_scales_with_the_music_counters(set_pool):
+    """"{1} **for each music counter on it**" — a multiplier dropped here would
+    charge {1} for a creature carrying five counters."""
+    pool = set_pool("ICE")
+    game, musician, bear = _musician_game(pool, lands=2)
+    _play_musician(game, musician)
+    _play_musician(game, musician)
+
+    game.start_turn(1)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+    assert bear in list(game.controlled_by(game.players[1]))
+    assert not any(
+        perm.card.name == "Forest" and not perm.tapped
+        for perm in game.controlled_by(game.players[1])
+    )
 # --- end W3G1 ---

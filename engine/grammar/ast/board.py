@@ -459,6 +459,13 @@ class DestroyUnlessPay:
     subject: Recipient
     cost: ManaCost
     damage_if_destroyed: int | None = None
+    #: "…unless you pay {1} **for each music counter on it**" (the ability
+    #: Musician grants). The counter word the printed cost is multiplied by, or
+    #: None for a flat cost. Named rather than counted here for the reason
+    #: cumulative upkeep names it: the multiplier is the permanent's counter
+    #: total *when the trigger resolves*, which is not knowable while the
+    #: sentence is being read.
+    per_counter: str | None = None
 
 
 @dataclass(frozen=True)

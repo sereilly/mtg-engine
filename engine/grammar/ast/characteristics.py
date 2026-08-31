@@ -138,6 +138,12 @@ class GainAbilityText:
     #: self-naming ability granted to some *other* permanent is a sentence that
     #: stops compiling the moment it arrives.
     self_name: str | None = None
+    #: "**If it doesn't have** "<ability>," it gains that ability." (Musician.)
+    #: The grant happens only where the permanent does not already say the
+    #: sentence. Recorded rather than dropped, because CR 611.2c lets a
+    #: permanent hold the same ability twice and Musician's whole point is that
+    #: it does not: a second copy would ask for the upkeep payment twice.
+    only_if_absent: bool = False
 
 
 @dataclass(frozen=True)

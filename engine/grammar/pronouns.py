@@ -206,6 +206,56 @@ def _parse_conditional_pronoun_grant_rider(
     return ast.Conditional(condition, grant)
 
 
+def _parse_conditional_quoted_grant_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``If it doesn't have "<ability>," it gains that ability.`` after a
+    sentence that chose a target.
+
+    "{T}: Put a music counter on target creature. **If it doesn't have "At the
+    beginning of your upkeep, destroy this creature unless you pay {1} for each
+    music counter on it," it gains that ability.**" (Musician.)
+
+    The quoted twin of :func:`_parse_conditional_pronoun_grant_rider`, and its
+    own reader for two reasons that reader cannot absorb:
+
+    * the condition tests a whole printed *ability* rather than a keyword, so
+      the generic condition parser has nothing to read it with;
+    * the arm says "that ability" — a back-reference to the sentence inside the
+      condition, which no independently parsed grant could name.
+
+    Both halves therefore come out of one production, and the result is a single
+    grant carrying the condition as ``only_if_absent`` rather than a
+    :class:`ast.Conditional` over a condition nothing else prints. The two are
+    the same statement: the test is about the very ability being granted, and
+    splitting them would be two readings of one quote that could disagree about
+    which sentence was meant.
+    """
+    if not steps:
+        return None
+    target = _statement_bound_target(steps[-1])
+    if target is None:
+        return None
+    mark = stream.mark()
+    if not stream.accept_phrase("if", "it", "doesn't", "have"):
+        return None
+    if not stream.at_kind(QUOTE):
+        stream.reset(mark)
+        return None
+    try:
+        abilities, self_name = _parse_quoted_abilities(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("it", "gains", "that", "ability"):
+        stream.reset(mark)
+        return None
+    return ast.GainAbilityText(
+        target, abilities, self_name=self_name, only_if_absent=True
+    )
+
+
 def _returned_permanent_step(statement: ast.Statement) -> ast.ReturnToZone | None:
     """The battlefield return a following "It loses …" sentence is about.
 

@@ -899,23 +899,37 @@ class UpkeepEffectsMixin:
           regenerated was not destroyed and takes no damage, and nothing but
           the destroy itself knows which happened.
         """
+        from ..cumulative_upkeep import scaled_cost
+        from ..named_counters import counters_on
+
         controller = ctx.controller
         human_choices = ctx.human_choices
         permanent = ctx.permanent
         trig = ctx.trig
-        mana = trig.instruction.payload.get("mana", {})
-        # `can_pay_upkeep_mana` / `_spend_upkeep_mana`: the pair every other
+        # "…unless you pay {1} **for each music counter on it**" — the ability
+        # Musician grants. The printed cost charged once per counter, through
+        # `scaled_cost`, which is the same escalation cumulative upkeep runs:
+        # a second multiplier here would be a second answer to "what does this
+        # cost right now". Unlike cumulative upkeep nothing is *added* first —
+        # this trigger only reads what the counters already are, and the ability
+        # that grants it is what put them there.
+        counter = trig.instruction.payload.get("per_counter")
+        cost = scaled_cost(
+            trig.instruction,
+            counters_on(permanent, str(counter)) if counter else 1,
+        )
+        # `can_pay_upkeep_cost` / `pay_upkeep_cost`: the pair every other
         # upkeep cost in this file uses, and never a hand-rolled pool read —
         # they know that generic mana can come from floating mana *or* from
         # tapping a land during upkeep.
         if human_choices is not None and permanent.card.name in human_choices:
-            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
-                controller, mana
+            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_cost(
+                controller, cost
             )
         else:
-            paid = self.can_pay_upkeep_mana(controller, mana)
+            paid = self.can_pay_upkeep_cost(controller, cost)
         if paid:
-            self._spend_upkeep_mana(controller, mana)
+            self.pay_upkeep_cost(controller, cost, reason=permanent.card.name)
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
             return
         index = next(
