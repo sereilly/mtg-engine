@@ -54,6 +54,7 @@ from .effects import (
     _parse_doesnt_untap_next_step, _parse_double, _parse_draw, _parse_enchant,
     _parse_end_the_turn, _parse_exchange_control, _parse_exile_graveyard,
     _parse_further_subjects,
+    _parse_coin_flip_stakes_loop,
     _parse_exile_top_of_library, _parse_extra_turn, _parse_fight, _parse_flip_coin,
     _parse_gain_control, _parse_gains, _parse_game_is_a_draw, _parse_gets,
     _parse_exchange_life_totals,
@@ -318,6 +319,13 @@ def parse_subject_verb(
         modal = _parse_modal_head(stream)
         if modal is not None:
             return modal
+    # Game of Chaos's whole four-sentence paragraph, which *opens* with "Flip a
+    # coin." and would otherwise be read as that sentence alone, stranding the
+    # three behind it. Tried first for that reason and refuses without
+    # consuming, so the bare imperative below keeps every other card.
+    stakes = _parse_coin_flip_stakes_loop(stream)
+    if stakes is not None:
+        return stakes
     # "Flip a coin." (CR 705.1) — a bare imperative like the ones below, and
     # the only production that reads the word, so any other "flip …" sentence
     # (Chaos Orb's) falls through untouched.

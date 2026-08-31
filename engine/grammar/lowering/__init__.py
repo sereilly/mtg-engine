@@ -275,6 +275,7 @@ from .game import (
     _lower_lose_life,
     _lower_pay_life,
     _lower_coin_flip_damage_loop,
+    _lower_coin_flip_stakes_loop,
     _lower_damage_this_game_history,
 )
 
@@ -328,6 +329,7 @@ __all__ = [
     "_lower_damage_dealt_riders",
     "_lower_damage_conjunction",
     "_lower_coin_flip_damage_loop",
+    "_lower_coin_flip_stakes_loop",
     "_lower_damage_this_game_history",
     "_lower_damage_cant_be_prevented",
     "_lower_prevent_damage",

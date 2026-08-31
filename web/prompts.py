@@ -871,6 +871,21 @@ def _face_down_cast(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("flip_again")
+def _flip_again(ctx: PromptContext, choices: list) -> dict:
+    """Game of Chaos: whether the player the last flip favoured runs it again.
+
+    ``stake`` is what the *next* round is worth, which is the whole decision —
+    the round just played is already paid for.
+    """
+    choice = choices[0]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "stake": int(choice.data.get("stake", 0)),
+    }
+
+
 @prompt_renderer("exile_from_hand_choice")
 def _exile_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
     """Ice Cauldron: which card in this seat's hand is exiled under the artifact.

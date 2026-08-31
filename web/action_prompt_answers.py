@@ -469,6 +469,21 @@ def _action_kudzu_reattach_confirm(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="invalid Kudzu reattach selection")
 
+@action_handler("flip_again_confirm")
+def _action_flip_again_confirm(session, req, seat_type):
+    # Game of Chaos: the player the last flip favoured says whether it happens
+    # again, at double the stake. Only that seat may answer — the offer is made
+    # to one player and the other has just lost the round.
+    pending = next(
+        (c for c in session.game.pending_choices_of("flip_again")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no coin flip pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if not session.game.confirm_flip_again(req.seat, req.accept is not False):
+        raise HTTPException(status_code=400, detail="invalid coin-flip answer")
+
 @action_handler("exile_from_hand_confirm")
 def _action_exile_from_hand_confirm(session, req, seat_type):
     # Ice Cauldron: the seat picks a card in its hand to exile under the

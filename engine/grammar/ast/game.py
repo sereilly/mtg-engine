@@ -73,6 +73,33 @@ class ExchangeLifeTotals:
 
 
 @dataclass(frozen=True)
+class CoinFlipStakesLoop:
+    """"Flip a coin. If you win the flip, you gain N life and target opponent
+    loses N life, and you decide whether to flip again. If you lose the flip,
+    you lose N life and that opponent gains N life, and that player decides
+    whether to flip again. Double the life stakes with each flip." (Game of
+    Chaos.)
+
+    One node for the whole paragraph, like Mana Clash's flip loop: every
+    sentence after the first reads a flip only the first produces, and the
+    offer that repeats it is answered by whichever player the *result* names.
+    Read as separate statements it would be four effects, and the one that
+    decides whether there is a next round would have nothing to repeat.
+
+    ``stake`` is the printed life total on the first flip — one number, because
+    the four printed amounts are one quantity and a production that let them
+    differ would compile a card nobody printed.
+
+    ``doubling`` is the last sentence, and it is a field rather than a required
+    word so that reading it changes what happens: without it the stake is
+    constant, which is a real card one word shorter, and with it the words are
+    load-bearing rather than consumed and dropped.
+    """
+    stake: Amount
+    doubling: bool = False
+
+
+@dataclass(frozen=True)
 class Ante:
     """"Ante the top card of your library." (CR 407.)
 

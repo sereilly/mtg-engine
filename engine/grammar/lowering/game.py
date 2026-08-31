@@ -752,6 +752,33 @@ def _lower_pay_life(node: ast.PayLife) -> tuple[OracleInstruction, ...]:
 _HISTORY_RECIPIENTS = frozenset({"opponent", "planeswalker"})
 
 
+def _lower_coin_flip_stakes_loop(
+    node: ast.CoinFlipStakesLoop,
+) -> tuple[OracleInstruction, ...]:
+    """Game of Chaos's whole paragraph as one instruction.
+
+    Not composed out of ``flip_coin`` and two conditionals, which is how Bottle
+    of Suleiman's two branches are built: those branches are the end of the
+    effect, and these two each end in an *offer to run the paragraph again* —
+    made to a different player depending on which branch ran, at a stake the
+    round after it doubles. Nothing in the composed shape can carry either
+    fact, and a lowering that dropped them would compile a card that flips once
+    for one life.
+
+    The stake must be a printed number: it is doubled by the round behind it, so
+    an announced X would be a quantity resolved once and then scaled by a
+    handler that never saw the announcement.
+    """
+    if not isinstance(node.stake, ast.Fixed):
+        raise LoweringError("a doubling stake is a printed number", node=node)
+    return (
+        OracleInstruction(
+            "coin_flip_stakes_loop", "",
+            {"stake": int(node.stake.value), "doubling": bool(node.doubling)},
+        ),
+    )
+
+
 def _lower_coin_flip_damage_loop(
     node: ast.CoinFlipDamageLoop,
 ) -> tuple[OracleInstruction, ...]:

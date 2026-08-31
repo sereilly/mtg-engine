@@ -2608,6 +2608,46 @@ class PendingChoicesMixin:
         if not options or not self._resolve_cast_choice(choice, options[0]):
             self._record_cast_choice(choice, 0)
 
+    # -- Whether a coin flip happens again, and at what stake ----------------
+
+    def confirm_flip_again(self, player_index: int, accept: bool = True) -> bool:
+        """Answer Game of Chaos's "…decides whether to flip again"."""
+        return self.resolve_pending_choice(
+            "flip_again", player_index, accept=accept
+        )
+
+    def _resolve_flip_again(self, choice: PendingChoice, accept: bool) -> bool:
+        """Run the paragraph again, or stop.
+
+        The next round is the *same* instruction with the next stake already on
+        its payload, carried here when the offer was armed — so this does not
+        have to know what the card doubles or who decides next, which is the
+        handler's business and stays there.
+        """
+        again = choice.data.get("_again")
+        context = choice.data.get("_context")
+        self.discard_pending_choice(choice)
+        player = self.players[choice.player_index]
+        if not accept or again is None or context is None:
+            self.log.append(
+                f"{player.name} declined to flip again "
+                f"({choice.data.get('card_name', 'an effect')})"
+            )
+            return True
+        self._execute_oracle_instruction(again, context)
+        return True
+
+    def _default_flip_again(self, choice: PendingChoice) -> None:
+        """The stated policy: **stop**.
+
+        Not a valuation. The offer doubles the stake every round and the flip is
+        even money, so there is no number a seat with no policy can be right
+        about — and a default of "yes" is not a default, it is a game that never
+        ends. A seat that should press its luck needs a weight in
+        ``engine/ai_valuation.py``, not a branch here.
+        """
+        self._resolve_flip_again(choice, False)
+
     # -- A card exiled out of a hand -----------------------------------------
 
     def live_exile_from_hand_choices(self, choice: PendingChoice) -> list[int]:
@@ -4664,6 +4704,28 @@ register_choice(
     # the stated default is taken where the effect stands. That is also what
     # keeps AI and headless play free of the suspension above.
     default_at_arm=True,
+    spectator_visible=True,
+)
+
+register_choice(
+    "flip_again",
+    resolve=lambda game, choice, r: game._resolve_flip_again(
+        choice, bool(r.get("accept", True))
+    ),
+    default=lambda game, choice: game._default_flip_again(choice),
+    action="flip_again_confirm",
+    prompt_key="flip_again",
+    blocked_detail="decide whether to flip again before other actions",
+    # The answer is whether the *rest of this resolution* happens at all, so
+    # nothing may run past it (CR 608.2) — and the round it starts arms the next
+    # offer, which is how a chain of decisions stays one resolution.
+    suspends=True,
+    # A non-interactive seat never queues it: the stated default is to stop, and
+    # taking it where the offer stands is what keeps AI and headless play from
+    # holding a resolution open on a decision nobody will make.
+    default_at_arm=True,
+    # Both players' life totals are public, and so is whose decision it is.
+    hidden_for_ai=False,
     spectator_visible=True,
 )
 
