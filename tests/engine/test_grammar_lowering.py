@@ -4644,3 +4644,88 @@ def test_the_noun_form_of_the_damage_rider_is_the_same_rider():
 
     assert lowered.kind == "deal_damage"
     assert lowered.payload["no_regen"] is True
+
+
+# --- FixA: "of their choice" leaves no payload key behind ---
+
+
+def _payload_keys(payload, out: set[str]) -> set[str]:
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            out.add(key)
+            _payload_keys(value, out)
+    elif isinstance(payload, (list, tuple)):
+        for value in payload:
+            _payload_keys(value, out)
+    return out
+
+
+def test_no_supported_card_carries_their_choice_into_a_handler(catalog):
+    """"Of their choice" says *who picks*, which no matcher can test — the word
+    is deliberately outside ``TESTABLE_SUBJECT_FILTER_KEYS``.
+
+    ``to_payload`` emits it so a gate can see it, but only the gates asking
+    "are all these keys testable?" look, and several lowerings ask none. The
+    Abyss went through one of those: the key rode into a
+    ``destroy_target_permanent`` payload, nothing outside ``engine/grammar``
+    read it, and the ability's *controller* picked which of the affected
+    player's creatures died.
+
+    A key nothing reads is invisible to every other instrument in the repo —
+    the census counts the card supported, ``--hollow-lines`` sees an ability
+    part, and ``parse_coverage`` sees the sentence claimed. So the pool is asked
+    directly: a lowering that admits the word must lift it off and perform it.
+    """
+    from engine.oracle import compile_card_oracle
+
+    carriers = []
+    for card in catalog:
+        program = compile_card_oracle(card)
+        if not program.supported:
+            continue
+        keys: set[str] = set()
+        for instruction in program.instructions:
+            _payload_keys(instruction.payload or {}, keys)
+        for ability in program.activated_abilities:
+            if ability.instruction is not None:
+                _payload_keys(ability.instruction.payload or {}, keys)
+        for trigger in program.triggered_abilities:
+            if trigger.instruction is not None:
+                _payload_keys(trigger.instruction.payload or {}, keys)
+        if "their_choice" in keys:
+            carriers.append(card.name)
+
+    assert carriers == [], (
+        "these cards hand a handler a key nothing reads: "
+        + ", ".join(sorted(carriers))
+    )
+
+
+def test_a_lowering_that_does_not_perform_the_choice_refuses_the_word():
+    """The refusal is what makes the sentence in ``lowering/board.py`` a
+    mechanism instead of a claim. Asked of a printed line rather than of
+    ``_filter_payload`` directly, because what has to hold is that a *card*
+    saying it cannot compile into a payload nobody reads.
+
+    In contrast with the same sentence without the phrase, which is the whole
+    assertion: what refuses is the three words, not the bounce."""
+    plain = compile_line(
+        "Return target creature to its owner's hand.", card_name="Untested Bounce"
+    )
+    assert plain.lowered and plain.instructions
+
+    chosen = compile_line(
+        "Return target creature of their choice to its owner's hand.",
+        card_name="Untested Bounce",
+    )
+    assert not chosen.instructions, (
+        "no bounce handler asks anybody, so the phrase must refuse rather than "
+        "compile into a key nothing reads"
+    )
+    # The refusal names the phrase, whichever gate got there first — the
+    # bounce family's own testability check, or `_filter_payload`'s blanket
+    # one behind it.
+    assert "their" in (chosen.lowering_error or "")
+
+
+# --- end FixA ---
