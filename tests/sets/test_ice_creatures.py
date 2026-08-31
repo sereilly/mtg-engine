@@ -1870,3 +1870,77 @@ def test_the_mount_carries_nobody_until_its_ability_is_activated(set_pool):
 
     assert mount in list(game.controlled_by(game.players[0]))
 # --- end W2G4 ---
+
+
+# --- W3G1: granted abilities in quotes ---
+def _shaman_game(pool):
+    """Bone Shaman for seat 0, a regenerating Bear for seat 1."""
+    shaman = _nosick(Permanent(card=pool["Bone Shaman"]))
+    victim = _nosick(Permanent(card=pool["Balduvian Bears"]))
+    victim.regeneration_shield = True
+    p1 = PlayerState(name="P1", battlefield=[shaman], life=20)
+    p2 = PlayerState(name="P2", battlefield=[victim], life=20)
+    game = Game(players=[p1, p2])
+    game._settle()
+    return game, shaman, victim
+
+
+def _activate_shaman(game):
+    game.players[0].mana_pool["B"] = 1
+    result = game.activate_permanent_ability(0, "Bone Shaman")
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+    return result
+
+
+def test_bone_shaman_grants_itself_the_no_regeneration_rider(set_pool):
+    """"{B}: Until end of turn, this creature gains "Creatures dealt damage by
+    this creature this turn can't be regenerated this turn.""
+
+    A grant of a whole printed sentence (CR 113.3), and the sentence is a
+    *static* one the damage seam reads off the damager — so the assertion is
+    that a shielded creature Bone Shaman damages dies anyway (CR 701.19c).
+    """
+    pool = set_pool("ICE")
+    game, shaman, victim = _shaman_game(pool)
+
+    assert _activate_shaman(game).supported
+    game._mark_damage_on_permanent(victim, 2, source=shaman)
+    game.check_state_based_actions()
+
+    assert victim not in list(game.controlled_by(game.players[1]))
+    assert [card.name for card in game.players[1].graveyard] == ["Balduvian Bears"]
+
+
+def test_bone_shaman_leaves_regeneration_alone_before_it_is_activated(set_pool):
+    """The shield is the control: without the grant the same damage is survived,
+    so the test above is measuring the granted ability and not the damage."""
+    pool = set_pool("ICE")
+    game, shaman, victim = _shaman_game(pool)
+
+    game._mark_damage_on_permanent(victim, 2, source=shaman)
+    game.check_state_based_actions()
+
+    assert victim in list(game.controlled_by(game.players[1]))
+    assert not victim.regeneration_shield
+
+
+def test_bone_shaman_stops_denying_regeneration_when_the_grant_expires(set_pool):
+    """"Until end of turn" — a duration dropped from a quoted grant would be a
+    permanent ability nobody printed."""
+    pool = set_pool("ICE")
+    game, shaman, victim = _shaman_game(pool)
+    _activate_shaman(game)
+    game.resolve_cleanup_step(0)
+    game._settle()
+    # CR 514.2 ends the shield with the turn as well, so it is re-armed here:
+    # what this test is about is the *grant* expiring, and a victim with nothing
+    # to regenerate with would pass it whether or not the grant did.
+    victim.regeneration_shield = True
+
+    game._mark_damage_on_permanent(victim, 2, source=shaman)
+    game.check_state_based_actions()
+
+    assert victim in list(game.controlled_by(game.players[1]))
+# --- end W3G1 ---

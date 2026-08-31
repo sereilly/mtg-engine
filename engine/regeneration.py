@@ -59,6 +59,51 @@ _SELF_REGENERATION = re.compile(
 #: things that raise it cannot disagree about the spelling.
 CANT_BE_REGENERATED = "cant_be_regenerated_this_turn"
 
+#: "Creatures dealt damage by this creature this turn can't be regenerated this
+#: turn." (Bone Shaman grants it; Runesword's *targeted* wording is the same
+#: rule stated as a one-shot.) CR 701.19c seen from the dealer's end: it is a
+#: standing property of the damager rather than a rider on one event, so it is
+#: derived from the permanent's text at the damage seam exactly as the static
+#: regeneration above is derived at the destruction paths.
+#:
+#: The noun is payload for the reason it is one row up, and the whole sentence
+#: is anchored: a narrower printing ("creatures dealt damage by this creature
+#: **during your turn**") would be a different rule and must keep refusing.
+_DENIES_REGENERATION = re.compile(
+    rf"^creatures dealt damage by this {_SELF_NOUN} this turn "
+    r"can't be regenerated this turn$"
+)
+
+
+def _normalized_line(line: str) -> str:
+    """One printed line as these patterns read it: no reminder text, no case,
+    no trailing full stop."""
+    return re.sub(r"\([^)]*\)", "", line or "").strip().lower().rstrip(".").strip()
+
+
+def denies_regeneration_line(line: str) -> bool:
+    """Whether one printed line is, in full, the dealer-side rider above.
+
+    Read by the support gate and by the grammar's parse claim, like its
+    neighbour — and by ``engine/granted_abilities.py``'s probe through both,
+    which is what lets Bone Shaman grant the sentence at all.
+    """
+    return bool(_DENIES_REGENERATION.match(_normalized_line(line)))
+
+
+def denies_regeneration(permanent: "Permanent") -> bool:
+    """Whether damage *permanent* deals leaves its victim unregenerable.
+
+    ``effective_card`` rather than ``card``, for the reason
+    :func:`regenerates_itself` gives: the sentence arrives on Bone Shaman as a
+    layer-6 grant and is folded in there, so a reader of the printed text would
+    see nothing at all.
+    """
+    return any(
+        denies_regeneration_line(line)
+        for line in (permanent.effective_card.oracle_text or "").splitlines()
+    )
+
 
 def self_regeneration_line(line: str) -> bool:
     """Whether one printed line is, in full, the CR 701.19b static above.
@@ -69,8 +114,7 @@ def self_regeneration_line(line: str) -> bool:
     one produces no instruction and would report unsupported however well the
     replacement worked.
     """
-    normalized = re.sub(r"\([^)]*\)", "", line or "").strip().lower().rstrip(".").strip()
-    return bool(_SELF_REGENERATION.match(normalized))
+    return bool(_SELF_REGENERATION.match(_normalized_line(line)))
 
 
 def regenerates_itself(permanent: "Permanent") -> bool:
