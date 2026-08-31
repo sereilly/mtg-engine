@@ -206,9 +206,9 @@
       "updated_at": 1783048805.0088525
     },
     "Candelabra of Tawnos": {
-      "reason": "It should ask me how many lands to untap",
-      "status": "fail",
-      "updated_at": 1787807488.142274
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1788202934.1076071
     },
     "Castle": {
       "reason": "",
@@ -1536,9 +1536,9 @@
       "updated_at": 1781585859.2176287
     },
     "Silent Dart": {
-      "reason": "I get an error saying no valid creature targets but the card sacrifices itself",
-      "status": "fail",
-      "updated_at": 1787458319.702542
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1788202918.5081973
     },
     "Simulacrum": {
       "reason": "",

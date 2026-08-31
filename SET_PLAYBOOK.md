@@ -193,6 +193,14 @@ Both open failures were closed in the same round this decision was written
 (Candelabra of Tawnos, an unplayable `{X}` activation, and Silent Dart, already
 fixed by the CR 602.2b gate and never re-checked), and each now has a test.
 
+**Amended 2026-08-31: fixing the card is not closing the report.** Both rows
+went on reading ❌ for three days after that round, because a tracker row
+records what a human saw in the app and no code change clears one. They were
+re-checked in the running app and recorded through the Debug Menu, and the
+failure count is 0. A round that fixes a reported card owes the re-check, not
+just the fix — put it in the same round or the repo advertises a live bug it
+has already closed.
+
 Drained at 4ED's Phase 0: the CI suite-time budget. The item said not to touch
 either number until someone read a real run, and reading three settled it — the
 ratio never worked because `BASELINE` was a local measurement compared against
@@ -919,4 +927,9 @@ test. Nine name-keyed hooks retired and **none added**, so reliance fell 6.0% �
 4.2% while the pool grew by a third. Grammar coverage 87.2% parsed / 54.9%
 executed. Two engine-wide findings left for their own rounds, recorded in
 ROADMAP: a delayed trigger binding a departed target *by index*, and The Abyss
-arming no prompt for "of their choice".
+arming no prompt for "of their choice". *(Both were taken as follow-on rounds
+the same day and both found the recorded scope wrong — the first was nine live
+activated abilities rather than a delayed-trigger binding, the second was a
+dropped `controller` keyword before it was a missing prompt. The ROADMAP entries
+they pointed at are gone with the fixes; the warning they left is in ROADMAP's
+Ice Age section.)*

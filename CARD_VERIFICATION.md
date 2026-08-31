@@ -3,8 +3,8 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **1508**
-- Passed: **468** (383 checked in-game, 85 auto-passed)
-- Failed: **2**
+- Passed: **470** (385 checked in-game, 85 auto-passed)
+- Failed: **0**
 - Equivalent to a passing card: **18**
 - Untested: **1020**
 
@@ -196,7 +196,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Camel | ✅ pass |  |
 | Camouflage | ✅ pass |  |
 | Cancel | ≡ equivalent | same behaviour as Counterspell |
-| Candelabra of Tawnos | ❌ fail | It should ask me how many lands to untap |
+| Candelabra of Tawnos | ✅ pass |  |
 | Canopy Stalker | ⬜ untested |  |
 | Capture Sphere | ⬜ untested |  |
 | Caribou Range | ⬜ untested |  |
@@ -1177,7 +1177,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Sibilant Spirit | ⬜ untested |  |
 | Siege Striker | ⬜ untested |  |
 | Sigiled Contender | ⬜ untested |  |
-| Silent Dart | ❌ fail | I get an error saying no valid creature targets but the card sacrifices itself |
+| Silent Dart | ✅ pass |  |
 | Silhouette | ⬜ untested |  |
 | Silver Erne | ✅ pass | auto-pass: keywords only (flying, trample) |
 | Silversmote Ghoul | ⬜ untested |  |

@@ -147,8 +147,57 @@ Invoke-WebRequest -UseBasicParsing -Method Post "http://127.0.0.1:8010/api/sessi
 foreground form blocks the shell and is only useful with a human at a real
 browser — for agents use the detached-server + playwright-cli path above.
 
+## Verifying one card in-game
+
+The full loop for "does this card actually work in the app", which is what
+`CARD_VERIFICATION.md` records. Fixing a card in the engine does **not** clear a
+failing row — only a recorded in-game check does.
+
+```powershell
+& $pw resize 1920 1080     # do this FIRST — see the prompt-panel gotcha below
+& $pw click "#homeHostBtn"; & $pw click "#startBtn"; Start-Sleep 5
+# Pregame: "Go First"/"Go Second", then "Keep Hand" — find their refs with `snapshot`.
+
+# Put the card and its supporting board in play, from the Debug Menu.
+& $pw click "#debugToggleBtn"
+& $pw fill "#debugCardSearch" "Candelabra of Tawnos"; Start-Sleep 2
+& $pw click "#debugCastFreeBtn"            # onto YOUR battlefield
+& $pw click "#debugCastFreeOpponentBtn"    # onto the opponent's (for a target)
+& $pw click "#debugAddManaToggle"          # adds a clickable mana rail down the right edge
+& $pw click "#debugCloseBtn"
+```
+
+Then **click the permanent on the canvas** (below), drive whatever prompts
+appear, and check the result against the state API rather than the picture:
+
+```powershell
+$sid = (& $pw requests) -match 'api/sessions/(\w+)' | Out-Null; $matches[1]
+.\.venv\Scripts\python.exe -c "import json,urllib.request; s=json.load(urllib.request.urlopen('http://127.0.0.1:8010/api/sessions/$sid/state?seat=0')); print([(c['name'],c.get('tapped')) for c in s['players'][0]['battlefield']]); print(s['log'][-5:])"
+```
+
+Record the result the way the tracker expects — the Debug Menu, not the JSON:
+
+```powershell
+& $pw click "#debugToggleBtn"; & $pw click "#debugMarkResultBtn"
+& $pw fill "#verifyCardName" "Candelabra of Tawnos"; Start-Sleep 2
+& $pw click "#verifyResultRow input[value='pass']"    # or value='fail' + a reason
+& $pw click "#verifyResultSubmitBtn"
+& $pw --raw eval "document.querySelector('#debugVerifyProgress').textContent"
+```
+
+That rewrites `CARD_VERIFICATION.md` and `card_verification.json` on disk.
+
 ## Gotchas
 
+- **Clicking a permanent means clicking a coordinate.** There is no selector for
+  one, so read the position off a screenshot and use real mouse events:
+  `mousemove <x> <y>`, then `mousedown`, then `mouseup` (three separate
+  commands). `click` needs a selector and cannot reach the board.
+- **Resize to 1920x1080 before touching the board.** At the default width the
+  Current Prompt panel sits on top of the right-hand half of your own
+  battlefield row, so a permanent that exists is unclickable — and the board
+  **re-lays out** whenever a permanent enters either side, which silently moves
+  whatever you were about to click. Re-screenshot after every state change.
 - **The battlefield is canvas-rendered.** `web/static/battlefield-canvas.js`
   paints cards/permanents onto a `<canvas>`. DOM selectors like `.card` find
   **nothing** on the board — `document.querySelectorAll(".card").length` is 0

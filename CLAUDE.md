@@ -835,7 +835,7 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (468 of the 1,508 catalog cards passing — 383
+manually validated in-game (470 of the 1,508 catalog cards passing — 385
 checked in-game and 85 auto-passed — with 18 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark and Ice Age, all five
 promoted before their in-game pass — have no recorded result yet, which
@@ -847,8 +847,11 @@ every result its cards already have. **Ice Age is the opposite pole**: 346 new
 cards, the largest single addition to the untested count since the tracker
 existed, which took it from 708 to 1,020. A card can also be recorded **failing**: that
 is an in-game bug report with a card name on it, and it stays in the tracker
-until the card is fixed and re-checked. **Generated automatically** — results
-are edited via the in-game Debug Menu, not by hand.
+until the card is fixed **and re-checked in the app** — fixing the code does not
+clear the row, which is how Candelabra of Tawnos and Silent Dart went on
+reporting ❌ for three days after their fixes landed. The failure count is 0.
+**Generated automatically** — results are edited via the in-game Debug Menu, not
+by hand.
 
 A *simple* card — no abilities at all, or nothing but keyword lines the engine
 implements (`engine.oracle.simple_card_keywords`: a vanilla creature, a
