@@ -258,9 +258,18 @@ def _spell_is_one_of_classes(card, classes) -> bool:
     return False
 
 
-def _spell_targets_matching(game, item, described: dict, observer: int) -> bool:
+def _spell_targets_matching(
+    game, item, described: dict, observer: int, source=None
+) -> bool:
     """Whether the spell *item* chose a permanent the filter *described* names —
     "…that targets a permanent you control" (Avoid Fate, Ring of Immortals).
+
+    *source* is the ability's own permanent, and passing it narrows the question
+    to "…that targets **this creature**" (Mistfolk). An identity, not a
+    description, so it is compared by ``permanent_id`` rather than folded into
+    the filter — the lowering lifts the word out of the noun phrase for the same
+    reason. ``None`` asks the unnarrowed question, which is every other card
+    printing this clause.
 
     Read off the stack item's recorded target *ids* (CR 601.2c), never its
     indices: time passes between the spell being cast and this counter
@@ -281,7 +290,11 @@ def _spell_targets_matching(game, item, described: dict, observer: int) -> bool:
         found = game.permanent_by_id(permanent_id)
         if found is None:
             continue
-        if subject_matches(game, found, described, observer=observer):
+        if source is not None and found is not source:
+            continue
+        if subject_matches(
+            game, found, described, observer=observer, source=source
+        ):
             return True
     return False
 
@@ -345,9 +358,21 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # Immortals). A restriction on what the chosen spell itself chose, so it
         # is asked of the stack item's recorded targets rather than of the card.
         targets_filter = instruction.payload.get("targets_filter")
-        if targets_filter and not _spell_targets_matching(
-            game, target, dict(targets_filter),
-            game.players.index(context.caster),
+        # "…that targets **this creature**" (Mistfolk). The second half of the
+        # same question, asked with the ability's own source in hand. With the
+        # source already gone there is no permanent the spell could still be
+        # targeting, and the counter finds nothing — which is CR 608.2b's
+        # answer, not a missing check.
+        targets_source = (
+            context.source_permanent
+            if instruction.payload.get("targets_source") else None
+        )
+        if (
+            (targets_filter or targets_source is not None)
+            and not _spell_targets_matching(
+                game, target, dict(targets_filter or {}),
+                game.players.index(context.caster), source=targets_source,
+            )
         ):
             game.log.append(
                 f"{card.name}: {target.card.name} does not target a matching "
