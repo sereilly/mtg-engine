@@ -386,7 +386,7 @@ class UpkeepEffectsMixin:
         # Power Leak's whole printed line produced the instruction, so Errant
         # Minion — the same sentence one noun over — got the substring's "yes"
         # and no instruction at all. One production reads the clause now
-        # (`paragraphs._parse_pay_mana_to_prevent_upkeep_damage`) and stamps
+        # (`upkeep._parse_pay_mana_to_prevent_upkeep_damage`) and stamps
         # this key, so what is offered is exactly what was read.
         if trig.instruction.payload.get("prevent_up_to_paid_mana"):
             requested = 0
