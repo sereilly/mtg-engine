@@ -732,11 +732,10 @@ def lower_statement(
     if isinstance(statement, ast.RemoveFromCombat):
         return _lower_remove_from_combat(statement, produced)
 
-    # In the chain, not the table: the event decides whether "that creature
-    # gains first strike" names a block pair's other half or nothing at all.
+    # In the chain: the event decides whether "that creature gains first
+    # strike" names a block pair's other half or nothing at all.
     if isinstance(statement, ast.GainKeyword):
         return _lower_gain_keyword(statement, event, event_subject)
-
     if isinstance(statement, ast.CreateDelayedTrigger):
         return _lower_create_delayed_trigger(statement, lower_statement(
             # The delay's own noun phrase is the created ability's narrowing —

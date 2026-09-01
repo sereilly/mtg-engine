@@ -1168,14 +1168,16 @@ def source_bites_target(game, instruction, context):
         game.log.append(f"{card.name}: nothing to deal the damage")
         return True, "resolved"
     filters = instruction.payload.get("filter") or {}
+    # "…to **another** target creature" (Farrel's Mantle) — re-checked here
+    # rather than trusted from the picker, the rule every narrowed handler
+    # follows. It is the *biter* that is excluded, which for an Aura is not the
+    # ability's source; and the key is only set where the word is printed, so
+    # Karplusan Yeti may still aim its own ability at itself.
+    excluded = source if instruction.payload.get("exclude_biter") else None
     victim = resolve_target_permanent(
         game, context,
-        # "…to **another** target creature": re-checked here rather than
-        # trusted from the picker, the rule every narrowed handler follows —
-        # and it is the *biter* that is excluded, which for an Aura is not the
-        # ability's source.
         predicate=lambda perm: (
-            perm is not source and permanent_matches_filter(perm, filters)
+            perm is not excluded and permanent_matches_filter(perm, filters)
         ),
     )
     # What the sentence after this one means by "that creature" (Tracker), by

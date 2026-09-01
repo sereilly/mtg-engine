@@ -456,13 +456,9 @@ def _lower_damage_shape(
     # information (CR 608.2), which the Permanent object still carries because
     # nothing off the battlefield touches it. Its own kind rather than the
     # generic damage, because the amount is a *read* rather than a number.
-    # …and the same sentence on an **Aura**, where the biter is the permanent it
-    # enchants rather than the Aura (Farrel's Mantle). CR 113.7a keeps the
-    # ability the Aura's, so the source stays the Aura and *which permanent
-    # deals the damage* is payload — the same split
-    # `assign_no_combat_damage_until_eot` makes for the same reason, and the
-    # only one available: an Aura's power is nothing at all, so a bite read off
-    # the source would deal zero and report itself resolved.
+    # …and on an **Aura**, whose biter is the permanent it enchants (Farrel's
+    # Mantle): the ability stays the Aura's (CR 113.7a) and the dealer is
+    # payload, because an Aura has no power to deal.
     if (
         isinstance(node.amount, ast.ThatMuch)
         and node.amount.source == "its_power"
@@ -477,19 +473,14 @@ def _lower_damage_shape(
         payload["filter"] = _filter_payload(node.recipients[0].filter)
         if _is_enchanted(node.source):
             payload["biter"] = "attached"
-            # "…to **another** target creature" (Farrel's Mantle). "Another"
-            # than the creature dealing the damage (CR 109.5's rule read about
-            # the object the sentence names, not about the Aura it is printed
-            # on) — so the exclusion moves with the biter. Left as
-            # ``exclude_self`` the picker would exclude the *Aura*, which is
-            # not a creature and was never on the list, and offer the attacker
-            # itself as its own victim.
-            for described in (payload.get("targets") or {}), payload:
-                if described.get("filter", {}).pop("exclude_self", None):
-                    described["filter"]["exclude_attached"] = True
-        # "…equal to its power **plus 2**" (Farrel's Mantle). CR 107.3's
-        # constant, carried rather than dropped: two fewer damage than the card
-        # prints is exactly the silent narrowing a dropped rider always is.
+            # "…to **another** target creature": other than the creature
+            # *dealing* it — left as ``exclude_self`` the picker excludes the
+            # Aura, never on the list, and offers the host as its own victim.
+            described = (payload.get("targets") or {}).get("filter") or {}
+            if described.pop("exclude_self", None):
+                described["exclude_attached"] = True
+                payload["exclude_biter"] = True
+        # "…its power **plus 2**" (Farrel's Mantle): CR 107.3's constant.
         if node.amount.bonus:
             payload["power_bonus"] = node.amount.bonus
         return (OracleInstruction("source_bites_target", "", payload),)
