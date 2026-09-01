@@ -622,12 +622,30 @@ def _cost_picker_spec(cost) -> dict | None:
         if getattr(cost, "exile_zone", "battlefield") == "graveyard":
             spec = {
                 "kind": GRAVEYARD_TARGET_KIND,
-                "own_graveyard_only": True,
                 "exile_cost": True,
             }
+            # Whose pile the payer may reach into. "from **your** graveyard"
+            # (Necropolis) is one seat; "from a single graveyard" (Night Soil)
+            # is anybody's, and the charger really does enumerate every seat —
+            # so a picker that said "your own" here would offer less than the
+            # cost accepts, which is the picker/charger disagreement this file
+            # exists to prevent, in the direction that hides a legal payment.
+            if getattr(cost, "exile_zone_owner", "you") == "you":
+                spec["own_graveyard_only"] = True
             wanted = described.get("type_filter")
             if isinstance(wanted, str):
                 spec["card_type"] = wanted
+            # How many the payer names. Emitted only when the printed count is
+            # more than one, so every spec written before a counted cost existed
+            # stays byte-identical.
+            count = int(getattr(cost, "exile_count", 1) or 1)
+            if count > 1:
+                spec["count"] = count
+            # "…from **a single** graveyard": all of them out of the same pile,
+            # which is a restriction on the *set* rather than on any one card
+            # and so cannot ride the filter.
+            if getattr(cost, "exile_same_zone", False):
+                spec["same_zone"] = True
             return spec
         spec = {
             "kind": filter_head_noun(described),
@@ -660,6 +678,13 @@ def _cost_picker_spec(cost) -> dict | None:
         # silently dropped.
         if described.get("exclude_self"):
             spec["exclude_source"] = True
+        # "Sacrifice **two** Goblins" (Goblin Warrens): how many the payer
+        # names. Emitted only above one, so every spec written before a counted
+        # sacrifice existed is unchanged — and "any" stays off it, because that
+        # cost already travels on ``cost_permanent_ids`` and has no fixed size.
+        sacrifice_count = getattr(cost, "sacrifice_count", 1)
+        if isinstance(sacrifice_count, int) and sacrifice_count > 1:
+            spec["count"] = sacrifice_count
         # `kind` already *is* the head noun, so re-stating it in the carried
         # filter would be the same restriction written twice. A type *union* has
         # no head noun (`kind` falls back to "permanent"), so it rides along.

@@ -581,3 +581,61 @@ def test_aggression_offers_a_creature_to_enchant(set_pool, catalog_by_name):
     _spec, refused, _game = cast("Wall of Stone")
     assert not refused.supported
 # --- end Promotion ---
+
+
+# --- G4 (Fallen Empires wave): Hecatomb's ping had no cost ------------------
+#
+# The same missing article as Karplusan Giant one file over: "Tap **an**
+# untapped Swamp you control" charged no tap at all, so the enchantment pinged
+# once per priority window forever.
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+
+
+def _g4_hecatomb_board(set_pool, swamps=1):
+    pool = set_pool("ICE")
+    lea = set_pool("LEA")
+    hecatomb = Permanent(card=pool["Hecatomb"])
+    marsh = [Permanent(card=lea["Swamp"]) for _ in range(swamps)]
+    p1 = PlayerState(name="P1", battlefield=[hecatomb, *marsh])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, p1, game.players[1], hecatomb, marsh
+
+
+def test_hecatomb_taps_a_swamp_to_deal_one_damage(set_pool):
+    """"**Tap an untapped Swamp you control**: This enchantment deals 1 damage
+    to any target."
+    """
+    game, _p1, p2, _hecatomb, marsh = _g4_hecatomb_board(set_pool)
+
+    result = game.activate_permanent_ability(
+        0, "Hecatomb", permanent_index=0, target_player_index=1,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert p2.life == 19
+    assert marsh[0].tapped
+
+
+def test_hecatomb_cannot_ping_twice_off_one_swamp(set_pool):
+    """A cost that matches nothing is a free ability, and a free ping is an
+    unlimited one: with the Swamp already tapped the second activation is
+    refused and the opponent takes no more damage.
+    """
+    game, _p1, p2, _hecatomb, _marsh = _g4_hecatomb_board(set_pool)
+    assert game.activate_permanent_ability(
+        0, "Hecatomb", permanent_index=0, target_player_index=1,
+    ).supported
+    game._settle()
+
+    result = game.activate_permanent_ability(
+        0, "Hecatomb", permanent_index=0, target_player_index=1,
+    )
+    game._settle()
+
+    assert not result.supported
+    assert p2.life == 19

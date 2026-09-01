@@ -18,9 +18,10 @@ import pytest
 
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.grammar import ast, parse_line
+from engine.grammar.lowering._common import chargeable_tap_filter
 from engine.mixins.stack.activation import COST_PERFORMING_KINDS
-from engine.oracle import (chargeable_sacrifice_payload, compile_card_oracle,
-                           parse_activated_ability_cost)
+from engine.oracle import (chargeable_exile_payload, chargeable_sacrifice_payload,
+                           compile_card_oracle, parse_activated_ability_cost)
 
 
 @pytest.fixture(scope="module")
@@ -71,6 +72,63 @@ def test_every_admitted_cost_clause_is_charged(pool):
                         unpaid.append(
                             f"{card.name}: charged {charged.sacrifice_filter} for "
                             f"{cost.filter.to_payload()}"
+                        )
+                    # …and *how many*. "Sacrifice **two** Goblins" (Goblin
+                    # Warrens) is the same filter with a count, and a charger
+                    # reading one is an ability at half price. Compared as the
+                    # grammar spells it: a printed number, or the payer's choice.
+                    wanted_count = (
+                        cost.count.value if isinstance(cost.count, ast.Fixed)
+                        else "any" if isinstance(cost.count, ast.AnyNumber)
+                        else None
+                    )
+                    if charged.sacrifice_count != wanted_count:
+                        unpaid.append(
+                            f"{card.name}: charged {charged.sacrifice_count} "
+                            f"sacrifice(s) for {wanted_count}"
+                        )
+                # "Tap two untapped Spirits you control" (Shacklegeist), "Tap
+                # **an** untapped Merfolk you control" (Vodalian War Machine).
+                # This branch was missing, and the gap it left was not
+                # hypothetical: ``_chargeable_tap_cost`` read the count through
+                # a word table that knew "a" and not "an", charged 0, and left
+                # three cards in the pool with a free, repeatable ability. The
+                # sacrifice branch above would have caught the same slip on the
+                # same day.
+                if isinstance(cost, ast.TapPermanentsCost):
+                    if charged.tap_count != cost.count:
+                        unpaid.append(
+                            f"{card.name}: charged {charged.tap_count} tap(s) "
+                            f"for {cost.count}"
+                        )
+                    elif charged.tap_filter != chargeable_tap_filter(cost.filter):
+                        unpaid.append(
+                            f"{card.name}: charged {charged.tap_filter} for "
+                            f"{chargeable_tap_filter(cost.filter)}"
+                        )
+                # "Exile a creature you control" (City of Shadows), "Exile
+                # **two** creature cards from a single graveyard" (Night Soil).
+                # The third chosen-object cost, and the same comparison: what
+                # may pay, and how many of it.
+                if isinstance(cost, ast.ExileCost):
+                    wanted_exile = chargeable_exile_payload(cost.filter.to_payload())
+                    if charged.exile_filter != wanted_exile:
+                        unpaid.append(
+                            f"{card.name}: charged {charged.exile_filter} for "
+                            f"{wanted_exile}"
+                        )
+                    wanted_count = (
+                        cost.count.value if isinstance(cost.count, ast.Fixed) else None
+                    )
+                    if charged.exile_count != wanted_count:
+                        unpaid.append(
+                            f"{card.name}: charged {charged.exile_count} "
+                            f"exile(s) for {wanted_count}"
+                        )
+                    if charged.exile_same_zone != cost.same_zone:
+                        unpaid.append(
+                            f"{card.name}: charged same_zone="
+                            f"{charged.exile_same_zone} for {cost.same_zone}"
                         )
                 if isinstance(cost, ast.DiscardCost) and not cost.last_drawn:
                     # "Discard your hand" and "Discard this card" are their own

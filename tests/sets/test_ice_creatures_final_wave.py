@@ -1356,3 +1356,86 @@ def test_goblin_ski_patrol_sacrifices_itself_and_not_the_opponents_board(set_poo
     assert [c.name for c in p1.graveyard] == ["Goblin Ski Patrol"], game.log
     assert {p.card.name for p in p2.battlefield} == {"Black Lotus", "Serra Angel"}
 # --- end Promotion ---
+
+
+# --- G4 (Fallen Empires wave): a tap cost that charged nothing --------------
+#
+# ``oracle._chargeable_tap_cost`` reads the printed count through
+# ``oracle_types._NUMBER_WORDS``, which knew "a" and not "an" -- so "Tap **an**
+# untapped snow land you control" charged 0 taps while the grammar's own amount
+# reader read the same word as one and admitted the line. Two shipped cards had
+# a free, repeatable ability for it; Fallen Empires' Vodalian War Machine has
+# two more of the same shape, which is how it was found.
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+
+
+def _g4_tap_cost_board(set_pool, lands=1):
+    pool = set_pool("ICE")
+    giant = Permanent(card=pool["Karplusan Giant"])
+    giant.metadata["summoning_sickness_turn"] = -99
+    snow = [Permanent(card=pool["Snow-Covered Mountain"]) for _ in range(lands)]
+    p1 = PlayerState(name="P1", battlefield=[giant, *snow])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, p1, giant, snow
+
+
+def test_karplusan_giant_taps_a_snow_land_to_pump(set_pool):
+    """"**Tap an untapped snow land you control**: This creature gets +1/+1
+    until end of turn."
+
+    The land really is tapped. This is the half that was free: the cost matched
+    nothing, so the Giant grew by +1/+1 as often as anyone cared to ask and no
+    land ever turned sideways.
+    """
+    game, _p1, giant, snow = _g4_tap_cost_board(set_pool)
+
+    result = game.activate_permanent_ability(0, "Karplusan Giant", permanent_index=0)
+    game._settle()
+
+    assert result.supported, result.details
+    assert (giant.effective_power, giant.effective_toughness) == (4, 4)
+    assert snow[0].tapped
+
+
+def test_karplusan_giant_cannot_pump_twice_off_one_snow_land(set_pool):
+    """The control, and the whole point: a cost that matches nothing is not a
+    refused ability, it is an unlimited one. With its only snow land tapped the
+    second activation is refused (CR 602.2b) and the Giant stays 4/4.
+    """
+    game, _p1, giant, _snow = _g4_tap_cost_board(set_pool)
+    assert game.activate_permanent_ability(
+        0, "Karplusan Giant", permanent_index=0
+    ).supported
+    game._settle()
+
+    result = game.activate_permanent_ability(0, "Karplusan Giant", permanent_index=0)
+    game._settle()
+
+    assert not result.supported
+    assert (giant.effective_power, giant.effective_toughness) == (4, 4)
+
+
+def test_karplusan_giant_will_not_tap_a_land_that_is_not_snow(set_pool):
+    """"…an untapped **snow** land". The supertype is a narrowing, so an
+    ordinary Mountain pays nothing.
+    """
+    pool = set_pool("ICE")
+    lea = set_pool("LEA")
+    giant = Permanent(card=pool["Karplusan Giant"])
+    giant.metadata["summoning_sickness_turn"] = -99
+    mountain = Permanent(card=lea["Mountain"])
+    p1 = PlayerState(name="P1", battlefield=[giant, mountain])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(0, "Karplusan Giant", permanent_index=0)
+    game._settle()
+
+    assert not result.supported
+    assert not mountain.tapped
+    assert (giant.effective_power, giant.effective_toughness) == (3, 3)
