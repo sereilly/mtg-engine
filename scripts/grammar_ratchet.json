@@ -1,24 +1,24 @@
 {
   "floors": {
     "2ED": {
-      "executed_pct": 46.5,
-      "lowered_pct": 82.8,
-      "parsed_pct": 84.1
+      "executed_pct": 46.8,
+      "lowered_pct": 83.0,
+      "parsed_pct": 84.3
     },
     "3ED": {
-      "executed_pct": 49.1,
-      "lowered_pct": 84.6,
-      "parsed_pct": 86.4
+      "executed_pct": 49.4,
+      "lowered_pct": 84.8,
+      "parsed_pct": 86.6
     },
     "4ED": {
-      "executed_pct": 53.7,
-      "lowered_pct": 89.8,
-      "parsed_pct": 90.2
+      "executed_pct": 53.8,
+      "lowered_pct": 90.0,
+      "parsed_pct": 90.4
     },
     "ALL": {
-      "executed_pct": 55.1,
-      "lowered_pct": 86.4,
-      "parsed_pct": 87.3
+      "executed_pct": 56.1,
+      "lowered_pct": 87.1,
+      "parsed_pct": 88.0
     },
     "ARN": {
       "executed_pct": 50.9,
@@ -35,20 +35,25 @@
       "lowered_pct": 96.4,
       "parsed_pct": 96.4
     },
+    "FEM": {
+      "executed_pct": 75.9,
+      "lowered_pct": 99.0,
+      "parsed_pct": 99.0
+    },
     "ICE": {
       "executed_pct": 63.4,
       "lowered_pct": 88.9,
       "parsed_pct": 89.4
     },
     "LEA": {
-      "executed_pct": 46.4,
-      "lowered_pct": 82.7,
-      "parsed_pct": 84.0
+      "executed_pct": 46.6,
+      "lowered_pct": 83.0,
+      "parsed_pct": 84.3
     },
     "LEB": {
-      "executed_pct": 46.5,
-      "lowered_pct": 82.8,
-      "parsed_pct": 84.1
+      "executed_pct": 46.8,
+      "lowered_pct": 83.0,
+      "parsed_pct": 84.3
     },
     "LEG": {
       "executed_pct": 58.7,

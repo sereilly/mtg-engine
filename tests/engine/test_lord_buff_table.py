@@ -274,10 +274,28 @@ def test_the_payload_round_trips(line):
 
 def test_every_lord_shaped_line_in_the_pool_derives(catalog):
     """Swept by shape, not from a list of the cards someone remembered. A card
-    ingested later whose text matches the shape and not the table shows up
-    here."""
+    ingested later whose text matches the shape and which **nothing** reads
+    shows up here.
+
+    "Nothing reads it" is the invariant, and it is not the same as "the table
+    does not claim it" — which is what this guard used to assert. The grammar
+    runs *before* the derivation tables (`tests/engine/test_grammar_derived_lines.py`
+    holds that order), so a production claiming a lord-shaped sentence is
+    exactly the case where the table is *supposed* to stay silent, and reading
+    the table alone reports a working card as a gap.
+
+    Fallen Empires collected on that at its promotion gate. Tidal Influence
+    prints "As long as there are exactly three tide counters on this
+    enchantment, all blue creatures get +2/+0" — a conditioned anthem the
+    grammar reads into a `lord_buff` with a condition, colour-correctly and
+    with the sibling `-2/-0` line working at one counter. The table does not
+    claim it and must not: the production consumed the line first. So the
+    question is asked of the compiled program, which is where both readers'
+    answers land.
+    """
     unclaimed: list[str] = []
     for card in catalog:
+        lord_shaped = []
         for raw in (card.oracle_text or "").splitlines():
             normalized = normalize_creature_line(raw)
             if " get +" not in normalized and " have " not in normalized:
@@ -286,9 +304,24 @@ def test_every_lord_shaped_line_in_the_pool_derives(catalog):
                 continue
             if any(word in normalized for word in ("until end of", "this turn")):
                 continue  # the spell reading; CR 611.2c
-            if lord_buff_for(normalized) is None:
-                unclaimed.append(f"{card.name}: {normalized}")
+            if lord_buff_for(normalized) is not None:
+                continue
+            lord_shaped.append(normalized)
+        if not lord_shaped:
+            continue
+        # The table declined every line above. Ask the other reader: a
+        # production that consumed the sentence leaves a `lord_buff`
+        # instruction behind, and that is the whole of what the table would
+        # have produced.
+        program = compile_card_oracle(card)
+        buffs = sum(
+            1 for instruction in program.instructions
+            if instruction.kind == LORD_BUFF_KIND
+        )
+        if buffs >= len(lord_shaped):
+            continue
+        unclaimed.extend(f"{card.name}: {line}" for line in lord_shaped)
     assert not unclaimed, (
-        "lord-shaped line(s) the derivation table does not claim:\n  "
-        + "\n  ".join(sorted(set(unclaimed)))
+        "lord-shaped line(s) neither the derivation table nor a grammar "
+        "production claims:\n  " + "\n  ".join(sorted(set(unclaimed)))
     )

@@ -43,6 +43,7 @@
     "Tobias Andrion",
     "Tor Giant",
     "Torsten Von Ursus",
+    "Vodalian Soldiers",
     "Walking Corpse",
     "Water Elemental",
     "Wishcoin Crab"
@@ -86,6 +87,13 @@
     "Hunding Gjornersen",
     "Marhault Elsdragon",
     "Wolverine Pack"
+  ],
+  [
+    "Benalish Hero",
+    "Icatian Phalanx",
+    "Kjeldoran Warrior",
+    "Shield Bearer",
+    "Timber Wolves"
   ],
   [
     "Black Scarab",
@@ -137,12 +145,6 @@
     "Onyx Talisman"
   ],
   [
-    "Benalish Hero",
-    "Kjeldoran Warrior",
-    "Shield Bearer",
-    "Timber Wolves"
-  ],
-  [
     "Deathlace",
     "Lifelace",
     "Purelace",
@@ -175,6 +177,11 @@
     "Stone Rain"
   ],
   [
+    "Spirit Shield",
+    "Tawnos's Weaponry",
+    "Zelyon Sword"
+  ],
+  [
     "Adarkar Sentinel",
     "Dragon Engine"
   ],
@@ -205,6 +212,10 @@
   [
     "Bog Imp",
     "Mahamoti Djinn"
+  ],
+  [
+    "Brassclaw Orcs",
+    "Ironclaw Orcs"
   ],
   [
     "Burn Bright",
@@ -259,6 +270,10 @@
     "Titanic Growth"
   ],
   [
+    "Goblin Mutant",
+    "Orgg"
+  ],
+  [
     "Hell Swarm",
     "Marsh Gas"
   ],
@@ -283,6 +298,10 @@
     "Kjeldoran Skyknight"
   ],
   [
+    "Knight of Stromgald",
+    "Order of the Ebon Hand"
+  ],
+  [
     "Moorish Cavalry",
     "War Mammoth"
   ],
@@ -293,6 +312,10 @@
   [
     "Orcish Artillery",
     "Orcish Cannoneers"
+  ],
+  [
+    "Order of Leitbur",
+    "Order of the White Shield"
   ],
   [
     "Order of the Sacred Torch",

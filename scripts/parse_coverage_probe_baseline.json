@@ -100,6 +100,13 @@
   ]
  },
  {
+  "card": "Bottomless Vault",
+  "clause": "if this land is tapped, put a storage counter on it",
+  "ignored": [
+   "land"
+  ]
+ },
+ {
   "card": "Brine Hag",
   "clause": "change the base power and toughness of all creatures that dealt damage to it this turn to 0/2",
   "ignored": [
@@ -172,6 +179,27 @@
   ]
  },
  {
+  "card": "Dwarven Catapult",
+  "clause": "dwarven catapult deals x damage divided evenly, rounded down, among all creatures target opponent controls",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Dwarven Hold",
+  "clause": "if this land is tapped, put a storage counter on it",
+  "ignored": [
+   "land"
+  ]
+ },
+ {
+  "card": "Dwarven Lieutenant",
+  "clause": "target dwarf creature gets +1/+0 until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Eater of the Dead",
   "clause": "if this creature is tapped, exile target creature card from a graveyard and untap this creature",
   "ignored": [
@@ -219,6 +247,20 @@
   "ignored": [
    "cards",
    "or"
+  ]
+ },
+ {
+  "card": "Farrel's Mantle",
+  "clause": "its controller may have it deal damage equal to its power plus 2 to another target creature. if that player does, the attacking creature assigns no combat damage this turn",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
+  "card": "Farrel's Zealot",
+  "clause": "you may have it deal 3 damage to target creature. if you do, this creature assigns no combat damage this turn",
+  "ignored": [
+   "have"
   ]
  },
  {
@@ -300,6 +342,20 @@
   ]
  },
  {
+  "card": "Goblin Flotilla",
+  "clause": "unless you pay {r}, whenever this creature blocks or becomes blocked by a creature this combat, that creature gains first strike until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Goblin Grenade",
+  "clause": "goblin grenade deals 5 damage to any target",
+  "ignored": [
+   "grenade"
+  ]
+ },
+ {
   "card": "Goblin Shrine",
   "clause": "it deals 1 damage to each goblin creature",
   "ignored": [
@@ -332,6 +388,41 @@
   "clause": "destroy all nonblack creatures. hellfire deals x plus 3 damage to you, where x is the number of creatures that died this way",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Hollow Trees",
+  "clause": "if this land is tapped, put a storage counter on it",
+  "ignored": [
+   "land"
+  ]
+ },
+ {
+  "card": "Icatian Lieutenant",
+  "clause": "target soldier creature gets +1/+0 until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Icatian Moneychanger",
+  "clause": "you gain 1 life for each credit counter on this creature",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Icatian Skirmishers",
+  "clause": "all creatures banded with it gain first strike until end of turn",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Icatian Store",
+  "clause": "if this land is tapped, put a storage counter on it",
+  "ignored": [
+   "land"
   ]
  },
  {
@@ -456,6 +547,13 @@
   ]
  },
  {
+  "card": "Orcish Captain",
+  "clause": "flip a coin. if you win the flip, target orc creature gets +2/+0 until end of turn. if you lose the flip, it gets -0/-2 until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Orcish Healer",
   "clause": "regenerate target black or green creature",
   "ignored": [
@@ -474,6 +572,13 @@
   "clause": "that player may pay any amount of mana. this aura deals 2 damage to that player. prevent x of that damage, where x is the amount of mana that player paid this way",
   "ignored": [
    "aura"
+  ]
+ },
+ {
+  "card": "Raiding Party",
+  "clause": "each player may tap any number of untapped white creatures they control. for each creature tapped this way, that player chooses up to two plains. then destroy all plains that weren't chosen this way by any player",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -521,6 +626,13 @@
   "clause": "prevent the next 3 damage that would be dealt to target creature this turn. at the beginning of the next end step, put a +0/+1 counter on that creature for each 1 damage prevented this way",
   "ignored": [
    "1"
+  ]
+ },
+ {
+  "card": "Sand Silos",
+  "clause": "if this land is tapped, put a storage counter on it",
+  "ignored": [
+   "land"
   ]
  },
  {
@@ -602,6 +714,15 @@
   ]
  },
  {
+  "card": "Spore Cloud",
+  "clause": "tap all blocking creatures. prevent all combat damage that would be dealt this turn. each attacking creature and each blocking creature doesn't untap during its controller's next untap step",
+  "ignored": [
+   "all",
+   "each",
+   "each"
+  ]
+ },
+ {
   "card": "Stench of Evil",
   "clause": "destroy all plains. for each land destroyed this way, stench of evil deals 1 damage to that land's controller unless they pay {2}",
   "ignored": [
@@ -642,6 +763,13 @@
   "clause": "destroy all untapped non-wall creatures that player controls that didn't attack, except for creatures the player hasn't controlled continuously since the beginning of the turn",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Tourach's Gate",
+  "clause": "remove a time counter from this aura. if there are no time counters on this aura, sacrifice it",
+  "ignored": [
+   "aura,"
   ]
  },
  {
@@ -712,6 +840,13 @@
   "clause": "target player chooses a card name, then reveals the top card of their library. if that card has the chosen name, that player puts it into their hand. otherwise, they put it into their graveyard and this artifact deals 2 damage to them",
   "ignored": [
    "artifact"
+  ]
+ },
+ {
+  "card": "Vodalian War Machine",
+  "clause": "destroy all merfolk tapped this turn to pay for its abilities",
+  "ignored": [
+   "all"
   ]
  },
  {

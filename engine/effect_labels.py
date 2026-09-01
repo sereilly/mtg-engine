@@ -325,6 +325,36 @@ ACTIVATED_LABELS: dict[str, str] = {
     "reassign_blockers_between_attackers": "activated_combat",
     "redirect_source_class_damage_until_eot": "activated_prevention",
     "grant_whole_prevention_shield": "activated_prevention",
+    # --- Fallen Empires' activated abilities, added at its promotion --------
+    # Same rule as M21's block above: the bucket the *ability* belongs to, not
+    # the one its instruction kind reads like — and where the kind is a
+    # **wrapper**, the label names the shape, because a wrapper has no leaf to
+    # name. `for_each` is the case that proves the rule rather than the one
+    # that bends it: Heroism prevents combat damage and Tidal Flats grants
+    # first strike, both through one `for_each`, so any leaf bucket would be
+    # right about one card and wrong about the other. `sequence`,
+    # `if_then` and `may` are already here for exactly that reason.
+    "for_each": "activated_repeated",
+    # Dwarven Armorer's "+0/+1 counter **or** a +1/+0 counter" is a choice
+    # between modes (CR 700.2), lowered onto the same `choose_one` the modal
+    # spells use. The shape again: what the ability is for depends on which
+    # mode is taken.
+    "choose_one": "activated_modal",
+    # Fungal Bloom. `add_named_counter_to_self` is already `activated_counter`
+    # above, and the target twin is the same ability pointed elsewhere.
+    "add_named_counter_to_target": "activated_counter",
+    # Orcish Spy, beside `look_at_target_hand` above — the same ability about
+    # a different hidden zone.
+    "look_at_target_library_top": "activated_look",
+    # Thelonite Druid's "Forests you control become 2/3 creatures until end of
+    # turn. They're still lands", beside `animate_target_until_eot` and the two
+    # type changes above: CR 205 is what a permanent *is*, which is the bucket
+    # rather than the P/T it arrives with.
+    "animate_matching_until_eot": "activated_characteristic",
+    # Vodalian War Machine. A permission to attack (CR 508.1a) rather than a
+    # characteristic change: the Wall keeps defender and the restriction is
+    # lifted for the turn.
+    "attack_as_though_no_defender_until_eot": "activated_combat",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -543,6 +573,12 @@ TRIGGERED_LABELS: dict[str, str] = {
     "exile_bound_card_from_graveyard": "triggered_exile",
     "unless_player_pays": "upkeep_effect",
     "deny_regeneration_to_block_pair": "spell_pattern",
+    # Icatian Skirmishers. The activated twin above is `activated_pump`,
+    # because there the ability is a pump however it is spelled; a keyword
+    # granted to the *band* on attacking is a combat ability, which is the
+    # bucket the vocabulary already has for a trigger that only exists
+    # inside a declare-attackers step.
+    "grant_team_keyword_until_eot": "triggered_combat",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps
@@ -616,6 +652,20 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     ("upkeep_self", "for_each"): "upkeep_effect",
     ("you_lose_life", "for_each"): "spell_pattern",
     ("end_step_enchanted_controller", "if_then"): "triggered_destruction",
+    # --- Fallen Empires, at its promotion -----------------------------------
+    # Goblin Flotilla's "At the beginning of each combat, unless you pay {R},
+    # …", beside ("combat_your_turn", "may") and the other combat offers above.
+    # The condition is the bare `combat`, which this set is also the reason
+    # anything *announces* — it sat in both front-end tables with no fire site
+    # until the wave gave it one.
+    ("combat", "may"): "triggered_combat",
+    # Thelon's Chant and Tourach's Chant: "Whenever a player puts a <land type>
+    # onto the battlefield, this enchantment deals 3 damage to that player
+    # unless they put a -1/-1 counter on a creature they control." The offer is
+    # the damage's price, so the ability reports what it *does* when the offer
+    # is declined — the same reading `unless_player_pays` takes for Scarwood
+    # Bandits in the activated table above.
+    ("matching_permanent_enters", "may"): "triggered_damage",
 }
 
 
