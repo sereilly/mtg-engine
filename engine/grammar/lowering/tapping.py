@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import OracleInstruction, TAPPED_THIS_WAY_OBJECTS
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter
@@ -36,11 +36,11 @@ from ._common import (
 )
 from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
                       EVENT_SUBJECT_PLAYER, names_attached_permanent)
-from ...oracle_types import TAPPED_THIS_WAY_OBJECTS
 
 #: The scratchpad key a tap records what it chose under, so a later sentence
 #: ("**it** doesn't untap…") can name the same permanents.
 _TAPPED_PERMANENTS = "tapped_permanents"
+
 
 def _lower_for_each_tapped(
     node: "ast.ForEach",
