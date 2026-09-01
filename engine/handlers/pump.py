@@ -756,6 +756,28 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
     # trigger bound, and the ids were frozen when the earlier step of this same
     # effect armed the destruction. Read by id, so a creature that left and came
     # back is a different object (CR 400.7) and gets nothing.
+    # "…unless the player puts a -1/-1 counter on a creature they control"
+    # (Thelon's Chant, Tourach's Chant.) Nobody targeted anything: the seat the
+    # offer was made to picked a creature one step earlier in this same
+    # resolution (CR 608.2d), and the pick is in the scratchpad under the key
+    # that step always writes. By id, so a creature that left and came back is a
+    # different object (CR 400.7) and gets nothing.
+    recorded_key = instruction.payload.get("permanents_from")
+    if recorded_key is not None:
+        chosen_id = context.results.get(recorded_key)
+        creature = (
+            game.permanent_by_id(chosen_id) if chosen_id is not None else None
+        )
+        if creature is None:
+            game.log.append(f"{card.name}: no creature was chosen to take a counter")
+            return True, "resolved"
+        if how_many:
+            game.place_pt_counters(creature, kind, how_many)
+            game.log.append(
+                f"{creature.card.name} gets a {kind} counter ({card.name})"
+            )
+        return True, "resolved"
+
     pair_member = instruction.payload.get("pair_member")
     if pair_member:
         bound = (context.trigger_context or {}).get(

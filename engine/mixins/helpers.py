@@ -2286,6 +2286,15 @@ class GameHelpersMixin:
             # event had. Recorded on every entry because the cost is one integer
             # and the alternative is a fire site that knows which cards care.
             entering_power=max(0, permanent.effective_power),
+            # Whose it is, for "…deals 3 damage to **that player**" (Thelon's
+            # Chant, Tourach's Chant, whose printed condition is "whenever a
+            # player puts a Swamp onto the battlefield" — the same event named
+            # from the player's side). Frozen here, like the power beside it,
+            # because CR 603.10 asks what the game knew when the event happened
+            # and the permanent may have changed hands by resolution. Recorded
+            # on every entry for that key's reason: one seat integer, against a
+            # fire site that would have to know which cards care.
+            event_subject_controller=controller_index,
         )
         # **And the permanent's own "when this enters" trigger**, for every entry
         # that is not a cast.

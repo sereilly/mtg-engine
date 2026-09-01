@@ -652,6 +652,25 @@ def _accept_trailing_toll(
             stream.reset(mark)
             return None
         return ast.May(actor=payer, action=discard, otherwise=body)
+    # "…unless the player **puts a -1/-1 counter on a creature they control**"
+    # (Thelon's Chant, Tourach's Chant). The third printed currency beside mana
+    # and a discard, and the same decomposition for the same reason: an
+    # "unless" is an offer with a penalty, and saying it as one means the
+    # offer, the penalty and the "you have nothing to put it on" case all come
+    # from machinery that already works.
+    if stream.at_word("puts", "put"):
+        try:
+            placement = _parse_put_counter(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        # Only a *counter placement*: "put" also opens the object-moving family
+        # ("put that card onto the battlefield"), which is not a price anybody
+        # pays out of their own resources and has no takeability test behind it.
+        if not isinstance(placement, ast.PutCounter) or payer.kind in _ENUMERATED_PAYERS:
+            stream.reset(mark)
+            return None
+        return ast.May(actor=payer, action=placement, otherwise=body)
     if not stream.accept_word("pays", "pay"):
         stream.reset(mark)
         return None

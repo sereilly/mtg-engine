@@ -21,7 +21,8 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import _filter_payload
-from ._events import _DEFENDING_PLAYER_EVENTS
+from ._events import (EVENT_SUBJECT_CONTROLLER, _DEFENDING_PLAYER_EVENTS,
+                      _EVENT_SUBJECT_CONTROLLERS)
 from ._records import _PRODUCES, primary_produced, produced_keys
 
 
@@ -410,7 +411,17 @@ def _lower_may(
         raise LoweringError(
             f"no offer names {node.actor.kind!r} as its payer", node=node
         )
-    payload: dict[str, object] = {"actor": node.actor.kind}
+    actor = node.actor.kind
+    if actor == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
+        # "…unless **the player** puts a -1/-1 counter on a creature they
+        # control" (Thelon's Chant, Tourach's Chant). Under an event whose
+        # subject is an *object*, "that player" is that object's controller —
+        # the seat the fire site froze, exactly as the damage recipient one
+        # module over reads it. Left as ``that_player`` the offer would go to
+        # ``context.target``, which for a permanent-entering trigger is a seat
+        # nothing chose.
+        actor = EVENT_SUBJECT_CONTROLLER
+    payload: dict[str, object] = {"actor": actor}
     if node.actor.kind == "target_opponent":
         # "**Target opponent** may ante the top card of their library."
         # (Amulet of Quoz.) The seat being offered is the ability's *target*,

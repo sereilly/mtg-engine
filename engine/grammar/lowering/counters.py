@@ -29,9 +29,24 @@ from ._common import (
     describe_target_roles,
 )
 from ._events import (
+    CHOSEN_PERMANENT,
+    EVENT_SUBJECT_CONTROLLER,
     _DAMAGED_PLAYER_EVENTS,
     _EVENT_SUBJECT_OBJECTS,
 )
+
+
+#: Whose creature an *unchosen* counter placement lands on, and the word the
+#: ``choose_permanent`` prompt names that seat by. "a creature **you** control"
+#: is the effect's own controller; "a creature **they** control" is the seat the
+#: firing event was about, which is the only reading of "they" a toll's price
+#: can have — the offer was made to that player and the price comes out of their
+#: own board. A controller word outside this table refuses, because a prompt
+#: armed on the wrong seat is a player paying somebody else's price.
+_COUNTER_CHOOSERS: dict[str, str] = {
+    "you": "you",
+    "that_player": EVENT_SUBJECT_CONTROLLER,
+}
 
 
 # The ObjectFilter fields the loyalty-counter picker reads. Only what the pool
@@ -536,6 +551,61 @@ def _lower_put_counter(
             OracleInstruction(
                 "add_named_counter_to_creatures_in_combat_with_source", "",
                 {"counter": node.counter, "count": node.count.value},
+            ),
+        )
+    # "…unless the player **puts a -1/-1 counter on a creature they control**"
+    # (Thelon's Chant, Tourach's Chant.) A CR 122.1a counter on a creature
+    # nobody targeted and nobody named: the sentence says only *whose*, so the
+    # seat it names picks one while the effect resolves (CR 608.2d).
+    #
+    # Two steps, the pairing ``choose_permanent`` + a step reading its answer
+    # that ``lowering/control_changes.py`` already makes for Preacher: the pick
+    # may have to stop and ask, and a handler that stops cannot also place the
+    # counter. Refused where the phrase names no seat at all — "put a counter on
+    # a creature" with no controller word is every creature on the table, and a
+    # prompt listing them is a choice the card never offered.
+    if (
+        is_pt_counter(node.counter)
+        and not node.up_to
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "a"
+        and not node.subject.targeted
+        and node.subject.filter.controller in _COUNTER_CHOOSERS
+    ):
+        if _restrictions_beyond(
+            node.subject.filter, frozenset({"card_types", "controller"})
+        ):
+            raise LoweringError(
+                "the chosen counter placement reads a seat's own permanents "
+                "and nothing narrower",
+                node=node,
+            )
+        if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
+            raise LoweringError(
+                "a chosen counter placement places one counter", node=node
+            )
+        chooser = _COUNTER_CHOOSERS[node.subject.filter.controller]
+        described = _filter_payload(
+            dataclasses.replace(node.subject.filter, controller=None)
+        )
+        return (
+            OracleInstruction(
+                "choose_permanent", "",
+                {
+                    "result_key": CHOSEN_PERMANENT,
+                    "chooser": chooser,
+                    # The candidates come off the *chooser's* own battlefield,
+                    # which is what "they control" says. Naming the seat twice —
+                    # once to ask and once to draw from — is how a three-seat
+                    # game ends up asking one player about another's creatures.
+                    "controlled_by": "chooser",
+                    "filter": described,
+                    "prompt": f"Choose a creature to put a {node.counter} counter on.",
+                },
+            ),
+            OracleInstruction(
+                "add_counter_to_target", "",
+                {"counter": node.counter, "permanents_from": CHOSEN_PERMANENT},
             ),
         )
     if node.counter != "+1/+1" or node.up_to:

@@ -93,6 +93,13 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     # tap, and an ability activated without {T}); both freeze the *subject's*
     # controller, which is the artifact's, never the activating seat.
     "permanent_tapped_or_ability_activated",
+    # Thelon's Chant, Tourach's Chant — the entering permanent's. Their printed
+    # condition names the *player* ("whenever a player puts a Swamp onto the
+    # battlefield"), and the seat the words mean is the one that permanent
+    # entered under, which `_initialize_permanent_state` freezes on every entry
+    # path. Absent from this table the phrase fell through to `target_player`,
+    # a choice neither card offers — which is Psychic Venom's bug one row up.
+    "matching_permanent_enters",
 })
 
 

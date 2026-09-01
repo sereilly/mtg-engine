@@ -25,21 +25,17 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**8 unclaimed sentence(s) across 5 supported card(s).**
+**6 unclaimed sentence(s) across 3 supported card(s).**
 
 - **Delif's Cube**
   - `{2}, {t}: this turn, when target creature you control attacks and isn't blocked, it assigns no combat damage this turn and you put a cube counter on this artifact`
 - **Goblin Grenade**
   - `as an additional cost to cast this spell, sacrifice a goblin`
-- **Thelon's Chant**
-  - `whenever a player puts a swamp onto the battlefield, this enchantment deals 3 damage to that player unless the player puts a -1/-1 counter on a creature they control`
 - **Tidal Influence**
   - `cast this spell only if no permanents named tidal influence are on the battlefield`
   - `as long as there is exactly one tide counter on this enchantment, all blue creatures get -2/-0`
   - `as long as there are exactly three tide counters on this enchantment, all blue creatures get +2/+0`
   - `whenever there are four or more tide counters on this enchantment, remove all tide counters from it`
-- **Tourach's Chant**
-  - `whenever a player puts a forest onto the battlefield, this enchantment deals 3 damage to that player unless they put a -1/-1 counter on a creature they control`
 
 ## Acknowledged simplifications
 
