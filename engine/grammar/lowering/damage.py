@@ -38,6 +38,7 @@ from ._common import (
     _filter_payload,
     _restrictions_beyond,
     _full_mana_payload,
+    _is_enchanted,
     _is_source,
     _is_target,
     _is_you,
@@ -455,11 +456,18 @@ def _lower_damage_shape(
     # information (CR 608.2), which the Permanent object still carries because
     # nothing off the battlefield touches it. Its own kind rather than the
     # generic damage, because the amount is a *read* rather than a number.
+    # …and the same sentence on an **Aura**, where the biter is the permanent it
+    # enchants rather than the Aura (Farrel's Mantle). CR 113.7a keeps the
+    # ability the Aura's, so the source stays the Aura and *which permanent
+    # deals the damage* is payload — the same split
+    # `assign_no_combat_damage_until_eot` makes for the same reason, and the
+    # only one available: an Aura's power is nothing at all, so a bite read off
+    # the source would deal zero and report itself resolved.
     if (
         isinstance(node.amount, ast.ThatMuch)
         and node.amount.source == "its_power"
         and node.source is not None
-        and _is_source(node.source)
+        and (_is_source(node.source) or _is_enchanted(node.source))
         and len(node.recipients) == 1
         and _is_target(node.recipients[0])
     ):
@@ -467,6 +475,13 @@ def _lower_damage_shape(
         payload: dict[str, object] = {}
         _describe_targets(payload, node.recipients[0])
         payload["filter"] = _filter_payload(node.recipients[0].filter)
+        if _is_enchanted(node.source):
+            payload["biter"] = "attached"
+        # "…equal to its power **plus 2**" (Farrel's Mantle). CR 107.3's
+        # constant, carried rather than dropped: two fewer damage than the card
+        # prints is exactly the silent narrowing a dropped rider always is.
+        if node.amount.bonus:
+            payload["power_bonus"] = node.amount.bonus
         return (OracleInstruction("source_bites_target", "", payload),)
 
     # "**That creature** deals damage equal to its power to this creature."

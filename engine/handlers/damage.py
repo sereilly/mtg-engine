@@ -1156,6 +1156,13 @@ def source_bites_target(game, instruction, context):
     """
     card = context.card
     source = context.source_permanent
+    # ``biter: "attached"`` — the permanent the source is attached to deals the
+    # damage (Farrel's Mantle). CR 113.7a leaves the ability the Aura's, so the
+    # source is still the Aura and only the dealer moves; read off the source
+    # rather than off the target, because an Aura that has fallen off has no
+    # creature to bite with and must deal nothing rather than bite with itself.
+    if instruction.payload.get("biter") == "attached":
+        source = attached_host(game, source)
     if source is None:
         game.log.append(f"{card.name}: nothing to deal the damage")
         return True, "resolved"
@@ -1176,8 +1183,12 @@ def source_bites_target(game, instruction, context):
     if victim is None:
         game.log.append(f"{card.name}: no valid target")
         return True, "resolved"
+    # "…equal to its power **plus 2**" (Farrel's Mantle). CR 107.3's printed
+    # constant, added here rather than folded into the power: what the creature
+    # *has* is still its power, and a lord counting it must not see the bonus.
+    amount = source.effective_power + int(instruction.payload.get("power_bonus", 0))
     apply_damage_to_creature(
-        game, victim, source.effective_power, source,
+        game, victim, amount, source,
         log_message=lambda dealt: (
             f"{source.card.name} deals {dealt} damage to {victim.card.name}"
         ),

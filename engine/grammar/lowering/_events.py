@@ -481,6 +481,12 @@ _BLOCK_PAIR_EVENTS = frozenset({
                                                # Abomination, Aisling Leprechaun
     "creature_becomes_blocked",                # Battering Ram
     "creature_blocks",                         # Infernal Medusa
+    # The **delayed** spelling of the first row (Goblin Flotilla), announced by
+    # the same two fire sites with the same `blocked_permanent_ids` key — so
+    # "that creature" under it is the same question with the same answer, and a
+    # set that left it out would refuse the created ability while admitting the
+    # printed one.
+    "source_blocks_or_blocked_by",
 })
 
 

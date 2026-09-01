@@ -150,13 +150,28 @@ def _lower_unless_player_pays(
     Two refusals, each a way the sentence could otherwise mean more than it
     says:
 
-    * the payer must be a reference the handler can enumerate seats from. "You"
-      is an offer to the ability's own controller, which is a ``May`` and a
-      different card; a payer nobody is asked is the effect happening
-      unconditionally.
+    * the payer must be a reference the handler can enumerate seats from — or
+      "you", which is an offer to the ability's own controller and is built as
+      the ``May`` this refusal always said it was. A payer nobody is asked is
+      the effect happening unconditionally.
     * the branch must lower to something. A clause bought off with nothing
       behind it is a payment charged for no reason.
     """
+    if node.payer.kind == "you":
+        # "…**unless you pay {R}**, …" (Goblin Flotilla). An offer to the
+        # ability's own controller is a ``May`` — one seat, the resolution's
+        # own, with the clause on the declined branch — which is what the
+        # refusal below has said since Scarwood Bandits. Built as that node and
+        # handed to the offer lowering rather than given a payer of its own:
+        # ``unless_player_pays`` is a *chain* over other seats, and a chain of
+        # one asked in the resolution's own seat is the offer with extra steps.
+        return _lower_may(
+            ast.May(
+                actor=node.payer, cost=node.cost,
+                action=None, otherwise=node.otherwise,
+            ),
+            produced, event, event_subject, lower_statement=lower_statement,
+        )
     payer = _ENUMERATED_PAYERS.get(node.payer.kind)
     if payer is None:
         raise LoweringError(

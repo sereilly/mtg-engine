@@ -234,7 +234,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.SetBasePT: _lower_set_base_pt,
     ast.ChangeBasePT: _lower_change_base_pt,
     ast.ReanimateEnchantedCard: _lower_reanimate_enchanted_card,
-    ast.GainKeyword: _lower_gain_keyword,
     ast.DoublePower: _lower_double_power,
     ast.SwitchPT: _lower_switch_pt,
     ast.Ante: _lower_ante,
@@ -733,9 +732,31 @@ def lower_statement(
     if isinstance(statement, ast.RemoveFromCombat):
         return _lower_remove_from_combat(statement, produced)
 
+    if isinstance(statement, ast.GainKeyword):
+        # In the chain rather than the table above because the firing event
+        # decides one of its readings: "that creature gains first strike" names
+        # the other half of a block pair (Goblin Flotilla) and names nothing at
+        # all under any other trigger, which is exactly what `binds_block_pair`
+        # answers.
+        return _lower_gain_keyword(statement, event, event_subject)
+
     if isinstance(statement, ast.CreateDelayedTrigger):
         return _lower_create_delayed_trigger(statement, lower_statement(
-            statement.effect, produced, event=statement.event, whole_effect=True,
+            statement.effect, produced, event=statement.event,
+            # The delay's own noun phrase is the created ability's narrowing —
+            # "…blocks or becomes blocked **by a creature** this combat" — and
+            # it travels with the event for the reason `lower_statement` states:
+            # the two are one fact about one trigger, and "that creature" needs
+            # both to know whether it names exactly one object.
+            # …or its ``agent`` where the phrase describes the *other* object
+            # the event names ("…blocks or becomes blocked **by a creature**"):
+            # one printed narrowing either way, and what "that creature" needs
+            # to know is that the event named exactly one.
+            event_subject=(
+                statement.subject if statement.subject is not None
+                else statement.agent
+            ),
+            whole_effect=True,
         ))
 
     if isinstance(statement, ast.WhereX):

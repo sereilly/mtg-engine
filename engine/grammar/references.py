@@ -457,10 +457,34 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
     # phrase away from the noun parser that reads the rest of them.
     mark_definite = stream.mark()
     if stream.accept_word("the"):
+        # "…**the attacking creature** assigns no combat damage this turn"
+        # (Farrel's Mantle). The same back-reference with the state the trigger
+        # already established spelled out: the sentence is under "whenever
+        # enchanted creature **attacks** and isn't blocked", so "the attacking
+        # creature" and "the creature" name one object. Read as an adjective
+        # here rather than as a noun phrase for the reason the bare form is:
+        # the words point at an object the sentence already has, and the noun
+        # parser would go looking for a set to choose from.
+        #
+        # One word, and only the one a printed sentence pairs with this shape.
+        # A wider list would let a state the trigger did **not** establish
+        # ("the blocking creature" under an attack trigger) resolve to the
+        # attacker, which is a referent nothing checked.
+        stated = stream.accept_word("attacking")
         noun = stream.peek_word()
         if noun is not None and noun in CARD_TYPES:
             stream.advance()
             if stream.exhausted or stream.at_punct(".", ",", ";"):
+                return ast.TargetSpec("it", ast.ObjectFilter(is_source=True))
+            # …and in the **subject** position, where a verb follows instead of
+            # the end of the phrase. Admitted only with the state word printed:
+            # bare "the creature" as a subject is read as a bound back-reference
+            # by ``phrases.parse_bound_subject``, and claiming it here would take
+            # every one of those sentences away from the lowerings written for
+            # them. A possessive is left alone for the same reason the bare form
+            # is — "the creature's controller" names a player, and the reader
+            # below this one reads it.
+            if stated and not stream.at_word("'s"):
                 return ast.TargetSpec("it", ast.ObjectFilter(is_source=True))
     stream.reset(mark_definite)
     # "**that token**" — the token an earlier sentence of this same effect

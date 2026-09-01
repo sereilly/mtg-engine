@@ -199,28 +199,22 @@ def creatures_banded_with(game: "Game", permanent: "Permanent | None") -> list["
 
     Empty when the permanent is in no band, which is the honest answer for a
     lone attacker: CR 702.22c makes a band a declaration, so a creature nobody
-    banded with is banded with nobody. The index is found by **identity**, never
-    by value: a ``Permanent`` compares field by field, and a look-alike on the
-    same battlefield would hand back a different creature's band.
+    banded with is banded with nobody. Both ends go through the control seam —
+    ``battlefield_index_of`` finds the slot by identity, because a ``Permanent``
+    compares field by field and a look-alike on the same battlefield would hand
+    back a different creature's band.
     """
     if permanent is None:
         return []
-    for player in game.players:
-        index = next(
-            (i for i, perm in enumerate(player.battlefield) if perm is permanent),
-            None,
-        )
-        if index is None:
-            continue
-        band = game._attacker_band(index)
-        if not band:
-            return []
-        return [
-            player.battlefield[other]
-            for other in band
-            if other != index and 0 <= other < len(player.battlefield)
-        ]
-    return []
+    seat = game.controller_index_of(permanent)
+    index = game.battlefield_index_of(permanent)
+    if seat is None or index is None:
+        return []
+    band = game._attacker_band(index)
+    if not band:
+        return []
+    mates = [game.permanent_at(seat, other) for other in band if other != index]
+    return [mate for mate in mates if mate is not None]
 
 
 def computed_abilities_of(perm: "Permanent") -> frozenset[str]:

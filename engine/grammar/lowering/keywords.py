@@ -22,7 +22,7 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS, NUMERIC_ARGUMENT_KEYWORDS
-from ._events import _RECORDED_PERMANENTS
+from ._events import _RECORDED_PERMANENTS, binds_block_pair
 from ._common import (
     _describe_several_targets,
     _describe_targets,
@@ -82,7 +82,11 @@ def _grant_duration(node, duration) -> str:
     return key
 
 
-def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
+def _lower_gain_keyword(
+    node: ast.GainKeyword,
+    event: str | None = None,
+    event_subject: object | None = None,
+) -> tuple[OracleInstruction, ...]:
     # "gains **your choice of** deathtouch or lifelink" (Alchemist's Gift). A
     # choice between two effects is `choose_one` — the composition seam
     # (engine/handlers/control_flow.py) that a modal ability already uses — so
@@ -98,7 +102,7 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         )
         modes = []
         for alternative in alternatives:
-            lowered = _lower_gain_keyword(alternative)
+            lowered = _lower_gain_keyword(alternative, event, event_subject)
             if len(lowered) != 1:
                 raise LoweringError("a keyword choice needs one instruction per option", node=node)
             modes.append({"label": alternative.keywords[0], "instruction": lowered[0]})
@@ -277,6 +281,35 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         return (
             OracleInstruction(
                 "grant_keyword_to_creatures_in_combat_with_source", "",
+                {"keywords": tuple(node.keywords), "duration": duration},
+            ),
+        )
+    # "…**that creature** gains first strike until end of turn." (Goblin
+    # Flotilla, and the printed static form of the same sentence.) The other
+    # half of the block pair the trigger fired on — named by the ids the fire
+    # site recorded, not by anything the creature carries, which is why the
+    # relation is the whole instruction and nothing is described for a picker.
+    #
+    # ``binds_block_pair`` is what admits it: CR 509.3c/509.3d make a *bare*
+    # block trigger fire once with several creatures in hand and no way to say
+    # which "that creature" is, so the narrowing has to be printed. Under any
+    # other event the words name nothing and the refusal below stands.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+        and binds_block_pair(event, event_subject)
+    ):
+        if _restrictions_beyond(node.subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "the block-pair keyword grant reads the creature its trigger "
+                "already named and nothing narrower",
+                node=node,
+            )
+        for keyword in node.keywords:
+            _check_grantable(keyword, node)
+        return (
+            OracleInstruction(
+                "grant_keyword_to_block_pair", "",
                 {"keywords": tuple(node.keywords), "duration": duration},
             ),
         )

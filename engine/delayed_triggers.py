@@ -83,6 +83,19 @@ DELAYED_EVENTS: dict[str, str] = {
     # is the shape the card prints, and CR 603.7d's own-source default would
     # point it at a sorcery already in a graveyard.
     "creature_attacks_unblocked": "the declare blockers step",
+    # "…whenever **this creature** blocks or becomes blocked by a creature this
+    # combat, that creature gains first strike until end of turn." (Goblin
+    # Flotilla.) The joined block event of CR 509.3a–d, watched about **one**
+    # permanent rather than about a described class — which is why it is not
+    # `creature_blocks` above: that one is announced per blocking creature and
+    # answers to any of them, and this one answers only to the creature whose
+    # ability armed it, on either side of the block.
+    #
+    # Announced **per pair**, with the other half of it in the trigger's
+    # context under the same `blocked_permanent_ids` key the printed static
+    # form uses — so "that creature" is one reader for both, and a card that
+    # prints the sentence as a static needs nothing new.
+    "source_blocks_or_blocked_by": "the declare blockers step",
     # Subira, Tulzidi Caravanner.
     "creature_deals_combat_damage_to_player": "the combat damage step",
     # "When that creature dies this turn, …" (Reincarnation). The dying

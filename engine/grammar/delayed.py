@@ -29,8 +29,9 @@ from .nouns import parse_object_filter
 from .effects.characteristics import _parse_keywords
 from .vocabulary import LAND_TYPES, TYPE_LINE_SUPERTYPES
 from .phrases import (BASIC_LAND_WORDS, _parse_duration,
-                      parse_bound_subject)
+                      parse_bound_subject, parse_subject_filter_at)
 from .rebinding import rebind_pronoun_to_delay_target
+from .readers import accept_source_reference
 from .references import parse_recipient, parse_target_spec
 from .lexer import SELF
 from .stream import TokenStream
@@ -378,6 +379,54 @@ def _parse_targeted_combat_delay(
     return None
 
 
+#: How long a block-pair delay's printed window lasts (CR 603.7b). "This
+#: combat" is the shorter of the two sweeps `engine/delayed_triggers.py` runs;
+#: a card printing "this turn" is the same ability over the longer one.
+_BLOCK_PAIR_WINDOWS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("this", "combat"), "end_of_combat"),
+    (("this", "turn"), "end_of_turn"),
+)
+
+
+def _parse_source_block_pair_delay(
+    stream: TokenStream,
+) -> "tuple[ast.ObjectFilter, str] | None":
+    """``this creature blocks or becomes blocked by <noun> this combat`` — the
+    delayed spelling of the joined block event (Goblin Flotilla).
+
+    The printed static form of the same sentence is a trigger of the permanent
+    (``engine/oracle.py``'s ``creature_blocks_or_blocked_by``); this is that
+    ability *created* for a window, which is what the trailing "this combat"
+    says. Its subject is the source rather than a described class — the delayed
+    entry watches one permanent by id — so the noun phrase after "by" narrows
+    the **other** half of the pair, exactly as it does on the static form.
+
+    Refuses with the cursor untouched, so every other "whenever …" opener keeps
+    its reading.
+    """
+    mark = stream.mark()
+    if not accept_source_reference(stream):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("blocks", "or", "becomes", "blocked", "by"):
+        stream.reset(mark)
+        return None
+    described = parse_subject_filter_at(stream)
+    if described is None:
+        stream.reset(mark)
+        return None
+    for phrase, duration in _BLOCK_PAIR_WINDOWS:
+        window = stream.mark()
+        if stream.accept_phrase(*phrase):
+            return described, duration
+        stream.reset(window)
+    # A window is required: CR 603.7b's "unless it has a stated duration" is
+    # what makes this ability repeat, and one with no window is a static the
+    # permanent simply has.
+    stream.reset(mark)
+    return None
+
+
 def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.CreateDelayedTrigger | None":
     """A sentence that **creates** a delayed triggered ability (CR 603.7).
 
@@ -473,6 +522,22 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
                 agent = None
             if agent is not None and stream.accept_phrase("this", "turn"):
                 event, binds, once = "bound_permanent_dealt_damage", True, False
+        if event is None:
+            # "…whenever **this creature** blocks or becomes blocked by a
+            # creature this combat, …" (Goblin Flotilla). The joined block event
+            # about the ability's own source, created for a window — read before
+            # the land-tap opener below, which it does not collide with, and
+            # after the bound-object one above, whose "that <noun>" it is not.
+            stream.reset(after_whenever)
+            pair = _parse_source_block_pair_delay(stream)
+            if pair is not None:
+                # The noun phrase is the **agent**, not the subject: the entry
+                # watches the ability's own source by id, and the phrase after
+                # "by" describes the *other* half of the pair. Filed under the
+                # field that is tested against that half, so the narrowing is
+                # asked of the creature the card narrows.
+                agent, duration = pair
+                event, once, watches = "source_blocks_or_blocked_by", False, "source"
         if event is None:
             # "…**whenever a player taps a Mountain for mana**, that player adds
             # an additional {R}." (Chaos Moon's odd branch.) The one opener here

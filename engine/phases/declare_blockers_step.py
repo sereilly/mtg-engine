@@ -423,6 +423,7 @@ class DeclareBlockersStepMixin:
         self._fire_creature_blocks_triggers(controller_index, assignments)
         self._fire_delayed_block_triggers(controller_index, assignments)
         self._fire_becomes_blocked_triggers(controller_index, assignments)
+        self._fire_delayed_block_pair_triggers(controller_index, assignments)
         self._apply_flanking(controller_index)
         # CR 509.4/802.4: once every defending player has declared, the active
         # player receives priority.
@@ -1249,6 +1250,26 @@ class DeclareBlockersStepMixin:
                         )
                     )
                     self.log.append(f"{source.card.name} triggered on block (added to stack)")
+            # "…whenever **this creature** blocks or becomes blocked by a
+            # creature this combat, …" (Goblin Flotilla). The delayed spelling
+            # of the joined block event, which belongs to no permanent's
+            # compiled program and so is out of reach of the scan above — the
+            # entry is one an ability *created*, and it watches the creature
+            # that armed it by id.
+            #
+            # Once per pair, and the pair rides the same
+            # ``blocked_permanent_ids`` key the printed static form writes: "that
+            # creature" is then one reader for both spellings. The blocker is
+            # the watched object and the attacker is the ``agent`` the printed
+            # noun phrase narrows, which is the half the card describes.
+            for _attacker_idx, attacker in blocked:
+                fire_delayed_triggers(
+                    self, "source_blocks_or_blocked_by",
+                    subject=blocker, agent=attacker,
+                    trigger_context={
+                        "blocked_permanent_ids": [attacker.permanent_id],
+                    },
+                )
             # "Whenever **enchanted creature** attacks or blocks" (Imprison) —
             # the block half of the union whose attack half fires in
             # declare_attackers_step. Something attached to the blocker, not
@@ -1571,6 +1592,31 @@ class DeclareBlockersStepMixin:
                     self.log.append(
                         f"{source.card.name} triggered on becoming blocked (added to stack)"
                     )
+
+    def _fire_delayed_block_pair_triggers(
+        self, controller_index: int, assignments: dict[int, list[int]]
+    ) -> None:
+        """The *becomes blocked* half of ``source_blocks_or_blocked_by``.
+
+        The mirror of the announcement inside ``_fire_creature_blocks_triggers``
+        with the two ends of the pair swapped: there the watched object is the
+        blocker and the agent the attacker it blocked, here the watched object
+        is the attacker and the agent each creature that blocked it (CR 509.3d).
+        Its own pass rather than a branch of the printed scan beside it, for the
+        reason ``_fire_delayed_block_triggers`` gives: a delayed ability belongs
+        to no permanent, so no ``effective_card`` scan can reach it.
+        """
+        for _blocker_idx, blocker, blocked in self._resolved_block_pairs(
+            controller_index, assignments
+        ):
+            for _attacker_idx, attacker in blocked:
+                fire_delayed_triggers(
+                    self, "source_blocks_or_blocked_by",
+                    subject=attacker, agent=blocker,
+                    trigger_context={
+                        "blocked_permanent_ids": [blocker.permanent_id],
+                    },
+                )
 
     def _apply_temporary_buff(self, permanent: Permanent, power: int, toughness: int) -> None:
         """Apply an "until end of turn" P/T change that the cleanup step reverts."""

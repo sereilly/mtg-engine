@@ -170,6 +170,15 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         third_person = True
         definite = True
         chooser_person = True
+    # "If **that player** does, …" (Farrel's Mantle) is the same rider under an
+    # offer made to a seat the *trigger* named — "its controller may have it
+    # deal damage …". The demonstrative points at the seat the offer already
+    # picked, exactly as the definite article beside it does, so it admits under
+    # the same condition; what it is not is the chooser reading, because there
+    # is no choice step in front of it to name one.
+    elif stream.accept_phrase("that", "player"):
+        third_person = True
+        definite = True
     elif stream.accept_word("they"):
         third_person = True
         # Anaphoric like "the player" and never distributive: "they" points at

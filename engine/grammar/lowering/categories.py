@@ -483,6 +483,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "finish_repeated_graveyard_pick": "zones",
     "exile_all_matching": "zones",
     "grant_team_keyword_until_eot": "pump",
+    # "…that creature gains first strike until end of turn" on a block trigger
+    # (Goblin Flotilla) — the keyword half of the same family, over the pair the
+    # trigger named rather than over a board.
+    "grant_keyword_to_block_pair": "pump",
     # A durationless keyword grant to the enchanted creature (Cocoon's hatch):
     # recorded on the creature through the layer-6 write API, so it survives
     # the Aura (CR 611.2c).

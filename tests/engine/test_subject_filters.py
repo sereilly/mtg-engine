@@ -360,6 +360,7 @@ _COVERED_ELSEWHERE = {
     "blocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
     "controlled_since_turn_start":
         "test_controlled_since_turn_start_rejects_a_creature_that_just_arrived",
+    "banded_with_source": "test_banded_with_source_names_only_the_band",
 }
 
 
@@ -583,6 +584,41 @@ def test_controlled_since_turn_start_rejects_a_creature_that_just_arrived(pool):
     )
     assert subject_matches(game, settled, {"controlled_since_turn_start": True})
     assert not subject_matches(game, arrived, {"controlled_since_turn_start": True})
+
+
+def test_banded_with_source_names_only_the_band(pool):
+    """"all creatures **banded with it**" (Icatian Skirmishers) — CR 702.22e.
+
+    Its own demonstration rather than a row in ``_REJECTIONS``: the answer is a
+    *declaration*, so telling the accepted creature from the rejected one needs
+    a real attack with a real band. A third attacker outside the band is what
+    the test is for — it answers every other part of the phrase and must still
+    be rejected, which a matcher shrugging at the key would not do.
+    """
+    bander = Permanent(card=pool["Icatian Skirmishers"])
+    mate = Permanent(card=pool["Camel"])
+    outsider = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bander, mate, outsider]),
+        PlayerState(name="P2"),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0, 1, 2], bands=[[0, 1]])[0]
+
+    described = {"banded_with_source": True}
+    assert subject_matches(game, mate, described, source=bander)
+    assert not subject_matches(game, outsider, described, source=bander), (
+        "attacking beside a band is not being in it"
+    )
+    assert not subject_matches(game, bander, described, source=bander), (
+        "a creature is not banded with itself"
+    )
+    assert not subject_matches(game, mate, described), (
+        "with no source there is no band, and the answer must be no"
+    )
 
 
 def test_no_key_is_promised_without_a_matcher_behind_it():

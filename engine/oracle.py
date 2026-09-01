@@ -909,6 +909,13 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # "…of combat on your turn" narrows the bare form to the active player's
     # combat (Adherent of Hope); must precede its own prefix below.
     ("combat_your_turn",    r"at the beginning of combat on your turn"),
+    # "At the beginning of **each** combat" (Goblin Flotilla). The same event
+    # as the bare spelling below it and the same kind: CR 506.1 gives a turn one
+    # combat phase per combat, and the fire site announces every one of them —
+    # so "each" states what the bare wording already means rather than narrowing
+    # it. Above the bare row, which is not its prefix but which the
+    # specific-before-generic rule keeps it above anyway.
+    ("combat",              r"at the beginning of each combat"),
     ("combat",              r"at the beginning of combat"),
     # "At end of combat, …" (The Wretched) — CR 511.1, the end of combat step.
     # Clockwork Beast's line opens the same way and stays a static line: its
