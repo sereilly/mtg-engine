@@ -29,7 +29,7 @@ from ._common import (
     _restrictions_beyond,
     _targets_only,
 )
-from ._events import CHOSEN_PERMANENT, _UNTAPPED_PERMANENTS
+from ._events import CHOSEN_PERMANENT, CHOSEN_PLAYER, _UNTAPPED_PERMANENTS
 
 
 def _lower_exchange_control(node: ast.ExchangeControl) -> tuple[OracleInstruction, ...]:
@@ -117,7 +117,15 @@ def _linked_steal_filter(node: ast.GainControl, subject: ast.TargetSpec) -> dict
         raise LoweringError(
             "the control change cannot test this restriction", node=node
         )
-    if object_only_filter(described, carried_separately=frozenset({"controller"})) is None:
+    # ``controller_controls`` rides beside ``controller`` in the carried set
+    # and for the same reason stated differently: the steal's own resolution
+    # tests it. "…**whose controller controls an Island**" (Seasinger) is a
+    # question about a seat's whole board, which no object-only matcher can
+    # answer — the handler asks ``subject_filters.subject_matches``, which has
+    # the game, and the picker asks the same function over the same payload.
+    if object_only_filter(
+        described, carried_separately=frozenset({"controller", "controller_controls"})
+    ) is None:
         raise LoweringError(
             "the control change cannot test this restriction", node=node
         )
@@ -216,6 +224,15 @@ def _lower_offered_steal(
 #: defaults to, which is the ability doing something the card never said.
 _NAMED_GAINERS = frozenset({"target_opponent", "target_player", "you"})
 
+#: The seats a control change may be handed to by a phrase that names **no**
+#: particular player — "**An opponent** gains control of this land" (Rainbow
+#: Vale). CR 608.2c/608.2d: the controller of the ability announces the choice
+#: while applying the effect, so the sentence lowers to the pick and then the
+#: hand-over, rather than to a hand-over that guesses. Kept apart from
+#: ``_NAMED_GAINERS`` because those seats are already resolved by the time the
+#: instruction runs and these are not.
+_CHOSEN_GAINERS = {"opponent": "Choose an opponent to gain control of this permanent."}
+
 
 def _lower_another_seat_gains_control(
     node: ast.GainControl, subject: ast.TargetSpec
@@ -243,6 +260,22 @@ def _lower_another_seat_gains_control(
         )
     assert node.gained_by is not None
     who = node.gained_by.kind
+    prompt = _CHOSEN_GAINERS.get(who)
+    if prompt is not None:
+        # Two steps for one sentence, the same shape ``choose_permanent`` +
+        # ``steal_target_linked_to_source`` takes a few lines up: the pick may
+        # have to stop and ask (three seats, three answers) and a handler that
+        # stops cannot also finish. The hand-over reads the seat back under the
+        # one key a chosen player is ever written to.
+        return (
+            OracleInstruction(
+                "choose_opponent", "",
+                {"result_key": CHOSEN_PLAYER, "prompt": prompt},
+            ),
+            OracleInstruction(
+                "give_control_of_source_to_player", "", {"who": "chosen"}
+            ),
+        )
     if who not in _NAMED_GAINERS:
         raise LoweringError(
             f"no handler gives control to {who!r}", node=node

@@ -120,6 +120,11 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "not_enchanted",
     "enchanted_only",
     "attached_to_filter",
+    # "…**whose controller controls an Island**" (Seasinger). ``to_payload``
+    # emits it unconditionally, and ``subject_filters.subject_matches`` is what
+    # answers it — a seat's whole board, so the pure matcher cannot and the
+    # gate downstream is what decides whether a given caller may carry it.
+    "controller_controls",
     # "target permanent you both **own** and control" (Obelisk of Undoing) /
     # "all Auras **you own** attached to permanents you control" (Remove
     # Enchantments). ``to_payload`` reads it unconditionally. It used to emit

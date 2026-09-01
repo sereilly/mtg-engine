@@ -169,6 +169,18 @@ def give_control_of_source_to_player(game: Game, instruction: OracleInstruction,
         recipient = context.caster
     elif who in ("target_opponent", "target_player"):
         recipient = context.target
+    elif who == "chosen":
+        # "**An opponent** gains control of this land …" (Rainbow Vale.) The
+        # seat the ``choose_opponent`` step in front of this one announced
+        # (CR 608.2d), read out of the scratchpad under the one key a chosen
+        # player is ever written to. Nobody chosen means nobody gains control —
+        # falling back to the caster would hand the permanent to the seat the
+        # sentence has just said it is *not*.
+        seat = context.results.get("chosen_player")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{context.card.name}: no opponent was chosen")
+            return True, "resolved"
+        recipient = game.players[seat]
     else:
         return False, f"unsupported control recipient {who!r}"
     if recipient is None or recipient not in game.players:
@@ -289,10 +301,26 @@ def steal_target_linked_to_source(game: Game, instruction: OracleInstruction, co
         )
     else:
         filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+        # Through ``subject_matches`` rather than the pure matcher, because one
+        # narrowing a steal may print is not about the object at all: "target
+        # creature **whose controller controls an Island**" (Seasinger) asks
+        # what the candidate's controller has elsewhere, which needs the game.
+        # ``controller`` is lifted off first — it is enforced by the picker at
+        # activation (``_PICKER_ENFORCED_CONTROLLERS``), and asking it again
+        # here against a seat this call does not name would refuse every
+        # candidate rather than narrow the set.
+        # Imported here rather than at module scope: ``subject_filters`` reads
+        # this package's ``_common``, so a module-level import closes the cycle
+        # through ``engine/handlers/__init__.py`` — the same reason
+        # ``handlers/stack.py`` imports ``control_flow`` inside its function.
+        from ..subject_filters import subject_matches
+
+        observed = {k: v for k, v in filters.items() if k != "controller"}
         target_perm = resolve_target_permanent(
             game, context,
             predicate=lambda p: (
-                permanent_matches_filter(p, filters)
+                subject_matches(game, p, observed, observer=seat,
+                                source=source_permanent)
                 # Guardian Beast, asked here as well as at the seam
                 # (`Game.cant_gain_control`, which `take_control` also asks):
                 # the two answer different moments. This one keeps the

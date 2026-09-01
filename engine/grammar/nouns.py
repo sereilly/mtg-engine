@@ -200,6 +200,9 @@ class _FilterDraft:
     named: str | None = None
     attached_to: str | None = None
     attached_to_filter: ast.ObjectFilter | None = None
+    # "…**whose controller controls an Island**" (Seasinger) — see
+    # ``ast.ObjectFilter``.
+    controller_controls: ast.ObjectFilter | None = None
     of_bound_type: bool = False
     # Five relative narrowings the postmodifier scan writes. Declared here like
     # every other field rather than defaulted onto the instance mid-parse, which
@@ -688,6 +691,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         not_enchanted=d.not_enchanted,
         attached_to=d.attached_to,
         attached_to_filter=d.attached_to_filter,
+        controller_controls=d.controller_controls,
         of_bound_type=d.of_bound_type,
         in_combat_with_source=d.in_combat_with_source,
         was_dealt_damage_this_turn=d.was_dealt_damage_this_turn,

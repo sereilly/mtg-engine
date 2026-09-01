@@ -226,6 +226,14 @@ class ObjectFilter:
     # through the very matcher testing the attachment, so whatever a noun phrase
     # can say about a permanent it can say about a host, once.
     attached_to_filter: "ObjectFilter | None" = None
+    # "target creature **whose controller controls an Island**" (Seasinger).
+    # A narrowing that is not about the object at all: it is about what the
+    # seat holding it has elsewhere on the battlefield. A nested filter for
+    # ``attached_to_filter``'s reason — whatever a noun phrase can say about a
+    # permanent it can say about the one this seat has to own — and a separate
+    # field because the two describe different relations: one walks an
+    # attachment, the other a seat's whole board.
+    controller_controls: "ObjectFilter | None" = None
     # "another permanent **of that type**" — shares a card type with what the
     # sentence's other clause named. Only a lowering knowing that object can
     # resolve it; one that does not must refuse.
@@ -418,6 +426,8 @@ class ObjectFilter:
             payload["exclude_types"] = list(self.excluded_types)
         if self.attached_to_filter is not None:
             payload["attached_to_filter"] = self.attached_to_filter.to_payload()
+        if self.controller_controls is not None:
+            payload["controller_controls"] = self.controller_controls.to_payload()
         # Additive keys — handlers read these with .get() defaults.
         if self.with_keywords:
             payload["with_keywords"] = list(self.with_keywords)

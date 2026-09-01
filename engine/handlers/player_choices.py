@@ -117,3 +117,50 @@ def choose_cast_this_turn(
         context=context,
     )
     return True, "resolved"
+
+
+@effect_handler("choose_opponent")
+def choose_opponent(
+    game: "Game", instruction: "OracleInstruction", context: "OracleExecutionContext"
+) -> tuple[bool, str]:
+    """"**An opponent** gains control of this land …" (Rainbow Vale.)
+
+    CR 608.2c/608.2d: a choice an effect offers with nobody named is announced
+    by the controller of the spell or ability while applying it — so the seat
+    that activated the ability picks which opponent, and the sentence behind
+    this one reads the answer rather than deciding again.
+
+    A step of its own rather than a word the control handler resolves, for
+    ``choose_player_who_cast``'s reason: a pick made in a two-player game has
+    exactly one answer and a pick made at four seats is a prompt, and a handler
+    that has to stop and ask cannot also finish the sentence. Recorded under the
+    key every "that player" reads, so any later step naming the chosen seat is
+    already wired.
+
+    The key is written first, so a table where nobody is left to choose reads
+    ``None`` rather than raising — "no legal choice" is an outcome.
+    """
+    key = str(instruction.payload["result_key"])
+    context.results[key] = None
+    card_name = getattr(context.card, "name", "")
+    chooser = game.players.index(context.caster)
+    seats = [
+        seat
+        for seat, player in enumerate(game.players)
+        if seat != chooser and not player.lost
+    ]
+    if not seats:
+        game.log.append(f"{card_name}: no opponent to choose")
+        return True, "resolved"
+    if len(seats) == 1:
+        context.results[key] = seats[0]
+        return True, "resolved"
+    game.arm_player_choice(
+        chooser,
+        card_name=card_name,
+        prompt=str(instruction.payload.get("prompt") or "Choose an opponent."),
+        result_key=key,
+        seats=seats,
+        context=context,
+    )
+    return True, "resolved"
