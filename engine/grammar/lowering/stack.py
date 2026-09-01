@@ -643,6 +643,18 @@ def _lower_create_delayed_trigger(
     # token maker wrote, so nothing is resolved as a target.
     if node.watches is not None:
         payload["watches"] = node.watches
+    # "…when **target creature you control** attacks and isn't blocked, …"
+    # (Delif's Cone, Delif's Cube). The opener's own target, described the way
+    # every other targeted instruction describes one — so `engine/targeting.py`
+    # raises the picker off this instruction and the arming handler binds what
+    # the player chose. Without it the ability would arm with `binds_target`
+    # set, find no target, and create nothing while the card compiled clean.
+    if node.target is not None:
+        _describe_targets(payload, node.target)
+        if "targets" not in payload:
+            raise LoweringError(
+                "this delay's opener names no target it can bind", node=node
+            )
     subject = _delayed_filter_payload(node.subject, node)
     if subject:
         payload["subject_filter"] = subject

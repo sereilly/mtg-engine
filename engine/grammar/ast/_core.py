@@ -139,6 +139,17 @@ class ThatMuch:
     would have taken the wrong number from the wrong place.
     """
     source: str | None = None
+    #: "…equal to its power **plus 2**" (Farrel's Mantle). CR 107.3's arithmetic
+    #: on a read value: the number the words name is the characteristic plus a
+    #: printed constant, so it rides the back-reference rather than becoming a
+    #: second node — every lowering that reads one of these reads a number, and
+    #: a bonus in a node of its own would be a second number nobody added.
+    #:
+    #: Zero is "no bonus printed", which is every card written before this one,
+    #: so no payload changes shape. A lowering that cannot carry the bonus must
+    #: refuse rather than drop it: two less damage than the card says is the
+    #: quiet failure this field exists to make loud.
+    bonus: int = 0
 
 
 @dataclass(frozen=True)

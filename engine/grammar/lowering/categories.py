@@ -489,6 +489,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "finish_repeated_graveyard_pick": "zones",
     "exile_all_matching": "zones",
     "grant_team_keyword_until_eot": "pump",
+    # "…that creature gains first strike until end of turn" on a block trigger
+    # (Goblin Flotilla) — the keyword half of the same family, over the pair the
+    # trigger named rather than over a board.
+    "grant_keyword_to_block_pair": "pump",
     # A durationless keyword grant to the enchanted creature (Cocoon's hatch):
     # recorded on the creature through the layer-6 write API, so it survives
     # the Aura (CR 611.2c).
@@ -542,7 +546,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Dust's block trigger) — a one-shot stamp on the blocked creature, read
     # back by `can_attack` for exactly one of that controller's turns.
     "cant_attack_during_controllers_next_turn": "combat_restrictions",
-    "cant_block_power_n_or_greater": "combat_restrictions",
+    "cant_block_subject": "combat_restrictions",
     # The one-shot, turn-scoped blanket ("Creatures without flying can't block
     # this turn", Destructive Tampering's second mode).
     "cant_block_until_eot": "combat_restrictions",

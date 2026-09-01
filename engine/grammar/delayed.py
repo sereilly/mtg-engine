@@ -30,7 +30,9 @@ from .nouns import parse_object_filter
 from .effects.characteristics import _parse_keywords
 from .vocabulary import LAND_TYPES, TYPE_LINE_SUPERTYPES
 from .phrases import (BASIC_LAND_WORDS, _parse_duration,
-                      parse_bound_subject)
+                      parse_bound_subject, parse_subject_filter_at)
+from .rebinding import rebind_pronoun_to_delay_target
+from .readers import accept_source_reference
 from .references import parse_recipient, parse_target_spec
 from .lexer import SELF
 from .stream import TokenStream
@@ -348,6 +350,103 @@ def _parse_land_tapped_for_mana(stream: TokenStream) -> "ast.ObjectFilter | None
     return land
 
 
+#: The combat events a ``this turn, when target <noun> …`` opener can name, by
+#: the words printed after the target phrase. Two rows would be two spellings of
+#: one shape, so the phrase is the key and the event is the value — a card
+#: printing "attacks" alone is a row, not a production.
+#:
+#: The keys are of ``engine/delayed_triggers.DELAYED_EVENTS``; one that is not
+#: refuses when the sentence is lowered, so a row added here cannot arm an
+#: ability nothing announces.
+_TARGETED_COMBAT_DELAYS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("attacks", "and", "isn't", "blocked"), "creature_attacks_unblocked"),
+)
+
+
+def _parse_targeted_combat_delay(
+    stream: TokenStream,
+) -> "tuple[str, ast.TargetSpec] | None":
+    """``when target <noun> attacks and isn't blocked`` — the opener that
+    **chooses** the creature it watches (Delif's Cone, Delif's Cube).
+
+    The other openers here name an object the effect already holds: its own
+    source, a token it made, or the target an *earlier sentence* chose. This one
+    names the target itself, so CR 601.2c/602.2b pick it as the ability is
+    activated and the spec has to travel out of the parse — otherwise the picker
+    has nothing to offer and the arming handler has nothing to bind.
+
+    Refuses with the cursor untouched, so every other "when" opener keeps its
+    reading.
+    """
+    mark = stream.mark()
+    try:
+        chosen = parse_target_spec(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if chosen is None or not chosen.targeted or chosen.count != 1:
+        # One permanent per entry: ``DelayedTrigger`` binds one id, so a counted
+        # phrase would arm an ability about whichever one the reader returned
+        # first. Refusing leaves the line's own refusal.
+        stream.reset(mark)
+        return None
+    for phrase, event in _TARGETED_COMBAT_DELAYS:
+        after = stream.mark()
+        if stream.accept_phrase(*phrase):
+            return event, chosen
+        stream.reset(after)
+    stream.reset(mark)
+    return None
+
+
+#: How long a block-pair delay's printed window lasts (CR 603.7b). "This
+#: combat" is the shorter of the two sweeps `engine/delayed_triggers.py` runs;
+#: a card printing "this turn" is the same ability over the longer one.
+_BLOCK_PAIR_WINDOWS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("this", "combat"), "end_of_combat"),
+    (("this", "turn"), "end_of_turn"),
+)
+
+
+def _parse_source_block_pair_delay(
+    stream: TokenStream,
+) -> "tuple[ast.ObjectFilter, str] | None":
+    """``this creature blocks or becomes blocked by <noun> this combat`` — the
+    delayed spelling of the joined block event (Goblin Flotilla).
+
+    The printed static form of the same sentence is a trigger of the permanent
+    (``engine/oracle.py``'s ``creature_blocks_or_blocked_by``); this is that
+    ability *created* for a window, which is what the trailing "this combat"
+    says. Its subject is the source rather than a described class — the delayed
+    entry watches one permanent by id — so the noun phrase after "by" narrows
+    the **other** half of the pair, exactly as it does on the static form.
+
+    Refuses with the cursor untouched, so every other "whenever …" opener keeps
+    its reading.
+    """
+    mark = stream.mark()
+    if not accept_source_reference(stream):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("blocks", "or", "becomes", "blocked", "by"):
+        stream.reset(mark)
+        return None
+    described = parse_subject_filter_at(stream)
+    if described is None:
+        stream.reset(mark)
+        return None
+    for phrase, duration in _BLOCK_PAIR_WINDOWS:
+        window = stream.mark()
+        if stream.accept_phrase(*phrase):
+            return described, duration
+        stream.reset(window)
+    # A window is required: CR 603.7b's "unless it has a stated duration" is
+    # what makes this ability repeat, and one with no window is a static the
+    # permanent simply has.
+    stream.reset(mark)
+    return None
+
+
 def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.CreateDelayedTrigger | None":
     """A sentence that **creates** a delayed triggered ability (CR 603.7).
 
@@ -374,34 +473,58 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
     subject = None
     agent = None
     watches: str | None = None
+    target: "ast.TargetSpec | None" = None
+
+    # "**This turn,** when target creature you control attacks and isn't
+    # blocked, …" (Delif's Cone, Delif's Cube). CR 603.7b's stated duration
+    # printed *in front of* the opener rather than inside it — the same window
+    # "…dies this turn" states from the other end of the sentence, so it is read
+    # here and the openers behind it keep their own defaults. Consumed only when
+    # a delay opener really follows: on any refusal below the mark is restored,
+    # so a sentence beginning "this turn" and going on to say something else
+    # keeps every other reading it had.
+    if stream.accept_phrase("this", "turn") and not stream.accept_punct(","):
+        stream.reset(mark)
+        return None
 
     if stream.accept_word("when"):
+        # "…when **target creature you control** attacks and isn't blocked, …"
+        # (Delif's Cone, Delif's Cube). Read before the bound-subject openers
+        # below: this one *chooses* its object where those name one the effect
+        # already holds, and it declines without consuming.
+        targeted = _parse_targeted_combat_delay(stream)
+        if targeted is not None:
+            event, target = targeted
+            binds = True
         # "When that creature dies this turn, …"
-        subject = _delayed_bound_subject(stream)
-        if subject is not None and stream.accept_phrase("dies", "this", "turn"):
-            event, binds = "bound_permanent_dies", True
-        elif subject is not None and stream.accept_phrase("leaves", "the", "battlefield"):
-            # "When that creature leaves the battlefield this turn, sacrifice
-            # this artifact." (Runesword.) CR 603.6c's wider event about the
-            # same bound object the row above names — a bounce and a tuck are
-            # both this and neither is a death, which is why the two are
-            # separate events rather than one with a flag.
-            event, binds = "bound_permanent_leaves_battlefield", True
-            if not stream.accept_phrase("this", "turn"):
-                duration = "until_it_triggers"
-        elif subject is None:
-            # "When **this artifact** leaves the battlefield this turn, destroy
-            # that creature." (War Barge.) The delay printed *in front* of its
-            # effect, naming the object it watches — which here is the ability's
-            # own source, while the effect names the creature the ability
-            # targeted. Two objects, so `binds` is granted: the opener says what
-            # is watched and `delay_binds_an_object` reads the effect for what
-            # is acted on.
-            stream.reset(mark)
-            leading = parse_leaves_battlefield_delay(stream)
-            if leading is not None:
-                event, once, duration, _permitted, watches = leading
-                binds = True
+        if event is None:
+            subject = _delayed_bound_subject(stream)
+            if subject is not None and stream.accept_phrase("dies", "this", "turn"):
+                event, binds = "bound_permanent_dies", True
+            elif subject is not None and stream.accept_phrase(
+                "leaves", "the", "battlefield"
+            ):
+                # "When that creature leaves the battlefield this turn,
+                # sacrifice this artifact." (Runesword.) CR 603.6c's wider event
+                # about the same bound object the row above names — a bounce and
+                # a tuck are both this and neither is a death, which is why the
+                # two are separate events rather than one with a flag.
+                event, binds = "bound_permanent_leaves_battlefield", True
+                if not stream.accept_phrase("this", "turn"):
+                    duration = "until_it_triggers"
+            elif subject is None:
+                # "When **this artifact** leaves the battlefield this turn,
+                # destroy that creature." (War Barge.) The delay printed *in
+                # front* of its effect, naming the object it watches — which
+                # here is the ability's own source, while the effect names the
+                # creature the ability targeted. Two objects, so `binds` is
+                # granted: the opener says what is watched and
+                # `delay_binds_an_object` reads the effect for what is acted on.
+                stream.reset(mark)
+                leading = parse_leaves_battlefield_delay(stream)
+                if leading is not None:
+                    event, once, duration, _permitted, watches = leading
+                    binds = True
     elif stream.accept_word("whenever"):
         # "Whenever that creature is dealt damage by an attacking creature this
         # turn, …" — "this turn" is CR 603.7b's stated duration, so this one
@@ -419,6 +542,22 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
                 agent = None
             if agent is not None and stream.accept_phrase("this", "turn"):
                 event, binds, once = "bound_permanent_dealt_damage", True, False
+        if event is None:
+            # "…whenever **this creature** blocks or becomes blocked by a
+            # creature this combat, …" (Goblin Flotilla). The joined block event
+            # about the ability's own source, created for a window — read before
+            # the land-tap opener below, which it does not collide with, and
+            # after the bound-object one above, whose "that <noun>" it is not.
+            stream.reset(after_whenever)
+            pair = _parse_source_block_pair_delay(stream)
+            if pair is not None:
+                # The noun phrase is the **agent**, not the subject: the entry
+                # watches the ability's own source by id, and the phrase after
+                # "by" describes the *other* half of the pair. Filed under the
+                # field that is tested against that half, so the narrowing is
+                # asked of the creature the card narrows.
+                agent, duration = pair
+                event, once, watches = "source_blocks_or_blocked_by", False, "source"
         if event is None:
             # "…**whenever a player taps a Mountain for mana**, that player adds
             # an additional {R}." (Chaos Moon's odd branch.) The one opener here
@@ -476,15 +615,24 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
         return None
     effect = resolve_that_turn(effect) or effect
     effect = fold_flip_stakes(stream, effect, parse_statement)
+    if target is not None:
+        # CR 603.7c: the ability is about the object its opener chose, so the
+        # pronouns behind the comma name that object rather than the ability's
+        # own source — which for Delif's Cube is a different permanent still on
+        # the battlefield, named by the very next clause.
+        effect = rebind_pronoun_to_delay_target(target, effect)
     return ast.CreateDelayedTrigger(
         event=event, effect=effect,
         once=once, duration=duration,
         binds_target=(
-            binds if subject is not None
+            # An opener that chose its own target binds it whatever the effect
+            # behind it says: the choosing is the opener's, so there is no
+            # sentence to read the permission against.
+            binds if subject is not None or target is not None
             else delay_binds_an_object(binds, effect)
         ),
         subject=subject, agent=agent,
-        watches=watches,
+        watches=watches, target=target,
     )
 
 

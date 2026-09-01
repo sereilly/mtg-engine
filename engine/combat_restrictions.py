@@ -70,7 +70,7 @@ class CombatRestriction:
 #                                   phases/declare_attackers_step.can_attack
 #   cant_be_blocked_by              phases/declare_blockers_step
 #   cant_be_blocked_except_by       phases/declare_blockers_step
-#   cant_block_power_n_or_greater   phases/declare_blockers_step
+#   cant_block_subject              phases/declare_blockers_step
 #   cant_block_power_n_or_greater_unless_pay  phases/declare_blockers_step
 #                                   + declare_blockers (the charge)
 #   creatures_that_attacked_last_turn_cant_attack
@@ -338,16 +338,6 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "must_be_blocked_by_all_able",
     ),
     (
-        # The threshold is data for the same reason the land type is: "power 4 or
-        # greater" is the same restriction Ironclaw Orcs has, and baking 2 into
-        # the instruction kind made every other number a new kind, a new handler
-        # branch, and a new gate entry.
-        re.compile(
-            r"^this creature can't block creatures with power (?P<power>\d+) or greater$"
-        ),
-        "cant_block_power_n_or_greater",
-    ),
-    (
         # "This creature can't block creatures with power 3 or greater **unless
         # you pay {1}**." (Hipparion.) CR 509.1b's restriction with CR 509.1a's
         # cost hung off it — the blocking twin of Brainwash's
@@ -369,6 +359,27 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"(?P<block_mana>(?:\{[^}]+\})+)$"
         ),
         "cant_block_power_n_or_greater_unless_pay",
+    ),
+    (
+        # "…can't block **creatures with power 2 or greater**" (Ironclaw Orcs),
+        # "…**white creatures with power 2 or greater**" (Orcish Veteran).
+        #
+        # **One row, and the noun phrase is read by `_blocker_union`** — the
+        # mirror of what `cant_be_blocked_by` above already does, and taken for
+        # the same reason. This was a row that captured the *threshold* alone,
+        # so a card printing any other narrowing of the same sentence had to
+        # earn a second capture and a second branch at the enforcement site;
+        # Orcish Veteran stacks a colour on the threshold and would have been
+        # the second row. The phrase is payload now, tested by
+        # ``subject_matches`` against the attacker.
+        #
+        # Below the priced row above it, whose sentence this pattern would also
+        # match: the `.+` reaches to the end of the line, so "unless you pay
+        # {1}" would be read as part of the noun phrase — where `_blocker_union`
+        # refuses it and the whole line refuses, which is the safe direction but
+        # not the right reading.
+        re.compile(r"^this creature can't block (?P<blockees>.+)$"),
+        "cant_block_subject",
     ),
     (
         # "Creatures that attacked during their controller's last turn can't
@@ -425,26 +436,31 @@ _AS_LONG_AS = re.compile(
 CONDITIONAL_RESTRICTION_KINDS: frozenset[str] = frozenset({"cant_be_blocked_by"})
 
 
-def _controlled_noun(phrase: str) -> dict | None:
-    """The board noun phrase an "as long as … controls …" clause names.
+def _printed_noun(phrase: str) -> dict | None:
+    """One printed noun phrase, as the subject-filter payload that tests it.
 
-    Read by **the grammar's noun parser**, not by `_blocker_noun` beside it.
-    That reader is a hand-written mini-parser for the members of a blocker
-    union, and it knows five shapes; "a snow land" is not one of them, and
-    teaching it a sixth would be one more entry in the second vocabulary this
-    file already keeps. The clause here is an ordinary board question — the
-    same one `activation_restrictions._controlled_board_phrase` and
-    `untap_restrictions._blocked_subject` ask — so it gets the same answer.
+    **The one reader of a noun in this file.** It began as the reader for an
+    "as long as … controls …" board clause — the same question
+    `activation_restrictions._controlled_board_phrase` and
+    `untap_restrictions._blocked_subject` ask, so it got the same answer — and
+    it is now what every union member goes through too. The five hand-written
+    regexes that used to read those (`_blocker_noun`) are gone: they knew
+    "creatures with flying" and "red creatures" but not the two stacked
+    together, so every new printed narrowing cost this file a sixth pattern and
+    the enforcement site a matching branch. That was the second vocabulary the
+    note here used to promise to retire.
 
-    (`_blocker_noun` is still a second reader of printed nouns, and is the
-    obvious next thing to retire in this file. It is not retired here because
-    its callers are unions, which the noun parser reads one member at a time.)
+    None means the phrase is not one the noun parser reads *in full*, or is one
+    carrying a key `subject_matches` cannot test — both of which refuse the
+    whole line rather than admitting a restriction nobody can apply.
     """
     from .grammar.errors import GrammarError
     from .grammar.lexer import tokenize
     from .grammar.nouns import parse_object_filter
     from .grammar.stream import TokenStream
-    from .subject_filters import untestable_filter_keys
+    from .subject_filters import (
+        unimplemented_filter_keywords, untestable_filter_keys,
+    )
 
     stream = TokenStream(tokenize(phrase.strip()).tokens)
     try:
@@ -455,6 +471,12 @@ def _controlled_noun(phrase: str) -> dict | None:
         return None
     payload = described.to_payload()
     if not payload or untestable_filter_keys(payload):
+        return None
+    # A keyword the engine does not implement makes the filter inert rather than
+    # unreadable, which for a restriction is a silent change to what is legal —
+    # the check the five retired regexes each carried, kept in the one reader
+    # that replaced them.
+    if unimplemented_filter_keywords(payload):
         return None
     return payload
 
@@ -508,7 +530,7 @@ def combat_restriction_for(
     condition: dict | None = None
     qualifier = _AS_LONG_AS.match(normalized_line)
     if qualifier is not None:
-        board = _controlled_noun(qualifier.group("board"))
+        board = _printed_noun(qualifier.group("board"))
         if board is None:
             return None
         condition = {"who": qualifier.group("who").replace(" ", "_"), "subject": board}
@@ -599,6 +621,17 @@ def combat_restriction_for(
             if filters is None:
                 return None
             payload["blocker_filters"] = filters
+        # "This creature can't block <union>." The mirror of the clause above —
+        # that one names what may not block *this*, this one names what *this*
+        # may not block — so it is the same union parsed by the same reader, and
+        # a phrase it cannot read refuses the line rather than admitting a
+        # restriction the enforcement site would then apply to nobody.
+        blockees = payload.pop("blockees", None)
+        if blockees is not None:
+            filters = _blocker_union(blockees, card_name)
+            if filters is None:
+                return None
+            payload["blockee_filters"] = filters
         allowed = payload.pop("allowed", None)
         if allowed is not None:
             filters = _blocker_union(allowed)
@@ -654,109 +687,69 @@ def combat_restriction_for(
     return None
 
 
-#: One member of an "except by" union, as the subject-filter payload that tests
-#: it. Each entry is a whole printed noun phrase rather than a word, because
-#: "creatures with flying" and "artifact creatures" are two words doing two
-#: different jobs and splitting them would need the noun parser this file
-#: deliberately does not have.
 def _blocker_union(phrase: str, card_name: str | None = None) -> list[dict] | None:
     """The filters a noun-phrase union names, or None.
 
-    Two rows carry one: the blocker whitelist ("can't be blocked except by
-    Walls and/or creatures with flying") and the attack-exception list
-    ("Except for creatures named Akron Legionnaire and artifact creatures,
-    …"). One parser, because the members are the same printed vocabulary and
-    a phrase readable in one union and not the other would be a fork nobody
-    could find.
+    Three rows carry one: the blocker whitelist ("can't be blocked except by
+    Walls and/or creatures with flying"), the attack-exception list ("Except
+    for creatures named Akron Legionnaire and artifact creatures, …") and the
+    blocking restriction ("can't block white creatures with power 2 or
+    greater"). One parser, because the members are the same printed vocabulary
+    and a phrase readable in one union and not the others would be a fork
+    nobody could find.
 
-    None means "this file does not read that phrase", which keeps the card
+    **Each member is read by the grammar's noun parser**, which is the second
+    reader this file used to keep — five hand-written regexes that knew
+    "creatures with flying" and "red creatures" but not the two stacked
+    together, so Orcish Veteran's phrase needed a sixth. Retiring it is what
+    this file's own note asked for; the payloads are the ones
+    ``subject_matches`` already tests, so nothing downstream learned a new
+    vocabulary.
+
+    None means "the noun parser does not read that phrase", which keeps the card
     unsupported with the clause named. Returning a partial union instead would
     be an evasion ability that lets through more than the card allows — or an
     exception list that exempts fewer creatures than the card prints.
     """
+    phrase = _restore_own_name(phrase.strip(), card_name)
+    if phrase is None:
+        return None
+    # **Whole phrase first.** A union member may itself contain "or" ("creatures
+    # with power 2 or greater"), and splitting first turns that into two members
+    # of which the first — "creatures with power 2" — reads as an *exact* power.
+    # That is the silent narrowing this ordering exists to prevent, and it is
+    # safe only because the noun parser refuses a phrase it cannot consume in
+    # full: "Walls and/or creatures with flying" leaves tokens over and comes
+    # back None, so a real union still reaches the split below.
+    whole = _printed_noun(phrase)
+    if whole is not None:
+        return [whole]
     filters: list[dict] = []
-    for part in re.split(r"\s*(?:and/or|and|or)\s+", phrase.strip()):
+    for part in re.split(r"\s*(?:and/or|and|or)\s+", phrase):
         part = part.strip()
         if not part:
             continue
-        described = _blocker_noun(part, card_name)
+        described = _printed_noun(part)
         if described is None:
-            # **A phrase the split broke may still be one noun.** "creatures
-            # with power 2 or greater" contains the word "or" and is not a
-            # union, so splitting it produced two members neither of which
-            # reads — and the whole line refused, for a threshold this engine
-            # has enforced since Amrou Kithkin.
-            #
-            # The retry is here, after a member fails, rather than before the
-            # split: read whole-first, "creatures named Akron Legionnaire and
-            # artifact creatures" fullmatches the *name* pattern greedily and
-            # the union collapses into one creature nobody is named. Trying the
-            # split first keeps every phrase that already worked working, and
-            # this is only reached where it did not.
-            whole = _blocker_noun(phrase.strip(), card_name)
-            return [whole] if whole is not None else None
+            return None
         filters.append(described)
     return filters or None
 
 
-def _blocker_noun(part: str, card_name: str | None = None) -> dict | None:
-    """One member of the union, as a subject-filter payload."""
-    named = re.fullmatch(r"creatures named (.+)", part)
-    if named is not None:
-        # "creatures named Kobolds of Kher Keep" — the name is data, matched
-        # through `name_key` by the subject matcher, so there is nothing to
-        # validate it against: a token's name (Wolves of the Hunt) is a name no
-        # card file lists. "this creature" is what `_restriction_line` collapsed
-        # the card's own name to; only the caller knows what it was, and a
-        # caller that cannot say refuses the phrase rather than carrying a
-        # filter that matches nothing.
-        name = named.group(1).strip()
-        if name == "this creature":
-            if not card_name:
-                return None
-            name = card_name
-        return {"type_filter": "creature", "named": name}
-    keyword = re.fullmatch(r"creatures with ([a-z ]+)", part)
-    if keyword is not None:
-        # The word has to be a keyword the engine implements, checked here for
-        # the reason the subtype is checked in `combat_restriction_for`: the
-        # matcher would answer "no permanent has that" for anything else, and a
-        # *whitelist* whose members match nothing is a creature that cannot be
-        # blocked at all. Loud refusal instead.
-        word = keyword.group(1).strip()
-        if word not in IMPLEMENTED_KEYWORDS:
-            return None
-        return {"type_filter": "creature", "with_keywords": [word]}
-    power = re.fullmatch(r"creatures with power (\d+) or greater", part)
-    if power is not None:
-        # Against the blocker's **effective** power (CR 613 layer 7), which is
-        # what `subject_matches` asks — a 2/2 that has been pumped stops being a
-        # legal blocker while it is pumped. Read here rather than as its own
-        # capture, so the whitelist form ("…except by creatures with power 3 or
-        # greater") gets it for free and cannot disagree.
-        return {"type_filter": "creature", "power": {"op": "ge", "value": int(power.group(1))}}
-    colored = re.fullmatch(rf"({_COLOR_WORD}) creatures", part)
-    if colored is not None:
-        return {"type_filter": "creature", "color_filter": COLOR_WORDS[colored.group(1)]}
-    typed = re.fullmatch(r"(artifact|enchantment|land) creatures", part)
-    if typed is not None:
-        return {"type_filter_all": [typed.group(1), "creature"]}
-    # "non-Wall creatures" (Flow of Maggots). The negation of the typed forms
-    # above, and its own branch rather than a flag on one of them: what it
-    # names is every creature *except* one subtype, and the matcher has a key
-    # for exactly that. A card printing "nonartifact creatures" is the same
-    # sentence and is left for the card that prints it — this reads the subtype
-    # form the pool has.
-    negated = re.fullmatch(r"non-?([a-z]+) creatures", part)
-    if negated is not None:
-        subtype = negated.group(1)
-        if subtype in CREATURE_TYPES:
-            return {"type_filter": "creature", "exclude_subtypes": [subtype]}
+def _restore_own_name(phrase: str, card_name: str | None) -> str | None:
+    """*phrase* with "this creature" put back to the printed card name.
+
+    "creatures named **this creature**" is what ``oracle._restriction_line``
+    collapsed Akron Legionnaire's self-naming exception to; the filter matches
+    by *name* rather than by identity, so a second copy and a token wearing the
+    name are both excepted. A caller with no name to give gets a refusal rather
+    than a filter that matches nothing.
+    """
+    if "named this creature" not in phrase:
+        return phrase
+    if not card_name:
         return None
-    singular = part[:-1] if part.endswith("s") else part
-    if singular in CREATURE_TYPES:
-        return {"subtype_filter": singular}
-    return None
+    return phrase.replace("named this creature", f"named {card_name}")
 
 
 #: A restriction *granted* for the turn rather than printed on a permanent

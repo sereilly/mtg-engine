@@ -482,6 +482,18 @@ def look_at_target_library_top(game: Game, instruction: OracleInstruction, conte
 @effect_handler("discard_target_cards")
 def discard_target_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
+    # ``who: "defending_player"`` names the seat the combat fire site froze into
+    # the trigger's context (CR 506.2) rather than a seat anybody targeted —
+    # Mindstab Thrull, whose discard has no target at all. The same key
+    # ``discard_x_target_cards`` reads for the random half of the same sentence,
+    # so one printed phrase resolves to one seat whichever handler runs it.
+    if instruction.payload.get("who") == "defending_player":
+        seat = (context.trigger_context or {}).get("trigger_defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            # The attacker can leave combat before this resolves, and a seat
+            # nobody recorded is not a seat to empty a hand from.
+            return True, "resolved"
+        target = game.players[seat]
     actual = min(
         resolve_amount(instruction.payload.get("amount", 0), context.x_value), len(target.hand)
     )

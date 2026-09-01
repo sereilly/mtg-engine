@@ -148,6 +148,12 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # refuses the whole line rather than being dropped, which here would offer
     # every creature on the table.
     "controller_controls",
+    # "all creatures **banded with it**" (Icatian Skirmishers). Membership of
+    # the band the ability's own source is attacking in (CR 702.22e) — a
+    # relation to the source like ``blocked_by_source`` above, answered from
+    # the band declaration rather than from any characteristic of the creature,
+    # and testable here for the same reason: this function takes the source.
+    "banded_with_source",
 })
 
 #: The keys :func:`subject_matches` answers from the object alone. The other two
@@ -187,6 +193,33 @@ def untestable_filter_keys(
         if isinstance(nested, dict) and untestable_filter_keys(nested, allowed=allowed):
             unknown.add(key)
     return unknown
+
+def unimplemented_filter_keywords(payload: dict) -> set[str]:
+    """The keyword *words* in *payload* this engine does not implement.
+
+    :func:`untestable_filter_keys` asks whether the matcher knows the **key**;
+    this asks whether it can answer the **value**. ``with_keywords`` and
+    ``without_keywords`` are both put to ``Game._has_keyword``, which answers
+    "no" for a word no behaviour is registered under — so a filter naming one is
+    not refused anywhere, it is silently inert: the positive form matches
+    nothing and the negative form matches everything.
+
+    For a *sweep* that is only a card doing less than it says. For a printed
+    **restriction** it changes what is legal, and in both directions at once —
+    "can't block creatures with shadow" would forbid nothing, and "creatures
+    without shadow can't attack" would ground the whole board. That is why the
+    combat-restriction table has always validated its keyword captures, and why
+    this is the one reader of that question rather than a check per row.
+    """
+    from .grammar.vocabulary import IMPLEMENTED_KEYWORDS
+
+    return {
+        word
+        for key in ("with_keywords", "without_keywords")
+        for word in (payload.get(key) or ())
+        if word not in IMPLEMENTED_KEYWORDS
+    }
+
 
 #: The keys ``_card_matches_filter`` answers about a **card** — an object in a
 #: hand, a graveyard or a library. A far smaller set than the two above, and
@@ -454,6 +487,17 @@ def subject_matches(
 
         if not tapped_to_pay_for(obj, source):
             return False
+    # "all creatures **banded with it**" — the other members of the attacking
+    # band the source is in (CR 702.22e), through the one reader of the band
+    # declaration. With no source there is no band to be in, and the answer is
+    # no: refusing the creature rather than sweeping every attacker.
+    if described.get("banded_with_source"):
+        from .banding import creatures_banded_with
+
+        if source is None:
+            return False
+        if not any(mate is obj for mate in creatures_banded_with(game, source)):
+            return False
     # "Another" (CR 109.5) excludes the ability's own source by identity — a
     # look-alike on the same battlefield is a different permanent.
     if described.get("exclude_self") and source is not None and obj is source:
@@ -471,4 +515,5 @@ __all__ = [
     "filter_head_noun",
     "object_only_filter",
     "subject_matches",
+    "unimplemented_filter_keywords",
 ]

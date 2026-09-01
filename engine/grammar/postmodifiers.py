@@ -365,6 +365,22 @@ def _parse_postmodifiers(
         ):
             d.tapped_to_pay_for_source_this_turn = True
             continue
+        # "all creatures **banded with it**" (Icatian Skirmishers), "creatures
+        # **banded with this creature**" (Camel). CR 702.22e's band, which is a
+        # relation to the ability's own source rather than a state of the
+        # creature described — so it is a relative filter field like
+        # `blocked_by_source` above it. Both printed referents name the source:
+        # the lexer has already collapsed a card's own name into SELF, and "it"
+        # under a trigger whose subject is the source means the same object.
+        banded = stream.mark()
+        if stream.accept_phrase("banded", "with"):
+            if stream.accept_word("it") or stream.accept_kind(SELF) is not None:
+                d.banded_with_source = True
+                continue
+            if stream.accept_word("this") and stream.accept_word(*_SELF_NOUNS):
+                d.banded_with_source = True
+                continue
+        stream.reset(banded)
         if stream.accept_phrase("that", "'s", "attacking", "you"):
             d.attacking_you = True
             continue

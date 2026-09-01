@@ -17,7 +17,7 @@ import dataclasses
 from .. import ast
 from ..amounts import parse_amount, parse_equal_to
 from ..errors import GrammarError
-from ..readers import accept_source_reference
+from ..readers import accept_source_reference, accept_source_reference_spec
 from ..references import parse_player_ref, parse_recipient
 from ..lexer import WORD
 from ..stream import TokenStream
@@ -553,13 +553,21 @@ def _parse_have_source_deal_damage(stream: TokenStream) -> "ast.Statement | None
     mark = stream.mark()
     if not stream.accept_word("have"):
         return None
-    if not accept_source_reference(stream):
+    # Through the spec reader rather than the predicate, so **which word was
+    # printed** survives: a bare "it" is a pronoun and, under a trigger whose
+    # condition named an object, means that object (CR 109.5 names the source;
+    # the pronoun does not). "Its controller may have **it** deal damage equal
+    # to its power" on an Aura (Farrel's Mantle) is the enchanted creature —
+    # collapsed to "this", the Aura itself would have dealt the damage, and an
+    # Aura's power is nothing at all.
+    biter = accept_source_reference_spec(stream)
+    if biter is None:
         stream.reset(mark)
         return None
     if not stream.at_word("deal", "deals"):
         stream.reset(mark)
         return None
-    return _parse_damage(stream, ast.TargetSpec("this", ast.ObjectFilter(is_source=True)))
+    return _parse_damage(stream, biter)
 
 
 #: How Runesword's two sentences name the creature its own ability targeted.

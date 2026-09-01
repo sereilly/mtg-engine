@@ -174,6 +174,7 @@ class _FilterDraft:
     blocked_by_target_object: ast.ObjectFilter | None = None
     blocked_by_source: bool = False
     tapped_to_pay_for_source_this_turn: bool = False
+    banded_with_source: bool = False
     attacking_you: bool = False
     power: ast.Comparison | None = None
     mana_value: ast.Comparison | None = None
@@ -670,6 +671,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         blocked_by_target_object=d.blocked_by_target_object,
         blocked_by_source=d.blocked_by_source,
         tapped_to_pay_for_source_this_turn=d.tapped_to_pay_for_source_this_turn,
+        banded_with_source=d.banded_with_source,
         attacking_you=d.attacking_you,
         blocked=d.blocked,
         power=d.power,

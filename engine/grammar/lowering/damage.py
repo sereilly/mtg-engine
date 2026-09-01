@@ -38,6 +38,7 @@ from ._common import (
     _filter_payload,
     _restrictions_beyond,
     _full_mana_payload,
+    _is_enchanted,
     _is_source,
     _is_target,
     _is_you,
@@ -455,11 +456,14 @@ def _lower_damage_shape(
     # information (CR 608.2), which the Permanent object still carries because
     # nothing off the battlefield touches it. Its own kind rather than the
     # generic damage, because the amount is a *read* rather than a number.
+    # …and on an **Aura**, whose biter is the permanent it enchants (Farrel's
+    # Mantle): the ability stays the Aura's (CR 113.7a) and the dealer is
+    # payload, because an Aura has no power to deal.
     if (
         isinstance(node.amount, ast.ThatMuch)
         and node.amount.source == "its_power"
         and node.source is not None
-        and _is_source(node.source)
+        and (_is_source(node.source) or _is_enchanted(node.source))
         and len(node.recipients) == 1
         and _is_target(node.recipients[0])
     ):
@@ -467,6 +471,18 @@ def _lower_damage_shape(
         payload: dict[str, object] = {}
         _describe_targets(payload, node.recipients[0])
         payload["filter"] = _filter_payload(node.recipients[0].filter)
+        if _is_enchanted(node.source):
+            payload["biter"] = "attached"
+            # "…to **another** target creature": other than the creature
+            # *dealing* it — left as ``exclude_self`` the picker excludes the
+            # Aura, never on the list, and offers the host as its own victim.
+            described = (payload.get("targets") or {}).get("filter") or {}
+            if described.pop("exclude_self", None):
+                described["exclude_attached"] = True
+                payload["exclude_biter"] = True
+        # "…its power **plus 2**" (Farrel's Mantle): CR 107.3's constant.
+        if node.amount.bonus:
+            payload["power_bonus"] = node.amount.bonus
         return (OracleInstruction("source_bites_target", "", payload),)
 
     # "**That creature** deals damage equal to its power to this creature."

@@ -59,6 +59,14 @@ def _forced_sacrifice_filter(filt: ast.ObjectFilter) -> dict | None:
     """
     if filt.is_source or filt.is_enchanted:
         return None
+    # "…sacrifice a land **of an opponent's choice**" (Demonic Hordes). The
+    # prompt is armed for the *payer*, so the rider names a chooser it cannot
+    # be — and unlike "of their choice" beside it, that is a narrowing rather
+    # than a restatement: which land goes is the whole of what the card asks.
+    # Refused here, which is what ``phrases._parse_opponents_choice`` promises
+    # every lowering downstream does with the flag.
+    if filt.chosen_by_opponent:
+        return None
     if not (filt.card_types or filt.subtypes) and _restrictions_beyond(
         filt, _SACRIFICE_CARRIED_FIELDS
     ):

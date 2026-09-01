@@ -344,6 +344,18 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r" (?P<block_pair_subject>(?:a|another) [^,]+)"),
     ("creature_blocks_or_blocked_by",
      r"whenever this creature blocks or becomes blocked by (?P<block_pair_subject>(?:a|another) [^,]+)"),
+    # "…blocks or becomes blocked by **one or more Orcs**" (Dwarven Soldier).
+    # CR 509.3e: an ability that triggers on blocking or being blocked by *at
+    # least* a number of creatures triggers **once**, however many answer — the
+    # opposite firing from the singular row above it, which fires once per
+    # creature the phrase admits (CR 509.3b/509.3d). So the count is payload the
+    # two dispatchers read, and the plural group suffix is what says the noun
+    # phrase is the counted kind ("Orcs") rather than a quantified one ("an
+    # Orc"). Below the singular row, which it does not collide with, and above
+    # the bare row, which is its strict prefix.
+    ("creature_blocks_or_blocked_by",
+     r"whenever this creature blocks or becomes blocked by "
+     r"(?P<block_pair_count>[a-z]+) or more (?P<block_pair_subjects>[^,]+)"),
     # The bare joined sentence (Spitting Slug). CR 509.3c/509.3d: with no noun
     # phrase it fires **once** for the block, where the narrowed rows above fire
     # once per creature the phrase admits — and the absence of the filter is
@@ -916,6 +928,13 @@ AT_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # "…of combat on your turn" narrows the bare form to the active player's
     # combat (Adherent of Hope); must precede its own prefix below.
     ("combat_your_turn",    r"at the beginning of combat on your turn"),
+    # "At the beginning of **each** combat" (Goblin Flotilla). The same event
+    # as the bare spelling below it and the same kind: CR 506.1 gives a turn one
+    # combat phase per combat, and the fire site announces every one of them —
+    # so "each" states what the bare wording already means rather than narrowing
+    # it. Above the bare row, which is not its prefix but which the
+    # specific-before-generic rule keeps it above anyway.
+    ("combat",              r"at the beginning of each combat"),
     ("combat",              r"at the beginning of combat"),
     # "At end of combat, …" (The Wretched) — CR 511.1, the end of combat step.
     # Clockwork Beast's line opens the same way and stays a static line: its
@@ -1607,6 +1626,13 @@ _PLURAL_SUBJECT_GROUP_SUFFIX = "_subjects"
 # condition at all.
 _PAIR_SUBJECT_GROUP_SUFFIX = "_pair_subject"
 
+# The same joined phrase in its **counted** spelling: "blocks or becomes blocked
+# by one or more **Orcs**" (Dwarven Soldier). A bare plural is the noun parser's
+# sweep quantifier, exactly as it is for `_subjects` one suffix up, and the
+# accompanying `_count` group is CR 509.3e's threshold — which is what makes
+# this firing once rather than once per creature.
+_PLURAL_PAIR_SUBJECT_GROUP_SUFFIX = "_pair_subjects"
+
 # Which filter keys a `_pair_subject` group fans out to, in the order the two
 # halves are printed. Named here rather than spelled at the fan-out below,
 # because these are the keys the dispatchers read and a fourth spelling of them
@@ -1675,8 +1701,9 @@ def _resolve_subject_groups(payload: dict) -> dict | None:
             return None
         resolved[key] = count
     for key, phrase in payload.items():
-        if key.endswith(_PAIR_SUBJECT_GROUP_SUFFIX):
-            described = subject_filter_payload(str(phrase))
+        pair_plural = key.endswith(_PLURAL_PAIR_SUBJECT_GROUP_SUFFIX)
+        if pair_plural or key.endswith(_PAIR_SUBJECT_GROUP_SUFFIX):
+            described = subject_filter_payload(str(phrase), plural=pair_plural)
             if described is None or set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
                 return None
             del resolved[key]

@@ -1004,38 +1004,28 @@ _CAMEL_SHIELD_TEXT = "prevent all damage deserts would deal to this creature"
 
 def _banded_desert_shield(game, permanent) -> bool:
     """Camel's second clause: the shield also covers "creatures banded with
-    this creature". Bands are only declared for the attacking player, so find
-    the damaged creature's attacker index and scan its band for an attacking
-    Camel.
+    this creature" (CR 702.22e).
 
-    The band lasts for the rest of combat (CR 702.22e) and attacking creatures
-    stay attacking until the end of combat step ends (CR 511.3), so the shield
-    still covers a band-mate targeted by a Desert during that step.
+    Through ``banding.creatures_banded_with``, which is the one reader of that
+    set — the same one ``subject_matches`` asks for the printed noun phrase
+    (Icatian Skirmishers' "all creatures banded with it"). Two walks of
+    ``combat_bands`` would be two answers to "who is in this band", and this
+    one used to be the second: it resolved the slot itself and read the
+    battlefield positionally to get there.
 
-    The index lookup is by identity: Permanent is a plain dataclass, so
-    ``list.index`` compares field-by-field and would return a *different*,
-    identically-stated attacker — losing the shield on the creature that
-    actually is in the band.
+    The band lasts for the rest of combat and attacking creatures stay
+    attacking until the end of combat step ends (CR 511.3), so the shield still
+    covers a band-mate a Desert aims at during that step.
     """
     if not permanent.attacking:
         return False
-    for player in game.players:
-        index = next(
-            (i for i, perm in enumerate(player.battlefield) if perm is permanent), None
-        )
-        if index is None:
-            continue
-        band = game._attacker_band(index)
-        if not band:
-            return False
-        for other in band:
-            if other == index or not (0 <= other < len(player.battlefield)):
-                continue
-            mate = player.battlefield[other]
-            if mate.attacking and _CAMEL_SHIELD_TEXT in (mate.effective_card.oracle_text or "").lower():
-                return True
-        return False
-    return False
+    from .banding import creatures_banded_with
+
+    return any(
+        mate.attacking
+        and _CAMEL_SHIELD_TEXT in (mate.effective_card.oracle_text or "").lower()
+        for mate in creatures_banded_with(game, permanent)
+    )
 
 
 def _applies_desert_shield(game, payload: dict) -> bool:

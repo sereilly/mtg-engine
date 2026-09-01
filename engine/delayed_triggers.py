@@ -83,6 +83,19 @@ DELAYED_EVENTS: dict[str, str] = {
     # is the shape the card prints, and CR 603.7d's own-source default would
     # point it at a sorcery already in a graveyard.
     "creature_attacks_unblocked": "the declare blockers step",
+    # "…whenever **this creature** blocks or becomes blocked by a creature this
+    # combat, that creature gains first strike until end of turn." (Goblin
+    # Flotilla.) The joined block event of CR 509.3a–d, watched about **one**
+    # permanent rather than about a described class — which is why it is not
+    # `creature_blocks` above: that one is announced per blocking creature and
+    # answers to any of them, and this one answers only to the creature whose
+    # ability armed it, on either side of the block.
+    #
+    # Announced **per pair**, with the other half of it in the trigger's
+    # context under the same `blocked_permanent_ids` key the printed static
+    # form uses — so "that creature" is one reader for both, and a card that
+    # prints the sentence as a static needs nothing new.
+    "source_blocks_or_blocked_by": "the declare blockers step",
     # Subira, Tulzidi Caravanner.
     "creature_deals_combat_damage_to_player": "the combat damage step",
     # "When that creature dies this turn, …" (Reincarnation). The dying
@@ -445,19 +458,24 @@ def fire_delayed_triggers(
         return 0
     game._enqueue_triggered_batch([
         entry.trigger_event(
-            # CR 603.7d: the source of a delayed ability is the source of the
-            # spell or ability that *created* it — never the object the ability
-            # watches. So a fire site that deliberately names one wins ("…deals
-            # combat damage to a player, <do something to **it**>"), and
-            # otherwise the entry supplies the permanent whose ability armed it,
-            # which is how a sentence naming its own source ("this creature
-            # gains …") finds anything to act on.
+            # CR 603.7d: "the source of a delayed triggered ability is the
+            # source of the spell or ability that created it". So the entry's
+            # own recorded source wins whenever it is still a permanent — a
+            # sentence naming itself ("…you put a cube counter on **this
+            # artifact**", Delif's Cube) has to reach the artifact that armed the
+            # ability, not the creature the event was about.
             #
-            # Defaulting it to the *subject* would be the wrong object twice
-            # over, which is why that is still not done here.
+            # A fire site's named object is the **fallback**, for the case the
+            # rule leaves open: a spell's source is the card as printed and
+            # never a permanent, so Gaze of Pain's entry has no source to give
+            # and its sentence ("…have **it** deal damage equal to **its**
+            # power") needs one. The attacker the site names is that object.
+            #
+            # Defaulting to the *subject* with neither would be the wrong object
+            # twice over, which is why that is still not done here.
             source_permanent=(
-                source_permanent if source_permanent is not None
-                else game.permanent_by_id(entry.source_permanent_id)
+                game.permanent_by_id(entry.source_permanent_id)
+                or source_permanent
             ),
             trigger_context=trigger_context,
         )

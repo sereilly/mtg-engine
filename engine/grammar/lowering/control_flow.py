@@ -116,7 +116,15 @@ OFFERABLE_ACTORS: frozenset[str] = frozenset(
      # it is read off the permanent the sentence targeted — so ``_offered_seats``
      # answers it by asking the control seam rather than by reading
      # ``context.target``, which is the reading the note below warns about.
-     "controller"}
+     "controller",
+     # "…**its controller** may have it deal damage…" on an Aura (Farrel's
+     # Mantle). The same two printed words about a different object: the
+     # possessive names the permanent the *trigger's condition* named — the
+     # enchanted creature — rather than one the sentence targeted, so the seat
+     # is read off the attachment. Its own actor because ``_offered_seats``
+     # answers the two by asking different things, and reading one as the other
+     # offered Farrel's Mantle's choice to the player being attacked.
+     "attached_controller"}
 )
 
 
@@ -154,13 +162,28 @@ def _lower_unless_player_pays(
     Two refusals, each a way the sentence could otherwise mean more than it
     says:
 
-    * the payer must be a reference the handler can enumerate seats from. "You"
-      is an offer to the ability's own controller, which is a ``May`` and a
-      different card; a payer nobody is asked is the effect happening
-      unconditionally.
+    * the payer must be a reference the handler can enumerate seats from — or
+      "you", which is an offer to the ability's own controller and is built as
+      the ``May`` this refusal always said it was. A payer nobody is asked is
+      the effect happening unconditionally.
     * the branch must lower to something. A clause bought off with nothing
       behind it is a payment charged for no reason.
     """
+    if node.payer.kind == "you":
+        # "…**unless you pay {R}**, …" (Goblin Flotilla). An offer to the
+        # ability's own controller is a ``May`` — one seat, the resolution's
+        # own, with the clause on the declined branch — which is what the
+        # refusal below has said since Scarwood Bandits. Built as that node and
+        # handed to the offer lowering rather than given a payer of its own:
+        # ``unless_player_pays`` is a *chain* over other seats, and a chain of
+        # one asked in the resolution's own seat is the offer with extra steps.
+        return _lower_may(
+            ast.May(
+                actor=node.payer, cost=node.cost,
+                action=None, otherwise=node.otherwise,
+            ),
+            produced, event, event_subject, lower_statement=lower_statement,
+        )
     payer = _ENUMERATED_PAYERS.get(node.payer.kind)
     if payer is None:
         raise LoweringError(
@@ -434,6 +457,10 @@ def _lower_may(
         # ``context.target``, which for a permanent-entering trigger is a seat
         # nothing chose.
         actor = EVENT_SUBJECT_CONTROLLER
+    if actor == "controller" and getattr(event_subject, "is_enchanted", False):
+        # "its" is the trigger's own subject here, not a target this sentence
+        # chose — see ``attached_controller`` in ``OFFERABLE_ACTORS``.
+        actor = "attached_controller"
     payload: dict[str, object] = {"actor": actor}
     if node.actor.kind == "target_opponent":
         # "**Target opponent** may ante the top card of their library."

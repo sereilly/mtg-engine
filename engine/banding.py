@@ -187,6 +187,36 @@ def bands_with_other_band(
     return False
 
 
+def creatures_banded_with(game: "Game", permanent: "Permanent | None") -> list["Permanent"]:
+    """The **other** members of the attacking band *permanent* is in (CR 702.22e).
+
+    "All creatures banded with it" (Icatian Skirmishers) and "creatures banded
+    with this creature" (Camel) are the same set printed two ways, and this is
+    the one reader of it: ``Game.combat_bands`` holds attacker *indices* into
+    the active player's battlefield, so a caller reaching for it has to resolve
+    slots — which is a positional battlefield read, and the kind of second
+    opinion this codebase keeps finding wrong.
+
+    Empty when the permanent is in no band, which is the honest answer for a
+    lone attacker: CR 702.22c makes a band a declaration, so a creature nobody
+    banded with is banded with nobody. Both ends go through the control seam —
+    ``battlefield_index_of`` finds the slot by identity, because a ``Permanent``
+    compares field by field and a look-alike on the same battlefield would hand
+    back a different creature's band.
+    """
+    if permanent is None:
+        return []
+    seat = game.controller_index_of(permanent)
+    index = game.battlefield_index_of(permanent)
+    if seat is None or index is None:
+        return []
+    band = game._attacker_band(index)
+    if not band:
+        return []
+    mates = [game.permanent_at(seat, other) for other in band if other != index]
+    return [mate for mate in mates if mate is not None]
+
+
 def computed_abilities_of(perm: "Permanent") -> frozenset[str]:
     """*perm*'s abilities after layer 6, as this module's callers want them.
 

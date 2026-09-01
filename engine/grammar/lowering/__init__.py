@@ -263,17 +263,15 @@ from .combat import (
     _lower_reassign_blockers_between_attackers,
     _lower_remove_from_combat,
 )
+from .tokens import (_lower_create_copy_token, _lower_create_emblem, _title,
+                     _lower_create_token)
 from .game import (
     _lower_count_objects,
-    _lower_create_emblem,
     _lower_ante,
     _lower_repeat_process,
     _lower_exchange_life_totals,
     _lower_set_life_total,
     _lower_gain_life,
-    _title,
-    _lower_create_copy_token,
-    _lower_create_token,
     _lower_extra_turn,
     _LOSE_GAME_KINDS,
     _lower_lose_game,

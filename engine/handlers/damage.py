@@ -13,7 +13,8 @@ from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
 from ._common import (
-    apply_damage_to_creature, apply_temp_pt_boost, evaluate_count, flip_coin,
+    apply_damage_to_creature, apply_temp_pt_boost, attached_host, evaluate_count,
+    flip_coin,
     frozen_that_player_seat, permanent_matches_filter, resolve_amount,
     resolve_target_permanent, resolve_target_permanents,
 )
@@ -1156,13 +1157,28 @@ def source_bites_target(game, instruction, context):
     """
     card = context.card
     source = context.source_permanent
+    # ``biter: "attached"`` — the permanent the source is attached to deals the
+    # damage (Farrel's Mantle). CR 113.7a leaves the ability the Aura's, so the
+    # source is still the Aura and only the dealer moves; read off the source
+    # rather than off the target, because an Aura that has fallen off has no
+    # creature to bite with and must deal nothing rather than bite with itself.
+    if instruction.payload.get("biter") == "attached":
+        source = attached_host(game, source)
     if source is None:
         game.log.append(f"{card.name}: nothing to deal the damage")
         return True, "resolved"
     filters = instruction.payload.get("filter") or {}
+    # "…to **another** target creature" (Farrel's Mantle) — re-checked here
+    # rather than trusted from the picker, the rule every narrowed handler
+    # follows. It is the *biter* that is excluded, which for an Aura is not the
+    # ability's source; and the key is only set where the word is printed, so
+    # Karplusan Yeti may still aim its own ability at itself.
+    excluded = source if instruction.payload.get("exclude_biter") else None
     victim = resolve_target_permanent(
         game, context,
-        predicate=lambda perm: permanent_matches_filter(perm, filters),
+        predicate=lambda perm: (
+            perm is not excluded and permanent_matches_filter(perm, filters)
+        ),
     )
     # What the sentence after this one means by "that creature" (Tracker), by
     # stable id and recorded on **every** path — a producer `_PRODUCES` names
@@ -1176,8 +1192,12 @@ def source_bites_target(game, instruction, context):
     if victim is None:
         game.log.append(f"{card.name}: no valid target")
         return True, "resolved"
+    # "…equal to its power **plus 2**" (Farrel's Mantle). CR 107.3's printed
+    # constant, added here rather than folded into the power: what the creature
+    # *has* is still its power, and a lord counting it must not see the bonus.
+    amount = source.effective_power + int(instruction.payload.get("power_bonus", 0))
     apply_damage_to_creature(
-        game, victim, source.effective_power, source,
+        game, victim, amount, source,
         log_message=lambda dealt: (
             f"{source.card.name} deals {dealt} damage to {victim.card.name}"
         ),

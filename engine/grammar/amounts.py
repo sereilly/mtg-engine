@@ -367,7 +367,23 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     # it. That is the intended asymmetry: the words are recognized, and what
     # they need is a handler rather than a parse.
     if stream.accept_phrase("its", "power"):
-        return ast.ThatMuch("its_power")
+        # "…equal to its power **plus 2**" (Farrel's Mantle). CR 107.3: the
+        # number is the read characteristic plus a printed constant, so the
+        # constant rides the same node rather than being a second amount.
+        bonus = 0
+        mark_bonus = stream.mark()
+        if stream.accept_word("plus"):
+            token = stream.peek()
+            printed = (
+                int(token.text) if token is not None and token.kind == NUMBER
+                else NUMBER_WORDS.get(token.text) if token is not None else None
+            )
+            if printed is None:
+                stream.reset(mark_bonus)
+            else:
+                stream.advance()
+                bonus = printed
+        return ast.ThatMuch("its_power", bonus=bonus)
 
     # "equal to **its** mana value" (Divine Offering: "Destroy target artifact.
     # You gain life equal to its mana value."). "It" is the object the

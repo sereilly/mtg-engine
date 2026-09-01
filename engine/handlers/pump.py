@@ -7,6 +7,7 @@ from ..pt import add_pt_modifier, set_base_pt
 from ._common import (
     apply_temp_pt_boost,
     bound_permanent,
+    block_pair_permanents,
     attached_host,
     permanent_matches_filter,
     resolve_amount,
@@ -426,6 +427,37 @@ def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, con
     game.log.append(
         f"{context.card.name}: {granted} {noun} gain {', '.join(keywords)}"
         + DURATION_WORDS.get(lifetime["duration"], "")
+    )
+    return True, "resolved"
+
+
+@effect_handler("grant_keyword_to_block_pair")
+def grant_keyword_to_block_pair(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…**that creature** gains first strike until end of turn." (Goblin
+    Flotilla.)
+
+    The other half of the block the trigger fired on, resolved by the stable ids
+    the fire site recorded (CR 509.3f fixes the set at declaration; an id that
+    no longer resolves is a creature that left, and one that returns is a new
+    object the sentence never named — CR 400.7).
+
+    ``block_pair_permanents`` is the one reader of that pair, shared with the
+    delayed destroy above it, so the two halves of a block are named the same
+    way whichever verb the card printed. The grant itself goes through the one
+    keyword seam, so it composes with every other layer-6 write by timestamp.
+    """
+    keywords = tuple(instruction.payload.get("keywords") or ())
+    lifetime = grant_lifetime(game, instruction, context)
+    granted = 0
+    for perm in block_pair_permanents(game, context):
+        for keyword in keywords:
+            _grant_one_keyword(game, perm, keyword, context, lifetime)
+        granted += 1
+    if not granted:
+        game.log.append(f"{context.card.name}: no creature in the block pair")
+        return True, "no target"
+    game.log.append(
+        f"{context.card.name}: {granted} creature(s) gain {', '.join(keywords)}"
     )
     return True, "resolved"
 

@@ -1165,6 +1165,17 @@ def _offered_seats(
             return []
         seat = game.controller_index_of(perm)
         return [] if seat is None else [seat]
+    if actor == "attached_controller":
+        # "…**its controller** may have it deal damage…" (Farrel's Mantle).
+        # The seat that controls the permanent this Aura is attached to, which
+        # is the object the trigger's own condition named — read off the
+        # attachment rather than off the resolution's target, which for this
+        # ability is the creature being *bitten* and belongs to the other side.
+        from ._common import attached_host
+
+        host = attached_host(game, context.source_permanent)
+        seat = game.controller_index_of(host) if host is not None else None
+        return [] if seat is None else [seat]
     if actor == "target_opponent":
         # "**Target opponent** may ante the top card of their library."
         # (Amulet of Quoz.) The seat the ability chose, held in

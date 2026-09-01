@@ -159,6 +159,15 @@ PARSE_LAYERS = [
     # answers "which branch does this clause belong to". Below `riders`, which
     # imports the binding and is never imported back.
     "pronouns",
+    # The branches of an offer — "if you do", "if you can't", "when you do",
+    # "otherwise". Split out of `riders` at the guard below, along the boundary
+    # that module already drew: these answer which *branch* of the decision
+    # before it a clause belongs to, where the rest of `riders` answers what a
+    # clause says about the step before it. The name is `lowering/control_flow.py`'s,
+    # which is what these productions lower through, so the mirror re-forms
+    # rather than forking. Beside `riders` and not under it — neither imports
+    # the other, and both are handed `parse_statement` by `statements`.
+    "control_flow",
     # The trailing clauses that attach to a sentence already parsed ("if you
     # do", "…, then …"). Above `statements` because reading one means reading
     # the statement it modifies.
@@ -180,7 +189,12 @@ PARSE_LAYERS = [
     "static_lines",
     "costs", "parser",
 ]
-LOWER_LAYERS = ["lowering", "statics", "lower"]
+# `by_node` is the node-type registry `lower` dispatches through. It left
+# `lower.py` when Fallen Empires took that module past the size guard, for
+# the reason `lowering/_records.py` records about the two tables that left
+# it first: the table is a registry either way, and `lower.py` is dispatch.
+# Below `lower` and above `lowering`, which is exactly what it reads.
+LOWER_LAYERS = ["lowering", "statics", "by_node", "lower"]
 
 # `library` joined on the parse side when The Dark pushed `effects/cards.py`
 # past the size guard: search, look-at and the library's top split off, reusing
@@ -298,7 +312,15 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # and `destruction`: the parse side stays in `effects/counters.py`, where
 # both halves fit in 321 lines and `_parse_remove_counter` reads the same
 # counter-kind vocabulary as `_parse_put_counter`.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "attachments", "types", "destruction", "counter_removal"]
+# `tokens` split out of `lowering/game.py` at 1,006, the second cap breach of
+# the same wave and by the same shape — additions that merely summed. The
+# line is CR's and `engine/tokens.py`'s: a token is an **object the game
+# creates** (CR 111.1), where everything left in `game` changes the state a
+# *player* is in — life, extra turns, ante, winning and losing. Asymmetric
+# like `zones`, `types`, `destruction` and `counter_removal`: the parse side
+# stays in `effects/game.py`, where a token line is one production over a
+# shared body vocabulary.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "attachments", "types", "destruction", "counter_removal", "tokens"]
 # The AST side has no `library`: what a search or a look-at *is* — the pile, the
 # filter, the fate of what was found — is a handful of nodes that sit perfectly
 # well beside the other card nodes, and the split that made `library` a family

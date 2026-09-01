@@ -908,8 +908,19 @@ def assign_no_combat_damage_until_eot(
     silently dropped one is the card doing strictly more than it prints.
     """
     source = context.source_permanent
-    if instruction.payload.get("subject") == "attached":
+    subject = instruction.payload.get("subject")
+    if subject == "attached":
         source = attached_host(game, source)
+    elif subject == "bound":
+        # "…when target creature you control attacks and isn't blocked, **it**
+        # assigns no combat damage" (Delif's Cone, Delif's Cube). CR 603.7c's
+        # object: the creature the delay's opener targeted, carried by id
+        # because a permanent that left and came back is a different one
+        # (CR 400.7) and must not inherit the mark.
+        bound = (context.trigger_context or {}).get("bound_permanent_id")
+        source = (
+            game.permanent_by_id(bound) if isinstance(bound, int) else None
+        )
     if source is None:
         return False, "ability not implemented"
     source.metadata[ASSIGNS_NO_COMBAT_DAMAGE] = True

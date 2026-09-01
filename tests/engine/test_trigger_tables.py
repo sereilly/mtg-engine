@@ -75,7 +75,14 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever this creature or another creature you control dies",
     ),
     "creature_opponent_controls_dies": "whenever a creature an opponent controls dies",
-    "creature_blocks_or_blocked_by": "whenever this creature blocks or becomes blocked by a non-wall creature",
+    # Two spellings, two firings: the quantified phrase fires once per creature
+    # it admits (CR 509.3b/509.3d) and the counted one fires once for the whole
+    # declaration (CR 509.3e). Both are named so the shadowing guard checks each
+    # against every earlier pattern of every other kind.
+    "creature_blocks_or_blocked_by": (
+        "whenever this creature blocks or becomes blocked by a non-wall creature",
+        "whenever this creature blocks or becomes blocked by one or more orcs",
+    ),
     "attacks_unblocked": "whenever this creature attacks and isn't blocked",
     "creature_attacks": "whenever this creature attacks",
     # A narrowed spelling beside its bare one: the subject filter is what makes
