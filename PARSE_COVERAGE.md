@@ -25,14 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**3 unclaimed sentence(s) across 3 supported card(s).**
+**1 unclaimed sentence(s) across 1 supported card(s).**
 
 - **Delif's Cube**
   - `{2}, {t}: this turn, when target creature you control attacks and isn't blocked, it assigns no combat damage this turn and you put a cube counter on this artifact`
-- **Thelon's Chant**
-  - `whenever a player puts a swamp onto the battlefield, this enchantment deals 3 damage to that player unless the player puts a -1/-1 counter on a creature they control`
-- **Tourach's Chant**
-  - `whenever a player puts a forest onto the battlefield, this enchantment deals 3 damage to that player unless they put a -1/-1 counter on a creature they control`
 
 ## Acknowledged simplifications
 

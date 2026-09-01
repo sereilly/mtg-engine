@@ -27,7 +27,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4ED | 368 | 520 | 90.4% | 90.0% | 53.8% | 246 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| FEM *(measured)* | 102 | 191 | 90.6% | 89.5% | 67.0% | 87 |
+| FEM *(measured)* | 102 | 191 | 94.2% | 93.7% | 71.2% | 92 |
 | **All (shipped)** | **2788** | **4005** | **87.4%** | **86.5%** | **55.2%** | **1886** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -40,9 +40,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 236 | 102 | expected a subject |  |
-| 116 | 49 | unrecognized effect verb |  |
-| 54 | 26 | unconsumed text |  |
+| 232 | 98 | expected a subject |  |
+| 115 | 48 | unrecognized effect verb |  |
+| 53 | 25 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 16 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -1437,6 +1437,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player casts a red spell, you may pay {3}. If you do, untap target permanent.`
 - **Heroic Intervention**
   - `Permanents you control gain hexproof and indestructible until end of turn.`
+- **Heroism**
+  - `Sacrifice a white creature: For each attacking red creature, prevent all combat damage that would be dealt by that creature this turn unless its controller pays {2}{R}.`
 - **Hidden Path**
   - `Green creatures have forestwalk. (They can't be blocked as long as defending player controls a Forest.)`
 - **High Tide**
@@ -2473,6 +2475,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{G}{W}{U}, {T}: Regenerate target creature.`
 - **Rain of Revelation**
   - `Draw three cards, then discard a card.`
+- **Rainbow Vale**
+  - `{T}: Add one mana of any color. An opponent gains control of this land at the beginning of the next end step.`
 - **Raise Dead**
   - `Return target creature card from your graveyard to your hand.`
   - `Return target creature card from your graveyard to your hand.`
@@ -2738,6 +2742,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: This creature gets +1/+0 until end of turn.`
 - **Seasinger**
   - `When you control no Islands, sacrifice this creature.`
+  - `{T}: Gain control of target creature whose controller controls an Island for as long as you control this creature and this creature remains tapped.`
 - **Season of the Witch**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay 2 life.`
   - `At the beginning of the end step, destroy all untapped creatures that didn't attack this turn, except for creatures that couldn't attack.`
@@ -2939,6 +2944,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `For each artifact or creature card in target opponent's graveyard, add {C} and you gain 1 life.`
 - **Spoils of War**
   - `Distribute X +1/+1 counters among any number of target creatures.`
+- **Spore Cloud**
+  - `Tap all blocking creatures. Prevent all combat damage that would be dealt this turn. Each attacking creature and each blocking creature doesn't untap during its controller's next untap step.`
 - **Spore Flower**
   - `At the beginning of your upkeep, put a spore counter on this creature.`
   - `Remove three spore counters from this creature: Prevent all combat damage that would be dealt this turn.`
@@ -3142,6 +3149,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At end of combat, gain control of all creatures blocking this creature for as long as you control this creature.`
 - **Thelon's Chant**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {G}.`
+  - `Whenever a player puts a Swamp onto the battlefield, this enchantment deals 3 damage to that player unless the player puts a -1/-1 counter on a creature they control.`
 - **Thelon's Curse**
   - `At the beginning of each player's upkeep, that player may choose any number of tapped blue creatures they control and pay {U} for each creature chosen this way. If the player does, untap those creatures.`
 - **Thelonite Druid**
@@ -3187,8 +3195,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Gain control of target Thrull for as long as you control this creature.`
 - **Thrull Retainer**
   - `Sacrifice this Aura: Regenerate enchanted creature.`
+- **Thrull Wizard**
+  - `{1}{B}: Counter target black spell unless that spell's controller pays {B} or {3}.`
 - **Thunder Wall**
   - `{U}: This creature gets +1/+1 until end of turn.`
+- **Tidal Flats**
+  - `{U}{U}: For each attacking creature without flying, its controller may pay {1}. If that player doesn't, creatures you control blocking that creature gain first strike until end of turn.`
 - **Tidal Influence**
   - `At the beginning of your upkeep, put a tide counter on this enchantment.`
   - `As long as there is exactly one tide counter on this enchantment, all blue creatures get -2/-0.`
@@ -3244,6 +3256,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Tourach's Chant**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {B}.`
+  - `Whenever a player puts a Forest onto the battlefield, this enchantment deals 3 damage to that player unless they put a -1/-1 counter on a creature they control.`
 - **Tourach's Gate**
   - `Sacrifice a Thrull: Put three time counters on this Aura.`
   - `At the beginning of your upkeep, remove a time counter from this Aura. If there are no time counters on this Aura, sacrifice it.`

@@ -20,7 +20,7 @@ Do not edit by hand — re-run the script instead.
 | 6 | Revised Edition | 3ED | 1994-04-11 | 296 | 0 | Complete (296/296 supported) |
 | 7 | Legends | LEG | 1994-06-01 | 310 | 310 | Complete (310/310 supported) |
 | 8 | The Dark | DRK | 1994-08-01 | 119 | 119 | Complete (119/119 supported) |
-| 9 | Fallen Empires | FEM | 1994-11-01 | 102 | 102 | Measured (88/102 supported, not shipped) |
+| 9 | Fallen Empires | FEM | 1994-11-01 | 102 | 102 | Measured (94/102 supported, not shipped) |
 | 10 | Fourth Edition | 4ED | 1995-04-01 | 368 | 0 | Complete (368/368 supported) |
 | 11 | Ice Age | ICE | 1995-06-03 | 373 | 346 | Complete (373/373 supported) |
 | 12 | Homelands | HML | 1995-10-01 | 115 | 115 | Not Implemented |
