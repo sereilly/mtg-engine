@@ -16,19 +16,19 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 84.0% | 82.7% | 46.4% | 164 |
-| LEB | 292 | 389 | 84.1% | 82.8% | 46.5% | 165 |
-| 2ED | 292 | 389 | 84.1% | 82.8% | 46.5% | 165 |
+| LEA | 290 | 388 | 84.3% | 83.0% | 46.6% | 165 |
+| LEB | 292 | 389 | 84.3% | 83.0% | 46.8% | 166 |
+| 2ED | 292 | 389 | 84.3% | 83.0% | 46.8% | 166 |
 | ARN | 78 | 108 | 76.9% | 73.1% | 50.9% | 46 |
 | ATQ | 85 | 120 | 90.0% | 90.0% | 62.5% | 68 |
-| 3ED | 296 | 389 | 86.4% | 84.6% | 49.1% | 172 |
+| 3ED | 296 | 389 | 86.6% | 84.8% | 49.4% | 173 |
 | LEG | 310 | 431 | 89.1% | 87.9% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
-| 4ED | 368 | 520 | 90.2% | 89.8% | 53.7% | 245 |
+| 4ED | 368 | 520 | 90.4% | 90.0% | 53.8% | 246 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| FEM *(measured)* | 102 | 191 | 77.5% | 75.4% | 54.5% | 74 |
-| **All (shipped)** | **2788** | **4005** | **87.3%** | **86.4%** | **55.1%** | **1881** |
+| FEM *(measured)* | 102 | 191 | 80.6% | 79.6% | 58.6% | 81 |
+| **All (shipped)** | **2788** | **4005** | **87.4%** | **86.5%** | **55.2%** | **1886** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -40,9 +40,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 252 | 114 | expected a subject |  |
+| 245 | 111 | expected a subject |  |
 | 117 | 50 | unrecognized effect verb |  |
-| 61 | 33 | unconsumed text |  |
+| 57 | 29 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 16 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -68,7 +68,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-1881 cards, 2205 lines.
+1886 cards, 2210 lines.
 
 - **Abomination**
   - `Whenever this creature blocks or becomes blocked by a green or white creature, destroy that creature at end of combat.`
@@ -614,6 +614,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{9}: Untap this creature. Activate only during your upkeep.`
 - **Combat Medic**
   - `{1}{W}: Prevent the next 1 damage that would be dealt to any target this turn.`
+- **Conch Horn**
+  - `{1}, {T}, Sacrifice this artifact: Draw two cards, then put a card from your hand on top of your library.`
 - **Conclave Mentor**
   - `When this creature dies, you gain life equal to its power.`
 - **Concordant Crossroads**
@@ -751,6 +753,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target spell or permanent becomes black. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes black. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes black. (Mana symbols on that permanent remain unchanged.)`
+- **Deep Spawn**
+  - `At the beginning of your upkeep, sacrifice this creature unless you mill two cards.`
+  - `{U}: This creature gains shroud until end of turn and doesn't untap during your next untap step. Tap this creature. (A creature with shroud can't be the target of spells or abilities.)`
 - **Deep Water**
   - `{U}: Until end of turn, if you tap a land you control for mana, it produces {U} instead of any other type.`
 - **Defiant Strike**
@@ -848,6 +853,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}: This creature gets +1/+0 until end of turn.`
   - `{2}: This creature gets +1/+0 until end of turn.`
   - `{2}: This creature gets +1/+0 until end of turn.`
+- **Dragon Whelp**
+  - `{R}: This creature gets +1/+0 until end of turn. If this ability has been activated four or more times this turn, sacrifice this creature at the beginning of the next end step.`
+  - `{R}: This creature gets +1/+0 until end of turn. If this ability has been activated four or more times this turn, sacrifice this creature at the beginning of the next end step.`
+  - `{R}: This creature gets +1/+0 until end of turn. If this ability has been activated four or more times this turn, sacrifice this creature at the beginning of the next end step.`
+  - `{R}: This creature gets +1/+0 until end of turn. If this ability has been activated four or more times this turn, sacrifice this creature at the beginning of the next end step.`
+  - `{R}: This creature gets +1/+0 until end of turn. If this ability has been activated four or more times this turn, sacrifice this creature at the beginning of the next end step.`
 - **Drain Life**
   - `Drain Life deals X damage to any target. You gain life equal to the damage dealt, but not more life than the player's life total before the damage was dealt, the planeswalker's loyalty before the damage was dealt, or the creature's toughness.`
   - `Drain Life deals X damage to any target. You gain life equal to the damage dealt, but not more life than the player's life total before the damage was dealt, the planeswalker's loyalty before the damage was dealt, or the creature's toughness.`
@@ -1013,6 +1024,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature gets +3/+0 and gains trample until end of turn.`
 - **Farrel's Zealot**
   - `Whenever this creature attacks and isn't blocked, you may have it deal 3 damage to target creature. If you do, this creature assigns no combat damage this turn.`
+- **Farrelite Priest**
+  - `{1}: Add {W}. If this ability has been activated four or more times this turn, sacrifice this creature at the beginning of the next end step.`
 - **Fasting**
   - `At the beginning of your upkeep, put a hunger counter on this enchantment. Then destroy this enchantment if it has five or more hunger counters on it.`
   - `When you draw a card, destroy this enchantment.`
@@ -1286,6 +1299,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Other Goblins get +1/+1 and have mountainwalk.`
   - `Other Goblins get +1/+1 and have mountainwalk.`
   - `Other Goblins get +1/+1 and have mountainwalk.`
+- **Goblin Kites**
+  - `{R}: Target creature you control with toughness 2 or less gains flying until end of turn. Flip a coin at the beginning of the next end step. If you lose the flip, sacrifice that creature.`
 - **Goblin Lyre**
   - `Sacrifice this artifact: Flip a coin. If you win the flip, this artifact deals damage to target opponent or planeswalker equal to the number of creatures you control. If you lose the flip, this artifact deals damage to you equal to the number of creatures that opponent or that planeswalker's controller controls.`
 - **Goblin Mutant**
@@ -1446,6 +1461,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: Tap target green creature.`
 - **Homarid Spawning Bed**
   - `{1}{U}{U}, Sacrifice a blue creature: Create X 1/1 blue Camarid creature tokens, where X is the sacrificed creature's mana value.`
+- **Homarid Warrior**
+  - `{U}: This creature gains shroud until end of turn and doesn't untap during your next untap step. Tap it. (A creature with shroud can't be the target of spells or abilities.)`
 - **Hooded Blightfang**
   - `Whenever a creature you control with deathtouch attacks, each opponent loses 1 life and you gain 1 life.`
   - `Whenever a creature you control with deathtouch deals damage to a planeswalker, destroy that planeswalker.`
@@ -1578,6 +1595,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Infuse**
   - `Untap target artifact, creature, or land.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Initiates of the Ebon Hand**
+  - `{1}: Add {B}. If this ability has been activated four or more times this turn, sacrifice this creature at the beginning of the next end step.`
 - **Inquisition**
   - `Target player reveals their hand. Inquisition deals damage to that player equal to the number of white cards in their hand.`
 - **Instill Energy**
@@ -2555,6 +2574,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}{G}{W}, {T}: Rin and Seri deals damage to any target equal to the number of Dogs you control. You gain life equal to the number of Cats you control.`
 - **Ring of Immortals**
   - `{3}, {T}: Counter target instant or Aura spell that targets a permanent you control.`
+- **Ring of Renewal**
+  - `{5}, {T}: Discard a card at random, then draw two cards.`
 - **Riptide**
   - `Tap all blue creatures.`
 - **Rise Again**

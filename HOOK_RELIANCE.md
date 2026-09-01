@@ -12,27 +12,27 @@ The measures are **ceilings**, the opposite direction to `GRAMMAR_COVERAGE.md`'s
 
 ## The headline
 
-**63 of 1508 supported cards (4.2%)** carry at least one name-keyed entry, across **69 entries** in 6 registries. The pool is 1508 cards, 100.0% supported.
+**62 of 1508 supported cards (4.1%)** carry at least one name-keyed entry, across **68 entries** in 6 registries. The pool is 1508 cards, 100.0% supported.
 
-Held at this rate, supporting the 26,113-card release line would need about **1,195 hand-written entries** covering **1,091 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
+Held at this rate, supporting the 26,113-card release line would need about **1,178 hand-written entries** covering **1,074 cards**. That projection is the point of the number, not a forecast: it is the cost of assuming the current sample is representative, and the sample is five sets from 1993–94.
 
 ## By set
 
 | Set | Cards | Supported | Hooked cards | Rules lines | Hooked lines | Entries | Entries/100 supported |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 290 (100.0%) | 36 (12.4%) | 388 | 34 (8.8%) | 40 | 13.8 |
-| LEB | 292 | 292 (100.0%) | 36 (12.3%) | 389 | 34 (8.7%) | 40 | 13.7 |
-| 2ED | 292 | 292 (100.0%) | 36 (12.3%) | 389 | 34 (8.7%) | 40 | 13.7 |
+| LEA | 290 | 290 (100.0%) | 35 (12.1%) | 388 | 33 (8.5%) | 39 | 13.4 |
+| LEB | 292 | 292 (100.0%) | 35 (12.0%) | 389 | 33 (8.5%) | 39 | 13.4 |
+| 2ED | 292 | 292 (100.0%) | 35 (12.0%) | 389 | 33 (8.5%) | 39 | 13.4 |
 | ARN | 78 | 78 (100.0%) | 21 (26.9%) | 107 | 19 (17.8%) | 23 | 29.5 |
 | ATQ | 85 | 85 (100.0%) | 3 (3.5%) | 120 | 3 (2.5%) | 3 | 3.5 |
-| 3ED | 296 | 296 (100.0%) | 30 (10.1%) | 389 | 29 (7.5%) | 33 | 11.1 |
+| 3ED | 296 | 296 (100.0%) | 29 (9.8%) | 389 | 28 (7.2%) | 32 | 10.8 |
 | LEG | 310 | 310 (100.0%) | 2 (0.6%) | 430 | 2 (0.5%) | 2 | 0.6 |
 | DRK | 119 | 119 (100.0%) | 1 (0.8%) | 167 | 1 (0.6%) | 1 | 0.8 |
-| 4ED | 368 | 368 (100.0%) | 22 (6.0%) | 520 | 21 (4.0%) | 24 | 6.5 |
+| 4ED | 368 | 368 (100.0%) | 21 (5.7%) | 520 | 20 (3.8%) | 23 | 6.2 |
 | ICE | 373 | 373 (100.0%) | 1 (0.3%) | 601 | 0 (0.0%) | 1 | 0.3 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| FEM *(measured)* | 102 | 69 (67.6%) | 0 (0.0%) | 129 | 0 (0.0%) | 0 | 0.0 |
-| **ALL (shipped, deduped)** | **1508** | **1508 (100.0%)** | **63 (4.2%)** | **2290** | **59 (2.6%)** | **69** | **4.6** |
+| FEM *(measured)* | 102 | 76 (74.5%) | 0 (0.0%) | 138 | 0 (0.0%) | 0 | 0.0 |
+| **ALL (shipped, deduped)** | **1508** | **1508 (100.0%)** | **62 (4.1%)** | **2290** | **58 (2.5%)** | **68** | **4.5** |
 
 *(measured)* — FEM are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
@@ -42,7 +42,7 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 
 | Registry | Cards | Entries |
 | --- | ---: | ---: |
-| `CARD_LINE_INSTRUCTIONS` | 58 | 59 |
+| `CARD_LINE_INSTRUCTIONS` | 57 | 58 |
 | `ON_LEAVE_BATTLEFIELD` | 6 | 6 |
 | `DRAW_STEP_MODIFIERS` | 1 | 1 |
 | `ON_SELF_RESOLVED` | 1 | 1 |
@@ -65,7 +65,6 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 - **Cyclopean Tomb** (`CARD_LINE_INSTRUCTIONS`, `ON_LEAVE_BATTLEFIELD`) — 1 line
 - **Darkpact** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Demonic Hordes** (`CARD_LINE_INSTRUCTIONS`) — 1 line
-- **Dragon Whelp** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Drain Power** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Drop of Honey** (`CARD_LINE_INSTRUCTIONS`) — 1 line
 - **Earthbind** (`CARD_LINE_INSTRUCTIONS`) — 1 line
