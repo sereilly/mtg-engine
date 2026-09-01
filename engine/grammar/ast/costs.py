@@ -124,6 +124,22 @@ class TapAttachedCost:
 
 
 @dataclass(frozen=True)
+class PayAttachedManaCost:
+    """"Pay enchanted creature's mana cost" (Merseine).
+
+    :class:`TapAttachedCost`'s sibling one payment over, and its own node for
+    that node's reason: what is spent is read off the *host*, and no symbol can
+    say it. A mana cost printed in symbols is fixed at compile time; this one is
+    whatever the enchanted permanent's printed cost happens to be right now
+    (CR 202.1), so the number does not exist until the ability is activated.
+
+    Nothing is picked and no filter is carried — the attachment record is the
+    whole answer, exactly as it is for the tap. CR 301.5f puts "equipped" and
+    "enchanted" on the same footing, so the word is not carried either.
+    """
+
+
+@dataclass(frozen=True)
 class PayLifeCost:
     """``Pay 4 life`` in front of a colon — an activation cost (CR 119.4).
 
@@ -174,5 +190,5 @@ class RemoveCounterCost:
 
 Cost = Union[
     ManaCost, TapSelf, SacrificeCost, DiscardCost, PayLifeCost, ExileSelf,
-    ExileCost, RemoveCounterCost
+    ExileCost, RemoveCounterCost, PayAttachedManaCost
 ]

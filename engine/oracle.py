@@ -737,6 +737,23 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # turn, announced by the draw sweep in check_state_based_actions off the
     # cards_drawn_this_turn record every draw path already feeds.
     ("draws_second_card",           r"whenever you draw your second card each turn"),
+    # "**Whenever** there are four or more tide counters on this creature, …"
+    # (Homarid, Tidal Influence); "**When** there are four or more page
+    # counters on this artifact, …" (Mazemind Tome). CR 603.8's *state*
+    # trigger: it fires whenever the game state matches, not on an event — so
+    # it is checked by the state-based sweep rather than announced from a call
+    # site, which is where every other "no single place this happens" condition
+    # already goes.
+    #
+    # In this table rather than the "when" one, though Mazemind Tome prints the
+    # other word: a kind lives in one table (the shadowing guard's canonical
+    # examples are keyed by kind), and the *whenever* table is the one both
+    # words reach — a "when" line this table misses is re-asked here with the
+    # word swapped, and there is no fallback the other way. Written the other
+    # way round, Homarid's printing had no reader at all.
+    ("counters_reach_threshold",
+     r"whenever there are (?P<counter_count>[a-z]+) or more (?P<counter_kind>[a-z]+) counters on this "
+     r"(?:artifact|creature|enchantment|permanent|land)"),
 )
 
 # "when" triggers (enter/leave events)
@@ -782,14 +799,6 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # canonical examples are keyed by kind and an example can only be a wording
     # of one trigger word.
     ("becomes_target",              r"when (?:this|.+) becomes the target"),
-    # "When there are four or more page counters on this artifact, …"
-    # (Mazemind Tome.) CR 603.8's *state* trigger: it fires whenever the game
-    # state matches, not on an event — so it is checked by the state-based
-    # sweep rather than announced from a call site, which is where every other
-    # "no single place this happens" condition already goes.
-    ("counters_reach_threshold",
-     r"when there are (?P<counter_count>[a-z]+) or more (?P<counter_kind>[a-z]+) counters on this "
-     r"(?:artifact|creature|enchantment|permanent|land)"),
     # "When you remove the last intervention counter from this enchantment, …"
     # (Divine Intervention.) The counter word is payload, like the threshold
     # trigger above it. Announced from the same state-based sweep and for the
@@ -1209,6 +1218,36 @@ def _taps_the_attached_permanent(cost_lower: str) -> bool:
     )
 
 
+#: "Pay enchanted creature's mana cost" (Merseine). Anchored per cost segment
+#: for :data:`_TAP_ATTACHED_COST_RE`'s reason: a rule matching a prefix would
+#: charge a *narrower* cost than the card prints. The apostrophe is admitted in
+#: both spellings, straight and curly, because the two readers of this clause —
+#: this one and the grammar's, which sees a lexed ``'s`` token — must agree
+#: about the same printed line.
+_PAY_ATTACHED_MANA_COST_RE = re.compile(
+    r"^pay (?:enchanted|equipped) \w+['’]s mana cost$"
+)
+
+
+def _pays_the_attached_permanents_mana_cost(cost_lower: str) -> bool:
+    """Whether a cost clause spends the mana cost of the permanent this Aura or
+    Equipment is on.
+
+    :func:`_taps_the_attached_permanent` one payment over, and the same shape:
+    the payment is the *host's*, nothing is picked, and the attachment record
+    is the whole answer. What differs is that this one can be **unpayable** —
+    the activator has to produce the mana — so the activation path builds the
+    symbols from the host rather than reading a fixed dict.
+
+    CR 301.5f puts "equipped" and "enchanted" on the same footing, so both
+    words are read.
+    """
+    return any(
+        _PAY_ATTACHED_MANA_COST_RE.match(segment.strip())
+        for segment in cost_lower.split(",")
+    )
+
+
 def _life_payment_cost(cost_lower: str) -> int:
     """The life a "Pay N life" activation cost charges, or 0 for no such cost.
 
@@ -1439,6 +1478,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         remove_counter_count=remove_counter_count,
         pay_life=_life_payment_cost(cost_lower),
         tap_attached=_taps_the_attached_permanent(cost_lower),
+        mana_from_attached=_pays_the_attached_permanents_mana_cost(cost_lower),
     )
 
 

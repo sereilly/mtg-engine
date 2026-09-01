@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ._common import count_from_payload, evaluate_count, resolve_amount
+from ..exiled_records import source_object
+from ..named_counters import counters_on
 from ..oracle_types import X_FROM_COUNT_PER_RECIPIENT
 from .registry import effect_handler
 from ..mana_payment import generic_cost
@@ -370,6 +372,21 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # every time an opponent's creature dies.
     if per_each is not None and per_each.get("history") == "creatures_died_this_turn":
         life_gain *= int(getattr(game, "creatures_died_this_turn", 0))
+    if per_each is not None and per_each.get("counters_on_source"):
+        # "…**for each credit counter on this creature**" (Icatian
+        # Moneychanger). Through the one counter reader, `counters_on`, which
+        # asks `pt.pt_counter_key` — this file's own spelling of the key would
+        # answer zero for every counter that also has rules meaning, silently,
+        # because a missing key is a legal zero.
+        #
+        # The source may already have left: this ability's cost sacrifices it
+        # (CR 603.6/608.2h), so the record read is the one the activation path
+        # carried forward, which `source_object` is the one reader of.
+        holder = source_object(context)
+        life_gain *= (
+            0 if holder is None
+            else counters_on(holder, str(per_each["counters_on_source"]))
+        )
     if per_each is not None and per_each.get("zone") not in (None, "battlefield"):
         # "For each artifact or creature card in **target opponent's**
         # graveyard, … you gain 1 life." (Spoils of Evil.) A count out of a zone

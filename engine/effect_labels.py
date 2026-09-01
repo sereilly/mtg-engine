@@ -509,6 +509,7 @@ TRIGGERED_LABELS: dict[str, str] = {
     # registry, and these are ordinary triggers that go on the stack, where the
     # prefix is read.
     "remove_counter_from_self": "triggered_counter",
+    "remove_all_counters_from_self": "triggered_counter",
     "remove_counter_from_attached": "triggered_counter",
     # Elder Land Wurm shedding defender: `grant_self_keyword_until_eot` with a
     # minus sign, and the same bucket.

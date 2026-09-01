@@ -822,6 +822,18 @@ def _lower_remove_counter(
         raise LoweringError(
             "the only counter-removal handler reads the ability's own source", node=node
         )
+    if isinstance(node.count, ast.AllOf):
+        # "…remove **all** tide counters from it." (Homarid, Tidal Influence.)
+        # Its own kind rather than a count on the one below: that handler
+        # decrements by a number the instruction already carries, and "all" is
+        # a number nobody knows until the permanent is looked at — compiling it
+        # onto a fixed removal would take exactly one counter off a permanent
+        # the card says to empty.
+        return (
+            OracleInstruction(
+                "remove_all_counters_from_self", "", {"counter": node.counter}
+            ),
+        )
     if isinstance(node.count, ast.AnyNumber):
         # "Remove **any number of** +1/+1 counters from this creature."
         # (Tetravus.) Its own kind rather than a count on the one above: that

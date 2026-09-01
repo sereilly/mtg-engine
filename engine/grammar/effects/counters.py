@@ -87,6 +87,30 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
         raise stream.error(f"unsupported counter kind {token.text!r}")
     counter = token.text
     stream.expect_word("counter", "counters")
+    # "Put a +0/+1 counter **or** a +1/+0 counter on target creature."
+    # (Dwarven Armorer.) One placement with two kinds to pick from, chosen by
+    # the ability's controller as it resolves — not two placements, which would
+    # put both. The alternatives are read here, where the kinds are printed,
+    # rather than at the sentence level: `_parse_optional_action`'s "or" joins
+    # two whole statements, and this "or" is inside one, between a noun and the
+    # subject they share.
+    alternatives: list[str] = [counter]
+    while True:
+        alternative_mark = stream.mark()
+        if not stream.accept_word("or"):
+            break
+        stream.accept_word("a", "an")
+        try:
+            other = _expect_counter_kind(stream)
+        except GrammarError:
+            stream.reset(alternative_mark)
+            break
+        if other.kind == PT and not is_pt_counter(other.text):
+            raise stream.error(f"unsupported counter kind {other.text!r}")
+        if not stream.accept_word("counter", "counters"):
+            stream.reset(alternative_mark)
+            break
+        alternatives.append(other.text)
     stream.expect_word("on")
     # "…put a -1/-1 counter on **that creature**." (Unstable Mutation;
     # Takklemaggot prints the same sentence with a -0/-1 pair.) The bound-object
@@ -137,6 +161,31 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     if not then_double:
         stream.reset(double_mark)
     placement = ast.PutCounter(subject, counter, count, up_to, then_double=then_double)
+    if len(alternatives) > 1:
+        # A choice between kinds is the modal handler's question, so it lowers
+        # onto `ast.OneOf` — the same node "sacrifice a creature **or** discard
+        # a creature card" produces, and therefore the same prompt, the same
+        # default and the same handler. A second mechanism for one question
+        # would be two prompts and two places for an option to go unoffered.
+        #
+        # The riders below are refused rather than distributed: "then double
+        # the number of X counters" names one kind, and a placement repeated
+        # per member of a set is a multiplication this shape cannot carry
+        # option by option. Nothing in the pool prints either beside an "or",
+        # and guessing which reading was meant is what a refusal is for.
+        if then_double or up_to:
+            raise stream.error(
+                "a choice of counter kinds carries no rider on the placement"
+            )
+        options = tuple(
+            ast.PutCounter(subject, kind, count, up_to) for kind in alternatives
+        )
+        labels = tuple(f"a {kind} counter" for kind in alternatives)
+        if _parse_for_each(stream) is not None or _parse_for_each_this_way(stream) is not None:
+            raise stream.error(
+                "a choice of counter kinds is not placed per member of a set"
+            )
+        return ast.OneOf(options, labels)
 
     # "…for each creature that died this turn" multiplies the placement; it is
     # not a rider on it. Modelled as an iteration wrapping the placement so a

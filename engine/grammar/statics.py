@@ -171,6 +171,14 @@ def _lower_anthem_condition_payload(payload: dict, node: ast.StaticAbilityNode) 
     # refuse a clause the evaluator implements in full.
     if payload.get("kind") in ("your_turn", "is_state"):
         return payload
+    # "As long as there is exactly one tide counter on this **enchantment**, all
+    # blue creatures get -2/-0." (Tidal Influence.) A count of the *source's*
+    # own counters, which carries no filter and no seat word either — and which
+    # `conditional_static_holds` answers off the permanent it is handed. Named
+    # here beside the two above rather than falling into the `controls` gates,
+    # which would refuse it for parts the sentence does not have.
+    if payload.get("kind") == "source_counter_count":
+        return payload
     # "…as long as **it's blocking and you control a snow land**" (Snow Devil).
     # CR 613 puts no limit on how many clauses a static's criteria have, so each
     # conjunct is checked by *this same gate* rather than by a second, laxer
@@ -313,7 +321,16 @@ def _lower_self_conditional_static(
     # strike as long as …" (Snow Devil) is a line it cannot read and there is no
     # second mechanism to collide with. So the refusal is asked of the
     # same-subject case only.
-    if not attached and condition.get("who") != "opponent":
+    # "As long as there is exactly one tide counter on this creature, it gets
+    # -1/-1." (Homarid.) Not in that table's territory either, and for a
+    # sharper reason than the Aura's: the table has no row for a counter count
+    # at all, so refusing here would leave the sentence read by nobody — the
+    # "refusal can expire" failure arriving before the refusal was even
+    # written. It is the *same* sentence Tidal Influence prints about a set of
+    # creatures instead of about itself, and both lower to one condition
+    # payload answered by one evaluator.
+    counted = condition.get("kind") == "source_counter_count"
+    if not attached and not counted and condition.get("who") != "opponent":
         raise LoweringError(
             "a conditional static bonus about your own board is derived by "
             "engine/static_bonuses.py",

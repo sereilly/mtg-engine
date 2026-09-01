@@ -471,6 +471,31 @@ class DiscardedCardWas:
 
 
 @dataclass(frozen=True)
+class SacrificedForCostWas:
+    """"If **the sacrificed creature** was a Thrull, …" (Ebon Praetor.)
+
+    :class:`DiscardedCardWas` one zone over, and the same shape for the same
+    reason: the phrase names *which* producer it means — the ability's own
+    sacrifice cost — where a bare "it" would answer off whatever record an
+    earlier step happened to write.
+
+    What it asks about is a **permanent**, not a card, which is what separates
+    it from the discard twin: the thing the cost ate had computed
+    characteristics right up until it left (CR 613.1), so the question is the
+    whole noun phrase asked through the one matcher, exactly as
+    :class:`DestroyedTargetWas` asks it. By the time the condition is read the
+    creature is a card in a graveyard, so the answer is last-known information
+    (CR 608.2h) — the record the payment path wrote, never a read of the board.
+
+    The noun the sentence repeats ("the sacrificed **creature**") is not
+    carried: it is the self-same object the cost chose, and lowering refuses
+    the condition outright when the ability's cost sacrifices nothing.
+    """
+
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class HadPlus1Counter:
     """"if it had a +1/+1 counter on it" (Basri's Lieutenant, CR 603.4).
 
@@ -712,6 +737,7 @@ Condition = Union[
     EveryOf, CoinFlipResult, Controls, CountedNumber, DestroyedThisWay,
     DestroyedTargetWas,
     DiscardedCardWas,
+    SacrificedForCostWas,
     IsState, StartedTheTurnState, DiedThisTurn, DamagedBySourceDiedThisTurn,
     ItIsColor, ObjectHasKeyword,
     HadPlus1Counter, ItWas,

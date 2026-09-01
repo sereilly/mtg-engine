@@ -3761,7 +3761,7 @@ class PendingChoicesMixin:
             self.check_state_based_actions()
             return True
         option = options[mode_index]
-        if option["spec"].get("requires_target"):
+        if option["spec"].get("requires_target") and not choice.data.get("_keep_targets"):
             target = (
                 self._select_trigger_mode_target(option, target) if target is not None
                 else self._default_trigger_mode_target(option, choice.player_index)

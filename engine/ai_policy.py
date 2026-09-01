@@ -15,6 +15,7 @@ from .ai_valuation import (
     returns_creature_to_hand,
     several_target_slot_sides,
 )
+from .activation_permissions import activation_permission_denial
 from .auras import controller_cast_ban
 from .cast_restrictions import check_cast_timing
 from .cost_modifiers import cost_reduction_for_cast, reduce_cost, spell_cost_tax
@@ -189,6 +190,28 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # every main phase for a pump that wears off. Derived from the compiled
         # cost, so it reaches every card printed this way and names none.
         if ability.cost.sacrifice_filter is not None or ability.cost.discard_cards:
+            continue
+
+        # CR 602.1a and its exceptions: a permanent whose printed permission
+        # closes its ability to *its own controller* — "Only your opponents may
+        # activate this ability" (Clergy of the Holy Nimbus), "Only the
+        # controller of the enchanted creature…" (Merseine) — is an ability
+        # this seat may not activate at all. Asked of the module that enforces
+        # it rather than scored, so the answer is the engine's own; without it
+        # the policy proposed the same refused activation every turn for the
+        # whole game, which is the "a seat doing nothing all game" shape a
+        # refused action makes.
+        if activation_permission_denial(
+            game, player_index, permanent, ability.source_line or ""
+        ):
+            continue
+
+        # "Pay enchanted creature's mana cost" (Merseine). A cost the compiled
+        # program cannot state — it is whatever the attached permanent's
+        # printed cost is right now — so the tap planner below has nothing to
+        # plan against. Skipping is the same honest floor the cost skips above
+        # take, and it is derived from the compiled cost, so it names no card.
+        if ability.cost.mana_from_attached:
             continue
 
         target = _choose_target_for_instruction(ability.instruction, player_index, game)

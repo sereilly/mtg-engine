@@ -23,7 +23,7 @@ from __future__ import annotations
 import pytest
 
 import engine.oracle as oracle
-from engine.card_loader import load_catalog
+from engine.card_loader import load_cards, load_catalog, manifest_set_paths
 from engine.effect_labels import (
     ACTIVATED_LABELS,
     TRIGGERED_LABELS,
@@ -34,10 +34,31 @@ from engine.oracle_types import OracleInstruction
 
 @pytest.fixture(scope="module")
 def grammar_abilities():
-    """Every (position, key, label) the pool's grammar-read abilities produce."""
+    """Every (position, key, label) the *shipped* pool's grammar-read abilities
+    produce — what "no ability falls back" is asked about."""
+    return _abilities_of(load_catalog())
+
+
+@pytest.fixture(scope="module")
+def measured_grammar_abilities():
+    """The same, over shipped **and** measured sets.
+
+    The two directions of this guard want two pools, and the asymmetry is the
+    same one ``scripts/parse_coverage.py`` documents: "no ability falls back"
+    gates on the shipped half, because a set ingested under ``measured`` is by
+    definition not implemented yet and failing on it would make every ingest red
+    on arrival. "Every entry is still reached" is the opposite question — an
+    entry a measured set's card reaches is not dead — and asking it of the
+    shipped pool alone would demand that a label be added only *after* its card
+    ships, which is exactly when nothing is left to add it for.
+    """
+    return _abilities_of(load_cards(manifest_set_paths(include_measured=True)))
+
+
+def _abilities_of(cards):
     activated: list[tuple[str, str, str]] = []
     triggered: list[tuple[str, str, str, str]] = []
-    for card in load_catalog():
+    for card in cards:
         program = oracle.compile_card_oracle(card)
         for ability in program.activated_abilities:
             if ability.instruction is None:
@@ -81,8 +102,8 @@ def test_no_grammar_read_ability_falls_back_to_the_category_default(grammar_abil
     )
 
 
-def test_every_table_entry_is_still_reached(grammar_abilities):
-    activated, triggered = grammar_abilities
+def test_every_table_entry_is_still_reached(measured_grammar_abilities):
+    activated, triggered = measured_grammar_abilities
 
     reached_activated = {kind for _name, kind, _label in activated}
     dead = sorted(set(ACTIVATED_LABELS) - reached_activated)

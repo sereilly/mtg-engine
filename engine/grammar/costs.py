@@ -254,6 +254,21 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # "no such cost", which is an ability activated for free.
             mark = stream.mark()
             stream.advance()
+            # "Pay **enchanted creature's mana cost**" (Merseine). Read before
+            # the amount below, which is a life payment and would refuse the
+            # noun — the same position the tap branch reads its own attached
+            # host from, and for the same reason: nothing is picked, so there
+            # is no count for the quantity parser to find.
+            attached = stream.mark()
+            if stream.accept_word("enchanted", "equipped"):
+                noun = stream.peek_word()
+                if noun is not None and _singular(noun) in CARD_TYPES:
+                    stream.advance()
+                    if stream.accept_phrase("'s", "mana", "cost"):
+                        costs.append(ast.PayAttachedManaCost())
+                        stream.accept_punct(",")
+                        continue
+            stream.reset(attached)
             amount = parse_amount(stream)
             if not isinstance(amount, ast.Fixed) or amount.value <= 0:
                 stream.reset(mark)

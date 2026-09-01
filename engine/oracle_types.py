@@ -235,6 +235,19 @@ class ActivatedAbilityCost:
     #: builds this with six positional arguments, so a field inserted among
     #: them silently rebinds one of the six.
     tap_attached: bool = False
+    #: Merseine: "**Pay enchanted creature's mana cost**: Remove a net counter
+    #: from this Aura." A mana cost read off the *host*, which the ``mana``
+    #: dict above cannot carry: that dict is fixed when the card compiles, and
+    #: this number is whatever the enchanted permanent's printed cost happens
+    #: to be at the moment of activation (CR 202.1, CR 601.2f-h). So the flag
+    #: says *where the cost comes from* and the activation path builds the
+    #: symbols; an ability with this set and no host is unpayable rather than
+    #: free.
+    #:
+    #: After ``tap_attached`` for that field's stated reason: the six
+    #: positional arguments ``parse_activated_ability_cost`` passes are at the
+    #: front, so a field inserted among them silently rebinds one of them.
+    mana_from_attached: bool = False
 
     @property
     def is_loyalty(self) -> bool:

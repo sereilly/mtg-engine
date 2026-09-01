@@ -189,7 +189,9 @@ class StackResolutionMixin:
                 )
             )
 
-    def _choose_trigger_mode(self, item: StackItem) -> None:
+    def _choose_trigger_mode(
+        self, item: StackItem, *, targets_already_chosen: bool = False
+    ) -> None:
         """Choose *item*'s mode and that mode's targets, as it goes on the
         stack (CR 700.2b / CR 603.3c-d).
 
@@ -231,6 +233,16 @@ class StackResolutionMixin:
             labels=[option["label"] for option in options],
             _options=tuple(options),
             _trigger_item=item,
+            # An **activated** modal ability chose its targets when it was
+            # activated (CR 602.2b), so the mode picker must keep them.
+            # Dwarven Armorer is the card that shows why: "Put a +0/+1 counter
+            # or a +1/+0 counter on target creature" is one target shared by
+            # both modes, named at activation — and choosing again handed the
+            # counter to whichever creature the default picker found first,
+            # which was the Armorer itself. Same rule as the twin flag one
+            # method up: asking again replaces a choice a player has made with
+            # one they have not.
+            _keep_targets=targets_already_chosen,
         )
 
     #: Target kinds :meth:`_choose_trigger_targets` picks for. Objects on the
