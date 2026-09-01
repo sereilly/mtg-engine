@@ -146,6 +146,25 @@ class ActivatedAbilityCost:
     #: the other (CR 613.1: a card in a zone has no computed characteristics
     #: at all).
     exile_zone: str = "battlefield"
+    #: Whose zone that payment comes out of: ``"you"`` (the payer's own pile,
+    #: Necropolis) or ``None`` for **any one player's** ("from a graveyard" /
+    #: "from a single graveyard", Night Soil). Beside ``exile_zone`` rather
+    #: than folded into it because they answer different questions — which zone
+    #: and whose — and a charger that read one as the other would enumerate the
+    #: wrong pile and pay nothing while the ability still resolved.
+    exile_zone_owner: str | None = "you"
+    #: How many objects that payment eats. "Exile **two** creature cards"
+    #: (Night Soil); one everywhere else. Beside the filter for the reason
+    #: ``sacrifice_count`` is: only a count can make the cost unpayable, and
+    #: one card is no more a payment of a two-card cost than none is
+    #: (CR 601.2h).
+    exile_count: int = 1
+    #: "…from **a single** graveyard" (Night Soil). Every card must come out of
+    #: the *same* pile. Its own flag rather than a narrowing of the filter,
+    #: because the filter is asked of one card at a time and cannot say it —
+    #: and dropped, the cost would be payable with one card from each of two
+    #: graveyards, which is strictly cheaper than the card prints.
+    exile_same_zone: bool = False
     # Seasoned Hallowblade: "Discard a card: …" — N cards the payer chooses,
     # where `discard_last_drawn` above names its card by history and leaves the
     # payer no choice at all. Two fields because they are two costs: a card

@@ -345,12 +345,23 @@ def test_601_2b_a_clause_the_engine_cannot_charge_leaves_the_line_unread():
     "Pay X life" (Fire Covenant) used to be the example here, on the grounds
     that X was announced after the costs were charged. That was true of the
     engine and not of the card: the announcement is CR 601.2b and the charge is
-    CR 601.2h, in that order, and the gate ran in the wrong one. It is read now;
-    an exile clause nothing charges is not."""
+    CR 601.2h, in that order, and the gate ran in the wrong one. "Exile a
+    creature" was the example after it and is read now too (Soul Exchange), so
+    the boundary has moved again — what is left is a clause naming a **zone the
+    payment path cannot reach**, and a phrase naming no card type at all.
+
+    Both refusals are the same rule read from two sides: the table charges what
+    ``engine/mixins/stack/casting.py`` can collect, which is the caster's own
+    battlefield, and a phrase it cannot enumerate or cannot test must leave the
+    line unread rather than be charged as the part of it that was."""
     from engine.cast_costs import additional_cost_for_line
 
     assert additional_cost_for_line(
-        "As an additional cost to cast this spell, exile a creature."
+        "As an additional cost to cast this spell, exile a creature card from "
+        "your graveyard."
+    ) is None
+    assert additional_cost_for_line(
+        "As an additional cost to cast this spell, sacrifice a permanent."
     ) is None
 
 

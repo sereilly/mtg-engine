@@ -471,6 +471,35 @@ class DiscardedCardWas:
 
 
 @dataclass(frozen=True)
+class CostObjectWas:
+    """"…**if the exiled creature was a Thrull**" (Soul Exchange); "…**if the
+    sacrificed creature was a Thrull**" (Ebon Praetor).
+
+    A question about what the spell's or ability's own **cost** ate, not about
+    anything a step of the effect touched: CR 601.2h pays the cost before the
+    object is on the stack, so by resolution the permanent is a memory the
+    payment path recorded (``sacrificed_for_cost`` / ``exiled_for_cost``) and
+    CR 608.2h's last-known information is the only answer there is.
+
+    The *fact* this carries is **which payment channel the phrase names**, and
+    it has one spelling here — ``channel`` — because "the sacrificed creature"
+    and "the exiled creature" are one printed template with the verb changed.
+    Two nodes, or two fields meaning the same thing under two names, would be
+    two readings of one sentence.
+
+    Beside :class:`DiscardedCardWas` rather than a widening of it: that one
+    names the *discard* channel, and one node per named producer is what keeps
+    a back-reference from reading whatever record happens to be lying around.
+    The whole noun phrase is carried rather than a printed type line, because
+    what is asked here is a creature's **subtype** and lowering is what checks
+    the matcher can test it.
+    """
+
+    channel: str
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class HadPlus1Counter:
     """"if it had a +1/+1 counter on it" (Basri's Lieutenant, CR 603.4).
 
@@ -679,6 +708,7 @@ Condition = Union[
     EveryOf, CoinFlipResult, Controls, CountedNumber, DestroyedThisWay,
     DestroyedTargetWas,
     DiscardedCardWas,
+    CostObjectWas,
     IsState, StartedTheTurnState, DiedThisTurn, DamagedBySourceDiedThisTurn,
     ItIsColor, ObjectHasKeyword,
     HadPlus1Counter, ItWas,

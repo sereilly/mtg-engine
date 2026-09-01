@@ -32,8 +32,8 @@ from ..oracle_types import PER_OBJECT_SEAT_RECORDS, OracleInstruction
 from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
-from ._common import (attached_host, flip_coin, permanent_matches_filter,
-                      permanent_state_holds)
+from ._common import (_card_matches_filter, attached_host, flip_coin,
+                      permanent_matches_filter, permanent_state_holds)
 from .registry import effect_handler
 from ..mana_payment import mana_cost_label
 
@@ -509,6 +509,29 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         wanted = tuple(payload.get("keywords") or ())
         has = bool(wanted) and all(target.has_keyword(word) for word in wanted)
         return (not has) if payload.get("negated") else has
+
+    if kind == "cost_object_was":
+        # "…**if the exiled creature was a Thrull**" (Soul Exchange). The object
+        # the *cost* ate (CR 601.2b / 602.2b), which left its zone before the
+        # spell or ability was ever on the stack — so the only honest source is
+        # the record the payment path kept (CR 608.2h), on the same channel
+        # every other reader of a cost's spoils uses.
+        #
+        # The channels carry two shapes and both are answered: the cast and
+        # activation sacrifice records hold a `Permanent`, whose *effective*
+        # types are what CR 608.2h remembers, and the graveyard exile holds a
+        # `CardDefinition`, which has no computed characteristics at all
+        # (CR 613.1). Nothing recorded is False, which is also what the words
+        # say: no creature was exiled, so the exiled creature was not a Thrull.
+        from ..models import Permanent
+
+        paid = (context.choices or {}).get(str(payload.get("channel")))
+        if paid is None:
+            return False
+        described = payload.get("filter") or {}
+        if isinstance(paid, Permanent):
+            return permanent_matches_filter(paid, described)
+        return _card_matches_filter(paid, described)
 
     if kind == "discarded_card_was":
         # "If the discarded card was a land card" (Land's Edge). The card is in

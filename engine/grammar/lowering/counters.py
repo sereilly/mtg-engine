@@ -31,6 +31,7 @@ from ._common import (
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
     _EVENT_SUBJECT_OBJECTS,
+    _RECORDED_PERMANENTS,
 )
 
 
@@ -379,6 +380,47 @@ def _lower_put_counter(
                 {"counter": node.counter, "count": node.count.value},
             ),
         )
+    # "Return target creature card from your graveyard to the battlefield. Put
+    # a +2/+2 counter on **that creature** …" (Soul Exchange.) The bound object
+    # is a permanent an earlier step of this effect *created*, not the ability's
+    # target — the target is a card in a graveyard, and a counter on it would
+    # land on nothing. So the placement reads the record that step wrote, the
+    # same ``permanents_from`` reading the grant one family over already makes.
+    #
+    # Read before the targeted branch below and before the "+1/+1 only" gate
+    # further down, both of which are about a *chosen* creature: with nothing
+    # recorded the words keep their old reading and refuse there, naming what is
+    # missing.
+    if (
+        is_pt_counter(node.counter)
+        and not node.up_to
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+        and not node.subject.targeted
+        and (produced & _RECORDED_PERMANENTS)
+    ):
+        if _restrictions_beyond(node.subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound object carries no narrowing the placement could "
+                "honour", node=node,
+            )
+        recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+        if len(recorded) != 1:
+            raise LoweringError(
+                "\"that creature\" is ambiguous: several earlier steps "
+                "recorded objects", node=node,
+            )
+        if not isinstance(node.count, ast.Fixed):
+            raise LoweringError(
+                "a counter on a bound object is placed a fixed number at a "
+                "time", node=node,
+            )
+        bound_payload: dict[str, object] = {
+            "counter": node.counter, "permanents_from": recorded[0],
+        }
+        if node.count.value != 1:
+            bound_payload["count"] = node.count.value
+        return (OracleInstruction("add_counter_to_target", "", bound_payload),)
     # "Put a **-0/-1** counter on target creature blocking or blocked by this
     # creature." (Lesser Werewolf.) The same placement as the +1/+1 branch far
     # below — one counter, on one chosen creature — differing only in the CR

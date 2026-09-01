@@ -753,21 +753,61 @@ class AbilityActivationMixin:
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             # Through the seam, which bounds-checks and turns an index arriving
             # from the wire into a permanent exactly once.
+            # "Sacrifice **two** Goblins" (Goblin Warrens). A printed count
+            # greater than one, which is a different payability question from
+            # every other sacrifice cost here: two of them must exist, and one
+            # Goblin is no more a payment than none (CR 601.2h). Checked before
+            # anything is spent, like the singular beside it.
+            wanted = ability.cost.sacrifice_count
+            wanted = wanted if isinstance(wanted, int) else 1
+            if len(candidates) < wanted:
+                details = (
+                    f"{permanent.card.name}: not enough "
+                    f"{filter_head_noun(described)}s to sacrifice for its cost"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            named = [
+                found
+                for found in (
+                    self.permanent_by_id(pid) for pid in (cost_permanent_ids or [])
+                )
+                if found is not None and any(c is found for c in candidates)
+            ]
+            # Through the seam, which bounds-checks and turns an index arriving
+            # from the wire into a permanent exactly once.
             named_permanent = (
                 self.permanent_at(controller, cost_permanent_index)
                 if isinstance(cost_permanent_index, int)
                 else None
             )
-            # `in` compares Permanents by value and would match a look-alike, so
-            # membership is tested by identity.
-            sacrifice_cost_permanent = (
-                named_permanent
-                if any(perm is named_permanent for perm in candidates)
-                # A permanent whose death loses the game is kept for last, then
-                # the smallest — one rule, shared with the cast-side additional
-                # cost and the forced-sacrifice default (`default_sacrifice_pick`).
-                else self.default_sacrifice_pick(candidates)
-            )
+            if any(perm is named_permanent for perm in candidates) and not any(
+                perm is named_permanent for perm in named
+            ):
+                named = [named_permanent, *named]
+            if wanted > 1:
+                # The payer's own picks first, then the deterministic default
+                # for the rest — the same arrangement the tap cost below makes,
+                # so a seat that names none is never blocked and a seat that
+                # names some has them honoured.
+                chosen_victims: list = []
+                for perm in [*named, *candidates]:
+                    if len(chosen_victims) >= wanted:
+                        break
+                    if not any(perm is already for already in chosen_victims):
+                        chosen_victims.append(perm)
+                sacrifice_cost_set = chosen_victims
+            else:
+                # `in` compares Permanents by value and would match a look-alike, so
+                # membership is tested by identity.
+                sacrifice_cost_permanent = (
+                    named_permanent
+                    if any(perm is named_permanent for perm in candidates)
+                    # A permanent whose death loses the game is kept for last, then
+                    # the smallest — one rule, shared with the cast-side additional
+                    # cost and the forced-sacrifice default (`default_sacrifice_pick`).
+                    else self.default_sacrifice_pick(candidates)
+                )
 
         # "Tap two untapped Spirits you control" (Shacklegeist). Chosen by the
         # payer through `cost_permanent_ids`, and defaulted deterministically for
@@ -845,12 +885,13 @@ class AbilityActivationMixin:
         # also runs ahead of the source's own exile further down, so a card
         # printing both eats the chosen object while the source is still there.
         exiled_for_cost = None
+        exiled_set_for_cost: list = []
         if ability.cost.exile_filter is not None:
-            exiled_for_cost = self._pay_exile_cost(
+            exiled_set_for_cost = self._pay_exile_cost(
                 ability.cost, controller, controller_index, permanent,
                 cost_permanent_index,
             )
-            if exiled_for_cost is None:
+            if not exiled_set_for_cost:
                 details = (
                     f"{permanent.card.name}: nothing available to exile as a cost"
                 )
@@ -858,6 +899,11 @@ class AbilityActivationMixin:
                 return SimulationResult(
                     permanent.card.name, False, "unsupported", details
                 )
+            # The single-object channel every reader of an exile cost already
+            # asks (Necropolis' "the exiled card's mana value"), kept as the
+            # first of them, so a counted cost adds a record rather than moving
+            # one.
+            exiled_for_cost = exiled_set_for_cost[0]
 
         required_cost = dict(ability.cost.mana)
         requires_tap = ability.cost.requires_tap
@@ -1233,6 +1279,7 @@ class AbilityActivationMixin:
                     # two paths it came down.
                     choices={
                         "exiled_for_cost": exiled_for_cost,
+                        "exiled_set_for_cost": list(exiled_set_for_cost),
                         "counters_removed_for_cost": counters_removed_for_cost,
                         "mana_spent_for_cost": mana_spent_for_cost,
                         "sacrificed_set_for_cost": list(sacrifice_cost_set),
@@ -1280,6 +1327,7 @@ class AbilityActivationMixin:
                     # before this item is on the stack, so nothing else holds
                     # it (CR 608.2h).
                     "exiled_for_cost": exiled_for_cost,
+                    "exiled_set_for_cost": list(exiled_set_for_cost),
                     # How many counters the cost's "remove any number of …"
                     # actually took (the Mana Batteries), on the same
                     # last-known-information channel as the sacrifice beside
@@ -1347,10 +1395,11 @@ class AbilityActivationMixin:
     def _pay_exile_cost(
         self, cost, controller, controller_index: int, permanent,
         cost_permanent_index,
-    ):
-        """Charge an "Exile <noun phrase>" activation cost, returning the card
-        it ate — or ``None`` when nothing in the named zone could pay, which
-        makes the ability unactivatable (CR 602.2b) with nothing else spent.
+    ) -> list:
+        """Charge an "Exile <noun phrase>" activation cost, returning the cards
+        it ate — or an **empty list** when nothing in the named zone could pay,
+        which makes the ability unactivatable (CR 602.2b) with nothing else
+        spent.
 
         Two zones, one rule. The battlefield enumerates the *permanents the
         payer controls* through the control seam and asks ``subject_matches``,
@@ -1368,35 +1417,70 @@ class AbilityActivationMixin:
         file does for a non-interactive seat.
         """
         described = cost.exile_filter or {}
+        wanted = max(1, int(getattr(cost, "exile_count", 1) or 1))
         if cost.exile_zone == "graveyard":
-            slots = [
-                index for index, card in enumerate(controller.graveyard)
-                if _card_matches_filter(card, described)
-            ]
-            if not slots:
-                return None
-            chosen = (
-                cost_permanent_index
-                if isinstance(cost_permanent_index, int)
-                and cost_permanent_index in slots
-                else slots[0]
+            # Whose pile. "your graveyard" (Necropolis) is one seat;
+            # ``exile_zone_owner`` of None is "a graveyard" — anybody's — and
+            # then **one** of them has to hold the whole payment: "from a
+            # single graveyard" (Night Soil) is a fact about the set, so the
+            # piles are tried whole rather than pooled. Pooled, the cost would
+            # be payable with one card from each of two graveyards, which is
+            # strictly cheaper than the card prints.
+            owner = getattr(cost, "exile_zone_owner", "you")
+            piles = (
+                [controller] if owner == "you"
+                # The payer's own pile first, then the rest in seat order, so a
+                # seat that names nothing is deterministic — the rule every
+                # other default pick in this file follows.
+                else [
+                    controller,
+                    *(seat for seat in self.players if seat is not controller),
+                ]
             )
-            card = controller.graveyard[chosen]
-            controller.graveyard.pop(chosen)
-            controller.exile.append(card)
-            self.log.append(
-                f"{controller.name} exiled {card.name} from their graveyard to "
-                f"activate {permanent.card.name}"
-            )
-            return card
+            for pile in piles:
+                slots = [
+                    index for index, card in enumerate(pile.graveyard)
+                    if _card_matches_filter(card, described)
+                ]
+                if len(slots) < wanted:
+                    continue
+                named = (
+                    [cost_permanent_index]
+                    if isinstance(cost_permanent_index, int)
+                    and cost_permanent_index in slots
+                    else []
+                )
+                chosen_slots: list[int] = []
+                for slot in [*named, *slots]:
+                    if len(chosen_slots) >= wanted:
+                        break
+                    if slot not in chosen_slots:
+                        chosen_slots.append(slot)
+                # Resolved to *cards* before anything leaves, then removed
+                # highest slot first: every pop renumbers the slots behind it,
+                # and a graveyard holds several copies of a popular card under
+                # one name, so a scan by value would take the wrong one
+                # (idiom 11).
+                taken = [pile.graveyard[slot] for slot in chosen_slots]
+                for slot in sorted(chosen_slots, reverse=True):
+                    pile.graveyard.pop(slot)
+                controller.exile.extend(taken)
+                self.log.append(
+                    f"{controller.name} exiled "
+                    + ", ".join(card.name for card in taken)
+                    + f" from the graveyard of {pile.name} to activate "
+                    f"{permanent.card.name}"
+                )
+                return taken
+            return []
         candidates = [
             perm for perm in self.controlled_by(controller_index)
             if subject_matches(
                 self, perm, described, observer=controller_index, source=permanent,
             )
         ]
-        if not candidates:
-            return None
+        if len(candidates) < wanted:
+            return []
         named = (
             self.permanent_at(controller, cost_permanent_index)
             if isinstance(cost_permanent_index, int) else None
@@ -1404,14 +1488,30 @@ class AbilityActivationMixin:
         victim = (
             named if any(named is option for option in candidates) else candidates[0]
         )
-        owner_index = self.owner_index_of(victim)
-        card = victim.card
-        self.remove_from_battlefield(victim)
-        self.players[owner_index if owner_index is not None else controller_index]            .exile.append(card)
+        # A counted battlefield exile would take *wanted* of them; no card in
+        # the pool prints one, so the picks after the first follow the same
+        # deterministic order the branch above uses.
+        picked = [victim]
+        for option in candidates:
+            if len(picked) >= wanted:
+                break
+            if not any(option is already for already in picked):
+                picked.append(option)
+        taken = []
+        for chosen in picked:
+            owner_index = self.owner_index_of(chosen)
+            card = chosen.card
+            self.remove_from_battlefield(chosen)
+            self.players[
+                owner_index if owner_index is not None else controller_index
+            ].exile.append(card)
+            taken.append(card)
         self.log.append(
-            f"{controller.name} exiled {card.name} to activate {permanent.card.name}"
+            f"{controller.name} exiled "
+            + ", ".join(card.name for card in taken)
+            + f" to activate {permanent.card.name}"
         )
-        return card
+        return taken
 
     def activate_from_hand(
         self,

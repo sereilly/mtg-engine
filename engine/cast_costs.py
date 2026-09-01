@@ -49,6 +49,14 @@ class AdditionalCost:
 
     phrase: str
     sacrifice_filter: dict | None = None
+    #: "As an additional cost to cast this spell, **exile a creature you
+    #: control**." (Soul Exchange.) The same noun-phrase vocabulary one field
+    #: up, one zone over -- and its own field for the reason
+    #: ``ActivatedAbilityCost`` keeps the two apart: an exiled permanent is
+    #: still a card somewhere afterwards, a sacrificed one is in a graveyard,
+    #: and a spell may read back either. ``None`` means "no exile", never
+    #: "anything".
+    exile_filter: dict | None = None
     discard_cards: int = 0
     #: "…by paying **3 life** and discarding a card" (Demonic Embrace).
     #: CR 118.4 makes an unpayable life cost an uncastable spell, checked with
@@ -84,6 +92,8 @@ class AdditionalCost:
         parts = []
         if self.sacrifice_filter is not None:
             parts.append(f"sacrifice a {filter_head_noun(self.sacrifice_filter)}")
+        if self.exile_filter is not None:
+            parts.append(f"exile a {filter_head_noun(self.exile_filter)}")
         if self.pay_life_x:
             parts.append("pay X life")
         elif self.pay_life:
@@ -141,7 +151,20 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"^(?:pay )?x life$"), "pay_life_x"),
     (re.compile(r"^(?:pay )?(\d+) life$"), "pay_life"),
     (re.compile(r"^(?:discard|discarding) (?:a|one) card$"), "discard_one"),
-    (re.compile(r"^(?:sacrifice|sacrificing) a creature$"), "sacrifice_creature"),
+    # The **noun phrase is read, not spelled out**. This row was
+    # ``sacrifice a creature`` as a literal, so Goblin Grenade's "sacrifice a
+    # **Goblin**" matched nothing at all -- and a clause the table cannot read
+    # leaves the line unclaimed, which for a card whose *other* line compiles
+    # means it reports ``supported`` and is cast without its real cost. The
+    # phrase goes through the same reader an activation cost's does
+    # (``oracle.chargeable_sacrifice_payload``), so what may pay a printed
+    # cost is one answer wherever the cost is printed.
+    (re.compile(r"^(?:sacrifice|sacrificing) (?P<noun>.+)$"), "sacrifice"),
+    # "…, **exile a creature you control**." (Soul Exchange.) The same clause
+    # one zone over, gated by the exile charger's own reader for the same
+    # reason -- two readers of one phrase drift, and the direction they drift
+    # in is a cost nobody pays.
+    (re.compile(r"^(?:exile|exiling) (?P<noun>.+)$"), "exile"),
 )
 
 
@@ -156,7 +179,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
     """
     fields: dict = {
         "pay_life": 0, "pay_life_x": False, "discard_cards": 0,
-        "sacrifice_filter": None,
+        "sacrifice_filter": None, "exile_filter": None,
     }
     for clause in re.split(r",\s*|\s+and\s+", costs):
         clause = clause.strip()
@@ -173,11 +196,61 @@ def _read_cost_clauses(costs: str) -> dict | None:
             elif field == "discard_one":
                 fields["discard_cards"] += 1
             else:
-                fields["sacrifice_filter"] = {"type_filter": "creature"}
+                described = _chargeable_object(found.group("noun"), field)
+                if described is None:
+                    # The phrase names something the payment path cannot
+                    # enumerate or cannot test. The whole sentence is refused
+                    # rather than charged as the part that was read — the
+                    # all-or-nothing rule this function already states, and the
+                    # one that keeps a card unsupported instead of cheap.
+                    return None
+                fields[f"{field}_filter"] = described
             break
         else:
             return None
     return fields
+
+
+def _chargeable_object(phrase: str, action: str) -> dict | None:
+    """The filter payload a "sacrifice/exile <noun phrase>" cost charges, or None.
+
+    The **charger's own** reading, not a second one: ``engine/oracle.py`` holds
+    ``chargeable_sacrifice_payload`` and ``chargeable_exile_payload`` because an
+    activation cost asks the same question (CR 601.2b and CR 602.2b are one
+    announcement step), and a phrase admitted here that they would refuse is a
+    cost this table claims and nothing collects.
+
+    Two zones and no others, matching what ``_pay_additional_costs`` can reach:
+    a sacrifice and an exile both come off the caster's own battlefield. A
+    phrase naming a graveyard, a hand or somebody else's board is refused, which
+    keeps the card unsupported rather than cast for a cost nobody pays.
+
+    Imported inside the function for the reason every other reader of these does:
+    ``engine/oracle.py`` imports this module at load time, so the edge back is
+    taken at call time.
+    """
+    from .grammar import subject_filter_payload
+    from .oracle import chargeable_exile_payload, chargeable_sacrifice_payload
+
+    described = subject_filter_payload(phrase.strip())
+    if described is None:
+        return None
+    if described.get("zone") not in (None, "battlefield"):
+        return None
+    reader = (
+        chargeable_sacrifice_payload if action == "sacrifice"
+        else chargeable_exile_payload
+    )
+    carried = reader(described)
+    if carried is None or not (
+        carried.get("type_filter") or carried.get("subtype_filter")
+    ):
+        # An *unnamed* cost — one whose noun phrase pins neither a card type nor
+        # a subtype — would let the payment eat anything the caster controls,
+        # a land included. The same narrowing ``grammar/costs.py`` makes for an
+        # activation cost, and the one a key set cannot express.
+        return None
+    return carried
 
 
 def _self_permission_cost(line: str) -> AdditionalCost | None:
