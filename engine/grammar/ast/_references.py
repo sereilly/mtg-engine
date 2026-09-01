@@ -385,6 +385,15 @@ class ObjectFilter:
     # quietly letting the ability's controller choose — which is the seat the
     # card says must not.
     chosen_by_opponent: bool = False
+    #: "destroy all Plains **that weren't chosen this way by any player**"
+    #: (Raiding Party). Not a characteristic and not a state: it is the
+    #: complement of a set an earlier step of this same effect recorded, so no
+    #: read of the board can answer it and ``to_payload`` deliberately does not
+    #: emit it. The one lowering written for it carries the record's name as
+    #: its own payload key; everywhere else ``_restrictions_beyond`` refuses
+    #: the phrase, which is what keeps a sweep from quietly widening back to
+    #: everything the noun names.
+    not_chosen_this_way: bool = False
 
     def to_payload(self) -> dict[str, object]:
         """Instruction-payload dict, emitting only keys that are set.

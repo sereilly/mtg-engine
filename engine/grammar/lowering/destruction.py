@@ -14,7 +14,7 @@ than assumed — so this is a family boundary and not a size cut.
 
 import dataclasses
 
-from ...oracle_types import (CHOSEN_TARGET_PERMANENTS,
+from ...oracle_types import (CHOSEN_THIS_WAY_OBJECTS, CHOSEN_TARGET_PERMANENTS,
                              X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
 from ...subject_filters import (
     TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter, untestable_filter_keys,
@@ -150,10 +150,32 @@ def _lower_destroy(
                 # The handler keys on the plural form the card prints; Plains is
                 # already plural.
                 plural = subtype if subtype.endswith("s") else f"{subtype}s"
+                # This branch carried **no** leftovers check for as long as it
+                # existed, which was safe only while the noun parser could read
+                # nothing more than the type word: every card printing it prints
+                # a bare "Destroy all Plains". The moment a relative clause
+                # became readable it became a dropped rider — a narrowed sweep
+                # widening silently back to every land of the type — so the
+                # check goes in beside the one narrowing this handler honours.
+                narrowed = _restrictions_beyond(
+                    filt,
+                    frozenset({"subtypes", "subtype_match", "not_chosen_this_way"}),
+                )
+                if narrowed:
+                    raise LoweringError(
+                        "the by-type land sweep cannot narrow by: "
+                        + ", ".join(narrowed), node=node,
+                    )
+                payload: dict[str, object] = {"land_type": plural}
+                if filt.not_chosen_this_way:
+                    # "…**that weren't chosen this way by any player**"
+                    # (Raiding Party). The complement of a set an earlier step
+                    # of this same effect recorded: the record's name travels as
+                    # payload and the handler subtracts it, because no read of
+                    # the board can say which Plains somebody named.
+                    payload["except_recorded"] = CHOSEN_THIS_WAY_OBJECTS
                 return (
-                    OracleInstruction(
-                        "destroy_all_lands_of_type", "", {"land_type": plural},
-                    ),
+                    OracleInstruction("destroy_all_lands_of_type", "", payload),
                 )
             # "Destroy all Equipment attached to that creature." (Turn to
             # Slag.) A sweep over a *narrowed* set rather than a card type, so

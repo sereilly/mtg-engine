@@ -31,7 +31,7 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 | 4ED | 368 | 368 (100.0%) | 21 (5.7%) | 520 | 20 (3.8%) | 23 | 6.2 |
 | ICE | 373 | 373 (100.0%) | 1 (0.3%) | 601 | 0 (0.0%) | 1 | 0.3 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| FEM *(measured)* | 102 | 101 (99.0%) | 0 (0.0%) | 188 | 0 (0.0%) | 0 | 0.0 |
+| FEM *(measured)* | 102 | 102 (100.0%) | 0 (0.0%) | 190 | 0 (0.0%) | 0 | 0.0 |
 | **ALL (shipped, deduped)** | **1508** | **1508 (100.0%)** | **62 (4.1%)** | **2290** | **58 (2.5%)** | **68** | **4.5** |
 
 *(measured)* — FEM are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.

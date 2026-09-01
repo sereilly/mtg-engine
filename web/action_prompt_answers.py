@@ -255,6 +255,27 @@ def _action_permanent_choice_confirm(session, req, seat_type):
     if not session.game.confirm_permanent_choice(req.seat, req.target_permanent_id):
         raise HTTPException(status_code=400, detail="invalid permanent choice")
 
+@action_handler("permanent_set_choice_confirm")
+def _action_permanent_set_choice_confirm(session, req, seat_type):
+    # The plural of the prompt above: several permanents chosen as the effect
+    # resolves, by stable id, re-checked by the engine against the same live
+    # candidate rule and against the printed ceiling.
+    pending = next(
+        (c for c in session.game.pending_choices_of("permanent_set_choice")),
+        None,
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no permanent choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    # An empty list is legal — "up to two" includes none. The engine refuses a
+    # list that is too long or names something it did not offer, so a client
+    # cannot widen the choice by sending more.
+    if not session.game.confirm_permanent_set_choice(
+        req.seat, req.target_permanent_ids or []
+    ):
+        raise HTTPException(status_code=400, detail="invalid permanent selection")
+
 @action_handler("tap_any_number_confirm")
 def _action_tap_any_number_confirm(session, req, seat_type):
     pending = next(

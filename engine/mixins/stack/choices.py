@@ -996,18 +996,33 @@ class PendingChoicesMixin:
         )
 
     def live_tap_any_number(self, choice: PendingChoice) -> list:
-        """The creatures this seat may still tap.
+        """The permanents this seat may still tap.
 
         Public because the prompt renderer is the second legitimate caller: the
         list offered and the list an answer is checked against have to be one
         rule rather than two copies of it.
+
+        Through ``subject_matches`` rather than the pure matcher, which is the
+        same correction ``_resolve_untap_up_to`` already carries: "untapped
+        **white** creatures **they control**" narrows by a colour (layer 5) and
+        by a seat, and the pure matcher — which has no game — would answer
+        neither and offer a strictly larger set than the card names. The whole
+        board rather than one seat's battlefield for the other half of the same
+        reason: whose permanents may be tapped is what the printed filter says,
+        not what this prompt assumes.
         """
+        from ...subject_filters import subject_matches
+
         described = dict(choice.data.get("filter") or {})
         untapped_only = bool(choice.data.get("untapped_only"))
+        observer = choice.data.get("observer")
         return [
             perm
-            for perm in self.controlled_by(choice.player_index)
-            if permanent_matches_filter(perm, described)
+            for perm in self.all_permanents()
+            if subject_matches(
+                self, perm, described,
+                observer=observer if isinstance(observer, int) else choice.player_index,
+            )
             and not (untapped_only and perm.tapped)
         ]
 
@@ -1030,6 +1045,7 @@ class PendingChoicesMixin:
             chosen.append(perm)
         for perm in chosen:
             self.become_tapped(perm)
+        self._record_tapped_this_way(choice, chosen)
         card_name = choice.data.get("card_name", "")
         names = ", ".join(perm.card.name for perm in chosen) if chosen else "nothing"
         self.log.append(
@@ -1047,13 +1063,47 @@ class PendingChoicesMixin:
         self.discard_pending_choice(choice)
         return True
 
+    def _record_tapped_this_way(self, choice: PendingChoice, chosen: list) -> None:
+        """Append what this seat tapped to the resolution's "tapped this way".
+
+        Only where the arming handler passed a context, which is what says a
+        later sentence of the same effect reads the answer. Siege Striker's
+        pump is applied by this very resolver and passes none, so it records
+        nothing — a producer declared for a kind that sometimes writes it would
+        be a back-reference the lowering admits and the handler leaves at zero.
+
+        Appended rather than assigned, and that is the whole of why this is a
+        method: "Each player may tap …" arms one prompt per seat and the
+        sentence behind it walks **every** creature every seat tapped. The
+        per-object controller map is written beside the set, because that
+        sentence asks whose each of them was and by then the board says only
+        that they are tapped.
+        """
+        from ...oracle_types import (PER_OBJECT_SEAT_RECORDS, TAPPED_THIS_WAY,
+                                     TAPPED_THIS_WAY_OBJECTS)
+
+        context = choice.data.get("_context")
+        if context is None:
+            return
+        context.results.setdefault(TAPPED_THIS_WAY_OBJECTS, []).extend(chosen)
+        context.results[TAPPED_THIS_WAY] = len(
+            context.results[TAPPED_THIS_WAY_OBJECTS]
+        )
+        seats = context.results.setdefault(PER_OBJECT_SEAT_RECORDS["controller"], {})
+        for perm in chosen:
+            seat = self.controller_index_of(perm)
+            if seat is not None:
+                seats[perm.permanent_id] = seat
+
     def _default_tap_any_number(self, choice: PendingChoice) -> None:
         """The stated policy: **tap everything eligible that is not attacking**.
 
-        Every creature tapped is a permanent boost to the attacker, and this
-        ability is printed on an attack trigger — so the only cost is losing a
-        blocker, and a creature already attacking is not going to block anyway.
-        A card that should choose otherwise needs a valuation, not a branch here.
+        A decision rather than a fallback, and the argument is the same for
+        both cards that arm this. Every creature tapped buys something the card
+        prints — Siege Striker's boost, Raiding Party's two Plains apiece — and
+        the only cost is losing a blocker, which a creature already attacking
+        was not going to be. A card that should choose otherwise needs a
+        valuation in ``engine/ai_valuation.py``, not a branch here.
         """
         picks = [
             self.permanent_id_of(perm)
@@ -2502,6 +2552,113 @@ class PendingChoicesMixin:
             choice, live[0].permanent_id
         ):
             self._record_permanent_choice(choice, None)
+
+    # -- Several permanents chosen as an effect resolves ---------------------
+    #
+    # The plural of the pick above, and the same rule underneath it: the
+    # candidates come from ``permanent_choice_candidates`` so the list offered
+    # and the list an answer is checked against cannot drift.
+
+    def arm_permanent_set_choice(
+        self,
+        player_index: int,
+        *,
+        card_name: str,
+        prompt: str,
+        result_key: str,
+        payload: dict,
+        context,
+        candidates,
+        up_to: int,
+    ) -> PendingChoice | None:
+        """Queue "choose up to *up_to* of these permanents" for *player_index*."""
+        return self.arm_pending_choice(
+            "permanent_set_choice", player_index,
+            card_name=card_name,
+            prompt=prompt,
+            result_key=result_key,
+            up_to=int(up_to),
+            _payload=dict(payload),
+            _context=context,
+            _candidates=tuple(candidates),
+        )
+
+    def live_permanent_set_choices(self, choice: PendingChoice) -> list:
+        """The armed candidates that are still legal answers."""
+        from ...handlers.permanent_choices import permanent_choice_candidates
+
+        return permanent_choice_candidates(
+            self,
+            choice.data.get("_payload") or {},
+            choice.data["_context"],
+            among=choice.data.get("_candidates") or (),
+        )
+
+    def confirm_permanent_set_choice(
+        self, player_index: int, permanent_ids: list
+    ) -> bool:
+        """*permanent_ids* addresses the chosen permanents by stable id. An empty
+        list is a legal answer — "up to two" includes none."""
+        return self.resolve_pending_choice(
+            "permanent_set_choice", player_index, permanent_ids=permanent_ids
+        )
+
+    def _resolve_permanent_set_choice(
+        self, choice: PendingChoice, permanent_ids: list
+    ) -> bool:
+        """Validated whole before anything is recorded, matching the two
+        list-shaped pickers beside it: one bad id rejects the answer and leaves
+        the prompt queued, so a malformed request cannot record half a choice.
+
+        The picks are **appended**. This prompt is armed once per iteration of a
+        loop and once per seat inside it, and the sentence that reads the record
+        asks about every answer at once ("chosen this way **by any player**").
+        """
+        ids = [pid for pid in (permanent_ids or []) if isinstance(pid, int)]
+        if len(ids) != len(permanent_ids or []) or len(set(ids)) != len(ids):
+            return False
+        if len(ids) > int(choice.data.get("up_to", 1)):
+            return False
+        live = self.live_permanent_set_choices(choice)
+        chosen = []
+        for pid in ids:
+            perm = self.permanent_by_id(pid)
+            if perm is None or not any(perm is candidate for candidate in live):
+                return False
+            chosen.append(perm)
+        results = choice.data["_context"].results
+        results.setdefault(choice.data["result_key"], []).extend(chosen)
+        card_name = choice.data.get("card_name", "Effect")
+        names = ", ".join(perm.card.name for perm in chosen) if chosen else "nothing"
+        self.log.append(
+            f"{self.players[choice.player_index].name} chose {names} ({card_name})"
+        )
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_permanent_set_choice(self, choice: PendingChoice) -> None:
+        """The stated policy: **the seat's own permanents first, in board order,
+        up to the ceiling**, and other seats' only to fill it.
+
+        Not a valuation — board order is seed-deterministic, which is what AI
+        and headless play need. Own-first is the one thing the policy does say,
+        and it is the policy rather than an accident: every printed sentence
+        that lets a player pick from any battlefield is a sentence where the
+        pick protects or profits whoever makes it, so a seat that picked an
+        opponent's permanent first would be answering for the wrong player.
+        A card that should choose more cleverly needs a weight in
+        ``engine/ai_valuation.py``, not a branch here.
+        """
+        live = self.live_permanent_set_choices(choice)
+        own = [perm for perm in live if self.controls(choice.player_index, perm)]
+        rest = [perm for perm in live if perm not in own]
+        limit = int(choice.data.get("up_to", 1))
+        picks = [
+            self.permanent_id_of(perm) for perm in (own + rest)[:limit]
+        ]
+        chosen = [pid for pid in picks if pid is not None]
+        if not self._resolve_permanent_set_choice(choice, chosen):
+            self._resolve_permanent_set_choice(choice, [])
 
     # -- A player, and one of their casts this turn --------------------------
 
@@ -5024,13 +5181,25 @@ register_choice(
     default=lambda game, choice: game._default_tap_any_number(choice),
     action="tap_any_number_confirm",
     prompt_key="tap_any_number",
-    blocked_detail="choose which creatures to tap before other actions",
+    blocked_detail="choose which permanents to tap before other actions",
     blocks_every_seat=True,
     spectator_visible=True,
     hidden_for_ai=False,
-    # Deliberately not suspending, and that is the whole reason the two printed
-    # sentences fuse into one instruction: the boost is applied by this choice's
-    # own resolver, so no value has to survive across a resumption.
+    # "For each creature tapped this way, that player chooses…" (Raiding Party)
+    # is a later step of the same resolution, and what it walks is exactly what
+    # this prompt records — so the loop it is a step of has to stop until every
+    # seat has answered (CR 608.2, CR 608.2e).
+    #
+    # Siege Striker, the other card that arms this, needs neither: its boost is
+    # applied by this choice's own resolver, which is why the two printed
+    # sentences fuse into one instruction there. Suspending costs it nothing —
+    # the prompt is the last step of what armed it — and one prompt shared by
+    # both cards is cheaper than two that differ by a flag.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish
+    # before the sentence behind it can read what was tapped, and the stated
+    # default is taken where the effect stands.
+    default_at_arm=True,
 )
 
 register_choice(
@@ -5393,6 +5562,26 @@ register_choice(
     # A non-interactive seat never queues it: the resolution has to finish, and
     # the stated default is taken where the effect stands. That is also what
     # keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+    spectator_visible=True,
+)
+
+register_choice(
+    "permanent_set_choice",
+    resolve=lambda game, choice, r: game._resolve_permanent_set_choice(
+        choice, r.get("permanent_ids") or []
+    ),
+    default=lambda game, choice: game._default_permanent_set_choice(choice),
+    action="permanent_set_choice_confirm",
+    prompt_key="permanent_set_choice",
+    blocked_detail="choose the permanents for the resolving effect before other actions",
+    # "Then destroy all Plains that weren't chosen this way by any player" is a
+    # later step of the same resolution and reads exactly what this records, so
+    # nothing may run past it (CR 608.2). The iteration behind it arms the next
+    # one, which is how a chain of decisions stays one resolution.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands.
     default_at_arm=True,
     spectator_visible=True,
 )

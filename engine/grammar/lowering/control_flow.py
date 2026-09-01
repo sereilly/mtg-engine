@@ -20,7 +20,7 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._common import _filter_payload
+from ._common import _filter_payload, _restrictions_beyond
 from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
                       _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS)
@@ -370,9 +370,10 @@ def _lower_may(
     decision per player; the actor is carried as payload and
     ``handlers/control_flow.may`` arms one prompt for each named seat.
     """
-    collapsed = _each_player_optional_discard(node)
-    if collapsed is not None:
-        return collapsed
+    for collapse in (_each_player_optional_discard, _each_player_optional_tap):
+        collapsed = collapse(node)
+        if collapsed is not None:
+            return collapsed
     # **An offer made to a set of seats rebinds what "that player" means.**
     # ``handlers/control_flow._offer_to_seat`` replaces ``context.target`` with
     # the offered seat for exactly these actors, so inside the offer the words
@@ -645,6 +646,83 @@ def _each_player_optional_discard(
         OracleInstruction(
             "each_player_discards_up_to_cards", "",
             {"actor": node.actor.kind, "amount": action.count.value},
+        ),
+    )
+
+
+def _each_player_optional_tap(
+    node: ast.May,
+) -> tuple[OracleInstruction, ...] | None:
+    """"Each player may tap **any number** of untapped white creatures they
+    control." (Raiding Party.)
+
+    :func:`_each_player_optional_discard`'s twin one zone over, and the same
+    collapse for the same reason: the offer and the ceiling are one decision.
+    "Any number" already lets a seat tap none, so the "may" in front of it adds
+    no answer the tap prompt does not already have — and collapsing them is what
+    makes the sentence behind it work, because the tap prompt suspends the
+    resolution until every seat has answered (CR 608.2e) where an offer does
+    not. "For each creature tapped this way, that player chooses…" has to run
+    after the answers rather than before them.
+
+    Deliberately narrow, exactly as the discard is: an offer with a cost, an
+    if-you-do or an otherwise is a second decision the tap prompt genuinely
+    cannot carry, and the sentence keeps the ordinary offer.
+
+    Written here rather than in the tapping family because what it recognises is
+    a ``May`` — the collapse is about the offer, and the instruction it emits is
+    the one the tap handler already reads.
+    """
+    action = node.action
+    if (
+        node.cost is not None
+        or node.then is not None
+        or node.otherwise is not None
+        or node.reflexive is not None
+        or node.starting_with is not None
+        or not isinstance(node.actor, ast.PlayerRef)
+        or node.actor.kind not in _EACH_SEAT_ACTORS | {"you"}
+        or not isinstance(action, ast.Tap)
+        or not isinstance(action.subject, ast.TargetSpec)
+    ):
+        return None
+    spec = action.subject
+    if spec.targeted or spec.quantifier != "any_number":
+        return None
+    # Every narrowing the prompt can actually test, and nothing else. The pick
+    # is offered from a list ``subject_matches`` builds, so a key it cannot
+    # answer would be a phrase silently dropped — and on a *choice* a dropped
+    # narrowing offers permanents the card never named.
+    leftovers = _restrictions_beyond(
+        spec.filter,
+        frozenset({"card_types", "type_match", "subtypes", "colors",
+                   "controller", "tapped"}),
+    )
+    if leftovers:
+        raise LoweringError(
+            "the any-number tap cannot narrow by: " + ", ".join(leftovers),
+            node=node,
+        )
+    described = _filter_payload(spec.filter)
+    if untestable_filter_keys(described):
+        raise LoweringError(
+            "the any-number tap cannot test this restriction", node=node
+        )
+    return (
+        OracleInstruction(
+            "tap_any_number_matching", "",
+            {
+                "filter": described,
+                # ``ObjectFilter.to_payload`` emits ``untapped_only`` for the
+                # tri-state's False half, and the prompt reads it there — this
+                # is the same fact carried where the *prompt* reads it, which
+                # is a second channel the handler already had for Siege
+                # Striker. The count is what the card is about, so a dropped
+                # "untapped" would offer creatures already tapped and buy their
+                # controller two Plains apiece for nothing.
+                "untapped_only": spec.filter.tapped is False,
+                "who": node.actor.kind,
+            },
         ),
     )
 

@@ -403,9 +403,27 @@ def destroy_all_lands_of_type(game: Game, instruction: OracleInstruction, contex
     # old substring match hid that ("plain" is a substring of "plains"), and
     # asking the layer system for an exact subtype does not.
     land_type = singular_land_type(str(instruction.payload.get("land_type", "")))
+    # "…**that weren't chosen this way by any player**" (Raiding Party). The
+    # complement of a set an earlier step of this same resolution recorded, by
+    # stable id: the permanents are still on the battlefield and nothing about
+    # them says a player named them, so the record is the only thing that can
+    # take them out of the sweep.
+    #
+    # An absent record spares nothing, which is the reading the words give when
+    # no player chose anything — the lowering emits the key only behind a step
+    # that writes it, so an empty list here is an answer rather than a gap.
+    spared = frozenset(
+        perm.permanent_id
+        for perm in (
+            context.results.get(str(instruction.payload["except_recorded"])) or ()
+        )
+        if getattr(perm, "permanent_id", None) is not None
+    ) if instruction.payload.get("except_recorded") else frozenset()
 
     def _matches(perm: Permanent) -> bool:
         if perm.card.primary_type != "land":
+            return False
+        if perm.permanent_id in spared:
             return False
         # has_type, so CR 305.7 is applied in one place: a land whose subtype
         # was set REPLACES its printed types, and asking the layer system is the
@@ -443,7 +461,15 @@ def destroy_all_lands_of_type(game: Game, instruction: OracleInstruction, contex
         for perm in died
         if perm.permanent_id in controllers
     }
-    game.log.append(f"All {land_type}s were destroyed")
+    # Named rather than counted, and never "all": this sweep can now spare
+    # what an earlier step recorded (Raiding Party), so a line reading "all
+    # Plains were destroyed" would be false in exactly the game the card is
+    # about. It was also spelling the plural itself — "All plainss" — because
+    # Plains is already plural and nothing can strip an "s" it never added.
+    game.log.append(
+        f"{context.card.name} destroyed "
+        + (", ".join(perm.card.name for perm in died) if died else "nothing")
+    )
     return True, "resolved"
 
 

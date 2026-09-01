@@ -1217,6 +1217,38 @@ def _permanent_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("permanent_set_choice")
+def _permanent_set_choice(ctx: PromptContext, choices: list) -> dict:
+    """"…chooses up to two Plains" (Raiding Party): the permanents this seat
+    picks as the ability resolves, multi-select up to a printed ceiling.
+
+    The plural of ``permanent_choice`` above and rendered the same way, off the
+    engine's own liveness rule — the list offered and the list the answer is
+    checked against are one rule rather than two copies. ``up_to`` is sent
+    because the client cannot derive it: unlike the tap prompt beside it, the
+    ceiling is smaller than the candidate list and is what the card printed.
+    """
+    choice = choices[0]
+    live = {id(perm) for perm in ctx.game.live_permanent_set_choices(choice)}
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "prompt": choice.data.get("prompt", ""),
+        "up_to": int(choice.data.get("up_to", 1)),
+        "candidates": [
+            {
+                "seat": seat,
+                "index": index,
+                "id": ctx.game.permanent_id_of(perm),
+                "name": perm.card.name,
+            }
+            for seat, player in enumerate(ctx.game.players)
+            for index, perm in enumerate(player.battlefield)
+            if id(perm) in live
+        ],
+    }
+
+
 @prompt_renderer("least_power_choice")
 def _least_power_choice(ctx: PromptContext, choices: list) -> dict:
     data = choices[0].data

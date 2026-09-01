@@ -27,7 +27,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4ED | 368 | 520 | 90.4% | 90.0% | 53.8% | 246 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| FEM *(measured)* | 102 | 191 | 97.9% | 97.9% | 75.4% | 98 |
+| FEM *(measured)* | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
 | **All (shipped)** | **2788** | **4005** | **87.4%** | **86.5%** | **55.2%** | **1886** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -40,7 +40,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 228 | 94 | expected a subject |  |
+| 227 | 93 | expected a subject |  |
 | 114 | 47 | unrecognized effect verb |  |
 | 52 | 24 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
@@ -59,8 +59,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
 | 3 | 1 | expected a colour or a creature body after 'becomes' |  |
 | 3 | 1 | expected a destination zone after 'return' |  |
-| 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+| 2 | 2 | unrecognized "can't be" restriction |  |
 | 2 | 2 | a counter-removal cost only reads the ability's own source |  |
 | 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
@@ -2487,6 +2487,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}{B}{B}, {T}: Target opponent reveals their hand and discards a creature card at random. Activate only during your turn.`
 - **Ragnar**
   - `{G}{W}{U}, {T}: Regenerate target creature.`
+- **Raiding Party**
+  - `Sacrifice an Orc: Each player may tap any number of untapped white creatures they control. For each creature tapped this way, that player chooses up to two Plains. Then destroy all Plains that weren't chosen this way by any player.`
 - **Rain of Revelation**
   - `Draw three cards, then discard a card.`
 - **Rainbow Vale**

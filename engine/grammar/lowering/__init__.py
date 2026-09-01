@@ -161,6 +161,7 @@ from .exile import (
 from .attachments import (
     _lower_attach,
     _lower_choose_permanent,
+    _lower_choose_permanents,
 )
 from .board import (
     _lower_phase_out,
@@ -186,6 +187,7 @@ from .control_changes import (
     _lower_gain_control,
 )
 from .tapping import (
+    _lower_for_each_tapped,
     _lower_tap,
     _lower_doesnt_untap_next_step,
     _lower_untap_restriction,
@@ -390,6 +392,7 @@ __all__ = [
     "_lower_tap_or_untap",
     "_lower_attach",
     "_lower_choose_permanent",
+    "_lower_choose_permanents",
     "_lower_exchange_control",
     "_lower_exchange_greatest_mana_value",
     "_lower_regenerate",
@@ -405,6 +408,7 @@ __all__ = [
     "_lower_exile",
     "_lower_exile_cost_sacrifices",
     "_lower_for_each_exiled",
+    "_lower_for_each_tapped",
     "_fused_exile_then_controller_life",
     "_DAMAGED_PLAYER_EVENTS",
     "CHOSEN_HAND_CARDS_RESULT",

@@ -131,8 +131,8 @@ from .effects import (
 def _parse_leading_for_each(
     parse_body,
     stream: TokenStream,
-) -> ("ast.DiedThisWay | ast.ExiledThisWay | ast.ChosenThisWay "
-     "| ast.EachLifeLost | ast.PlayerRef | None"):
+) -> ("ast.DiedThisWay | ast.ExiledThisWay | ast.TappedThisWay "
+     "| ast.ChosenThisWay | ast.EachLifeLost | ast.PlayerRef | None"):
     """``For each <objects> that died this way,`` — the set a later clause
     repeats over, in the leading printed position.
 
@@ -236,6 +236,20 @@ def _parse_leading_for_each(
             stream.reset(mark)
             return None
         return ast.DiedThisWay(filt)
+    # "For each creature **tapped this way**, …" (Raiding Party.) The bare
+    # participle again, over the set an earlier step *tapped* — a third record
+    # rather than a reuse of either above, because a tap destroys nothing and
+    # exiles nothing, so both of theirs would name an empty set.
+    #
+    # The one window whose objects are still on the battlefield, which is why
+    # it cannot fall through to the board branch at the bottom: "creature
+    # tapped this way" read as a live noun phrase would be every tapped
+    # creature in play, including the ones this effect never touched.
+    if stream.accept_phrase("tapped", "this", "way"):
+        if not stream.accept_punct(","):
+            stream.reset(mark)
+            return None
+        return ast.TappedThisWay(filt)
     if not stream.accept_phrase("that", "died", "this", "way"):
         # "**For each attacking red creature,** prevent all combat damage …"
         # (Heroism) / "**For each attacking creature without flying,** its

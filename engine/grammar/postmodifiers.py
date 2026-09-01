@@ -272,6 +272,22 @@ def _parse_postmodifiers(
         if stream.accept_phrase("that", "attacked", "this", "turn"):
             d.attacked_this_turn = True
             continue
+        # "destroy all Plains **that weren't chosen this way by any player**"
+        # (Raiding Party). A narrowing of the noun phrase rather than an
+        # exception clause on the verb, for the reason Season of the Witch's
+        # pair above is: the sweep destroys exactly what the phrase names, and
+        # an exclusion read anywhere else would have to be re-applied by every
+        # verb that could carry it.
+        #
+        # "By any player" is the whole of what makes it one narrowing: the
+        # choices were made by several seats over several iterations, and the
+        # words ask about all of the answers at once — which is why the record
+        # behind it accumulates instead of holding the last seat's pick.
+        if stream.accept_phrase(
+            "that", "weren't", "chosen", "this", "way", "by", "any", "player"
+        ):
+            d.not_chosen_this_way = True
+            continue
         except_mark = stream.mark()
         stream.accept_punct(",")
         if stream.accept_phrase(
