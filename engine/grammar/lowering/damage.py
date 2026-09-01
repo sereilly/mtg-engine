@@ -477,6 +477,16 @@ def _lower_damage_shape(
         payload["filter"] = _filter_payload(node.recipients[0].filter)
         if _is_enchanted(node.source):
             payload["biter"] = "attached"
+            # "…to **another** target creature" (Farrel's Mantle). "Another"
+            # than the creature dealing the damage (CR 109.5's rule read about
+            # the object the sentence names, not about the Aura it is printed
+            # on) — so the exclusion moves with the biter. Left as
+            # ``exclude_self`` the picker would exclude the *Aura*, which is
+            # not a creature and was never on the list, and offer the attacker
+            # itself as its own victim.
+            for described in (payload.get("targets") or {}), payload:
+                if described.get("filter", {}).pop("exclude_self", None):
+                    described["filter"]["exclude_attached"] = True
         # "…equal to its power **plus 2**" (Farrel's Mantle). CR 107.3's
         # constant, carried rather than dropped: two fewer damage than the card
         # prints is exactly the silent narrowing a dropped rider always is.

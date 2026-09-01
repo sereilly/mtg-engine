@@ -112,7 +112,15 @@ OFFERABLE_ACTORS: frozenset[str] = frozenset(
      # it is read off the permanent the sentence targeted — so ``_offered_seats``
      # answers it by asking the control seam rather than by reading
      # ``context.target``, which is the reading the note below warns about.
-     "controller"}
+     "controller",
+     # "…**its controller** may have it deal damage…" on an Aura (Farrel's
+     # Mantle). The same two printed words about a different object: the
+     # possessive names the permanent the *trigger's condition* named — the
+     # enchanted creature — rather than one the sentence targeted, so the seat
+     # is read off the attachment. Its own actor because ``_offered_seats``
+     # answers the two by asking different things, and reading one as the other
+     # offered Farrel's Mantle's choice to the player being attacked.
+     "attached_controller"}
 )
 
 
@@ -391,7 +399,12 @@ def _lower_may(
         raise LoweringError(
             f"no offer names {node.actor.kind!r} as its payer", node=node
         )
-    payload: dict[str, object] = {"actor": node.actor.kind}
+    actor = node.actor.kind
+    if actor == "controller" and getattr(event_subject, "is_enchanted", False):
+        # "its" is the trigger's own subject here, not a target this sentence
+        # chose — see ``attached_controller`` in ``OFFERABLE_ACTORS``.
+        actor = "attached_controller"
+    payload: dict[str, object] = {"actor": actor}
     if node.actor.kind == "target_opponent":
         # "**Target opponent** may ante the top card of their library."
         # (Amulet of Quoz.) The seat being offered is the ability's *target*,

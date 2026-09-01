@@ -13,7 +13,8 @@ from ..models import Permanent
 from ..named_counters import counters_on
 from ..resumption import run_resumable
 from ._common import (
-    apply_damage_to_creature, apply_temp_pt_boost, evaluate_count, flip_coin,
+    apply_damage_to_creature, apply_temp_pt_boost, attached_host, evaluate_count,
+    flip_coin,
     frozen_that_player_seat, permanent_matches_filter, resolve_amount,
     resolve_target_permanent, resolve_target_permanents,
 )
@@ -1169,7 +1170,13 @@ def source_bites_target(game, instruction, context):
     filters = instruction.payload.get("filter") or {}
     victim = resolve_target_permanent(
         game, context,
-        predicate=lambda perm: permanent_matches_filter(perm, filters),
+        # "…to **another** target creature": re-checked here rather than
+        # trusted from the picker, the rule every narrowed handler follows —
+        # and it is the *biter* that is excluded, which for an Aura is not the
+        # ability's source.
+        predicate=lambda perm: (
+            perm is not source and permanent_matches_filter(perm, filters)
+        ),
     )
     # What the sentence after this one means by "that creature" (Tracker), by
     # stable id and recorded on **every** path — a producer `_PRODUCES` names

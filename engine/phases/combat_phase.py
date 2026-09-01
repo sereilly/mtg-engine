@@ -327,12 +327,20 @@ class CombatPhaseMixin:
         if step == "beginning_of_combat":
             # "At the beginning of combat on your turn" (CR 507.1) — scanned
             # over the active player's battlefield only, which is what the
-            # narrowing means; the bare "at the beginning of combat" form
-            # would scan every battlefield, and no shipped card uses it.
+            # narrowing means.
             emit(
                 self, "combat_your_turn",
                 players=[self.players[self.active_player_index]],
             )
+            # "At the beginning of **each** combat" (Goblin Flotilla) — the
+            # unnarrowed form of the same step, and every battlefield: the
+            # ability is its own permanent's controller's (CR 113.7a) and the
+            # step belongs to whoever's turn it is, so a defending player's
+            # permanent triggers on the attacker's combat. This row had no fire
+            # site at all until a card printed it, which is the shape
+            # `test_trigger_dispatchers.py` exists to catch — a condition both
+            # front ends read and nothing announces.
+            emit(self, "combat")
         # CR 508.1 / 509.1: declaring attackers and declaring blockers are
         # turn-based actions that happen *before* any player receives priority,
         # so no spell or ability can be cast/activated during that assignment.

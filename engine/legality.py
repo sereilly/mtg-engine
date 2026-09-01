@@ -1257,6 +1257,14 @@ class LegalityMixin:
                 # "Sacrifice **another** …" — the source cannot pay for itself.
                 if spec.get("exclude_source") and perm is source_permanent:
                     continue
+                # "…to **another** target creature" on an Aura (Farrel's
+                # Mantle): the creature excluded is the one the source is
+                # attached to, which is the one that will deal the damage.
+                if spec.get("exclude_attached"):
+                    from .handlers._common import attached_host
+
+                    if perm is attached_host(self, source_permanent):
+                        continue
                 # The two combat *relations* a target description can print.
                 # Both are asked through ``subject_matches`` — the one reader of
                 # what a printed noun phrase means — with the observer and

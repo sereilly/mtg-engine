@@ -371,6 +371,13 @@ def _narrowing_flags(source: dict) -> dict:
         # `legality.py` has honoured `exclude_source` all along — nothing read
         # the filter key into it.
         flags["exclude_source"] = True
+    if source.get("exclude_attached"):
+        # "…to **another** target creature" on an Aura (Farrel's Mantle). The
+        # same word about a different object: the creature dealing the damage
+        # is the one the Aura is attached to, so the picker excludes the host
+        # rather than the source. A flag of its own because the two exclude
+        # different permanents, and the Aura was never on the list anyway.
+        flags["exclude_attached"] = True
     if source.get("blocked_by_source"):
         # "target creature **it's blocking**" (Goblin Snowman, Tinder Wall).
         # A relation to the ability's own source, so the enumerator applies it —
