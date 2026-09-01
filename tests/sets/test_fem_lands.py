@@ -75,3 +75,39 @@ def test_rainbow_vale_does_not_change_hands_before_the_end_step(set_pool):
     game.resolve_upkeep(0)
     assert game.controller_index_of(vale) == 0, game.log
 # --- end G5 ---
+
+
+# --- G5 (continued): the opponent is chosen, not assumed ---
+def test_rainbow_vale_asks_which_opponent_when_there_is_more_than_one(set_pool):
+    """CR 608.2d: "an opponent" names nobody, so the ability's controller
+    announces which one while applying the effect.
+
+    A duel has one answer and is recorded without asking; three seats is a real
+    decision, and it is the difference between a card that hands itself to a
+    threat and one that hands itself to whoever the engine listed first.
+    """
+    vale = Permanent(card=set_pool("FEM")["Rainbow Vale"])
+    library = [set_pool("LEA")["Island"]] * 5
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[vale], library=list(library)),
+        PlayerState(name="P2", library=list(library)),
+        PlayerState(name="P3", library=list(library)),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    game.activate_permanent_ability(0, "Rainbow Vale", mana_color="R")
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    game.resolve_end_step(0)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    pending = [c for c in game.pending_choices if c.kind == "player_choice"]
+    assert [c.player_index for c in pending] == [0], game.log
+    assert pending[0].data["names"] == ["P2", "P3"], "its own controller is not an option"
+
+    assert game.confirm_player_choice(0, 2)
+    assert game.controller_index_of(vale) == 2, game.log
+# --- end G5 (continued) ---

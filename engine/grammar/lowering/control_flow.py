@@ -21,8 +21,9 @@ from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import _filter_payload
-from ._events import (EVENT_SUBJECT_CONTROLLER, _DEFENDING_PLAYER_EVENTS,
-                      _EVENT_SUBJECT_CONTROLLERS)
+from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
+                      _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS,
+                      _EVENT_SUBJECT_PLAYERS)
 from ._records import _PRODUCES, primary_produced, produced_keys
 
 
@@ -412,7 +413,19 @@ def _lower_may(
             f"no offer names {node.actor.kind!r} as its payer", node=node
         )
     actor = node.actor.kind
-    if actor == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
+    if actor == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
+        # "…**you may draw a card unless that player pays {4}**" (Mystic
+        # Remora). Under an event whose subject *is* a player, "that player" is
+        # the seat the fire site froze — the opponent who cast the spell — and
+        # not the resolution's target. Left as ``that_player`` the offer reached
+        # ``_offered_seats``' fallback, which reads ``context.target``: right in
+        # a duel by coincidence, and in a three-seat game the toll was offered
+        # to a player who had cast nothing.
+        #
+        # The same mapping the damage recipient one module over already makes
+        # for these five events, applied to the seat an *offer* is made to.
+        actor = EVENT_SUBJECT_PLAYER
+    elif actor == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
         # "…unless **the player** puts a -1/-1 counter on a creature they
         # control" (Thelon's Chant, Tourach's Chant). Under an event whose
         # subject is an *object*, "that player" is that object's controller —

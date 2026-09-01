@@ -1145,6 +1145,16 @@ def _offered_seats(
             return []
         return [] if game.players[seat].lost else [seat]
 
+    if actor == "event_subject_player":
+        # "…unless **that player** pays {4}" (Mystic Remora). The seat the
+        # firing event *is about*, frozen by the fire site (CR 603.10) — one
+        # step nearer than the controller branch below, which names the seat
+        # that controlled an object the event was about. Nobody recorded means
+        # nobody is offered.
+        seat = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return []
+        return [] if game.players[seat].lost else [seat]
     if actor == "event_subject_controller":
         # "…unless the player puts a -1/-1 counter on a creature they control"
         # (Thelon's Chant, Tourach's Chant). The seat that controlled what the
