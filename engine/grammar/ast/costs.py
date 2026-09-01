@@ -180,6 +180,18 @@ class ExileCost:
     say about what may pay.
     """
     filter: ObjectFilter
+    #: "Exile **two** creature cards …" (Night Soil). How many the phrase names,
+    #: beside the filter for the reason :class:`SacrificeCost`'s count is beside
+    #: its own: only a count can make the cost unpayable, and one card is no
+    #: more a payment of a two-card cost than none is (CR 601.2h).
+    count: Amount = field(default_factory=lambda: Fixed(1))
+    #: "…from **a single** graveyard" (Night Soil). Every object must come out
+    #: of the *same* pile — a fact about the set the payer names, not about any
+    #: one card, which is why it is on the cost and not on the filter: the
+    #: filter is asked of one object at a time and could not express it.
+    #: Dropped, the cost would be payable with one card from each of two
+    #: graveyards, which is a strictly cheaper cost than the card prints.
+    same_zone: bool = False
 
 
 @dataclass(frozen=True)

@@ -18,7 +18,8 @@ from .ai_valuation import (
 from .activation_permissions import activation_permission_denial
 from .auras import controller_cast_ban
 from .cast_restrictions import check_cast_timing
-from .cost_modifiers import cost_reduction_for_cast, reduce_cost, spell_cost_tax
+from .cost_modifiers import (cost_reduction_for_cast, reduce_cost,
+                             spell_cost_tax, spell_symbol_tax)
 from .classifier import classify_card
 from .game import Game
 from .handlers._common import permanent_matches_filter
@@ -1516,6 +1517,10 @@ def _cost_for(
     """
     seat = next((i for i, seated in enumerate(game.players) if seated is player), 0)
     tax, _names = spell_cost_tax(game, seat, card)
+    # The coloured half of the same taxes (Derelor). Asked here too, because the
+    # AI prices a spell to decide whether it can cast it — priced without the
+    # pip it proposes a cast the rules then refuse, every turn, forever.
+    pips, _pip_names = spell_symbol_tax(game, seat, card)
     reduction, _reducers = cost_reduction_for_cast(game, seat, card)
     # The best split of X among the colours the card allows, which is the one
     # the cast path will try first (`casting._x_color_allocations`). The AI is
@@ -1530,6 +1535,7 @@ def _cost_for(
             x_value=x_value,
             extra_generic=tax,
             x_allocation=allocation,
+            extra_pips=pips,
         ),
         reduction,
     )

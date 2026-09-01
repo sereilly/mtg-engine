@@ -23,7 +23,7 @@ from __future__ import annotations
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from .. import ast
 from ..errors import LoweringError
-from ...subject_filters import untestable_filter_keys
+from ...subject_filters import card_only_filter, untestable_filter_keys
 from ._common import _filter_payload, _is_enchanted, _restrictions_beyond
 from ._events import (_EVENT_SUBJECT_PLAYERS, COUNTED_NUMBER,
                       EVENT_SUBJECT_PLAYER)
@@ -243,6 +243,40 @@ def _lower_condition(
             "keywords": list(condition.keywords),
             "negated": condition.negated,
         }
+    if isinstance(condition, ast.CostObjectWas):
+        # "…**if the exiled creature was a Thrull**" (Soul Exchange);
+        # "…**if the sacrificed creature was a Thrull**" (Ebon Praetor). The
+        # channel is named in the printed words, so the payload is the channel
+        # plus the noun phrase and nothing is guessed.
+        #
+        # **No producer gate here, deliberately, and this is the one
+        # back-reference that has to do without one.** The producer is a *cost*,
+        # and a cost is not a step of the effect: for an activated ability it is
+        # the clause left of the colon, and for a spell it is a **different
+        # printed line** of the same card (``engine/cast_costs.py``), which this
+        # line cannot see at all. `produced` names what steps of *this* clause
+        # recorded, so gating on it would refuse Soul Exchange outright. What
+        # stands in for the gate is that the phrase names its own channel — no
+        # pronoun to resolve — and an unpaid channel is honestly False rather
+        # than ambiguous: nothing was sacrificed, so the sacrificed creature was
+        # not a Thrull.
+        described = _filter_payload(condition.filter)
+        # Tested against a *card* as well as a permanent — the payment channels
+        # carry a `Permanent` on the cast side and a `CardDefinition` on the
+        # activation side — so the filter must be one the narrower of the two
+        # matchers can answer. Anything wider refuses, which is the direction
+        # that cannot make the condition true about a larger set than the card
+        # names.
+        if not described or card_only_filter(described) is None:
+            raise LoweringError(
+                "the cost-object test cannot ask this of what a cost ate",
+                node=condition,
+            )
+        return {
+            "kind": "cost_object_was",
+            "channel": f"{condition.channel}_for_cost",
+            "filter": described,
+        }
     if isinstance(condition, ast.DiscardedCardWas):
         # Same discipline as the two back-references above, with the producer
         # named in the printed words: an ability that discarded nothing has no
@@ -275,31 +309,6 @@ def _lower_condition(
             "card_types": list(condition.filter.card_types),
             "type_match": condition.filter.type_match,
         }
-    if isinstance(condition, ast.SacrificedForCostWas):
-        # The discard twin's discipline one zone over: an ability whose cost
-        # sacrifices nothing has no record to read, and `evaluate_condition`
-        # would answer False forever while the card compiled clean. The
-        # producer is the ability's own sacrifice cost (CR 601.2h / 602.2b),
-        # seeded by `lower_ability` off the cost clause — the only place the
-        # cost and the effect are both in view.
-        if "sacrificed_for_cost" not in produced:
-            raise LoweringError(
-                "'the sacrificed <noun>' with nothing in this ability that "
-                "sacrificed one",
-                node=condition,
-            )
-        described = _filter_payload(condition.filter)
-        if not described or untestable_filter_keys(described):
-            # A *permanent*, not a card, so the whole noun phrase is asked
-            # through the one matcher — and a narrowing that matcher cannot
-            # test would be a condition answering about a different set than
-            # the card names. The same gate `destroyed_target_was` applies to
-            # the same kind of last-known-information question.
-            raise LoweringError(
-                "the last-known-information test cannot ask this of a "
-                "permanent", node=condition,
-            )
-        return {"kind": "sacrificed_for_cost_was", "filter": described}
     if isinstance(condition, ast.BlockersOfBoundCreature):
         # "that creature" is the creature the *firing event* named, and only a
         # block event names one. Under anything else the referent is nothing —

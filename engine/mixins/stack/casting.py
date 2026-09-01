@@ -33,7 +33,7 @@ from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...classifier import classify_card
 from ...cost_modifiers import (
     CostReduction, cost_reduction_for_cast, reduce_cost, sacrifice_taxes,
-    spell_cost_tax, spell_life_tax,
+    spell_cost_tax, spell_life_tax, spell_symbol_tax,
 )
 from ...game_types import SimulationResult, StackItem
 from ...handlers._common import graveyard_card_matches, permanent_matches_filter
@@ -440,6 +440,11 @@ class SpellCastingMixin:
         card = source_zone[hand_index]
         classification = classify_card(card)
         extra_generic_tax = 0
+        # The *coloured* half of the same taxes (Derelor's "{B}"). Its own
+        # total because it is its own resource: a generic pip is payable with
+        # anything and a coloured one is not (CR 202.1), so the two cannot
+        # share a number without the tax becoming cheaper than the card.
+        extra_pip_tax: dict[str, int] = {}
 
         if self.enforce_mana_costs and card.primary_type == "land":
             refusal = self._land_play_refusal(caster_index)
@@ -493,6 +498,20 @@ class SpellCastingMixin:
         if spell_tax:
             extra_generic_tax += spell_tax
             self.log.append(f"{card.name} is taxed by {', '.join(taxing_names)}")
+
+        # "Black spells you cast cost {B} more to cast." (Derelor.) Charged
+        # beside the generic tax and at the same moment (CR 601.2f), into the
+        # coloured part of the cost — so a caster with only Forests cannot pay
+        # it, which is the whole difference between this and a {1}.
+        pip_tax, pip_taxing_names = spell_symbol_tax(
+            self, caster_index, card, aimed_at
+        )
+        if pip_tax:
+            for symbol, count in pip_tax.items():
+                extra_pip_tax[symbol] = extra_pip_tax.get(symbol, 0) + count
+            self.log.append(
+                f"{card.name} is taxed by {', '.join(pip_taxing_names)}"
+            )
 
         # CR 903.8: the commander tax, {2} per previous cast of this commander
         # from the command zone. An additional cost like any other (CR 601.2f),
@@ -699,7 +718,7 @@ class SpellCastingMixin:
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():
             resolved_x_value = self._infer_x_value(
                 caster, card.mana_cost, extra_generic_tax, x_colors=x_colors,
-                reduction=cost_reduction,
+                reduction=cost_reduction, extra_pips=extra_pip_tax,
             )
 
         # CR 601.2b's *bound*: "X can't be greater than the number of snow
@@ -813,6 +832,7 @@ class SpellCastingMixin:
             x_mana_spent = self._pay_cast_cost(
                 caster, card, resolved_x_value, x_colors,
                 extra_generic=extra_generic_tax, reduction=cost_reduction,
+                extra_pips=extra_pip_tax,
             )
             if x_mana_spent is None:
                 details = f"insufficient mana for {card.name}"
@@ -829,12 +849,14 @@ class SpellCastingMixin:
         # Now, and not before: the spell is no longer in the hand, so it cannot
         # be discarded to pay for itself, and the creature it eats is gone from
         # the battlefield before the spell is on the stack.
-        sacrificed_for_cost = self._pay_additional_costs(
+        cost_spoils = self._pay_additional_costs(
             caster_index, card, cast_costs,
             cost_permanent_index=cost_permanent_index,
             cost_hand_card=cost_hand_card,
             x_value=resolved_x_value,
         )
+        sacrificed_for_cost = cost_spoils["sacrificed_for_cost"]
+        exiled_for_cost = cost_spoils["exiled_for_cost"]
         # Drought's imposed sacrifices, paid with the printed ones and at the
         # same moment. The victims were picked before the mana was spent, so a
         # board that has not changed since pays exactly what the gate measured.
@@ -888,6 +910,13 @@ class SpellCastingMixin:
                         # (CR 608.2h) held on the stack item rather than a
                         # second lookup that could not succeed.
                         "sacrificed_for_cost": sacrificed_for_cost,
+                        # …and what an *exile* cost ate, on the channel the
+                        # activation path already records it on. Last-known
+                        # information for the same reason (CR 608.2h): the
+                        # permanent left the battlefield before the spell was
+                        # on the stack, so nothing on the board can be asked
+                        # what it was.
+                        "exiled_for_cost": exiled_for_cost,
                         # CR 601.2h's answer to "the amount of {B} spent on X"
                         # (Soul Burn). Decided as the cost was built rather than
                         # measured as a pool delta afterwards: this card costs
@@ -933,20 +962,30 @@ class SpellCastingMixin:
             target_player_index=target_player_index,
             target_permanent_index=target_permanent_index,
             x_value=resolved_x_value,
-            choices={"sacrificed_for_cost": sacrificed_for_cost},
+            choices=dict(cost_spoils),
         )
         return SimulationResult(card.name, True, classification.effect_kind, "resolved")
     # ------------------------------------------------------------------
     # Printed additional costs (CR 601.2b)
     # ------------------------------------------------------------------
 
-    def _additional_cost_candidates(self, caster_index: int, cost: AdditionalCost) -> list[Permanent]:
-        """The permanents that could pay *cost*'s sacrifice, by identity.
+    def _additional_cost_candidates(
+        self, caster_index: int, cost: AdditionalCost, *, giving_up: str = "sacrifice",
+    ) -> list[Permanent]:
+        """The permanents that could pay *cost*'s sacrifice or exile, by identity.
 
         Never by index: an index would be held across the removal that paying
         performs, and would then name whichever permanent slid into the slot.
+
+        One enumeration for both verbs, because they ask one question — which
+        permanents on the payer's own battlefield the printed noun phrase names
+        (CR 601.2b). What differs is where the object goes afterwards, which is
+        the payment's business and not the candidate list's.
         """
-        if cost.sacrifice_filter is None:
+        described = (
+            cost.sacrifice_filter if giving_up == "sacrifice" else cost.exile_filter
+        )
+        if described is None:
             return []
         return [
             perm
@@ -954,9 +993,7 @@ class SpellCastingMixin:
             # The observer is the payer: "a creature **you control**" is a
             # seat comparison, and a payload carrying one with no observer to
             # compare against refuses every candidate.
-            if subject_matches(
-                self, perm, cost.sacrifice_filter, observer=caster_index
-            )
+            if subject_matches(self, perm, described, observer=caster_index)
         ]
 
     def _sacrifice_tax_victims(
@@ -1033,6 +1070,18 @@ class SpellCastingMixin:
                         f"{filter_head_noun(cost.sacrifice_filter)} to "
                         f"sacrifice for its additional cost (CR 601.2h)"
                     )
+            # "…, **exile a creature you control**." (Soul Exchange.) Gated
+            # beside the sacrifice and for the same rule: CR 601.2h makes an
+            # unpayable cost an uncastable spell, never a free one.
+            if cost.exile_filter is not None:
+                if not self._additional_cost_candidates(
+                    caster_index, cost, giving_up="exile"
+                ):
+                    return (
+                        f"{card.name} can't be cast: no "
+                        f"{filter_head_noun(cost.exile_filter)} to "
+                        f"exile for its additional cost (CR 601.2h)"
+                    )
             # CR 118.4: a player may pay life only down to 0, and CR 601.2h then
             # makes an unpayable cost an uncastable spell rather than a free
             # one. Checked with the others, before anything is spent.
@@ -1105,9 +1154,15 @@ class SpellCastingMixin:
         cost_permanent_index: int | None,
         cost_hand_card: "CardDefinition | None",
         x_value: int | None = None,
-    ) -> Permanent | None:
-        """Perform *card*'s printed additional costs, returning what was
-        sacrificed (for the spell whose effect asks about it).
+    ) -> dict:
+        """Perform *card*'s printed additional costs, returning what they ate.
+
+        A record rather than one permanent, keyed by the same channel names the
+        activation path records its costs on (``sacrificed_for_cost``,
+        ``exiled_for_cost``) — so a spell reading back what its cost consumed
+        asks the same question whether a cast or an activation paid it. Soul
+        Exchange's "if the exiled creature was a Thrull" is the first reader on
+        the cast side.
 
         The payer chooses (CR 601.2b), and the choice arrives with the action
         rather than through the pending-choice queue — a queued prompt would put
@@ -1118,7 +1173,38 @@ class SpellCastingMixin:
         """
         caster = self.players[caster_index]
         sacrificed: Permanent | None = None
+        exiled: Permanent | None = None
         for cost in costs:
+            # "…, **exile a creature you control**." (Soul Exchange.) Paid
+            # before the sacrifice beside it only in source order; both are one
+            # payment moment (CR 601.2h), and no card in the pool prints both.
+            if cost.exile_filter is not None:
+                candidates = self._additional_cost_candidates(
+                    caster_index, cost, giving_up="exile"
+                )
+                if candidates:
+                    named = (
+                        self.permanent_at(caster, cost_permanent_index)
+                        if isinstance(cost_permanent_index, int)
+                        else None
+                    )
+                    # `in` compares Permanents by value and would match a
+                    # look-alike; membership is by identity.
+                    chosen = (
+                        named
+                        if any(perm is named for perm in candidates)
+                        else self.default_sacrifice_pick(candidates)
+                    )
+                    owner_index = self.owner_index_of(chosen)
+                    exiled_card = chosen.card
+                    self.remove_from_battlefield(chosen)
+                    self.players[
+                        owner_index if owner_index is not None else caster_index
+                    ].exile.append(exiled_card)
+                    exiled = chosen
+                    self.log.append(
+                        f"{caster.name} exiled {exiled_card.name} to cast {card.name}"
+                    )
             if cost.sacrifice_filter is not None:
                 candidates = self._additional_cost_candidates(caster_index, cost)
                 if not candidates:
@@ -1172,7 +1258,7 @@ class SpellCastingMixin:
                     )
                     # One named index pays one card; the rest take the default.
                     cost_hand_index = None
-        return sacrificed
+        return {"sacrificed_for_cost": sacrificed, "exiled_for_cost": exiled}
 
     def _x_implied_by_target(
         self, card, target_player_index, target_permanent_index, target_stack_item
@@ -1711,12 +1797,16 @@ class SpellCastingMixin:
     def _infer_x_value(
         self, player: PlayerState, mana_cost: str, extra_generic: int = 0,
         x_colors: tuple[str, ...] = (), reduction: CostReduction | None = None,
+        extra_pips: dict[str, int] | None = None,
     ) -> int:
         # The reduction is applied before X is inferred, because X is whatever
         # is left after the rest of the cost is paid — inferring it from the
         # undiscounted cost would spend the discount on nothing.
         required = reduce_cost(
-            self._parse_mana_cost(mana_cost, x_value=0, extra_generic=extra_generic),
+            self._parse_mana_cost(
+                mana_cost, x_value=0, extra_generic=extra_generic,
+                extra_pips=extra_pips,
+            ),
             reduction or CostReduction(),
         )
         temp = {symbol: player.mana_pool.get(symbol, 0) for symbol in ("W", "U", "B", "R", "G", "C")}
@@ -1775,6 +1865,7 @@ class SpellCastingMixin:
     def _parse_mana_cost(
         self, mana_cost: str, x_value: int | None, extra_generic: int = 0,
         x_allocation: dict[str, int] | None = None,
+        extra_pips: dict[str, int] | None = None,
     ) -> dict[str, int]:
         """*mana_cost* as a symbol dict, with X worth *x_value*.
 
@@ -1791,6 +1882,11 @@ class SpellCastingMixin:
         opposed to the mandatory {B} pip or the {2} beside it.
         """
         required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": max(0, extra_generic)}
+        # A coloured tax (Derelor's "{B}") joins the pips rather than the
+        # generic part, which is what makes it unpayable from the wrong colour.
+        for symbol, count in (extra_pips or {}).items():
+            if symbol in _POOL_SYMBOLS:
+                required[symbol] += max(0, int(count))
         if not mana_cost:
             return required
 
@@ -1851,6 +1947,7 @@ class SpellCastingMixin:
         self, caster: PlayerState, card, x_value: int | None,
         x_colors: tuple[str, ...], *, extra_generic: int,
         reduction: CostReduction | None,
+        extra_pips: dict[str, int] | None = None,
     ) -> dict[str, int] | None:
         """Pay *card*'s mana cost, and report what X was paid with.
 
@@ -1864,6 +1961,7 @@ class SpellCastingMixin:
                 self._parse_mana_cost(
                     card.mana_cost, x_value=x_value,
                     extra_generic=extra_generic, x_allocation=allocation,
+                    extra_pips=extra_pips,
                 ),
                 reduction or CostReduction(),
             )

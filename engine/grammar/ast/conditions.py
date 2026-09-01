@@ -471,27 +471,31 @@ class DiscardedCardWas:
 
 
 @dataclass(frozen=True)
-class SacrificedForCostWas:
-    """"If **the sacrificed creature** was a Thrull, …" (Ebon Praetor.)
+class CostObjectWas:
+    """"…**if the exiled creature was a Thrull**" (Soul Exchange); "…**if the
+    sacrificed creature was a Thrull**" (Ebon Praetor).
 
-    :class:`DiscardedCardWas` one zone over, and the same shape for the same
-    reason: the phrase names *which* producer it means — the ability's own
-    sacrifice cost — where a bare "it" would answer off whatever record an
-    earlier step happened to write.
+    A question about what the spell's or ability's own **cost** ate, not about
+    anything a step of the effect touched: CR 601.2h pays the cost before the
+    object is on the stack, so by resolution the permanent is a memory the
+    payment path recorded (``sacrificed_for_cost`` / ``exiled_for_cost``) and
+    CR 608.2h's last-known information is the only answer there is.
 
-    What it asks about is a **permanent**, not a card, which is what separates
-    it from the discard twin: the thing the cost ate had computed
-    characteristics right up until it left (CR 613.1), so the question is the
-    whole noun phrase asked through the one matcher, exactly as
-    :class:`DestroyedTargetWas` asks it. By the time the condition is read the
-    creature is a card in a graveyard, so the answer is last-known information
-    (CR 608.2h) — the record the payment path wrote, never a read of the board.
+    The *fact* this carries is **which payment channel the phrase names**, and
+    it has one spelling here — ``channel`` — because "the sacrificed creature"
+    and "the exiled creature" are one printed template with the verb changed.
+    Two nodes, or two fields meaning the same thing under two names, would be
+    two readings of one sentence.
 
-    The noun the sentence repeats ("the sacrificed **creature**") is not
-    carried: it is the self-same object the cost chose, and lowering refuses
-    the condition outright when the ability's cost sacrifices nothing.
+    Beside :class:`DiscardedCardWas` rather than a widening of it: that one
+    names the *discard* channel, and one node per named producer is what keeps
+    a back-reference from reading whatever record happens to be lying around.
+    The whole noun phrase is carried rather than a printed type line, because
+    what is asked here is a creature's **subtype** and lowering is what checks
+    the matcher can test it.
     """
 
+    channel: str
     filter: "ObjectFilter"
 
 
@@ -737,7 +741,7 @@ Condition = Union[
     EveryOf, CoinFlipResult, Controls, CountedNumber, DestroyedThisWay,
     DestroyedTargetWas,
     DiscardedCardWas,
-    SacrificedForCostWas,
+    CostObjectWas,
     IsState, StartedTheTurnState, DiedThisTurn, DamagedBySourceDiedThisTurn,
     ItIsColor, ObjectHasKeyword,
     HadPlus1Counter, ItWas,

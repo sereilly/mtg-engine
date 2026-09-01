@@ -71,6 +71,32 @@ def _parse_cost_object(
     return replace(spec.filter, other_than_source=True) if another else spec.filter
 
 
+def _accept_cost_count(stream: TokenStream) -> "ast.Fixed | None":
+    """A printed count of **two or more** in front of a cost's noun phrase.
+
+    "Sacrifice **two** Goblins" (Goblin Warrens), "Exile **two** creature cards"
+    (Night Soil). The article is deliberately not read here: "a creature" is
+    already the singular every other cost prints, and reading its "a" as a count
+    would turn the noun phrase behind it into the bare plural
+    :func:`_parse_cost_object` admits only for a counted phrase — quietly
+    widening every uncounted sacrifice in the pool.
+
+    Returns None with the cursor unmoved when the next word is not a number, so
+    a caller that does not find one still owes the rest of its clause to full
+    token consumption.
+    """
+    mark = stream.mark()
+    try:
+        amount = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if isinstance(amount, ast.Fixed) and amount.value >= 2:
+        return amount
+    stream.reset(mark)
+    return None
+
+
 def _is_chargeable_sacrifice(filt: ast.ObjectFilter) -> bool:
     """Whether the payment path can actually collect this sacrifice cost.
 
@@ -128,8 +154,13 @@ def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
     from ..oracle import chargeable_exile_payload
 
     if filt.zone == "graveyard":
-        if not (filt.is_card and filt.zone_owner is not None
-                and filt.zone_owner.kind == "you"):
+        # Whose pile. "your graveyard" (Necropolis) is the payer's own; **no
+        # owner at all** is "a graveyard" — anybody's — which the charger
+        # enumerates seat by seat. Anything else (a named opponent's) is a
+        # phrase this charger has no enumeration for and refuses.
+        if not filt.is_card:
+            return False
+        if filt.zone_owner is not None and filt.zone_owner.kind != "you":
             return False
     elif filt.zone != "battlefield" or filt.is_card:
         return False
@@ -204,10 +235,20 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             stream.accept_punct(",")
             continue
         if stream.accept_word("sacrifice"):
-            sacrificed = _parse_cost_object(stream, "sacrifice")
+            # "Sacrifice **two** Goblins" (Goblin Warrens). The count is printed
+            # in front of the phrase, which leaves the phrase itself the bare
+            # plural the noun parser calls "all" — the same shape Sword of the
+            # Ages' "any number of" tail already reads, and admitted the same
+            # way.
+            counted = _accept_cost_count(stream)
+            sacrificed = _parse_cost_object(
+                stream, "sacrifice", bare_plural=counted is not None
+            )
             if not _is_chargeable_sacrifice(sacrificed):
                 raise stream.error("no cost path charges a narrowed sacrifice")
-            costs.append(ast.SacrificeCost(sacrificed))
+            costs.append(
+                ast.SacrificeCost(sacrificed, count=counted or ast.Fixed(1))
+            )
             # "Sacrifice this artifact **and any number of creatures you
             # control**" (Sword of the Ages). One printed cost naming two
             # things, so it becomes two entries: the source, and a set whose
@@ -231,11 +272,26 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # ``ExileSelf`` names no object, so the source gets its own entry:
             # nothing is chosen, nothing can make the ability unpayable, and
             # there is no record of what was eaten.
-            exiled = _parse_cost_object(stream, "exile")
+            counted = _accept_cost_count(stream)
+            exiled = _parse_cost_object(
+                stream, "exile", bare_plural=counted is not None
+            )
             if exiled.is_source:
                 costs.append(ast.ExileSelf())
                 stream.accept_punct(",")
                 continue
+            # "…from **a single** graveyard" (Night Soil). The noun parser stops
+            # in front of it — "single" is not a zone owner it knows — so the
+            # tail is read here, where the *cost* is being built and the fact it
+            # states has somewhere to live. It is two facts in four words: the
+            # pile may be anybody's, and every card must come out of the same
+            # one. The first rides the filter's ``zone``/``zone_owner`` like
+            # every other printed zone; the second cannot, because a filter is
+            # asked of one card at a time, so it rides the cost.
+            same_zone = False
+            if stream.accept_phrase("from", "a", "single", "graveyard"):
+                exiled = replace(exiled, zone="graveyard", zone_owner=None)
+                same_zone = True
             # "Exile **a creature you control**" (City of Shadows) / "Exile **a
             # creature card from your graveyard**" (Necropolis). A chosen
             # object, gated by the charger's own reader for the reason the
@@ -243,7 +299,11 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # direction they drift in is a cost nobody pays.
             if not _is_chargeable_exile(exiled):
                 raise stream.error("no cost path charges an exile of this shape")
-            costs.append(ast.ExileCost(exiled))
+            costs.append(
+                ast.ExileCost(
+                    exiled, count=counted or ast.Fixed(1), same_zone=same_zone
+                )
+            )
             stream.accept_punct(",")
             continue
         if stream.at_word("pay"):

@@ -32,8 +32,8 @@ from ..oracle_types import PER_OBJECT_SEAT_RECORDS, OracleInstruction
 from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
-from ._common import (attached_host, flip_coin, permanent_matches_filter,
-                      permanent_state_holds)
+from ._common import (_card_matches_filter, attached_host, flip_coin,
+                      permanent_matches_filter, permanent_state_holds)
 from .registry import effect_handler
 from ..mana_payment import mana_cost_label
 
@@ -510,6 +510,29 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         has = bool(wanted) and all(target.has_keyword(word) for word in wanted)
         return (not has) if payload.get("negated") else has
 
+    if kind == "cost_object_was":
+        # "…**if the exiled creature was a Thrull**" (Soul Exchange). The object
+        # the *cost* ate (CR 601.2b / 602.2b), which left its zone before the
+        # spell or ability was ever on the stack — so the only honest source is
+        # the record the payment path kept (CR 608.2h), on the same channel
+        # every other reader of a cost's spoils uses.
+        #
+        # The channels carry two shapes and both are answered: the cast and
+        # activation sacrifice records hold a `Permanent`, whose *effective*
+        # types are what CR 608.2h remembers, and the graveyard exile holds a
+        # `CardDefinition`, which has no computed characteristics at all
+        # (CR 613.1). Nothing recorded is False, which is also what the words
+        # say: no creature was exiled, so the exiled creature was not a Thrull.
+        from ..models import Permanent
+
+        paid = (context.choices or {}).get(str(payload.get("channel")))
+        if paid is None:
+            return False
+        described = payload.get("filter") or {}
+        if isinstance(paid, Permanent):
+            return permanent_matches_filter(paid, described)
+        return _card_matches_filter(paid, described)
+
     if kind == "discarded_card_was":
         # "If the discarded card was a land card" (Land's Edge). The card is in
         # a graveyard by the time this is asked and CR 400.7 makes that a new
@@ -525,24 +548,6 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         return bool(cards) and all(
             any(name in card.type_line.lower() for name in wanted) for card in cards
         )
-
-    if kind == "sacrificed_for_cost_was":
-        # "If **the sacrificed creature** was a Thrull, …" (Ebon Praetor.) The
-        # permanent the ability's own cost ate, which by now is a card in a
-        # graveyard and CR 400.7 makes that a new object — so the only honest
-        # source is the record the *cost payment* wrote (CR 608.2h), the same
-        # channel `the sacrificed creature's toughness` already reads.
-        #
-        # Asked through the one matcher, with no observer and no source: the
-        # question is about the object itself, and the lowering refuses any
-        # narrowing that would need either. No record means the ability
-        # sacrificed nothing, which is False rather than a guess.
-        from ..subject_filters import subject_matches
-
-        eaten = (context.choices or {}).get("sacrificed_for_cost")
-        if eaten is None:
-            return False
-        return subject_matches(game, eaten, payload.get("filter") or {})
 
     if kind == "destroyed_this_way":
         # "…**if that creature was destroyed this way**" (Infinite Authority).

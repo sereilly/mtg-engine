@@ -132,6 +132,13 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # a caller with neither, which is the direction that cannot widen a set.
     "blocked_by_source",
     "attacking_you",
+    # "…all Merfolk **tapped this turn to pay for its abilities**" (Vodalian
+    # War Machine). A history rather than a characteristic, and one no read of
+    # the permanent alone can answer: a tapped permanent looks the same however
+    # it came to be tapped, so the payment path writes the record and this
+    # tests it. Relative to the ability's own source, which makes it testable
+    # here and nowhere else — the same footing as ``blocked_by_source``.
+    "tapped_to_pay_for_source_this_turn",
 })
 
 #: The keys :func:`subject_matches` answers from the object alone. The other two
@@ -400,6 +407,17 @@ def subject_matches(
         if observer is None or not obj.attacking:
             return False
         if obj.defending_player_index != observer:
+            return False
+    # "…**tapped this turn to pay for its abilities**". Asked of the record
+    # the activation path wrote when the cost was paid, through the one reader
+    # of it — so "was tapped to pay" and "was recorded as paying" cannot become
+    # two questions. With no source there is nothing the phrase is relative to
+    # and the answer is no, which refuses the sweep rather than offering it
+    # every permanent tapped for anybody's ability.
+    if described.get("tapped_to_pay_for_source_this_turn"):
+        from .cost_tap_records import tapped_to_pay_for
+
+        if not tapped_to_pay_for(obj, source):
             return False
     # "Another" (CR 109.5) excludes the ability's own source by identity — a
     # look-alike on the same battlefield is a different permanent.

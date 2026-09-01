@@ -67,6 +67,13 @@ CHOICE_KEYS = (
     # mana value" is asked once it is (CR 608.2h). A ``CardDefinition``, not a
     # ``Permanent``, because the graveyard spelling of the cost never had one.
     "exiled_for_cost",
+    # Every card a **counted** exile cost ate ("Exile two creature cards from a
+    # single graveyard", Night Soil). A list beside ``exiled_for_cost``'s single
+    # object for the reason ``sacrificed_set_for_cost`` sits beside
+    # ``sacrificed_for_cost``: one names the object the payer chose, the other
+    # the whole set, and a reader of "the exiled card" must not be handed a list
+    # it would then treat as one card.
+    "exiled_set_for_cost",
     # CR 107.4b's symbols a printed mana cost actually consumed ("Note the type
     # of mana spent to pay this activation cost", Jeweled Amulet, Ice Cauldron).
     # A symbol dict, and on this channel for the three above's reason: the pool

@@ -22,6 +22,7 @@ symmetry is for.
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ...subject_filters import untestable_filter_keys
 from ._common import _describe_targets, _filter_payload, _is_source, _is_target
 
 
@@ -46,9 +47,37 @@ def _lower_become_creature(
                 "animate_self_until_eot", "", _animation_payload(node)
             ),
         )
+    # "**Forests you control** become 2/3 creatures until end of turn. They're
+    # still lands." (Thelonite Druid.) A quantified subject, and a *third*
+    # instruction kind rather than a flag on the two above, because what
+    # differs is where the record goes: one permanent the sentence named
+    # (either of the two above) against every permanent the phrase describes,
+    # collected when the ability resolves and fixed then (CR 611.2c).
+    #
+    # Distinct from ``engine/land_animation.py``, which reads the same words
+    # printed as a *static* ability: that one is recomputed from the board on
+    # every pass and ends when its source leaves, and this one is a one-shot
+    # that ends at cleanup — the same sentence, two durations, two mechanisms.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and not node.subject.targeted
+        and node.subject.quantifier in ("all", "each")
+    ):
+        described = _filter_payload(node.subject.filter)
+        if not described or untestable_filter_keys(described):
+            # A narrowing the matcher cannot test would be carried and dropped,
+            # and a dropped narrowing on a sweep is not an animation that does
+            # less — it is one that animates the whole board.
+            raise LoweringError(
+                "the animation sweep cannot test this noun phrase", node=node
+            )
+        payload = _animation_payload(node)
+        payload.update(described)
+        return (OracleInstruction("animate_matching_until_eot", "", payload),)
     if not _is_target(node.subject):
         raise LoweringError(
-            "an animation names the source or one target", node=node
+            "an animation names the source, one target or a described set",
+            node=node,
         )
     payload = _animation_payload(node)
     payload.update(_filter_payload(node.subject.filter))

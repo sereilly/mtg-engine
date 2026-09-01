@@ -372,23 +372,27 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         stream.accept_word("a", "an")
         return ast.DiscardedCardWas(parse_object_filter(stream))
 
-    # "if **the sacrificed creature** was a Thrull" (Ebon Praetor). The same
-    # named back-reference one zone over, and the noun the sentence repeats is
-    # read rather than spelled in: "the sacrificed **artifact**" and "the
-    # sacrificed **permanent**" are the same clause about the same record, and
-    # a row per noun is a row per printing. What it names is the self-same
-    # object the cost ate, so the noun narrows nothing and is not carried.
-    sacrificed_mark = stream.mark()
-    if stream.accept_phrase("the", "sacrificed"):
-        noun = stream.peek_word()
-        if noun is not None and stream.peek_word(1) == "was":
-            stream.advance(2)
+    # "if **the exiled creature was a Thrull**" (Soul Exchange); "if **the
+    # sacrificed creature was a Thrull**" (Ebon Praetor). The same past-tense
+    # back-reference as the two above, naming a *cost* channel instead of a step
+    # of the effect: CR 601.2h paid it before the object was on the stack, so
+    # the answer is the record the payment kept (CR 608.2h).
+    #
+    # One production for both verbs, because they are one printed template with
+    # the verb changed — and the noun after it is read and dropped the way
+    # "that <noun> was …" drops its repeated noun: it names the object the cost
+    # ate, which the channel already says.
+    cost_mark = stream.mark()
+    if stream.accept_word("the"):
+        verb = stream.peek_word()
+        if verb in ("sacrificed", "exiled") and stream.peek_word(2) == "was":
+            stream.advance(3)
             stream.accept_word("a", "an")
             try:
-                return ast.SacrificedForCostWas(parse_object_filter(stream))
+                return ast.CostObjectWas(str(verb), parse_object_filter(stream))
             except GrammarError:
                 pass
-    stream.reset(sacrificed_mark)
+    stream.reset(cost_mark)
 
     # "if it's a creature or land card" (Track Down) — the present-tense twin of
     # the clause above, and a different question: that one asks what an object

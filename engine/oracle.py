@@ -1117,7 +1117,7 @@ def chargeable_exile_payload(described: dict) -> dict | None:
     return carried
 
 
-def _chargeable_exile_filter(phrase: str) -> dict | None:
+def _chargeable_exile_filter(phrase: str, *, plural: bool = False) -> dict | None:
     """The filter payload an "Exile <noun phrase>" cost charges, or None when the
     payment path cannot collect it. The two-halves pairing
     :func:`_chargeable_sacrifice_filter` describes, one zone wider."""
@@ -1129,7 +1129,7 @@ def _chargeable_exile_filter(phrase: str) -> dict | None:
     # graveyard**" is exactly the shape it exists to refuse. The zone is the
     # point here, so the gate is ``chargeable_exile_payload`` alone, which is
     # also the function the grammar's own cost side asks (idiom 1).
-    filt = parse_subject_filter(phrase)
+    filt = parse_subject_filter(phrase, plural=plural)
     if filt is None:
         return None
     return chargeable_exile_payload(filt.to_payload())
@@ -1348,6 +1348,42 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         and "from your graveyard" in chosen_exile.group(1)
         else "battlefield"
     )
+    exile_zone_owner: str | None = "you"
+    exile_count = 1
+    exile_same_zone = False
+    # "Exile **two** creature cards **from a single graveyard**" (Night Soil).
+    # The counted twin of the singular above, and the sacrifice's twin one zone
+    # over: "an?" cannot match "two", so the singular pattern found nothing at
+    # all and the cost was charged as none.
+    #
+    # "a single graveyard" is two facts in three words — the pile may be
+    # anybody's, and every card must come out of the same one. The first is
+    # rewritten to the phrase the noun parser already reads ("a graveyard") so
+    # there is one reader of a zone tail; the second has no filter to live on
+    # and is recorded beside the count.
+    if exile_filter is None and not exile_self:
+        counted_exile = re.search(
+            r"\bexile (\w+) ([^,:]+?)\s*(?=,|$)", cost_lower
+        )
+        if counted_exile is not None:
+            word = counted_exile.group(1)
+            number = int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
+            phrase = counted_exile.group(2)
+            if number >= 2:
+                if "from a single graveyard" in phrase:
+                    phrase = phrase.replace(
+                        "from a single graveyard", "from a graveyard"
+                    )
+                    exile_same_zone = True
+                narrowed = _chargeable_exile_filter(phrase, plural=True)
+                if narrowed is not None:
+                    exile_filter = narrowed
+                    exile_count = number
+                    if "graveyard" in phrase:
+                        exile_zone = "graveyard"
+                        exile_zone_owner = (
+                            "you" if "from your graveyard" in phrase else None
+                        )
     # "Sacrifice this artifact" (Black Lotus, Bottle of Suleiman). Older
     # printings name the card instead of saying "this artifact", so accept
     # either wording.
@@ -1382,6 +1418,27 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # does one cost up. Without this the tail matched nothing at all and the
     # ability sacrificed only itself, so its X was always zero.
     sacrifice_count: int | str = 1
+    # "Sacrifice **two** Goblins" (Goblin Warrens). The count is printed in
+    # front of the noun phrase, which leaves that phrase the bare plural
+    # ``plural=True`` reads — the same split the "any number of" tail below
+    # makes, with a number where that one has a choice. Read *before* the
+    # singular match above could have run, which is why it is a separate regex
+    # rather than a widening of it: "an?" cannot match "two", so the singular
+    # pattern found nothing at all and the cost was charged as none.
+    if sacrifice_filter is None and not sacrifice_self:
+        counted = re.search(
+            r"\bsacrifice (\w+) ([^,:]+?)\s*(?=,|$)", cost_lower
+        )
+        if counted is not None:
+            word = counted.group(1)
+            number = int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
+            if number >= 2:
+                narrowed = _chargeable_sacrifice_filter(
+                    counted.group(2), plural=True
+                )
+                if narrowed is not None:
+                    sacrifice_filter = narrowed
+                    sacrifice_count = number
     any_number_sacrifice = re.search(
         r"\bsacrifice [^,:]*?\band any number of ([^,:]+?)\s*(?=,|$)", cost_lower
     )
@@ -1460,11 +1517,38 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         if any_number is not None:
             remove_counter = any_number.group(1)
             remove_counter_count = "any"
+    if remove_counter is None:
+        # "Remove **three spore** counters from this creature" (Thallid and the
+        # rest of Fallen Empires' Saproling engine), "Remove **two carrion**
+        # counters from this creature" (Osai Vultures). A *printed* count, and
+        # the third row this pattern has needed for one reason: the singular
+        # "an?" matched nothing at all, so the ability was activated for free
+        # and could be activated forever -- Osai Vultures has been shipping an
+        # unlimited +1/+1 since Legends was ingested, with its carrion counters
+        # untouched.
+        #
+        # The regex only **delimits** the number; ``_NUMBER_WORDS`` reads it,
+        # which is the split every other counted clause in this file makes. Read
+        # after the "any number of" row above, whose opening words it would
+        # otherwise have to exclude by hand.
+        counted_removal = re.search(
+            r"\bremove (\w+) ([a-z]+|[+-]\d+/[+-]\d+) counters from ",
+            cost_lower,
+        )
+        if counted_removal is not None:
+            word = counted_removal.group(1)
+            number = int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
+            if number >= 2:
+                remove_counter = counted_removal.group(2)
+                remove_counter_count = number
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
         sacrifice_filter,
         exile_filter=exile_filter,
         exile_zone=exile_zone,
+        exile_zone_owner=exile_zone_owner,
+        exile_count=exile_count,
+        exile_same_zone=exile_same_zone,
         sacrifice_count=sacrifice_count,
         tap_filter=tap_cost[1] if tap_cost else None,
         tap_count=tap_cost[0] if tap_cost else 0,

@@ -96,6 +96,17 @@ class CostModifier:
     #: reason every other parameter here is: a card printing the same sentence
     #: about a red symbol needs no code.
     per_symbol: str | None = None
+    #: "Black spells you cast cost **{B}** more to cast." (Derelor.) The
+    #: *coloured* pips the tax adds, beside ``amount``'s generic mana.
+    #:
+    #: Its own field rather than more of ``amount`` because a coloured pip is a
+    #: different resource: generic mana may be paid with anything (CR 202.1),
+    #: {B} may not, so a Forest pays a {1} tax and does not pay a {B} one.
+    #: Folding it into the generic total would make Derelor's tax payable with
+    #: any mana at all, which is the direction a cost must never drift in --
+    #: the same reason ``life`` and ``sacrifice_filter`` are their own fields
+    #: and their own readers.
+    symbols: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -110,11 +121,43 @@ class CostReduction:
 
 
 # "<colour>? <type>? spells [with <keyword>] [you cast] cost {N} more/less to cast"
+#
+# The amount is a **run of mana symbols**, not one number: "cost {B} more to
+# cast" (Derelor) is the same sentence with a coloured pip where Gloom prints a
+# generic one, and reading only the digit form left the card refusing at
+# "unrecognized effect verb" with nothing else wrong with it.
+# ``_tax_symbols`` splits the run; a mixed "{1}{B}" would be read as both.
 _SPELL_TAX = re.compile(
     rf"(?:(?P<colour>{_COLOURS}) )?(?:(?P<type>{_TYPE_LIST}) )?spells"
     r"(?: with (?P<keyword>[a-z]+))?(?P<controller> you cast)? cost "
-    r"\{(?P<amount>\d+)\} (?P<direction>more|less) to cast"
+    r"(?P<amount>(?:\{(?:\d+|[wubrgc])\})+) (?P<direction>more|less) to cast"
 )
+
+
+def _tax_symbols(printed: str) -> tuple[int, tuple[tuple[str, int], ...]]:
+    """A printed run of mana symbols as ``(generic, coloured pips)``.
+
+    One reader for both halves of what a tax charges, because they come out of
+    one printed clause -- and two because they are two resources: the generic
+    part joins ``amount`` and is payable with anything, the coloured part is a
+    pip that is not (CR 202.1).
+
+    An unreadable symbol contributes nothing rather than being skipped
+    silently: the caller refuses a clause this could not read in full, for the
+    reason every cost reader in this repo refuses -- a symbol dropped here is a
+    spell cast for less than it prints.
+    """
+    generic = 0
+    pips: dict[str, int] = {}
+    for token in re.findall(r"\{([^}]*)\}", printed):
+        if token.isdigit():
+            generic += int(token)
+        elif token.upper() in _MANA_SYMBOLS:
+            symbol = token.upper()
+            pips[symbol] = pips.get(symbol, 0) + 1
+        else:
+            return -1, ()
+    return generic, tuple(sorted(pips.items()))
 
 # "Spells your opponents cast that target this creature cost an additional N
 # life to cast." (Terror of the Peaks.) A tax in **life**, not mana, and scoped
@@ -188,15 +231,30 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
         return ()
     modifiers: list[CostModifier] = []
     for match in _SPELL_TAX.finditer(text):
+        generic, pips = _tax_symbols(match.group("amount"))
+        if generic < 0:
+            # A symbol this reader could not name. Skipped rather than charged
+            # as the part it did read, and `cost_modifier_claims_line` refuses
+            # the same clause, so the card is unsupported instead of taxed for
+            # less than it prints.
+            continue
+        if pips and match.group("direction") == "less":
+            # CR 118.7's coloured *reduction* is a different arithmetic from
+            # adding a pip (it falls back to generic, and an excess spills), and
+            # `reduce_cost` is where that lives. No card in the pool prints one
+            # from a permanent; admitting it here would discount a cost by a
+            # rule nothing in this path applies.
+            continue
         modifiers.append(
             CostModifier(
-                amount=int(match.group("amount")),
+                amount=generic,
                 applies_to="cast",
                 reduces=match.group("direction") == "less",
                 colour=_COLOR_WORD_TO_SYMBOL.get(match.group("colour") or ""),
                 card_types=_types_named(match.group("type")),
                 keyword=match.group("keyword"),
                 controller="you" if match.group("controller") else None,
+                symbols=pips,
             )
         )
     for match in _TARGETING_LIFE_TAX.finditer(text):
@@ -365,6 +423,14 @@ def _tax(
             # tax it does not impose.
             if modifier.sacrifice_filter is not None:
                 continue
+            # A tax printed entirely as coloured pips (Derelor's "{B}") adds no
+            # generic mana, and is charged by ``spell_symbol_tax``. Skipped
+            # rather than left to contribute its zero, for the reason a
+            # sacrifice tax is: this function also collects the taxing
+            # permanents' *names*, and a Derelor listed here would report a
+            # generic tax it does not impose.
+            if modifier.symbols and not modifier.amount:
+                continue
             if modifier.applies_to != applies_to or not _matches(modifier, card):
                 continue
             if modifier.reduces != (wanted == "less"):
@@ -407,6 +473,45 @@ def spell_cost_tax(
         game, card, "cast", wanted="more", controller_index=caster_index,
         targeted=targeted,
     )
+
+
+def spell_symbol_tax(
+    game, caster_index: int, card, targeted=(),
+) -> tuple[dict[str, int], list[str]]:
+    """The **coloured** mana a tax adds to *card*'s cost, and who is charging it.
+
+    "Black spells you cast cost {B} more to cast." (Derelor.) Its own reader
+    beside :func:`spell_cost_tax` for the reason :func:`spell_life_tax` is one:
+    what changes is the resource. Generic mana may be paid with anything
+    (CR 202.1), so folding a {B} into the generic total would let a Forest pay
+    it -- a tax charged more cheaply than the card prints, which is the one
+    direction a cost may never move.
+
+    One application per taxing permanent, over every battlefield, and scoped by
+    the same ``controller`` / ``targets_source`` reading ``_tax`` makes -- so
+    "**you** cast" charges only its own controller's spells and an opponent's
+    black spell is untaxed.
+    """
+    total: dict[str, int] = {}
+    names: list[str] = []
+    for seat, permanent in game.permanents_with_controller():
+        for modifier in cost_modifiers_for(permanent.effective_card.oracle_text):
+            if not modifier.symbols or modifier.reduces:
+                continue
+            if modifier.applies_to != "cast" or not _matches(modifier, card):
+                continue
+            if modifier.controller == "you" and seat != caster_index:
+                continue
+            if modifier.controller == "opponents" and seat == caster_index:
+                continue
+            if modifier.targets_source and not any(
+                aimed is permanent for aimed in targeted
+            ):
+                continue
+            for symbol, count in modifier.symbols:
+                total[symbol] = total.get(symbol, 0) + count
+            names.append(permanent.card.name)
+    return total, names
 
 
 def spell_life_tax(game, caster_index: int, targeted) -> tuple[int, list[str]]:

@@ -721,6 +721,34 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
         # than a miss: the ability did what it said.
         how_many = 0
 
+    # "Return target creature card from your graveyard to the battlefield. Put
+    # a +2/+2 counter on **that creature** …" (Soul Exchange.) No target was
+    # chosen either: the ability's target is a *card in a graveyard*, and the
+    # permanent this names did not exist when it was announced. So the
+    # placement reads what the reanimation recorded, by id — the same
+    # ``permanents_from`` channel ``grant_target_ability_text`` reads, because
+    # the question is the same one.
+    #
+    # An empty record is a legal outcome (nothing came back), not an error.
+    recorded_key = instruction.payload.get("permanents_from")
+    if recorded_key is not None:
+        placed_on = 0
+        for permanent_id in (context.results or {}).get(str(recorded_key)) or ():
+            creature = game.permanent_by_id(permanent_id)
+            if creature is None:
+                # It left between the two steps of one resolution; a returning
+                # permanent is a new object (CR 400.7) and is not this one.
+                continue
+            game.place_pt_counters(creature, kind, how_many)
+            placed_on += 1
+            game.log.append(
+                f"{creature.card.name} gets {how_many} {kind} counter(s) "
+                f"({card.name})"
+            )
+        if not placed_on:
+            game.log.append(f"{card.name}: nothing was left to put a counter on")
+        return True, "resolved"
+
     # "…put a +1/+1 counter on **the first creature**." (Infinite Authority.)
     # No target was ever chosen: the sentence names one half of the pair a block
     # trigger bound, and the ids were frozen when the earlier step of this same

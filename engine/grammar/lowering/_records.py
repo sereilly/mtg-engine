@@ -328,8 +328,18 @@ _COST_PRODUCES: dict[type, str] = {
     ast.DiscardCost: "discarded_cards",
     # "Sacrifice a creature: … **If the sacrificed creature was a Thrull**, …"
     # (Ebon Praetor.) The activation path records the permanent the cost ate
-    # under ``sacrificed_for_cost``; this is what says a step of *this* ability
-    # wrote it, so the condition refuses on an ability whose cost sacrifices
-    # nothing rather than reading a record some other ability left.
+    # under ``sacrificed_for_cost``, and the cast path records the same key
+    # for an additional cost (``engine/mixins/stack/casting.py``).
+    #
+    # **Nothing gates on this row today, and that is the honest state rather
+    # than an oversight.** ``CostObjectWas`` reads both this channel and the
+    # exile one, and it cannot use ``produced``: for a *spell* the cost is a
+    # different printed line of the card, which the clause being lowered
+    # cannot see, so the gate would refuse Soul Exchange outright. The row
+    # stays because it states what the payment path writes, and the reader
+    # that would use it is named: ``SacrificedForCost`` (the *amount* — Life
+    # Chisel, Diamond Valley) has no check that its ability sacrifices
+    # anything at all, and threading ``produced`` into that branch is what
+    # this row is for.
     ast.SacrificeCost: "sacrificed_for_cost",
 }

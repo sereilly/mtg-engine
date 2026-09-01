@@ -146,6 +146,25 @@ class ActivatedAbilityCost:
     #: the other (CR 613.1: a card in a zone has no computed characteristics
     #: at all).
     exile_zone: str = "battlefield"
+    #: Whose zone that payment comes out of: ``"you"`` (the payer's own pile,
+    #: Necropolis) or ``None`` for **any one player's** ("from a graveyard" /
+    #: "from a single graveyard", Night Soil). Beside ``exile_zone`` rather
+    #: than folded into it because they answer different questions — which zone
+    #: and whose — and a charger that read one as the other would enumerate the
+    #: wrong pile and pay nothing while the ability still resolved.
+    exile_zone_owner: str | None = "you"
+    #: How many objects that payment eats. "Exile **two** creature cards"
+    #: (Night Soil); one everywhere else. Beside the filter for the reason
+    #: ``sacrifice_count`` is: only a count can make the cost unpayable, and
+    #: one card is no more a payment of a two-card cost than none is
+    #: (CR 601.2h).
+    exile_count: int = 1
+    #: "…from **a single** graveyard" (Night Soil). Every card must come out of
+    #: the *same* pile. Its own flag rather than a narrowing of the filter,
+    #: because the filter is asked of one card at a time and cannot say it —
+    #: and dropped, the cost would be payable with one card from each of two
+    #: graveyards, which is strictly cheaper than the card prints.
+    exile_same_zone: bool = False
     # Seasoned Hallowblade: "Discard a card: …" — N cards the payer chooses,
     # where `discard_last_drawn` above names its card by history and leaves the
     # payer no choice at all. Two fields because they are two costs: a card
@@ -346,6 +365,14 @@ class OracleProgram:
 # untap_restrictions. `engine/grammar/` reads its own numbers in the lexer.
 _NUMBER_WORDS = {
     "a": 1,
+    # "Tap **an** untapped Merfolk you control" (Vodalian War Machine),
+    # "Tap **an** untapped Swamp you control" (Hecatomb), "Tap **an** untapped
+    # snow land you control" (Karplusan Giant). The same article as "a" before
+    # a vowel, and its absence was not a missing spelling but three **free
+    # abilities**: `oracle._chargeable_tap_cost` reads the count through this
+    # table, got 0, and charged no tap at all — while the grammar's own amount
+    # reader had always read "an" as one and admitted the line.
+    "an": 1,
     "one": 1,
     "two": 2,
     "three": 3,

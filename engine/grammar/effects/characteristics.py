@@ -20,7 +20,8 @@ from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS,
                           LAND_TYPES, SUBTYPE_INDEX,
-                          TYPE_LINE_SUPERTYPES, match_longest)
+                          TYPE_LINE_SUPERTYPES, match_longest,
+                          singular as _singular_type)
 
 from ..phrases import (is_pt_counter, _expect_counter_kind,
                        _parse_can_attack_as_though, _parse_duration,
@@ -852,7 +853,12 @@ def _parse_become_creature(
             break
         card_types.append(word)
         stream.advance()
-    if not stream.accept_word("creature"):
+    # "…become 2/3 **creatures**" (Thelonite Druid). The plural head noun, for
+    # a subject that names a set rather than one permanent. Read here rather
+    # than as a second production: it is the same sentence with the noun
+    # agreeing, and which subjects the animation can actually reach is the
+    # lowering's question.
+    if not stream.accept_word("creature", "creatures"):
         stream.reset(mark)
         return None
     keywords: list[str] = []
@@ -880,7 +886,14 @@ def _parse_become_creature(
         return None
     if not in_addition:
         stream.accept_punct(".")
-        if not stream.accept_phrase("it", "'s", "still", "a"):
+        # "**They're still lands.**" (Thelonite Druid) is the plural of "It's
+        # still a land." — the same sentence agreeing with a subject that names
+        # a set, and the article goes with the number.
+        if stream.accept_phrase("it", "'s", "still", "a"):
+            plural_kept = False
+        elif stream.accept_phrase("they're", "still"):
+            plural_kept = True
+        else:
             stream.reset(mark)
             return None
         # The type the sentence names is one the permanent already has, so
@@ -888,7 +901,12 @@ def _parse_become_creature(
         # still required to *be* a card type, because a sentence naming
         # something else is one this production has not understood.
         kept = stream.peek_word()
-        if kept is None or kept not in CARD_TYPES:
+        if kept is None or _singular_type(kept) not in CARD_TYPES:
+            stream.reset(mark)
+            return None
+        if plural_kept and kept == _singular_type(kept):
+            # "They're still land" is not English and is not a sentence this
+            # production has read; the plural subject takes the plural noun.
             stream.reset(mark)
             return None
         stream.advance()

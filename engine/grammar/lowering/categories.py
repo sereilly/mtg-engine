@@ -118,6 +118,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # on the source, so the same category: what differs is which permanent
     # holds it, not what the sentence does.
     "animate_target_until_eot": "pump",
+    # "Forests you control become 2/3 creatures until end of turn." (Thelonite
+    # Druid.) The same record again, over every permanent a noun phrase
+    # describes rather than over one the sentence named — so the same category
+    # for the same reason.
+    "animate_matching_until_eot": "pump",
     "set_team_base_pt_until_eot": "pump",
     # The CR 613.4b rewrite template (Sentinel, Wall of Tombstones, Halfdane,
     # Brine Hag). The same category as the setters above: a one-shot layer-7b

@@ -1201,9 +1201,14 @@ def test_a_cost_clause_the_table_cannot_charge_refuses_the_whole_line():
         "You may cast this card from your graveyard by paying 3 life and "
         "discarding a card in addition to paying its other costs."
     ) is not None
+    # "sacrificing a Zombie" stood here and is read now (the noun phrase goes
+    # through the same reader an activation cost's does, which is what Goblin
+    # Grenade's "sacrifice a Goblin" needed). What is left outside the table is
+    # a clause naming a zone the payment path cannot reach.
     assert additional_cost_for_line(
         "You may cast this card from your graveyard by paying 3 life and "
-        "sacrificing a Zombie in addition to paying its other costs."
+        "exiling a creature card from your graveyard in addition to paying "
+        "its other costs."
     ) is None
 
 
