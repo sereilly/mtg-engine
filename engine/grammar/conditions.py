@@ -495,25 +495,44 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                 return ast.SourceExiledWithCounter(counter_word)
     stream.reset(exiled_mark)
 
-    # "if **there are no more scream counters on it**" (All Hallow's Eve), the
-    # sentence after the removal. A count of the source's counters against a
-    # number; only the zero comparison is printed in this pool, and the node
-    # carries the number rather than a flag so the wider comparison is an
-    # extension here rather than a second condition.
+    # "if **there are no more scream counters on it**" (All Hallow's Eve),
+    # "if **there are no time counters on this Aura**" (Tourach's Gate),
+    # "as long as **there is exactly one tide counter on this creature**"
+    # (Homarid, Tidal Influence). One production over the three axes the pool
+    # varies independently, for the reason the tapped/untapped clause below
+    # states about its own four spellings: written out as one phrase each, the
+    # spelling nobody listed reads as a parser gap rather than as the same
+    # question.
+    #
+    # The axes are the copula ("there is" for a singular counter, "there are"
+    # for a plural), the number ("no", "no more", "exactly one", "exactly
+    # three" — every one of them an *equality*), and how the card names the
+    # object holding them ("on it", "on this Aura", "on this creature"), which
+    # is `accept_source_reference`'s question everywhere else.
     #
     # "no more" and "no" are one phrase with an optional word: the difference
-    # is English, not a different question — both say the count is zero.
+    # is English, not a different question — both say the count is zero. So is
+    # "exactly": it is the comparison this node already defaults to, printed
+    # out loud because the card needs to distinguish one tide counter from
+    # three.
     empty_mark = stream.mark()
-    if stream.accept_phrase("there", "are", "no"):
-        stream.accept_word("more")
-        counter_word = stream.peek_word()
-        if counter_word is not None and counter_word not in ("counter", "counters"):
-            stream.advance()
-            if (
-                stream.accept_word("counters", "counter")
-                and stream.accept_phrase("on", "it")
-            ):
-                return ast.SourceCounterCount(counter_word, 0)
+    if stream.accept_word("there") and stream.accept_word("is", "are"):
+        count: int | None = None
+        if stream.accept_word("no"):
+            stream.accept_word("more")
+            count = 0
+        elif stream.accept_word("exactly"):
+            word = stream.peek_word()
+            if word is not None and word in NUMBER_WORDS:
+                stream.advance()
+                count = NUMBER_WORDS[word]
+        if count is not None:
+            counter_word = stream.peek_word()
+            if counter_word is not None and counter_word not in ("counter", "counters"):
+                stream.advance()
+                if stream.accept_word("counters", "counter") and stream.accept_word("on"):
+                    if accept_source_reference(stream):
+                        return ast.SourceCounterCount(counter_word, count)
     stream.reset(empty_mark)
 
     # "if **it has five or more hunger counters on it**" (Fasting) — the same

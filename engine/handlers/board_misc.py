@@ -1266,6 +1266,37 @@ def remove_counter_from_self(game: Game, instruction: OracleInstruction, context
     return True, "resolved"
 
 
+@effect_handler("remove_all_counters_from_self")
+def remove_all_counters_from_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Remove all tide counters from it." (Homarid, Tidal Influence.)
+
+    The emptying twin of :func:`remove_counter_from_self`, and its own kind
+    because "all" is a number nobody knows until the permanent is looked at.
+    Through the same one removal seam (``named_counters.remove_counters``), so
+    the *last counter removed* record every state trigger reads is written here
+    too — a hand-rolled ``metadata[key] = 0`` would empty the store and tell
+    nobody.
+
+    Removing from zero is a no-op, not a failure: CR 608.2b does as much as
+    possible, and the rest of the resolution still runs.
+    """
+    permanent = source_object(context)
+    if permanent is None:
+        return True, "resolved"
+    counter = str(instruction.payload.get("counter", ""))
+    held = counters_on(permanent, counter)
+    if held <= 0:
+        context.results["removed_counter"] = False
+        game.log.append(f"{permanent.card.name} has no {counter} counters to remove")
+        return True, "resolved"
+    context.results["removed_counter"] = True
+    remove_counters(permanent, counter, held)
+    game.log.append(
+        f"Removed all {held} {counter} counters from {permanent.card.name}"
+    )
+    return True, "resolved"
+
+
 @effect_handler("sacrifice_self")
 def sacrifice_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…sacrifice it." where "it" is the ability's own source (Cocoon's

@@ -154,6 +154,21 @@ PARSE_LAYERS = [
     # do", "…, then …"). Above `statements` because reading one means reading
     # the statement it modifies.
     "riders",
+    # Whole printed lines whose frame is a *condition* rather than a verb —
+    # "As long as <condition>, <effect>", "<effect> as long as <condition>",
+    # "During your turn, <effect>". Split out of `parser` at the size guard,
+    # along the boundary that module already drew in its own shape: the
+    # sentence loop would fail every one of these on a subject it never finds,
+    # so they are tried ahead of it and each hands back a whole
+    # `StaticAbilityNode`. Above `statements` and `conditions`, whose parsers
+    # it calls, and never imported back.
+    #
+    # The mirror's word is `statics`, which the *lowering* half already holds
+    # at `engine/grammar/statics.py` — the one place a mirror name cannot be
+    # reused, because both halves would be one file. So the name is
+    # `OracleProgram.static_lines`' own, which is exactly what these
+    # productions produce, rather than a new one.
+    "static_lines",
     "costs", "parser",
 ]
 LOWER_LAYERS = ["lowering", "statics", "lower"]

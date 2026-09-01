@@ -132,8 +132,16 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever this artifact becomes untapped",
         "whenever this permanent becomes untapped",
     ),
-    "counters_reach_threshold":
+    # One kind, both printed words: Mazemind Tome prints "when" and Homarid
+    # "whenever", and CR 603.8 makes them the same state trigger. The row lives
+    # in the *whenever* table (the one both words reach), so only the
+    # "whenever" spelling is an example that table would be asked about — the
+    # "when" one is here because the pool prints it and it must not be read as
+    # something else on the way through the fallback.
+    "counters_reach_threshold": (
+        "whenever there are four or more tide counters on this creature",
         "when there are four or more page counters on this artifact",
+    ),
     # Two rows share this kind — the union narrowing and the single-type one —
     # so both spellings are named, which is what the "one entry may hold
     # several" shape above exists for.

@@ -175,6 +175,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # counter, which is what the category is about.
     "player_gets_poison_counters": "counters",
     "remove_counter_from_self": "counters",
+    "remove_all_counters_from_self": "counters",
     "remove_any_number_of_counters_from_self": "counters",
     "exile_any_number_of_own_tokens": "zones",
     "put_graveyard_cards_on_library_top": "zones",

@@ -260,8 +260,70 @@ def _accept_unshared_colour(stream: TokenStream) -> ast.ObjectFilter | None:
     return None
 
 
+def _parse_state_trigger_event(
+    stream: TokenStream, word: str
+) -> ast.TriggerEvent | None:
+    """``there are <state>`` — CR 603.8's state triggers, under either word.
+
+    "**When** there are four or more page counters on this artifact"
+    (Mazemind Tome); "**Whenever** there are four or more tide counters on this
+    creature" (Homarid, Tidal Influence). CR 603.1 makes the two words one kind
+    of ability — they differ in how often it triggers while it exists, never in
+    what triggers it — and for a state trigger not even in that: CR 603.8 says
+    it triggers whenever the game state matches, whichever word is printed. So
+    the reading is one production asked with the word the line carried, rather
+    than a copy per branch, which is how one spelling ends up read and the
+    other refusing.
+
+    Read here as well as in `engine/oracle.py`'s table because both front ends
+    see the whole line, and a condition only one of them reads leaves the other
+    refusing the effect behind it.
+
+    Marked, because both readings behind "there are" can refuse: the block used
+    to consume the two words and fall through with the cursor past them, so
+    every later branch was offered a line missing its opening. That was
+    invisible while one production followed the phrase and is what kept Mana
+    Vortex's reading below from being reached at all.
+    """
+    state_mark = stream.mark()
+    if stream.accept_phrase("there", "are"):
+        # "When there are **no lands on the battlefield**, sacrifice this
+        # enchantment." (Mana Vortex.) CR 603.8 again, asked about every
+        # battlefield rather than about the source's controller — a different
+        # set and so a different kind, since a Mana Vortex whose controller has
+        # run out of lands stays while an opponent has one.
+        if stream.accept_phrase("no", "lands", "on", "the", "battlefield"):
+            return ast.TriggerEvent("no_lands_anywhere", word)
+        count = stream.peek_word()
+        if count in NUMBER_WORDS:
+            stream.advance()
+            if stream.accept_phrase("or", "more"):
+                kind = stream.peek_word()
+                if kind:
+                    stream.advance()
+                    if stream.accept_word("counters") and stream.accept_word("on"):
+                        if stream.at_kind(SELF) or stream.at_word("this"):
+                            stream.advance()
+                            stream.accept_word(
+                                "artifact", "creature", "enchantment",
+                                "permanent", "land",
+                            )
+                            return ast.TriggerEvent(
+                                "counters_reach_threshold", word,
+                            )
+    stream.reset(state_mark)
+    return None
+
+
 def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
     if stream.accept_word("whenever"):
+        # CR 603.8's state trigger, under the other printed word ("Whenever
+        # there are four or more tide counters on this creature", Homarid).
+        # First, because "there" is not a subject and every branch below this
+        # one expects one.
+        state = _parse_state_trigger_event(stream, "whenever")
+        if state is not None:
+            return state
         # "…one or more +1/+1 counters are put on <noun phrase>" (Wildwood
         # Scourge). The subject is parsed as a noun phrase and carried on the
         # event, so the exclusion and the controller scope are data — the same
@@ -625,43 +687,9 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
     if stream.accept_word("when"):
         if accept_event_phrase(stream, ("this", "creature", "dies")):
             return ast.TriggerEvent("dies", "when")
-        # "When there are four or more page counters on this artifact"
-        # (Mazemind Tome). CR 603.8's state trigger. Read here as well as in
-        # `engine/oracle.py`'s table because both front ends see the whole line,
-        # and a condition only one of them reads leaves the other refusing the
-        # effect behind it.
-        # Marked, because both readings behind "there are" can refuse: the block
-        # used to consume the two words and fall through with the cursor past
-        # them, so every later branch was offered a line missing its opening.
-        # That was invisible while one production followed the phrase and is
-        # what kept Mana Vortex's reading below from being reached at all.
-        state_mark = stream.mark()
-        if stream.accept_phrase("there", "are"):
-            # "When there are **no lands on the battlefield**, sacrifice this
-            # enchantment." (Mana Vortex.) CR 603.8 again, asked about every
-            # battlefield rather than about the source's controller — a
-            # different set and so a different kind, since a Mana Vortex whose
-            # controller has run out of lands stays while an opponent has one.
-            if stream.accept_phrase("no", "lands", "on", "the", "battlefield"):
-                return ast.TriggerEvent("no_lands_anywhere", "when")
-            count = stream.peek_word()
-            if count in NUMBER_WORDS:
-                stream.advance()
-                if stream.accept_phrase("or", "more"):
-                    kind = stream.peek_word()
-                    if kind:
-                        stream.advance()
-                        if stream.accept_word("counters") and stream.accept_word("on"):
-                            if stream.at_kind(SELF) or stream.at_word("this"):
-                                stream.advance()
-                                stream.accept_word(
-                                    "artifact", "creature", "enchantment",
-                                    "permanent", "land",
-                                )
-                                return ast.TriggerEvent(
-                                    "counters_reach_threshold", "when",
-                                )
-        stream.reset(state_mark)
+        state = _parse_state_trigger_event(stream, "when")
+        if state is not None:
+            return state
         # "**When** enchanted land becomes tapped, destroy it" (Blight). The
         # same event as the whenever spelling — one printed word apart — so it
         # is the same production, asked with the word this branch read.

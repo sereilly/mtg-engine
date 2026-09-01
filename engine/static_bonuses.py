@@ -403,6 +403,28 @@ def conditional_static_holds(game, seat: int, source, condition: dict) -> bool:
         )
     if kind == "has_plus1_counter":
         return int(source.metadata.get("plus_counters", 0)) > 0
+    if kind == "source_counter_count":
+        # "As long as there is exactly one tide counter on this creature, it
+        # gets -1/-1." (Homarid; Tidal Influence prints it about a set of
+        # creatures instead.) The count is read through the one counter reader
+        # `named_counters.counters_on`, which asks `pt.pt_counter_key` — this
+        # file's own spelling of the key would answer zero for every counter
+        # that also has rules meaning, silently, because a missing key is a
+        # legal zero.
+        #
+        # The comparison is read off the payload rather than assumed, exactly
+        # as `handlers/control_flow.evaluate_condition` reads it for the same
+        # payload: an at-least test answered as an equality is a bonus that
+        # switches off again on the next counter.
+        from .named_counters import counters_on
+
+        if source is None:
+            return False
+        held = counters_on(source, str(condition.get("counter", "")))
+        wanted = int(condition.get("count", 0))
+        if str(condition.get("comparison", "exactly")) == "at_least":
+            return held >= wanted
+        return held == wanted
     if kind == "graveyard_size":
         # "**An** opponent" is any one of them, not all — so it is an `any` over
         # the opponents rather than a sum, and a game with more than two seats
