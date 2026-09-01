@@ -783,6 +783,133 @@ Soul Exchange's additional-cost clause, Delif's Cube prints Delif's Cone's
 Tourach's Chant are each other's sentence with the land type changed. Five of
 the set's repeated shapes, none of them visible in the census histogram.
 
+**The wave ran and 32 of the 33 landed**, in one pass of five worktree groups
+— 69/102 to 101/102, with Raiding Party declined as an enumerated list of ten
+parts. **Zero name-keyed hooks were added and one was retired** (Dragon Whelp,
+which prints Farrelite Priest's clause verbatim), so reliance fell 4.2% → 4.1%
+while the measured pool grew. Every group's pairing paid: Homarid and Tidal
+Influence cost one production between them, Delif's Cone and Delif's Cube one,
+Goblin Grenade and Soul Exchange one, and the two Chants one.
+
+**Integration cost about what authorship did, and every merge hazard the
+playbook names fired at least once.** Two branches invented the cost-object
+back-reference under two names (`SacrificedForCostWas` and
+`CostObjectWas(channel, filter)`); two moved *different* functions out of the
+same over-cap `subject_verb.py`, so git offered each side as "keep mine" and
+either alone resurrects the other's move; two rewrote one guard in
+`_lower_doesnt_untap_next_step`, each adding a term the other lacked; and a
+union of two `if` branches in `skip_next_untap` broke an `if`/`elif` chain, so
+one branch's answer was computed and then overwritten — three tests green on
+each branch alone, red on the merge. Two new ones are worth recording:
+
+- **A whole-file `--theirs` discards the hunks that were never in dispute.**
+  Resolving `ast/conditions.py` that way would have silently dropped a *third*
+  group's node that had merged cleanly into the same file. Resolve the conflict,
+  not the file.
+- **One channel, two value shapes.** `permanents_from` names a scratchpad key,
+  and one producer writes a list where another writes a bare id. Both reached
+  one reader and it raised. Normalised at that reader with the disagreement
+  named — but every *other* reader (`destruction`, `control_changes`) reads the
+  scalar shape only and would raise on the list, so **the channel's arity is
+  still an open question**, not a settled convention.
+
+**Three cap breaches fired at integration and none was caused by one branch** —
+`lowering/counters.py` (three groups' additions summing), `lowering/game.py` and
+`lower.py`. All three split along a line that was already there:
+`counter_removal` on CR 121.1/121.2 versus 121.3, `tokens` on CR 111.1 (an
+object the game creates, where what stays in `game` changes the state a *player*
+is in), and `by_node` on the distinction `lowering/_records.py` had already
+recorded about the two tables that left `lower.py` before it — the table is a
+registry either way, and `lower.py` is dispatch. The guard that fails on an
+unlisted family fired straight after each, which is a hand-maintained list
+checking itself.
+
+**And the moved-block import hazard caught the integrator rather than a group.**
+`lowering/tokens.py` lost `_restrictions_beyond`, which lives in the header its
+functions left behind — the same failure the per-set test files were
+restructured to prevent, in the one place that restructuring does not reach. It
+fails as 132 collection errors, which is loud; the sweep for a second instance
+across `engine/` came back clean.
+
+## Live defects the wave found in *already-supported* cards
+
+Every one was found by reading compiled programs or by sweeping the pool for a
+shape, not by the census — and none had a failing test. **The free-ability ones
+are the class Ice Age's Triskelion was**: a cost that matches nothing is not a
+refused ability, it is a free one.
+
+Fixed in the wave:
+
+- **Goblin Grenade was castable with no Goblin anywhere**, dealing 5 for `{R}`:
+  `cast_costs._COST_CLAUSES` spelled "sacrifice a creature" out as a literal, so
+  a typed noun matched no clause and the additional cost was claimed by nothing
+  and charged by nobody.
+- **Hecatomb and Karplusan Giant had free unlimited abilities** because
+  `_NUMBER_WORDS` carried `"a"` and not `"an"`, so the charger read a count of
+  zero from "Tap **an** untapped Swamp" while the grammar's amount reader read
+  one. **Osai Vultures** (Legends and Fourth Edition) pumped forever because a
+  counted counter-removal cost matched no printed count. Both survived a
+  pool-wide guard whose whole job is that class; it now covers tap, exile,
+  counter-removal and counter-adding costs with their counts.
+- **Vodalian War Machine's two tap costs charged nothing** — the lines parsed
+  and were free, which is the brief's suspicion confirmed rather than dismissed.
+- **`combat`, the bare "at the beginning of combat", had no fire site at all**
+  while sitting in *both* front-end tables. `test_trigger_dispatchers.py` could
+  not see it because no pool card produced the kind — the guard's blind spot
+  rather than a gap in it.
+- **"Sacrifice a land of an opponent's choice" dropped its `chosen_by_opponent`
+  flag**, so the sacrificing player would have chosen. Demonic Hordes was
+  shielded only by its name-keyed hook, which means the fix is what kept that
+  hook honest.
+- **Mystic Remora offered its toll to the wrong seat** in a three-seat game —
+  "that player" under a player-subject event reached a fallback reading
+  `context.target`, right in a duel by coincidence.
+- **A keyword grant dropped its target narrowing entirely** (Whalebone Glider's
+  "with power 3 or less", Krovikan Elementalist's "you control", Phantasmal
+  Mount), because the single-keyword shortcut carried only a duration.
+- **`add_counter_to_target` announced a target it never chose**, so a trigger
+  with no legal creature was removed from the stack under CR 603.3c — live for
+  The Abyss, Dread Wight, Frost Breath, Telekinesis and Melee.
+
+Open, each recorded with what it costs rather than scheduled here:
+
+- **Orcish Captain (FEM, supported) shrinks itself instead of its target.**
+  "Flip a coin. If you win the flip, target Orc creature gets +2/+0 … If you
+  lose the flip, **it** gets -0/-2" — the losing arm's bare "it" lowers to
+  `pump_self`. The missing piece is cross-sentence pronoun rebinding: the
+  rebinder binds a pronoun to a *condition's* target and to a trigger's event
+  subject, but not to a target announced by an earlier sentence of the same
+  line. **This one ships with the set and is fixed before promotion.**
+- **A mana ability with a rider uses the stack** (CR 605.3/605.1a).
+  `is_mana_ability` reads only the top-level instruction kind, so Farrelite
+  Priest, Initiates of the Ebon Hand, Barbed Sextant and all six Ice Age
+  painlands are pushed and resolved like ordinary abilities — which means their
+  mana cannot be produced while a cost is being paid.
+- **A coloured pay-or-sacrifice upkeep cannot tap lands.**
+  `can_pay_upkeep_mana` covers coloured pips from floating mana alone while
+  letting the generic part tap, so **Stasis, Drought, Justice, Conversion, Dance
+  of Many, Sunken City, Glaciers, Breeding Pit** and both FEM Chants are
+  sacrificed on the first upkeep in AI or headless play with the right lands
+  untapped. Every other offered price in the engine taps lands, citing
+  CR 605.3b. Ten cards across six sets.
+- **`land_enters` has one fire site, inside the land-*play* resolution**, so a
+  land an effect puts onto the battlefield triggers nothing — Ankh of Mishra
+  deals no damage for one. This wave makes the fix nearly free: the row can fall
+  to `matching_permanent_enters`, whose "that land's controller" now reads
+  `event_subject_controller`.
+- **An offer priced in a non-mana action arms with no prompt string**, so Deep
+  Spawn's "unless you mill two cards" and Oath of Lim-Dul's discard reach the
+  web layer as a bare Yes/No with no statement of the price.
+- **Living Artifact's vitality counters bypass the counter seam**, writing
+  `perm.metadata[...] += damage` with the counter word in a substring test. No
+  live bug — that card has no cap and no last-counter trigger — but it skips the
+  cap enforcement and the emptied-kinds record every other placement goes
+  through.
+- **The browser can name only one object for a counted cost.**
+  `web/static/app.js` sends a single `cost_permanent_index`, so Goblin Warrens'
+  second Goblin and Night Soil's second card take the deterministic default. The
+  cost is fully charged; only the *choice* is partly the engine's.
+
 **Round plan: one wave of five worktree groups**, split by the machinery rather
 than by the printed type, each carrying the supported-but-hollow card that
 shares its shape:
