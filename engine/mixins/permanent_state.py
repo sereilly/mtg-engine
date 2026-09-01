@@ -1925,10 +1925,12 @@ class PermanentStateMixin:
         and passing it is what says the choice belongs to an ability rather than
         to a spell. Its presence is the flag rather than a separate boolean: an
         immunity narrowed to a class of source ("can't be the target of
-        abilities from artifact sources", Artifact Ward) needs the source object
-        itself, because an animated artifact land is an artifact source and its
-        printed type line says otherwise. Every caller that leaves it out is
-        aiming a spell, where the immunity does not apply.
+        abilities from artifact sources", Artifact Ward; "…or abilities from
+        white sources", Raiding Party) needs the source object itself, because
+        an animated artifact land is an artifact source and its printed type
+        line says otherwise, and because a colour is a layer question. Every
+        caller that leaves it out is aiming a spell, where the immunity does
+        not apply.
 
         Hexproof (CR 702.11b/d) forbids targeting by spells and abilities an
         *opponent* of the target's controller controls, so it is asked only when
@@ -1969,12 +1971,14 @@ class PermanentStateMixin:
             ):
                 return False
         if ability_source is not None:
-            from ..auras import ability_target_immunity_classes
-            from ..prevention import source_has_type
+            from ..target_immunity import (
+                ability_source_immunity_classes,
+                source_is_in_class,
+            )
 
             if any(
-                source_has_type(self, ability_source, source_type)
-                for source_type in ability_target_immunity_classes(target)
+                source_is_in_class(self, ability_source, source_class)
+                for source_class in ability_source_immunity_classes(target)
             ):
                 return False
         # "…can't be the target of spells that can target only Walls or of
