@@ -3251,14 +3251,24 @@ def test_draw_then_discard_reads_both_counts_rather_than_hardcoding_them():
     ]
 
 
-def test_draw_then_discard_refuses_a_random_discard():
+def test_draw_then_discard_does_not_fuse_a_random_discard():
     """``draw_then_discard_self`` raises a prompt and lets the controller pick
-    which cards go. A random discard is a different effect, and claiming it
-    would silently hand the choice back to the player."""
-    result = compile_line("Draw two cards, then discard three cards at random.", card_name="Test")
+    which cards go. A random discard is a different effect, and fusing it would
+    silently hand the choice back to the player.
 
-    assert result.parsed
-    assert not result.lowered
+    The pair therefore stays decomposed, and the second half is the *sampling*
+    handler with its seat named — the shape Ring of Renewal needs, and the one
+    thing that makes decomposing safe: without the seat that handler reads
+    ``context.target``, which for an activation nobody targeted with is the
+    opponent. This line used to refuse outright for want of a controller-side
+    random discard; what it must never do is fuse.
+    """
+    assert _instructions(
+        "Draw two cards, then discard three cards at random.", "Test"
+    ) == [
+        ("draw_controller_cards", {"amount": 2}),
+        ("discard_x_target_cards", {"amount": 3, "who": "caster"}),
+    ]
 
 
 def test_the_fusion_checks_who_discards_rather_than_matching_the_shape():

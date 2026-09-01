@@ -13,7 +13,8 @@ from ..auras import aura_restriction_active
 from ..replacements import apply_replacements
 from ..subject_filters import subject_matches
 from ..handlers.board_misc import LAND_TYPE_UNTIL_UNTAP
-from ..handlers.tapping import (UNTAP_BLOCKED_WHILE_COUNTERS_KEY,
+from ..handlers.tapping import (SKIP_NEXT_UNTAP_SEAT,
+                                UNTAP_BLOCKED_WHILE_COUNTERS_KEY,
                                 UNTAP_LOCK_WHILE_TAPPED_KEY)
 from ..land_types import end_land_type_changes_from
 from ..control import LINKED_CONTROL_CONDITIONS
@@ -34,6 +35,25 @@ from ..untap_restrictions import (
 #: step asks each one separately, so a card printed with any of them needs no
 #: code here — only a row in engine/untap_restrictions.py.
 _LIMITED_TYPES = ("land", "creature", "artifact")
+
+
+def _skip_next_untap_names_this_step(permanent, seat: int) -> bool:
+    """Whether a permanent's ``skip_next_untap`` marker is about *seat*'s step.
+
+    Two printed durations share the one marker. "…during **its controller's**
+    next untap step" (Frost Breath) records no seat, because the step only ever
+    reaches permanents the active player controls and so the controller's step
+    is the one that finds it. "…during **your** next untap step" (Deep Spawn,
+    Homarid Warrior — CR 701.43a) records the seat the effect's controller had,
+    and that marker must sit out every other player's untap step rather than be
+    spent by it: a creature that changed hands would otherwise miss the step the
+    card actually named and untap on schedule under its new controller.
+
+    Asked at both ends of this step — the skip and the expiry — so an untap that
+    the marker does not block cannot silently consume it.
+    """
+    named = permanent.metadata.get(SKIP_NEXT_UNTAP_SEAT)
+    return named is None or named == seat
 
 
 def _self_untap_blocked(game, permanent, seat: int) -> bool:
@@ -294,7 +314,9 @@ class UntapStepMixin:
             # in engine/untap_restrictions.py. CR 502.3 — "effects can keep one or
             # more of a player's permanents from untapping". Cleared below, for
             # this step whether or not it kept anything tapped.
-            if permanent.metadata.get("skip_next_untap"):
+            if permanent.metadata.get("skip_next_untap") and (
+                _skip_next_untap_names_this_step(permanent, player_index)
+            ):
                 continue
 
             # "…doesn't untap during its controller's untap step **for as
@@ -426,11 +448,19 @@ class UntapStepMixin:
             # (Telekinesis) spends one of them here and waits for the other, and
             # the marker is forgotten only when the last is spent. `True` from
             # any older record counts as one.
-            held = int(permanent.metadata.get("skip_next_untap") or 0) - 1
-            if held > 0:
-                permanent.metadata["skip_next_untap"] = held
-            else:
-                permanent.metadata.pop("skip_next_untap", None)
+            #
+            # A marker naming somebody else's untap step is left alone — this is
+            # not the step it named, and CR 611.2a's stated duration is that
+            # step and no other. Only the marker is held back; the land-type
+            # window below is a different record with a different owner and is
+            # swept for this seat regardless.
+            if _skip_next_untap_names_this_step(permanent, player_index):
+                held = int(permanent.metadata.get("skip_next_untap") or 0) - 1
+                if held > 0:
+                    permanent.metadata["skip_next_untap"] = held
+                else:
+                    permanent.metadata.pop("skip_next_untap", None)
+                    permanent.metadata.pop(SKIP_NEXT_UNTAP_SEAT, None)
             # "Target land becomes a Swamp **until its controller's next untap
             # step**." (Orcish Farmer.) The window names the land's controller,
             # which is this seat, and the record outlives the permanent that

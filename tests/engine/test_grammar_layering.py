@@ -125,6 +125,15 @@ PARSE_LAYERS = [
     # reads, and below everything that reads a whole line.
     "triggers",
     "effects", "conditions",
+    # The trailing clauses that share a sentence's printed subject — "…gets
+    # +2/+0 **and deals 1 damage to you**", "…gains shroud **and doesn't untap
+    # during your next untap step**". Split out of `subject_verb` at the guard
+    # below, along the boundary that module already had: everything left in it
+    # reads a sentence's opening, and these read what is joined onto its end.
+    # Above `effects`, because a joiner exists precisely to hold two effect
+    # families that may not import each other, and below `subject_verb`, which
+    # hands it the statement it has already parsed.
+    "conjuncts",
     # Delayed triggered abilities, and the opener that binds one. Below
     # `statements`, which hands it `parse_statement` rather than being
     # imported back — a delayed trigger contains a whole statement.

@@ -159,7 +159,37 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
         # stays refused is "at random" — who picks is what separates this
         # handler from `discard_x_target_cards`, and lowering a chosen discard
         # onto the random one takes the choice the card leaves its controller.
-        if node.at_random or not isinstance(amount, (int, str)):
+        if node.at_random:
+            # "{5}, {T}: **Discard a card at random**, then draw two cards."
+            # (Ring of Renewal.) Nobody chooses, so it is not this handler at
+            # all: `discard_x_target_cards` is the one that samples, and what
+            # separates the two is the chooser rather than the seat. Routed to
+            # it with the seat named, because that handler reads
+            # ``context.target`` by default — which for an activated ability
+            # nobody targeted with is the **opponent**, so the ring would have
+            # emptied the wrong hand while reporting itself resolved.
+            if not isinstance(amount, (int, str)):
+                raise LoweringError(
+                    "the random controller discard is counted or X", node=node
+                )
+            random_payload: dict[str, object] = {
+                "amount": amount, "who": "caster",
+            }
+            if node.filter is not None:
+                # The same reader the targeted random discard uses one branch
+                # down (Rag Man): a phrase the card matcher cannot test would
+                # widen the sample to the whole hand, which is the one direction
+                # a narrowing must never be dropped in.
+                described = chargeable_card_filter(node.filter)
+                if not described:
+                    raise LoweringError(
+                        "no random discard can test this narrowing", node=node
+                    )
+                random_payload["filter"] = described
+            return (
+                OracleInstruction("discard_x_target_cards", "", random_payload),
+            )
+        if not isinstance(amount, (int, str)):
             raise LoweringError(
                 "the controller discard is chosen, and counted or X", node=node
             )

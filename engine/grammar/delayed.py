@@ -25,6 +25,7 @@ import dataclasses
 from . import ast
 from .effects.prevention import _parse_bound_targeting_prevention
 from .errors import GrammarError
+from .conditions import _parse_condition
 from .nouns import parse_object_filter
 from .effects.characteristics import _parse_keywords
 from .vocabulary import LAND_TYPES, TYPE_LINE_SUPERTYPES
@@ -74,8 +75,14 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     # site announces it unseated, and the entry waits for the step rather than
     # expiring with the turn — an ability created during the end step itself
     # would otherwise be swept away before the step it names arrives.
+    #
+    # It **may** bind, as `next_end_of_combat` beside it does and for the same
+    # reason: a step names no object itself, so whether one was chosen is a fact
+    # about the sentence behind it (Goblin Kites' "sacrifice **that creature**"
+    # against Rukh Egg's token, which names nothing). The column is a permission
+    # and `delay_binds_an_object` is the answer.
     (("at", "the", "beginning", "of", "the", "next", "end", "step"),
-     "next_end_step", True, "until_it_triggers", False),
+     "next_end_step", True, "until_it_triggers", True),
     # "At the beginning of **your** next end step, …" (Necropotence). Not the
     # row above: that one is the next end step there is, whoever's turn it falls
     # in, and this one waits for one of the controller's own. On an opponent's
@@ -122,6 +129,14 @@ def delay_binds_an_object(may_bind: bool, effect) -> bool:
     narrowing added later — the ``blocked_by_bound_object`` / ``of_bound_type``
     family — is covered the day it is named rather than the day someone
     remembers this function.
+
+    A bound **card** is not one of them. ``create_delayed_trigger`` answers this
+    permission by resolving a *permanent* and arming **nothing** when it finds
+    none, so a sentence about a card in a graveyard — Seraph's "put **that
+    card** onto the battlefield", which reads the dead card out of the frozen
+    trigger context instead — would be granted a binding it cannot fill and lose
+    its whole ability. So the two card markers are excluded by name, the same
+    way the object ones are included by name.
     """
     if not may_bind:
         return False
@@ -130,11 +145,16 @@ def delay_binds_an_object(may_bind: bool, effect) -> bool:
 
 def _names_a_bound_object(node) -> bool:
     if isinstance(node, ast.TargetSpec) and node.quantifier in ("that", "other", "first"):
-        return True
+        # "…that **card**" is a card in a hidden or public zone, not a permanent
+        # the arming handler could look up by id (CR 400.7: what comes back is a
+        # different object). The rest of the walk still runs, so a sentence
+        # naming a card *and* a permanent is still a binding.
+        if not node.filter.is_card:
+            return True
     if dataclasses.is_dataclass(node) and not isinstance(node, type):
         for field in dataclasses.fields(node):
             value = getattr(node, field.name)
-            if "bound" in field.name and value:
+            if "bound" in field.name and "card" not in field.name and value:
                 return True
             if _names_a_bound_object(value):
                 return True
@@ -455,6 +475,7 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
         stream.reset(mark)
         return None
     effect = resolve_that_turn(effect) or effect
+    effect = fold_flip_stakes(stream, effect, parse_statement)
     return ast.CreateDelayedTrigger(
         event=event, effect=effect,
         once=once, duration=duration,
@@ -465,6 +486,82 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
         subject=subject, agent=agent,
         watches=watches,
     )
+
+
+def _contains_flip(node) -> bool:
+    """Whether *node* flips a coin somewhere inside it (CR 705.1).
+
+    Written as a walk over the dataclass rather than a check on the top-level
+    node, for :func:`_names_a_bound_object`'s reason one function up: the flip
+    may be one step of a sequence or the body of an offer, and a shape added
+    later is covered by default instead of silently answering False.
+    """
+    if isinstance(node, ast.FlipCoin):
+        return True
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        return any(
+            _contains_flip(getattr(node, field.name))
+            for field in dataclasses.fields(node)
+        )
+    if isinstance(node, (tuple, list)):
+        return any(_contains_flip(item) for item in node)
+    return False
+
+
+def fold_flip_stakes(stream: TokenStream, effect, parse_statement):
+    """Fold ``If you {win,lose} the flip, <effect>.`` into the delayed sentence
+    in front of it.
+
+    "{R}: Target creature you control with toughness 2 or less gains flying
+    until end of turn. **Flip a coin at the beginning of the next end step. If
+    you lose the flip, sacrifice that creature.**" (Goblin Kites.)
+
+    The two printed sentences are one delayed triggered ability: the flip
+    happens at the end step and so does everything that depends on it. Left as a
+    sibling step the conditional would be performed *now*, on the result of a
+    flip that has not happened — which is what the lowering already refuses by
+    name ("'the flip' with no coin flip before it in this effect"). So this can
+    only turn a refusal into a card; it can never change a reading that already
+    worked.
+
+    Which is also what makes the fold safe to decide here rather than by a list
+    of cards: the marker is that the following sentence back-references a value
+    **only the delayed effect produces**. A flip inside the delay and a
+    ``CoinFlipResult`` behind it is that relation spelled out, and nothing else
+    matches it.
+
+    Returns *effect* unchanged, cursor untouched, when the sentence behind it is
+    anything else — a second delay, an ordinary step, a conditional on a board
+    state — so every other card keeps the reading it has.
+    """
+    if not _contains_flip(effect):
+        return effect
+    mark = stream.mark()
+    if not (stream.accept_punct(".") and stream.accept_word("if")):
+        stream.reset(mark)
+        return effect
+    try:
+        condition = _parse_condition(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return effect
+    if not isinstance(condition, ast.CoinFlipResult) or not stream.accept_punct(","):
+        stream.reset(mark)
+        return effect
+    try:
+        consequence = parse_statement(stream, top_level=False)
+    except GrammarError:
+        stream.reset(mark)
+        return effect
+    # The stakes govern their whole sentence, so the consequence has to run to
+    # the end of one — the same guard `_parse_create_delayed_trigger` states
+    # about its own body, and for the same reason: a prefix accepted here would
+    # leave the rest to be performed immediately or to fail the line somewhere
+    # that says nothing about what happened.
+    if not stream.exhausted and not stream.at_punct(".", ";"):
+        stream.reset(mark)
+        return effect
+    return ast.Sequence((effect, ast.Conditional(condition, consequence)))
 
 
 def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTarget | None":

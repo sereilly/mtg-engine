@@ -30,7 +30,7 @@ from .paragraphs import (
 )
 from .delayed import (_parse_choose_target, _parse_choose_then_gain,
                       _parse_create_delayed_trigger, delay_binds_an_object,
-                      parse_trailing_delay,
+                      fold_flip_stakes, parse_trailing_delay,
                       resolve_that_turn)
 from .references import parse_player_ref, parse_recipient
 from .vocabulary import CARD_TYPES
@@ -227,6 +227,13 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
                 "a delayed sentence's X must say when it is counted"
             )
     statement = resolve_that_turn(statement) or statement
+    # "Flip a coin at the beginning of the next end step. **If you lose the
+    # flip, sacrifice that creature.**" (Goblin Kites.) The sentence behind the
+    # delay reads a value only the delayed effect produces, so it belongs inside
+    # the ability rather than beside it — folded before the node is built, which
+    # is what lets `delay_binds_an_object` below see the "that creature" it now
+    # contains.
+    statement = fold_flip_stakes(stream, statement, parse_statement)
     return ast.CreateDelayedTrigger(
         event=event, effect=statement,
         once=once, duration=duration,

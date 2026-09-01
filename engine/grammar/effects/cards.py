@@ -665,10 +665,14 @@ def _accept_hand_to_library_tail(
     caller's, because it agrees with the subject the sentence already named:
     "**your** hand … **your** library", "**their** hand … **their** library".
 
-    *ordered* is False for the one printing that omits the rider — Jester's
-    Mask's "puts the cards from their hand on top of their library" — and is a
-    parameter rather than an ``accept`` so the two spellings cannot drift into
-    each other: a card that prints the words must still have them read.
+    *ordered* is False where the rider is not printed and could not be, and is
+    a parameter rather than an ``accept`` so the two spellings cannot drift into
+    each other: a card that prints the words must still have them read. Two
+    callers pass it. Jester's Mask ("puts the cards from their hand on top of
+    their library") omits the rider over a whole hand; and **one card is not an
+    order** — "put a card from your hand on top of your library" (Conch Horn)
+    prints no ordering clause because a single card has no order to give, and
+    requiring one there refuses the sentence for a word English does not print.
     """
     if not stream.accept_phrase("on", "top", "of", possessive, "library"):
         return False
@@ -693,10 +697,23 @@ def _parse_put_hand_cards_on_library(
     if count is None or not stream.accept_phrase("from", "your", "hand"):
         stream.reset(mark)
         return None
-    if not _accept_hand_to_library_tail(stream, "your"):
+    if not _accept_hand_to_library_tail(stream, "your", ordered=_orderable(count)):
         stream.reset(mark)
         return None
     return ast.PutHandCardsOnLibrary(ast.PlayerRef("you"), count)
+
+
+def _orderable(count: "ast.Amount") -> bool:
+    """Whether the printed count is one an "in any order" rider can be about.
+
+    One card has no order, so Conch Horn prints none and Brainstorm prints one.
+    That is the difference between the two sentences and the only one, so it is
+    read off the count rather than made optional: with the rider merely accepted,
+    "put two cards from your hand on top of your library" would parse with the
+    player's ordering silently dropped, which is the rider bug this file already
+    refuses by construction one function up.
+    """
+    return not (isinstance(count, ast.Fixed) and count.value == 1)
 
 
 def _parse_player_puts_hand_cards_on_library(

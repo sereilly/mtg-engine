@@ -477,6 +477,18 @@ def _lower_condition(
             "count": condition.count,
             "comparison": condition.comparison,
         }
+    if isinstance(condition, ast.SourceAbilityActivations):
+        # The number and the comparison travel; what they are measured against
+        # is the per-turn activation ledger `engine/activation_restrictions.py`
+        # keeps, which the evaluator reads through that module's own accessor
+        # rather than off the metadata key — one reader, so the refusal a
+        # printed cap makes and the question this clause asks cannot come to
+        # disagree about how many activations there have been.
+        return {
+            "kind": "source_ability_activations",
+            "count": condition.count,
+            "comparison": condition.comparison,
+        }
     if isinstance(condition, ast.InABlockSinceLastUpkeep):
         # No payload: the sentence names no seat, no side of the block and no
         # other window. "Your" is the ability's controller, which the evaluator

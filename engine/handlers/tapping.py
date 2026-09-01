@@ -558,6 +558,22 @@ def tap_recorded_permanents(game: Game, instruction: OracleInstruction, context:
     return True, "resolved"
 
 
+#: Whose untap step a ``skip_next_untap`` marker is waiting for, when the card
+#: named one — "doesn't untap during **your** next untap step" (CR 701.43a).
+#: A seat index on the restricted permanent, beside the count.
+#:
+#: **Absent is not a default seat.** A marker with no entry here is the printed
+#: "its controller's next untap step", which needs no seat at all: the untap
+#: step only ever reaches permanents the active player controls, so the
+#: controller's step is the one that finds it. The key is written only for the
+#: seated spelling, which leaves every marker made before this word existed
+#: exactly as it was.
+#:
+#: Written here and read by ``engine/phases/untap_step.py``; one name for the
+#: reason :data:`UNTAP_LOCK_WHILE_TAPPED_KEY` has one.
+SKIP_NEXT_UNTAP_SEAT = "skip_next_untap_seat"
+
+
 @effect_handler("skip_next_untap")
 def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Those creatures don't untap during their controller's next untap step."
@@ -571,10 +587,18 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
     the same shape ``phased_out`` uses for the other thing CR 502 does per
     controller.
 
-    **Per creature, not per caster.** The marker carries no seat. The untap step
-    runs for the active player and looks only at permanents that player controls,
-    so two creatures under two controllers each wait for their own controller's
-    step with nothing recording whose step it is.
+    **Per creature unless the card says otherwise.** The marker carries no seat
+    for the printed "its controller's next untap step": the untap step runs for
+    the active player and looks only at permanents that player controls, so two
+    creatures under two controllers each wait for their own controller's step
+    with nothing recording whose step it is.
+
+    ``whose_untap_step: "controller"`` is the other printed word — "doesn't
+    untap during **your** next untap step" (Deep Spawn, Homarid Warrior;
+    CR 701.43a's exert wording is "the next untap step of the player who exerted
+    it"). That names one seat, frozen here while the ability still knows it,
+    because a creature that changes hands in between would otherwise wait for
+    the wrong player's step.
 
     Which permanents "those creatures" names comes from the scratchpad, keyed by
     the producing instruction's recorded result (``engine/grammar/lower.py``'s
@@ -582,7 +606,14 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
     none — and is not an error.
     """
     key = instruction.payload.get("permanents_from")
-    if key is None:
+    if instruction.payload.get("subject") == "source":
+        # "**This creature** … doesn't untap during your next untap step." The
+        # sentence names the ability's own permanent, so nothing is chosen and
+        # nothing is looked up; a source already gone is marked by nothing,
+        # which is CR 608.2 doing as much as it can.
+        source = context.source_permanent
+        recorded = (source.permanent_id,) if source is not None else ()
+    elif key is None:
         # "**Target creature** doesn't untap during its controller's next untap
         # step." (Barl's Cage.) The sentence chooses for itself instead of
         # restating an earlier step's pick, so the permanent comes from the
@@ -609,6 +640,14 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
         recorded = (chosen.permanent_id,) if chosen is not None else ()
     else:
         recorded = context.results.get(key) or ()
+    # CR 701.43a's seat, read once for the whole batch: the ability's own
+    # controller, which is who "your" names (CR 109.5).
+    seat = (
+        game.players.index(context.caster)
+        if instruction.payload.get("whose_untap_step") == "controller"
+        and context.caster in game.players
+        else None
+    )
     # "…next **two** untap steps" (Telekinesis). The marker is a count of steps
     # rather than a flag, because how many of the same turn-based action the
     # restriction survives is the only thing that differs between the two
@@ -626,9 +665,26 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
         # (CR 701.43b, said of exert — the keyworded form of this effect).
         held = int(permanent.metadata.get("skip_next_untap") or 0)
         permanent.metadata["skip_next_untap"] = max(held, steps)
+        # Two contributions on one permanent share one marker, so the seat has
+        # to merge too, and it merges toward the **stricter** reading: an
+        # unseated marker applies at whichever untap step reaches the permanent,
+        # and a seated one skips every other player's. Dropping the seat where
+        # the two disagree can only hold a creature down longer than one of them
+        # asked, never shorter — which is the one direction a restriction may
+        # err in.
+        if seat is None:
+            permanent.metadata.pop(SKIP_NEXT_UNTAP_SEAT, None)
+        elif permanent.metadata.get(SKIP_NEXT_UNTAP_SEAT, seat) != seat:
+            permanent.metadata.pop(SKIP_NEXT_UNTAP_SEAT, None)
+        elif held <= 0 or SKIP_NEXT_UNTAP_SEAT in permanent.metadata:
+            permanent.metadata[SKIP_NEXT_UNTAP_SEAT] = seat
+        whose = (
+            f"{game.players[seat].name}'s next" if seat is not None
+            else "its controller's next"
+        )
         plural = "" if steps == 1 else f" {steps}"
         game.log.append(
-            f"{permanent.card.name} won't untap during its controller's next"
+            f"{permanent.card.name} won't untap during {whose}"
             f"{plural} untap step" + ("" if steps == 1 else "s")
         )
         marked += 1

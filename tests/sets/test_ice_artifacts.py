@@ -1735,3 +1735,55 @@ def test_a_talisman_whose_target_left_untaps_nothing(set_pool, name):
         f"{name} untapped the permanent that inherited its target's slot"
     )
 # --- end LeadB ---
+
+
+# --- FEM G2: a one-keyword grant's printed noun phrase reaches the picker ---
+def test_whalebone_glider_only_lifts_a_creature_the_phrase_admits(set_pool):
+    """"{2}, {T}: Target creature **with power 3 or less** gains flying until
+    end of turn."
+
+    A single-keyword grant took a shortcut instruction kind that carried a
+    duration and nothing else, so the printed noun phrase never reached
+    ``engine/targeting.py`` and the picker offered every creature on the board.
+    Krovikan Elementalist's "target creature **you control** gains flying" lost
+    its phrase the same way, one narrowing over.
+
+    Enforced where CR 602.2b puts it -- at activation, with nothing paid --
+    which is what ``legality.activation_target_refusal`` asks over the same
+    list the picker is handed.
+    """
+    pool = set_pool("ICE")
+    glider = _nosick(Permanent(card=pool["Whalebone Glider"]))
+    light = _nosick(Permanent(card=pool["Balduvian Bears"]))       # 2/2
+    heavy = _nosick(Permanent(card=pool["Scaled Wurm"]))            # 7/6
+    p1 = PlayerState(name="P1", battlefield=[glider, light, heavy])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game._settle()
+    assert heavy.effective_power > 3, "the fixture creature is out of range"
+
+    ability = compile_card_oracle(glider.card).activated_abilities[0]
+    assert game.activation_target_refusal(
+        0, glider, ability,
+        target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(heavy),
+    ) is not None
+    assert game.activation_target_refusal(
+        0, glider, ability,
+        target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(light),
+    ) is None
+
+    result = game.activate_permanent_ability(
+        0, "Whalebone Glider",
+        permanent_index=game.battlefield_index_of(glider),
+        target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(light),
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+    assert result.supported, result.details
+    assert light.has_keyword("flying")
+    assert not heavy.has_keyword("flying")

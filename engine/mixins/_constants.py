@@ -73,8 +73,6 @@ _EOT_METADATA_KEYS = (
     # they answer two questions and are read by two different clauses — the
     # victim's list names its killers, this one names a damager's victims.
     "dealt_damage_to_seats_this_turn",
-    # Dragon Whelp firebreathing activation counter ("four or more times this turn")
-    "pump_activation_count",
     # Pyramids: unused land-destruction shield expires with the turn
     "land_destruction_shield_this_turn",
     # Ebony Horse: combat-damage shield on the untapped attacker

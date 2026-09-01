@@ -488,7 +488,17 @@ def _lower_doesnt_untap_next_step(
         and subject.quantifier == "target"
         and subject.targeted
     )
-    if not bare_pronoun and not chosen and (
+    # "**This creature** … doesn't untap during your next untap step." (Deep
+    # Spawn, Homarid Warrior.) The sentence names the ability's own permanent,
+    # which is neither a back-reference nor a choice — so there is no producer
+    # to require and nothing to describe for a picker, and the handler reads
+    # ``context.source_permanent``.
+    # Not the bare pronoun, which also carries ``is_source`` and means the
+    # opposite thing — "it" names what the sentence in front of it tapped, and
+    # reading the two as one would point the marker at the ability's own
+    # permanent (the very confusion ``bare_pronoun`` above is written to avoid).
+    own_source = _is_source(subject) and not bare_pronoun
+    if not bare_pronoun and not chosen and not own_source and (
         not isinstance(subject, ast.TargetSpec) or subject.quantifier != "those"
     ):
         raise LoweringError(
@@ -498,6 +508,24 @@ def _lower_doesnt_untap_next_step(
         )
     if node.count < 1:
         raise LoweringError("a skipped-untap count of none is no restriction", node=node)
+    # CR 701.43a's "your", carried as a seat the handler freezes. Absent for the
+    # per-creature spelling, which leaves every payload written before this word
+    # existed byte-identical — and the untap step reads an unseated marker as
+    # "the controller's next untap step", which is what that spelling means.
+    seated = {"whose_untap_step": "controller"} if node.whose == "you" else {}
+    if own_source:
+        if _restrictions_beyond(
+            subject.filter, frozenset({"card_types", "is_source"})
+        ):
+            raise LoweringError(
+                "the source names itself and carries no narrowing", node=node
+            )
+        return (
+            OracleInstruction(
+                "skip_next_untap", "",
+                {"subject": "source", "untap_steps": node.count, **seated},
+            ),
+        )
     if chosen:
         described = _filter_payload(subject.filter)
         # The handler tests the noun phrase with ``subject_matches``, so a key
@@ -507,7 +535,9 @@ def _lower_doesnt_untap_next_step(
             raise LoweringError(
                 "the untap marker cannot test this restriction", node=node
             )
-        payload: dict[str, object] = {**described, "untap_steps": node.count}
+        payload: dict[str, object] = {
+            **described, "untap_steps": node.count, **seated,
+        }
         _describe_targets(payload, subject)
         return (OracleInstruction("skip_next_untap", "", payload),)
     if not bare_pronoun and _restrictions_beyond(subject.filter, frozenset({"card_types"})):
@@ -526,7 +556,11 @@ def _lower_doesnt_untap_next_step(
             # where ``engine/handlers/control_flow.py`` carries a composed
             # effect's nested instructions, and every reader that walks a
             # program recurses into it.
-            {"permanents_from": _TAPPED_PERMANENTS, "untap_steps": node.count},
+            {
+                "permanents_from": _TAPPED_PERMANENTS,
+                "untap_steps": node.count,
+                **seated,
+            },
         ),
     )
 
