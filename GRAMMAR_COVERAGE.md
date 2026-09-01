@@ -27,7 +27,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4ED | 368 | 520 | 90.4% | 90.0% | 53.8% | 246 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| FEM *(measured)* | 102 | 191 | 87.4% | 86.4% | 64.4% | 83 |
+| FEM *(measured)* | 102 | 191 | 90.6% | 89.5% | 67.0% | 87 |
 | **All (shipped)** | **2788** | **4005** | **87.4%** | **86.5%** | **55.2%** | **1886** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -41,8 +41,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 236 | 102 | expected a subject |  |
-| 117 | 50 | unrecognized effect verb |  |
-| 56 | 28 | unconsumed text |  |
+| 116 | 49 | unrecognized effect verb |  |
+| 54 | 26 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 16 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -55,9 +55,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | this clause enumerates an opponent or any player, not 'you' |  |
 | 4 | 1 | expected 'that' |  |
-| 4 | 2 | expected a colour or a creature body after 'becomes' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
+| 3 | 1 | expected a colour or a creature body after 'becomes' |  |
 | 3 | 1 | expected a destination zone after 'return' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
@@ -1325,6 +1325,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: This creature deals 1 damage to target creature it's blocking.`
 - **Goblin War Drums**
   - `Creatures you control have menace. (They can't be blocked except by two or more creatures.)`
+- **Goblin Warrens**
+  - `{2}{R}, Sacrifice two Goblins: Create three 1/1 red Goblin creature tokens.`
 - **Goblin Wizard**
   - `{T}: You may put a Goblin permanent card from your hand onto the battlefield.`
   - `{R}: Target Goblin gains protection from white until end of turn.`
@@ -2171,6 +2173,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Nicol Bolas**
   - `At the beginning of your upkeep, sacrifice Nicol Bolas unless you pay {U}{B}{R}.`
   - `Whenever Nicol Bolas deals damage to an opponent, that player discards their hand.`
+- **Night Soil**
+  - `{1}, Exile two creature cards from a single graveyard: Create a 1/1 green Saproling creature token.`
 - **Nine Lives**
   - `When there are nine or more incarnation counters on this enchantment, exile it.`
   - `When this enchantment leaves the battlefield, you lose the game.`
@@ -2888,6 +2892,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever an opponent casts a creature spell, this enchantment deals 2 damage to that player unless they pay {2}.`
 - **Soul Burn**
   - `Soul Burn deals X damage to any target. You gain life equal to the damage dealt, but not more than the amount of {B} spent on X, the player's life total before the damage was dealt, the planeswalker's loyalty before the damage was dealt, or the creature's toughness.`
+- **Soul Exchange**
+  - `Return target creature card from your graveyard to the battlefield. Put a +2/+2 counter on that creature if the exiled creature was a Thrull.`
 - **Soul Kiss**
   - `{B}, Pay 1 life: Enchanted creature gets +2/+2 until end of turn. Activate no more than three times each turn.`
 - **Soul Net**
@@ -3138,6 +3144,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {G}.`
 - **Thelon's Curse**
   - `At the beginning of each player's upkeep, that player may choose any number of tapped blue creatures they control and pay {U} for each creature chosen this way. If the player does, untap those creatures.`
+- **Thelonite Druid**
+  - `{1}{G}, {T}, Sacrifice a creature: Forests you control become 2/3 creatures until end of turn. They're still lands.`
 - **Thelonite Monk**
   - `{T}, Sacrifice a green creature: Target land becomes a Forest. (This effect lasts indefinitely.)`
 - **Thermokarst**
@@ -3404,6 +3412,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Vodalian War Machine**
   - `Tap an untapped Merfolk you control: This creature can attack this turn as though it didn't have defender.`
   - `Tap an untapped Merfolk you control: This creature gets +2/+1 until end of turn.`
+  - `When this creature dies, destroy all Merfolk tapped this turn to pay for its abilities.`
 - **Volcanic Eruption**
   - `Destroy X target Mountains. Volcanic Eruption deals damage to each creature and each player equal to the number of Mountains put into a graveyard this way.`
   - `Destroy X target Mountains. Volcanic Eruption deals damage to each creature and each player equal to the number of Mountains put into a graveyard this way.`
