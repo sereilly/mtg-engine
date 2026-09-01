@@ -724,6 +724,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # a category of its own — here, damage. A choice sharing the category of
     # what reads it would let one switch gate half of a two-sentence card.
     "choose_player_who_cast": "chosen_players",
+    # "**An opponent** gains control of this land …" (Rainbow Vale.) The same
+    # category and for the same reason: the seat is a value one step records and
+    # the step behind it reads back, and the hand-over that reads it carries the
+    # control family's category of its own.
+    "choose_opponent": "chosen_players",
     # "Count the number of permanents." (Chaos Moon.) Its own category for the
     # reason the chosen number and the chosen player have theirs: the count is a
     # *value* the effect records, and the sentences that read it back carry the

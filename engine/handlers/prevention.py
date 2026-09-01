@@ -664,11 +664,16 @@ def prevent_damage_by_target_until_eot(game: Game, instruction: OracleInstructio
     from ..prevention import COMBAT_SHIELD_BY, add_directional_shield
 
     combat_only = bool(instruction.payload.get("combat_only"))
-    perm = resolve_target_permanent(
+    # Through the innermost binding, exactly as the recipient half above does
+    # and for its reason: "**For each attacking red creature,** prevent all
+    # combat damage that would be dealt by **that creature** this turn"
+    # (Heroism) names a different creature each time round, and the sentence
+    # chooses no target at all — so a read of the resolution's targets would
+    # shield whichever creature a fallback happened to find.
+    perm = bound_permanent(
         game, context,
         predicate=lambda p: p.is_creature,
         fallback_players=tuple(game.players),
-        fallback_on_invalid_choice=False,
     )
     if perm is None:
         game.log.append(f"{context.card.name}: no creature to silence")

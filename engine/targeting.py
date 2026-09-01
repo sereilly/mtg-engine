@@ -529,10 +529,7 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "pump_target_creature_until_eot": {"kind": "creature"},
     "grant_regeneration_to_target_creature": {"kind": "creature"},
     "mark_non_wall_target_to_attack": {"kind": "creature"},
-    # "Put a +1/+1 counter on target creature" — the creature restriction is
-    # part of what the kind means. Emitted by Dwarven Weaponsmith's hook and,
-    # since the M21 counter round, by the grammar's put-counter lowering.
-    "add_counter_to_target": {"kind": "creature"},
+
     # Effects that act on a *player*: the handler reads `context.target`,
     # a seat, and never looks at the battlefield. ``mill_target_player`` is not
     # among them — it names its recipient in the payload, so it is read by
@@ -1411,6 +1408,26 @@ def _from_instruction(instruction) -> dict | None:
         spec = _spec_from_type_filter(instruction.payload)
         if spec is not None:
             return spec
+    # **An instruction acting on a recorded set chooses nothing.**
+    # ``permanents_from`` names what an earlier step of this same resolution
+    # put in the scratchpad — the creature a ``choose_permanent`` prompt was
+    # answered with, the permanents a tap recorded — and CR 601.2c chose none
+    # of them: a target is announced when the spell or ability goes on the
+    # stack, and these objects were not known then.
+    #
+    # Asked here rather than in each kind's own row because it is a property of
+    # the payload and not of the kind: the very same ``add_counter_to_target``
+    # is a target on Dwarven Weaponsmith and a back-reference on Thelon's
+    # Chant. Read as a target, the Chant's trigger acquired one it never had —
+    # and a trigger whose only target is illegal is removed from the stack
+    # (CR 603.3c), which on a board with no creature to shrink is the whole
+    # ability gone instead of three damage.
+    #
+    # After the two readings above on purpose: an instruction carrying a real
+    # ``targets`` description settles on that, and none in the pool carries
+    # both.
+    if instruction.payload.get("permanents_from"):
+        return None
     by_kind = _KIND_TO_SPEC.get(instruction.kind)
     return dict(by_kind) if by_kind is not None else None
 

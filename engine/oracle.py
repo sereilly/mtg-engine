@@ -674,6 +674,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"(?: the battlefield)?(?P<enterer_includes_source>)"),
     ("matching_permanent_enters",
      r"whenever (?P<enterer_subject>(?:a|another) [^,]+) enters(?: the battlefield)?"),
+    # "Whenever **a player puts a Swamp onto the battlefield**" (Thelon's
+    # Chant, Tourach's Chant) — the same event named from the player's side.
+    # One kind, because it is one event: the engine announces a permanent
+    # entering from the one seam every entry path passes through, and a second
+    # condition would need a second fire site watching the same moment. Below
+    # the two rows above rather than beside them: this pattern's subject group
+    # sits after three fixed words those cannot match, so no collision, and the
+    # ordering keeps the commoner spellings first.
+    ("matching_permanent_enters",
+     r"whenever a player puts (?P<enterer_subject>a [^,]+?) onto the battlefield"),
     ("one_or_more_attack",          r"whenever one or more creatures you control attack"),
     # "Whenever one or more Cats you control deal combat damage to a player"
     # (Feline Sovereign). A **batched** trigger: however many creatures dealt

@@ -65,6 +65,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # the first sentence does, and the only place the second can read it: a
     # chosen player is not a target and nothing on a board records the choice.
     "choose_player_who_cast": CHOSEN_PLAYER,
+    # "**An opponent** gains control of this land …" (Rainbow Vale.) The same
+    # record: an unnamed seat the effect picks is written where every chosen
+    # player is written, so the hand-over behind it needs no key of its own.
+    "choose_opponent": CHOSEN_PLAYER,
     # "…equal to half the damage dealt by **one of those** sorcery spells this
     # turn." The pick records what the chosen cast dealt, because by the time
     # this is asked the spell has resolved and left the stack — the ledger is

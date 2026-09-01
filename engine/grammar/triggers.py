@@ -528,6 +528,28 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         # is read before the phrase table below, whose bare entry is its strict
         # prefix — matching that first is what left Snarespinner compiled to an
         # unnarrowed "this creature blocks" with its rider on the floor.
+        # "Whenever **a player puts a Swamp onto the battlefield**" (Thelon's
+        # Chant, Tourach's Chant). The entry event named from the player's side
+        # rather than the permanent's — one event, so one kind: whatever put it
+        # there, a permanent entering the battlefield is what happened, and the
+        # engine announces that once from the seam every entry path goes
+        # through. Reading it as a condition of its own would need a second fire
+        # site watching the same moment.
+        #
+        # A production rather than a `_FILTERED_EVENTS` row because the phrase
+        # continues *after* the noun ("onto the battlefield"), which that
+        # table's rows have no way to consume — and an unconsumed tail fails the
+        # line.
+        mark = stream.mark()
+        if stream.accept_phrase("a", "player", "puts"):
+            entering = parse_subject_filter_at(stream)
+            if entering is not None and stream.accept_phrase(
+                "onto", "the", "battlefield"
+            ):
+                return ast.TriggerEvent(
+                    "matching_permanent_enters", "whenever", subject=entering,
+                )
+        stream.reset(mark)
         for phrase, kind in _FILTERED_EVENTS:
             mark = stream.mark()
             if accept_event_phrase(stream, phrase):

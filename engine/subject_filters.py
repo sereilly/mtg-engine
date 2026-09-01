@@ -139,6 +139,15 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # tests it. Relative to the ability's own source, which makes it testable
     # here and nowhere else — the same footing as ``blocked_by_source``.
     "tapped_to_pay_for_source_this_turn",
+    # "target creature **whose controller controls an Island**" (Seasinger).
+    # A nested noun phrase about a *seat's board* rather than about the object,
+    # so it needs the game — and only the game: no observer, because the seat
+    # the phrase asks about is the candidate's own controller and not the
+    # ability's. Recursed through :func:`untestable_filter_keys` exactly as
+    # ``attached_to_filter`` is, so a nested phrase naming something untestable
+    # refuses the whole line rather than being dropped, which here would offer
+    # every creature on the table.
+    "controller_controls",
 })
 
 #: The keys :func:`subject_matches` answers from the object alone. The other two
@@ -148,7 +157,11 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
 #: takes the excluded permanent as its own argument — has neither to give, so a
 #: payload it hands over must stay inside this set or the narrowing would be
 #: quietly ignored.
-OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {"controller", "owner", "exclude_self"}
+#: ``controller_controls`` is out for the same reason as the three below it,
+#: one step further away: a caller with no game cannot read anybody's board.
+OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {
+    "controller", "owner", "exclude_self", "controller_controls",
+}
 
 
 def untestable_filter_keys(
@@ -169,9 +182,10 @@ def untestable_filter_keys(
     the reader chasing the refusal wants the host phrase, not one of its parts.
     """
     unknown = set(payload) - allowed
-    nested = payload.get("attached_to_filter")
-    if isinstance(nested, dict) and untestable_filter_keys(nested, allowed=allowed):
-        unknown.add("attached_to_filter")
+    for key in ("attached_to_filter", "controller_controls"):
+        nested = payload.get(key)
+        if isinstance(nested, dict) and untestable_filter_keys(nested, allowed=allowed):
+            unknown.add(key)
     return unknown
 
 #: The keys ``_card_matches_filter`` answers about a **card** — an object in a
@@ -324,6 +338,27 @@ def subject_matches(
     # on the ability's source (CR 614.1c) — resolved here, where the source is
     # in hand, into the ordinary colour key. With no source the key survives and
     # the pure matcher refuses, which is the direction that cannot widen the set.
+    # "…**whose controller controls an Island**" (Seasinger). A question about
+    # the candidate's own controller's board, so it is asked with that seat as
+    # the observer rather than with this call's — "an Island" is not "an Island
+    # you control", and passing the ability's seat down would read the wrong
+    # board every time the two differ. Stripped before the pure matcher runs,
+    # which has no key for it.
+    controller_controls = described.get("controller_controls")
+    if controller_controls:
+        described = {
+            k: v for k, v in described.items() if k != "controller_controls"
+        }
+        seat = game.controller_index_of(obj)
+        if seat is None:
+            return False
+        if not any(
+            subject_matches(
+                game, other, controller_controls, observer=seat, source=source
+            )
+            for other in game.controlled_by(game.players[seat])
+        ):
+            return False
     described = _resolve_chosen_color(described, source)
     if not permanent_matches_filter(obj, described):
         return False

@@ -237,6 +237,30 @@ def _parse_leading_for_each(
             return None
         return ast.DiedThisWay(filt)
     if not stream.accept_phrase("that", "died", "this", "way"):
+        # "**For each attacking red creature,** prevent all combat damage …"
+        # (Heroism) / "**For each attacking creature without flying,** its
+        # controller may pay {1}." (Tidal Flats.) The set the board holds right
+        # now, with no window and no earlier step behind it — which is what
+        # ``ast.ForEach``'s iterator union has always said an ``ObjectFilter``
+        # means, and what nothing in the leading position could produce.
+        #
+        # Read **last**, after all four windows above, so a phrase that names a
+        # history keeps naming one: "creature that died this way" is a strictly
+        # longer phrase whose prefix this branch would otherwise take, turning a
+        # loop over a graveyard into a loop over the battlefield.
+        #
+        # Two guards. The phrase must name something *on the battlefield* — a
+        # zone the loop cannot walk is `_parse_leading_count_scale`'s multiplier
+        # reading, tried before this one — and it must narrow at all: "for each
+        # permanent," names every object in play, which no card prints and which
+        # a bare article could reach by accident.
+        if (
+            filt.zone == "battlefield"
+            and not filt.is_card
+            and filt != ast.ObjectFilter()
+            and stream.accept_punct(",")
+        ):
+            return filt
         stream.reset(mark)
         return None
     if not stream.accept_punct(","):
@@ -557,7 +581,16 @@ def _accept_graded_toll_outcomes(parse_body, stream, statement):
     return _replace_offer(
         statement,
         dataclasses.replace(
-            offer, otherwise=otherwise, option_effects=tuple(outcomes),
+            offer, otherwise=otherwise,
+            # Only when a "pays only {N}" clause really named one. "…its
+            # controller may pay {1}. **If that player doesn't**, …" (Tidal
+            # Flats) prints the decline branch and nothing else, which is not a
+            # graded offer at all — one empty slot per printed option would
+            # make the lowering read it as an offer where every way of paying
+            # buys nothing, and refuse the line.
+            option_effects=(
+                tuple(outcomes) if any(o is not None for o in outcomes) else ()
+            ),
         ),
     )
 
@@ -637,6 +670,25 @@ def _accept_trailing_toll(
             stream.reset(mark)
             return None
         return ast.May(actor=payer, action=mill, otherwise=body)
+    # "…unless the player **puts a -1/-1 counter on a creature they control**"
+    # (Thelon's Chant, Tourach's Chant). The third printed currency beside mana
+    # and a discard, and the same decomposition for the same reason: an
+    # "unless" is an offer with a penalty, and saying it as one means the
+    # offer, the penalty and the "you have nothing to put it on" case all come
+    # from machinery that already works.
+    if stream.at_word("puts", "put"):
+        try:
+            placement = _parse_put_counter(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        # Only a *counter placement*: "put" also opens the object-moving family
+        # ("put that card onto the battlefield"), which is not a price anybody
+        # pays out of their own resources and has no takeability test behind it.
+        if not isinstance(placement, ast.PutCounter) or payer.kind in _ENUMERATED_PAYERS:
+            stream.reset(mark)
+            return None
+        return ast.May(actor=payer, action=placement, otherwise=body)
     if not stream.accept_word("pays", "pay"):
         stream.reset(mark)
         return None

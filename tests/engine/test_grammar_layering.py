@@ -282,7 +282,23 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # name in either direction, checked at the split. Asymmetric like `zones` and
 # `types`: the parse side stays in `effects/board.py`, where destroy is one
 # production reading the same noun phrase as the rest.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "attachments", "types", "destruction"]
+# `counter_removal` split out of `lowering/counters.py` at 1,002, and like
+# `destruction` the cap is the whole story of where the line is: **three**
+# parallel branches added to that module and none crossed it alone — a bound
+# subject for a placement (Soul Exchange), a chosen one (Thelon's Chant,
+# Tourach's Chant) and "remove **all** counters" (Homarid, Tidal Influence)
+# — and the sum did. The boundary was already there to be found, and it is
+# the CR's own: putting counters on is CR 121.1/121.2 and removing them is
+# CR 121.3, and the two ask different questions of a payload. A placement
+# asks which object and how many; a removal asks which kind, and whether the
+# number is even known yet — "all" and "any number of" each need their own
+# instruction kind because a fixed decrement would take exactly one counter
+# off a permanent the card says to empty. The two halves share no name in
+# either direction, checked at the split. Asymmetric like `zones`, `types`
+# and `destruction`: the parse side stays in `effects/counters.py`, where
+# both halves fit in 321 lines and `_parse_remove_counter` reads the same
+# counter-kind vocabulary as `_parse_put_counter`.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "attachments", "types", "destruction", "counter_removal"]
 # The AST side has no `library`: what a search or a look-at *is* — the pile, the
 # filter, the fate of what was found — is a handful of nodes that sit perfectly
 # well beside the other card nodes, and the split that made `library` a family

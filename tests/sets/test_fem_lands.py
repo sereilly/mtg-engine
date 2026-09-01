@@ -18,3 +18,96 @@ only after the merge is committed. A self-contained block cannot lose one.
 """
 
 from __future__ import annotations
+
+
+# --- G5: prices offered to a player, prevention and control ---
+from engine import Game, PlayerState
+from engine.models import Permanent
+
+
+def _g5_game(*rows) -> Game:
+    game = Game(players=[PlayerState(name=f"P{i + 1}", battlefield=list(row))
+                         for i, row in enumerate(rows)])
+    game.enforce_mana_costs = False
+    return game
+
+
+def test_rainbow_vale_hands_itself_to_an_opponent_at_the_next_end_step(set_pool):
+    """"{T}: Add one mana of any color. An opponent gains control of this land
+    at the beginning of the next end step."
+
+    Both halves in one activation: the mana arrives now and the control change
+    is a CR 603.7 delayed ability that fires in the end step. Who gets it is a
+    choice the ability's controller announces while applying the effect
+    (CR 608.2c/d) — in a duel there is one answer, and the seat is recorded
+    rather than assumed so a three-seat game asks.
+    """
+    vale = Permanent(card=set_pool("FEM")["Rainbow Vale"])
+    game = _g5_game([vale], [])
+    game.start_turn(0)
+
+    assert game.activate_permanent_ability(0, "Rainbow Vale", mana_color="U").supported
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert game.players[0].mana_pool["U"] == 1
+    assert game.controller_index_of(vale) == 0, "it is still yours until the end step"
+
+    game.resolve_end_step(0)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert game.controller_index_of(vale) == 1, game.log
+    # CR 613 layer 2 is a contribution, not a move: the seat it entered under
+    # is untouched, which is what CR 108.3 ownership still reads.
+    assert vale.metadata.get("base_controller_index") in (0, None)
+
+
+def test_rainbow_vale_does_not_change_hands_before_the_end_step(set_pool):
+    """The delay is the card. Nothing fires until an end step, so the land is
+    still producing mana for its own controller in the meantime."""
+    vale = Permanent(card=set_pool("FEM")["Rainbow Vale"])
+    game = _g5_game([vale], [])
+    game.start_turn(0)
+    game.activate_permanent_ability(0, "Rainbow Vale", mana_color="G")
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    game.resolve_upkeep(0)
+    assert game.controller_index_of(vale) == 0, game.log
+# --- end G5 ---
+
+
+# --- G5 (continued): the opponent is chosen, not assumed ---
+def test_rainbow_vale_asks_which_opponent_when_there_is_more_than_one(set_pool):
+    """CR 608.2d: "an opponent" names nobody, so the ability's controller
+    announces which one while applying the effect.
+
+    A duel has one answer and is recorded without asking; three seats is a real
+    decision, and it is the difference between a card that hands itself to a
+    threat and one that hands itself to whoever the engine listed first.
+    """
+    vale = Permanent(card=set_pool("FEM")["Rainbow Vale"])
+    library = [set_pool("LEA")["Island"]] * 5
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[vale], library=list(library)),
+        PlayerState(name="P2", library=list(library)),
+        PlayerState(name="P3", library=list(library)),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.start_turn(0)
+    game.activate_permanent_ability(0, "Rainbow Vale", mana_color="R")
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    game.resolve_end_step(0)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    pending = [c for c in game.pending_choices if c.kind == "player_choice"]
+    assert [c.player_index for c in pending] == [0], game.log
+    assert pending[0].data["names"] == ["P2", "P3"], "its own controller is not an option"
+
+    assert game.confirm_player_choice(0, 2)
+    assert game.controller_index_of(vale) == 2, game.log
+# --- end G5 (continued) ---

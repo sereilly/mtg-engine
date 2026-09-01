@@ -1341,6 +1341,7 @@ def bound_permanent(
     context: OracleExecutionContext,
     *,
     predicate: Callable[[Permanent], bool] | None = None,
+    fallback_players: "Sequence[PlayerState] | None" = None,
 ) -> Permanent | None:
     """The permanent a sentence's back-reference names — "that creature", "it",
     "its controller" — resolved against the **innermost** binding.
@@ -1370,6 +1371,7 @@ def bound_permanent(
         return None
     return resolve_target_permanent(
         game, context, predicate=predicate, fallback_on_invalid_choice=False,
+        fallback_players=fallback_players,
     )
 
 

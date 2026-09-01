@@ -29,10 +29,25 @@ from ._common import (
     describe_target_roles,
 )
 from ._events import (
+    CHOSEN_PERMANENT,
+    EVENT_SUBJECT_CONTROLLER,
     _DAMAGED_PLAYER_EVENTS,
     _EVENT_SUBJECT_OBJECTS,
     _RECORDED_PERMANENTS,
 )
+
+
+#: Whose creature an *unchosen* counter placement lands on, and the word the
+#: ``choose_permanent`` prompt names that seat by. "a creature **you** control"
+#: is the effect's own controller; "a creature **they** control" is the seat the
+#: firing event was about, which is the only reading of "they" a toll's price
+#: can have — the offer was made to that player and the price comes out of their
+#: own board. A controller word outside this table refuses, because a prompt
+#: armed on the wrong seat is a player paying somebody else's price.
+_COUNTER_CHOOSERS: dict[str, str] = {
+    "you": "you",
+    "that_player": EVENT_SUBJECT_CONTROLLER,
+}
 
 
 # The ObjectFilter fields the loyalty-counter picker reads. Only what the pool
@@ -580,6 +595,61 @@ def _lower_put_counter(
                 {"counter": node.counter, "count": node.count.value},
             ),
         )
+    # "…unless the player **puts a -1/-1 counter on a creature they control**"
+    # (Thelon's Chant, Tourach's Chant.) A CR 122.1a counter on a creature
+    # nobody targeted and nobody named: the sentence says only *whose*, so the
+    # seat it names picks one while the effect resolves (CR 608.2d).
+    #
+    # Two steps, the pairing ``choose_permanent`` + a step reading its answer
+    # that ``lowering/control_changes.py`` already makes for Preacher: the pick
+    # may have to stop and ask, and a handler that stops cannot also place the
+    # counter. Refused where the phrase names no seat at all — "put a counter on
+    # a creature" with no controller word is every creature on the table, and a
+    # prompt listing them is a choice the card never offered.
+    if (
+        is_pt_counter(node.counter)
+        and not node.up_to
+        and isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "a"
+        and not node.subject.targeted
+        and node.subject.filter.controller in _COUNTER_CHOOSERS
+    ):
+        if _restrictions_beyond(
+            node.subject.filter, frozenset({"card_types", "controller"})
+        ):
+            raise LoweringError(
+                "the chosen counter placement reads a seat's own permanents "
+                "and nothing narrower",
+                node=node,
+            )
+        if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
+            raise LoweringError(
+                "a chosen counter placement places one counter", node=node
+            )
+        chooser = _COUNTER_CHOOSERS[node.subject.filter.controller]
+        described = _filter_payload(
+            dataclasses.replace(node.subject.filter, controller=None)
+        )
+        return (
+            OracleInstruction(
+                "choose_permanent", "",
+                {
+                    "result_key": CHOSEN_PERMANENT,
+                    "chooser": chooser,
+                    # The candidates come off the *chooser's* own battlefield,
+                    # which is what "they control" says. Naming the seat twice —
+                    # once to ask and once to draw from — is how a three-seat
+                    # game ends up asking one player about another's creatures.
+                    "controlled_by": "chooser",
+                    "filter": described,
+                    "prompt": f"Choose a creature to put a {node.counter} counter on.",
+                },
+            ),
+            OracleInstruction(
+                "add_counter_to_target", "",
+                {"counter": node.counter, "permanents_from": CHOSEN_PERMANENT},
+            ),
+        )
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)
     if isinstance(node.count, ast.ThatMuch) and _is_source(node.subject):
@@ -790,108 +860,6 @@ def _lower_player_gets_counters(
             "player_gets_poison_counters", "",
             {"amount": amount, "player": "damaged_player"},
         ),
-    )
-
-
-def _lower_remove_counter(
-    node: ast.RemoveCounter, event: str | None = None
-) -> tuple[OracleInstruction, ...]:
-    """``Remove a <kind> counter from this <permanent>`` (Armageddon Clock).
-
-    The counter's name is payload — it is the accumulating side's payload too
-    (``upkeep_put_counter_on_self``), so the pair is one template rather than a
-    card. What is *not* payload is the subject or the number:
-    ``remove_counter_from_self`` reads the ability's own source and decrements by
-    one, so anything else refuses rather than compiling onto a handler that
-    would quietly do that instead.
-    """
-    # "Remove two loyalty counters from each planeswalker." (Pestilent Haze's
-    # second mode.) A sweep, not a choice: every planeswalker on every
-    # battlefield loses that many, and CR 704.5i collects the ones that hit
-    # zero. Only the loyalty/planeswalker pairing has a handler — loyalty is
-    # the one counter kind whose storage the handler knows how to reach.
-    if (
-        isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier == "each"
-        and node.counter == "loyalty"
-    ):
-        if node.subject.filter.card_types != ("planeswalker",):
-            raise LoweringError(
-                "the loyalty sweep removes from planeswalkers alone", node=node
-            )
-        amount = _amount_payload(node.count)
-        if not isinstance(amount, int) or amount <= 0:
-            raise LoweringError("the loyalty sweep takes a fixed count", node=node)
-        return (
-            OracleInstruction(
-                "remove_loyalty_from_each_planeswalker", "", {"amount": amount}
-            ),
-        )
-    # "…remove a sleep counter from **that creature**." (Venarian Gold.) "That
-    # creature" restates an object something earlier bound, and the only
-    # trigger head that binds one is `upkeep_enchanted_controller` — its
-    # sentence is *about* the enchanted creature, which is what the handler
-    # reads off the source's own attachment. Under any other event the words
-    # name a creature nobody recorded, so the line keeps refusing; and the
-    # dispatch registry keys on the ability's whole instruction, so a nested
-    # occurrence (event is None here) refuses the same way.
-    if (
-        isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier == "that"
-        and event == "upkeep_enchanted_controller"
-    ):
-        if node.subject.filter != ast.ObjectFilter(card_types=("creature",)):
-            raise LoweringError(
-                "the attached counter removal reads the enchanted creature alone",
-                node=node,
-            )
-        if is_pt_counter(node.counter):
-            raise LoweringError(
-                "a P/T counter removal needs the counter seam, which this "
-                "handler does not reach",
-                node=node,
-            )
-        if _amount_payload(node.count) != 1:
-            raise LoweringError(
-                "no handler removes more than one counter at a time", node=node
-            )
-        return (
-            OracleInstruction(
-                "remove_counter_from_attached", "", {"counter": node.counter}
-            ),
-        )
-    if not _is_source(node.subject):
-        raise LoweringError(
-            "the only counter-removal handler reads the ability's own source", node=node
-        )
-    if isinstance(node.count, ast.AllOf):
-        # "…remove **all** tide counters from it." (Homarid, Tidal Influence.)
-        # Its own kind rather than a count on the one below: that handler
-        # decrements by a number the instruction already carries, and "all" is
-        # a number nobody knows until the permanent is looked at — compiling it
-        # onto a fixed removal would take exactly one counter off a permanent
-        # the card says to empty.
-        return (
-            OracleInstruction(
-                "remove_all_counters_from_self", "", {"counter": node.counter}
-            ),
-        )
-    if isinstance(node.count, ast.AnyNumber):
-        # "Remove **any number of** +1/+1 counters from this creature."
-        # (Tetravus.) Its own kind rather than a count on the one above: that
-        # handler decrements by a number it already knows, and this one has to
-        # ask its controller for the number first. What it removes is recorded,
-        # because the sentence after it ("create **that many** … tokens") reads
-        # it back.
-        return (
-            OracleInstruction(
-                "remove_any_number_of_counters_from_self", "", {"counter": node.counter}
-            ),
-        )
-    if _amount_payload(node.count) != 1:
-        raise LoweringError("no handler removes more than one counter at a time", node=node)
-    return (
-        OracleInstruction("remove_counter_from_self", "", {"counter": node.counter}),
     )
 
 

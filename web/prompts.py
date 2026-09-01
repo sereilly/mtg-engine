@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from engine.grammar.phrases import BASIC_LAND_WORDS
+from engine.mana_payment import mana_cost_label
 from engine.pending_choices import CHOICE_SPECS, public_data
 from engine.search_filters import search_matches, searched_seat
 
@@ -871,9 +872,17 @@ def _land_type_choice(ctx: PromptContext, choices: list) -> dict:
 def _mana_payment(ctx: PromptContext, choices: list) -> dict:
     data = choices[0].data
     target_item = data.get("stack_item")
+    # The cost as the card prints it, beside the total the client has always
+    # rendered. `amount` alone cannot say "{B}" — Ayesha Tanaka's prompt read
+    # "{1}" — and it cannot say "{B} or {3}" (Thrull Wizard) at all. Which of
+    # CR 118.8's alternatives is spent is still the engine's (the first the
+    # board covers); the label is so the payer can see what they are agreeing
+    # to before they tap.
+    costs = ctx.game._mana_payment_costs(data)
     return {
         "card_name": data["card_name"],
         "amount": int(data["amount"]),
+        "cost": " or ".join(mana_cost_label(cost) for cost in costs),
         "spell_name": target_item.card.name if target_item is not None else None,
     }
 

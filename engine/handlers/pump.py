@@ -6,6 +6,7 @@ from ..models import Permanent
 from ..pt import add_pt_modifier, set_base_pt
 from ._common import (
     apply_temp_pt_boost,
+    bound_permanent,
     attached_host,
     permanent_matches_filter,
     resolve_amount,
@@ -390,11 +391,23 @@ def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, con
         if instruction.payload.get("every_seat")
         else (caster_index,)
     )
+    # "creatures you control **blocking that creature** gain first strike until
+    # end of turn" (Tidal Flats). A relation to the object the loop around this
+    # sentence bound rather than a characteristic of the blocker, so it is read
+    # off the combat maps here — through the one reader of the relation, and
+    # once, before the board walk. CR 611.2c: the set is fixed now, so a
+    # creature that starts blocking later is not in it.
+    blockers: list | None = None
+    if instruction.payload.get("blocking_bound_target"):
+        blocked = bound_permanent(game, context)
+        blockers = list(game.creatures_blocking(blocked)) if blocked is not None else []
     lifetime = grant_lifetime(game, instruction, context)
     granted = 0
     for seat in seats:
         for perm in game.controlled_by(seat):
             if not every_permanent and not perm.is_creature:
+                continue
+            if blockers is not None and not any(perm is one for one in blockers):
                 continue
             # Through the one reader of what a printed noun phrase means, with the
             # caster as observer (CR 109.5), so "attacking" here and "attacking" on
@@ -730,10 +743,22 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
     # the question is the same one.
     #
     # An empty record is a legal outcome (nothing came back), not an error.
+    #
+    # **The channel carries one id or a list of them, and both reach here.**
+    # ``reanimated_permanents`` is a list because "return target creature card"
+    # is one step of a sentence that could return several; ``attach_host`` is a
+    # bare id, because a choose-one prompt picks exactly one (Thelon's Chant,
+    # Tourach's Chant). Every other reader of ``permanents_from``
+    # (``destruction``, ``control_changes``) reads the scalar shape only and
+    # would raise on the list, so normalising here is the *local* half of a
+    # wider question recorded in ROADMAP.md rather than a settled convention.
     recorded_key = instruction.payload.get("permanents_from")
     if recorded_key is not None:
         placed_on = 0
-        for permanent_id in (context.results or {}).get(str(recorded_key)) or ():
+        recorded = (context.results or {}).get(str(recorded_key))
+        if isinstance(recorded, int):
+            recorded = (recorded,)
+        for permanent_id in recorded or ():
             creature = game.permanent_by_id(permanent_id)
             if creature is None:
                 # It left between the two steps of one resolution; a returning
@@ -754,6 +779,28 @@ def add_counter_to_target(game: Game, instruction: OracleInstruction, context: O
     # trigger bound, and the ids were frozen when the earlier step of this same
     # effect armed the destruction. Read by id, so a creature that left and came
     # back is a different object (CR 400.7) and gets nothing.
+    # "…unless the player puts a -1/-1 counter on a creature they control"
+    # (Thelon's Chant, Tourach's Chant.) Nobody targeted anything: the seat the
+    # offer was made to picked a creature one step earlier in this same
+    # resolution (CR 608.2d), and the pick is in the scratchpad under the key
+    # that step always writes. By id, so a creature that left and came back is a
+    # different object (CR 400.7) and gets nothing.
+    recorded_key = instruction.payload.get("permanents_from")
+    if recorded_key is not None:
+        chosen_id = context.results.get(recorded_key)
+        creature = (
+            game.permanent_by_id(chosen_id) if chosen_id is not None else None
+        )
+        if creature is None:
+            game.log.append(f"{card.name}: no creature was chosen to take a counter")
+            return True, "resolved"
+        if how_many:
+            game.place_pt_counters(creature, kind, how_many)
+            game.log.append(
+                f"{creature.card.name} gets a {kind} counter ({card.name})"
+            )
+        return True, "resolved"
+
     pair_member = instruction.payload.get("pair_member")
     if pair_member:
         bound = (context.trigger_context or {}).get(

@@ -43,6 +43,7 @@ from .lowering.where_x import lower_where_x
 from .statics import _lower_static_ability
 from .lowering.control_flow import (
     _lower_for_each_life_lost,
+    _lower_for_each_matching,
     _lower_for_each_player,
     _lower_may, _lower_one_of, _lower_steps, _lower_unless_player_pays,
 )
@@ -780,6 +781,12 @@ def lower_statement(
         # iteration binds "that player" the way an object loop binds "it".
         if isinstance(statement.iterator, ast.PlayerRef):
             return _lower_for_each_player(statement, repeated())
+        # "**For each attacking red creature,** …" (Heroism, Tidal Flats) — the
+        # set the board holds now. Read before the tally below, which is the
+        # *other* thing an untyped iterator can be: that one's iterator is a
+        # ``DiedThisTurn`` window, so neither can claim the other's node.
+        if isinstance(statement.iterator, ast.ObjectFilter):
+            return _lower_for_each_matching(statement, repeated())
         return _lower_for_each(statement)
 
     # The offer-round loop takes the recursion back as an argument: its lowering

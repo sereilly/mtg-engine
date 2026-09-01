@@ -97,6 +97,18 @@ class CounterSpell:
     # `engine/counter_conditions.py` is what answers it, refusing at lowering
     # anything it cannot.
     only_if: str | None = None
+    # "…unless that spell's controller pays {B} **or {3}**" (Thrull Wizard).
+    # CR 118.8's alternative cost, riding the same offer rather than arming a
+    # second one: two prompts would be two decisions and two counters, and
+    # declining the first would counter the spell before the second was made.
+    # The same field shape ``ast.May.cost_alternatives`` already carries for
+    # the offer printed outside a counter.
+    #
+    # **Appended, not slotted beside ``unless_pays``.** These nodes are
+    # positional as well as keyword-constructed (``riders.py`` rebuilds one with
+    # three positional arguments), so a field inserted in the middle silently
+    # re-reads an existing caller's argument as this one.
+    unless_pays_alternatives: tuple[ManaCost, ...] = ()
 
 
 @dataclass(frozen=True)

@@ -307,6 +307,30 @@ def _parse_postmodifiers(
         if stream.accept_phrase("they", "control"):
             d.controller = "that_player"
             continue
+        # "target creature **whose controller controls an Island**"
+        # (Seasinger). Not a seat this object's controller *is*, but a fact
+        # about what that seat has elsewhere — so it is its own field rather
+        # than a value of ``controller``, which every reader takes as a
+        # comparison against the ability's own seat. The thing they must
+        # control is a whole noun phrase, read by the same reader that read
+        # the phrase this modifies.
+        whose = stream.mark()
+        if stream.accept_phrase("whose", "controller", "controls"):
+            # The article, for the same reason the host phrase below strips
+            # one: the noun parser reads what comes *after* a quantifier, so
+            # "an Island" reaches it as "Island". A phrase that narrows nothing
+            # is not this clause — "whose controller controls a permanent" says
+            # only that somebody controls it, which every permanent on a
+            # battlefield already does.
+            stream.accept_word("a", "an")
+            try:
+                required = parse_filter(stream)
+            except GrammarError:
+                required = None
+            if required is not None and required != ast.ObjectFilter():
+                d.controller_controls = required
+                continue
+            stream.reset(whose)
         # "creatures **blocking this creature**" (The Wretched) — the set of
         # blockers declared against the ability's own source (CR 509.1a).
         # "…blocking **target attacking creature**" and "…blocking **it**"

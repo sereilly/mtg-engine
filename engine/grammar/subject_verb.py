@@ -47,6 +47,7 @@ from .effects import (
     _parse_change_text, _parse_choose_cards_in_hand, _parse_choose_color,
     _parse_choose_number,
     _parse_choose_player_who_cast,
+    _parse_copy_that_spell, _parse_copy_this_spell,
     _parse_counter, _parse_create_token,
     _parse_damage, _parse_damage_redirect, _parse_destroy, _parse_discard,
     _parse_discard_revealed_unless_pay_life,
@@ -127,71 +128,6 @@ def _parse_entering_counters(stream: TokenStream) -> tuple[tuple[str, int], ...]
     return ((name, count),)
 
 
-def _parse_copy_that_spell(stream: TokenStream) -> ast.Statement:
-    """``Copy that spell. You may choose new targets for the copy.``
-
-    Both sentences, every word. The second is CR 707.10's choice and part of
-    what the card does; consuming it is also what stops this production
-    claiming a bare "copy that spell" no card prints.
-    """
-    for word in ("copy", "that", "spell"):
-        stream.expect_word(word)
-    if not stream.accept_punct("."):
-        raise stream.error("expected the new-targets sentence after the copy")
-    for word in (
-        "you", "may", "choose", "new", "targets", "for", "the", "copy",
-    ):
-        stream.expect_word(word)
-    return ast.CopyThatSpell()
-
-
-def _parse_copy_this_spell(stream: TokenStream) -> ast.Statement | None:
-    """``Copy this spell[.| and] [you] may choose [a] new target[s] for
-    [that|the] copy.`` (Chain Lightning.)
-
-    "This spell" is the one resolving, so the copy is made from
-    ``Game.resolving_items[-1]`` rather than from the stack — see
-    :class:`ast.CopySpell`. The re-aiming clause is consumed here in either
-    printed spelling, and *recorded*: a copy that could not be re-aimed is a
-    smaller card, and the deletion probe is right to call a dropped rider a bug.
-
-    Refuses without consuming, so a "Copy that spell" line still reaches the
-    production behind this one.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("copy", "this", "spell"):
-        stream.reset(mark)
-        return None
-    # "…and may choose a new target for that copy" (Chain Lightning) and
-    # "… . You may choose new targets for the copy" (the modern template) are
-    # the same offer printed two ways. Both are read; neither is optional,
-    # because a bare "copy this spell" is not a line any card prints and
-    # claiming it would let a card with an unread rider report itself supported.
-    retarget = False
-    if stream.accept_word("and"):
-        stream.accept_word("you")
-        retarget = stream.accept_word("may") and stream.accept_word("choose")
-    elif stream.accept_punct(".") and stream.accept_phrase("you", "may"):
-        retarget = stream.accept_word("choose")
-    if not retarget:
-        stream.reset(mark)
-        return None
-    stream.accept_word("a")
-    if not (stream.accept_word("new") and stream.accept_word("target")
-            or stream.accept_word("targets")):
-        stream.reset(mark)
-        return None
-    stream.accept_word("targets")
-    if not stream.accept_word("for"):
-        stream.reset(mark)
-        return None
-    if not (stream.accept_word("that") or stream.accept_word("the")):
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("copy"):
-        stream.reset(mark)
-        return None
-    return ast.CopySpell(ast.PlayerRef("you"), may_choose_new_target=True)
 
 
 def parse_subject_verb(
@@ -674,6 +610,38 @@ def parse_subject_verb(
         # and a bound-subject reader that got there first would eat the noun and
         # strand the possessive — which is exactly what it did to Gloom Sower.
         source_spec = parse_recipient(stream) or parse_bound_subject(stream)
+        # "**Each attacking creature and each blocking creature** doesn't untap
+        # during its controller's next untap step." (Spore Cloud.) One verb over
+        # a union of *subject* noun phrases — the mirror of the union
+        # `_parse_further_subjects` already reads in the object position, and
+        # the same answer to it: no single ``ObjectFilter`` says "attacking or
+        # blocking" without also saying "and", so the union lives in the shape.
+        #
+        # The clause is re-read once per phrase through ``carried_subject``,
+        # which is the mechanism a shared subject already uses in the other
+        # direction ("target player draws a card **and loses 1 life**"). Reading
+        # it once and rewriting the statement's subject field would work only
+        # for the statements that happen to have one.
+        #
+        # Safe to probe here because at this point the next token is the
+        # sentence's verb on every line the pool prints: an "and" this early
+        # cannot be joining two clauses, since the first has no verb yet.
+        # ``_parse_further_subjects`` rewinds whole unless a separator really is
+        # followed by an object-quantified noun phrase.
+        if source_spec is not None and stream.at_word("and"):
+            shared = _parse_further_subjects(stream, source_spec)
+            if shared:
+                verb_at = stream.mark()
+                parts = []
+                for subject in (source_spec, *shared):
+                    stream.reset(verb_at)
+                    parts.append(
+                        parse_subject_verb(
+                            stream, subject,
+                            parse_optional_action=parse_optional_action,
+                        )
+                    )
+                return ast.Conjunction(tuple(parts))
 
     if source_spec is None:
         stream.reset(mark)

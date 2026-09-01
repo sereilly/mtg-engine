@@ -32,7 +32,12 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     phrase rather than a counter: ``put <objects> on top of its owner's
     library`` (Teferi, Timeless Voyager) and ``put <objects> onto the
     battlefield [under your control]`` (Ugin, Liliana's emblem)."""
-    stream.expect_word("put")
+    # "…unless the player **puts** a -1/-1 counter on a creature they control"
+    # (Thelon's Chant, Tourach's Chant). The third-person spelling is the same
+    # sentence with its subject printed in front of it, and the toll reader that
+    # meets it has already read that subject — so it is this production's verb
+    # in another inflection, not a production of its own.
+    stream.expect_word("put", "puts")
     move_mark = stream.mark()
     # "Put **that card** onto the battlefield under your control." (Seraph,
     # Krovikan Vampire.) The bound object: the card of the creature the trigger

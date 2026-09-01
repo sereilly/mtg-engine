@@ -1,16 +1,25 @@
-"""The stack: countering spells, choosing modes, and what declining a cost costs.
+"""The stack: countering spells, copying them, choosing modes, and what
+declining a cost costs.
 
-Counterspell's production, the modal head ("Choose one —") every modal spell and
-ability is announced with, the closed list of penalties a card imposes on a
-player who declines an "unless they pay" cost, and the activation restrictions
-("activate only during your upkeep") that gate an ability.
+Counterspell's production, the two copy-a-spell templates (CR 707.10), the modal
+head ("Choose one —") every modal spell and ability is announced with, the closed
+list of penalties a card imposes on a player who declines an "unless they pay"
+cost, and the activation restrictions ("activate only during your upkeep") that
+gate an ability.
+
+The copy productions arrived here from ``subject_verb`` when that module crossed
+the thousand-line guard, and the move is the family rule rather than the nearest
+free space: neither of them reads a subject and a verb — they read a whole
+printed sentence about **an object on the stack**, which is this module's
+subject and nobody else's.
 """
 
 from .. import ast
 from ..lexer import DASH, WORD
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import _parse_counted_sacrifice, _parse_mana_payment
+from ..phrases import (_accept_mana_alternatives, _parse_counted_sacrifice,
+                       _parse_mana_payment)
 from ..vocabulary import NUMBER_WORDS
 
 
@@ -165,7 +174,13 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
             )
 
         return ast.CounterSpell(
-            subject, unless_pays=payment, replaces_prior_amount=replaces_prior
+            subject, unless_pays=payment,
+            # "…pays {B} **or {3}**" (Thrull Wizard). Read here rather than
+            # before "instead" above because the two clauses are about
+            # different things: "instead" replaces an amount an earlier
+            # sentence named, and this offers a second way to cover *this* one.
+            unless_pays_alternatives=_accept_mana_alternatives(stream),
+            replaces_prior_amount=replaces_prior,
         )
 
     return ast.CounterSpell(subject)
@@ -404,3 +419,70 @@ def _parse_activation_restriction(stream: TokenStream) -> ast.ActivationRestrict
         return None
     stream.accept_punct(".")
     return ast.ActivationRestriction(sentence)
+
+
+def _parse_copy_that_spell(stream: TokenStream) -> ast.Statement:
+    """``Copy that spell. You may choose new targets for the copy.``
+
+    Both sentences, every word. The second is CR 707.10's choice and part of
+    what the card does; consuming it is also what stops this production
+    claiming a bare "copy that spell" no card prints.
+    """
+    for word in ("copy", "that", "spell"):
+        stream.expect_word(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the new-targets sentence after the copy")
+    for word in (
+        "you", "may", "choose", "new", "targets", "for", "the", "copy",
+    ):
+        stream.expect_word(word)
+    return ast.CopyThatSpell()
+
+
+def _parse_copy_this_spell(stream: TokenStream) -> ast.Statement | None:
+    """``Copy this spell[.| and] [you] may choose [a] new target[s] for
+    [that|the] copy.`` (Chain Lightning.)
+
+    "This spell" is the one resolving, so the copy is made from
+    ``Game.resolving_items[-1]`` rather than from the stack — see
+    :class:`ast.CopySpell`. The re-aiming clause is consumed here in either
+    printed spelling, and *recorded*: a copy that could not be re-aimed is a
+    smaller card, and the deletion probe is right to call a dropped rider a bug.
+
+    Refuses without consuming, so a "Copy that spell" line still reaches the
+    production behind this one.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("copy", "this", "spell"):
+        stream.reset(mark)
+        return None
+    # "…and may choose a new target for that copy" (Chain Lightning) and
+    # "… . You may choose new targets for the copy" (the modern template) are
+    # the same offer printed two ways. Both are read; neither is optional,
+    # because a bare "copy this spell" is not a line any card prints and
+    # claiming it would let a card with an unread rider report itself supported.
+    retarget = False
+    if stream.accept_word("and"):
+        stream.accept_word("you")
+        retarget = stream.accept_word("may") and stream.accept_word("choose")
+    elif stream.accept_punct(".") and stream.accept_phrase("you", "may"):
+        retarget = stream.accept_word("choose")
+    if not retarget:
+        stream.reset(mark)
+        return None
+    stream.accept_word("a")
+    if not (stream.accept_word("new") and stream.accept_word("target")
+            or stream.accept_word("targets")):
+        stream.reset(mark)
+        return None
+    stream.accept_word("targets")
+    if not stream.accept_word("for"):
+        stream.reset(mark)
+        return None
+    if not (stream.accept_word("that") or stream.accept_word("the")):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("copy"):
+        stream.reset(mark)
+        return None
+    return ast.CopySpell(ast.PlayerRef("you"), may_choose_new_target=True)

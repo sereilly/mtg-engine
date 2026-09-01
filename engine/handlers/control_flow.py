@@ -928,6 +928,25 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
         return len(game._sacrifice_candidate_indices(
             player, dict(instruction.payload.get("filter") or {}), exclude
         )) >= int(instruction.payload.get("count", 1))
+    # "…unless the player **puts a -1/-1 counter on a creature they control**"
+    # (Thelon's Chant, Tourach's Chant). A price paid out of the offered seat's
+    # own board, so a seat with no creature cannot pay it — and accepting anyway
+    # would buy off the damage for nothing, which is the same failure the
+    # sacrifice above is gated on. Only the pick *from the offered seat's own
+    # battlefield* is asked: a choice drawn from anywhere else is not a price
+    # this player pays, and answering False for it would withdraw an offer the
+    # card makes.
+    if instruction.kind == "choose_permanent":
+        if instruction.payload.get("controlled_by") != "chooser":
+            return True
+        from ..subject_filters import subject_matches
+
+        seat = game.players.index(player)
+        described = dict(instruction.payload.get("filter") or {})
+        return any(
+            subject_matches(game, perm, described, observer=seat, source=source)
+            for perm in game.controlled_by(seat)
+        )
     if instruction.kind == "discard_controller_cards":
         described = dict(instruction.payload.get("filter") or {})
         return any(_card_matches_filter(card, described) for card in player.hand)
@@ -1168,6 +1187,29 @@ def _offered_seats(
         # combat that ended, not a card nobody wired up — and no prompt is the
         # right answer then.
         seat = (context.trigger_context or {}).get("trigger_defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return []
+        return [] if game.players[seat].lost else [seat]
+
+    if actor == "event_subject_player":
+        # "…unless **that player** pays {4}" (Mystic Remora). The seat the
+        # firing event *is about*, frozen by the fire site (CR 603.10) — one
+        # step nearer than the controller branch below, which names the seat
+        # that controlled an object the event was about. Nobody recorded means
+        # nobody is offered.
+        seat = (context.trigger_context or {}).get("event_subject_player")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return []
+        return [] if game.players[seat].lost else [seat]
+    if actor == "event_subject_controller":
+        # "…unless the player puts a -1/-1 counter on a creature they control"
+        # (Thelon's Chant, Tourach's Chant). The seat that controlled what the
+        # firing event was about, frozen by the fire site (CR 603.10) — the same
+        # read the damage recipient beside it takes, so the player offered the
+        # price and the player who takes the damage for refusing it are one
+        # answer. Nobody recorded means nobody is offered, which is the honest
+        # outcome and the one the two branches above already give.
+        seat = (context.trigger_context or {}).get("event_subject_controller")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             return []
         return [] if game.players[seat].lost else [seat]
@@ -1602,13 +1644,25 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
             if not narrowing or permanent_matches_filter(item, narrowing)
         ]
     else:
+        # "For each attacking creature **without flying**, …" (Tidal Flats).
+        # Through ``subject_matches`` rather than the pure matcher, because a
+        # loop over the board is the one iterator whose phrase is a live noun
+        # phrase and can therefore ask a layer question: a creature *granted*
+        # flying is a creature with flying (CR 613.1f), and the pure matcher —
+        # which has no game — would have offered Tidal Flats' toll to it.
+        from ..subject_filters import subject_matches
+
+        observer = (
+            game.players.index(context.caster)
+            if context.caster in game.players else None
+        )
         matched = [
             permanent
             for permanent in game.all_permanents()
-            # (game, perm, filters) until this round — three arguments to a
-            # two-argument function, which is what a loop no card reaches gets
-            # to keep. The pure matcher takes the object and the payload.
-            if permanent_matches_filter(permanent, filters)
+            if subject_matches(
+                game, permanent, filters, observer=observer,
+                source=context.source_permanent,
+            )
         ]
     previous = context.iteration_target
     previous_seats = context.iteration_seats

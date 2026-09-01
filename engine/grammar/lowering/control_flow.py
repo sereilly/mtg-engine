@@ -17,9 +17,13 @@ callers is only which parser they already hold.
 from __future__ import annotations
 
 from ...oracle_types import OracleInstruction
+from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._events import _DEFENDING_PLAYER_EVENTS
+from ._common import _filter_payload
+from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
+                      _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS,
+                      _EVENT_SUBJECT_PLAYERS)
 from ._records import _PRODUCES, primary_produced, produced_keys
 
 
@@ -239,6 +243,38 @@ def _lower_for_each_player(
 _LOOPED_SEAT_SETS = frozenset({"each_player", "each_opponent"})
 
 
+def _lower_for_each_matching(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each attacking creature without flying,** its controller may pay
+    {1}." (Tidal Flats.) "**For each attacking red creature,** prevent all
+    combat damage that would be dealt by that creature this turn unless its
+    controller pays {2}{R}." (Heroism.)
+
+    A loop over what the **board** holds when the ability resolves — the fourth
+    kind of iterator beside the recorded sets, the count and the seats, and the
+    one the handler has always had a branch for and nothing could reach.
+
+    The filter is the whole iterator payload, which is what the handler matches
+    each permanent against; every key in it therefore has to be one
+    ``subject_matches`` answers, or the loop would run over a strictly larger
+    set than the phrase names — "creature **without flying**" is a layer-6
+    question (CR 613.1f), and a loop that dropped it would offer Tidal Flats'
+    toll to every attacker including the fliers it is printed to let through.
+    """
+    described = _filter_payload(node.iterator)
+    if untestable_filter_keys(described):
+        raise LoweringError(
+            "the loop cannot test this restriction", node=node
+        )
+    if not inner:
+        raise LoweringError("a per-object loop with no effect in it", node=node)
+    return (
+        OracleInstruction("for_each", "", {"iterator": described, "effect": inner}),
+    )
+
+
 def _lower_for_each_life_lost(
     node: ast.ForEach,
     inner: tuple[OracleInstruction, ...],
@@ -376,7 +412,29 @@ def _lower_may(
         raise LoweringError(
             f"no offer names {node.actor.kind!r} as its payer", node=node
         )
-    payload: dict[str, object] = {"actor": node.actor.kind}
+    actor = node.actor.kind
+    if actor == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
+        # "…**you may draw a card unless that player pays {4}**" (Mystic
+        # Remora). Under an event whose subject *is* a player, "that player" is
+        # the seat the fire site froze — the opponent who cast the spell — and
+        # not the resolution's target. Left as ``that_player`` the offer reached
+        # ``_offered_seats``' fallback, which reads ``context.target``: right in
+        # a duel by coincidence, and in a three-seat game the toll was offered
+        # to a player who had cast nothing.
+        #
+        # The same mapping the damage recipient one module over already makes
+        # for these five events, applied to the seat an *offer* is made to.
+        actor = EVENT_SUBJECT_PLAYER
+    elif actor == "that_player" and event in _EVENT_SUBJECT_CONTROLLERS:
+        # "…unless **the player** puts a -1/-1 counter on a creature they
+        # control" (Thelon's Chant, Tourach's Chant). Under an event whose
+        # subject is an *object*, "that player" is that object's controller —
+        # the seat the fire site froze, exactly as the damage recipient one
+        # module over reads it. Left as ``that_player`` the offer would go to
+        # ``context.target``, which for a permanent-entering trigger is a seat
+        # nothing chose.
+        actor = EVENT_SUBJECT_CONTROLLER
+    payload: dict[str, object] = {"actor": actor}
     if node.actor.kind == "target_opponent":
         # "**Target opponent** may ante the top card of their library."
         # (Amulet of Quoz.) The seat being offered is the ability's *target*,

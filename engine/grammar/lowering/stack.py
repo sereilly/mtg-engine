@@ -406,17 +406,35 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
             )
         payload["only_if"] = key
     if node.unless_pays is not None:
+        alternatives = [dict(cost.pips) for cost in node.unless_pays_alternatives]
+        if any("X" in cost for cost in alternatives):
+            raise LoweringError(
+                "no counter flow sizes an alternative from an X", node=node
+            )
         if node.unless_pays.pips == _COUNTER_UNLESS_PAYS_X:
+            if alternatives:
+                raise LoweringError(
+                    "no counter flow offers an alternative to a chosen X", node=node
+                )
             payload["unless_pays_x"] = True
         elif (
-            len(node.unless_pays.pips) == 1
+            not alternatives
+            and len(node.unless_pays.pips) == 1
             and node.unless_pays.pips[0][0] == "generic"
         ):
             # Miscast's "{3}": the same pending payment Power Sink arms, with
             # the amount fixed by the printed cost instead of a chosen X.
             payload["unless_pays_amount"] = node.unless_pays.pips[0][1]
         else:
-            raise LoweringError("no counter flow offers this cost", node=node)
+            # "…pays {B} **or {3}**" (Thrull Wizard). A symbol dict, which is
+            # what a cost is everywhere in this engine — the ability counter
+            # next door has carried one since Ayesha Tanaka, and the bare number
+            # above is the shape a coloured cost had no flow to arrive through.
+            # The alternatives ride the same key (CR 118.8): one offer the payer
+            # may cover either way, not two prompts.
+            payload["unless_pays_cost"] = dict(node.unless_pays.pips)
+            if alternatives:
+                payload["unless_pays_cost_alternatives"] = alternatives
     if node.unpaid_penalty is not None:
         if node.unless_pays is None:
             raise LoweringError("a decline penalty with no cost to decline", node=node)

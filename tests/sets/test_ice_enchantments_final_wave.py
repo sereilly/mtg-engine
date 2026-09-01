@@ -639,3 +639,47 @@ def test_hecatomb_cannot_ping_twice_off_one_swamp(set_pool):
 
     assert not result.supported
     assert p2.life == 19
+# --- FEM wave, G5: an offer's seat under a player-subject trigger ---
+from engine import Game as _G5Game, PlayerState as _G5PlayerState
+from engine.models import Permanent as _G5Permanent
+
+
+def test_mystic_remora_offers_the_toll_to_the_seat_that_cast_the_spell(set_pool):
+    """The seat, in a game with more than one opponent in it.
+
+    "…unless **that player** pays {4}" names the player the *event* was about,
+    which the cast site freezes (CR 603.10). The offer used to reach
+    ``_offered_seats``' fallback and read the resolution's target instead — the
+    same seat in a duel by coincidence, and in a three-seat game a toll offered
+    to a player who had cast nothing while the caster drew nothing and paid
+    nothing.
+    """
+    pool = set_pool("ICE")
+    remora = _G5Permanent(card=pool["Mystic Remora"])
+    p0 = _G5PlayerState(name="P0", battlefield=[remora],
+                        library=[pool["Balduvian Bears"]])
+    # Four Islands each, so the toll is one both opponents could pay: an offer
+    # nobody can afford is never armed (the decline branch runs at once), and
+    # the question here is *which* seat gets asked.
+    p1 = _G5PlayerState(
+        name="P1",
+        battlefield=[_G5Permanent(card=pool["Island"]) for _ in range(4)],
+    )
+    p2 = _G5PlayerState(
+        name="P2", hand=[pool["Dark Ritual"]],
+        battlefield=[_G5Permanent(card=pool["Island"]) for _ in range(4)],
+    )
+    game = _G5Game(players=[p0, p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(2)
+
+    game.queue_from_hand(2, "Dark Ritual")
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    offered = [
+        c.player_index for c in game.pending_choices
+        if c.kind == "optional_pay" and c.data.get("card_name") == "Mystic Remora"
+    ]
+    assert offered == [2], game.log
+# --- end FEM wave, G5 ---

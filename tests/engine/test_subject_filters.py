@@ -362,6 +362,8 @@ _COVERED_ELSEWHERE = {
         "test_controlled_since_turn_start_rejects_a_creature_that_just_arrived",
     "tapped_to_pay_for_source_this_turn":
         "test_tapped_to_pay_names_only_what_paid_for_this_source",
+    "controller_controls":
+        "test_controller_controls_asks_about_the_candidate_s_own_seat",
 }
 
 
@@ -869,3 +871,59 @@ def test_the_blocked_pair_is_read_off_a_real_combat(pool):
     assert not subject_matches(game, unblocked, {"blocked_only": True})
     assert not subject_matches(game, idle, {"blocked_only": True})
 # --- end W1G1 ---
+
+
+# --- FEM G5: prices offered to a player, prevention and control ---
+def test_controller_controls_asks_about_the_candidate_s_own_seat(pool):
+    """"target creature **whose controller controls an Island**" (Seasinger).
+
+    Its own demonstration rather than a row in ``_REJECTIONS``: that table
+    builds one bare permanent on one battlefield, and the question here is
+    about a *second* permanent on the same seat's board — so the rejection has
+    to be staged with two seats and three permanents.
+
+    The half a reader could plausibly get wrong is the last assertion. The
+    phrase does not say "an Island **you** control": the seat it asks about is
+    the candidate's controller, not the ability's, and passing the observer
+    straight down would read the wrong board every time the two differ — which
+    on Seasinger is every time it is worth activating.
+    """
+    theirs = Permanent(card=pool["Grizzly Bears"])
+    their_island = Permanent(card=pool["Island"])
+    mine = Permanent(card=pool["Grizzly Bears"])
+    my_island = Permanent(card=pool["Island"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[mine, my_island]),
+        PlayerState(name="P2", battlefield=[theirs, their_island]),
+    ])
+    islander = {"type_filter": "creature", "controller_controls": {"subtype_filter": "island"}}
+
+    assert subject_matches(game, theirs, islander, observer=0)
+    assert subject_matches(game, mine, islander, observer=0)
+
+    game.players[1].battlefield = [theirs]
+    game._sync_control()
+    assert not subject_matches(game, theirs, islander, observer=0)
+    # …and the seat asked really is the candidate's own: seat 0 still has an
+    # Island, so a reader that passed the observer down would say yes here.
+    assert subject_matches(game, mine, islander, observer=0)
+
+
+def test_a_controller_controls_phrase_is_gated_by_the_same_key_set():
+    """The nested gate, for the second nested key.
+
+    ``untestable_filter_keys`` recurses into this phrase exactly as it does
+    into a host phrase, and names the *outer* key — that is the clause a
+    refusal has to point at. And an observerless, gameless caller may not take
+    it at all: reading a seat's whole board is not something a payload handed
+    to a bare object matcher can do, so the key is outside
+    ``OBJECT_ONLY_FILTER_KEYS`` and the phrase refuses rather than being
+    dropped, which here would offer every creature on the table.
+    """
+    plain = {"type_filter": "creature", "controller_controls": {"subtype_filter": "island"}}
+    invented = {"type_filter": "creature", "controller_controls": {"no_such_key": True}}
+
+    assert not untestable_filter_keys(plain)
+    assert untestable_filter_keys(invented) == {"controller_controls"}
+    assert object_only_filter(plain) is None
+# --- end FEM G5 ---
