@@ -27,7 +27,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4ED | 368 | 520 | 90.4% | 90.0% | 53.8% | 246 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| FEM *(measured)* | 102 | 191 | 80.6% | 79.6% | 58.6% | 81 |
+| FEM *(measured)* | 102 | 191 | 87.4% | 86.4% | 64.4% | 83 |
 | **All (shipped)** | **2788** | **4005** | **87.4%** | **86.5%** | **55.2%** | **1886** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -40,9 +40,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 245 | 111 | expected a subject |  |
+| 236 | 102 | expected a subject |  |
 | 117 | 50 | unrecognized effect verb |  |
-| 57 | 29 | unconsumed text |  |
+| 56 | 28 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 16 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -885,6 +885,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target opponent reveals their hand. You choose a noncreature, nonland card from it. That player discards that card.`
 - **Dust to Dust**
   - `Exile two target artifacts.`
+- **Dwarven Armorer**
+  - `{R}, {T}, Discard a card: Put a +0/+1 counter or a +1/+0 counter on target creature.`
 - **Dwarven Armory**
   - `{2}, Sacrifice a land: Put a +2/+2 counter on target creature. Activate only during any upkeep step.`
 - **Dwarven Catapult**
@@ -927,6 +929,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{0}: If this creature is tapped, exile target creature card from a graveyard and untap this creature.`
 - **Ebon Praetor**
   - `At the beginning of your upkeep, put a -2/-2 counter on this creature.`
+  - `Sacrifice a creature: Remove a -2/-2 counter from this creature. If the sacrificed creature was a Thrull, put a +1/+0 counter on this creature. Activate only during your upkeep and only once each turn.`
 - **Ebon Stronghold**
   - `{T}: Add {B}.`
   - `{T}, Sacrifice this land: Add {B}{B}.`
@@ -1457,6 +1460,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Nonwhite creatures get -1/-1 until end of turn.`
 - **Homarid**
   - `At the beginning of your upkeep, put a tide counter on this creature.`
+  - `As long as there is exactly one tide counter on this creature, it gets -1/-1.`
+  - `As long as there are exactly three tide counters on this creature, it gets +1/+1.`
+  - `Whenever there are four or more tide counters on this creature, remove all tide counters from it.`
 - **Homarid Shaman**
   - `{U}: Tap target green creature.`
 - **Homarid Spawning Bed**
@@ -1516,6 +1522,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Icatian Moneychanger**
   - `When this creature enters, it deals 3 damage to you.`
   - `At the beginning of your upkeep, put a credit counter on this creature.`
+  - `Sacrifice this creature: You gain 1 life for each credit counter on this creature. Activate only during your upkeep.`
 - **Icatian Priest**
   - `{1}{W}{W}: Target creature gets +1/+1 until end of turn.`
 - **Icatian Scout**
@@ -2021,6 +2028,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Destroy target creature with islandwalk.`
 - **Merieke Ri Berit**
   - `{T}: Gain control of target creature for as long as you control Merieke Ri Berit. When Merieke Ri Berit leaves the battlefield or becomes untapped, destroy that creature. It can't be regenerated.`
+- **Merseine**
+  - `Pay enchanted creature's mana cost: Remove a net counter from this Aura. Only the controller of the enchanted creature may activate this ability.`
 - **Mesmeric Trance**
   - `{U}, Discard a card: Draw a card.`
 - **Meteor Shower**
@@ -3174,6 +3183,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: This creature gets +1/+1 until end of turn.`
 - **Tidal Influence**
   - `At the beginning of your upkeep, put a tide counter on this enchantment.`
+  - `As long as there is exactly one tide counter on this enchantment, all blue creatures get -2/-0.`
+  - `As long as there are exactly three tide counters on this enchantment, all blue creatures get +2/+0.`
+  - `Whenever there are four or more tide counters on this enchantment, remove all tide counters from it.`
 - **Tide Skimmer**
   - `Whenever you attack with two or more creatures with flying, draw a card.`
 - **Timberline Ridge**
@@ -3226,6 +3238,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {B}.`
 - **Tourach's Gate**
   - `Sacrifice a Thrull: Put three time counters on this Aura.`
+  - `At the beginning of your upkeep, remove a time counter from this Aura. If there are no time counters on this Aura, sacrifice it.`
   - `Tap enchanted land: Attacking creatures you control get +2/-1 until end of turn. Activate only if enchanted land is untapped.`
 - **Tower of Coireall**
   - `{T}: Target creature can't be blocked by Walls this turn.`
