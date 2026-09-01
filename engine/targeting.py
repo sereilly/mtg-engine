@@ -529,10 +529,7 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "pump_target_creature_until_eot": {"kind": "creature"},
     "grant_regeneration_to_target_creature": {"kind": "creature"},
     "mark_non_wall_target_to_attack": {"kind": "creature"},
-    # "Put a +1/+1 counter on target creature" — the creature restriction is
-    # part of what the kind means. Emitted by Dwarven Weaponsmith's hook and,
-    # since the M21 counter round, by the grammar's put-counter lowering.
-    "add_counter_to_target": {"kind": "creature"},
+
     # Effects that act on a *player*: the handler reads `context.target`,
     # a seat, and never looks at the battlefield. ``mill_target_player`` is not
     # among them — it names its recipient in the payload, so it is read by
@@ -1045,6 +1042,24 @@ def _graveyard_to_library_spec(payload: dict) -> dict:
     }
 
 
+def _counter_placement_spec(payload: dict) -> dict | None:
+    """"Put a +1/+1 counter on target creature" — the creature restriction is
+    part of what the kind means. Emitted by Dwarven Weaponsmith's hook and, since
+    the M21 counter round, by the grammar's put-counter lowering.
+
+    None when the payload names a **recorded** permanent instead: "…unless the
+    player puts a -1/-1 counter on a creature they control" (Thelon's Chant,
+    Tourach's Chant) is a mid-resolution choice by another seat, not a target
+    this ability announced (CR 601.2c chose nothing). Read as a target it would
+    give the trigger a target it never had — and a trigger with no legal target
+    is removed from the stack (CR 603.3c), which is the whole card gone on a
+    board with no creature to shrink.
+    """
+    if payload.get("permanents_from") or payload.get("pair_member"):
+        return None
+    return {"kind": "creature"}
+
+
 def _retarget_spec(payload: dict) -> dict:
     """"Target spell with a single target [if that target is you]"
     (Deflection, Reflecting Mirror — CR 115.7a, CR 115.9a).
@@ -1080,6 +1095,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "mill_target_player": _player_recipient_spec,
     "counter_top_stack_spell": _counter_spec,
     "counter_stack_ability": _counter_ability_spec,
+    "add_counter_to_target": _counter_placement_spec,
     "choose_permanent": _chosen_permanent_spec,
     # Reverberation names a spell on the stack the same way a counter does, and
     # narrows it the same way ("target **sorcery** spell"), so it derives the
