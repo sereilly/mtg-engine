@@ -582,7 +582,32 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
     none — and is not an error.
     """
     key = instruction.payload.get("permanents_from")
-    if key is None:
+    if instruction.payload.get("sweep"):
+        # "Each attacking creature and each blocking creature doesn't untap
+        # during its controller's next untap step." (Spore Cloud.) Untargeted,
+        # so the set is read off the board as the spell resolves rather than out
+        # of the scratchpad — through the control seam, which is the one reader
+        # of "every permanent in play", and through ``subject_matches``, which
+        # is the one reader of what the printed phrase names.
+        from ..subject_filters import subject_matches
+
+        described = {
+            key_: value for key_, value in instruction.payload.items()
+            if key_ not in ("targets", "untap_steps", "sweep")
+        }
+        observer = (
+            game.players.index(context.caster)
+            if context.caster in game.players else None
+        )
+        recorded = tuple(
+            permanent.permanent_id
+            for permanent in game.all_permanents()
+            if subject_matches(
+                game, permanent, described, observer=observer,
+                source=context.source_permanent,
+            )
+        )
+    elif key is None:
         # "**Target creature** doesn't untap during its controller's next untap
         # step." (Barl's Cage.) The sentence chooses for itself instead of
         # restating an earlier step's pick, so the permanent comes from the

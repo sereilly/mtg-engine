@@ -237,6 +237,30 @@ def _parse_leading_for_each(
             return None
         return ast.DiedThisWay(filt)
     if not stream.accept_phrase("that", "died", "this", "way"):
+        # "**For each attacking red creature,** prevent all combat damage …"
+        # (Heroism) / "**For each attacking creature without flying,** its
+        # controller may pay {1}." (Tidal Flats.) The set the board holds right
+        # now, with no window and no earlier step behind it — which is what
+        # ``ast.ForEach``'s iterator union has always said an ``ObjectFilter``
+        # means, and what nothing in the leading position could produce.
+        #
+        # Read **last**, after all four windows above, so a phrase that names a
+        # history keeps naming one: "creature that died this way" is a strictly
+        # longer phrase whose prefix this branch would otherwise take, turning a
+        # loop over a graveyard into a loop over the battlefield.
+        #
+        # Two guards. The phrase must name something *on the battlefield* — a
+        # zone the loop cannot walk is `_parse_leading_count_scale`'s multiplier
+        # reading, tried before this one — and it must narrow at all: "for each
+        # permanent," names every object in play, which no card prints and which
+        # a bare article could reach by accident.
+        if (
+            filt.zone == "battlefield"
+            and not filt.is_card
+            and filt != ast.ObjectFilter()
+            and stream.accept_punct(",")
+        ):
+            return filt
         stream.reset(mark)
         return None
     if not stream.accept_punct(","):
@@ -557,7 +581,16 @@ def _accept_graded_toll_outcomes(parse_body, stream, statement):
     return _replace_offer(
         statement,
         dataclasses.replace(
-            offer, otherwise=otherwise, option_effects=tuple(outcomes),
+            offer, otherwise=otherwise,
+            # Only when a "pays only {N}" clause really named one. "…its
+            # controller may pay {1}. **If that player doesn't**, …" (Tidal
+            # Flats) prints the decline branch and nothing else, which is not a
+            # graded offer at all — one empty slot per printed option would
+            # make the lowering read it as an offer where every way of paying
+            # buys nothing, and refuse the line.
+            option_effects=(
+                tuple(outcomes) if any(o is not None for o in outcomes) else ()
+            ),
         ),
     )
 

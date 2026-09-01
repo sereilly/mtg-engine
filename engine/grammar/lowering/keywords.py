@@ -190,10 +190,20 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
         # has already checked.
         and duration == "end_of_turn"
     ):
+        # "creatures you control **blocking that creature** gain first strike"
+        # (Tidal Flats). A relation to the object the loop around this sentence
+        # bound, not a characteristic of the blocker — so it has no
+        # ``to_payload`` form and no matcher key, and it is carried as its own
+        # payload word the handler resolves against the combat maps. The same
+        # decomposition ``prevent_damage_by_target_until_eot`` makes for
+        # "…and each creature blocking it" (Feint).
+        blocking_bound = node.subject.filter.blocking_bound_target
+        carried = frozenset({"blocking_bound_target"}) if blocking_bound else frozenset()
         leftover = _restrictions_beyond(
-            node.subject.filter, frozenset({"card_types", "controller"})
+            node.subject.filter,
+            frozenset({"card_types", "controller"}) | carried,
         )
-        described = _filter_payload(node.subject.filter)
+        described = _filter_payload(node.subject.filter, carried_separately=carried)
         if leftover:
             # "**Attacking** creatures get +1/+0 and gain trample until end of
             # turn" (Stampede). A narrowing the *matcher* can test is carried as
@@ -228,6 +238,8 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
             # player.
             team_payload["filter"] = described
             team_payload["every_seat"] = node.subject.filter.controller is None
+        if blocking_bound:
+            team_payload["blocking_bound_target"] = True
         team_payload["duration"] = duration
         return (OracleInstruction("grant_team_keyword_until_eot", "", team_payload),)
     # "**X** target creatures gain islandwalk until end of turn." (Part Water.)

@@ -218,11 +218,17 @@ def _lower_tap(
         # the narrowing looks harmless (tapping a tapped permanent does
         # nothing), but the *count* behind it is the card, and dropping the word
         # would have counted Islands that were already tapped.
+        # "Tap all **blocking** creatures." (Spore Cloud.) It reaches the
+        # payload as ``blocking_only``, CR 509.1g's state of the permanent
+        # itself, which ``subject_matches`` tests off the record the
+        # declare-blockers step stamps. Its twin ``attacking`` is deliberately
+        # absent: round 43's rule is that a field is listed once the pool prints
+        # it, and nothing in the pool sweeps taps over attackers.
         leftovers = _restrictions_beyond(
             spec.filter,
             frozenset({
                 "card_types", "supertypes", "subtypes", "colors", "controller",
-                "tapped",
+                "tapped", "blocking",
             }),
         )
         if leftovers:
@@ -488,13 +494,40 @@ def _lower_doesnt_untap_next_step(
         and subject.quantifier == "target"
         and subject.targeted
     )
-    if not bare_pronoun and not chosen and (
+    # "**Each attacking creature** … doesn't untap during its controller's next
+    # untap step." (Spore Cloud.) A *sweep*: nothing was chosen and nothing was
+    # recorded, so the set is whatever the board holds when the spell resolves.
+    # Its own branch beside the target and the back-reference, told apart by the
+    # printed quantifier exactly as those two are — and it carries no ``targets``
+    # description, because a sweep announces nothing (CR 601.2c).
+    swept = (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier in ("all", "each")
+        and not subject.targeted
+    )
+    if not bare_pronoun and not chosen and not swept and (
         not isinstance(subject, ast.TargetSpec) or subject.quantifier != "those"
     ):
         raise LoweringError(
             "this sentence acts on the objects the previous one chose, and its "
             "subject does not name them",
             node=node,
+        )
+    if swept:
+        described = _filter_payload(subject.filter)
+        # The handler asks ``subject_matches`` with the resolving seat as
+        # observer, so a key outside what that answers would be carried and
+        # ignored — the marker landing on permanents the printed phrase
+        # excludes, which for a sweep is every permanent on the table.
+        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError(
+                "the untap marker cannot test this restriction", node=node
+            )
+        return (
+            OracleInstruction(
+                "skip_next_untap", "",
+                {**described, "sweep": True, "untap_steps": node.count},
+            ),
         )
     if node.count < 1:
         raise LoweringError("a skipped-untap count of none is no restriction", node=node)

@@ -1556,13 +1556,25 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
             if not narrowing or permanent_matches_filter(item, narrowing)
         ]
     else:
+        # "For each attacking creature **without flying**, …" (Tidal Flats).
+        # Through ``subject_matches`` rather than the pure matcher, because a
+        # loop over the board is the one iterator whose phrase is a live noun
+        # phrase and can therefore ask a layer question: a creature *granted*
+        # flying is a creature with flying (CR 613.1f), and the pure matcher —
+        # which has no game — would have offered Tidal Flats' toll to it.
+        from ..subject_filters import subject_matches
+
+        observer = (
+            game.players.index(context.caster)
+            if context.caster in game.players else None
+        )
         matched = [
             permanent
             for permanent in game.all_permanents()
-            # (game, perm, filters) until this round — three arguments to a
-            # two-argument function, which is what a loop no card reaches gets
-            # to keep. The pure matcher takes the object and the payload.
-            if permanent_matches_filter(permanent, filters)
+            if subject_matches(
+                game, permanent, filters, observer=observer,
+                source=context.source_permanent,
+            )
         ]
     previous = context.iteration_target
     previous_seats = context.iteration_seats

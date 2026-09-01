@@ -17,8 +17,10 @@ callers is only which parser they already hold.
 from __future__ import annotations
 
 from ...oracle_types import OracleInstruction
+from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
+from ._common import _filter_payload
 from ._events import _DEFENDING_PLAYER_EVENTS
 from ._records import _PRODUCES, primary_produced, produced_keys
 
@@ -237,6 +239,38 @@ def _lower_for_each_player(
 #: two ``handlers/control_flow._offered_seats`` enumerates, and deliberately no
 #: more: a reference naming one seat is not a loop.
 _LOOPED_SEAT_SETS = frozenset({"each_player", "each_opponent"})
+
+
+def _lower_for_each_matching(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each attacking creature without flying,** its controller may pay
+    {1}." (Tidal Flats.) "**For each attacking red creature,** prevent all
+    combat damage that would be dealt by that creature this turn unless its
+    controller pays {2}{R}." (Heroism.)
+
+    A loop over what the **board** holds when the ability resolves — the fourth
+    kind of iterator beside the recorded sets, the count and the seats, and the
+    one the handler has always had a branch for and nothing could reach.
+
+    The filter is the whole iterator payload, which is what the handler matches
+    each permanent against; every key in it therefore has to be one
+    ``subject_matches`` answers, or the loop would run over a strictly larger
+    set than the phrase names — "creature **without flying**" is a layer-6
+    question (CR 613.1f), and a loop that dropped it would offer Tidal Flats'
+    toll to every attacker including the fliers it is printed to let through.
+    """
+    described = _filter_payload(node.iterator)
+    if untestable_filter_keys(described):
+        raise LoweringError(
+            "the loop cannot test this restriction", node=node
+        )
+    if not inner:
+        raise LoweringError("a per-object loop with no effect in it", node=node)
+    return (
+        OracleInstruction("for_each", "", {"iterator": described, "effect": inner}),
+    )
 
 
 def _lower_for_each_life_lost(

@@ -6,6 +6,7 @@ from ..models import Permanent
 from ..pt import add_pt_modifier, set_base_pt
 from ._common import (
     apply_temp_pt_boost,
+    bound_permanent,
     attached_host,
     permanent_matches_filter,
     resolve_amount,
@@ -407,11 +408,23 @@ def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, con
         if instruction.payload.get("every_seat")
         else (caster_index,)
     )
+    # "creatures you control **blocking that creature** gain first strike until
+    # end of turn" (Tidal Flats). A relation to the object the loop around this
+    # sentence bound rather than a characteristic of the blocker, so it is read
+    # off the combat maps here — through the one reader of the relation, and
+    # once, before the board walk. CR 611.2c: the set is fixed now, so a
+    # creature that starts blocking later is not in it.
+    blockers: list | None = None
+    if instruction.payload.get("blocking_bound_target"):
+        blocked = bound_permanent(game, context)
+        blockers = list(game.creatures_blocking(blocked)) if blocked is not None else []
     lifetime = grant_lifetime(game, instruction, context)
     granted = 0
     for seat in seats:
         for perm in game.controlled_by(seat):
             if not every_permanent and not perm.is_creature:
+                continue
+            if blockers is not None and not any(perm is one for one in blockers):
                 continue
             # Through the one reader of what a printed noun phrase means, with the
             # caster as observer (CR 109.5), so "attacking" here and "attacking" on
