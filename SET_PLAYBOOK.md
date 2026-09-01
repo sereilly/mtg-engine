@@ -76,13 +76,46 @@ branch's table had been written when a single kind covered both. Every file
 merged cleanly and three tests failed at runtime. Nothing textual can find
 this; what finds it is running the suite between merges rather than at the end.
 
-**Reconstructing a test file from its delimited block drops header imports.**
-The block convention below makes per-set test merges mechanical, and the
-mechanical move is "take `ours`, append the branch's block". That silently
-loses any `import` the branch added at the *top* of the file. Diff
-branch-minus-block against the merge base before trusting the reconstruction;
-it fails loudly as a `NameError` at collection, but only after you have
-committed it.
+Fallen Empires added two more, both about *how the conflict is resolved* rather
+than about what conflicted. **A whole-file `--theirs` (or `--ours`) discards the
+hunks that were never in dispute.** Resolving one conflicted file that way would
+have silently dropped a **third** branch's node, which had merged cleanly into
+the same file minutes earlier — the file was in conflict, the node was not.
+Resolve the conflict, never the file: restore the conflicted version with
+`git checkout -m <file>` and take the sides hunk by hunk. And **a union can
+break an `if`/`elif` chain.** Two branches each added a branch to one dispatch
+function; keeping both put the second one's `if` where the first's `elif` had
+been, so the first branch's answer was computed and then overwritten by an arm
+that found nothing. Three tests were green on each branch alone and red on the
+merge. When both sides add an arm, check what the arms are arms *of*.
+
+**One scratchpad channel can end up carrying two value shapes**, which is the
+same class one level down. Two branches wrote to the same record key, one a list
+and one a bare id, and the single reader that received both raised. Normalising
+at the reader is the local fix; the question of what arity the *channel* has is
+a real one, and belongs in Known gaps rather than in a comment.
+
+**Give every group's test block its own imports, and the header hazard is
+designed out.** The block convention below makes per-set test merges
+mechanical, and the mechanical move is "take `ours`, append the branch's
+block" — which silently loses any `import` a branch added at the *top* of the
+file. Ice Age's answer was to diff branch-minus-block against the merge base
+before trusting the reconstruction. Fallen Empires' is better and costs
+nothing: **open the per-set test files on `main` before the fan-out, with a
+header telling each group to put its imports at the top of its own block.** A
+self-contained block cannot lose an import, and every group's first write
+becomes an append rather than a file-creation collision. Still assert it rather
+than trust it — the reconstruction script should check that the branch's copy
+of the shared header is byte-identical to the merge base's, which is one
+comparison and catches the case where a group edited the header anyway.
+
+The hazard survives in one place the convention does not reach: **a function
+*moved* between modules leaves its imports behind.** That is the same failure
+with the file boundary in a different spot, and at FEM's integration it caught
+the integrator rather than a group, when a cap split carried three functions
+into a new module and left one of their imports in the old header. It fails
+loudly — 132 collection errors — so the fix is cheap; sweep every module you
+moved code out of before running the suite.
 
 **Expect cap breaches that no single branch caused.** The 1,000-line grammar
 guard and the 2,600-line per-set test guard both fired at *integration* seven
@@ -171,6 +204,20 @@ carrying the method that emits them (idiom 26).
 A drainable list of things the playbook knows are not yet true, each naming
 the phase that clears it. A retrospective that drains an item deletes it; a
 set that hits a new one adds it.
+
+**Added at FEM's Phase 6: `permanents_from` carries two arities and only one
+reader knows.** That payload key names a scratchpad record, and its producers
+disagree about shape — a reanimation writes a *list* of permanent ids, a
+choose-one prompt writes a bare id. Two branches of one wave wrote each, both
+reached `add_counter_to_target`, and it raised. That reader now normalises and
+says so; every *other* reader (`handlers/destruction.py`,
+`handlers/control_changes.py`) reads the scalar shape only and would raise on a
+list. Nothing is broken today because no list-producer feeds those readers, which
+is the kind of "safe by which cards exist" this repo does not like. **Phase 3 of
+whichever set next adds a `permanents_from` producer clears it**, by deciding
+the channel's arity once — most likely always-a-tuple, with the readers that
+want one object asserting they got one — rather than by adding a third local
+normalisation.
 
 Drained 2026-08-28: **the verification backlog is accepted as-is.** It sat here
 as the largest standing debt — 708 of 1,162 cards with no recorded in-game
@@ -263,6 +310,21 @@ is green, the trackers carry its row, and the census is in hand.
    refused line of every unsupported card with the grammar's exact refusal
    site, plus a rollup by site — run it too, and plan Phase 3's rounds from
    it rather than re-probing the compiler card by card.
+
+   **Then run the two sentence-level instruments, here and not at Phase 4:**
+   `scripts/parse_coverage.py` (whose measured-set section is reported and not
+   gated) and `support_report.py --set <CODE> --hollow-lines`. Both name
+   **supported** cards carrying a line nothing implements, and that population
+   is the one the census structurally cannot see: it counts *cards*, and a card
+   is supported when any of its lines is. Fallen Empires is the worked example
+   and it changed the round plan. Its refusal census measured 39 refused lines
+   over 39 distinct sentences — no production shared by even two cards, which
+   reads as "this set has no leverage in it" — while these two instruments found
+   five supported cards carrying eight unimplemented sentences, four of which
+   were a *second card* for a production a refused card already needed. The
+   pairs became the group split and each cost one production for two cards.
+   Left to Phase 4 they would have been promotion-gate findings instead, after
+   the work they could have halved was already done.
 5. **Ask how many of the set's cards are new to the pool**, before planning any
    round. Every phase after this one is written for a set that brings cards,
    and a reprint set brings printings: 4ED's 378 entries were 368 unique cards
@@ -385,6 +447,22 @@ measured set so per-card tests can land as the cards do. **Exit:**
    that it accepted "creatures with three heads" as a keyword filter — which,
    in a whitelist, is a creature nothing can legally block. The positive cases
    all passed.
+
+   **Diff the whole pool's compiled programs before believing a change is
+   local.** Build the map once before the change and once after —
+   `{card.name: repr((supported, instructions, activated, triggered))}` over
+   `manifest_set_paths(include_measured=True)` — and read every card that moved.
+   It is a minute's work over 1,600 cards and it is the cheapest instrument in
+   this repo, because it answers the question every other one only approximates:
+   *what else did this touch?* Three of Fallen Empires' five groups ran it
+   unprompted and each named it as the thing that let them be sure. It also
+   turned one inherited estimate inside out: Orcish Captain's decline was
+   recorded as "cross-sentence pronoun rebinding is missing", a parser feature —
+   and building that broke **eight shipped cards** which already played
+   correctly, because the engine reads that pronoun in the *lowering* and each
+   of those lowerings already had a branch for it. The differential said so in
+   one run; the real fix was one branch in one lowering, and it moves 1 card of
+   1,610.
 
    **A refusal site is a work-list entry, not a diagnosis — record which
    *layer* each failure is in.** `--refusals` names where the parser stopped,
@@ -933,3 +1011,53 @@ activated abilities rather than a delayed-trigger binding, the second was a
 dropped `controller` keyword before it was a missing prompt. The ROADMAP entries
 they pointed at are gone with the fixes; the warning they left is in ROADMAP's
 Ice Age section.)*
+
+**FEM — 2026-09-01 (Phases 0–6; the set shipped).** 69/102 at ingest, 101/102
+after **one wave of five worktree groups**, and 102/102 after one more agent
+took the single declined card. Pool 1,508 → 1,610 unique cards; the manifest
+entry inserted at printing-order index 8, the first insert rather than an
+append. **Zero name-keyed hooks added and one retired** (Dragon Whelp, whose
+printed clause two FEM cards share), so reliance fell 4.2% → 3.9%.
+
+*Drained:* nothing — the list was empty on entry. *Added:* one item, the
+`permanents_from` channel carrying two arities.
+
+*The instruction that paid most, and it is new:* **run `parse_coverage.py` and
+`--hollow-lines` at Phase 1, not at Phase 4.** FEM's refusal census measured 39
+refused lines over 39 distinct sentences — the reading that says a set contains
+no shared production — and those two instruments then found four *supported*
+cards each holding a second copy of a sentence a refused card needed. The pairs
+became the group split and each cost one production for two cards. The census
+counts cards and cannot see that population by construction; this is now a
+numbered step in Phase 1.
+
+*Added to the phase text, all in place:* two merge hazards about **how a
+conflict is resolved** rather than what conflicted — a whole-file `--theirs`
+discards the hunks that were never in dispute (it would have dropped a third
+branch's cleanly-merged node), and a union of two `if` branches can break an
+`if`/`elif` chain so one branch's answer is computed and overwritten. The
+per-set test convention is rewritten: **block-local imports**, with the files
+opened on `main` before the fan-out, which designs out the header-import hazard
+instead of watching for it — and a note that the same failure survives wherever
+a *function* moves between modules, which is how it caught the integrator during
+a cap split. And Phase 3 gains the **whole-pool compiled-program differential**
+as a step rather than a tactic.
+
+*The scope error worth repeating:* a decline recorded during the wave named a
+parser feature ("cross-sentence pronoun rebinding is missing"), and building it
+broke eight shipped cards that already played correctly — the engine reads that
+pronoun in the *lowering*, and each of those lowerings already had a branch for
+it. The differential found that in one run; the real fix was one branch in one
+lowering. Roughly a third of every brief was wrong again, in the usual
+direction.
+
+*Phase 4 collected on the proxy trap a fourth time.* A guard asserted that every
+anthem-shaped line is claimed by `engine/lord_buffs.py`'s table — but the grammar
+runs *before* the derivation tables, so a production claiming such a line is
+exactly when the table must stay silent. It now asks whether the line is read by
+anything. Three cap breaches fired at integration and none was caused by a
+single branch.
+
+*The numbers:* grammar 88.0% parsed / 56.1% executed (FEM itself 99.0%); ten
+defects fixed in already-supported cards, two of them free abilities and one
+five sets old; behaviour classes 57 → 62; suite 10,934 → 11,176 tests.
