@@ -1787,7 +1787,7 @@ class GameHelpersMixin:
         which is the fire-site problem in miniature.
         """
         self._stack_push_object(item)
-        self._choose_trigger_mode(item)
+        self._choose_trigger_mode(item, targets_already_chosen=targets_already_chosen)
         # …and its non-modal twin: an ability whose printed noun phrase is a
         # *choice* the event did not make chooses it now, at the same moment
         # and for the same rule (CR 603.3d/601.2c). Both hang off this method
