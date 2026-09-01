@@ -544,6 +544,30 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
                         )
     stream.reset(threshold_mark)
 
+    # "if **this ability has been activated four or more times this turn**"
+    # (Farrelite Priest, Initiates of the Ebon Hand). The one condition here
+    # that asks about the ability rather than about a board: how often the very
+    # line carrying it has been used since the turn began.
+    #
+    # Every word is required, and two of them carry the whole meaning. The
+    # number and its comparison are read rather than skipped — a threshold read
+    # as "at least once" arms the drawback on the first activation, which is a
+    # strictly harsher card. "**This turn**" is the window, and without it the
+    # clause would be the lifetime count the same ledger also keeps
+    # (``activations_ever``), which is a different question.
+    tally_mark = stream.mark()
+    if stream.accept_phrase("this", "ability", "has", "been", "activated"):
+        word = stream.peek_word()
+        if word is not None and word in NUMBER_WORDS:
+            stream.advance()
+            if (
+                stream.accept_phrase("or", "more")
+                and stream.accept_word("times")
+                and stream.accept_phrase("this", "turn")
+            ):
+                return ast.SourceAbilityActivations(NUMBER_WORDS[word])
+    stream.reset(tally_mark)
+
     # "if it had a +1/+1 counter on it" (Basri's Lieutenant). Past tense, and
     # that is the whole point: "it" is the creature that just died, so the
     # answer is last-known information (CR 603.10) recorded as the trigger

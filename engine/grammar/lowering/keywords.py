@@ -286,7 +286,29 @@ def _lower_gain_keyword(node: ast.GainKeyword) -> tuple[OracleInstruction, ...]:
     if len(node.keywords) == 1:
         kind = _KEYWORD_GRANTS.get((node.keywords[0], scope))
         if kind is not None:
-            return (OracleInstruction(kind, "", {"duration": duration}),)
+            shortcut: dict[str, object] = {"duration": duration}
+            # **The printed noun phrase travels even down the shortcut.** These
+            # kinds used to carry a duration and nothing else, and the phrase in
+            # front of the verb was simply dropped: Whalebone Glider's "target
+            # creature **with power 3 or less**" and Krovikan Elementalist's
+            # "target creature **you control**" both offered every creature on
+            # the board, because `engine/targeting.py` derives the picker from
+            # this payload and there was nothing in it to narrow. Goblin Kites
+            # prints the same shape with two narrowings at once.
+            #
+            # Described rather than re-routed to the generic pair below, whose
+            # handler re-tests the phrase at resolution: an *earlier step of the
+            # same ability* may have changed the creature (Phantasmal Mount's
+            # "gets +1/+1 **and** gains flying until end of turn" takes a
+            # toughness-2 creature to 3 before the grant runs), and CR 608.2b
+            # checks a target's legality once, when the ability begins
+            # resolving — not between its instructions. So the narrowing is
+            # enforced where the rules put it, at announcement
+            # (CR 601.2c / 602.2b, `legality.py`'s gates over the same
+            # `_enumerate_targets` list the picker gets).
+            if scope == "target":
+                _describe_targets(shortcut, node.subject)
+            return (OracleInstruction(kind, "", shortcut),)
     # Any other grant rides the generic payload pair, gated on the keyword
     # registry: `grant_keyword` puts the word into layer 6 for anything, but a
     # word whose behaviour is not built would be a grant of nothing — the same

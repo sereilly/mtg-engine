@@ -95,23 +95,6 @@ def pump_self(game: Game, instruction: OracleInstruction, context: OracleExecuti
     return True, "resolved"
 
 
-@effect_handler("pump_self_with_sacrifice_condition")
-def pump_self_with_sacrifice_condition(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    card = context.card
-    source_permanent = context.source_permanent
-    if source_permanent is None:
-        return False, "ability not implemented"
-    apply_temp_pt_boost(source_permanent, 1)
-    activation_count = int(source_permanent.metadata.get("pump_activation_count", 0)) + 1
-    source_permanent.metadata["pump_activation_count"] = activation_count
-    if activation_count >= 4:
-        source_permanent.metadata["sacrifice_at_next_end_step"] = True
-    game.log.append(
-        f"{card.name} gets +1/+0 until end of turn (activation {activation_count})"
-    )
-    return True, "resolved"
-
-
 @effect_handler("pump_target_creature_until_eot")
 def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     caster = context.caster

@@ -626,6 +626,39 @@ class SourceCounterCount:
 
 
 @dataclass(frozen=True)
+class SourceAbilityActivations:
+    """"**If this ability has been activated four or more times this turn**,
+    sacrifice this creature at the beginning of the next end step." (Farrelite
+    Priest, Initiates of the Ebon Hand.)
+
+    How often the ability *reading this clause* has been activated in the
+    current turn, compared against a printed number. Its own condition rather
+    than a spelling of :class:`CountedNumber`, because what it counts is not on
+    any board: it is a per-turn ledger the activation path keeps on the
+    permanent, which is the same ledger CR 602.5's "Activate no more than twice
+    each turn" is refused against (``engine/activation_restrictions.py``).
+
+    ``count`` and ``comparison`` are the printed words and nothing else, so the
+    card that prints "twice or more" or "exactly three times" extends this
+    production rather than needing a second node.
+
+    One honest limitation, recorded here because the two cards printing the
+    clause cannot show it: the ledger is kept **per permanent**, not per
+    printed line, so a permanent carrying a second capped ability would have
+    both counted together. Neither of these creatures has one — each prints a
+    single activated ability — and the fix, if a card ever prints two, is the
+    per-line ledger ``ONCE_ONLY_TALLY_MARK`` already keeps beside it rather
+    than a second counter here.
+    """
+
+    count: int
+    #: "four **or more**" is ``"at_least"``; a printed exact count would be
+    #: ``"exactly"``. The field exists for :class:`SourceCounterCount`'s reason
+    #: — the question is one question and the comparison is what varies.
+    comparison: str = "at_least"
+
+
+@dataclass(frozen=True)
 class ItIsColor:
     """"Counter target spell **if it's red**." (Hydroblast, Pyroblast.)
 
@@ -685,6 +718,7 @@ Condition = Union[
     AttackersAimedAtYou, EnteredFrom, ItHappened, RevealedCardIs,
     LifeGainedThisTurn, PaidCost, RawCondition, ReturnedToHandThisTurn,
     DealtDamageThisTurn, SubjectCharacteristicIs, BlockersOfBoundCreature,
-    SourceExiledWithCounter, SourceCounterCount, OnBattlefield,
+    SourceExiledWithCounter, SourceCounterCount, SourceAbilityActivations,
+    OnBattlefield,
     TurnIsYours,
 ]

@@ -202,12 +202,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
                 mana={"W": 0, "U": 0, "B": 3, "R": 0, "G": 0, "C": 0, "generic": 0},
             ),
     },
-    'Dragon Whelp': {
-        "{r}: this creature gets +1/+0 until end of turn. if this ability has been "
-        "activated four or more times this turn, sacrifice this creature at the "
-        "beginning of the next end step":
-            _line("pump_self_with_sacrifice_condition", "activated_pump"),
-    },
     'Drain Power': {
         'target player activates a mana ability of each land they control. then '
         'that player loses all unspent mana and you add the mana lost this way':

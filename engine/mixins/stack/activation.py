@@ -22,6 +22,7 @@ from ...activation_restrictions import (
     mark_activated_this_turn,
     mark_once_only_activation,
     prints_once_only_restriction,
+    reads_activation_tally,
 )
 from ...auras import attached_ability_cost_reduction, aura_restriction_active
 from ...cost_modifiers import (ability_cost_tax, ability_self_reduction_amount,
@@ -1033,8 +1034,15 @@ class AbilityActivationMixin:
                 event_subject_controller=self.controller_index_of(permanent),
             )
 
-        # All guards/costs passed — tally an activation of a capped ability.
-        if activation_caps:
+        # All guards/costs passed — tally an activation of a capped ability,
+        # and of one whose own effect reads the tally ("If this ability has been
+        # activated four or more times this turn, …", Farrelite Priest). Two
+        # questions about one ledger: the first is asked of the printed clause,
+        # because a cap is a refusal and is enforced before anything is paid;
+        # the second is asked of the compiled program, because that sentence is
+        # an effect the grammar has already read and a second reader of it would
+        # be free to disagree.
+        if activation_caps or reads_activation_tally(ability.instruction):
             mark_activated_this_turn(self, permanent)
         # The same stamp for the cap with no turn in it ("Activate only once",
         # Touch of Vitae's granted ability). Beside the per-turn one and in the

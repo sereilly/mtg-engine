@@ -212,6 +212,11 @@ _BOUND_OBJECT_DELAYED_EVENTS: frozenset[str] = frozenset({
     "bound_permanent_dies",              # Reincarnation
     "bound_permanent_dealt_damage",      # Glyph of Life
     "next_end_of_combat",                # Glyph of Doom
+    # "Flip a coin at the beginning of the next end step. If you lose the flip,
+    # sacrifice **that creature**." (Goblin Kites.) A *step* event that names an
+    # object, exactly as the end-of-combat row above is: the step says when, and
+    # the sentence behind it says what the ability is about.
+    "next_end_step",
     # War Barge ("when this artifact leaves the battlefield this turn, destroy
     # **that creature**") and Runesword. The object the ability is *about* is
     # not always the object it watches: this membership is the acted-on half,

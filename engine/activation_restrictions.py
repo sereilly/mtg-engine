@@ -802,8 +802,58 @@ def _not_yet_activated_at_all(
     return once_only_activations(source, ability_text) < 1
 
 
+#: The lowered condition kind that *reads* the per-turn tally rather than
+#: bounding it: "If this ability has been activated four or more times this
+#: turn, …" (Farrelite Priest, Initiates of the Ebon Hand). Spelled once,
+#: because `engine/grammar/lowering/conditions.py` writes it and
+#: :func:`reads_activation_tally` looks for it.
+ACTIVATION_TALLY_CONDITION = "source_ability_activations"
+
+
+def reads_activation_tally(instruction) -> bool:
+    """Whether this compiled ability asks how often it has been activated.
+
+    The other half of :func:`mark_activated_this_turn`'s question. A cap is a
+    *refusal* and is read off the printed clause; this is an ability that reads
+    the same ledger as an ordinary effect, and one that is not tallied would
+    find it empty on every activation and never fire its drawback — supported,
+    silent, and free.
+
+    Asked of the **compiled program**, not of the printed words. The grammar has
+    already read that sentence once; a regex here would be a second reader of
+    it, free to disagree about a printing neither author had in mind. Walking
+    the payload for nested instructions rather than a list of the keys that hold
+    them is the same choice for the same reason — a key list is a list that goes
+    stale, and every value that *is* an instruction is one wherever it sits.
+    """
+    from .oracle_types import OracleInstruction
+
+    if not isinstance(instruction, OracleInstruction):
+        return False
+    payload = instruction.payload or {}
+    if instruction.kind == "if_then":
+        condition = payload.get("condition") or {}
+        if condition.get("kind") == ACTIVATION_TALLY_CONDITION:
+            return True
+    for value in payload.values():
+        if isinstance(value, OracleInstruction):
+            if reads_activation_tally(value):
+                return True
+        elif isinstance(value, (tuple, list)):
+            for item in value:
+                # A `choose_one` carries its alternatives as dicts with the
+                # instruction under a key, so both shapes are walked.
+                nested = (
+                    item.get("instruction") if isinstance(item, dict) else item
+                )
+                if reads_activation_tally(nested):
+                    return True
+    return False
+
+
 def mark_activated_this_turn(game: "Game", source) -> None:
-    """Tally one activation of a permanent whose ability prints a per-turn cap."""
+    """Tally one activation of a permanent whose ability prints a per-turn cap
+    or reads the per-turn count."""
     if source is None:
         return
     already = activations_this_turn(game, source)
@@ -1397,6 +1447,8 @@ def activation_denial(game, controller_index: int, source, ability_text: str) ->
 __all__ = [
     "ACTIVATION_RESTRICTIONS",
     "ACTIVATION_TALLY_MARK",
+    "ACTIVATION_TALLY_CONDITION",
+    "reads_activation_tally",
     "ONCE_ONLY_TALLY_MARK",
     "clear_once_only_tally",
     "mark_once_only_activation",

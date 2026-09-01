@@ -591,6 +591,29 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return held >= wanted
         return held == wanted
 
+    if kind == "source_ability_activations":
+        # "If this ability has been activated four or more times this turn, …"
+        # (Farrelite Priest, Initiates of the Ebon Hand.) The ledger the
+        # activation path stamps on the permanent, read through its own module
+        # so this question and CR 602.5's refusal count the same activations.
+        #
+        # The activation that is resolving has already been counted — the stamp
+        # goes on once every cost and guard has passed — so the fourth use is
+        # the one that sees four, which is what the card says.
+        from ..activation_restrictions import activations_this_turn
+
+        source = context.source_permanent
+        if source is None:
+            # The permanent left between activation and resolution (CR 400.7
+            # makes anything that comes back a different object), so there is
+            # no ledger to read and no creature the clause could be about.
+            return False
+        used = activations_this_turn(game, source)
+        wanted = int(payload.get("count", 0))
+        if str(payload.get("comparison", "at_least")) == "exactly":
+            return used == wanted
+        return used >= wanted
+
     if kind == "returned_to_hand_this_turn":
         # "a permanent was put into your hand from the battlefield this turn"
         # (Barrin). "Your" is the ability's controller; the bounce paths feed
