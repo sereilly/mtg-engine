@@ -220,10 +220,12 @@ def _chargeable_object(phrase: str, action: str) -> dict | None:
     announcement step), and a phrase admitted here that they would refuse is a
     cost this table claims and nothing collects.
 
-    Two zones and no others, matching what ``_pay_additional_costs`` can reach:
-    a sacrifice and an exile both come off the caster's own battlefield. A
-    phrase naming a graveyard, a hand or somebody else's board is refused, which
-    keeps the card unsupported rather than cast for a cost nobody pays.
+    **One zone**, because that is all ``_pay_additional_costs`` can reach: both
+    verbs take a permanent off the caster's own battlefield. A phrase naming a
+    graveyard or a hand is already refused by ``subject_filter_payload``, whose
+    whole job is to read a phrase describing a *permanent*; the zone check below
+    is the belt to that braces, so a later widening of that reader cannot
+    silently admit a cost this table has nothing to charge.
 
     Imported inside the function for the reason every other reader of these does:
     ``engine/oracle.py`` imports this module at load time, so the edge back is

@@ -752,8 +752,6 @@ class AbilityActivationMixin:
                 )
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
-            # Through the seam, which bounds-checks and turns an index arriving
-            # from the wire into a permanent exactly once.
             # "Sacrifice **two** Goblins" (Goblin Warrens). A printed count
             # greater than one, which is a different payability question from
             # every other sacrifice cost here: two of them must exist, and one
@@ -800,14 +798,16 @@ class AbilityActivationMixin:
                 sacrifice_cost_set = chosen_victims
             else:
                 # `in` compares Permanents by value and would match a look-alike, so
-                # membership is tested by identity. An id names the victim as
-                # well as an index does — the wire carries both — and honouring
-                # it here is CR 601.2b's "the payer chooses"; without it a seat
-                # that named an id got the deterministic default instead.
+                # membership is tested by identity.
                 sacrifice_cost_permanent = (
-                    named[0] if named
-                    else named_permanent
+                    named_permanent
                     if any(perm is named_permanent for perm in candidates)
+                    # An id names the victim as well as an index does — the wire
+                    # carries both — so a seat that named one is honoured rather
+                    # than given the deterministic default. The index channel
+                    # keeps precedence, because that is the one the sacrifice
+                    # picker has always answered on.
+                    else named[0] if named
                     # A permanent whose death loses the game is kept for last, then
                     # the smallest — one rule, shared with the cast-side additional
                     # cost and the forced-sacrifice default (`default_sacrifice_pick`).
