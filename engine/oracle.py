@@ -1478,6 +1478,30 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         if any_number is not None:
             remove_counter = any_number.group(1)
             remove_counter_count = "any"
+    if remove_counter is None:
+        # "Remove **three spore** counters from this creature" (Thallid and the
+        # rest of Fallen Empires' Saproling engine), "Remove **two carrion**
+        # counters from this creature" (Osai Vultures). A *printed* count, and
+        # the third row this pattern has needed for one reason: the singular
+        # "an?" matched nothing at all, so the ability was activated for free
+        # and could be activated forever -- Osai Vultures has been shipping an
+        # unlimited +1/+1 since Legends was ingested, with its carrion counters
+        # untouched.
+        #
+        # The regex only **delimits** the number; ``_NUMBER_WORDS`` reads it,
+        # which is the split every other counted clause in this file makes. Read
+        # after the "any number of" row above, whose opening words it would
+        # otherwise have to exclude by hand.
+        counted_removal = re.search(
+            r"\bremove (\w+) ([a-z]+|[+-]\d+/[+-]\d+) counters from ",
+            cost_lower,
+        )
+        if counted_removal is not None:
+            word = counted_removal.group(1)
+            number = int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
+            if number >= 2:
+                remove_counter = counted_removal.group(2)
+                remove_counter_count = number
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
         sacrifice_filter,

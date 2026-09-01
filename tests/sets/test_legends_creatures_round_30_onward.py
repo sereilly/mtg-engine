@@ -1143,3 +1143,62 @@ def test_ayesha_tanaka_cannot_be_activated_with_nothing_to_counter(set_pool):
 
     assert not result.supported
     assert not ayesha.tapped
+
+
+# --- G4 (Fallen Empires wave): a counted counter-removal cost charged nothing
+
+
+def _g4_vultures(set_pool, carrion=0):
+    from engine.named_counters import add_counters
+
+    from engine import Game, PlayerState
+    from engine.models import Permanent
+
+    vultures = Permanent(card=set_pool("LEG")["Osai Vultures"])
+    vultures.metadata["summoning_sickness_turn"] = -99
+    p1 = PlayerState(name="P1", battlefield=[vultures])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    if carrion:
+        add_counters(vultures, "carrion", carrion)
+    return game, vultures
+
+
+def test_osai_vultures_spends_two_carrion_counters_to_pump(set_pool):
+    """"**Remove two carrion counters from this creature**: This creature gets
+    +1/+1 until end of turn."
+
+    The counters really come off. The charger's pattern read only "remove **a**
+    <kind> counter", so a *printed count* matched nothing at all — and a cost
+    that matches nothing is not a refused ability, it is a free one. This card
+    pumped +1/+1 as often as anyone asked, for ever, with every carrion counter
+    still on it.
+    """
+    from engine.named_counters import counters_on
+
+    game, vultures = _g4_vultures(set_pool, carrion=3)
+
+    result = game.activate_permanent_ability(0, "Osai Vultures", permanent_index=0)
+    game._settle()
+
+    assert result.supported, result.details
+    assert (vultures.effective_power, vultures.effective_toughness) == (2, 2)
+    assert counters_on(vultures, "carrion") == 1
+
+
+def test_osai_vultures_cannot_pump_on_one_carrion_counter(set_pool):
+    """The control the count exists for: one counter is no more a payment of a
+    two-counter cost than none is (CR 601.2h), so the ability is not activated
+    (CR 602.2b) and the counter stays.
+    """
+    from engine.named_counters import counters_on
+
+    game, vultures = _g4_vultures(set_pool, carrion=1)
+
+    result = game.activate_permanent_ability(0, "Osai Vultures", permanent_index=0)
+    game._settle()
+
+    assert not result.supported
+    assert (vultures.effective_power, vultures.effective_toughness) == (1, 1)
+    assert counters_on(vultures, "carrion") == 1

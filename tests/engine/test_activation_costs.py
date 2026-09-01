@@ -158,6 +158,37 @@ def test_every_admitted_cost_clause_is_charged(pool):
                             f"{card.name}: charged {charged.discard_filters} for "
                             f"{tuple(f.to_payload() for f in cost.filters)}"
                         )
+                # "Remove **two carrion** counters from this creature" (Osai
+                # Vultures), "Remove **three spore** counters…" (the Thallids).
+                # A counter cost with no branch here was the same hole the tap
+                # cost had: the charger read only the singular spelling, so a
+                # printed count charged nothing and the ability was free. Both
+                # the kind and the number are compared, because a charger
+                # reading one and not the other is still a cheaper cost.
+                if isinstance(cost, ast.RemoveCounterCost):
+                    wanted_count = (
+                        cost.count.value if isinstance(cost.count, ast.Fixed)
+                        else "any" if isinstance(cost.count, ast.AnyNumber)
+                        else None
+                    )
+                    if (charged.remove_counter, charged.remove_counter_count) != (
+                        cost.counter, wanted_count
+                    ):
+                        unpaid.append(
+                            f"{card.name}: charged "
+                            f"{(charged.remove_counter, charged.remove_counter_count)}"
+                            f" for {(cost.counter, wanted_count)}"
+                        )
+                # Its mirror. A cost that *adds* a marker can never be
+                # unpayable, so getting it wrong is not a free ability — but it
+                # is a card whose own state trigger never fires, which is the
+                # same silence.
+                if isinstance(cost, ast.PutCounterCost):
+                    if charged.put_counter != cost.kind:
+                        unpaid.append(
+                            f"{card.name}: charged put {charged.put_counter!r} "
+                            f"for {cost.kind!r}"
+                        )
                 if isinstance(cost, ast.PayLifeCost):
                     # Not "is life charged" but "is *this much* charged". The
                     # amount is printed, and a charger reading a smaller one is
