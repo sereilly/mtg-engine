@@ -727,6 +727,82 @@ Third, **alternative costs (CR 118.9) do not exist** — `cast_costs.py` impleme
 *additional* costs well, and the phrase appears in the engine only in comments —
 which blocks the buyback/flashback/evoke/madness family wholesale.
 
+## Fallen Empires (FEM) — measured, in progress
+
+**Census at ingest: 102 cards, 69 supported (67.6%), 33 unsupported, 39 refused
+lines.** 187 printings dedupe to 102 by `oracle_id` — FEM prints most of its
+commons in two or three arts, which is the largest printing-to-card ratio in the
+pool and worth knowing before reading any per-set count. All 102 cards are new
+here, so Phase 1 step 5's question ("is this a set you implement or a set you
+promote?") answers *implement*.
+
+**It is the first set that inserts rather than appends.** FEM released
+1994-11-01, between The Dark (index 7) and Fourth Edition (index 8).
+`CardDefinition.original_printing` is the first entry in `printings`, so the
+promotion commit places the manifest entry at index 8 rather than at the end.
+Nothing in the shipped pool moves — every FEM card is new — which means
+`test_appending_a_set_never_changes_an_existing_original_printing` cannot fail
+whatever index is chosen, exactly the blind spot 4ED collected on. The guard
+that does fire is
+`test_manifest_roles.test_the_shipped_sets_are_in_printing_order`, which
+compares the `released` dates the entries already carry.
+
+**Both Phase 2 subsystem sweeps came back empty**, which is the finding that
+sizes the set. Every card is `layout: normal` with a known type — no
+planeswalker, no split, no transform — so nothing gates promotion structurally.
+And every keyword the set prints (banding, protection, first strike, trample,
+islandwalk, landwalk, defender, plus the Scryfall tags Regenerate / Enchant /
+Mill whose behaviour lives elsewhere) is already in `IMPLEMENTED_KEYWORDS`, with
+none of them in `UNSUPPORTED_KEYWORDS` — the third table that outranks both and
+cost Legends seven rampage cards with the behaviour built and tested. So FEM
+opens with **no keyword round**, which is unusual: keywords normally open Phase
+3 because they have the highest cards-unlocked-per-change in a census.
+
+**The refusal rollup is as flat as the re-census predicted** — 14 lines at
+"expected a subject", 9 at "unconsumed text", 3 at "unrecognized effect verb",
+and thirteen sites with exactly one line each. Every one of the 39 is a distinct
+sentence. There is no production here that buys ten cards.
+
+**The leverage is somewhere the census structurally cannot look, and that is the
+transferable finding.** `support_report.py` counts cards, and a card is
+supported when *any* of its lines is — so the sentences that repeat in this set
+repeat between a *refused* card and a *supported* one, where only an instrument
+reading line by line can see the pair. Two of those instruments were run at
+ingest rather than at Phase 4:
+
+- `parse_coverage.py`'s measured-set section: **8 unclaimed sentences across 5
+  supported cards** (Delif's Cube, Goblin Grenade, Thelon's Chant, Tidal
+  Influence, Tourach's Chant).
+- `support_report.py --hollow-lines`: **1 card, 1 part** — Delif's Cube's
+  activated ability compiles to no instruction at all.
+
+Four of those five pair with a refused card: Tidal Influence prints Homarid's
+three tide-counter sentences with the subject changed, Goblin Grenade prints
+Soul Exchange's additional-cost clause, Delif's Cube prints Delif's Cone's
+"attacks and isn't blocked … assigns no combat damage", and Thelon's Chant and
+Tourach's Chant are each other's sentence with the land type changed. Five of
+the set's repeated shapes, none of them visible in the census histogram.
+
+**Round plan: one wave of five worktree groups**, split by the machinery rather
+than by the printed type, each carrying the supported-but-hollow card that
+shares its shape:
+
+| Group | Machinery | Cards |
+| --- | --- | ---: |
+| G1 | counters as named state | 6 + Tidal Influence |
+| G2 | self-clocks, delayed self-sacrifice, card-flow order | 7 |
+| G3 | combat triggers, block restrictions, damage substitution | 7 + Delif's Cube |
+| G4 | costs from the board and the graveyard, taxes, land animation | 6 + Goblin Grenade |
+| G5 | prices offered to another player, prevention, control | 7 + both Chants |
+
+**One process change went in with the wave**, against the playbook's own
+warning that reconstructing a per-set test file from its delimited block drops
+header imports. The six `tests/sets/test_fem_*.py` files were opened on `main`
+before the fan-out, and their header instructs each group to put **its own
+imports at the top of its own block**. The mechanical merge is "take ours,
+append the branch's block"; a block that carries its imports cannot lose them,
+so the hazard is designed out rather than watched for.
+
 ## Ice Age (ICE) — shipped
 
 **Final: 373/373 supported, hollow lines 0, unclaimed parse sentences 0, and the
