@@ -10,7 +10,8 @@ from .. import ast
 from ..lexer import DASH, WORD
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import _parse_counted_sacrifice, _parse_mana_payment
+from ..phrases import (_accept_mana_alternatives, _parse_counted_sacrifice,
+                       _parse_mana_payment)
 from ..vocabulary import NUMBER_WORDS
 
 
@@ -165,7 +166,13 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
             )
 
         return ast.CounterSpell(
-            subject, unless_pays=payment, replaces_prior_amount=replaces_prior
+            subject, unless_pays=payment,
+            # "…pays {B} **or {3}**" (Thrull Wizard). Read here rather than
+            # before "instead" above because the two clauses are about
+            # different things: "instead" replaces an amount an earlier
+            # sentence named, and this offers a second way to cover *this* one.
+            unless_pays_alternatives=_accept_mana_alternatives(stream),
+            replaces_prior_amount=replaces_prior,
         )
 
     return ast.CounterSpell(subject)

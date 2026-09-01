@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from ..card_hooks import ON_SPELL_COUNTERED
 from ..divided_damage import DIVIDED_TARGETS, divided_entry
 from ..game_types import StackItem
-from ..mana_payment import total_pips
+from ..mana_payment import mana_cost_label, total_pips
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -458,13 +458,28 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # (a human taps lands and pays/declines via the prompt; headless/AI play is
         # auto-resolved deterministically). Paying {0} always succeeds, so X=0 never
         # counters — resolve that immediately without a prompt.
-        if instruction.payload.get("unless_pays_x") or instruction.payload.get("unless_pays_amount"):
+        printed_cost = instruction.payload.get("unless_pays_cost")
+        if (
+            instruction.payload.get("unless_pays_x")
+            or instruction.payload.get("unless_pays_amount")
+            or printed_cost
+        ):
             # Power Sink sizes the cost from its caster's chosen X; Miscast
-            # prints it. Everything after the amount is one flow.
-            if instruction.payload.get("unless_pays_x"):
-                cost = max(0, int(context.x_value or 0))
+            # prints it; Thrull Wizard prints a coloured one with a second way
+            # to cover it. Everything after the amount is one flow.
+            alternatives = [
+                dict(alt)
+                for alt in instruction.payload.get("unless_pays_cost_alternatives") or ()
+            ]
+            if printed_cost:
+                cost = total_pips(printed_cost)
+                symbols: dict[str, int] | None = dict(printed_cost)
             else:
-                cost = max(0, int(instruction.payload["unless_pays_amount"]))
+                symbols = None
+                if instruction.payload.get("unless_pays_x"):
+                    cost = max(0, int(context.x_value or 0))
+                else:
+                    cost = max(0, int(instruction.payload["unless_pays_amount"]))
             # "If you control a creature with flying, counter that spell unless
             # its controller pays {4} **instead**." (Lofty Denial.) One counter
             # with a replacement amount, asked here rather than lowered into two
@@ -490,11 +505,19 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             game.arm_pending_choice(
                 "mana_payment", target.caster_index,
                 amount=cost, card_name=card.name, counter_card=card,
-                stack_item=target, _new=True,
+                stack_item=target,
+                # Absent for the two numeric forms, so their prompt data is
+                # byte-identical to what it was; ``_mana_payment_cost`` falls
+                # back to ``generic_cost(amount)`` when there is no symbol dict.
+                **({"cost": symbols} if symbols is not None else {}),
+                **({"cost_alternatives": alternatives} if alternatives else {}),
+                _new=True,
             )
             game.log.append(
                 f"{card.name}: {game.players[target.caster_index].name} must pay "
-                f"{{{cost}}} or {target.card.name} is countered"
+                f"{mana_cost_label(symbols) if symbols is not None else f'{{{cost}}}'}"
+                + "".join(f" or {mana_cost_label(alt)}" for alt in alternatives)
+                + f" or {target.card.name} is countered"
             )
             return True, "resolved"
 

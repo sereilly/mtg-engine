@@ -2276,6 +2276,23 @@ class PendingChoicesMixin:
             return {k: int(v) for k, v in cost.items()}
         return generic_cost(int(data.get("amount", 0)))
 
+    @classmethod
+    def _mana_payment_costs(cls, data: dict) -> list[dict[str, int]]:
+        """Every way the payer may cover this offer, in printed order —
+        "…unless that spell's controller pays {B} **or {3}**" (Thrull Wizard).
+
+        Through the same reader ``optional_pay`` uses, and stating the same
+        policy CR 118.8 leaves to the engine: the alternatives are two ways to
+        buy *one* consequence, so there is nothing for the payer to choose
+        between and the first the board can cover is the one spent. A card whose
+        alternatives bought different things would be the graded offer next
+        door, which asks.
+        """
+        return [
+            cls._mana_payment_cost(data),
+            *(dict(alt) for alt in (data.get("cost_alternatives") or ())),
+        ]
+
     def _counter_payment_plan(self, player, cost: dict[str, int]):
         """How *player* can pay a counterspell's "unless you pay", or None.
 
@@ -2309,10 +2326,18 @@ class PendingChoicesMixin:
 
     def _default_mana_payment(self, choice: PendingChoice) -> None:
         controller = self.players[choice.player_index]
-        cost = self._mana_payment_cost(choice.data)
         self._resolve_mana_payment(
-            choice, self._counter_payment_plan(controller, cost) is not None
+            choice, self._counter_payment_plan_any(controller, choice.data) is not None
         )
+
+    def _counter_payment_plan_any(self, player, data: dict):
+        """The first of the offer's printed costs *player* can cover, as a plan,
+        or None when they can cover none of them."""
+        for cost in self._mana_payment_costs(data):
+            plan = self._counter_payment_plan(player, cost)
+            if plan is not None:
+                return cost, plan
+        return None
 
     def _resolve_mana_payment(self, choice: PendingChoice, pay: bool) -> bool:
         controller = self.players[choice.player_index]
@@ -2326,7 +2351,8 @@ class PendingChoicesMixin:
         # everyone. Lands are tapped as well as pips spent (CR 605.3b) — the
         # plan names both halves, and paying from one without the other would
         # let the same land answer two costs.
-        plan = self._counter_payment_plan(controller, cost) if pay else None
+        chosen = self._counter_payment_plan_any(controller, data) if pay else None
+        cost, plan = chosen if chosen is not None else (cost, None)
         if plan is not None:
             for symbol, spent in plan.from_pool.items():
                 controller.mana_pool[symbol] = controller.mana_pool.get(symbol, 0) - spent

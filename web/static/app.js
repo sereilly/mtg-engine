@@ -5434,11 +5434,15 @@ function applyManaPaymentPrompt(info) {
 
   const cardName = info.card_name || "Power Sink";
   const spellName = info.spell_name || "your spell";
-  const costSymbols = renderSymbolsInline(`{${Number(info.amount) || 0}}`);
+  // The printed cost, not the total: "{B}" is one mana and so is "{1}", and
+  // "{B} or {3}" (Thrull Wizard) is two ways to cover one offer. `amount`
+  // stays the fallback for a client talking to an older server.
+  const costText = info.cost || `{${Number(info.amount) || 0}}`;
+  const costSymbols = renderSymbolsInline(costText);
   title.textContent = "Pay or be countered";
   setSymbolsHtml(
     body,
-    `${cardName} counters ${spellName} unless you pay {${Number(info.amount) || 0}}. ` +
+    `${cardName} counters ${spellName} unless you pay ${costText}. ` +
       `Tap lands to generate mana, then pay or decline.`,
   );
   const payBtn = `<button type="button" class="prompt-choice-btn" id="manaPayBtn">Pay ${costSymbols}</button>`;

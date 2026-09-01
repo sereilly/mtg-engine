@@ -1307,14 +1307,41 @@ def test_a_fixed_unless_pays_cost_carries_its_printed_amount():
     assert "unless_pays_x" not in payload
 
 
-def test_a_coloured_unless_pays_cost_is_refused():
-    """No flow charges a coloured pip: the pending payment is generic mana
-    only, so "pays {W}" must refuse rather than prompt for the wrong cost."""
+def test_a_coloured_unless_pays_cost_is_carried_as_symbols():
+    """A coloured pip is charged as a coloured pip.
+
+    This used to refuse, on the true premise that the counter's pending payment
+    held a bare number. It has held a symbol dict since Ayesha Tanaka's ability
+    counter, and the spell counter reads the same key — so "{1}{W}" now arrives
+    as the cost it is rather than as a {2} the payer could cover with two
+    Mountains.
+    """
     result = compile_line(
         "Counter target spell unless its controller pays {1}{W}.", card_name="Test"
     )
 
-    assert result.parsed and not result.lowered
+    assert result.parsed and result.lowered
+    payload = result.instructions[0].payload
+    assert payload.get("unless_pays_cost") == {"generic": 1, "W": 1}
+    assert "unless_pays_amount" not in payload
+
+
+def test_an_unless_pays_alternative_rides_the_same_offer():
+    """"…unless that spell's controller pays {B} **or {3}**" (Thrull Wizard).
+
+    CR 118.8: two ways to cover *one* offer, so they ride one payment rather
+    than arming a second prompt — declining a first prompt would counter the
+    spell before the second was ever made.
+    """
+    result = compile_line(
+        "Counter target black spell unless that spell's controller pays {B} or {3}.",
+        card_name="Test",
+    )
+
+    assert result.parsed and result.lowered
+    payload = result.instructions[0].payload
+    assert payload.get("unless_pays_cost") == {"B": 1}
+    assert payload.get("unless_pays_cost_alternatives") == [{"generic": 3}]
 
 
 def test_only_the_countered_spells_controller_can_pay():
