@@ -469,6 +469,21 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
         for phrase, kind in _FILTERED_EVENTS:
             mark = stream.mark()
             if accept_event_phrase(stream, phrase):
+                # "…becomes blocked by **one or more** Orcs" (Dwarven Soldier).
+                # The counted spelling of the same narrowing, read before the
+                # quantified one because a bare plural is a different reading of
+                # the noun ("Orcs" is a kind, "an Orc" is one of them) and the
+                # number in front is what says how many. CR 509.3e is what the
+                # count means; `engine/oracle.py`'s table is where it lands as
+                # the condition's payload, and this side has only to agree that
+                # the words describe a subject.
+                counted = stream.mark()
+                count = _accept_number(stream)
+                if count is not None and stream.accept_phrase("or", "more"):
+                    subject = parse_subject_filter_at(stream, plural=True)
+                    if subject is not None:
+                        return ast.TriggerEvent(kind, "whenever", subject=subject)
+                stream.reset(counted)
                 subject = parse_subject_filter_at(stream)
                 if subject is not None:
                     return ast.TriggerEvent(kind, "whenever", subject=subject)

@@ -263,6 +263,50 @@ def _lower_combat_restriction(
                 },
             ),
         )
+    # "This creature can't block white creatures with power 2 or greater."
+    # (Orcish Veteran.) The printed noun phrase as the filter list the
+    # enforcement site tests against the *attacker*, byte for byte the payload
+    # `engine/combat_restrictions.py` builds for the same sentence — a list
+    # because the union spelling ("Walls and/or creatures with flying") is the
+    # same reader on the other side, and one shape is what keeps the two
+    # producers comparable.
+    if node.kind == "cant_block_subject":
+        from ...subject_filters import unimplemented_filter_keywords
+
+        described = _filter_payload(dict(node.payload)["blockees"])
+        # A keyword no behaviour is registered under makes the filter inert, not
+        # unreadable — `Game._has_keyword` answers no for every creature — so the
+        # restriction would forbid nothing while the card reported supported.
+        # The same check `engine/combat_restrictions.py` makes of the same
+        # sentence, through the same reader.
+        inert = unimplemented_filter_keywords(described)
+        if inert:
+            raise LoweringError(
+                "the blocker gate cannot answer this keyword: "
+                + ", ".join(sorted(inert)),
+                node=node,
+            )
+        untestable = untestable_filter_keys(described)
+        if untestable or not described:
+            # Idiom 2: the gate tests the phrase with `subject_matches`, and an
+            # untestable key would be carried and ignored — which for a *block*
+            # restriction is the widening direction, a creature that may block
+            # attackers the card forbids it.
+            raise LoweringError(
+                "the blocker gate cannot test what this creature can't block: "
+                + (", ".join(sorted(untestable)) or "nothing was described"),
+                node=node,
+            )
+        if not _is_source(node.subject):
+            raise LoweringError(
+                "this block restriction is read off the creature it restricts",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "cant_block_subject", "", {"blockee_filters": [described]}
+            ),
+        )
     if node.kind == "cant_block_until_eot":
         payload = dict(node.payload)
         if payload.get("duration") not in _REST_OF_TURN:

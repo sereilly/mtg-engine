@@ -203,15 +203,28 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
                 node=node,
             )
         amount = _amount_payload(node.count)
-        if not node.at_random or amount != 1 or node.filter is not None:
+        if node.filter is not None or not isinstance(amount, int):
             raise LoweringError(
-                "the defending-player discard is one card, at random, from the "
-                "whole hand", node=node,
+                "the defending-player discard is unnarrowed and counted",
+                node=node,
             )
+        if node.at_random:
+            return (
+                OracleInstruction(
+                    "discard_x_target_cards", "",
+                    {"amount": amount, "who": "defending_player"},
+                ),
+            )
+        # "…**defending player discards three cards**." (Mindstab Thrull.) The
+        # same seat, chosen rather than sampled — so it is the chosen handler
+        # with the same ``who`` key, not the random one with a count. Who picks
+        # the cards is what separates the two handlers everywhere else in this
+        # function, and reading a chosen discard onto the random one would take
+        # the decision away from the player the card leaves it to.
         return (
             OracleInstruction(
-                "discard_x_target_cards", "",
-                {"amount": 1, "who": "defending_player"},
+                "discard_target_cards", "",
+                {"amount": amount, "who": "defending_player"},
             ),
         )
     if node.player.kind not in ("target_player", "target_opponent", "that_player"):

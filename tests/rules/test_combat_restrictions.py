@@ -110,7 +110,11 @@ def test_509_1b_an_except_by_clause_names_the_only_legal_blockers():
     assert restriction is not None
     assert restriction.kind == "cant_be_blocked_except_by"
     assert restriction.payload["allowed_blockers"] == [
-        {"subtype_filter": "wall"},
+        # "Walls" reads as creatures of that subtype now that the union's
+        # members go through the grammar's noun parser rather than through five
+        # regexes of this file's own — the same set, spelled the way every other
+        # filter in the engine spells it.
+        {"type_filter": "creature", "subtype_filter": "wall"},
         {"type_filter": "creature", "with_keywords": ["flying"]},
     ]
 
@@ -145,15 +149,20 @@ def test_509_1b_cant_block_power_threshold_is_data_not_part_of_the_kind():
     """"Can't block creatures with power N or greater" is one restriction with a
     number in it. The threshold used to be baked into the instruction kind
     (`cant_block_power_2_or_greater`), so the identical restriction printed with
-    any other number produced no instruction at all."""
+    any other number produced no instruction at all — and then into a *capture*
+    named ``power``, so a card stacking any other narrowing on the same
+    sentence (Orcish Veteran's colour) had nowhere to put it. The whole noun
+    phrase is the payload now."""
     for threshold in (1, 2, 3, 4, 7):
         program = compile_card_oracle(
             _orc(f"This creature can't block creatures with power {threshold} or greater.")
         )
         assert program.supported
-        blocks = [i for i in program.instructions if i.kind == "cant_block_power_n_or_greater"]
+        blocks = [i for i in program.instructions if i.kind == "cant_block_subject"]
         assert len(blocks) == 1, f"power {threshold} produced {program.instructions}"
-        assert blocks[0].payload["power"] == threshold
+        assert blocks[0].payload["blockee_filters"] == [
+            {"type_filter": "creature", "power": {"op": "ge", "value": threshold}}
+        ]
 
 
 @pytest.mark.cr("509.1b")
@@ -192,9 +201,15 @@ def test_506_3_an_unrecognized_restriction_rider_is_unsupported_not_silently_dro
     prefix "this creature can't block", matched no anchored pattern, and fell
     through to a bare static line: supported, restriction absent. Failing loud
     is the contract — a card the engine cannot enforce must not claim support.
+
+    That first example is now *enforced* rather than refused, and its place is
+    taken by the sentence with the same shape the gate still cannot answer: a
+    keyword no behaviour is registered under. ``Game._has_keyword`` says no for
+    every creature, so the restriction would forbid nothing — the same silent
+    admission by a different route, which is what this guard is about.
     """
     for text in (
-        "This creature can't block creatures with flying.",
+        "This creature can't block creatures with shadow.",
         "This creature can't attack unless you control a Wall.",
         "This creature can't attack unless defending player controls a snowfield.",
     ):

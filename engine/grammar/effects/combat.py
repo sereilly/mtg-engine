@@ -12,7 +12,8 @@ from ..lexer import MANA
 from ..nouns import parse_object_filter
 from ..references import parse_recipient
 from ..stream import TokenStream
-from ..phrases import _accept_number, _parse_duration, parse_counted_subject
+from ..phrases import (_accept_number, _parse_duration, parse_counted_subject,
+                       parse_subject_filter_at)
 
 
 # The printed combat restrictions the engine enforces (CR 506, 509). Several are
@@ -183,25 +184,31 @@ def _parse_cant_attack_or_block(
         # is a blanket over the *subject*, scoped by the printed duration.
         # Only the durationed form is claimed; a bare "<subject> can't block"
         # would be a static ability and refuses below by falling through.
-        if not stream.at_word("creatures"):
+        #
+        # Gated on the words a duration can start with, so the noun read below
+        # never has to decline "this turn" — the two readings are told apart by
+        # the printed word rather than by one of them failing.
+        if stream.at_word("this", "until"):
             duration = _parse_duration(stream)
             if duration.kind is None:
-                raise stream.error("expected 'creatures' or a duration after \"can't block\"")
+                raise stream.error("expected a duration after \"can't block\"")
             return ast.CombatRestriction(
                 subject, "cant_block_until_eot", (("duration", duration.kind),)
             )
-        stream.expect_word("creatures")
-        if not stream.accept_phrase("with", "power"):
-            raise stream.error("expected 'with power'")
-        token = stream.peek()
-        if token is None or not token.text.isdigit():
-            raise stream.error("expected a power threshold")
-        power = token.text
-        stream.advance()
-        if not stream.accept_phrase("or", "greater"):
-            raise stream.error("expected 'or greater'")
+        # "…can't block **creatures with power 2 or greater**" (Ironclaw Orcs),
+        # "…**white creatures with power 2 or greater**" (Orcish Veteran). The
+        # whole noun phrase, through the reader every other narrowed subject in
+        # this file uses. It used to be three literal steps — "creatures", "with
+        # power", a digit, "or greater" — so a colour in front of the noun was a
+        # parse error, and the threshold rode in the instruction *kind*'s name
+        # while every other narrowing had nowhere to go.
+        described = parse_subject_filter_at(stream, plural=True)
+        if described is None:
+            raise stream.error(
+                "expected what this creature can't block, or a duration"
+            )
         return ast.CombatRestriction(
-            subject, "cant_block_power_n_or_greater", (("power", int(power)),)
+            subject, "cant_block_subject", (("blockees", described),)
         )
 
     stream.reset(mark)

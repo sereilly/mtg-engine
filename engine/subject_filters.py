@@ -167,6 +167,33 @@ def untestable_filter_keys(
         unknown.add("attached_to_filter")
     return unknown
 
+def unimplemented_filter_keywords(payload: dict) -> set[str]:
+    """The keyword *words* in *payload* this engine does not implement.
+
+    :func:`untestable_filter_keys` asks whether the matcher knows the **key**;
+    this asks whether it can answer the **value**. ``with_keywords`` and
+    ``without_keywords`` are both put to ``Game._has_keyword``, which answers
+    "no" for a word no behaviour is registered under — so a filter naming one is
+    not refused anywhere, it is silently inert: the positive form matches
+    nothing and the negative form matches everything.
+
+    For a *sweep* that is only a card doing less than it says. For a printed
+    **restriction** it changes what is legal, and in both directions at once —
+    "can't block creatures with shadow" would forbid nothing, and "creatures
+    without shadow can't attack" would ground the whole board. That is why the
+    combat-restriction table has always validated its keyword captures, and why
+    this is the one reader of that question rather than a check per row.
+    """
+    from .grammar.vocabulary import IMPLEMENTED_KEYWORDS
+
+    return {
+        word
+        for key in ("with_keywords", "without_keywords")
+        for word in (payload.get(key) or ())
+        if word not in IMPLEMENTED_KEYWORDS
+    }
+
+
 #: The keys ``_card_matches_filter`` answers about a **card** — an object in a
 #: hand, a graveyard or a library. A far smaller set than the two above, and
 #: smaller for a reason rather than for want of code: CR 613.1 applies the layer
@@ -418,4 +445,5 @@ __all__ = [
     "filter_head_noun",
     "object_only_filter",
     "subject_matches",
+    "unimplemented_filter_keywords",
 ]

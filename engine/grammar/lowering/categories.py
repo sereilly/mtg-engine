@@ -536,7 +536,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Dust's block trigger) — a one-shot stamp on the blocked creature, read
     # back by `can_attack` for exactly one of that controller's turns.
     "cant_attack_during_controllers_next_turn": "combat_restrictions",
-    "cant_block_power_n_or_greater": "combat_restrictions",
+    "cant_block_subject": "combat_restrictions",
     # The one-shot, turn-scoped blanket ("Creatures without flying can't block
     # this turn", Destructive Tampering's second mode).
     "cant_block_until_eot": "combat_restrictions",

@@ -37,6 +37,56 @@ from ..turn_state import record_block_involvement
 # unsupported instead of shipping evasion that never applies.
 
 
+#: CR 509.3e's threshold, as ``engine/oracle.py``'s condition table records it:
+#: "blocks or becomes blocked by **one or more** Orcs" (Dwarven Soldier). Absent
+#: means the sentence printed no number, which is the per-creature firing
+#: CR 509.3b/509.3d give — so the two shapes are told apart by the payload and
+#: neither dispatcher needs to know which card it is reading.
+_PAIR_THRESHOLD_KEY = "block_pair_count"
+
+
+def _meets_threshold(trig, admitted: list) -> bool:
+    """Whether *admitted* satisfies the trigger's printed "N or more" (CR 509.3e).
+
+    True with no threshold printed, because then every admitted creature is its
+    own firing and the caller is already looping over them.
+    """
+    threshold = trig.condition.payload.get(_PAIR_THRESHOLD_KEY)
+    if not isinstance(threshold, int):
+        return True
+    return len(admitted) >= threshold
+
+
+def _threshold_blockers(trig, admitted: list) -> list:
+    """Which admitted blockers a narrowed becomes-blocked trigger fires for.
+
+    The mirror of :func:`_threshold_firings` on the other side of the block: no
+    printed threshold is CR 509.3d's one firing per creature, and a printed one
+    is CR 509.3e's single firing for the declaration — represented as the first
+    creature that answered, because the firing still records a pair.
+    """
+    if not isinstance(trig.condition.payload.get(_PAIR_THRESHOLD_KEY), int):
+        return admitted
+    return admitted[:1] if _meets_threshold(trig, admitted) else []
+
+
+def _threshold_firings(trig, admitted: list) -> list[dict]:
+    """The firing contexts a narrowed block trigger produces for *admitted*.
+
+    Without a printed threshold that is one firing per creature the phrase
+    admits (CR 509.3b/509.3d). With one it is a single firing for the whole
+    declaration (CR 509.3e), carrying every creature that answered — the pair
+    is recorded by id for the same reason the unnarrowed half records it, so a
+    sentence that does say "that creature" reads the set the event was about
+    rather than whichever attacker the item happens to point at.
+    """
+    if not _meets_threshold(trig, admitted):
+        return []
+    if isinstance(trig.condition.payload.get(_PAIR_THRESHOLD_KEY), int):
+        return [{"blocked_permanent_ids": [a.permanent_id for a in admitted]}]
+    return [{"blocked_permanent_ids": [a.permanent_id]} for a in admitted]
+
+
 class DeclareBlockersStepMixin:
     def _max_blocks_for(self, blocker: Permanent) -> int:
         """How many attackers this creature may block at once (CR 509.1b). Normally
@@ -705,16 +755,22 @@ class DeclareBlockersStepMixin:
         # every other attached restriction, so Invisibility, Seeker and Elven
         # Riders are one rule printed on three different kinds of card.
 
-        # "Can't block creatures with power N or greater" (Ironclaw Orcs). The
-        # threshold rides on the payload rather than the instruction kind, so a
-        # card printed with any other number is the same restriction.
+        # "Can't block creatures with power N or greater" (Ironclaw Orcs),
+        # "…white creatures with power 2 or greater" (Orcish Veteran). The
+        # printed noun phrase rides on the payload rather than the instruction
+        # kind, read through the same `subject_matches` the blocked-by
+        # restriction above uses — so the layers answer here too: a pumped 2/2
+        # has power 4 and a creature laced white is a white creature.
         blocker_program = compile_card_oracle(blocker.effective_card)
-        power_block = next(
-            (i for i in blocker_program.instructions if i.kind == "cant_block_power_n_or_greater"),
-            None,
-        )
-        if power_block is not None and attacker.effective_power >= int(power_block.payload["power"]):
-            return False
+        for restriction in blocker_program.instructions:
+            if restriction.kind != "cant_block_subject":
+                continue
+            for described in restriction.payload.get("blockee_filters") or ():
+                if subject_matches(
+                    self, attacker, described,
+                    observer=self.controller_index_of(blocker), source=blocker,
+                ):
+                    return False
 
         # "...can't block creatures with power 3 or greater **unless you pay
         # {1}**." (Hipparion.) CR 509.1b's restriction with CR 509.1d's cost
@@ -1166,14 +1222,14 @@ class DeclareBlockersStepMixin:
                         ],
                     }]
                 else:
-                    firing_contexts = [
-                        {"blocked_permanent_ids": [attacker.permanent_id]}
-                        for _, attacker in blocked
+                    admitted = [
+                        attacker for _, attacker in blocked
                         if trigger_subject_matches(
                             self, trig, "blocked", attacker,
                             observer=source_seat, source=blocker,
                         )
                     ]
+                    firing_contexts = _threshold_firings(trig, admitted)
                 for firing_context in firing_contexts:
                     self._stack_push(
                         StackItem(
@@ -1463,6 +1519,15 @@ class DeclareBlockersStepMixin:
                             source=attacker,
                         )
                     ]
+                    # CR 509.3e's "at least a certain number": one firing for
+                    # the whole declaration rather than one per creature, and
+                    # the blocker it is *about* is the first that answered — the
+                    # sentence printing this threshold names no creature back
+                    # (Dwarven Soldier says "this creature gets …"), so the pair
+                    # travels for the log rather than for an effect to read.
+                    # With no threshold printed the per-creature firing of
+                    # CR 509.3d stands, which is every other card here.
+                    matched = _threshold_blockers(trig, matched)
                 for blocker in matched:
                     # **The blocker is what the trigger bound**, so it is the
                     # stack item's target: "destroy that Wall" (Battering Ram)
