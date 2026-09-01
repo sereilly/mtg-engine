@@ -12,6 +12,35 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **109**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**8 unclaimed sentence(s) across 5 supported card(s).**
+
+- **Delif's Cube**
+  - `{2}, {t}: this turn, when target creature you control attacks and isn't blocked, it assigns no combat damage this turn and you put a cube counter on this artifact`
+- **Goblin Grenade**
+  - `as an additional cost to cast this spell, sacrifice a goblin`
+- **Thelon's Chant**
+  - `whenever a player puts a swamp onto the battlefield, this enchantment deals 3 damage to that player unless the player puts a -1/-1 counter on a creature they control`
+- **Tidal Influence**
+  - `cast this spell only if no permanents named tidal influence are on the battlefield`
+  - `as long as there is exactly one tide counter on this enchantment, all blue creatures get -2/-0`
+  - `as long as there are exactly three tide counters on this enchantment, all blue creatures get +2/+0`
+  - `whenever there are four or more tide counters on this enchantment, remove all tide counters from it`
+- **Tourach's Chant**
+  - `whenever a player puts a forest onto the battlefield, this enchantment deals 3 damage to that player unless they put a -1/-1 counter on a creature they control`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |
