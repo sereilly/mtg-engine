@@ -1260,3 +1260,58 @@ def test_g3_the_flotillas_delay_expires_with_its_combat(set_pool):
     _g3_finish_combat(game)
 
     assert game.delayed_triggers == [], game.log
+
+
+# --- Integration: the pronoun a previous sentence targeted ---
+
+from unittest.mock import patch as _cap_patch
+
+from engine import Game as _cap_Game, PlayerState as _cap_PlayerState
+from engine.models import Permanent as _cap_Permanent
+from tests.helpers import _nosick as _cap_nosick
+
+
+def _captain_board(set_pool):
+    """The Captain and a second Orc, so a mis-aimed pronoun has somewhere
+    visibly wrong to land."""
+    fem = set_pool("FEM")
+    captain = _cap_nosick(_cap_Permanent(card=fem["Orcish Captain"]))
+    other = _cap_nosick(_cap_Permanent(card=fem["Orcish Veteran"]))
+    p1 = _cap_PlayerState(name="P1", battlefield=[captain, other])
+    game = _cap_Game(players=[p1, _cap_PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    return game, captain, other
+
+
+def test_orcish_captain_moves_the_orc_it_targeted_on_both_flips(set_pool):
+    """"{1}: Flip a coin. If you win the flip, **target Orc creature** gets
+    +2/+0 until end of turn. If you lose the flip, **it** gets -0/-2 until end
+    of turn."
+
+    The losing arm's "it" is the Orc the ability announced, not the Captain.
+    It lowered to ``pump_self`` for as long as the card had been in the pool —
+    the card compiled supported, claimed every printed sentence and carried no
+    hollow line, while shrinking the wrong creature.
+
+    Both arms are asserted, because a fix that pointed the loss at the target
+    and broke the win would pass a test that read only the loss. And the
+    Captain's own P/T is asserted on both, because the bug's signature is that
+    it moves.
+    """
+    for roll, target_pt in ((0.0, (4, 2)), (0.9, (2, 0))):
+        game, captain, other = _captain_board(set_pool)
+        assert (other.effective_power, other.effective_toughness) == (2, 2)
+
+        with _cap_patch(
+            "engine.handlers.control_flow.flip_coin", return_value=roll == 0.0
+        ):
+            result = game.activate_permanent_ability(
+                0, "Orcish Captain", permanent_index=0,
+                target_player_index=0, target_permanent_index=1,
+            )
+            game._settle()
+
+        assert result.supported, result.details
+        assert (other.effective_power, other.effective_toughness) == target_pt
+        assert (captain.effective_power, captain.effective_toughness) == (1, 1)

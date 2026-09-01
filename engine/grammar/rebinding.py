@@ -213,6 +213,118 @@ def rebind_attachment_pronoun_to_sentence_target(statement: ast.Statement) -> as
     return _walk_specs(statement, _rewrite)
 
 
+def _announced_target(node) -> "ast.TargetSpec | None":
+    """The first target *node* announces (CR 601.2c), or None.
+
+    :func:`_names_a_target`'s twin, separate rather than folded into it because
+    the two callers want different things: that one asks whether the sentence
+    chose anything, this one needs the choice itself.
+    """
+    if isinstance(node, ast.TargetSpec) and node.targeted:
+        return node
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        for field in dataclasses.fields(node):
+            found = _announced_target(getattr(node, field.name))
+            if found is not None:
+                return found
+        return None
+    if isinstance(node, (tuple, list)):
+        for item in node:
+            found = _announced_target(item)
+            if found is not None:
+                return found
+    return None
+
+
+def _rebind_pump_subject(node, bound: "ast.TargetSpec"):
+    """*node* with every bare-pronoun :class:`ast.Pump` subject set to *bound*.
+
+    Deliberately not a :func:`_walk_specs` rewrite over every spec, which is
+    what the four rebinders above do. See
+    :func:`rebind_pump_pronoun_to_sentence_target` for why this one is narrow.
+    """
+    if isinstance(node, ast.Pump):
+        subject = node.subject
+        if (
+            isinstance(subject, ast.TargetSpec)
+            and subject.quantifier == "it"
+            and subject.filter.is_source
+            and subject.filter.to_payload() == {}
+        ):
+            return replace(node, subject=bound)
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        changes = {
+            field.name: rebound
+            for field in dataclasses.fields(node)
+            for rebound in (_rebind_pump_subject(getattr(node, field.name), bound),)
+            if rebound is not getattr(node, field.name)
+        }
+        return replace(node, **changes) if changes else node
+    if isinstance(node, (tuple, list)):
+        walked = [_rebind_pump_subject(item, bound) for item in node]
+        if all(a is b for a, b in zip(walked, node)):
+            return node
+        return type(node)(walked)
+    return node
+
+
+def rebind_pump_pronoun_to_sentence_target(statement: ast.Statement) -> ast.Statement:
+    """"Flip a coin. If you win the flip, **target Orc creature** gets +2/+0
+    until end of turn. If you lose the flip, **it** gets -0/-2 until end of
+    turn." (Orcish Captain.)
+
+    The fifth rebinder, and the only one whose antecedent sits in a *previous
+    sentence of the same printed line*. The four above each have both halves in
+    one production's hand — a condition and its arms, a trigger and its event, a
+    delay and what it delays, a filter and the sentence around it. A line's
+    sentences are parsed independently, so nothing inside the second one can see
+    that the first announced a target, and Orcish Captain's losing arm lowered
+    to ``pump_self``: the Captain shrank *itself*. A card that compiled
+    supported, claimed every printed sentence and carried no hollow line, doing
+    something other than what it says — the shape neither ``--hollow-lines`` nor
+    ``parse_coverage.py`` can see, because both ask only whether a sentence
+    produced *something*.
+
+    **It rewrites one node type, and that narrowness is the whole design.** The
+    obvious version of this function walks every spec the way the four above do.
+    It is wrong, and a whole-pool differential says so: eight shipped cards —
+    Phyrexian Gremlins, Telekinesis, Glyph of Destruction, Whippoorwill, Mole
+    Worms, Goblin Sappers, Ice Floe and Elvish Scout — print a bare "it" after a
+    targeting sentence and **already play correctly**, because the lowerings
+    that receive it (the untap restrictions, the damage shields) each carry
+    their own bare-pronoun branch and resolve the ability's target at
+    resolution. Handing those a rebound spec breaks all eight: they refuse a
+    subject that looks chosen, on the sound reasoning that a second targeted
+    spec would ask the picker for a target the card never offered.
+
+    So the engine already has a convention for this pronoun, and it is *read by
+    the lowering*, not by the parser. What was missing was one lowering's branch
+    — ``_lower_pump`` tests ``filter.is_source`` and cannot tell "it" from
+    "this creature", so it fell through to the source. Rebinding the ``Pump``
+    subject alone gives that lowering the one thing it could not know, and
+    leaves every lowering that had already solved the problem untouched.
+
+    The bound spec **stays a target**: the ability announces one (CR 601.2c) and
+    both arms move it, so the two arms carry the identical ``targets`` payload
+    and the picker asks once. That is the opposite choice from
+    :func:`rebind_pronoun_to_delay_target`, which drops the targeting — a
+    delayed ability fires later and its opener already chose.
+    """
+    if not isinstance(statement, ast.Sequence):
+        return statement
+    announced: "ast.TargetSpec | None" = None
+    steps: list[ast.Statement] = []
+    for step in statement.steps:
+        if announced is not None:
+            step = _rebind_pump_subject(step, announced)
+        elif (found := _announced_target(step)) is not None:
+            announced = found
+        steps.append(step)
+    if all(a is b for a, b in zip(steps, statement.steps)):
+        return statement
+    return replace(statement, steps=tuple(steps))
+
+
 def _names_a_target(node) -> bool:
     """Whether any part of *node* announces a target (CR 601.2c)."""
     if isinstance(node, ast.TargetSpec) and node.targeted:

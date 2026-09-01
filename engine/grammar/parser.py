@@ -61,6 +61,7 @@ from .stream import TokenStream
 from .vocabulary import (KEYWORD_INDEX, match_longest)
 from .rebinding import (bind_recorded_card,
                         rebind_attachment_pronoun_to_sentence_target,
+                        rebind_pump_pronoun_to_sentence_target,
                         rebind_pronoun_to_event_subject)
 from .triggers import _parse_trigger_event
 from .effects import (
@@ -538,7 +539,14 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
 
     if not steps:
         raise GrammarError("empty line", line=stream.line)
-    return steps[0] if len(steps) == 1 else ast.Sequence(tuple(steps))
+    # One sentence has nothing in front of it to refer back to; a sequence
+    # does, and this is the one place a whole printed line's sentences are in
+    # hand. It runs here rather than in `parse_line`'s tail because an
+    # activated ability's effect never reaches that tail -- and an activated
+    # ability is exactly where Orcish Captain prints the pronoun.
+    if len(steps) == 1:
+        return steps[0]
+    return rebind_pump_pronoun_to_sentence_target(ast.Sequence(tuple(steps)))
 
 
 
