@@ -26,6 +26,7 @@ from ...activation_restrictions import (
 from ...auras import attached_ability_cost_reduction, aura_restriction_active
 from ...cost_modifiers import (ability_cost_tax, ability_self_reduction_amount,
                                 sacrifice_taxes)
+from ...cost_tap_records import record_tapped_to_pay
 from ...cost_x_definitions import cost_x_is_defined, cost_x_value
 from ...mana_payment import is_mana_ability
 from ...events import emit
@@ -799,9 +800,13 @@ class AbilityActivationMixin:
                 sacrifice_cost_set = chosen_victims
             else:
                 # `in` compares Permanents by value and would match a look-alike, so
-                # membership is tested by identity.
+                # membership is tested by identity. An id names the victim as
+                # well as an index does — the wire carries both — and honouring
+                # it here is CR 601.2b's "the payer chooses"; without it a seat
+                # that named an id got the deterministic default instead.
                 sacrifice_cost_permanent = (
-                    named_permanent
+                    named[0] if named
+                    else named_permanent
                     if any(perm is named_permanent for perm in candidates)
                     # A permanent whose death loses the game is kept for last, then
                     # the smallest — one rule, shared with the cast-side additional
@@ -1042,12 +1047,23 @@ class AbilityActivationMixin:
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             self.become_tapped(permanent)
+            # The {T} symbol is a permanent tapped to pay for its *own*
+            # ability, which is what the phrase says too — recorded beside the
+            # spelled-out cost rather than only there, so the record answers the
+            # question the words ask rather than the subset one card needs.
+            record_tapped_to_pay(permanent, permanent)
 
         # The spelled-out tap cost, collected above and paid here — beside the
         # {T} symbol, because both are the same payment and CR 601.2h pays every
         # cost at one moment.
         for tapped_for_cost in tap_cost_permanents:
             self.become_tapped(tapped_for_cost)
+            # "…destroy all Merfolk **tapped this turn to pay for its
+            # abilities**" (Vodalian War Machine). Nothing on the board can be
+            # asked how a permanent came to be tapped, so the answer is written
+            # down here, where the cost is paid — the one place an activation
+            # cost taps anything other than the source (engine/cost_tap_records.py).
+            record_tapped_to_pay(permanent, tapped_for_cost)
         if tap_cost_permanents:
             self.log.append(
                 f"{permanent.card.name}: tapped "

@@ -360,6 +360,8 @@ _COVERED_ELSEWHERE = {
     "blocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
     "controlled_since_turn_start":
         "test_controlled_since_turn_start_rejects_a_creature_that_just_arrived",
+    "tapped_to_pay_for_source_this_turn":
+        "test_tapped_to_pay_names_only_what_paid_for_this_source",
 }
 
 
@@ -521,6 +523,51 @@ def test_blocked_by_source_names_only_what_the_source_blocks(pool):
     assert subject_matches(game, attacker, described, source=blocker)
     assert not subject_matches(game, other, described, source=blocker)
     assert not subject_matches(game, attacker, described)
+
+
+def test_tapped_to_pay_names_only_what_paid_for_this_source(pool):
+    """"…all Merfolk **tapped this turn to pay for its abilities**" (Vodalian
+    War Machine).
+
+    A history rather than a characteristic, and demonstrated with a record
+    rather than by a row in ``_REJECTIONS``: the rejected creature is an
+    ordinary tapped permanent, and nothing about either one tells them apart —
+    which is precisely why the payment path has to write it down.
+
+    Two rejections, and both matter. A permanent tapped for *another*
+    permanent's ability is not in the set, or the phrase would read "tapped
+    this turn"; and with no source at all the answer is **no**, because a
+    matcher that shrugged would turn the clause into "every tapped permanent",
+    which is the whole board.
+    """
+    from engine.cost_tap_records import record_tapped_to_pay
+
+    paid_for_me = Permanent(card=pool["Grizzly Bears"])
+    paid_for_someone_else = Permanent(card=pool["Grizzly Bears"])
+    just_tapped = Permanent(card=pool["Grizzly Bears"])
+    source = Permanent(card=pool["Grizzly Bears"])
+    other_source = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(
+            name="P1",
+            battlefield=[
+                paid_for_me, paid_for_someone_else, just_tapped, source,
+                other_source,
+            ],
+        ),
+        PlayerState(name="P2"),
+    ])
+    game.become_tapped(paid_for_me)
+    game.become_tapped(paid_for_someone_else)
+    game.become_tapped(just_tapped)
+    record_tapped_to_pay(source, paid_for_me)
+    record_tapped_to_pay(other_source, paid_for_someone_else)
+
+    described = {"tapped_to_pay_for_source_this_turn": True}
+    assert subject_matches(game, paid_for_me, described, source=source)
+    assert not subject_matches(game, paid_for_someone_else, described, source=source)
+    assert not subject_matches(game, just_tapped, described, source=source)
+    assert not subject_matches(game, paid_for_me, described)
 
 
 def test_attacking_you_is_two_questions_not_one(pool):

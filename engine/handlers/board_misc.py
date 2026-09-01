@@ -739,6 +739,64 @@ def animate_target_until_eot(game: Game, instruction: OracleInstruction, context
     return True, "resolved"
 
 
+@effect_handler("animate_matching_until_eot")
+def animate_matching_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Forests you control become 2/3 creatures until end of turn. They're
+    still lands." (Thelonite Druid, CR 613 layers 4 and 7b.)
+
+    The swept twin of ``animate_target_until_eot`` above and the *same* record:
+    an animation is one metadata entry the layer bridge reads, so animating a
+    described set is that entry on every member and not a second mechanism.
+
+    Which permanents is asked of ``subject_matches``, not of the pure matcher:
+    "Forests **you control**" is a seat comparison no read of the land alone can
+    make, and the observer is CR 109.5's — the controller of the ability, never
+    whoever controls what it reaches. The lowering gates on the same key set, so
+    a phrase this cannot test never arrives here; a dropped narrowing on a sweep
+    is not an animation that does less, it is one that takes the board.
+
+    CR 611.2c fixes the set when the ability resolves: a Forest played
+    afterwards is not animated, and one that leaves takes its own record with
+    it. The P/T goes on the ``_until_eot`` channel, which the cleanup sweep
+    clears alongside the type record.
+    """
+    from ..subject_filters import subject_matches
+
+    described = {
+        key: value for key, value in instruction.payload.items()
+        if key not in ("power", "toughness", "subtypes", "keywords", "card_types")
+    }
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
+    payload = instruction.payload
+    power, toughness = int(payload.get("power", 0)), int(payload.get("toughness", 0))
+    record = {
+        "subtypes": list(payload.get("subtypes") or ()),
+        "keywords": list(payload.get("keywords") or ()),
+        "card_types": list(payload.get("card_types") or ()),
+    }
+    animated = []
+    for permanent in game.all_permanents():
+        if not subject_matches(
+            game, permanent, described,
+            observer=observer, source=context.source_permanent,
+        ):
+            continue
+        set_base_pt(permanent, power, toughness, until_eot=True)
+        permanent.metadata[ANIMATE_UNTIL_EOT] = dict(record)
+        animated.append(permanent)
+    if not animated:
+        game.log.append(f"{context.card.name}: nothing to animate")
+        return True, "resolved"
+    game.log.append(
+        f"{context.card.name} animated "
+        + ", ".join(perm.card.name for perm in animated)
+        + f" as {power}/{toughness} creatures until end of turn"
+    )
+    return True, "resolved"
+
+
 @effect_handler("change_land_type_until")
 def change_land_type_until(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target land becomes a Swamp until its controller's next untap step."

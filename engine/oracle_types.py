@@ -352,6 +352,14 @@ class OracleProgram:
 # untap_restrictions. `engine/grammar/` reads its own numbers in the lexer.
 _NUMBER_WORDS = {
     "a": 1,
+    # "Tap **an** untapped Merfolk you control" (Vodalian War Machine),
+    # "Tap **an** untapped Swamp you control" (Hecatomb), "Tap **an** untapped
+    # snow land you control" (Karplusan Giant). The same article as "a" before
+    # a vowel, and its absence was not a missing spelling but three **free
+    # abilities**: `oracle._chargeable_tap_cost` reads the count through this
+    # table, got 0, and charged no tap at all — while the grammar's own amount
+    # reader had always read "an" as one and admitted the line.
+    "an": 1,
     "one": 1,
     "two": 2,
     "three": 3,

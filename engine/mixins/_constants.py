@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..combat_assignment import ASSIGNS_NO_COMBAT_DAMAGE
+from ..cost_tap_records import TAPPED_TO_PAY_FOR
 from ..combat_permissions import (ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..damage_events import (DAMAGE_DENIES_REGENERATION,
@@ -11,6 +12,11 @@ _EOT_METADATA_KEYS = (
     # Riddleform's self-animation: the record *is* the effect, so sweeping it
     # here is what ends it — nothing was stashed and nothing is restored.
     "animate_until_end_of_turn",
+    # "…destroy all Merfolk **tapped this turn** to pay for its abilities."
+    # (Vodalian War Machine.) The window is one turn, and the sweep is what
+    # says so: with no entry here the record would make "this turn" mean
+    # "ever", and the trigger would reach back over the whole game.
+    TAPPED_TO_PAY_FOR,
     "assign_combat_damage_as_unblocked_until_eot",
     "cant_be_blocked_until_eot",
     # "...can't be blocked **by Walls** this turn" (Tower of Coireall):

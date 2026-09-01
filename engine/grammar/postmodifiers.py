@@ -330,6 +330,17 @@ def _parse_postmodifiers(
         if stream.accept_phrase("it", "'s", "blocking"):
             d.blocked_by_source = True
             continue
+        # "…all Merfolk **tapped this turn to pay for its abilities**"
+        # (Vodalian War Machine). Every word is required. "Tapped this turn" on
+        # its own is a strictly larger set — a creature tapped to attack is in
+        # it — so a clause that stopped there would destroy Merfolk the card
+        # does not name; and "its abilities" is what makes the set relative to
+        # the ability's own source rather than to anybody's.
+        if stream.accept_phrase(
+            "tapped", "this", "turn", "to", "pay", "for", "its", "abilities",
+        ):
+            d.tapped_to_pay_for_source_this_turn = True
+            continue
         if stream.accept_phrase("that", "'s", "attacking", "you"):
             d.attacking_you = True
             continue

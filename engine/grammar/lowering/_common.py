@@ -119,6 +119,11 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "colored", "with_plus1_counter", "supertypes", "excluded_supertypes",
     "not_enchanted",
     "enchanted_only",
+    # "…tapped this turn to pay for its abilities" (Vodalian War Machine).
+    # ``to_payload`` emits it unconditionally and ``subject_matches`` tests it,
+    # so it is honoured in the same sense every state word here is — what it
+    # additionally needs is the ability's source, which that function takes.
+    "tapped_to_pay_for_source_this_turn",
     "attached_to_filter",
     # "target permanent you both **own** and control" (Obelisk of Undoing) /
     # "all Auras **you own** attached to permanents you control" (Remove

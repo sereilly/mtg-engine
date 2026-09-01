@@ -310,6 +310,18 @@ class ObjectFilter:
     # ``subject_matches`` can answer it: it needs the source, which that
     # function already takes.
     blocked_by_source: bool = False
+    # "…destroy all Merfolk **tapped this turn to pay for its abilities**."
+    # (Vodalian War Machine.) Narrower than "tapped this turn": a Merfolk
+    # tapped to attack, or by somebody else's Icy Manipulator, is not in the
+    # set. Nothing about a tapped permanent says how it came to be tapped, so
+    # the phrase is answered from the record the payment path writes
+    # (``engine/cost_tap_records.py``) rather than from any characteristic.
+    #
+    # Relative like ``blocked_by_source`` above, and emitted for the same
+    # reason: what it needs is the ability's own source, which
+    # ``subject_matches`` already takes. A caller with no source answers no,
+    # which refuses the sweep rather than handing it the board.
+    tapped_to_pay_for_source_this_turn: bool = False
     # "target creature **that's attacking you**" (Ice Floe, Snow Fortress,
     # Giant Trap Door Spider). Not a state of the creature alone: CR 508.1a
     # makes attacking a state, but *whom* it attacks is the defending player it
@@ -439,6 +451,8 @@ class ObjectFilter:
             payload["attacking_only"] = True
         if self.blocked_by_source:
             payload["blocked_by_source"] = True
+        if self.tapped_to_pay_for_source_this_turn:
+            payload["tapped_to_pay_for_source_this_turn"] = True
         if self.attacking_you:
             payload["attacking_you"] = True
         if self.was_dealt_damage_this_turn:
