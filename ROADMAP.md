@@ -1,11 +1,14 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **1,508** unique cards (LEA/LEB/2ED/ARN/ATQ/
-3ED/LEG/DRK/4ED/ICE/M21, all shipped and all supported) to the full release
+Target: grow the card pool from **1,610** unique cards (LEA/LEB/2ED/ARN/ATQ/
+3ED/LEG/DRK/FEM/4ED/ICE/M21, all shipped and all supported) to the full release
 line — **137 sets, 33,594 printings, 26,113 unique cards** per
-`set_progress.json`. Eleven sets, and the two most recent sit at opposite
-extremes: 4ED is a pure reprint set that bought printings rather than cards,
-and Ice Age brought 346 new ones, the largest addition since Alpha.
+`set_progress.json`. Twelve sets, and the recent arrivals span the whole range:
+4ED is a pure reprint set that bought printings rather than cards, Ice Age
+brought 346 new ones (the largest addition since Alpha), and Fallen Empires
+brought 102 of which every single one was new — the smallest work set so far,
+and the first inserted into the middle of the printing order rather than
+appended.
 
 **The reprint shape recurs and is worth planning for** — `set_progress.json`
 records 13 sets in the release line with zero new cards, and ten are still
@@ -687,22 +690,34 @@ them. Alliances got cheaper too (99 → 88 unsupported; cumulative upkeep
 shipped with ICE and its ALL 9 / MIR 5 / VIS 5 / WTH 14 printings now cost
 whatever *else* they print).
 
-**The leverage argument did not move.** Four of the five candidates measure
-exactly 1.00 lines per distinct sentence — every refused line a different
-sentence, no production shared by even two cards — and ALL's 1.02 is noise, not
-a subsystem. ICE was the last candidate that forced one. So the next set is
-chosen on card count, block position and what the ingest teaches, not on
-leverage that is not there — and on that reading **FEM is the pick**: smallest
-(102 cards, 33 unsupported), the only near-term insert (which rehearses the
-printing-order machinery), and the first of 5ED's two remaining sources.
+**The leverage argument did not move, and FEM proved it was asking the wrong
+question.** Four of the five candidates measure exactly 1.00 lines per distinct
+sentence — every refused line a different sentence, no production shared by even
+two cards — and ALL's 1.02 is noise. FEM measured 1.00 too, and then paid for
+*four* shared productions anyway, because the sentences it repeats pair a
+refused card with a **supported** one and this table is built from refusals
+only. **Read the next candidate's `parse_coverage.py` and `--hollow-lines`
+numbers beside this table**, not after the ingest: a supported card carrying an
+unimplemented sentence is a work-list entry the refusal census cannot see, and
+on FEM those were where all the leverage was.
 
-**FEM is the only near-term candidate that inserts rather than appends.**
-Fallen Empires released 1994-11-01, between DRK (index 7) and 4ED (index 8), and
-the manifest is printing-ordered because `CardDefinition.original_printing` is
-the first entry in `printings`. Nothing in the pool would move — all 102 of its
-cards are new here — but `test_the_shipped_sets_are_in_printing_order` compares
-the `released` dates the entries carry, so the index is not optional. HML
-(1995-10-01) and everything later append.
+**FEM shipped (102/102, at index 8), so the pick is now HML or 5ED.** Fifth
+Edition's "new to pool" fell again with FEM's promotion; Homelands is the
+smaller and the last of 5ED's two remaining sources, so the sequencing rule puts
+HML first and 5ED behind it. Re-census both against the post-FEM compiler before
+committing — 5ED's number moved 147 → 58 on Ice Age alone, and two of the rows
+in the table above are now stale by a whole set.
+
+**FEM was the only near-term candidate that inserts rather than appends, and
+the insert is done.** Fallen Empires released 1994-11-01, between DRK (index 7)
+and 4ED (now index 9), and the manifest is printing-ordered because
+`CardDefinition.original_printing` is the first entry in `printings`. Nothing in
+the pool moved — all 102 of its cards were new here — which is exactly why
+`test_appending_a_set_never_changes_an_existing_original_printing` could not
+have caught a wrong index: it checks the consequence, and there was none to
+observe. What held the order was
+`test_the_shipped_sets_are_in_printing_order`, comparing the `released` dates
+the entries already carry. HML (1995-10-01) and everything later append.
 
 **The three remaining zero-new-card sets are not 4ED again.** FBB, SUM and 4BB
 are the only sets that would bring nothing new to *this* pool, and they are the
@@ -727,7 +742,59 @@ Third, **alternative costs (CR 118.9) do not exist** — `cast_costs.py` impleme
 *additional* costs well, and the phrase appears in the engine only in comments —
 which blocks the buyback/flashback/evoke/madness family wholesale.
 
-## Fallen Empires (FEM) — measured, in progress
+## Fallen Empires (FEM) — shipped
+
+**Final: 102/102 supported, hollow lines 0, unclaimed parse sentences 0, and the
+manifest entry moved from `measured` to `sets` at printing-order index 8 —
+between The Dark and Fourth Edition.** The pool went 1,508 → **1,610** unique
+cards over twelve sets. Ingest census was 69/102 (67.6%), the highest of any
+work set. **One wave of five worktree groups took it to 101/102 in a single
+pass**, and one follow-up agent took the declined card. Grammar coverage
+87.4% → **88.0%** parsed and 55.2% → **56.1%** executed, with FEM itself at
+99.0%. Hook reliance 4.2% → **3.9%**: one hook retired, **none added**, across
+all 33 cards. The suite went 10,934 → **11,176** tests.
+
+**The census could not see this set's leverage, and that is the finding to
+carry.** Four of the five candidates re-censused before the ingest measured
+exactly 1.00 refused lines per distinct sentence, FEM included — no production
+shared by even two cards, which reads as "no leverage, pick on card count". The
+refusal rollup at ingest said the same: 39 refused lines, 39 distinct sentences.
+Both were true and both were measuring the wrong population. `support_report.py`
+counts **cards**, and a card is supported when *any* of its lines is — so a
+sentence that repeats between a refused card and a *supported* one is invisible
+to it by construction. Running `parse_coverage.py` and `--hollow-lines` at
+**Phase 1** rather than at Phase 4 found five supported cards carrying eight
+sentences nothing implemented, and four of them paired with a card on the work
+list: Tidal Influence with Homarid, Goblin Grenade with Soul Exchange, Delif's
+Cube with Delif's Cone, and the two Chants with each other. Those pairs became
+the group split, and every one of them cost a single production for two cards.
+
+**Integration cost roughly what authorship did, and every merge hazard the
+playbook names fired at least once** — one fact under two names, two moves out
+of one over-cap file, two rewrites of one guard, and a semantic collision that
+merged clean and failed at runtime. Three cap breaches fired *at integration*
+and none was caused by a single branch. Two new hazards are recorded in
+SET_PLAYBOOK.md: a whole-file `--theirs` discards the hunks that were never in
+dispute, and a union of two `if` branches can break an `if`/`elif` chain so that
+one branch's answer is computed and then overwritten.
+
+**Ten defects were found in cards that already shipped**, none with a failing
+test, all found by reading compiled programs or sweeping the pool for a shape.
+Two were free abilities — the class Ice Age's Triskelion was — and one of those
+predated this pool by five sets. Two more came from the promotion gate itself.
+The list is above, with what each cost.
+
+**The instrument that mattered most was the cheapest.** A whole-pool
+compiled-program differential (1,610 cards, base versus HEAD) is what turned
+Orcish Captain's recorded scope — "cross-sentence pronoun rebinding is missing",
+a parser feature — into a one-node fix, by showing that the obvious version
+broke eight shipped cards which already played correctly. Three of the five
+groups ran the same differential unprompted and each reported it as the thing
+that let them be sure. It belongs in Phase 3 as a step, not as a tactic
+somebody rediscovers.
+
+### How it went, phase by phase
+
 
 **Census at ingest: 102 cards, 69 supported (67.6%), 33 unsupported, 39 refused
 lines.** 187 printings dedupe to 102 by `oracle_id` — FEM prints most of its
@@ -1023,6 +1090,7 @@ not commits.
 | DRK | 119 | 47.9% | 12 groups, 3 waves |
 | 4ED | 368 | 100% | 0 (pure reprint) |
 | ICE | 373 | 49.3% | 42 + 4 waves of 5 |
+| FEM | 102 | 67.6% | 1 wave of 5, + 1 for the decline |
 
 Legends is the useful data point and the warning: the lowest starting coverage,
 the largest card count *at the time*, and the flattest ranking — after eight
@@ -1039,13 +1107,15 @@ cards did**. Forty-two rounds bought 100 cards; four waves of five bought the
 remaining 89 in a fraction of the calendar time, with integration — not
 authorship — as the constraint throughout.
 
-**Where the pool stands** (regenerate rather than trust these): 1,508 unique
-cards over **11** sets, 100% supported. Grammar parses 87.3% of lines, lowers
-86.4% and executes 55.1% (`GRAMMAR_COVERAGE.md`). 4.2% of supported cards carry
-a name-keyed hook — 63 cards, **69** entries in 6 registries
+**Where the pool stands** (regenerate rather than trust these): 1,610 unique
+cards over **12** sets, 100% supported. Grammar parses 88.0% of lines, lowers
+87.1% and executes 56.1% (`GRAMMAR_COVERAGE.md`). 3.9% of supported cards carry
+a name-keyed hook — 62 cards, **68** entries in 6 registries
 (`HOOK_RELIANCE.md`) — the number that decides whether this architecture reaches
-26,113 cards. Parse coverage: 1,506 of 1,508 supported cards fully claimed, 2
-acknowledged, **0 unclaimed** (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the
+26,113 cards, and the projection it implies has fallen from 1,195 hand-written
+entries to **1,103** across two sets that added none. Parse coverage: 1,608 of
+1,610 supported cards fully claimed, 2 acknowledged, **0 unclaimed**
+(`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the
 CR coverage tracker. `CARD_VERIFICATION.md` is a log, not a target — see the
 accepted-backlog decision above.
 
