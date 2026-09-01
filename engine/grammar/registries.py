@@ -28,7 +28,8 @@ instruction, the entry goes with it.
 from __future__ import annotations
 
 from ..auras import aura_continuous_claim
-from ..cast_restrictions import CAST_RESTRICTIONS, cast_condition_line
+from ..cast_restrictions import (CAST_RESTRICTIONS, cast_absence_line,
+                                 cast_condition_line)
 from ..cost_modifiers import cost_modifier_claims_line
 from ..cost_x_definitions import cast_x_ceiling_line, cast_x_definition_line
 from ..damage_source_colors import colorless_source_line
@@ -79,6 +80,15 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # phrase is payload, so the claim asks the reader that answers it rather
     # than comparing against a literal the table would be free to drift from.
     if cast_condition_line(normalized) is not None:
+        return "cast_restrictions"
+
+    # engine/cast_restrictions.py — the same half of CR 601.3 negated and asked
+    # about every battlefield: "Cast this spell only if no permanents named
+    # Tidal Influence are on the battlefield." Its own claim because it is its
+    # own row and its own scan; the phrase is read by the matcher that answers
+    # it, so a board the matcher cannot test leaves the line unclaimed rather
+    # than admitted with the restriction dropped.
+    if cast_absence_line(normalized) is not None:
         return "cast_restrictions"
 
     # engine/untap_restrictions.py — CR 502 "don't untap" templates (Stasis,

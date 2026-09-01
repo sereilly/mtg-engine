@@ -86,6 +86,32 @@ def _opponents_only(game: "Game", seat: int, permanent: "Permanent") -> bool:
     return controller is not None and seat != controller
 
 
+def _attached_controller_only(game: "Game", seat: int, permanent: "Permanent") -> bool:
+    """"Only the controller of the enchanted creature may activate this
+    ability." (Merseine.)
+
+    The seat that controls the permanent this Aura is *attached to*, which none
+    of the three rows beside it can say: they name the Aura's own controller,
+    its owner, or everyone else. Here the ability is printed on the Aura and
+    reachable only by the player whose creature it is holding down — which on
+    Merseine is normally an opponent, so this row both opens the ability to a
+    seat CR 602.1a closes and closes it to the one seat that could already
+    reach it.
+
+    Read off the live attachment record, never last-known information: this
+    answers "may you activate right now", and an Aura with no host is about to
+    leave the battlefield (CR 704.5m) with nobody able to activate it in the
+    meantime.
+    """
+    from .handlers._common import attached_host
+
+    host = attached_host(game, permanent, last_known=False)
+    if host is None:
+        return False
+    controller = game.controller_index_of(host)
+    return controller is not None and seat == controller
+
+
 ACTIVATION_PERMISSIONS: tuple[ActivationPermission, ...] = (
     ActivationPermission(
         pattern=re.compile(r"^any player may activate this ability$"),
@@ -104,6 +130,16 @@ ACTIVATION_PERMISSIONS: tuple[ActivationPermission, ...] = (
         pattern=re.compile(r"^only your opponents may activate this ability$"),
         may_activate=_opponents_only,
         denial="only your opponents may activate this ability",
+    ),
+    ActivationPermission(
+        # CR 301.5f puts "equipped" and "enchanted" on the same footing, so both
+        # words are read: an Equipment printing the clause names the same seat.
+        pattern=re.compile(
+            r"^only the controller of the (?:enchanted|equipped) [a-z]+ "
+            r"may activate this ability$"
+        ),
+        may_activate=_attached_controller_only,
+        denial="only the controller of the enchanted permanent may activate this ability",
     ),
 )
 

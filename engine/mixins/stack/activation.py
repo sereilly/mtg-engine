@@ -27,10 +27,11 @@ from ...auras import attached_ability_cost_reduction, aura_restriction_active
 from ...cost_modifiers import (ability_cost_tax, ability_self_reduction_amount,
                                 sacrifice_taxes)
 from ...cost_x_definitions import cost_x_is_defined, cost_x_value
-from ...mana_payment import is_mana_ability
+from ...mana_payment import is_mana_ability, mana_cost_from_symbols
 from ...events import emit
 from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
-from ...handlers._common import _card_matches_filter, permanent_matches_filter
+from ...handlers._common import (_card_matches_filter, attached_host,
+                                 permanent_matches_filter)
 from ...oracle import LOYALTY_ANY_TIME_STATIC, OracleInstruction, compile_card_oracle
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
 
@@ -860,6 +861,35 @@ class AbilityActivationMixin:
                 )
 
         required_cost = dict(ability.cost.mana)
+        # "**Pay enchanted creature's mana cost**: …" (Merseine.) The symbols
+        # are the *host's* and cannot be known when the card compiles, so the
+        # cost dict is built here, at the one moment there is a host to read
+        # (CR 202.1 — a permanent's mana cost is what is printed in its upper
+        # right corner, whatever the copy and text-change layers have made of
+        # the object).
+        #
+        # An Aura with no host, or a host whose printed cost carries a symbol
+        # this engine cannot spend, refuses the activation with nothing paid
+        # (CR 602.2b). Never a fallback to the empty dict beside it: an
+        # unreadable cost read as zero is an ability activated for free, which
+        # is the failure every cost reader in this engine is written against.
+        if ability.cost.mana_from_attached:
+            host = attached_host(self, permanent, last_known=False)
+            printed = None if host is None else (
+                getattr(host.card, "mana_cost", "") or ""
+            )
+            symbols = None if host is None else mana_cost_from_symbols(printed)
+            if host is None or (symbols is None and printed.strip()):
+                details = (
+                    f"{permanent.card.name}: the mana cost it charges is the "
+                    "attached permanent's, and there is none to read"
+                )
+                self.log.append(details)
+                return SimulationResult(
+                    permanent.card.name, False, "unsupported", details
+                )
+            for symbol, count in (symbols or {}).items():
+                required_cost[symbol] = required_cost.get(symbol, 0) + count
         requires_tap = ability.cost.requires_tap
         # Abilities with an "{X}" in their cost (e.g. Clockwork Beast's
         # "{X}, {T}: Put up to X +1/+0 counters") charge X generic mana on top of

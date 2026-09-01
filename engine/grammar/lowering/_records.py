@@ -326,4 +326,10 @@ def primary_produced(kind: str) -> str | None:
 #: registry either way, and `lower.py` is dispatch.
 _COST_PRODUCES: dict[type, str] = {
     ast.DiscardCost: "discarded_cards",
+    # "Sacrifice a creature: … **If the sacrificed creature was a Thrull**, …"
+    # (Ebon Praetor.) The activation path records the permanent the cost ate
+    # under ``sacrificed_for_cost``; this is what says a step of *this* ability
+    # wrote it, so the condition refuses on an ability whose cost sacrifices
+    # nothing rather than reading a record some other ability left.
+    ast.SacrificeCost: "sacrificed_for_cost",
 }

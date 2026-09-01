@@ -58,7 +58,7 @@ from engine.oracle_types import (OracleInstruction,  # noqa: E402
                                  x_spend_colors_from_text)
 from engine.cast_costs import cast_cost_claims_line  # noqa: E402
 from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
-                                      cast_condition_line)
+                                      cast_absence_line, cast_condition_line)
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for  # noqa: E402
 from engine.draw_step_modifiers import (  # noqa: E402
@@ -233,6 +233,12 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # phrase list this file would be free to drift from.
     ("cast_restrictions.py (board condition)",
      lambda s: cast_condition_line(s) is not None),
+    # The same half negated and asked about every battlefield — "Cast this
+    # spell only if no permanents named Tidal Influence are on the
+    # battlefield." Its own channel because it is its own row and its own
+    # scan; the claim asks the reader that answers it, for the reason above.
+    ("cast_restrictions.py (board absence)",
+     lambda s: cast_absence_line(s) is not None),
     # A CR 614 replacement effect, in full. `engine/replacements.py`'s
     # REPLACEMENT_LINES *is* the set of constants its interceptors probe for, so
     # asking it is asking the code that carries the line out. Three of these

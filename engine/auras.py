@@ -1432,21 +1432,19 @@ _RESTRICTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
 # whenever the attachment is legal: an opponent gaining control of the creature
 # makes the attachment illegal, and the state-based sweep puts the Aura into
 # the graveyard before any untap step arrives (CR 704.5m/n).
-_COUNTER_UNTAP_CONDITIONS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (
-        re.compile(
-            rf"^{_ATTACHED} {_NOUN} doesn't untap during its controller's "
-            r"untap step if it has an? (?P<kind>[a-z]+) counter on it$"
-        ),
-        "attached",
-    ),
-    (
-        re.compile(
-            rf"^{_ATTACHED} {_NOUN} doesn't untap during your untap step "
-            r"if this aura has an? (?P<kind>[a-z]+) counter on it$"
-        ),
-        "aura",
-    ),
+#
+# **One pattern over two axes, not a row per pairing.** The step is printed two
+# ways ("its controller's", "your") and the holder two ways ("it", "this
+# aura"), and Merseine prints the crossing the pairing table had no row for —
+# "during **its controller's** untap step if **this Aura** has a net counter on
+# it". A row per pairing is quadratic in the clauses that exist, which is the
+# arrangement `engine/activation_restrictions.py` records replacing for exactly
+# this reason; and the clause nobody had listed is not a dead restriction, it
+# is an *unenforced* one, so the card untaps every turn while reporting fine.
+_COUNTER_UNTAP_CONDITION = re.compile(
+    rf"^{_ATTACHED} {_NOUN} doesn't untap during (?:its controller's|your) "
+    r"untap step if (?P<holder>it|this aura) has an? (?P<kind>[a-z]+) "
+    r"counter on it$"
 )
 
 
@@ -1475,12 +1473,11 @@ def aura_counter_untap_condition(line: str) -> tuple[str, str] | None:
     Gold's sleep counter on the creature) or ``"aura"`` (Cocoon's pupa counter
     on the Aura itself).
     """
-    normalized = _line_text(line)
-    for pattern, holder in _COUNTER_UNTAP_CONDITIONS:
-        match = pattern.match(normalized)
-        if match is not None:
-            return match.group("kind"), holder
-    return None
+    match = _COUNTER_UNTAP_CONDITION.match(_line_text(line))
+    if match is None:
+        return None
+    holder = "aura" if match.group("holder") == "this aura" else "attached"
+    return match.group("kind"), holder
 
 
 _PROTECTION_GRANT = re.compile(

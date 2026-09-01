@@ -1218,6 +1218,36 @@ def _taps_the_attached_permanent(cost_lower: str) -> bool:
     )
 
 
+#: "Pay enchanted creature's mana cost" (Merseine). Anchored per cost segment
+#: for :data:`_TAP_ATTACHED_COST_RE`'s reason: a rule matching a prefix would
+#: charge a *narrower* cost than the card prints. The apostrophe is admitted in
+#: both spellings, straight and curly, because the two readers of this clause —
+#: this one and the grammar's, which sees a lexed ``'s`` token — must agree
+#: about the same printed line.
+_PAY_ATTACHED_MANA_COST_RE = re.compile(
+    r"^pay (?:enchanted|equipped) \w+['’]s mana cost$"
+)
+
+
+def _pays_the_attached_permanents_mana_cost(cost_lower: str) -> bool:
+    """Whether a cost clause spends the mana cost of the permanent this Aura or
+    Equipment is on.
+
+    :func:`_taps_the_attached_permanent` one payment over, and the same shape:
+    the payment is the *host's*, nothing is picked, and the attachment record
+    is the whole answer. What differs is that this one can be **unpayable** —
+    the activator has to produce the mana — so the activation path builds the
+    symbols from the host rather than reading a fixed dict.
+
+    CR 301.5f puts "equipped" and "enchanted" on the same footing, so both
+    words are read.
+    """
+    return any(
+        _PAY_ATTACHED_MANA_COST_RE.match(segment.strip())
+        for segment in cost_lower.split(",")
+    )
+
+
 def _life_payment_cost(cost_lower: str) -> int:
     """The life a "Pay N life" activation cost charges, or 0 for no such cost.
 
@@ -1448,6 +1478,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         remove_counter_count=remove_counter_count,
         pay_life=_life_payment_cost(cost_lower),
         tap_attached=_taps_the_attached_permanent(cost_lower),
+        mana_from_attached=_pays_the_attached_permanents_mana_cost(cost_lower),
     )
 
 

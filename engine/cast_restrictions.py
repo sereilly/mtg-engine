@@ -260,6 +260,73 @@ def cast_condition_line(line: str) -> "tuple[dict, str] | None":
     return payload, board
 
 
+#: "Cast this spell only if **no permanents named Tidal Influence are on the
+#: battlefield**." (Tidal Influence.) The negative twin of the row above, and
+#: two things separate them rather than one: the quantifier is a negation, and
+#: the zone named is **the** battlefield rather than the caster's own share of
+#: it (CR 400.1 — there is one battlefield, and every player's permanents are
+#: on it). A card that stopped its second copy only on *your* side would be a
+#: different, strictly weaker card, so the two are different rows with
+#: different scans rather than one row with a flag.
+#:
+#: The noun phrase is payload, exactly as it is above: "permanents named X" is
+#: what this card prints and "artifacts", "black creatures" or any other phrase
+#: the noun parser reads is the same restriction on a different board.
+_ABSENT_RE = re.compile(
+    r"^cast this spell only if no (?P<board>.+) are on the battlefield$"
+)
+
+
+@lru_cache(maxsize=None)
+def cast_absence_line(line: str) -> "tuple[dict, str] | None":
+    """``(filter payload, the printed noun phrase)`` for the absence row, or None.
+
+    Through **the grammar's noun parser** for :func:`cast_condition_line`'s
+    reason: ``subject_matches`` answers this at every cast, and a second reader
+    of "permanents named Tidal Influence" would be free to disagree with it
+    about what one is. A phrase carrying a key that matcher cannot test refuses
+    rather than being approximated — a dropped narrowing here is a spell
+    *refused* on a board the card allows, which is the direction that costs a
+    player a card they may legally cast.
+    """
+    from .grammar.errors import GrammarError
+    from .grammar.lexer import tokenize
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+    from .subject_filters import untestable_filter_keys
+
+    match = _ABSENT_RE.match(line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    board = match.group("board")
+    stream = TokenStream(tokenize(board).tokens)
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted:
+        return None
+    payload = described.to_payload()
+    if not payload or untestable_filter_keys(payload):
+        return None
+    return payload, board
+
+
+def _nothing_matches(game: "Game", caster_index: int, payload: dict) -> bool:
+    """Whether *no* permanent anywhere matches the phrase.
+
+    Every battlefield, not the caster's: see :data:`_ABSENT_RE`. CR 109.5's
+    observer is still the casting seat, so a "you" *inside* the noun phrase
+    would mean the same player the caster is.
+    """
+    from .subject_filters import subject_matches
+
+    return not any(
+        subject_matches(game, perm, payload, observer=caster_index)
+        for perm in game.all_permanents()
+    )
+
+
 def _condition_holds(game: "Game", caster_index: int, payload: dict) -> bool:
     """Whether *caster_index* controls a permanent the phrase names.
 
@@ -290,4 +357,11 @@ def check_cast_timing(game: "Game", caster_index: int, oracle_text_lower: str) -
         payload, board = read
         if not _condition_holds(game, caster_index, payload):
             return f"can only be cast if you control {board}"
+    for line in oracle_text_lower.split("\n"):
+        absent = cast_absence_line(line)
+        if absent is None:
+            continue
+        payload, board = absent
+        if not _nothing_matches(game, caster_index, payload):
+            return f"can only be cast if no {board} are on the battlefield"
     return None

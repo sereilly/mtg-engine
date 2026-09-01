@@ -216,6 +216,22 @@ def _lower_gain_life(
             )
         payload["per_each"] = {"history": "creatures_died_this_turn"}
         return (OracleInstruction("target_gains_life", "", payload),)
+    if isinstance(node.per_each, ast.CountersOnSource):
+        # "You gain 1 life **for each credit counter on this creature**."
+        # (Icatian Moneychanger.) A count of the ability's own source, not of a
+        # set of objects — so the payload names the counter word and the
+        # handler names the reader, exactly as `deal_damage`'s
+        # `amount_from_named_counters` does for the same phrase one family
+        # over. The counter word is payload the whole way down, so a card
+        # printing any other kind needs nothing here.
+        if node.player.kind != "you":
+            raise LoweringError(
+                "a gain counted off the source's counters is the ability's own "
+                "controller's",
+                node=node,
+            )
+        payload["per_each"] = {"counters_on_source": node.per_each.kind}
+        return (OracleInstruction("target_gains_life", "", payload),)
     if node.per_each is not None:
         filt = node.per_each
         zone_owner = filt.zone_owner.kind if filt.zone_owner is not None else None

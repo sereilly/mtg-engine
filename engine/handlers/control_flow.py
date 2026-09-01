@@ -526,6 +526,24 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             any(name in card.type_line.lower() for name in wanted) for card in cards
         )
 
+    if kind == "sacrificed_for_cost_was":
+        # "If **the sacrificed creature** was a Thrull, …" (Ebon Praetor.) The
+        # permanent the ability's own cost ate, which by now is a card in a
+        # graveyard and CR 400.7 makes that a new object — so the only honest
+        # source is the record the *cost payment* wrote (CR 608.2h), the same
+        # channel `the sacrificed creature's toughness` already reads.
+        #
+        # Asked through the one matcher, with no observer and no source: the
+        # question is about the object itself, and the lowering refuses any
+        # narrowing that would need either. No record means the ability
+        # sacrificed nothing, which is False rather than a guess.
+        from ..subject_filters import subject_matches
+
+        eaten = (context.choices or {}).get("sacrificed_for_cost")
+        if eaten is None:
+            return False
+        return subject_matches(game, eaten, payload.get("filter") or {})
+
     if kind == "destroyed_this_way":
         # "…**if that creature was destroyed this way**" (Infinite Authority).
         # Two records meet here and neither can answer alone: the scratchpad the

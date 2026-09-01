@@ -372,6 +372,24 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         stream.accept_word("a", "an")
         return ast.DiscardedCardWas(parse_object_filter(stream))
 
+    # "if **the sacrificed creature** was a Thrull" (Ebon Praetor). The same
+    # named back-reference one zone over, and the noun the sentence repeats is
+    # read rather than spelled in: "the sacrificed **artifact**" and "the
+    # sacrificed **permanent**" are the same clause about the same record, and
+    # a row per noun is a row per printing. What it names is the self-same
+    # object the cost ate, so the noun narrows nothing and is not carried.
+    sacrificed_mark = stream.mark()
+    if stream.accept_phrase("the", "sacrificed"):
+        noun = stream.peek_word()
+        if noun is not None and stream.peek_word(1) == "was":
+            stream.advance(2)
+            stream.accept_word("a", "an")
+            try:
+                return ast.SacrificedForCostWas(parse_object_filter(stream))
+            except GrammarError:
+                pass
+    stream.reset(sacrificed_mark)
+
     # "if it's a creature or land card" (Track Down) — the present-tense twin of
     # the clause above, and a different question: that one asks what an object
     # *was* before it left a zone, this one asks what a card revealed by an

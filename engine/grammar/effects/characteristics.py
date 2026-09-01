@@ -10,9 +10,9 @@ change a characteristic; where it sits is incidental.
 """
 
 from .. import ast
-from ..amounts import (accept_fraction_head, accept_life_gain_cap,
-                       accept_rounding, expect_pt, parse_amount,
-                       parse_equal_to)
+from ..amounts import (accept_counters_on_source, accept_fraction_head,
+                       accept_life_gain_cap, accept_rounding, expect_pt,
+                       parse_amount, parse_equal_to)
 from ..errors import GrammarError
 from ..lexer import (GToken, PT, PUNCT, QUOTE, SELF, WORD, tokenize)
 from ..nouns import parse_object_filter
@@ -191,10 +191,19 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                 if per_each is None:
                     for_each_mark = stream.mark()
                     if stream.accept_phrase("for", "each"):
-                        try:
-                            per_each = parse_object_filter(stream)
-                        except GrammarError:
-                            stream.reset(for_each_mark)
+                        # "…**for each credit counter on this creature**"
+                        # (Icatian Moneychanger). A count of the source's own
+                        # counters rather than a set of objects, so it is read
+                        # by the one production that reads that phrase
+                        # (`accept_counters_on_source`) and before the noun
+                        # parser, which refuses a counter word as an unknown
+                        # noun and would take the whole line down with it.
+                        per_each = accept_counters_on_source(stream)
+                        if per_each is None:
+                            try:
+                                per_each = parse_object_filter(stream)
+                            except GrammarError:
+                                stream.reset(for_each_mark)
                 return ast.GainLife(player, amount, per_each=per_each)
         except GrammarError:
             pass

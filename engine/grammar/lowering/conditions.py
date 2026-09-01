@@ -275,6 +275,31 @@ def _lower_condition(
             "card_types": list(condition.filter.card_types),
             "type_match": condition.filter.type_match,
         }
+    if isinstance(condition, ast.SacrificedForCostWas):
+        # The discard twin's discipline one zone over: an ability whose cost
+        # sacrifices nothing has no record to read, and `evaluate_condition`
+        # would answer False forever while the card compiled clean. The
+        # producer is the ability's own sacrifice cost (CR 601.2h / 602.2b),
+        # seeded by `lower_ability` off the cost clause — the only place the
+        # cost and the effect are both in view.
+        if "sacrificed_for_cost" not in produced:
+            raise LoweringError(
+                "'the sacrificed <noun>' with nothing in this ability that "
+                "sacrificed one",
+                node=condition,
+            )
+        described = _filter_payload(condition.filter)
+        if not described or untestable_filter_keys(described):
+            # A *permanent*, not a card, so the whole noun phrase is asked
+            # through the one matcher — and a narrowing that matcher cannot
+            # test would be a condition answering about a different set than
+            # the card names. The same gate `destroyed_target_was` applies to
+            # the same kind of last-known-information question.
+            raise LoweringError(
+                "the last-known-information test cannot ask this of a "
+                "permanent", node=condition,
+            )
+        return {"kind": "sacrificed_for_cost_was", "filter": described}
     if isinstance(condition, ast.BlockersOfBoundCreature):
         # "that creature" is the creature the *firing event* named, and only a
         # block event names one. Under anything else the referent is nothing —
