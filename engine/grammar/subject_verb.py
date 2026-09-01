@@ -836,6 +836,15 @@ def parse_subject_verb(
             whole_hand = _parse_player_puts_whole_hand_on_library(stream, source_spec)
             if whole_hand is not None:
                 return whole_hand
+            # "…and **you put** a cube counter on this artifact" (Delif's Cube).
+            # The imperative with its subject spelled out, which CR 101.1 makes
+            # the same sentence — so it is handed back to this function with the
+            # cursor on the verb rather than to a second copy of the "put" chain
+            # above, whose ordering is the whole of what that chain is.
+            if source_spec.kind == "you":
+                return parse_subject_verb(
+                    stream, parse_optional_action=parse_optional_action
+                )
         if token.text in ("sacrifices", "sacrifice") and isinstance(source_spec, ast.PlayerRef):
             stream.advance()
             return _parse_sacrifice(stream, source_spec)

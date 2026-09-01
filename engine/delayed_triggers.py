@@ -445,19 +445,24 @@ def fire_delayed_triggers(
         return 0
     game._enqueue_triggered_batch([
         entry.trigger_event(
-            # CR 603.7d: the source of a delayed ability is the source of the
-            # spell or ability that *created* it — never the object the ability
-            # watches. So a fire site that deliberately names one wins ("…deals
-            # combat damage to a player, <do something to **it**>"), and
-            # otherwise the entry supplies the permanent whose ability armed it,
-            # which is how a sentence naming its own source ("this creature
-            # gains …") finds anything to act on.
+            # CR 603.7d: "the source of a delayed triggered ability is the
+            # source of the spell or ability that created it". So the entry's
+            # own recorded source wins whenever it is still a permanent — a
+            # sentence naming itself ("…you put a cube counter on **this
+            # artifact**", Delif's Cube) has to reach the artifact that armed the
+            # ability, not the creature the event was about.
             #
-            # Defaulting it to the *subject* would be the wrong object twice
-            # over, which is why that is still not done here.
+            # A fire site's named object is the **fallback**, for the case the
+            # rule leaves open: a spell's source is the card as printed and
+            # never a permanent, so Gaze of Pain's entry has no source to give
+            # and its sentence ("…have **it** deal damage equal to **its**
+            # power") needs one. The attacker the site names is that object.
+            #
+            # Defaulting to the *subject* with neither would be the wrong object
+            # twice over, which is why that is still not done here.
             source_permanent=(
-                source_permanent if source_permanent is not None
-                else game.permanent_by_id(entry.source_permanent_id)
+                game.permanent_by_id(entry.source_permanent_id)
+                or source_permanent
             ),
             trigger_context=trigger_context,
         )

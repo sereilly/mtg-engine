@@ -150,6 +150,15 @@ PARSE_LAYERS = [
     # answers "which branch does this clause belong to". Below `riders`, which
     # imports the binding and is never imported back.
     "pronouns",
+    # The branches of an offer — "if you do", "if you can't", "when you do",
+    # "otherwise". Split out of `riders` at the guard below, along the boundary
+    # that module already drew: these answer which *branch* of the decision
+    # before it a clause belongs to, where the rest of `riders` answers what a
+    # clause says about the step before it. The name is `lowering/control_flow.py`'s,
+    # which is what these productions lower through, so the mirror re-forms
+    # rather than forking. Beside `riders` and not under it — neither imports
+    # the other, and both are handed `parse_statement` by `statements`.
+    "control_flow",
     # The trailing clauses that attach to a sentence already parsed ("if you
     # do", "…, then …"). Above `statements` because reading one means reading
     # the statement it modifies.

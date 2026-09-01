@@ -338,6 +338,19 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
     # (CR 608.2h): a Giant Tortoise sacrificed while untapped is worth its
     # +0/+3, not its printed 1. A cost that ate nothing gains nothing rather
     # than reading a printed number off a card.
+    # "…you may gain life equal to **its** power" (Delif's Cone). CR 603.7c's
+    # object: the creature the delay's opener targeted, addressed by the id the
+    # arming handler froze — live, because the creature is on the battlefield
+    # attacking when this resolves, and gone means no life rather than a printed
+    # number read off a card.
+    if instruction.payload.get("amount_from_bound_power"):
+        bound = (context.trigger_context or {}).get("bound_permanent_id")
+        watched = game.permanent_by_id(bound) if isinstance(bound, int) else None
+        game._gain_life(
+            gainer, max(0, watched.effective_power) if watched is not None else 0,
+            card.name,
+        )
+        return True, "resolved"
     cost_characteristic = instruction.payload.get("amount_from_cost_sacrifice")
     if cost_characteristic is not None:
         sacrificed = context.choices.get("sacrificed_for_cost")

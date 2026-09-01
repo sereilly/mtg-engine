@@ -132,6 +132,12 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # a caller with neither, which is the direction that cannot widen a set.
     "blocked_by_source",
     "attacking_you",
+    # "all creatures **banded with it**" (Icatian Skirmishers). Membership of
+    # the band the ability's own source is attacking in (CR 702.22e) — a
+    # relation to the source like ``blocked_by_source`` above, answered from
+    # the band declaration rather than from any characteristic of the creature,
+    # and testable here for the same reason: this function takes the source.
+    "banded_with_source",
 })
 
 #: The keys :func:`subject_matches` answers from the object alone. The other two
@@ -427,6 +433,17 @@ def subject_matches(
         if observer is None or not obj.attacking:
             return False
         if obj.defending_player_index != observer:
+            return False
+    # "all creatures **banded with it**" — the other members of the attacking
+    # band the source is in (CR 702.22e), through the one reader of the band
+    # declaration. With no source there is no band to be in, and the answer is
+    # no: refusing the creature rather than sweeping every attacker.
+    if described.get("banded_with_source"):
+        from .banding import creatures_banded_with
+
+        if source is None:
+            return False
+        if not any(mate is obj for mate in creatures_banded_with(game, source)):
             return False
     # "Another" (CR 109.5) excludes the ability's own source by identity — a
     # look-alike on the same battlefield is a different permanent.

@@ -708,6 +708,17 @@ def _lower_assigns_no_combat_damage(
     # permanent, not a filter: nothing here chooses.
     if _is_enchanted(node.subject):
         subject = "attached"
+    elif (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+    ):
+        # "…when **target creature you control** attacks and isn't blocked, **it**
+        # assigns no combat damage this turn" (Delif's Cone, Delif's Cube). The
+        # delay's opener chose the creature and `rebinding` pointed the pronoun
+        # at it (CR 603.7c), so the mark goes on the object the ability is
+        # *about* rather than on its source — which for the Cube is the artifact
+        # that armed it and is not a creature at all.
+        subject = "bound"
     elif _is_source(node.subject):
         subject = ""
     else:

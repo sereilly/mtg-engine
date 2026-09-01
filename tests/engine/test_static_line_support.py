@@ -206,7 +206,14 @@ def test_the_acknowledgement_list_has_no_dead_entries():
     [
         # Each of these is a real bug that shipped, in the exact shape the gate
         # admits: a recognized prefix followed by a rider nothing implements.
-        "This creature can't block creatures with flying.",
+        #
+        # "…can't block creatures with **flying**" used to stand here; the whole
+        # noun phrase is payload now and the blocker gate tests it, so the line
+        # is implemented rather than admitted. Its place is taken by the same
+        # sentence with a word the gate still cannot answer — a keyword no
+        # behaviour is registered under makes the filter inert rather than
+        # unreadable, so the restriction would forbid nothing.
+        "This creature can't block creatures with shadow.",
         "This creature can't attack unless you control a Wall.",
         # "As long as you control a **Wall**…" and "…a **Zombie**" used to stand
         # here, and both are implemented now: `static_bonuses` reads "you control

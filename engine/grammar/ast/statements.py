@@ -31,6 +31,7 @@ from ._core import (
     ObjectFilter,
     PlayerRef,
     RawEffect,
+    TargetSpec,
 )
 from .damage import (
     DamageCantBePreventedOrRedirected,
@@ -490,6 +491,18 @@ class CreateDelayedTrigger:
     #: in hand and never targeted, so a shared field would send the resolver to
     #: a target that was never picked.
     watches: str | None = None
+    #: The target the **opener itself** names — "this turn, when **target
+    #: creature you control** attacks and isn't blocked, …" (Delif's Cone,
+    #: Delif's Cube). CR 601.2c/602.2b pick it as the spell or ability is
+    #: announced, so it is chosen now and the delayed ability is about it
+    #: (CR 603.7c) however many steps later it fires.
+    #:
+    #: Distinct from ``subject``, which re-states a target an *earlier
+    #: sentence* chose ("Choose target creature. When **that creature** dies
+    #: this turn, …"): there the choosing is its own statement and carries its
+    #: own ``targets`` description, and here the opener is the only place the
+    #: target is named — so this is what the picker has to learn it from.
+    target: TargetSpec | None = None
 
 
 # ``UnlessPlayerPays`` is a *statement*, not an effect, for the reason ``May``

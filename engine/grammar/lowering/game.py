@@ -128,6 +128,27 @@ def _lower_gain_life(
                 {"amount_from_trigger": "dead_power", "recipient": "caster"},
             ),
         )
+    # "…you may gain life equal to **its** power" (Delif's Cone), inside a delay
+    # whose opener targeted the creature (CR 603.7c) — so "it" is that creature
+    # and `rebinding` said so by naming the amount for it. Read live at
+    # resolution rather than frozen: the creature is on the battlefield,
+    # attacking and unblocked, at the moment this ability resolves.
+    if (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source == "bound_power"
+    ):
+        if node.player.kind != "you" or node.capped_by:
+            raise LoweringError(
+                "the bound creature's power is gained by the ability's own "
+                "controller, uncapped",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "target_gains_life", "",
+                {"amount_from_bound_power": True, "recipient": "caster"},
+            ),
+        )
     if isinstance(node.amount, ast.SacrificedForCost):
         # "You gain life equal to the sacrificed creature's toughness" (Life
         # Chisel, Diamond Valley). The number is read off the permanent the

@@ -126,6 +126,64 @@ def rebind_pronoun_to_event_subject(
     return _rebound(statement, subject)
 
 
+def rebind_pronoun_to_delay_target(
+    chosen: ast.TargetSpec, statement: ast.Statement
+) -> ast.Statement:
+    """"…when **target creature you control** attacks and isn't blocked, **it**
+    assigns no combat damage this turn" (Delif's Cube) — the pronoun names the
+    object the *delay's opener* chose (CR 603.7c).
+
+    The fourth rebinder, and the one whose antecedent is neither the ability's
+    source nor a trigger's event: a delay's opener may target, and by the time
+    the delayed ability fires its source is a different object again — Delif's
+    Cube is still on the battlefield and its own sentence says "this artifact"
+    in the very next clause. Left as the source-reading pronoun, "it" would name
+    the artifact and the card would mark an artifact as assigning no combat
+    damage.
+
+    The rebound spec keeps the opener's noun phrase and **stops being a
+    target**: CR 601.2c chose the object once, at announcement, and a second
+    targeted spec in the effect would ask the picker for it again.
+
+    ``ThatMuch("its_power")`` is rewritten with it — "you may gain life equal to
+    **its** power" (Delif's Cone) is the same word about the same object, and an
+    amount carries no spec for the walk above to find, so it is named here
+    rather than left to a lowering that would have to know it was inside a
+    delay.
+    """
+    bound = replace(chosen, quantifier="that", targeted=False)
+
+    def _rewrite(spec: ast.TargetSpec) -> ast.TargetSpec | None:
+        if spec.quantifier == "it" and spec.filter.is_source:
+            return bound
+        return None
+
+    rebound = _walk_specs(statement, _rewrite)
+    return _rebind_its_power(rebound)
+
+
+def _rebind_its_power(node):
+    """*node* with every ``its power`` back-reference pointed at the bound
+    object. The amount twin of the walk above, written against the dataclass
+    fields for the reason ``_walk_specs`` is."""
+    if isinstance(node, ast.ThatMuch) and node.source == "its_power":
+        return replace(node, source="bound_power")
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        changes = {
+            field.name: rebound
+            for field in dataclasses.fields(node)
+            for rebound in (_rebind_its_power(getattr(node, field.name)),)
+            if rebound is not getattr(node, field.name)
+        }
+        return replace(node, **changes) if changes else node
+    if isinstance(node, (tuple, list)):
+        walked = [_rebind_its_power(item) for item in node]
+        if all(a is b for a, b in zip(walked, node)):
+            return node
+        return type(node)(walked)
+    return node
+
+
 def rebind_attachment_pronoun_to_sentence_target(statement: ast.Statement) -> ast.Statement:
     """"…and all white Auras you own **attached to it**" (Word of Undoing).
 

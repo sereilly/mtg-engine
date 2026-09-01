@@ -310,6 +310,13 @@ class ObjectFilter:
     # ``subject_matches`` can answer it: it needs the source, which that
     # function already takes.
     blocked_by_source: bool = False
+    # "all creatures **banded with it**" (Icatian Skirmishers), "creatures
+    # **banded with this creature**" (Camel). Membership of the attacking band
+    # the ability's own source is in (CR 702.22e) — a relation, like
+    # ``blocked_by_source`` above, and emitted for the same reason:
+    # ``subject_matches`` can answer it, because it needs the source and the
+    # game, which that function already takes.
+    banded_with_source: bool = False
     # "target creature **that's attacking you**" (Ice Floe, Snow Fortress,
     # Giant Trap Door Spider). Not a state of the creature alone: CR 508.1a
     # makes attacking a state, but *whom* it attacks is the defending player it
@@ -439,6 +446,8 @@ class ObjectFilter:
             payload["attacking_only"] = True
         if self.blocked_by_source:
             payload["blocked_by_source"] = True
+        if self.banded_with_source:
+            payload["banded_with_source"] = True
         if self.attacking_you:
             payload["attacking_you"] = True
         if self.was_dealt_damage_this_turn:

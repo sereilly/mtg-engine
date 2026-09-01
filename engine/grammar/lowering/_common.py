@@ -120,6 +120,10 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "not_enchanted",
     "enchanted_only",
     "attached_to_filter",
+    # "all creatures **banded with it**" (Icatian Skirmishers). ``to_payload``
+    # emits it unconditionally and ``subject_matches`` tests it, exactly as it
+    # does ``blocked_by_source`` — so it is honoured rather than relative.
+    "banded_with_source",
     # "target permanent you both **own** and control" (Obelisk of Undoing) /
     # "all Auras **you own** attached to permanents you control" (Remove
     # Enchantments). ``to_payload`` reads it unconditionally. It used to emit
