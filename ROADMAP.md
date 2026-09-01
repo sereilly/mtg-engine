@@ -871,15 +871,24 @@ Fixed in the wave:
   with no legal creature was removed from the stack under CR 603.3c — live for
   The Abyss, Dread Wight, Frost Breath, Telekinesis and Melee.
 
+- **Orcish Captain shrank itself instead of the Orc it targeted** — the
+  losing arm's bare "it" lowered to `pump_self`. Fixed, and **the recorded
+  scope was wrong in the way this roadmap keeps warning about.** The wave
+  wrote it up as "cross-sentence pronoun rebinding is missing", which reads
+  as a parser gap; building that broke **eight shipped cards** (Phyrexian
+  Gremlins, Telekinesis, Glyph of Destruction, Whippoorwill, Mole Worms,
+  Goblin Sappers, Ice Floe, Elvish Scout), every one of which prints a bare
+  "it" after a targeting sentence and already played correctly. The engine
+  does have a convention for that pronoun — it is read by the *lowering*,
+  not the parser, and each of those lowerings carries its own bare-pronoun
+  branch. What was missing was one lowering's branch: `_lower_pump` tests
+  `filter.is_source`, cannot tell "it" from "this creature", and fell
+  through to the source. **A whole-pool compiled-program differential is what
+  turned a parser feature into a one-node fix**, and it is the cheapest
+  instrument in this repo for that: 1 of 1,610 programs changes.
+
 Open, each recorded with what it costs rather than scheduled here:
 
-- **Orcish Captain (FEM, supported) shrinks itself instead of its target.**
-  "Flip a coin. If you win the flip, target Orc creature gets +2/+0 … If you
-  lose the flip, **it** gets -0/-2" — the losing arm's bare "it" lowers to
-  `pump_self`. The missing piece is cross-sentence pronoun rebinding: the
-  rebinder binds a pronoun to a *condition's* target and to a trigger's event
-  subject, but not to a target announced by an earlier sentence of the same
-  line. **This one ships with the set and is fixed before promotion.**
 - **A mana ability with a rider uses the stack** (CR 605.3/605.1a).
   `is_mana_ability` reads only the top-level instruction kind, so Farrelite
   Priest, Initiates of the Ebon Hand, Barbed Sextant and all six Ice Age
