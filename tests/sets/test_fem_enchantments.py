@@ -1264,6 +1264,34 @@ def test_g6_a_non_interactive_seat_takes_its_stated_default(set_pool):
     assert all(game.is_on_battlefield(p) for p in every_plains), game.log
 
 
+def test_g6_a_default_never_spends_a_pick_on_an_opponents_plains(set_pool):
+    """The half of the default that is a decision rather than an ordering.
+
+    P2 is the only non-interactive seat and controls **one** Plains against a
+    ceiling of two, so its default has a pick left over. It leaves it unspent:
+    the chosen Plains are the ones that survive, so a leftover pick handed to an
+    opponent is a gift the card never asked anyone to make. "Own first, then
+    others to fill the ceiling" would save one of P1's here, and P1 chose
+    nothing at all.
+    """
+    game, board = _g6_board(set_pool, interactive=(0,))
+    game.remove_from_battlefield(board["their_plains"][1])
+    game._settle()
+    _g6_raid(game, board)
+    game._settle()
+
+    assert game.confirm_tap_any_number(0, []), "P1 declines the offer"
+    game._settle()
+
+    assert not game.pending_choices, "a non-interactive seat never queues this"
+    assert game.is_on_battlefield(board["their_plains"][0]), (
+        "P2's default tapped its Priest and saved the one Plains it controls"
+    )
+    assert not any(game.is_on_battlefield(p) for p in board["my_plains"]), (
+        "P2 had a pick to spare and did not spend it on P1's Plains"
+    )
+
+
 def test_g6_a_seat_that_taps_nothing_saves_nothing(set_pool):
     """The card's whole point, stated as one game: the seat that declines the
     offer has no Plains choices and loses every Plains it controls.

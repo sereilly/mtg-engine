@@ -2637,25 +2637,28 @@ class PendingChoicesMixin:
         return True
 
     def _default_permanent_set_choice(self, choice: PendingChoice) -> None:
-        """The stated policy: **the seat's own permanents first, in board order,
-        up to the ceiling**, and other seats' only to fill it.
+        """The stated policy: **the seat's own permanents, in board order, up to
+        the ceiling — and nothing else, even when the ceiling is unspent.**
 
-        Not a valuation — board order is seed-deterministic, which is what AI
-        and headless play need. Own-first is the one thing the policy does say,
-        and it is the policy rather than an accident: every printed sentence
-        that lets a player pick from any battlefield is a sentence where the
-        pick protects or profits whoever makes it, so a seat that picked an
-        opponent's permanent first would be answering for the wrong player.
-        A card that should choose more cleverly needs a weight in
-        ``engine/ai_valuation.py``, not a branch here.
+        Board order rather than a valuation, which is the singular pick's rule
+        beside it and for its reason: seed-determinism is what AI and headless
+        play need, and a card that should choose cleverly wants a weight in
+        ``engine/ai_valuation.py`` rather than a branch here.
+
+        Own-only is the half that is a *decision*, and it is deliberately not
+        "own first, then others to fill". A sentence that lets a seat pick from
+        any battlefield is a sentence where the pick is worth something to
+        whoever is picking — Raiding Party's chosen Plains are the ones that
+        survive — so a leftover pick spent on an opponent's permanent is a gift
+        the card never asked anyone to make. Leaving the ceiling unspent is the
+        neutral answer; taking it is a valuation this has no basis for.
         """
-        live = self.live_permanent_set_choices(choice)
-        own = [perm for perm in live if self.controls(choice.player_index, perm)]
-        rest = [perm for perm in live if perm not in own]
         limit = int(choice.data.get("up_to", 1))
         picks = [
-            self.permanent_id_of(perm) for perm in (own + rest)[:limit]
-        ]
+            self.permanent_id_of(perm)
+            for perm in self.live_permanent_set_choices(choice)
+            if self.controls(choice.player_index, perm)
+        ][:limit]
         chosen = [pid for pid in picks if pid is not None]
         if not self._resolve_permanent_set_choice(choice, chosen):
             self._resolve_permanent_set_choice(choice, [])
