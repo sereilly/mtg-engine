@@ -39,14 +39,24 @@ def _parse_doesnt_untap_next_step(
       ``engine/auras.py`` derives for Paralyze and Capture Sphere — a strictly
       larger effect. Refusing the wording without "next" is what makes the
       deletion probe's rider check pass honestly rather than by accident.
-    * **"their/its controller's"** is required, and "your" is refused. They are
-      different effects: this one is per-creature, and "your next untap step"
-      (exert's wording, CR 701.43a) is the *controller of the effect's* step,
-      which the marker this lowers to carries no seat to express.
+    * **"their/its controller's"** and **"your"** are two different effects and
+      are read as two, never as one spelling of the other. This one is
+      per-creature; "your next untap step" (exert's wording, CR 701.43a — "the
+      next untap step of the player who exerted it") names a *seat*, and the
+      two pick out different steps the moment the creature changes hands. So
+      the word is carried on ``whose`` and the marker carries the seat; the
+      "your" spelling admits no other duration tail, because the linked
+      durations below are all printed with the possessive this branch replaces.
     """
     stream.expect_word("don't", "doesn't")
     stream.expect_word("untap")
     stream.expect_word("during")
+    # "…during **your** next untap step." (Deep Spawn, Homarid Warrior.) The
+    # seated spelling: one word where the per-creature one prints three, and it
+    # goes straight to the "next" tail — none of the linked-duration forms below
+    # is printed with it, and inventing one would accept text no card carries.
+    if stream.accept_word("your"):
+        return _parse_next_untap_steps(stream, subject, whose="you")
     stream.expect_word("their", "its")
     stream.expect_word("controller")
     stream.expect_word("'s")
@@ -89,6 +99,17 @@ def _parse_doesnt_untap_next_step(
         ) and stream.accept_phrase("remains", "tapped"):
             return ast.DoesntUntapWhileSourceTapped(subject)
     stream.reset(linked)
+    return _parse_next_untap_steps(stream, subject, whose="controller")
+
+
+def _parse_next_untap_steps(
+    stream: TokenStream, subject: ast.Recipient, *, whose: str
+) -> ast.Statement:
+    """``next [N] untap step[s]`` — the tail both possessives share.
+
+    One reader, because the number is read the same way after either word and a
+    second copy of it is a second answer to how long the restriction lasts.
+    """
     stream.expect_word("next")
     # "…next **two** untap steps" (Telekinesis). The number is read rather than
     # skipped: a restriction that survived one untap step where the card says
@@ -106,7 +127,7 @@ def _parse_doesnt_untap_next_step(
             count = 1
     stream.expect_word("untap")
     stream.expect_word("step", "steps")
-    return ast.DoesntUntapNextStep(subject, count=count)
+    return ast.DoesntUntapNextStep(subject, count=count, whose=whose)
 
 
 def _parse_tap_untap(stream: TokenStream) -> ast.Statement:

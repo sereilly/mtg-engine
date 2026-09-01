@@ -619,6 +619,24 @@ def _accept_trailing_toll(
             stream.reset(mark)
             return None
         return ast.May(actor=payer, action=discard, otherwise=body)
+    # "…unless you **mill two cards**" (Deep Spawn). The third cost mana cannot
+    # express, decomposed exactly as the discard above is: the mill is the
+    # offer's *action*, so it reaches the same `May` and the same prompt.
+    #
+    # No takeability entry answers it, and that is the rule rather than an
+    # omission — CR 701.13b mills the whole library when it is shorter than the
+    # number, so a player can always take this offer and a "can you?" check
+    # would withdraw one the card makes.
+    if stream.at_word("mills", "mill"):
+        try:
+            mill = _parse_mill(stream, payer)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        if payer.kind in _ENUMERATED_PAYERS:
+            stream.reset(mark)
+            return None
+        return ast.May(actor=payer, action=mill, otherwise=body)
     if not stream.accept_word("pays", "pay"):
         stream.reset(mark)
         return None

@@ -282,10 +282,21 @@ class DoesntUntapNextStep:
     (Telekinesis). A number, not a second node: how many of the same turn-based
     action the restriction survives is the one thing that differs, and a card
     printing three would need no code.
+
+    ``whose`` is the other printed word, and it names a *player* rather than a
+    permanent: "during **its controller's** next untap step" (Frost Breath) is
+    per-creature, and "during **your** next untap step" (Deep Spawn, Homarid
+    Warrior — CR 701.43a's exert wording) is the next untap step of the player
+    who created the effect. They coincide on every board where nobody has
+    changed hands, and diverge exactly where a control change puts the creature
+    on somebody else's battlefield first — so the word travels rather than being
+    read as a spelling of the other, and the marker carries the seat.
     """
 
     subject: Recipient
     count: int = 1
+    #: ``"controller"`` for "its controller's", ``"you"`` for "your".
+    whose: str = "controller"
 
 
 @dataclass(frozen=True)

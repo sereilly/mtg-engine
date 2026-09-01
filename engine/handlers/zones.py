@@ -597,11 +597,20 @@ def discard_x_target_cards(game: Game, instruction: OracleInstruction, context: 
 
     ``who: "defending_player"`` names the seat the combat fire site froze into
     the trigger's context (CR 506.2) rather than a seat anybody targeted — Cloak
-    of Confusion, whose discard has no target at all. Payload for the same
-    reason the count is: the sample and the move are identical, and only who
-    holds the hand differs.
+    of Confusion, whose discard has no target at all. ``who: "caster"`` names
+    the ability's own controller (CR 608.2's unwritten subject) — Ring of
+    Renewal's "discard a card at random, then draw two cards", which likewise
+    targets nobody. Payload for the same reason the count is: the sample and the
+    move are identical, and only who holds the hand differs.
+
+    The default stays ``context.target``, and the two named seats exist because
+    it is *not* a safe default for an effect that chose no target: the context's
+    target for a targetless activation is the opponent, so an unnamed seat here
+    would empty the wrong hand and log itself resolved.
     """
     target = context.target
+    if instruction.payload.get("who") == "caster":
+        target = context.caster
     if instruction.payload.get("who") == "defending_player":
         seat = (context.trigger_context or {}).get("trigger_defending_player_index")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
