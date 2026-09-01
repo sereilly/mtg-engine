@@ -358,3 +358,44 @@ def test_a_declaration_level_restriction_does_not_ground_the_whole_team(set_pool
     two_friends, declared = _picked(2)
     assert declared
     assert two_friends == [0, 1, 2], "with company the Conscripts attack too"
+
+
+# --- G1 (FEM): an ability the activating seat is not permitted to activate ---
+
+
+def _g1_lone_permanent(pool, name):
+    perm = Permanent(card=pool[name])
+    game = Game(players=[
+        PlayerState(name="P1", life=20), PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._put_permanent_onto_battlefield(0, perm, None)
+    game._settle()
+    perm.metadata["summoning_sickness_turn"] = -99
+    return game, perm
+
+
+def test_the_policy_skips_an_ability_its_own_controller_may_not_activate(catalog_by_name):
+    """"Only your opponents may activate this ability." (Clergy of the Holy
+    Nimbus.) CR 602.1a's exception, pointed at the controller.
+
+    The engine refuses the activation, so nothing illegal ever happened — but
+    the policy proposed the same refused action every turn for the whole game,
+    which is a seat doing nothing with its main phase. Asked of the module that
+    enforces the permission, so the policy and the engine give one answer.
+    """
+    game, _clergy = _g1_lone_permanent(catalog_by_name, "Clergy of the Holy Nimbus")
+
+    assert choose_activation_action(game, 0) is None
+
+
+def test_the_policy_still_offers_an_ability_a_permission_only_widens(catalog_by_name):
+    """The same read pointed the other way: "Any player may activate this
+    ability" (Ifh-Bíff Efreet) opens the ability to everyone *including* its
+    controller, so skipping it would cost the AI a card it can play."""
+    game, efreet = _g1_lone_permanent(catalog_by_name, "Ifh-Bíff Efreet")
+
+    action = choose_activation_action(game, 0)
+
+    assert action is not None
+    assert action.permanent_name == efreet.card.name
