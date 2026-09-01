@@ -970,3 +970,406 @@ def test_g3_declining_the_mantle_leaves_the_attack_alone(set_pool):
 
     assert victim.damage_marked == 0
     assert game.players[1].life == 19, game.log
+
+
+# --- G6: Raiding Party ---
+
+from engine import Game as _G6Game, PlayerState as _G6PlayerState
+from engine.card_loader import load_cards as _g6_load_cards
+from engine.card_loader import manifest_set_path as _g6_manifest_set_path
+from engine.models import Permanent as _G6Permanent
+from engine.oracle import compile_card_oracle as _g6_compile
+from engine.targeting import derive_cast_spec as _g6_derive_cast_spec
+
+
+def _g6_lea():
+    return {card.name: card for card in _g6_load_cards(_g6_manifest_set_path("LEA"))}
+
+
+def _g6_board(set_pool, *, interactive=(0, 1)):
+    """Raiding Party, an Orc to eat, two white creatures, and four Plains.
+
+    Two Plains on each battlefield, because "chooses up to two Plains" names no
+    controller and the sweep behind it names none either — a board where every
+    Plains belonged to one seat could not tell a picker that dropped the words
+    from one that read them.
+    """
+    fem, lea = set_pool("FEM"), _g6_lea()
+    party = _G6Permanent(card=fem["Raiding Party"])
+    orc = _G6Permanent(card=fem["Brassclaw Orcs"])
+    mine_a = _G6Permanent(card=fem["Icatian Infantry"])       # white
+    mine_b = _G6Permanent(card=fem["Icatian Scout"])          # white
+    red = _G6Permanent(card=fem["Brassclaw Orcs"])            # not white
+    my_plains = [_G6Permanent(card=lea["Plains"]) for _ in range(2)]
+    theirs = _G6Permanent(card=fem["Icatian Priest"])         # white
+    their_plains = [_G6Permanent(card=lea["Plains"]) for _ in range(2)]
+    forest = _G6Permanent(card=lea["Forest"])
+    mine = [party, orc, mine_a, mine_b, red, *my_plains]
+    yours = [theirs, *their_plains, forest]
+    for permanent in mine + yours:
+        permanent.metadata["summoning_sickness_turn"] = -99
+    game = _G6Game(players=[
+        _G6PlayerState(name="P1", battlefield=mine),
+        _G6PlayerState(name="P2", battlefield=yours),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game._settle()
+    return game, {
+        "party": party, "orc": orc, "mine_a": mine_a, "mine_b": mine_b,
+        "red": red, "theirs": theirs, "forest": forest,
+        "my_plains": my_plains, "their_plains": their_plains,
+    }
+
+
+def _g6_raid(game, board):
+    """Sacrifice the Orc to put the ability on the stack and start resolving."""
+    controlled = list(game.controlled_by(0))
+    return game.activate_permanent_ability(
+        0, "Raiding Party", cost_permanent_index=controlled.index(board["orc"])
+    )
+
+
+def _g6_owed(game, kind):
+    return [c for c in game.pending_choices if c.kind == kind]
+
+
+def test_g6_raiding_party_is_supported_whole(set_pool):
+    """Both printed lines, and the count that says so is the ability's own.
+
+    A card is supported when *any* of its lines is, so the assertion that
+    matters is on the activated ability rather than on the card: line 1 alone
+    made this card report supported for a whole round while the ability behind
+    the colon compiled to nothing.
+    """
+    program = _g6_compile(set_pool("FEM")["Raiding Party"])
+
+    assert program.supported
+    assert [a.supported for a in program.activated_abilities] == [True]
+    steps = program.activated_abilities[0].instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "tap_any_number_matching", "for_each", "destroy_all_lands_of_type",
+    ], steps
+
+
+def test_g6_a_white_spell_cannot_target_raiding_party(set_pool):
+    """"can't be the target of **white spells**" — a class of spell named by
+    its colour, which the immunity table had no axis for.
+
+    Asked of the picker and of the cast gate, which are the two places CR
+    601.2c is enforced: Disenchant destroys target enchantment and is white, so
+    an unread colour word is a Raiding Party that dies to it.
+    """
+    game, board = _g6_board(set_pool)
+    disenchant = _g6_lea()["Disenchant"]
+    game.players[1].hand = [disenchant]
+    spec = _g6_derive_cast_spec(disenchant, _g6_compile(disenchant))
+
+    offered = game._enumerate_targets(1, disenchant, spec, for_cast=True)
+    # By slot, which is what an entry carries — there is no ``permanent_id`` key
+    # on it, and a membership test against one would pass over any list at all.
+    party_slot = (
+        game.controller_index_of(board["party"]),
+        game.battlefield_index_of(board["party"]),
+    )
+    assert party_slot not in {
+        (entry["seat"], entry["index"]) for entry in offered
+    }, offered
+
+    result = game.cast_from_hand(
+        1, "Disenchant", target_permanent_ids=[board["party"].permanent_id]
+    )
+    assert not result.supported, result.details
+    assert game.is_on_battlefield(board["party"]), game.log
+    # Refused at announcement (CR 601.2c), not countered on resolution
+    # (CR 608.2b): the difference is a card, and it is the whole of what the
+    # `is_creature` test in `_validate_cast_targets` used to cost.
+    assert [c.name for c in game.players[1].hand] == ["Disenchant"], game.log
+
+
+def test_g6_a_green_spell_may_still_target_raiding_party(set_pool):
+    """The other half, and the one that says the clause is a *narrowed* shroud
+    rather than shroud: Desert Twister destroys target permanent and is green,
+    so nothing stops it."""
+    game, board = _g6_board(set_pool)
+    game.players[1].hand = [set_pool("ARN")["Desert Twister"]]
+
+    result = game.cast_from_hand(
+        1, "Desert Twister", target_permanent_ids=[board["party"].permanent_id]
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(board["party"]), game.log
+
+
+def test_g6_an_ability_from_a_white_source_cannot_target_raiding_party(set_pool):
+    """"…**or abilities from white sources**" — the second conjunct, and the one
+    the reader in ``auras.py`` could not have seen: it answered only for an
+    Aura's attachment, and this clause is printed about the permanent itself.
+
+    Arenson's Aura is a white enchantment whose activated ability destroys
+    target enchantment, so it is the whole question in one card. The colourless
+    Despotic Scepter beside it is the control: the clause names white sources,
+    not every source.
+    """
+    game, board = _g6_board(set_pool)
+    ice = set_pool("ICE")
+    white_source = _G6Permanent(card=ice["Arenson's Aura"])
+    colorless_source = _G6Permanent(card=set_pool("ATQ")["Candelabra of Tawnos"])
+    game.players[1].battlefield.extend([white_source, colorless_source])
+    game._sync_control()
+
+    assert not game._can_be_targeted(
+        board["party"], white_source.card, caster_index=1,
+        ability_source=white_source,
+    )
+    assert game._can_be_targeted(
+        board["party"], colorless_source.card, caster_index=1,
+        ability_source=colorless_source,
+    )
+
+
+def test_g6_each_tap_buys_two_plains_choices_and_no_tap_buys_none(set_pool):
+    """"Each player may tap any number of untapped white creatures they control.
+    For each creature tapped this way, that player chooses up to two Plains."
+
+    The arithmetic is the card: two creatures tapped is **two** choice prompts,
+    and a seat that taps nothing is asked nothing. Both halves in one test,
+    because they are one claim — the loop runs once per creature the record
+    holds, and a loop that walked seats or the board instead would get exactly
+    one of them wrong.
+
+    CR 101.4 / CR 608.2e: the taps are offered in turn order from the active
+    player, and only once every seat has answered does the second action begin.
+    """
+    game, board = _g6_board(set_pool)
+    _g6_raid(game, board)
+    game._settle()
+
+    owed = _g6_owed(game, "tap_any_number")
+    assert [c.player_index for c in owed] == [0], (
+        "one seat at a time, active player first (CR 101.4)"
+    )
+    offered = {p.card.name for p in game.live_tap_any_number(owed[0])}
+    assert offered == {"Icatian Infantry", "Icatian Scout"}, (
+        "'untapped **white** creatures **they control**' — not the Orc beside "
+        f"them and not the opponent's Priest: {offered}"
+    )
+    assert not _g6_owed(game, "permanent_set_choice"), (
+        "the Plains choices wait until every seat has tapped (CR 608.2e)"
+    )
+
+    assert game.confirm_tap_any_number(
+        0, [board["mine_a"].permanent_id, board["mine_b"].permanent_id]
+    )
+    game._settle()
+    assert game.confirm_tap_any_number(1, []), "'any number' includes none"
+    game._settle()
+
+    choices = _g6_owed(game, "permanent_set_choice")
+    assert [c.player_index for c in choices] == [0], (
+        "two creatures tapped by seat 0 and none by seat 1: seat 1 chooses "
+        f"nothing at all — {[(c.player_index, c.data['up_to']) for c in choices]}"
+    )
+    assert choices[0].data["up_to"] == 2
+    # Answering the first arms the second: one prompt per creature, and both
+    # belong to the seat that tapped it.
+    assert game.confirm_permanent_set_choice(0, [])
+    game._settle()
+    second = _g6_owed(game, "permanent_set_choice")
+    assert [c.player_index for c in second] == [0], game.log
+    assert game.confirm_permanent_set_choice(0, [])
+    game._settle()
+    assert not _g6_owed(game, "permanent_set_choice"), (
+        "two creatures, two choices, and no third"
+    )
+
+
+def test_g6_chosen_plains_survive_and_the_rest_are_destroyed(set_pool):
+    """"Then destroy all Plains that weren't chosen this way by any player."
+
+    The picks are unrestricted by controller and accumulate across prompts, so
+    the test names one Plains on each battlefield from two different choices and
+    checks that both survive while their neighbours die. A sweep that dropped
+    the relative clause destroys all four; one that kept only the last answer
+    destroys three.
+    """
+    game, board = _g6_board(set_pool)
+    _g6_raid(game, board)
+    game._settle()
+
+    assert game.confirm_tap_any_number(
+        0, [board["mine_a"].permanent_id, board["mine_b"].permanent_id]
+    )
+    game._settle()
+    assert game.confirm_tap_any_number(1, [board["theirs"].permanent_id])
+    game._settle()
+
+    saved = [board["my_plains"][0], board["their_plains"][0]]
+    doomed = [board["my_plains"][1], board["their_plains"][1]]
+    picks = [
+        [board["my_plains"][0].permanent_id],
+        [board["their_plains"][0].permanent_id],
+        [],
+    ]
+    for wanted in picks:
+        owed = _g6_owed(game, "permanent_set_choice")
+        assert owed, game.log
+        assert game.confirm_permanent_set_choice(owed[0].player_index, wanted)
+        game._settle()
+
+    assert not _g6_owed(game, "permanent_set_choice"), game.log
+    assert all(game.is_on_battlefield(p) for p in saved), game.log
+    assert not any(game.is_on_battlefield(p) for p in doomed), game.log
+    assert game.is_on_battlefield(board["forest"]), "only Plains are swept"
+
+
+def test_g6_the_offer_holds_the_ability_open_until_it_is_answered(set_pool):
+    """CR 608.2 / CR 117.3b: nothing behind a prompt runs until it is answered.
+
+    The evidence is the board rather than a flag — with the first tap still
+    owed, every Plains is still there. A sweep that ran ahead of the answers
+    would destroy all four, because nothing had been chosen yet.
+    """
+    game, board = _g6_board(set_pool)
+    _g6_raid(game, board)
+    game._settle()
+
+    waiting = game.waiting_prompt()
+    assert waiting is not None and waiting.kind == "tap_any_number"
+    every_plains = board["my_plains"] + board["their_plains"]
+    assert all(game.is_on_battlefield(p) for p in every_plains), game.log
+
+
+def test_g6_a_non_interactive_seat_takes_its_stated_default(set_pool):
+    """Both defaults are decisions, and both are exercised here.
+
+    A seat nobody can ask **taps everything eligible that is not attacking**
+    and then **saves its own Plains first**, so a board where every seat is
+    non-interactive resolves with every Plains its controller could cover still
+    standing. That is the policy, not an accident: each tap buys two Plains, and
+    a default that picked an opponent's would be answering for the wrong player.
+    """
+    game, board = _g6_board(set_pool, interactive=())
+    result = _g6_raid(game, board)
+    game._settle()
+
+    assert result.supported, result.details
+    assert not game.pending_choices, "a headless game never blocks on this card"
+    assert board["mine_a"].tapped and board["mine_b"].tapped
+    assert board["theirs"].tapped
+    assert not board["red"].tapped, "the Orc is not white"
+    every_plains = board["my_plains"] + board["their_plains"]
+    assert all(game.is_on_battlefield(p) for p in every_plains), game.log
+
+
+def test_g6_a_default_never_spends_a_pick_on_an_opponents_plains(set_pool):
+    """The half of the default that is a decision rather than an ordering.
+
+    P2 is the only non-interactive seat and controls **one** Plains against a
+    ceiling of two, so its default has a pick left over. It leaves it unspent:
+    the chosen Plains are the ones that survive, so a leftover pick handed to an
+    opponent is a gift the card never asked anyone to make. "Own first, then
+    others to fill the ceiling" would save one of P1's here, and P1 chose
+    nothing at all.
+    """
+    game, board = _g6_board(set_pool, interactive=(0,))
+    game.remove_from_battlefield(board["their_plains"][1])
+    game._settle()
+    _g6_raid(game, board)
+    game._settle()
+
+    assert game.confirm_tap_any_number(0, []), "P1 declines the offer"
+    game._settle()
+
+    assert not game.pending_choices, "a non-interactive seat never queues this"
+    assert game.is_on_battlefield(board["their_plains"][0]), (
+        "P2's default tapped its Priest and saved the one Plains it controls"
+    )
+    assert not any(game.is_on_battlefield(p) for p in board["my_plains"]), (
+        "P2 had a pick to spare and did not spend it on P1's Plains"
+    )
+
+
+def test_g6_a_seat_that_taps_nothing_saves_nothing(set_pool):
+    """The card's whole point, stated as one game: the seat that declines the
+    offer has no Plains choices and loses every Plains it controls.
+
+    The opposite of the default test above, and the reason that one is not
+    enough on its own — a default that tapped nothing would pass it by
+    accident."""
+    game, board = _g6_board(set_pool)
+    _g6_raid(game, board)
+    game._settle()
+
+    assert game.confirm_tap_any_number(0, [board["mine_a"].permanent_id])
+    game._settle()
+    assert game.confirm_tap_any_number(1, [])
+    game._settle()
+
+    owed = _g6_owed(game, "permanent_set_choice")
+    assert [c.player_index for c in owed] == [0], game.log
+    assert game.confirm_permanent_set_choice(
+        0, [p.permanent_id for p in board["my_plains"]]
+    )
+    game._settle()
+
+    assert all(game.is_on_battlefield(p) for p in board["my_plains"]), game.log
+    assert not any(
+        game.is_on_battlefield(p) for p in board["their_plains"]
+    ), "P2 tapped nothing, so P2 chose nothing, so P2's Plains all die"
+
+
+def test_g6_the_pick_is_capped_and_checked_against_what_was_offered(set_pool):
+    """"up to **two**" is a ceiling the engine enforces, not a hint the client
+    is trusted with. A third Plains, or a permanent that is not one, is refused
+    whole — the prompt stays owed rather than recording part of the answer."""
+    game, board = _g6_board(set_pool)
+    _g6_raid(game, board)
+    game._settle()
+    assert game.confirm_tap_any_number(0, [board["mine_a"].permanent_id])
+    game._settle()
+    assert game.confirm_tap_any_number(1, [])
+    game._settle()
+
+    owed = _g6_owed(game, "permanent_set_choice")[0]
+    three = [
+        board["my_plains"][0].permanent_id,
+        board["my_plains"][1].permanent_id,
+        board["their_plains"][0].permanent_id,
+    ]
+    assert not game.confirm_permanent_set_choice(0, three)
+    assert not game.confirm_permanent_set_choice(0, [board["forest"].permanent_id])
+    assert _g6_owed(game, "permanent_set_choice") == [owed], (
+        "a refused answer leaves the prompt owed"
+    )
+
+
+def test_g6_the_tap_prompt_records_only_what_it_tapped(set_pool):
+    """"tapped this way" is not "tapped".
+
+    A Plains and a white creature are tapped *before* the ability is activated;
+    neither may reach the loop. The record is the only thing that can tell them
+    apart, which is why this window needs one at all — unlike a destroy sweep,
+    its objects never leave the battlefield for the board to stop knowing about.
+    """
+    game, board = _g6_board(set_pool)
+    game.become_tapped(board["mine_b"])
+    game.become_tapped(board["my_plains"][0])
+    _g6_raid(game, board)
+    game._settle()
+
+    owed = _g6_owed(game, "tap_any_number")[0]
+    assert {p.card.name for p in game.live_tap_any_number(owed)} == {
+        "Icatian Infantry"
+    }, "'**untapped** white creatures' — the tapped Scout is not offered"
+    assert game.confirm_tap_any_number(0, [board["mine_a"].permanent_id])
+    game._settle()
+    assert game.confirm_tap_any_number(1, [])
+    game._settle()
+
+    assert len(_g6_owed(game, "permanent_set_choice")) == 1, (
+        "one creature tapped this way, so one choice — not one per tapped "
+        f"creature on the board: {game.log}"
+    )

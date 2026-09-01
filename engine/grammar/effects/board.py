@@ -841,6 +841,7 @@ def parse_player_chooses_permanent(
     stream: TokenStream, chooser: "ast.PlayerRef"
 ) -> "ast.ChoosePermanent | None":
     """``<player> chooses <noun phrase> [that this card could enchant].``
+    ``<player> chooses up to <N> <noun phrase>.``
 
     "That creature's controller chooses a creature that this card could
     enchant." (Takklemaggot.) The subject has already been read, so this starts
@@ -866,7 +867,22 @@ def parse_player_chooses_permanent(
     if not stream.accept_word("chooses", "choose"):
         return None
     spec = parse_target_spec(stream)
-    if spec is None or spec.targeted or spec.quantifier != "a" or spec.count != 1:
+    if spec is None or spec.targeted:
+        stream.reset(mark)
+        return None
+    if spec.quantifier == "up_to":
+        # "that player **chooses up to two Plains**" (Raiding Party). The plural
+        # of the same sentence, and the same node: how many may be picked is
+        # already what ``TargetSpec.quantifier`` and ``count`` say, so a second
+        # field here would be a number the spec beside it also carries.
+        #
+        # No relative clause is read for it, and none is tolerated: the tail
+        # below is Takklemaggot's enchant legality, which is a question about a
+        # *pair* of permanents and means nothing for a set. Anything else the
+        # phrase printed is left in the stream and refuses the line, which is
+        # full token consumption doing its job.
+        return ast.ChoosePermanent(chooser, spec)
+    if spec.quantifier != "a" or spec.count != 1:
         stream.reset(mark)
         return None
     host_for_source = False

@@ -289,6 +289,18 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # interactive seat ever queues it — `default_at_arm` answers for
         # everyone else before the flag is set.
         "permanent_choice",
+        # "…chooses up to two Plains. **Then destroy all Plains that weren't
+        # chosen this way by any player.**" (Raiding Party): the sweep behind
+        # the pick is a later step of the same resolution and subtracts exactly
+        # what this records — and the iteration behind *it* arms the next one,
+        # which is how a chain of decisions stays one resolution.
+        "permanent_set_choice",
+        # "Each player may tap any number of untapped white creatures they
+        # control. **For each creature tapped this way**, …" (Raiding Party):
+        # the loop behind it walks what this prompt tapped. Siege Striker arms
+        # the same kind with nothing behind it, where suspending costs nothing —
+        # the same note `number_choice` above carries about Shapeshifter.
+        "tap_any_number",
         # "Target opponent chooses a card in your graveyard. You may pay {G}.
         # If you do, **repeat this process** …" (Forgotten Lore): the pick is
         # what the payment offer behind it is about, and the set of picks is

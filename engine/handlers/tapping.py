@@ -805,6 +805,69 @@ def tap_any_number_then_pump_self(game: Game, instruction: OracleInstruction, co
     return True, "resolved"
 
 
+@effect_handler("tap_any_number_matching")
+def tap_any_number_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each player may tap any number of untapped white creatures they
+    control." (Raiding Party.)
+
+    ``untap_up_to_matching``'s mirror, one seat at a time. The "may" and the
+    "any number" are one decision — a seat that wants none answers with none —
+    so this is one prompt per seat rather than an offer wrapped round a prompt,
+    which is the collapse ``_each_player_optional_tap`` makes in the lowering
+    and the same one Mind Bomb's discard already made.
+
+    **Every seat writes into one record.** The sentence behind this one is "for
+    each creature tapped this way, **that player** chooses…", which walks every
+    creature every seat tapped and asks whose each one was — so the taps
+    accumulate rather than replacing each other, and the per-object controller
+    map is what answers "that player" inside the loop.
+
+    The records are written empty **before** the first prompt is armed. A seat
+    that taps nothing must still leave a set the loop can walk, and a loop over
+    a missing key is a sentence reporting itself resolved having read nothing.
+
+    CR 101.4 / CR 608.2e: the seats are asked in turn order from the active
+    player, which is exactly the order ``_offered_seats`` returns and the order
+    the prompts drain in.
+    """
+    from ..oracle_types import (PER_OBJECT_SEAT_RECORDS, TAPPED_THIS_WAY,
+                                TAPPED_THIS_WAY_OBJECTS)
+    from ..resumption import run_resumable
+    from .control_flow import _offered_seats
+
+    payload = instruction.payload
+    context.results.setdefault(TAPPED_THIS_WAY_OBJECTS, [])
+    context.results.setdefault(TAPPED_THIS_WAY, 0)
+    context.results.setdefault(PER_OBJECT_SEAT_RECORDS["controller"], {})
+    seats = _offered_seats(game, str(payload.get("who") or "you"), context)
+
+    def arm(seat: int) -> None:
+        filt = dict(payload.get("filter") or {})
+        # "…**they** control", where "they" is the seat being asked.
+        # `subject_matches` refuses `that_player` outright and says why: the
+        # seat is known only to the resolution, which is here. Rewritten into
+        # the relative key the matcher does answer, against this seat — the
+        # same rewrite `untap_up_to_matching` makes one function over.
+        if filt.get("controller") == "that_player":
+            filt["controller"] = "you"
+        game.arm_pending_choice(
+            "tap_any_number", seat,
+            filter=filt,
+            untapped_only=bool(payload.get("untapped_only")),
+            observer=seat,
+            _context=context,
+            card_name=context.card.name,
+        )
+
+    # Through ``run_resumable`` for the reason ``engine/resumption.py`` states
+    # and ``handlers/control_flow.may`` states beside it: an interactive seat's
+    # prompt suspends, and a bare ``for`` here would lose every seat behind the
+    # one that stopped. The loop is the last thing this handler does, which is
+    # the other half of that rule.
+    run_resumable(game, seats, arm)
+    return True, "resolved"
+
+
 @effect_handler("untap_up_to_matching")
 def untap_up_to_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Untap up to four lands." (Rewind.) No "target" is printed, so nothing

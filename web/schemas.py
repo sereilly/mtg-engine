@@ -53,6 +53,7 @@ ActionKind = Literal[
     "reflexive_target_confirm",
     "copy_spell_target_confirm",
     "permanent_choice_confirm",
+    "permanent_set_choice_confirm",
     "untap_up_to_confirm",
     "look_top_pick_confirm",
     "name_and_strip_confirm",

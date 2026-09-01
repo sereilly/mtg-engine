@@ -98,6 +98,30 @@ _SPELL_CLASSES: tuple[tuple[str, str], ...] = (
 )
 
 
+#: The prefix that makes a colour word a *class of source*. "White spells" is a
+#: class of spell exactly as "Aura spells" is, and "abilities from white
+#: sources" narrows the same way one printed clause over — so a colour travels
+#: down the same channel as a subtype rather than as a second field beside it.
+#:
+#: Namespaced because the channel really is shared and the two axes would
+#: otherwise be indistinguishable strings: an unprefixed "artifact" is a card
+#: type read off the source's type line, and an unprefixed "white" would be
+#: asked of the same reader as a subtype no card has — which answers False and
+#: drops the restriction in silence.
+COLOR_CLASS_PREFIX = "color:"
+
+#: The printed colour words, mapped to the symbols every colour reader uses.
+#: Data rather than a branch, exactly as ``_SOURCE_KIND_WORDS`` above is.
+_COLOR_WORDS: dict[str, str] = {
+    "white": "W", "blue": "U", "black": "B", "red": "R", "green": "G",
+}
+
+#: The card types "abilities from <type> sources" names. The list Artifact Ward
+#: was read with when this clause lived in ``auras.py``, carried across whole so
+#: no printing that used to be read stops being read.
+_SOURCE_CARD_TYPES = ("artifact", "creature", "enchantment", "land")
+
+
 @dataclass(frozen=True)
 class TargetImmunity:
     """One printed "can't be the target of <class>" clause."""
@@ -137,6 +161,32 @@ class EnchantImmunity:
     subject: str
 
 
+@dataclass(frozen=True)
+class SourceClassImmunity:
+    """One printed "can't be the target of <a class of source>" conjunct.
+
+    "This enchantment can't be the target of white spells **or** abilities from
+    white sources." (Raiding Party.) / "Enchanted creature can't be the target
+    of abilities from artifact sources." (Artifact Ward.)
+
+    The third axis a narrowed shroud can be narrowed along, and the one the two
+    above could not carry. :class:`TargetImmunity` names a class of *spell* by
+    its card type; :class:`NarrowSourceImmunity` names what the source's own
+    target description admits. This one names what the **source** is —
+    a colour or a card type — and it is asked per source kind, because a spell
+    and an ability are separately targeted (CR 115.1a, CR 115.1c/d) and one
+    printed line may name one, the other, or both.
+
+    *source_class* is a card type ("artifact") or a colour under
+    :data:`COLOR_CLASS_PREFIX` ("color:W"), which is the same string the two
+    readers behind it dispatch on.
+    """
+
+    subject: str
+    source_kind: str
+    source_class: str
+
+
 _TARGET_IMMUNITY = re.compile(
     rf"^(?P<who>{_SELF}|{_ATTACHED}) can't be the target of (?P<spell_class>[a-z ]+?)"
     r"(?P<unless> unless it attacked or blocked this turn)?$"
@@ -155,6 +205,21 @@ _NARROW_SOURCE_HEAD = re.compile(
 )
 _NARROW_SOURCE_PART = re.compile(
     r"^(?:of )?(?P<kinds>[a-z]+) that can target only (?P<subtype>[a-z-]+)s$"
+)
+
+#: One conjunct of a source-class clause: either a coloured spell ("white
+#: spells") or an ability from a class of source ("abilities from white
+#: sources", "abilities from artifact sources").
+#:
+#: Its head is :data:`_NARROW_SOURCE_HEAD`, shared rather than copied: both
+#: readers are the same sentence split on the same " or ", and the only thing
+#: that tells them apart is which conjunct shape matches. A second head regex
+#: would be the same sentence spelled twice.
+_SOURCE_CLASS_PART = re.compile(
+    r"^(?:of )?(?:"
+    rf"(?P<spell_color>{'|'.join(_COLOR_WORDS)}) spells"
+    rf"|abilities from (?P<ability_class>{'|'.join((*_COLOR_WORDS, *_SOURCE_CARD_TYPES))}) sources"
+    r")$"
 )
 
 
@@ -244,6 +309,50 @@ def narrow_source_immunities(line: str) -> tuple[NarrowSourceImmunity, ...]:
     return tuple(found)
 
 
+def source_class_immunities(line: str) -> tuple[SourceClassImmunity, ...]:
+    """Every "can't be the target of <class of source>" conjunct *line* prints.
+
+    "This enchantment can't be the target of white spells or abilities from
+    white sources." (Raiding Party.) One printed subject and two conjuncts
+    joined by "or", which is the same shape :func:`narrow_source_immunities`
+    reads one clause over — so it shares that clause's head and its rule.
+
+    **All or nothing**, for that function's reason: a conjunct this cannot read
+    is a conjunct that would be dropped, and half a narrowed shroud is strictly
+    more permissive than the card prints. An unreadable conjunct withdraws the
+    whole clause, and the card is reported unsupported naming it.
+
+    Returns ``()`` for a clause that names no source class at all — "…of
+    spells" (Anti-Magic Aura), "…of Aura spells" (Bartel Runeaxe), "…of spells
+    that can target only Walls" (Wall of Shadows) — so each of those keeps the
+    reader written for it rather than being claimed twice.
+    """
+    match = _NARROW_SOURCE_HEAD.match(line)
+    if match is None:
+        return ()
+    subject = _subject_of(match.group("who"))
+    found = []
+    for part in match.group("body").split(" or "):
+        part_match = _SOURCE_CLASS_PART.match(part.strip())
+        if part_match is None:
+            return ()
+        colour = part_match.group("spell_color")
+        if colour is not None:
+            found.append(
+                SourceClassImmunity(
+                    subject, SPELL_SOURCE, COLOR_CLASS_PREFIX + _COLOR_WORDS[colour]
+                )
+            )
+            continue
+        printed = part_match.group("ability_class")
+        source_class = (
+            COLOR_CLASS_PREFIX + _COLOR_WORDS[printed]
+            if printed in _COLOR_WORDS else printed
+        )
+        found.append(SourceClassImmunity(subject, ABILITY_SOURCE, source_class))
+    return tuple(found)
+
+
 def enchant_immunities(line: str) -> tuple[EnchantImmunity, ...]:
     """Every "can't be enchanted by other Auras" clause *line* prints."""
     return tuple(
@@ -269,6 +378,7 @@ def immunity_claims_line(line: str) -> bool:
             target_immunities(clause)
             or enchant_immunities(clause)
             or narrow_source_immunities(clause)
+            or source_class_immunities(clause)
         )
         for clause in clauses
     )
@@ -293,35 +403,76 @@ def _lines_of(card) -> list[str]:
     ]
 
 
-def spell_target_immunity_classes(permanent) -> frozenset[str]:
-    """Every class of spell that may not target *permanent*.
+def printed_about(permanent, reader):
+    """Every clause *reader* finds that is printed **about** *permanent*.
 
-    Gathers the permanent's own printed lines *and* the Auras attached to it,
-    which is why this lives here rather than in ``auras.py``: one question, one
-    answer, however the restriction reached the creature. Read off the
-    **effective** card, so a copied or text-changed permanent is asked what it
-    says now (CR 613 layers 1 and 3).
+    The permanent's own lines, where the clause's subject is the card itself,
+    plus the lines of every Aura attached to it, where the subject is the
+    enchanted permanent. One question, one answer, however the restriction
+    reached the creature — which is why this file answers for both and
+    ``auras.py`` no longer answers for one of them.
 
-    Asked at the moment a target is chosen, so the immunity ends when the Aura
-    does — the same shape ``auras.ability_target_immunity_classes`` has.
+    Read off the **effective** card, so a copied or text-changed permanent is
+    asked what it says now (CR 613 layers 1 and 3), and read at the moment a
+    target is chosen, so the immunity ends when the Aura does.
     """
     from .auras import auras_attached_to
 
+    for line in _lines_of(permanent.effective_card):
+        for found in reader(line):
+            if found.subject == SELF_SUBJECT:
+                yield found
+    for aura in auras_attached_to(permanent):
+        for line in _lines_of(aura.effective_card):
+            for found in reader(line):
+                if found.subject == ATTACHED_SUBJECT:
+                    yield found
+
+
+def spell_target_immunity_classes(permanent) -> frozenset[str]:
+    """Every class of spell that may not target *permanent*.
+
+    Two readers, one answer. :func:`target_immunities` names a class by the
+    spell's *card type* ("Aura spells") or by nothing at all ("spells");
+    :func:`source_class_immunities` names it by the spell's **colour** ("white
+    spells", Raiding Party). Both are classes of spell asked at the same
+    moment, so a caller sees one set — and :func:`spell_is_in_class` is the one
+    reader that decides what each string in it means.
+    """
     classes = {
         immunity.spell_class
-        for line in _lines_of(permanent.effective_card)
-        for immunity in target_immunities(line)
-        if immunity.subject == SELF_SUBJECT and _immunity_holds(immunity, permanent)
+        for immunity in printed_about(permanent, target_immunities)
+        if _immunity_holds(immunity, permanent)
     }
     classes |= {
-        immunity.spell_class
-        for aura in auras_attached_to(permanent)
-        for line in _lines_of(aura.effective_card)
-        for immunity in target_immunities(line)
-        if immunity.subject == ATTACHED_SUBJECT
-        and _immunity_holds(immunity, permanent)
+        immunity.source_class
+        for immunity in printed_about(permanent, source_class_immunities)
+        if immunity.source_kind == SPELL_SOURCE
     }
     return frozenset(classes)
+
+
+def ability_source_immunity_classes(permanent) -> frozenset[str]:
+    """Every class of source whose **abilities** may not target *permanent*.
+
+    "Enchanted creature can't be the target of abilities from artifact
+    sources." (Artifact Ward.) / "…or abilities from white sources." (Raiding
+    Party.) The sibling of :func:`spell_target_immunity_classes`, separate from
+    it because CR 115.1a and CR 115.1c/d make a spell and an ability separately
+    targeted objects — a card can stop one and not the other, and Artifact Ward
+    stops only abilities.
+
+    This lived in ``auras.py`` and answered only for an Aura's attachment,
+    which is half the question: Raiding Party prints the clause about
+    **itself**, and a reader keyed to the attachment cannot see it. One reader
+    for both subjects and both axes, so there is no second copy free to
+    disagree about which sources a clause names.
+    """
+    return frozenset(
+        immunity.source_class
+        for immunity in printed_about(permanent, source_class_immunities)
+        if immunity.source_kind == ABILITY_SOURCE
+    )
 
 
 def _immunity_holds(immunity: TargetImmunity, permanent) -> bool:
@@ -368,22 +519,11 @@ def narrow_source_immunity_subtypes(permanent, source_kind: str) -> frozenset[st
     (CR 115.1a, CR 115.1c/d) so a card can stop one and not the other, and
     Wall of Shadows printing both is not permission to answer for both at once.
     """
-    from .auras import auras_attached_to
-
-    subtypes = {
+    return frozenset(
         immunity.only_subtype
-        for line in _lines_of(permanent.effective_card)
-        for immunity in narrow_source_immunities(line)
-        if immunity.subject == SELF_SUBJECT and immunity.source_kind == source_kind
-    }
-    subtypes |= {
-        immunity.only_subtype
-        for aura in auras_attached_to(permanent)
-        for line in _lines_of(aura.effective_card)
-        for immunity in narrow_source_immunities(line)
-        if immunity.subject == ATTACHED_SUBJECT and immunity.source_kind == source_kind
-    }
-    return frozenset(subtypes)
+        for immunity in printed_about(permanent, narrow_source_immunities)
+        if immunity.source_kind == source_kind
+    )
 
 
 def cannot_be_enchanted(permanent, *, by_aura=None) -> bool:
@@ -421,9 +561,37 @@ def spell_is_in_class(card, spell_class: str) -> bool:
     """
     if spell_class == ANY_SPELL:
         return True
+    if spell_class.startswith(COLOR_CLASS_PREFIX):
+        # "**White** spells" (Raiding Party). CR 105.2 — a spell's colours,
+        # through the one reader every colour question in this engine uses, so
+        # a laced or copied source answers with what it is now rather than with
+        # what it was printed as.
+        from .damage_source_colors import source_colors
+
+        return spell_class[len(COLOR_CLASS_PREFIX):] in source_colors(card)
     from .search_filters import card_has_type
 
     return card_has_type(card, spell_class)
+
+
+def source_is_in_class(game, source, source_class: str) -> bool:
+    """Whether the object whose **ability** is choosing belongs to *source_class*.
+
+    :func:`spell_is_in_class`'s twin for the other half of CR 115.1, separate
+    from it for the reason the two halves are separate everywhere in this file:
+    the same question, asked of a different kind of object. A spell is a card
+    on the stack; an ability's source is a permanent, and an animated artifact
+    land is an artifact source however its printed type line reads — which is
+    why the card-type half goes through ``prevention.source_has_type`` rather
+    than through the printed line.
+    """
+    if source_class.startswith(COLOR_CLASS_PREFIX):
+        from .damage_source_colors import source_colors
+
+        return source_class[len(COLOR_CLASS_PREFIX):] in source_colors(source)
+    from .prevention import source_has_type
+
+    return source_has_type(game, source, source_class)
 
 
 __all__ = [
@@ -431,13 +599,19 @@ __all__ = [
     "ANY_SPELL",
     "ATTACHED_SUBJECT",
     "CLAIM",
+    "COLOR_CLASS_PREFIX",
     "SELF_SUBJECT",
     "SPELL_SOURCE",
+    "SourceClassImmunity",
+    "ability_source_immunity_classes",
     "cannot_be_enchanted",
     "enchant_immunities",
     "immunity_claims_line",
     "narrow_source_immunities",
     "narrow_source_immunity_subtypes",
+    "printed_about",
+    "source_class_immunities",
+    "source_is_in_class",
     "spell_is_in_class",
     "spell_target_immunity_classes",
     "target_immunities",

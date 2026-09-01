@@ -199,6 +199,7 @@ class _FilterDraft:
     token_only: bool = False
     their_choice: bool = False
     chosen_by_opponent: bool = False
+    not_chosen_this_way: bool = False
     named: str | None = None
     attached_to: str | None = None
     attached_to_filter: ast.ObjectFilter | None = None
@@ -700,6 +701,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         in_combat_with_source=d.in_combat_with_source,
         was_dealt_damage_this_turn=d.was_dealt_damage_this_turn,
         chosen_by_opponent=d.chosen_by_opponent,
+        not_chosen_this_way=d.not_chosen_this_way,
         dealt_damage_to_source_this_turn=d.dealt_damage_to_source_this_turn,
     )
 

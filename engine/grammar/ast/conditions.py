@@ -227,6 +227,28 @@ class ExiledThisWay:
 
 
 @dataclass(frozen=True)
+class TappedThisWay:
+    """"for each creature **tapped this way**" (Raiding Party).
+
+    The third set-naming sibling of :class:`DiedThisWay` and
+    :class:`ExiledThisWay`, and its own node for the reason those two are
+    separate from each other: what tells them apart is which earlier step
+    recorded the set, and a node carrying the record's name as data would be a
+    back-reference free to name one nothing writes.
+
+    Its objects are still on the battlefield, which is what makes it the
+    interesting one: the board *can* be asked which permanents are tapped, and
+    the answer is a strictly larger set than this names — every permanent that
+    was already tapped when the effect began. So the record is not a workaround
+    for objects that have left, it is the only thing that knows which taps were
+    this effect's.
+
+    Refused without a producer like every other back-reference here.
+    """
+    filter: ObjectFilter = field(default_factory=ObjectFilter)
+
+
+@dataclass(frozen=True)
 class DestroyedThisWay:
     """"if **that creature was destroyed this way**" (Infinite Authority).
 

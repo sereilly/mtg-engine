@@ -461,6 +461,36 @@ _MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")
 EXILED_THIS_WAY = "exiled_this_way"
 EXILED_THIS_WAY_OBJECTS = "exiled_this_way_objects"
 
+#: What "**tapped this way**" names (Raiding Party, Siege Striker's sibling
+#: sentence). The count is ``tapped_this_way`` — the key ``tap_all_matching``
+#: has recorded since Monsoon — and this is the *objects* beside it, for the
+#: sentence that asks a question about each one individually rather than about
+#: how many there were.
+#:
+#: Two keys for the same step, exactly as the destroy family carries two: a
+#: count answers "where X is the number of Islands tapped this way" and a set
+#: answers "for each creature tapped this way, that player chooses…". Unlike a
+#: destruction the objects are still on the battlefield, so a *narrower*
+#: sentence could ask the board — but which of them this effect tapped is not
+#: something the board records, and "all tapped creatures" is a different and
+#: larger set.
+TAPPED_THIS_WAY = "tapped_this_way"
+TAPPED_THIS_WAY_OBJECTS = "tapped_this_way_objects"
+
+#: What "**chosen this way**" names (Raiding Party). The permanents a
+#: resolution-time pick named, accumulated across every iteration and every
+#: seat that was asked — "then destroy all Plains that weren't chosen this way
+#: **by any player**" is one question about all of the answers, and no single
+#: prompt holds it.
+#:
+#: Its own key rather than ``CHOSEN_TARGET_PERMANENTS`` beside it, for that
+#: constant's own reason one line up: those are permanents a spell *targeted*
+#: at announcement (CR 601.2c), and these were never targeted at all — a
+#: sentence reading one as the other would find an empty set on every card that
+#: prints the other.
+CHOSEN_THIS_WAY_OBJECTS = "chosen_this_way_objects"
+
+
 #: How many cards a "puts the cards from their hand on top of their library"
 #: step moved (Jester's Mask). The ``results`` key the handler writes and the
 #: ``produced`` marker the "search that player's library for **that many**

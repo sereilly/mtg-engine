@@ -260,6 +260,63 @@ def _chooser_seat(game, payload: dict, context) -> int | None:
     )
 
 
+@effect_handler("choose_permanents")
+def choose_permanents(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"that player **chooses up to two Plains**" (Raiding Party.)
+
+    :func:`choose_permanent`'s plural, and a second instruction rather than a
+    count on the first: the answer is a *set*, so the prompt collects a list,
+    the resolver validates the whole list before recording any of it, and the
+    default has a ceiling to respect. One id and a list of ids are two shapes on
+    the wire and two shapes in ``results``, and a kind that meant either would
+    leave every reader asking which.
+
+    **The record accumulates.** The sentence this is a step of runs once per
+    creature tapped this way, by several seats, and the sentence behind *it*
+    asks about "all Plains that weren't chosen this way **by any player**" —
+    one question about every answer. So the picks are appended to the key rather
+    than assigned to it, and the key is written empty first so a loop that ran
+    zero times still leaves a set to subtract.
+
+    Who chooses is payload, exactly as it is for the singular: ``chooser`` names
+    a seat the sentence names outright, and ``chooser_seat_record`` names a seat
+    an *earlier step of this same resolution* wrote down about the object the
+    loop is currently on (``PER_OBJECT_SEAT_RECORDS``). With no entry there is
+    nobody to ask, which is the honest outcome rather than handing the pick to
+    the ability's controller.
+    """
+    payload = instruction.payload
+    result_key = payload["result_key"]
+    context.results.setdefault(result_key, [])
+    record = payload.get("chooser_seat_record")
+    if record is not None:
+        found = context.iteration_seats.get(str(record))
+        seat = found if isinstance(found, int) and 0 <= found < len(game.players) else None
+    else:
+        seat = _chooser_seat(game, payload, context)
+    card_name = getattr(context.card, "name", "")
+    if seat is None:
+        game.log.append(f"{card_name}: there is nobody to make the choice")
+        return True, "resolved"
+    candidates = permanent_choice_candidates(game, payload, context)
+    if not candidates:
+        game.log.append(f"{card_name}: there is no permanent it could choose")
+        return True, "resolved"
+    game.arm_permanent_set_choice(
+        seat,
+        card_name=card_name,
+        prompt=payload.get("prompt") or "Choose permanents.",
+        result_key=result_key,
+        payload=payload,
+        context=context,
+        candidates=candidates,
+        up_to=int(payload.get("up_to", 1)),
+    )
+    return True, "resolved"
+
+
 @effect_handler("choose_permanent")
 def choose_permanent(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext

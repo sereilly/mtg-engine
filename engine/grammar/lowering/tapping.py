@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import OracleInstruction, TAPPED_THIS_WAY_OBJECTS
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter
@@ -40,6 +40,57 @@ from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
 #: The scratchpad key a tap records what it chose under, so a later sentence
 #: ("**it** doesn't untap…") can name the same permanents.
 _TAPPED_PERMANENTS = "tapped_permanents"
+
+
+def _lower_for_each_tapped(
+    node: "ast.ForEach",
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each creature tapped this way,** <effect>." (Raiding Party.)
+
+    The destroy family's loop one status over: a walk of the objects an earlier
+    step of *this same effect* tapped, read off the record that step wrote. Here
+    rather than beside its two siblings for this module's own stated reason —
+    tapping is a permanent's status, and nothing about a destruction or an exile
+    describes it.
+
+    Refused without a producer, as every back-reference in this grammar is. That
+    refusal matters more here than for the other two: a tap leaves its objects
+    on the battlefield, so a loop that fell through to a live noun phrase would
+    quietly succeed over *every* tapped creature in play — including every one
+    this effect never touched.
+    """
+    if TAPPED_THIS_WAY_OBJECTS not in produced:
+        raise LoweringError(
+            "'tapped this way' with no earlier step in this effect that "
+            "tapped anything", node=node,
+        )
+    filt = node.iterator.filter
+    narrowing = filt.to_payload()
+    if set(narrowing) - {"type_filter"} or filt.zone != "battlefield":
+        raise LoweringError(
+            "'tapped this way' iterates what the earlier step tapped and is "
+            "narrowed by its printed card type and nothing else", node=node,
+        )
+    if not inner:
+        raise LoweringError("a per-object loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {
+                # The printed card type rides beside the record's name and is
+                # applied to it, exactly as the destroy loop's does: normally a
+                # restatement of what the earlier step tapped, and a restatement
+                # is only as good as the reader that checks it.
+                "iterator": {
+                    "produced_by": TAPPED_THIS_WAY_OBJECTS, **narrowing,
+                },
+                "effect": inner,
+            },
+        ),
+    )
+
 
 def _lower_tap(
     node: ast.Tap | ast.Untap,

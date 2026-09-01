@@ -1811,40 +1811,20 @@ def attached_ability_cost_reduction(permanent) -> tuple[int, int]:
     return total, floor
 
 
-#: "Enchanted creature can't be the target of abilities from artifact sources."
-#: (Artifact Ward.) Narrower than protection (CR 702.16), which also stops
-#: damage, enchanting and blocking, and narrower than shroud, which stops spells
-#: too — so it is neither of those with a filter bolted on, it is its own rule
-#: about one kind of source choosing one kind of object.
-#:
-#: The source class is payload, like every other text-keyed table's parameter.
-_ATTACHED_ABILITY_TARGET_IMMUNITY = re.compile(
-    rf"^{_ATTACHED} {_NOUN} can't be the target of abilities from "
-    r"(?P<source_type>artifact|creature|enchantment|land) sources$"
-)
-
-
-def aura_ability_target_immunity(line: str) -> str | None:
-    """The class of source whose *abilities* may not target what this Aura is
-    attached to, or None if *line* is not that sentence."""
-    match = _ATTACHED_ABILITY_TARGET_IMMUNITY.match(_line_text(line))
-    return match.group("source_type") if match is not None else None
-
-
-def ability_target_immunity_classes(permanent) -> frozenset[str]:
-    """Every source class the Auras on *permanent* make its abilities-untargetable.
-
-    Asked at the moment a target is chosen, so the immunity ends when the Aura
-    does — the same shape :func:`aura_restriction_active` has.
-    """
-    classes = {
-        source_type
-        for aura in auras_attached_to(permanent)
-        for line in (aura.effective_card.oracle_text or "").splitlines()
-        for source_type in (aura_ability_target_immunity(line),)
-        if source_type is not None
-    }
-    return frozenset(classes)
+# "Enchanted creature can't be the target of abilities from artifact sources."
+# (Artifact Ward.) This module used to carry that sentence, its regex and the
+# board reader behind it. It does not any more: Raiding Party prints the same
+# clause about **itself** rather than about an attachment, and a reader keyed to
+# the attachment cannot see it — so what looked like one Aura's rule was half a
+# rule, and the missing half was the subject.
+#
+# `engine/target_immunity.py` owns the whole family now
+# (`source_class_immunities`, `ability_source_immunity_classes`), which is where
+# its two siblings already lived: a narrowed shroud is a narrowed shroud whether
+# the narrowing names a spell's card type, what a source's target description
+# admits, or what the source *is*. `aura_continuous_claim` below reaches it
+# through `immunity_claims_line`, the same claim every other clause in that file
+# is admitted by.
 
 
 def aura_continuous_claim(line: str) -> str | None:
@@ -1897,15 +1877,13 @@ def aura_continuous_claim(line: str) -> str | None:
         return "attack-conditioned untap restriction — auras.aura_restriction_active"
     if aura_combat_restriction(normalized) is not None:
         return "attached combat restriction — auras.attached_combat_restrictions"
-    if aura_ability_target_immunity(normalized) is not None:
-        return "ability-target immunity — auras.ability_target_immunity_classes"
     # "Enchanted creature can't be the target of spells and can't be enchanted
     # by other Auras." (Anti-Magic Aura.) Both clauses, or neither: the reader
     # claims a line only when it implements every restriction the line conjoins,
     # so a card pairing one of these with a sentence nothing reads stays
     # unsupported instead of losing half its text.
     if immunity_claims_line(normalized):
-        return "target/enchant immunity — target_immunity"
+        return "target/enchant/source-class immunity — target_immunity"
     if _attached_prevent_all_from_source_type(normalized) is not None:
         return "prevention from a source class — prevention._source_type_shielded_by"
     if _attached_combat_shield_direction(normalized) is not None:

@@ -93,7 +93,10 @@ from .lowering import (
     _lower_repeat_process,
     _lower_for_each_destroyed,
     _lower_for_each_exiled,
+    _lower_for_each_tapped,
     _lower_for_each_chosen,
+    _lower_choose_permanent,
+    _lower_choose_permanents,
     _lower_gain_control,
     _lower_gain_ability_text,
     _lower_gain_keyword,
@@ -606,6 +609,11 @@ def lower_statement(
             return _lower_for_each_destroyed(statement, repeated(), produced)
         if isinstance(statement.iterator, ast.ExiledThisWay):
             return _lower_for_each_exiled(statement, repeated(), produced)
+        # "For each creature **tapped this way**, …" (Raiding Party) — the third
+        # "this way" window, over a record whose objects never left the
+        # battlefield. Beside its two siblings and refused on the same terms.
+        if isinstance(statement.iterator, ast.TappedThisWay):
+            return _lower_for_each_tapped(statement, repeated(), produced)
         if isinstance(statement.iterator, ast.ChosenThisWay):
             return _lower_for_each_chosen(statement, repeated(), produced)
         # "For each **1 life you lost**" (Oath of Lim-Dûl).
@@ -627,6 +635,17 @@ def lower_statement(
     # lives in the `game` family, which is below this dispatcher.
     if isinstance(statement, ast.RepeatProcess):
         return _lower_repeat_process(statement, lower_statement)
+
+    if isinstance(statement, ast.ChoosePermanent):
+        # Two lowerings, told apart by the printed quantifier. The plural needs
+        # ``produced``: "**that player** chooses up to two Plains" inside a loop
+        # names the seat an earlier step of this same effect recorded about the
+        # object the loop is on, which is a reading only the producer set can
+        # admit. That argument is why this pair sits here rather than in
+        # ``by_node``, whose rows take the node and nothing else.
+        if statement.spec.quantifier == "up_to":
+            return _lower_choose_permanents(statement, produced)
+        return _lower_choose_permanent(statement)
 
     if isinstance(statement, ast.Exile):
         # `produced` is the gate on "exile **that token**": the phrase names

@@ -25,8 +25,9 @@ what a step of that kind always writes when it does.
 from __future__ import annotations
 
 from .. import ast
-from ...oracle_types import (CHOSEN_TARGET_PERMANENTS,
-                             HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS)
+from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
+                             HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS,
+                             TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       COUNTED_NUMBER, CREATED_TOKEN, DAMAGE_RECIPIENT,
                       EXILED_THIS_WAY, _PERMANENTS_GIVEN_COUNTERS,
@@ -225,6 +226,26 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # the only step that can say which permanent the sentences behind it name.
     "reanimate_creature": _REANIMATED_PERMANENTS,
     "tap_all_matching": "tapped_this_way",
+    # "Each player may tap any number of untapped white creatures they control.
+    # **For each creature tapped this way, that player** chooses…" (Raiding
+    # Party.) Three records, because the sentence behind it asks three
+    # questions: how many were tapped, which permanents they were, and whose
+    # each of them was.
+    #
+    # The set is not something a later read of the board could supply, which is
+    # the one place this differs from the destroy family's identical trio: the
+    # objects are still on the battlefield, and asking the board would name
+    # every tapped permanent rather than the ones this effect turned.
+    "tap_any_number_matching": (
+        TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS,
+        PER_OBJECT_SEAT_RECORDS["controller"],
+    ),
+    # "…chooses up to two Plains. **Then destroy all Plains that weren't chosen
+    # this way by any player.**" (Raiding Party.) What the pick named, so the
+    # sweep behind it has a set to subtract. Written by every seat asked and
+    # every iteration, into the one key — the sentence that reads it is one
+    # question about all of the answers.
+    "choose_permanents": CHOSEN_THIS_WAY_OBJECTS,
     "tap_target_permanent": "tapped_permanents",
     # "…tap the creature, **remove it** from combat" (Imprison). The Aura's tap
     # names its own attachment rather than a target, so it is a different

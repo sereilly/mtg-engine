@@ -6880,6 +6880,66 @@ function renderUntapUpToModal(info) {
   }
 }
 
+// Raiding Party's "that player chooses up to two Plains": a resolution-time
+// multi-select over permanents on any battlefield, capped at the printed
+// ceiling. Confirming with nothing selected is legal — "up to two" includes
+// none — and the engine re-checks every id against the list it offered.
+let permanentSetChoiceSelected = new Set();
+
+function getPermanentSetChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.permanent_set_choice;
+  if (!info) return null;
+  if (info.player_seat !== seat) return null;
+  return info;
+}
+
+function renderPermanentSetChoiceModal(info) {
+  const modal = document.getElementById("permanentSetChoiceModal");
+  if (!modal) return;
+  if (!info) {
+    modal.classList.add("hidden");
+    permanentSetChoiceSelected = new Set();
+    return;
+  }
+  modal.classList.remove("hidden");
+  const limit = Number(info.up_to || 0);
+  const subtitle = document.getElementById("permanentSetChoiceSubtitle");
+  if (subtitle) {
+    subtitle.textContent = `${info.card_name}: ${info.prompt || `Choose up to ${limit}.`}`;
+  }
+  const list = document.getElementById("permanentSetChoiceList");
+  const confirmBtn = document.getElementById("permanentSetChoiceConfirmBtn");
+  if (list) {
+    list.innerHTML = (info.candidates || [])
+      .map((entry) => {
+        const selectedClass = permanentSetChoiceSelected.has(entry.id) ? " selected" : "";
+        const owner = entry.seat === seat ? "yours" : "opponent's";
+        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${owner}</div></div>`;
+      })
+      .join("") || `<div class="modal-empty-note">Nothing to choose.</div>`;
+    list.querySelectorAll(".library-card-choice").forEach((el) => {
+      el.addEventListener("click", () => {
+        const id = Number(el.dataset.id);
+        if (permanentSetChoiceSelected.has(id)) permanentSetChoiceSelected.delete(id);
+        else if (permanentSetChoiceSelected.size < limit) permanentSetChoiceSelected.add(id);
+        else return;
+        el.classList.toggle("selected");
+      });
+    });
+  }
+  if (confirmBtn && !confirmBtn.dataset.bound) {
+    confirmBtn.dataset.bound = "1";
+    confirmBtn.addEventListener("click", async () => {
+      const ids = [...permanentSetChoiceSelected];
+      permanentSetChoiceSelected = new Set();
+      delete confirmBtn.dataset.bound;
+      modal.classList.add("hidden");
+      await sendAction({ seat, action: "permanent_set_choice_confirm", target_permanent_ids: ids });
+    });
+  }
+}
+
 // Chandra, Heart of Fire's −9: a two-zone multi-select search. Any number of
 // the highlighted (matching) cards may be picked across both grids; confirm
 // exiles them, and confirming with nothing picked is the fail-to-find.
@@ -14431,6 +14491,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   renderSearchDestinationModal(getSearchDestinationInfo(state));
   renderSearchExileModal(getSearchExileInfo(state));
   renderUntapUpToModal(getUntapUpToInfo(state));
+  renderPermanentSetChoiceModal(getPermanentSetChoiceInfo(state));
   renderLookTopPickModal(getLookTopPickInfo(state));
   renderRevealedHandPickModal(getRevealedHandPickInfo(state));
   renderReorderLibraryModal(reorderLibraryInfo);

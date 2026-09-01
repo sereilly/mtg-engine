@@ -20,7 +20,8 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import (CHOSEN_THIS_WAY_OBJECTS, PER_OBJECT_SEAT_RECORDS,
+                             OracleInstruction)
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -102,6 +103,59 @@ def _lower_attach_chosen(node: ast.Attach) -> tuple[OracleInstruction, ...]:
         subject_payload, subject_from="target", host_from=_ATTACH_HOST_KEY,
     ))
     return (choose, attach)
+
+
+def _lower_choose_permanents(
+    node: ast.ChoosePermanent, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """"that player **chooses up to two Plains**" (Raiding Party.)
+
+    The plural of the pick below, and a different instruction rather than a
+    count on it: the answer is a *set*, which is a different shape on the wire,
+    in ``results`` and in the default. What the two share is the candidate rule,
+    and that already lives in one place.
+
+    Two things the singular does not have to answer. **Where the picks go**: one
+    key for the whole resolution, appended to by every iteration and every seat,
+    because the sentence that reads it asks about "all Plains that weren't
+    chosen this way **by any player**". And **who is asked**: inside "for each
+    creature tapped this way, **that player** chooses…" the words name the seat
+    an earlier step of this same effect wrote down about the creature the loop
+    is on — the third channel ``PER_OBJECT_SEAT_RECORDS`` exists for, and the
+    same reading ``lowering/damage.py`` gives the identical printed pronoun
+    behind a destroy sweep.
+
+    Gated on ``produced``, so the pronoun is admitted only where a step really
+    wrote that record. Without one the words name nobody, and a prompt armed for
+    a guessed seat is a decision taken from the wrong player.
+    """
+    spec = node.spec
+    if node.host_for_source or node.optional:
+        raise LoweringError(
+            "a plural choice reads neither an enchant clause nor a decline",
+            node=node,
+        )
+    payload: dict[str, object] = {
+        "filter": _filter_payload(spec.filter),
+        "up_to": spec.count,
+        "result_key": CHOSEN_THIS_WAY_OBJECTS,
+        "prompt": f"Choose up to {spec.count}.",
+    }
+    untestable = untestable_filter_keys(payload["filter"])
+    if untestable:
+        raise LoweringError(
+            "the choice cannot test " + ", ".join(sorted(untestable)), node=node
+        )
+    controller_record = PER_OBJECT_SEAT_RECORDS["controller"]
+    if node.chooser.kind == "that_player" and controller_record in produced:
+        payload["chooser_seat_record"] = controller_record
+    elif node.chooser.kind in _CHOOSER_SEATS and node.chooser.kind != "that_player":
+        payload["chooser"] = _CHOOSER_SEATS[node.chooser.kind]
+    else:
+        raise LoweringError(
+            f"no prompt asks {node.chooser.kind!r} to choose permanents", node=node
+        )
+    return (OracleInstruction("choose_permanents", "", payload),)
 
 
 def _lower_choose_permanent(node: ast.ChoosePermanent) -> tuple[OracleInstruction, ...]:

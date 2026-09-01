@@ -1575,7 +1575,17 @@ class SpellCastingMixin:
         for chosen in chosen_targets:
             if chosen is None:
                 continue
-            if chosen.is_creature and not self._can_be_targeted(
+            # **Every permanent, not every creature.** CR 115 is about objects,
+            # and the `is_creature` test that stood here was true of every card
+            # in the pool that had ever printed a targeting restriction — every
+            # shroud, every protection, every "can't be the target of Aura
+            # spells" sat on a creature or on an Aura enchanting one. Raiding
+            # Party prints one on an *enchantment*, and the narrowing was
+            # dropped: the picker offered it to Disenchant, the announcement was
+            # allowed, and CR 608.2b caught it one step too late — the spell was
+            # countered on resolution rather than being an illegal cast, so the
+            # caster lost a card to an announcement CR 601.2c forbids.
+            if not self._can_be_targeted(
                 chosen, card, caster_index=caster_index
             ):
                 return False, f"{chosen.card.name} is an illegal target for {card.name}"

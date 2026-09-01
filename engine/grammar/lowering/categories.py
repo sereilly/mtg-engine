@@ -249,6 +249,12 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the choice is one step of the attachment sentence, and gating it apart
     # from the attach would leave the card half-lowered.
     "choose_permanent": "attachments",
+    # "…**chooses up to two Plains**" (Raiding Party): the plural of the pick
+    # above, in the same category for the same reason — it is one step of the
+    # sentence around it, and gating it apart would leave that sentence half
+    # lowered. The family is the pick's, not the Plains': what this instruction
+    # does is choose.
+    "choose_permanents": "attachments",
     "tap_self": "tapping",
     "untap_target_permanent": "tapping",
     "untap_target_land": "tapping",
@@ -260,6 +266,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # family rather than "pump": the pick is the effect and the boost is sized by
     # it, so gating it behind the pump switch would tie two migrations together.
     "tap_any_number_then_pump_self": "tapping",
+    # "Each player may tap any number of untapped white creatures they
+    # control." (Raiding Party.) The unfused half of the same pick: the offer
+    # and the ceiling collapse into one prompt per seat, and what the taps buy
+    # is a separate sentence rather than a boost this instruction could apply.
+    "tap_any_number_matching": "tapping",
     "untap_self": "tapping",
     "untap_enchanted_creature": "tapping",
     # The enchanted untap's tap twin (Paralyze's enter-tap), and the
