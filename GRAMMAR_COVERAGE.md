@@ -27,7 +27,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4ED | 368 | 520 | 90.4% | 90.0% | 53.8% | 246 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| FEM *(measured)* | 102 | 191 | 94.2% | 93.7% | 71.2% | 92 |
+| FEM *(measured)* | 102 | 191 | 97.9% | 97.9% | 75.4% | 98 |
 | **All (shipped)** | **2788** | **4005** | **87.4%** | **86.5%** | **55.2%** | **1886** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -40,9 +40,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 232 | 98 | expected a subject |  |
-| 115 | 48 | unrecognized effect verb |  |
-| 53 | 25 | unconsumed text |  |
+| 228 | 94 | expected a subject |  |
+| 114 | 47 | unrecognized effect verb |  |
+| 52 | 24 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 16 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -53,7 +53,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5 | 1 | expected 'card' |  |
 | 5 | 1 | expected 'equal to' quantity for damage |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
-| 4 | 1 | this clause enumerates an opponent or any player, not 'you' |  |
+| 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
@@ -62,9 +62,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | a counter-removal cost only reads the ability's own source |  |
-| 2 | 2 | expected 'creatures' or a duration after "can't block" |  |
 | 1 | 1 | expected what to gain control of |  |
 | 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
+| 1 | 1 | expected something to destroy |  |
 
 ## Cards executing through the grammar
 
@@ -763,7 +763,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw a card.`
 - **Deflection**
   - `Change the target of target spell with a single target.`
+- **Delif's Cone**
+  - `{T}, Sacrifice this artifact: This turn, when target creature you control attacks and isn't blocked, you may gain life equal to its power. If you do, it assigns no combat damage this turn.`
 - **Delif's Cube**
+  - `{2}, {T}: This turn, when target creature you control attacks and isn't blocked, it assigns no combat damage this turn and you put a cube counter on this artifact.`
   - `{2}, Remove a cube counter from this artifact: Regenerate target creature.`
 - **Demonic Attorney**
   - `Each player antes the top card of their library.`
@@ -903,6 +906,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Dwarven Ruins**
   - `{T}: Add {R}.`
   - `{T}, Sacrifice this land: Add {R}{R}.`
+- **Dwarven Soldier**
+  - `Whenever this creature blocks or becomes blocked by one or more Orcs, this creature gets +0/+2 until end of turn.`
 - **Dwarven Song**
   - `One or more target creatures become red until end of turn.`
 - **Dwarven Warriors**
@@ -1025,6 +1030,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice a creature: This creature gets +2/+1 until end of turn.`
 - **Fanatical Fever**
   - `Target creature gets +3/+0 and gains trample until end of turn.`
+- **Farrel's Mantle**
+  - `Whenever enchanted creature attacks and isn't blocked, its controller may have it deal damage equal to its power plus 2 to another target creature. If that player does, the attacking creature assigns no combat damage this turn.`
 - **Farrel's Zealot**
   - `Whenever this creature attacks and isn't blocked, you may have it deal 3 damage to target creature. If you do, this creature assigns no combat damage this turn.`
 - **Farrelite Priest**
@@ -1294,6 +1301,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice a Goblin: Regenerate target creature.`
 - **Goblin Digging Team**
   - `{T}, Sacrifice this creature: Destroy target Wall.`
+- **Goblin Flotilla**
+  - `At the beginning of each combat, unless you pay {R}, whenever this creature blocks or becomes blocked by a creature this combat, that creature gains first strike until end of turn.`
 - **Goblin Grenade**
   - `Goblin Grenade deals 5 damage to any target.`
 - **Goblin King**
@@ -1531,6 +1540,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{W}{W}: Target creature gets +1/+1 until end of turn.`
 - **Icatian Scout**
   - `{1}, {T}: Target creature gains first strike until end of turn.`
+- **Icatian Skirmishers**
+  - `Whenever this creature attacks, all creatures banded with it gain first strike until end of turn.`
 - **Icatian Store**
   - `At the beginning of your upkeep, if this land is tapped, put a storage counter on it.`
   - `{T}, Remove any number of storage counters from this land: Add {W} for each storage counter removed this way.`
@@ -2065,6 +2076,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Look at target player's hand and choose X cards from it. That player discards those cards.`
 - **Mind Whip**
   - `At the beginning of the upkeep of enchanted creature's controller, that player may pay {3}. If they don't, this Aura deals 2 damage to that player and you tap that creature.`
+- **Mindstab Thrull**
+  - `Whenever this creature attacks and isn't blocked, you may sacrifice it. If you do, defending player discards three cards.`
 - **Minion of Leshrac**
   - `At the beginning of your upkeep, this creature deals 5 damage to you unless you sacrifice a creature other than this creature. If this creature deals damage to you this way, tap it.`
   - `{T}: Destroy target creature or land.`
@@ -2251,6 +2264,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Orcish Squatters**
   - `Whenever this creature attacks and isn't blocked, you may gain control of target land defending player controls for as long as you control this creature. If you do, this creature assigns no combat damage this turn.`
 - **Orcish Veteran**
+  - `This creature can't block white creatures with power 2 or greater.`
   - `{R}: This creature gains first strike until end of turn.`
 - **Order of Leitbur**
   - `{W}: This creature gains first strike until end of turn.`
