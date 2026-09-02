@@ -400,12 +400,22 @@ def _describe_several_targets(payload: dict[str, object], recipient: ast.TargetS
         # picker that offers nothing.
         "count": "x" if recipient.count_from_x else recipient.count,
     }
-    if recipient.quantifier == "one_or_more":
+    if recipient.quantifier in ("one_or_more", "any_number"):
         # No printed maximum, so the cap is however many legal targets there
         # are — a number that only exists once the picker has enumerated them
         # (engine/legality.py fills it in as an ordinary `max_targets`). A
         # `count` of 0 here would otherwise read as "no targets" and show a
         # picker that offers nothing.
+        #
+        # Both quantifiers, because the maximum is the same question for each.
+        # Their *minimum* is not — "any number of" (Energy Arc) may name none
+        # and "one or more" (Heaven's Gate and its four colour siblings) may
+        # not — and nothing here or downstream carries a floor: there is no
+        # `min_targets` in the engine, so the five "one or more" cards already
+        # shipped may legally be cast naming nothing. That is a pre-existing
+        # looseness this widening inherits rather than one it introduces, and
+        # it is the only shape where "any number of" is not simply the more
+        # permissive twin.
         payload["targets"]["unbounded"] = True
 
 
@@ -714,7 +724,12 @@ def _names_several_targets(subject: ast.Recipient) -> bool:
             # qualifies on the quantifier alone — the same way "X target lands"
             # above does, and for the same reason: the count is not knowable
             # here, only that it can exceed one.
-            or subject.quantifier == "one_or_more"
+            #
+            # "**Any number of** target creatures" (Energy Arc) is the same
+            # shape one word over. The two differ only in their *floor* — CR
+            # 601.2c lets "any number of" name none where "one or more" must
+            # name one — and the floor is not what this predicate asks about.
+            or subject.quantifier in ("one_or_more", "any_number")
         )
     )
 

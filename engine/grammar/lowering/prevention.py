@@ -17,6 +17,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
+from ._events import _RECORDED_PERMANENTS
 from ._common import (
     _REST_OF_COMBAT,
     _REST_OF_TURN,
@@ -92,7 +93,9 @@ def _alternate_amount(node: ast.PreventDamage) -> dict | None:
     return {"filter": described, "amount": larger}
 
 
-def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]:
+def _lower_prevent_damage(
+    node: ast.PreventDamage, produced: frozenset[str] = frozenset()
+) -> tuple[OracleInstruction, ...]:
     """"Prevent the next N damage …" and the Circle-of-Protection shield.
 
     One handler, `grant_prevention_shield`, with the recipient encoded as two
@@ -133,7 +136,7 @@ def _lower_prevent_damage(node: ast.PreventDamage) -> tuple[OracleInstruction, .
     if isinstance(node.amount, ast.Half):
         return _lower_prevent_half(node)
     if isinstance(node.amount, ast.AllOf):
-        return _lower_prevent_all(node)
+        return _lower_prevent_all(node, produced)
     if node.combat_only:
         # Only the blanket form above has a combat-scoped handler.
         # `grant_prevention_shield` counts damage of any kind, so lowering a
@@ -378,7 +381,9 @@ def _lower_prevent_from_subject(
     )
 
 
-def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]:
+def _lower_prevent_all(
+    node: ast.PreventDamage, produced: frozenset[str] = frozenset()
+) -> tuple[OracleInstruction, ...]:
     """"Prevent all combat damage that would be dealt this turn." (Fog.)
 
     ``prevent_all_combat_damage`` sets one turn-wide flag
@@ -521,7 +526,13 @@ def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]
         # end of the event: the object the sentence in front of it targeted, so
         # no ``targets`` description is emitted and the handler shields the
         # ability's one target.
-        and node.to.quantifier in ("it", "target", "that")
+        # "…dealt to and dealt by **those creatures** this turn." (Energy
+        # Arc.) The plural of the bound reading beside it: the objects an
+        # earlier step of this same effect recorded, not a second choice. The
+        # branch below reads the record the untap wrote and arms one shield per
+        # permanent — the *same* shield, several times, which is what makes it
+        # this instruction with a payload key rather than a second kind.
+        and node.to.quantifier in ("it", "target", "that", "those")
         and (node.dealt_by is None or node.to_and_by)
     ):
         if node.duration.kind not in _REST_OF_TURN + _REST_OF_COMBAT:
@@ -550,6 +561,33 @@ def _lower_prevent_all(node: ast.PreventDamage) -> tuple[OracleInstruction, ...]
                     "the two-way shield covers combat damage only", node=node
                 )
             payload["to_and_by"] = True
+        if node.to.quantifier == "those":
+            if _restrictions_beyond(node.to.filter, frozenset({"card_types"})):
+                # A bound plural was chosen by the sentence in front of this
+                # one, so a restated adjective has nothing left to narrow — and
+                # would be dropped rather than honoured. The singular arm below
+                # refuses for the same reason.
+                raise LoweringError(
+                    "a bound plural carries no narrowing the shield could "
+                    "honour", node=node,
+                )
+            recorded = tuple(sorted(produced & _RECORDED_PERMANENTS))
+            if not recorded:
+                raise LoweringError(
+                    "\"those creatures\" names objects nothing in this effect "
+                    "recorded", node=node,
+                )
+            if len(recorded) != 1:
+                raise LoweringError(
+                    "\"those creatures\" is ambiguous: several earlier steps "
+                    "recorded objects", node=node,
+                )
+            payload["permanents_from"] = recorded[0]
+            return (
+                OracleInstruction(
+                    "prevent_damage_to_target_until_eot", "", payload,
+                ),
+            )
         if node.to.quantifier == "that" and _restrictions_beyond(
             node.to.filter, frozenset({"card_types"})
         ):

@@ -334,15 +334,23 @@ def _lower_tap(
         # the several-targets opt-in, which is what says the handler resolves a
         # list and the picker collects up to N.
         #
-        # Gated to exactly what that handler reads: a *targeted* "up to N" over
-        # creatures. `_describe_several_targets` refuses the untargeted spelling
-        # itself ("up to four lands", Rewind, is chosen on resolution), and the
-        # filter equality keeps a narrowing the handler's
+        # Gated to exactly what that handler reads: a *targeted* "up to N" /
+        # "N target". `_describe_several_targets` refuses the untargeted
+        # spelling itself ("up to four lands", Rewind, is chosen on
+        # resolution), and the key gate keeps a narrowing the handler's
         # `permanent_matches_filter` plus its two seat tests cannot answer from
         # compiling into a wider tap.
+        #
+        # **The type is not part of that gate**, and used to be: this arm
+        # demanded `card_types == ("creature",)` where its untap twin below
+        # demands nothing, so "{X}{X}{1}, {T}: Tap **X target lands**"
+        # (Floodwater Dam) refused on a restriction the handler does not have.
+        # A card type is exactly what `permanent_matches_filter` answers about
+        # a permanent alone — it is the one key Ali Baba's single-target tap has
+        # always ridden — and the two seat keys the sweep cannot answer purely
+        # are asked by `_tap_several_targets` itself.
         if (
             isinstance(node, ast.Tap)
-            and spec.filter.card_types == ("creature",)
             and not _restrictions_beyond(
                 spec.filter, frozenset({"card_types", "controller", "other_than_source"})
             )
