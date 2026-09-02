@@ -444,3 +444,83 @@ def test_the_adnate_refuses_a_creature_neither_black_nor_an_artifact(set_pool):
     assert not subject_matches(game, mox, described), (
         "an artifact that is not a creature is outside the printed noun"
     )
+
+
+def _w2g2_drone_board(set_pool, mine):
+    p1 = PlayerState(name="A")
+    game = Game(players=[p1, PlayerState(name="B")])
+    game.enforce_mana_costs = True
+    game.interactive_seats = {0}
+    p1.battlefield.append(Permanent(card=set_pool("ALL")["Viscerid Drone"]))
+    for name in mine:
+        p1.battlefield.append(Permanent(card=_W2G2_LEA[name]))
+    game.players[1].battlefield.append(Permanent(card=_W2G2_LEA["Hill Giant"]))
+    game._settle()
+    return game, p1
+
+
+def test_viscerid_drone_eats_two_permanents_for_one_activation(set_pool):
+    """"{T}, **Sacrifice a creature and a Swamp**: Destroy target nonartifact
+    creature. It can't be regenerated."
+
+    One printed verb naming two *different* objects. A single filter cannot say
+    it — every matcher ANDs its keys, and "a creature that is also a Swamp" is
+    not what the card prints — so the clause parsed as unconsumed text and the
+    whole ability refused. The effect half already worked (it is Terror's)."""
+    game, p1 = _w2g2_drone_board(set_pool, ["Grizzly Bears", "Swamp"])
+    giant = game.players[1].battlefield[0]
+
+    result = game.activate_permanent_ability(
+        0, "Viscerid Drone", target_player_index=1,
+        target_permanent_index=0, ability_index=0,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(giant)
+    # Two permanents left to pay, and the Swamp is one of them.
+    assert [p.card.name for p in game.controlled_by(0)] == ["Grizzly Bears"], (
+        "the Swamp and one creature both paid"
+    )
+
+
+def test_viscerid_drone_refuses_with_no_swamp_and_pays_nothing(set_pool):
+    """CR 601.2h: if either half is unpayable the whole cost is, so a board with
+    a creature and no Swamp refuses **with the creature still on it**. The
+    creature is the assertion that matters — a gate that checked the halves one
+    at a time would have eaten it before finding the Swamp missing."""
+    game, p1 = _w2g2_drone_board(set_pool, ["Grizzly Bears"])
+    giant = game.players[1].battlefield[0]
+
+    result = game.activate_permanent_ability(
+        0, "Viscerid Drone", target_player_index=1,
+        target_permanent_index=0, ability_index=0,
+    )
+    game._settle()
+
+    assert not result.supported
+    assert [p.card.name for p in game.controlled_by(0)] == [
+        "Viscerid Drone", "Grizzly Bears",
+    ]
+    assert game.is_on_battlefield(giant)
+
+
+def test_the_drones_snow_variant_keeps_its_supertype(set_pool):
+    """The second ability prints "a **snow** Swamp" and destroys target creature
+    rather than target *nonartifact* creature — two narrowings that would both
+    vanish if the conjoined tail were read as one loose phrase."""
+    from engine.oracle import parse_activated_ability_cost
+
+    plain, snow = [
+        parse_activated_ability_cost(a.source_line)
+        for a in compile_card_oracle(
+            set_pool("ALL")["Viscerid Drone"]
+        ).activated_abilities
+    ]
+    assert plain.sacrifice_also_filter == {"subtype_filter": "swamp"}
+    assert snow.sacrifice_also_filter == {
+        "subtype_filter": "swamp", "supertypes": ["snow"],
+    }
+    assert plain.sacrifice_filter == snow.sacrifice_filter == {
+        "type_filter": "creature"
+    }

@@ -921,6 +921,46 @@ class AbilityActivationMixin:
                 named[0] if named else self.default_sacrifice_pick(candidates)
             )
 
+        # "{T}, Sacrifice a creature **and a Swamp**: …" (Viscerid Drone). The
+        # second object a conjoined sacrifice names, collected here rather than
+        # in the branch above because it is a *different* noun phrase with its
+        # own candidate list — and CR 601.2h makes the whole cost unpayable if
+        # either half is, so a board with a creature and no Swamp refuses with
+        # nothing sacrificed.
+        #
+        # The two permanents must be distinct: a creature Swamp (an animated
+        # land) answers both phrases, and letting it pay both would collect one
+        # card for a cost the card prints as two.
+        sacrifice_also_permanent = None
+        if ability.cost.sacrifice_also_filter is not None:
+            described = ability.cost.sacrifice_also_filter
+            candidates = [
+                perm
+                for perm in self.controlled_by(controller_index)
+                if subject_matches(
+                    self, perm, described,
+                    observer=controller_index, source=permanent,
+                )
+                and perm is not sacrifice_cost_permanent
+            ]
+            if not candidates:
+                details = (
+                    f"{permanent.card.name}: no "
+                    f"{filter_head_noun(described)} available to sacrifice"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            named = [
+                found
+                for found in (
+                    self.permanent_by_id(pid) for pid in (cost_permanent_ids or [])
+                )
+                if found is not None and any(c is found for c in candidates)
+            ]
+            sacrifice_also_permanent = (
+                named[-1] if named else self.default_sacrifice_pick(candidates)
+            )
+
         # "**Tap enchanted land**: …" (Earthlore). The host, collected beside
         # the picked tap cost above and paid with it below — one payment moment
         # (CR 601.2h). Nothing is picked: the attachment record is the whole
@@ -1336,6 +1376,16 @@ class AbilityActivationMixin:
         if sacrifice_cost_permanent is not None:
             name = sacrifice_cost_permanent.card.name
             self.sacrifice_permanent(sacrifice_cost_permanent)
+            self.log.append(
+                f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
+            )
+        # …and the second half of a conjoined sacrifice (Viscerid Drone), paid
+        # at the same moment: CR 602.2b puts every cost of an activation at one
+        # point, so a board that changed between the two would not be able to
+        # pay half of it.
+        if sacrifice_also_permanent is not None:
+            name = sacrifice_also_permanent.card.name
+            self.sacrifice_permanent(sacrifice_also_permanent)
             self.log.append(
                 f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
             )
@@ -1963,6 +2013,7 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("discard_self", "a discard-this cost"),
         ("put_counter", "a counter cost"),
         ("put_counter_filter", "a counter cost on a chosen permanent"),
+        ("sacrifice_also_filter", "a conjoined sacrifice cost"),
         ("remove_counter", "a counter-removal cost"),
         ("tap_count", "a tap-other-permanents cost"),
         ("tap_attached", "a tap-the-attached-permanent cost"),

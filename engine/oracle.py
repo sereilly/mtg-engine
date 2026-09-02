@@ -1592,6 +1592,25 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         if chosen_sacrifice
         else None
     )
+    # "Sacrifice a creature **and a Swamp**" (Viscerid Drone). One printed verb
+    # naming two different objects, which the delimiter above swallows whole —
+    # and the noun parser then refuses "a creature and a swamp", so the cost was
+    # charged as *none at all*. Split only after the whole phrase has been
+    # tried, so every reading that worked before is byte-identical: a noun
+    # phrase that legitimately contains "and" keeps it.
+    sacrifice_also_filter = None
+    if (
+        sacrifice_filter is None
+        and chosen_sacrifice is not None
+        and " and " in chosen_sacrifice.group(1)
+        and "any number of" not in chosen_sacrifice.group(1)
+    ):
+        first, _, second = chosen_sacrifice.group(1).partition(" and ")
+        first_filter = _chargeable_sacrifice_filter(first.strip())
+        second_filter = _chargeable_sacrifice_filter(second.strip())
+        if first_filter is not None and second_filter is not None:
+            sacrifice_filter = first_filter
+            sacrifice_also_filter = second_filter
     # "Sacrifice this artifact **and any number of creatures you control**"
     # (Sword of the Ages). One printed cost naming two things: the source, read
     # above, and a *set* whose size the payer chooses. The same field carries
@@ -1762,6 +1781,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         discard_self=discard_self,
         put_counter=put_counter,
         put_counter_filter=put_counter_filter,
+        sacrifice_also_filter=sacrifice_also_filter,
         remove_counter=remove_counter,
         remove_counter_count=remove_counter_count,
         pay_life=_life_payment_cost(cost_lower),

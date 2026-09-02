@@ -310,6 +310,22 @@ class ActivatedAbilityCost:
     #: positional arguments ``parse_activated_ability_cost`` passes are at the
     #: front, so a field inserted among them silently rebinds one of them.
     put_counter_filter: dict | None = None
+    #: Viscerid Drone: "{T}, **Sacrifice a creature and a Swamp**: …". The
+    #: *second* object a conjoined sacrifice names. Its own field rather than a
+    #: list widening ``sacrifice_filter``, for that field's own stated reason
+    #: one direction over: the two are different costs — two noun phrases, each
+    #: paid by its own permanent — and every existing reader of
+    #: ``sacrifice_filter`` asks it about one object. A list there would be
+    #: handed to those readers as if it were a filter.
+    #:
+    #: Both must be payable or neither is paid (CR 601.2h), and the two
+    #: permanents must be distinct: one creature Swamp would otherwise pay a
+    #: cost the card prints as two cards.
+    #:
+    #: After ``put_counter_filter`` for that field's stated reason: the six
+    #: positional arguments ``parse_activated_ability_cost`` passes are at the
+    #: front, so a field inserted among them silently rebinds one of them.
+    sacrifice_also_filter: dict | None = None
 
     @property
     def is_loyalty(self) -> bool:

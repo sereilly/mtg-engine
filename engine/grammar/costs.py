@@ -339,6 +339,18 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                 if not _is_chargeable_sacrifice(several):
                     raise stream.error("no cost path charges a narrowed sacrifice")
                 costs.append(ast.SacrificeCost(several, count=ast.AnyNumber()))
+            elif stream.accept_word("and"):
+                # "Sacrifice a creature **and a Swamp**" (Viscerid Drone). One
+                # printed verb naming two *different* objects, so it becomes two
+                # entries — the same decomposition Sword of the Ages' tail makes
+                # one branch up, with a second noun phrase where that one has a
+                # count. A single filter cannot hold it: the two are ANDed by
+                # every matcher, and "a creature that is also a Swamp" is a
+                # permanent this pool never prints.
+                also = _parse_cost_object(stream, "sacrifice")
+                if not _is_chargeable_sacrifice(also):
+                    raise stream.error("no cost path charges a narrowed sacrifice")
+                costs.append(ast.SacrificeCost(also))
             else:
                 stream.reset(more)
             stream.accept_punct(",")
