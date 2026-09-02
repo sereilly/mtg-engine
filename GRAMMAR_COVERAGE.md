@@ -16,22 +16,22 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 84.8% | 83.0% | 46.6% | 165 |
-| LEB | 292 | 389 | 84.8% | 83.0% | 46.8% | 166 |
-| 2ED | 292 | 389 | 84.8% | 83.0% | 46.8% | 166 |
+| LEA | 290 | 388 | 85.1% | 83.2% | 46.9% | 165 |
+| LEB | 292 | 389 | 85.1% | 83.3% | 47.0% | 166 |
+| 2ED | 292 | 389 | 85.1% | 83.3% | 47.0% | 166 |
 | ARN | 78 | 108 | 76.9% | 73.1% | 50.9% | 46 |
-| ATQ | 85 | 120 | 90.0% | 90.0% | 62.5% | 68 |
-| 3ED | 296 | 389 | 87.1% | 84.8% | 49.4% | 173 |
+| ATQ | 85 | 120 | 90.8% | 90.8% | 63.3% | 68 |
+| 3ED | 296 | 389 | 87.4% | 85.1% | 49.6% | 173 |
 | LEG | 310 | 431 | 89.1% | 87.9% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
-| 4ED | 368 | 520 | 90.8% | 90.0% | 53.8% | 246 |
+| 4ED | 368 | 520 | 91.2% | 90.4% | 54.2% | 246 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
-| HML | 115 | 189 | 92.6% | 92.6% | 64.0% | 93 |
-| 5ED | 434 | 631 | 92.7% | 92.4% | 60.1% | 316 |
+| HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
+| 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 66.5% | 61.8% | 44.2% | 84 |
-| **All (shipped)** | **3439** | **5016** | **88.9%** | **87.9%** | **56.9%** | **2394** |
+| ALL *(measured)* | 144 | 251 | 68.1% | 64.5% | 46.6% | 89 |
+| **All (shipped)** | **3439** | **5016** | **89.2%** | **88.2%** | **57.1%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -43,9 +43,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 273 | 123 | expected a subject |  |
+| 260 | 120 | expected a subject |  |
 | 140 | 59 | unrecognized effect verb |  |
-| 77 | 40 | unconsumed text |  |
+| 75 | 38 | unconsumed text |  |
 | 39 | 39 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -71,7 +71,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-2394 cards, 2855 lines.
+2394 cards, 2866 lines.
 
 - **Abbey Matron**
   - `{W}, {T}: This creature gets +0/+3 until end of turn.`
@@ -732,21 +732,32 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever enchanted creature attacks and isn't blocked, you may have it assign no combat damage this turn. If you do, defending player discards a card at random.`
   - `Whenever enchanted creature attacks and isn't blocked, you may have it assign no combat damage this turn. If you do, defending player discards a card at random.`
 - **Clockwork Avian**
+  - `At end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.`
   - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than four. Activate only during your upkeep.`
+  - `At end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.`
   - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than four. Activate only during your upkeep.`
 - **Clockwork Beast**
+  - `At end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.`
   - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than seven. Activate only during your upkeep.`
+  - `At end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.`
   - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than seven. Activate only during your upkeep.`
+  - `At end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.`
   - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than seven. Activate only during your upkeep.`
+  - `At end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.`
   - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than seven. Activate only during your upkeep.`
+  - `At end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.`
   - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than seven. Activate only during your upkeep.`
+  - `At end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.`
   - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than seven. Activate only during your upkeep.`
 - **Clockwork Gnomes**
   - `{3}, {T}: Regenerate target artifact creature.`
 - **Clockwork Steed**
+  - `At end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.`
   - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than four. Activate only during your upkeep.`
+  - `At end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.`
   - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than four. Activate only during your upkeep.`
 - **Clockwork Swarm**
+  - `At end of combat, if this creature attacked or blocked this combat, remove a +1/+0 counter from it.`
   - `{X}, {T}: Put up to X +1/+0 counters on this creature. This ability can't cause the total number of +1/+0 counters on this creature to be greater than four. Activate only during your upkeep.`
 - **Coal Golem**
   - `{3}, Sacrifice this creature: Add {R}{R}{R}.`
@@ -2126,6 +2137,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Green creatures you control get +1/+1.`
 - **Keen Glidemaster**
   - `{2}{U}: Target creature gains flying until end of turn.`
+- **Keeper of Tresserhorn**
+  - `Whenever this creature attacks and isn't blocked, it assigns no combat damage this turn and defending player loses 2 life.`
 - **Kei Takahashi**
   - `{T}: Prevent the next 2 damage that would be dealt to target creature this turn.`
 - **Kelsinko Ranger**
@@ -2159,6 +2172,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At end of combat, destroy all creatures blocking or blocked by this creature.`
 - **Kjeldoran Guard**
   - `{T}: Target creature gets +1/+1 until end of turn. When that creature leaves the battlefield this turn, sacrifice this creature. Activate only during combat and only if defending player controls no snow lands.`
+- **Kjeldoran Home Guard**
+  - `At end of combat, if this creature attacked or blocked this combat, put a -0/-1 counter on this creature and create a 0/1 white Deserter creature token.`
 - **Kjeldoran Knight**
   - `{1}{W}: This creature gets +1/+0 until end of turn.`
   - `{W}{W}: This creature gets +0/+2 until end of turn.`
@@ -2337,6 +2352,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Lim-Dûl's Paladin**
   - `At the beginning of your upkeep, you may discard a card. If you don't, sacrifice this creature and draw a card.`
   - `Whenever this creature becomes blocked, it gets +6/+3 until end of turn.`
+  - `Whenever this creature attacks and isn't blocked, it assigns no combat damage this turn and defending player loses 4 life.`
 - **Living Armor**
   - `{T}, Sacrifice this artifact: Put X +0/+1 counters on target creature, where X is that creature's mana value.`
 - **Living Artifact**
@@ -3747,6 +3763,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this land: Add {U}{U}.`
   - `{T}: Add {U}.`
   - `{T}, Sacrifice this land: Add {U}{U}.`
+- **Swamp Mosquito**
+  - `Whenever this creature attacks and isn't blocked, defending player gets a poison counter. (A player with ten or more poison counters loses the game.)`
 - **Swift Response**
   - `Destroy target tapped creature.`
 - **Swiftwater Cliffs**
@@ -4080,6 +4098,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever an opponent draws a card, this enchantment deals 1 damage to that player.`
 - **Unleash Fury**
   - `Double the power of target creature until end of turn.`
+- **Unlikely Alliance**
+  - `{1}{W}: Target nonattacking, nonblocking creature gets +0/+2 until end of turn.`
 - **Unstable Mutation**
   - `At the beginning of the upkeep of enchanted creature's controller, put a -1/-1 counter on that creature.`
   - `At the beginning of the upkeep of enchanted creature's controller, put a -1/-1 counter on that creature.`
@@ -4302,6 +4322,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Attacking creatures get -1/-0.`
 - **Whalebone Glider**
   - `{2}, {T}: Target creature with power 3 or less gains flying until end of turn.`
+- **Whip Vine**
+  - `{T}: Tap target creature with flying blocked by this creature. That creature doesn't untap during its controller's untap step for as long as this creature remains tapped.`
 - **Whippoorwill**
   - `{G}{G}, {T}: Target creature can't be regenerated this turn. Damage that would be dealt to that creature this turn can't be prevented or dealt instead to another permanent or player. When the creature dies this turn, exile the creature.`
 - **Whirling Catapult**

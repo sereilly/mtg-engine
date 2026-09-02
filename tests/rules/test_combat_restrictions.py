@@ -840,3 +840,174 @@ def test_509_1b_a_granted_whitelist_forbids_every_blocker_it_omits():
     assert game._can_block_attacker(bear, attacker) is False, (
         "'except by Walls' says everything else may not block"
     )
+
+
+# --- W2G1: how many creatures must block, and what that costs ---
+
+
+def _w2g1_creature(name: str, text: str, power: int = 2, toughness: int = 2):
+    """An invented creature printing *text*.
+
+    Invented on purpose, exactly as ``_fish`` above is: the templates below are
+    read out of the printed sentence, and a test naming only the card that
+    happens to print one today would pass against an implementation keyed to
+    that card's name.
+    """
+    return CardDefinition(
+        name=name, mana_cost="{2}", cmc=2.0,
+        type_line="Creature — Ape", oracle_text=text,
+        colors=("G",), color_identity=("G",), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Creature — Ape",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _w2g1_land(name: str):
+    """A colourless mana source, so the payment below spends something visible."""
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0,
+        type_line="Land", oracle_text="{T}: Add {C}.",
+        colors=(), color_identity=(), keywords=(), produced_mana=("C",),
+        raw={"name": name, "type_line": "Land"},
+    )
+
+
+def _w2g1_combat(attacker_card, blocker_count, defender_extra=()):
+    """*attacker_card* attacking a defender holding *blocker_count* vanilla
+    creatures, stopped at the declare-blockers step."""
+    attacker = Permanent(card=attacker_card)
+    blockers = [
+        Permanent(card=_w2g1_creature(f"Blocker {i}", ""))
+        for i in range(blocker_count)
+    ]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker], life=20),
+        PlayerState(name="P2", battlefield=blockers + list(defender_extra), life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._settle()
+    for perm in [attacker] + blockers:
+        _nosick(perm)
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    return game, attacker, blockers
+
+
+@pytest.mark.cr("509.1b", "702.111a")
+@pytest.mark.parametrize("printed,minimum", [
+    ("This creature can't be blocked except by three or more creatures.", 3),
+    ("This creature can't be blocked except by two or more creatures.", 2),
+    ("This creature can't be blocked except by four or more creatures.", 4),
+])
+def test_a_printed_blocker_minimum_is_checked_over_the_whole_declaration(
+    printed, minimum
+):
+    """CR 509.1b: a restriction is checked against the finished declaration, not
+    against any one blocker pair.
+
+    CR 702.111a defines menace as exactly this sentence with N=2, so the number
+    is payload and the three rows above are one implementation. Fewer than N is
+    illegal; **none** is legal, because the sentence says how many must block
+    together and not that any must.
+    """
+    card = _w2g1_creature("Printed Menace", printed)
+
+    for count in range(minimum + 1):
+        game, _, _ = _w2g1_combat(card, minimum)
+        ok, message = game.declare_blockers(1, {i: 0 for i in range(count)})
+        if count == 0 or count >= minimum:
+            assert ok, f"{count} blocker(s) should be legal: {message}"
+        else:
+            assert not ok, f"{count} blocker(s) should be illegal"
+
+
+@pytest.mark.cr("509.1b")
+def test_two_blocker_minimums_take_the_larger_not_the_first():
+    """CR 509.1b: *every* restriction is checked, so a creature carrying menace
+    and a printed "three or more" needs three.
+
+    Reading the first match would make the second restriction free — the
+    failure direction a restriction may never take, because it lets a block
+    happen that the card forbids.
+    """
+    card = _w2g1_creature(
+        "Menacing Ape",
+        "Menace\nThis creature can't be blocked except by three or more creatures.",
+    )
+    game, attacker, _ = _w2g1_combat(card, 3)
+
+    assert game._minimum_blockers(attacker) == 3
+    assert not game.declare_blockers(1, {0: 0, 1: 0})[0]
+    game, _, _ = _w2g1_combat(card, 3)
+    assert game.declare_blockers(1, {0: 0, 1: 0, 2: 0})[0]
+
+
+@pytest.mark.cr("509.1d", "509.1f")
+def test_a_pay_to_block_cost_printed_on_the_attacker_is_charged_to_the_defender():
+    """CR 509.1d/509.1f: the costs of the chosen blockers are totalled and paid
+    in full before CR 509.1g makes anything a blocking creature.
+
+    The cost here is printed on the *attacker* ("…unless defending player pays
+    {2} for each creature they control that's blocking it") rather than on the
+    blocker, which is the second channel the totalling reader needed. The "for
+    each" needs no multiplier: the total is summed once per (blocker, attacker)
+    pair.
+    """
+    card = _w2g1_creature(
+        "Toll Ape",
+        "This creature can't be blocked unless defending player pays {2} "
+        "for each creature they control that's blocking it.",
+    )
+    lands = [Permanent(card=_w2g1_land(f"Toll Land {i}")) for i in range(4)]
+    game, _, _ = _w2g1_combat(card, 2, defender_extra=lands)
+    game.enforce_mana_costs = True
+
+    assert game.declare_blockers(1, {0: 0, 1: 0})[0]
+    assert sum(1 for land in lands if land.tapped) == 4, "{2} per blocking creature"
+
+
+@pytest.mark.cr("509.1b", "509.1f")
+def test_a_pay_to_block_declaration_that_cannot_be_covered_is_illegal():
+    """CR 509.1f forbids partial payments, so a defender short of the total has
+    made an illegal declaration (CR 509.1b) — and nothing is spent, because
+    CR 509.1g has not yet made anything a blocker.
+
+    This is why the template needs no pending choice and no undo: there is no
+    declared block to take back at the moment the payment fails.
+    """
+    card = _w2g1_creature(
+        "Toll Ape",
+        "This creature can't be blocked unless defending player pays {2} "
+        "for each creature they control that's blocking it.",
+    )
+    lands = [Permanent(card=_w2g1_land(f"Toll Land {i}")) for i in range(3)]
+    game, _, _ = _w2g1_combat(card, 2, defender_extra=lands)
+    game.enforce_mana_costs = True
+
+    assert not game.declare_blockers(1, {0: 0, 1: 0})[0]
+    assert not any(land.tapped for land in lands), "nothing spent on a refusal"
+    # One blocker is {2}, which three lands do cover.
+    game, _, _ = _w2g1_combat(card, 2, defender_extra=lands)
+    game.enforce_mana_costs = True
+    assert game.declare_blockers(1, {0: 0})[0]
+
+
+@pytest.mark.cr("509.1c")
+def test_declining_to_block_never_owes_the_cost():
+    """CR 509.1c: "If a creature can't block unless a player pays a cost, that
+    player is not required to pay that cost." Not blocking is always legal and
+    always free."""
+    card = _w2g1_creature(
+        "Toll Ape",
+        "This creature can't be blocked unless defending player pays {2} "
+        "for each creature they control that's blocking it.",
+    )
+    lands = [Permanent(card=_w2g1_land(f"Toll Land {i}")) for i in range(4)]
+    game, _, _ = _w2g1_combat(card, 2, defender_extra=lands)
+    game.enforce_mana_costs = True
+
+    assert game.declare_blockers(1, {})[0]
+    assert not any(land.tapped for land in lands)
+# --- end W2G1 ---
