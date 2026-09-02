@@ -152,21 +152,6 @@ def test_surge_of_strength_discards_a_red_or_green_card_to_be_cast(set_pool):
 # unnoticed, and the message says what to do about it.
 
 
-def test_scars_of_the_veteran_declines_on_its_delayed_trigger(set_pool):
-    """The pitch half is done (see the cycle test above). What is missing is one
-    part: **a delayed triggered ability created at resolution** (CR 603.7) —
-    "put a +0/+1 counter on it for each 1 damage prevented this way at the
-    beginning of the next end step", which also has to read back how much a
-    CR 615 shield actually absorbed. W1G5 owns the delayed-trigger mechanism;
-    when it lands, this card needs only the counter-per-damage-prevented
-    reader."""
-    program = compile_card_oracle(set_pool("ALL")["Scars of the Veteran"])
-    assert not program.supported
-    assert alternative_costs(set_pool("ALL")["Scars of the Veteran"]), (
-        "the alternative cost is read even while the effect half is not"
-    )
-
-
 def test_bounty_of_the_hunt_declines_on_two_named_parts(set_pool):
     """Two parts, both outside this round's subsystem:
 
@@ -420,3 +405,93 @@ def test_w1g5_lat_nams_legacy_draws_nothing_from_an_empty_hand(set_pool):
 
     assert game.pending_choices == []
     assert game.delayed_triggers == []
+
+
+# --- W2G3: upkeep and counters ---
+#
+# Scars of the Veteran's effect half. W1G4 finished its pitch cost and declined
+# the rest as "a delayed triggered ability that reads back how much a CR 615
+# shield absorbed"; the shield's own running total (``Shield.prevented``) and
+# the end-step reader were both already there for Sacred Boon, so what was
+# missing was the two spellings this card prints instead - "on **it**" for
+# Sacred Boon's "that creature", and the "if it's a creature" guard "any target"
+# needs and "target creature" does not.
+
+from engine import Game, PlayerState, load_cards
+from engine.alternative_costs import alternative_costs as _w2g3_alt_costs
+from engine.card_loader import manifest_set_path
+from engine.damage_events import deal_damage
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle as _w2g3_compile
+
+_W2G3_LEA_I = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+
+
+def _w2g3_cast_scars(set_pool, board, **targets):
+    p1 = PlayerState(name="P1", battlefield=list(board))
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    p1.hand = [set_pool("ALL")["Scars of the Veteran"]]
+    result = game.cast_from_hand(0, "Scars of the Veteran", **targets)
+    assert result.supported, result
+    game._settle()
+    while game.stack:
+        game.resolve_top_of_stack()
+        game._settle()
+    return game, p1, p2
+
+
+def test_w2g3_scars_of_the_veteran_counts_what_its_shield_absorbed(set_pool):
+    """CR 615.5's "damage prevented this way" is the shield's own running
+    total, read a whole turn after the spell resolved (CR 603.7) - so the
+    counters are a reading of the shield rather than of the spell."""
+    bear = Permanent(card=_W2G3_LEA_I["Grizzly Bears"])
+    bear.metadata["summoning_sickness_turn"] = -99
+    game, p1, _p2 = _w2g3_cast_scars(
+        set_pool, [bear], target_player_index=0, target_permanent_index=0
+    )
+
+    deal_damage(
+        game, {"recipient": bear, "amount": 3, "source": None, "combat": False}
+    )
+    game._settle()
+    assert bear.damage_marked == 0, "the shield ate all three"
+
+    game.resolve_end_step(0)
+    game._settle()
+    while game.stack:
+        game.resolve_top_of_stack()
+        game._settle()
+    assert (bear.effective_power, bear.effective_toughness) == (2, 5)
+
+
+def test_w2g3_scars_of_the_veteran_places_nothing_on_a_player(set_pool):
+    """"If it's a creature" is the guard "any target" needs (CR 115.4). It is
+    also the arm's own precondition - the end-step reader addresses a
+    ``permanent_id`` the shield step recorded, and a shield armed on a player
+    recorded none - so the seat takes the prevention and no counters exist to
+    go anywhere."""
+    game, p1, _p2 = _w2g3_cast_scars(set_pool, [], target_player_index=0)
+
+    deal_damage(
+        game, {"recipient": p1, "amount": 3, "source": None, "combat": False}
+    )
+    game._settle()
+    game.resolve_end_step(0)
+    game._settle()
+    while game.stack:
+        game.resolve_top_of_stack()
+        game._settle()
+    assert p1.life == 20
+    assert p1.battlefield == []
+
+
+def test_w2g3_scars_of_the_veteran_keeps_its_pitch_cost(set_pool):
+    """The CR 118.9 half W1G4 landed is still read now that the effect half
+    compiles - the two are different readings of the same card and a card
+    supported on one of them is exactly the failure this round removed."""
+    card = set_pool("ALL")["Scars of the Veteran"]
+    assert _w2g3_compile(card).supported
+    assert _w2g3_alt_costs(card)

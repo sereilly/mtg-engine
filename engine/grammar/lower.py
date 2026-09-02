@@ -738,6 +738,8 @@ def lower_statement(
 
     if isinstance(statement, ast.Conditional):
         then = lower_statement(statement.then, produced, event=event, event_subject=event_subject, whole_effect=False)
+        if _guard_is_the_arms_own_precondition(statement.condition, then):
+            return then
         otherwise = (
             lower_statement(statement.otherwise, produced, event=event, event_subject=event_subject, whole_effect=False)
             if statement.otherwise else ()
@@ -786,6 +788,38 @@ def lower_statement(
         return (OracleInstruction("grant_team_assign_unblocked_until_eot", "", {}),)
 
     raise LoweringError(f"no lowering for {type(statement).__name__}", node=statement)
+
+
+def _guard_is_the_arms_own_precondition(condition, then) -> bool:
+    """"**If it's a creature**, put a +0/+1 counter on it for each 1 damage
+    prevented this way…" (Scars of the Veteran.)
+
+    The guard restates what the arm can already only do. "Any target" is a
+    creature, a player or a planeswalker (CR 115.4), and the arm is
+    ``add_pt_counters_per_damage_prevented``, whose whole reading is the
+    ``permanent_id`` the shield step recorded — armed on a player it records
+    none and the arm places nothing. So the condition is CR-redundant here, in
+    the way "under its owner's control" restates CR 400.3, and dropping it is
+    not dropping a rider.
+
+    **Not** consumed into nothing: it is checked against the arm, so a printing
+    that guarded some *other* effect with the same words still reaches the
+    ordinary conditional lowering — where it refuses, because nothing in the
+    effect revealed a card for "it" to name. This is the one arm whose own
+    record answers the question, and the pair is asserted rather than assumed.
+    """
+    from .lowering._common import _restrictions_beyond
+
+    return (
+        isinstance(condition, ast.RevealedCardIs)
+        and not condition.negated
+        and condition.filter.card_types == ("creature",)
+        and not _restrictions_beyond(
+            condition.filter, frozenset({"card_types"})
+        )
+        and len(then) == 1
+        and then[0].kind == "add_pt_counters_per_damage_prevented"
+    )
 
 
 def _lower_line_statement(
