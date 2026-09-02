@@ -53,3 +53,44 @@ def test_refusals_report_is_empty_over_the_shipped_pool(catalog):
     from support_report import refusals_report
 
     assert refusals_report(catalog) == []
+
+
+def test_refusal_rollup_counts_cards_per_site():
+    """The rollup's third column: how many CARDS share a refusal site.
+
+    Lines-per-distinct-sentence read 1.00 for four sets running ("no
+    production here buys two cards") while Homelands held ten cards printing
+    one untap-denial clause -- the leverage number a backlog round ranks by is
+    cards per site, and this pins that it is counted and carried by name.
+    """
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+    from support_report import refusal_rollup, refusals_json
+
+    findings = [
+        ("Card A", "creature", "reason A", [
+            ("refused", "Doesn't  untap during X.", "site-1"),
+            ("clean", "Flying", ""),
+        ]),
+        ("Card B", "creature", "reason B", [
+            ("refused", "doesn't untap during X.", "site-1"),
+        ]),
+        ("Card C", "sorcery", "front-end headline", [
+            ("clean", "Draw a card.", ""),
+        ]),
+    ]
+    sites, front_end_only = refusal_rollup(findings)
+    assert sites["site-1"]["lines"] == 2
+    # One distinct sentence: whitespace and case fold together.
+    assert len(sites["site-1"]["texts"]) == 1
+    assert sites["site-1"]["cards"] == {"Card A", "Card B"}
+    # Every line grammar-clean -> the refusal is the headline reason.
+    assert front_end_only == [("Card C", "front-end headline")]
+
+    payload = refusals_json(findings)
+    assert payload["by_site"][0]["cards"] == ["Card A", "Card B"]
+    assert payload["front_end_only"] == [
+        {"name": "Card C", "headline": "front-end headline"}
+    ]
