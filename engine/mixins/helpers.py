@@ -1319,6 +1319,14 @@ class GameHelpersMixin:
         # filter below has to ask about the token while the stack item names
         # the enchantment.
         leaving: list[tuple[Permanent, dict]] = []
+        # Every permanent attached through the single ``attached_to`` slot, read
+        # once for the whole sweep rather than once per departing permanent: a
+        # mass removal is the common case and this is the one board-wide scan in
+        # the function. (The Aura *list* is on the host, so it costs nothing.)
+        attachments = [
+            perm for perm in self.all_permanents()
+            if perm.metadata.get("attached_to") is not None
+        ]
         for perm in targets:
             seat = self.controller_index_of(perm)
             if seat is None:
@@ -1343,7 +1351,7 @@ class GameHelpersMixin:
             # and the single slot an Equipment sets.
             attached_context = {"event_subject_controller": seat}
             observers: list[Permanent] = list(auras_attached_to(perm))
-            for other in self.all_permanents():
+            for other in attachments:
                 if other.metadata.get("attached_to") is perm and not any(
                     other is already for already in observers
                 ):
