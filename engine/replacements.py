@@ -823,6 +823,14 @@ def _apply_recorded_redirect(game, payload: dict) -> ReplacementOutcome | None:
     The combat flag travels with it: damage redirected during the combat damage
     step is still combat damage (CR 510.2 does not stop being true because the
     recipient changed), so a Fog or a Circle still sees what it should.
+
+    **A record may move only part of the event.** "The next 1 damage that would
+    be dealt to target white creature this turn is dealt to this creature
+    instead" (Daughter of Autumn, Hazduhr the Abbot) carries a point pool, spent
+    the way CR 615.7 spends a numeric shield: the points it covers move and the
+    rest of the event carries on to its original recipient, which is what
+    ``ReplacementOutcome.new_amount`` says. A record with no pool moves the
+    whole event and consumes it, as every other printing in the pool does.
     """
     redirect = _recorded_redirect(game, payload)
     if redirect is None:  # pragma: no cover - the predicate just said otherwise
@@ -833,18 +841,21 @@ def _apply_recorded_redirect(game, payload: dict) -> ReplacementOutcome | None:
     new_recipient = live_recipient(game, redirect)
     amount = payload["amount"]
     source = payload.get("source")
-    redirect.spend()
+    moved = redirect.moves(amount)
+    if moved <= 0:  # pragma: no cover - `spent` already excludes an empty pool
+        return None
+    redirect.spend(moved)
     # Held while the hand-off runs so a pair of records aimed at each other
     # cannot recurse: the new event runs the whole contention set again, and an
     # unspent record with no uses limit would still be applicable.
     redirect.applying = True
     try:
         if isinstance(new_recipient, PlayerState):
-            game._deal_damage_to_player(new_recipient, amount, source=source)
+            game._deal_damage_to_player(new_recipient, moved, source=source)
             taker = new_recipient.name
         else:
             game._mark_damage_on_permanent(
-                new_recipient, amount, source=source, combat=bool(payload.get("combat"))
+                new_recipient, moved, source=source, combat=bool(payload.get("combat"))
             )
             taker = new_recipient.card.name
     finally:
@@ -857,9 +868,11 @@ def _apply_recorded_redirect(game, payload: dict) -> ReplacementOutcome | None:
         getattr(recipient, "card", None), "name", "it"
     )
     game.log.append(
-        f"{amount} damage to {from_name} is dealt to {taker} instead"
+        f"{moved} damage to {from_name} is dealt to {taker} instead"
         + (f" ({redirect.source_name})" if redirect.source_name else "")
     )
+    if moved < amount:
+        return ReplacementOutcome(new_amount=amount - moved)
     return ReplacementOutcome(replaced=True)
 
 

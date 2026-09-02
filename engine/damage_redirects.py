@@ -97,16 +97,50 @@ class DamageRedirect:
     #: otherwise recurse forever. Set by the interceptor around the hand-off and
     #: read by the predicate, which stays pure: reading a flag is not spending.
     applying: bool = False
+    #: "**The next 1 damage** that would be dealt to target white creature this
+    #: turn is dealt to this creature instead." (Daughter of Autumn; Hazduhr the
+    #: Abbot prints ``X``.) The points this record can still move — the exact
+    #: twin of ``Shield.amount``, and spent the way CR 615.7 spends a numeric
+    #: shield: each 1 damage moved reduces it by 1, and once it reaches 0 what
+    #: is left of the event is dealt to the original recipient normally.
+    #:
+    #: ``None`` is every other record in the pool — "**all** damage that would
+    #: be dealt …", which moves the whole event however large it is. The
+    #: difference is not bookkeeping: a 1-point record read as a blanket one
+    #: would move a Fireball's twelve.
+    amount: int | None = None
 
     @property
     def spent(self) -> bool:
         """Used up, so it no longer exists to be applied."""
-        return self.uses is not None and self.uses <= 0
+        return (self.uses is not None and self.uses <= 0) or (
+            self.amount is not None and self.amount <= 0
+        )
 
-    def spend(self) -> None:
-        """Charge one instance against the record. The mutating half."""
+    def moves(self, amount: int) -> int:
+        """Points this record would take out of an event of *amount*.
+
+        Pure — the half CR 616.1's applicability predicate is allowed to call,
+        for the reason ``Shield.would_prevent`` is (see
+        ``engine/effect_ordering.py``). A record with no pool moves the whole
+        event, which is what every "all damage …" printing means.
+        """
+        if self.amount is None:
+            return max(0, amount)
+        return max(0, min(self.amount, amount))
+
+    def spend(self, moved: int = 0) -> None:
+        """Charge one instance, and *moved* points, against the record.
+
+        The mutating half. Both counters are charged rather than one or the
+        other, because ``uses`` and ``amount`` answer different printed
+        sentences — "the next **time**" against "the next **N damage**" — and a
+        record that carried both would have to satisfy both to keep applying.
+        """
         if self.uses is not None:
             self.uses -= 1
+        if self.amount is not None:
+            self.amount -= moved
 
 
 # ---------------------------------------------------------------------------

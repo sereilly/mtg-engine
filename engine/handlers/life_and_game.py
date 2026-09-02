@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from ._common import count_from_payload, evaluate_count, resolve_amount
 from ..exiled_records import source_object
 from ..named_counters import counters_on
-from ..oracle_types import X_FROM_COUNT_PER_RECIPIENT
+from ..oracle_types import COUNTERS_REMOVED, X_FROM_COUNT_PER_RECIPIENT
 from .registry import effect_handler
 from ..mana_payment import generic_cost
 
@@ -47,6 +47,38 @@ def player_gets_poison_counters(game: Game, instruction: OracleInstruction, cont
     game.log.append(
         f"{context.card.name}: {player.name} gets {amount} {noun} "
         f"({player.poison_counters} total)"
+    )
+    return True, "resolved"
+
+
+@effect_handler("remove_all_counters_from_target_player")
+def remove_all_counters_from_target_player(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """"Target player loses all poison counters." (Leeches.)
+
+    The mirror of :func:`player_gets_poison_counters` above and over the same
+    store — ``PlayerState.poison_counters``, which the CR 704.5c / 122.1f sweep
+    reads — so a player taken back under ten stops losing the game with no code
+    here.
+
+    **How many came off is recorded**, because the sentence behind it reads the
+    number: "Leeches deals **that much** damage to that player" is the count
+    this step removed, and by the time it runs the store holds zero. The record
+    is what was actually taken, not what the card asked for — a player with two
+    counters loses two and takes two.
+    """
+    player = context.target
+    if player is None:
+        game.log.append(f"{context.card.name}: no player to remove counters from")
+        return True, "resolved"
+    kind = str(instruction.payload.get("counter", "poison"))
+    removed = max(0, int(player.poison_counters))
+    player.poison_counters = 0
+    context.results[COUNTERS_REMOVED] = removed
+    noun = f"{kind} counter" if removed == 1 else f"{kind} counters"
+    game.log.append(
+        f"{context.card.name}: {player.name} loses {removed} {noun}"
     )
     return True, "resolved"
 

@@ -397,6 +397,27 @@ def _parse_loses(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
     except GrammarError:
         pass
     stream.reset(mark)
+    # "Target player loses **all poison counters**." (Leeches.) The same removal
+    # ``effects/counters.py`` reads as "remove all poison counters from target
+    # player", in the word order this card prints — one node, so what a counter
+    # removal *is* has one answer however the sentence is arranged and the
+    # lowering behind it does not have to learn a second shape.
+    #
+    # Read after the life branch, which has already refused on the missing word
+    # "life", and before the keyword list, which fails the whole line on
+    # "poison" — which is exactly how Leeches refused. Non-consuming, so every
+    # other "loses …" keeps the reading it has: "loses all abilities" gets as
+    # far as the head noun and backtracks on the missing word "counter".
+    counter_mark = stream.mark()
+    try:
+        count = parse_amount(stream)
+        kind = _expect_counter_kind(stream, " for a subject to lose")
+        if kind.kind == PT and isinstance(subject, ast.PlayerRef):
+            raise stream.error("a player cannot lose a power/toughness counter")
+        stream.expect_word("counter", "counters")
+        return ast.RemoveCounter(subject, kind.text, count)
+    except GrammarError:
+        stream.reset(counter_mark)
     keywords = _parse_keywords(stream)
     duration = _parse_duration(stream)
     return ast.LoseKeyword(subject, keywords, duration)

@@ -1434,6 +1434,78 @@ def redirect_damage_until_eot(
     return True, "resolved"
 
 
+@effect_handler("redirect_next_damage_to_source_until_eot")
+def redirect_next_damage_to_source_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Daughter of Autumn: "{W}: The next 1 damage that would be dealt to target
+    white creature this turn is dealt to this creature instead." Hazduhr the
+    Abbot prints the same sentence with ``X`` for the number.
+
+    A **point pool** rather than a whole-event record (CR 615.7 read with
+    CR 614.9's verb): the record carries how many points it can still move, and
+    what a larger event leaves over is dealt to the creature normally. Which is
+    why the amount is resolved here and not at the arming's parse — Hazduhr's is
+    the X his controller announced, and an X of 0 arms nothing rather than
+    arming a record that can move nothing and would sit on the creature until
+    the cleanup step.
+
+    The record hangs off the **protected creature**, which is the ordinary home
+    for one (``engine/damage_redirects.py``: a record lives on the recipient it
+    watches), and points at the permanent whose ability this is. If that
+    permanent has left by the time the damage would be dealt, CR 614.9 makes the
+    redirect do nothing — ``live_recipient`` answers that, so nothing here has
+    to hold the Abbot on the battlefield.
+
+    The target is re-checked against the printed noun phrase at resolution
+    (CR 608.2b) rather than trusted from the activation, and through
+    ``subject_matches`` with the ability's controller as the observer, because
+    "white creature **you control**" is that seat's "you" (CR 109.5). No
+    scan-the-board fallback: a redirect armed on a creature nobody named moves
+    damage the player never chose to move.
+    """
+    from ..subject_filters import subject_matches
+
+    payload = instruction.payload
+    card_name = getattr(context.card, "name", "")
+    taker = context.source_permanent
+    if taker is None or not game.is_on_battlefield(taker):
+        game.log.append(f"{card_name}: nothing is there to take the damage")
+        return True, "resolved"
+    described = (payload.get("targets") or {}).get("filter") or {}
+    caster = context.caster
+    observer = game.players.index(caster) if caster in game.players else None
+    protected = resolve_target_permanent(
+        game,
+        context,
+        predicate=lambda perm: subject_matches(
+            game, perm, described, observer=observer, source=taker
+        ),
+        fallback_players=(),
+    )
+    if protected is None:
+        game.log.append(f"{card_name}: its target is gone, nothing is redirected")
+        return True, "resolved"
+    amount = resolve_amount(payload.get("amount", 0), context.x_value)
+    if amount <= 0:
+        game.log.append(f"{card_name}: no damage to move")
+        return True, "resolved"
+    add_redirect(
+        protected,
+        DamageRedirect(
+            new_recipient=taker,
+            amount=amount,
+            uses=None,
+            source_name=card_name or None,
+        ),
+    )
+    game.log.append(
+        f"{card_name}: the next {amount} damage that would be dealt to "
+        f"{protected.card.name} this turn is dealt to {taker.card.name} instead"
+    )
+    return True, "resolved"
+
+
 @effect_handler("redirect_matching_damage_to_you_until_eot")
 def redirect_matching_damage_to_you_until_eot(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext

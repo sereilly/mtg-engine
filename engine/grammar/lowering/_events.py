@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from ...oracle_types import (EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                              HAND_CARDS_TO_LIBRARY)
+from ...oracle_types import COUNTERS_REMOVED
 from ...tokens import CREATED_TOKEN_RESULT_KEY
 from .. import ast
 from ..errors import LoweringError
@@ -369,6 +370,9 @@ COUNTED_NUMBER = "counted_number"
 # number out of something that is not one.
 _PRODUCED_QUANTITIES: frozenset[str] = frozenset({
     "damage_dealt",
+    # How many counters a "loses all <kind> counters" step took off (Leeches),
+    # which is what "deals **that much** damage to that player" reads.
+    COUNTERS_REMOVED,
     # How many cards a discard this effect asked for actually went (Recall).
     "discarded_count",
     # How many cards a "puts the cards from their hand on top of their library"

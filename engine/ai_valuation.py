@@ -168,12 +168,31 @@ _OPPONENT_CATEGORIES = frozenset({"damage", "destruction", "tapping", "countersp
 _OWN_CATEGORIES = frozenset({"pump", "counters", "regeneration", "evasion", "attachments", "characteristics"})
 
 
+#: Kinds whose category is right about the family and wrong about the side.
+#: A CR 614.9 redirect is categorised ``damage`` because the damage is still
+#: *dealt* — the whole distinction ``engine/damage_redirects.py`` exists for —
+#: but a counted one moves damage **off** the permanent it names, so the seat
+#: that wants to be named is the activating player's own. Aimed by the category
+#: alone, Daughter of Autumn shields an opponent's white creature: the ability
+#: resolves, the record is armed, and it protects the wrong board.
+#:
+#: Keyed on the instruction kind, which is a claim about the compiled program
+#: rather than about a card, and narrow on purpose: the *other* redirects in the
+#: pool name the source whose damage moves ("target attacking creature"), which
+#: really is the opponent's.
+_OWN_KINDS = frozenset({"redirect_next_damage_to_source_until_eot"})
+
+
 def activation_target_side(instruction: OracleInstruction) -> str | None:
     """"opponent" / "you" / None — whose permanent an object-targeted activated
-    ability should be aimed at, derived from ``INSTRUCTION_CATEGORIES``."""
+    ability should be aimed at, derived from ``INSTRUCTION_CATEGORIES`` and the
+    handful of kinds whose category cannot answer (``_OWN_KINDS``)."""
     from .grammar.lowering.categories import INSTRUCTION_CATEGORIES
 
-    category = INSTRUCTION_CATEGORIES.get(getattr(instruction, "kind", None))
+    kind = getattr(instruction, "kind", None)
+    if kind in _OWN_KINDS:
+        return "you"
+    category = INSTRUCTION_CATEGORIES.get(kind)
     if category in _OPPONENT_CATEGORIES:
         return "opponent"
     if category in _OWN_CATEGORIES:

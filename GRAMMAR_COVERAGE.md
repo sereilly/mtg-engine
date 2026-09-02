@@ -28,7 +28,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4ED | 368 | 520 | 90.4% | 90.0% | 53.8% | 246 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| HML *(measured)* | 115 | 189 | 75.7% | 72.5% | 47.1% | 65 |
+| HML *(measured)* | 115 | 189 | 77.2% | 74.1% | 48.7% | 68 |
 | **All (shipped)** | **2890** | **4196** | **88.0%** | **87.1%** | **56.1%** | **1985** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -41,16 +41,17 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 243 | 106 | expected a subject |  |
+| 236 | 103 | expected a subject |  |
 | 119 | 52 | unrecognized effect verb |  |
 | 62 | 32 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 16 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 10 | 4 | expected a keyword ability |  |
+| 9 | 3 | expected a keyword ability |  |
 | 7 | 2 | no lowering for RawEffect |  |
 | 7 | 2 | expected 'the number of' in a where-clause |  |
 | 7 | 7 | expected 'unless defending player controls' |  |
+| 6 | 2 | expected who takes the redirected damage |  |
 | 5 | 1 | expected 'card' |  |
 | 5 | 1 | expected 'equal to' quantity for damage |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
@@ -65,7 +66,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | a counter-removal cost only reads the ability's own source |  |
 | 2 | 2 | expected what this creature can't block, or a duration |  |
-| 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
 
@@ -785,6 +785,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this artifact: The next time a source of your choice would deal damage to you this turn, prevent half that damage, rounded down.`
 - **Darkness**
   - `Prevent all combat damage that would be dealt this turn.`
+- **Daughter of Autumn**
+  - `{W}: The next 1 damage that would be dealt to target white creature this turn is dealt to Daughter of Autumn instead.`
 - **Daybreak Charger**
   - `When this creature enters, target creature gets +2/+0 until end of turn.`
 - **Death Ward**
@@ -1080,6 +1082,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Eternal Flame deals X damage to target opponent or planeswalker and half X damage, rounded up, to you, where X is the number of Mountains you control.`
 - **Eureka**
   - `Starting with you, each player may put a permanent card from their hand onto the battlefield. Repeat this process until no one puts a card onto the battlefield.`
+- **Evaporate**
+  - `Evaporate deals 1 damage to each white and/or blue creature.`
 - **Exorcist**
   - `{1}{W}, {T}: Destroy target black creature.`
 - **Experimental Overload**
@@ -1921,6 +1925,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{7}{R}: This creature deals damage equal to its power to target player or planeswalker.`
 - **Leaping Lizard**
   - `{1}{G}: This creature gets -0/-1 and gains flying until end of turn.`
+- **Leeches**
+  - `Target player loses all poison counters. Leeches deals that much damage to that player.`
 - **Legion's Judgment**
   - `Destroy target creature with power 4 or greater.`
 - **Leshrac's Sigil**
