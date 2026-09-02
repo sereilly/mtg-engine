@@ -1310,6 +1310,20 @@ class LegalityMixin:
                     and not self.players[seat].attacked_this_turn
                 ):
                     continue
+                # "target opponent **previously dealt damage by it**" (Diseased
+                # Vermin). The record is on the *source permanent*, not on the
+                # seat — "whom has this creature hurt" — so this is the one
+                # player narrowing that needs the ability's source, and with no
+                # source in hand the clause admits nobody rather than everybody:
+                # an unenforceable restriction offered as satisfied is the
+                # silent direction (CR 601.2c).
+                if spec.get("damaged_by_source"):
+                    from .damage_events import seats_dealt_damage_by
+
+                    if ability_source is None:
+                        continue
+                    if seat not in seats_dealt_damage_by(ability_source):
+                        continue
                 targets.append({"kind": "player", "seat": seat})
             if kind == "player":
                 return targets

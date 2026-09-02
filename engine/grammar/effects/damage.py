@@ -62,6 +62,20 @@ def _parse_damage_recipient(stream: TokenStream) -> ast.Recipient | None:
         and stream.accept_phrase("who", "attacked", "this", "turn")
     ):
         return dataclasses.replace(recipient, attacked_this_turn=True)
+    if (
+        isinstance(recipient, ast.PlayerRef)
+        and recipient.kind in ("target_player", "target_opponent")
+        # "target opponent **previously dealt damage by it**" (Diseased
+        # Vermin). Beside the attack narrowing above and read the same way: the
+        # restriction is only honoured by the picker this lowering feeds, so a
+        # parse anywhere else would be a clause nobody enforces.
+        #
+        # "By it" is the ability's own source — the only referent the sentence
+        # has — and every word is required: "previously" is the whole window,
+        # and a printing naming another one would be a different record.
+        and stream.accept_phrase("previously", "dealt", "damage", "by", "it")
+    ):
+        return dataclasses.replace(recipient, damaged_by_source=True)
     if recipient is None:
         # "This creature deals 2 damage to **that creature** at end of combat."
         # (Dwarven Sea Clan.) The back-reference every other family already

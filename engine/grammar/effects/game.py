@@ -587,6 +587,18 @@ def _finish_create_token(
         else:
             keywords = _parse_token_keywords(stream)
 
+    # "…**for each time it regenerated this turn**" (Spiny Starfish). A
+    # multiplier on how many tokens are made, read here rather than by
+    # ``phrases._parse_for_each`` because that clause counts a set of *objects*
+    # and this one counts occurrences on one permanent. Both words of the
+    # window are required, for the reason the death tally's are: the record is
+    # swept each turn, so a clause naming another window is a different number.
+    per_source_regeneration = bool(
+        stream.accept_phrase(
+            "for", "each", "time", "it", "regenerated", "this", "turn"
+        )
+    )
+
     # "…that are tapped and attacking" (Basri Ket): the tokens' entry state.
     # Both words are recorded — a token entering merely tapped, or merely
     # attacking, would be a different effect wearing the same head.
@@ -663,6 +675,7 @@ def _finish_create_token(
         keywords=keywords,
         tapped=tapped,
         attacking=attacking,
+        per_source_regeneration=per_source_regeneration,
     )
 
 

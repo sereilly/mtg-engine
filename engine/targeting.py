@@ -1831,6 +1831,12 @@ def _from_targets_payload(targets) -> dict | None:
             # (CR 115.4). The same flag Word of Command's kind-table entry
             # carries, enforced by legality's seat check.
             spec["opponents_only"] = True
+        if targets.get("damaged_by_source"):
+            # "…**previously dealt damage by it**" (Diseased Vermin). Carried to
+            # the same seat loop for the same reason the two flags above are: it
+            # is the picker that enforces a printed narrowing, and an ability
+            # whose restriction stops at the parser is one that hits anybody.
+            spec["damaged_by_source"] = True
         return spec
     if kind == "player_or_planeswalker":
         # Chandra's Magmutt: player faces plus planeswalker permanents — the

@@ -248,6 +248,22 @@ def _stamp_token_count(payload: dict, node: "ast.CreateToken"):
             )
         payload["count"] = {"history": history}
         return payload["count"]
+    if node.per_source_regeneration:
+        # "…for each time it regenerated this turn" (Spiny Starfish). The count
+        # is a record on the ability's own source, so the payload names the key
+        # rather than a number and the handler reads it as the tokens are made
+        # (CR 608.2 counts at resolution). Beside the death tally above and not
+        # folded into it: that one is a game-wide counter on ``Game`` and this
+        # one is a permanent's own metadata, which no single reader can answer.
+        from ...regeneration import REGENERATED_THIS_TURN
+
+        if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
+            raise LoweringError(
+                "a per-regeneration token count multiplies one token, not several",
+                node=node,
+            )
+        payload["count"] = {"source_record": REGENERATED_THIS_TURN}
+        return payload["count"]
     if isinstance(node.count, ast.ThatMuch):
         # "create that many … tokens" — the count is the firing event's own
         # number (a delayed attack trigger's matching attackers), recorded by
