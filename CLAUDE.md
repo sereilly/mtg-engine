@@ -10,11 +10,12 @@ JSON per set, registered in `cards/manifest.json` (the single source of truth
 for which sets ship): Limited Edition Alpha (290 cards), Limited Edition Beta
 (292), Unlimited Edition (292 — same list as Beta), Arabian Nights (78),
 Antiquities (85), Revised Edition (296), Legends (310), The Dark (119),
-Fallen Empires (102), Fourth Edition (368), Ice Age (373), Homelands (115) and
-Core Set 2021 (285), 1,725 unique cards, all classified as supported.
-**Thirteen sets, and their sizes are the whole spread**: 4ED is a pure reprint
-set, every one of its cards already in the pool, so it is the one set that ships
-without implementing a card; Ice Age is the largest ever ingested and brought
+Fallen Empires (102), Fourth Edition (368), Ice Age (373), Homelands (115),
+Fifth Edition (434) and Core Set 2021 (285), 1,725 unique cards, all classified
+as supported.
+**Fourteen sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+reprint sets, every one of their cards already in the pool, so they are the two
+sets that ship without implementing a card; Ice Age is the largest ever ingested and brought
 **346 new cards**, more than any set since Alpha; and Fallen Empires is the
 smallest work set yet, 102 cards of which every single one was new. Homelands
 is the second set after FEM to bring nothing but new cards — 115 of 115, with
@@ -33,17 +34,19 @@ load it (`manifest_set_paths(include_measured=True)`), `load_catalog` does not,
 and no player can put one of its cards in a deck. **It is empty today** — M21
 went in under it at 58% supported, Antiquities at 56.5%, Legends at 32.9%, The
 Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
-67.6% and Homelands at 66.1%, and all eight were promoted to `sets`
-once every card was, which is the role working as designed rather than a role
-nobody uses. 4ED is the degenerate case that shows what the role is *for*
-rather than an exception to it: it entered `measured` fully supported and left
-the same day, and the ingest still paid — a guard proved itself unable to tell
-the roles apart for an all-reprint set, which is a finding only the measured
-step could surface. The next ingested set goes there first.
+67.6%, Homelands at 66.1% and Fifth Edition at 100%, and all nine were promoted
+to `sets` once every card was, which is the role working as designed rather
+than a role nobody uses. 4ED is the degenerate case that shows what the role is
+*for* rather than an exception to it: it entered `measured` fully supported and
+left the same day, and the ingest still paid — a guard proved itself unable to
+tell the roles apart for an all-reprint set, which is a finding only the
+measured step could surface. 5ED repeated the shape and its ingest paid the
+same way: a manifest-write guard that had baked in "measured starts empty"
+fired on the first real entry. The next ingested set goes there first.
 
 **The manifest is printing-ordered, and the order is load-bearing.** Antiquities
 went in at index 4, Legends at index 6, The Dark at index 7, Fallen Empires at
-index 8 and Fourth Edition at index 9, each *between*
+index 8, Fourth Edition at index 9 and Fifth Edition at index 12, each *between*
 the sets it was printed between rather than being appended — `CardDefinition.original_printing` is the first entry in
 `printings`, so appending would have left the 19 cards Antiquities shares with
 Revised reading `3ed`, and Golgothian Sylex ("each nontoken permanent with a
@@ -855,8 +858,9 @@ rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires and Homelands, all seven promoted before their in-game pass — have no
 recorded result yet, which
 SET_PLAYBOOK.md Phase 5 owns and deliberately does not gate promotion on; the
-summary at the top of the markdown is the current number). Fourth Edition is
-the one promotion that did not add to that backlog, because it added no card to
+summary at the top of the markdown is the current number). Fourth and Fifth
+Edition are the two promotions that did not add to that backlog, because they
+added no card to
 verify — the tracker is keyed to the deduped catalog, so a reprint set inherits
 every result its cards already have. **Ice Age is the opposite pole**: 346 new
 cards, the largest single addition to the untested count since the tracker

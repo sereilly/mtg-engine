@@ -15,10 +15,15 @@
       "lowered_pct": 90.0,
       "parsed_pct": 90.6
     },
+    "5ED": {
+      "executed_pct": 60.1,
+      "lowered_pct": 92.4,
+      "parsed_pct": 92.6
+    },
     "ALL": {
-      "executed_pct": 56.5,
-      "lowered_pct": 87.3,
-      "parsed_pct": 88.3
+      "executed_pct": 56.9,
+      "lowered_pct": 87.9,
+      "parsed_pct": 88.8
     },
     "ARN": {
       "executed_pct": 50.9,
