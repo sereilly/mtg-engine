@@ -711,6 +711,29 @@ def _parse_postmodifiers(
                 if stream.accept_phrase("blocked", "this", "turn"):
                     d.blocked_by_target_object = blocker
                     continue
+            # "…all creatures **that blocked this creature this turn**"
+            # (Joven's Ferrets). The active voice of the passive clause above,
+            # with the ability's own source as the referent — so it sets its
+            # own field rather than either of theirs: which object the block
+            # record is read against decides which permanent the sweep names,
+            # and one field meaning either would leave the matcher guessing.
+            #
+            # Read *after* "blocked or were blocked by", whose first word this
+            # is: tried first it would take the word and strand the "or".
+            # "This turn" is required for that clause's reason — the record is
+            # kept per turn, and a clause naming another window is a different
+            # sentence.
+            elif stream.at_word("blocked"):
+                blocked_probe = stream.mark()
+                stream.advance()
+                if accept_source_reference(stream) and stream.accept_phrase(
+                    "this", "turn"
+                ):
+                    d.blocked_source_this_turn = True
+                    continue
+                stream.reset(blocked_probe)
+                stream.reset(probe)
+                break
             elif stream.accept_phrase("dealt", "damage", "to"):
                 if accept_source_reference(stream) and stream.accept_phrase(
                     "this", "turn"

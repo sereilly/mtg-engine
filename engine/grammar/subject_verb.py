@@ -925,7 +925,32 @@ def parse_subject_verb(
         # word Lich never prints. A line this branch cannot finish keeps the
         # refusal it already had.
         if token.text in ("don't", "doesn't") and stream.peek_word(1) == "untap":
-            return _parse_doesnt_untap_next_step(stream, source_spec)
+            return _parse_doesnt_untap_next_step(
+                stream, _untap_subject(source_spec)
+            )
 
     stream.reset(mark)
     raise stream.error("unrecognized effect verb")
+
+
+def _untap_subject(subject: "ast.Recipient | None") -> "ast.Recipient | None":
+    """*subject* as the untap restriction reads it — the plural pronoun made a
+    bound set.
+
+    "Tap all creatures that blocked this creature this turn. **They** don't
+    untap during their controller's next untap step." (Joven's Ferrets.) The
+    subject reader has no verb in hand when it meets "they", and reads it as a
+    *seat* (``that_player``) — which is what the word means in front of every
+    other verb it opens ("they lose 1 life", "they sacrifice a creature"). CR
+    502.1 untaps permanents and never players, so in front of this one verb the
+    same word is the plural of "those creatures": the objects the sentence
+    before it acted on.
+
+    Rewritten here rather than in the subject reader, and rewritten to the
+    quantifier the bound plural already carries rather than to a second
+    spelling of it — so the lowering keeps one branch, and its producer gate
+    (a set really was recorded) applies to both printings.
+    """
+    if isinstance(subject, ast.PlayerRef) and subject.kind == "that_player":
+        return ast.TargetSpec(quantifier="those", filter=ast.ObjectFilter())
+    return subject

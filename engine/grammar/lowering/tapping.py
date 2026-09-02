@@ -152,6 +152,36 @@ def _lower_tap(
             ),
         )
 
+    # "…**Tap that creature.**" (Samite Alchemist.) The object the sentence in
+    # front of it already targeted, not a second choice — so no ``targets``
+    # description is emitted and the handler taps the ability's one target,
+    # exactly as ``prevent_damage_by_target_until_eot`` reads the identical
+    # noun phrase for Telekinesis. A bound object carries no narrowing to
+    # honour, which is why a restated adjective refuses rather than being
+    # dropped, and the card type still rides so the handler tests what the
+    # phrase named.
+    #
+    # Below ``names_attached_permanent`` above, which reads the same two words
+    # as the source's attachment under the two events that name one: Mind
+    # Whip's "you tap that creature" must keep that reading.
+    if (
+        isinstance(node, ast.Tap)
+        and spec.quantifier == "that"
+        and not spec.targeted
+        and not spec.filter.is_source
+    ):
+        if _restrictions_beyond(spec.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound object carries no narrowing the tap could honour",
+                node=node,
+            )
+        described = _filter_payload(spec.filter)
+        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            raise LoweringError(
+                "no tap handler honours this restriction", node=node
+            )
+        return (OracleInstruction("tap_target_permanent", "", described),)
+
     # "Untap this artifact" (Basalt Monolith), "untap enchanted creature" and
     # "Tap this creature" (Seasoned Hallowblade) name their subject without a
     # target being chosen — the source and the enchanted permanent are known —
@@ -276,11 +306,17 @@ def _lower_tap(
         # declare-blockers step stamps. Its twin ``attacking`` is deliberately
         # absent: round 43's rule is that a field is listed once the pool prints
         # it, and nothing in the pool sweeps taps over attackers.
+        # "Tap all creatures **that blocked this creature this turn**."
+        # (Joven's Ferrets.) A block *history* rather than a state, so it
+        # reaches the payload as ``blocked_source_this_turn`` and
+        # ``subject_matches`` tests it off the record the declare-blockers step
+        # stamps on each blocker — relative to the ability's own source, which
+        # that function already takes and this handler already passes.
         leftovers = _restrictions_beyond(
             spec.filter,
             frozenset({
                 "card_types", "supertypes", "subtypes", "colors", "controller",
-                "tapped", "blocking",
+                "tapped", "blocking", "blocked_source_this_turn",
             }),
         )
         if leftovers:
@@ -671,7 +707,22 @@ def _lower_doesnt_untap_next_step(
         raise LoweringError(
             "a bound plural carries no narrowing the marker could honour", node=node
         )
-    if _TAPPED_PERMANENTS not in produced:
+    # Which record the bound plural reads, in printed-order preference. Two
+    # steps can tap: a target ("Tap target creature. **It** doesn't untap…",
+    # Frost Breath, Telekinesis) and a sweep ("tap all creatures that blocked
+    # this creature this turn. **They** don't untap…", Joven's Ferrets). One
+    # ordered pair rather than a widened `_RECORDED_PERMANENTS` lookup, because
+    # this sentence only ever names what a *tap* recorded — a counter placement
+    # or a reanimation in the same effect would be a different set, and the
+    # sibling `DoesntUntapWhileCounter` is the node written for those.
+    recorded = next(
+        (
+            key for key in (_TAPPED_PERMANENTS, TAPPED_THIS_WAY_OBJECTS)
+            if key in produced
+        ),
+        None,
+    )
+    if recorded is None:
         # "Whenever this creature attacks, … **it** doesn't untap during your
         # next untap step." (Spectral Bears.) Idiom 20: a pronoun names the
         # object the sentence already named, and under a trigger that object is
@@ -705,7 +756,7 @@ def _lower_doesnt_untap_next_step(
             # effect's nested instructions, and every reader that walks a
             # program recurses into it.
             {
-                "permanents_from": _TAPPED_PERMANENTS,
+                "permanents_from": recorded,
                 "untap_steps": node.count,
                 **seated,
             },

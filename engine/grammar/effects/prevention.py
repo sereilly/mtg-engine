@@ -44,12 +44,26 @@ def _parse_prevent(stream: TokenStream) -> ast.PreventDamage:
     amount = parse_amount(stream)
     if not stream.accept_word("damage"):
         raise stream.error("expected 'damage'")
-    if not stream.accept_phrase("that", "would", "be", "dealt", "to"):
-        raise stream.error("expected 'that would be dealt to'")
+    if not stream.accept_phrase("that", "would", "be", "dealt"):
+        raise stream.error("expected 'that would be dealt'")
+    # "…that would be dealt **this turn to** target creature you control."
+    # (Samite Alchemist.) The pre-modern printing puts the duration first, and
+    # both orders are the same sentence — the blanket branch below already
+    # reads either for Pack Leader's identical swap, and a numeric shield
+    # failing on word order is the card lost to a printing convention rather
+    # than to a missing effect. Read here, before the "to", so the recipient
+    # reader below sees the same stream either way.
+    duration = _parse_duration(stream)
+    if not stream.accept_word("to"):
+        raise stream.error("expected 'to' in a prevention effect")
     recipient = parse_recipient(stream)
     if recipient is None:
         raise stream.error("expected something to shield")
-    duration = _parse_duration(stream)
+    # The trailing spelling. Only one of the two may be printed: a duration on
+    # both sides is not a sentence this reads, and taking the second silently
+    # would let two windows disagree about how long the shield lasts.
+    if duration.kind is None:
+        duration = _parse_duration(stream)
     alternate = _parse_instead_rider(stream)
     if alternate is None:
         return ast.PreventDamage(amount, to=recipient, duration=duration)

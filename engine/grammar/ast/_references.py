@@ -318,6 +318,20 @@ class ObjectFilter:
     # ``subject_matches`` can answer it: it needs the source, which that
     # function already takes.
     blocked_by_source: bool = False
+    # "…all creatures **that blocked this creature this turn**" (Joven's
+    # Ferrets). The same block record as ``blocked_by_bound_object`` above,
+    # read off a third referent: the ability's own source. "This turn" is what
+    # makes it a *history* rather than the live relation ``blocking_source``
+    # carries — a turn holds several combats, and the creatures that blocked in
+    # an earlier one, or died doing it, are in the set the words name while the
+    # combat maps have forgotten them.
+    #
+    # Emitted, and testable for ``blocked_by_source``'s reason: the record
+    # lives on the *candidate* (a blocker names the attackers it blocked), and
+    # the only other thing needed is the ability's source, which
+    # ``subject_matches`` already takes. A caller with no source answers no,
+    # which refuses the sweep rather than handing it the board.
+    blocked_source_this_turn: bool = False
     # "…destroy all Merfolk **tapped this turn to pay for its abilities**."
     # (Vodalian War Machine.) Narrower than "tapped this turn": a Merfolk
     # tapped to attack, or by somebody else's Icy Manipulator, is not in the
@@ -477,6 +491,8 @@ class ObjectFilter:
             payload["attacking_only"] = True
         if self.blocked_by_source:
             payload["blocked_by_source"] = True
+        if self.blocked_source_this_turn:
+            payload["blocked_source_this_turn"] = True
         if self.tapped_to_pay_for_source_this_turn:
             payload["tapped_to_pay_for_source_this_turn"] = True
         if self.banded_with_source:
