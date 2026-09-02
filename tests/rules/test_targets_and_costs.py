@@ -1271,3 +1271,198 @@ def test_608_2h_the_last_known_information_a_destroy_records_does_not_depend_on_
         return game.players[0].life
 
     assert _cast(by_id=False) == _cast(by_id=True) == 25
+
+
+# --- GyRes: the two graveyard-target residuals (CR 608.2b / 601.2c) ---
+#
+# A graveyard slot has no ``permanent_id``, so a chosen card is remembered as a
+# ``GraveyardTarget`` stamp and re-located at resolution. Two residuals lived in
+# that seam. Resolution: a stamp whose card had left the pile *entirely* fell
+# through to the stale index, which named whatever slid into the vacated slot —
+# exile the Serra Angel a Resurrection targeted and it reanimated the Grizzly
+# Bears beneath it. Announcement: ``cast_target_refusal`` skipped graveyard
+# targets and ``_validate_cast_targets`` keys on the *primary* instruction kind,
+# so a spell whose graveyard targeting sits inside a ``sequence`` (Fungal
+# Rebirth, Experimental Overload) accepted an announcement naming an opponent's
+# pile and silently re-pointed it at the caster's own. The *ambiguous* case —
+# two copies of one card are literally one ``CardDefinition``, so resolution
+# clamps to the last surviving copy — is deliberately unchanged, and the third
+# test below is the guard that says so.
+
+
+@pytest.mark.cr("608.2b")
+def test_608_2b_a_graveyard_targets_vanished_card_is_not_the_card_beneath_it(
+    set_pool, cards,
+):
+    """Resurrection targets the Serra Angel in its caster's graveyard; the
+    Angel is exiled in response. CR 608.2b: the chosen card is no longer in the
+    zone it was targeted in, it was the spell's only target, so the spell does
+    not resolve — it leaves the stack and is put into its owner's graveyard.
+    What must NOT happen is the stale slot answering instead: the Grizzly Bears
+    beneath the Angel slid into its index, and the old fall-through reanimated
+    them."""
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("LEA")["Resurrection"]],
+        graveyard=[cards["Grizzly Bears"], cards["Serra Angel"]],
+    )
+    game = _two_player_game(p1, PlayerState(name="P2"))
+    game.queue_from_hand(0, "Resurrection", target_permanent_index=1)
+
+    p1.graveyard.pop(1)  # the Angel is exiled in response
+
+    game.resolve_top_of_stack()
+
+    assert [p.card.name for p in p1.battlefield] == [], game.log
+    assert [c.name for c in p1.graveyard] == ["Grizzly Bears", "Resurrection"]
+    assert any("every target is illegal" in line for line in game.log), game.log
+
+
+@pytest.mark.cr("608.2b")
+def test_608_2b_a_graveyard_target_that_merely_slid_is_still_reanimated(
+    set_pool, cards,
+):
+    """The other direction, and the reason the answer is a stamp rather than a
+    refusal to hold an index at all: the pile shifting *beneath* the chosen
+    card is not a zone change for it. The Bears leave, the Angel slides from
+    slot 1 to slot 0, and the spell still reanimates the Angel."""
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("LEA")["Resurrection"]],
+        graveyard=[cards["Grizzly Bears"], cards["Serra Angel"]],
+    )
+    game = _two_player_game(p1, PlayerState(name="P2"))
+    game.queue_from_hand(0, "Resurrection", target_permanent_index=1)
+
+    p1.graveyard.pop(0)  # the Bears leave; the Angel slides down a slot
+
+    game.resolve_top_of_stack()
+
+    assert [p.card.name for p in p1.battlefield] == ["Serra Angel"], game.log
+
+
+@pytest.mark.cr("608.2b")
+def test_608_2b_a_surviving_copy_of_the_chosen_card_is_not_a_fizzle(
+    set_pool, cards,
+):
+    """The deliberate boundary of the fizzle. Two copies of one card in one
+    graveyard are literally one ``CardDefinition``, so when one of them leaves
+    the engine cannot know which — resolution clamps to the last surviving copy
+    rather than guessing, and the fizzle is reserved for the case the data
+    model can establish: NO copy of the chosen card left in that pile."""
+    bears = cards["Grizzly Bears"]
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("LEA")["Resurrection"]],
+        graveyard=[bears, bears],
+    )
+    game = _two_player_game(p1, PlayerState(name="P2"))
+    game.queue_from_hand(0, "Resurrection", target_permanent_index=1)
+
+    p1.graveyard.pop(1)  # one copy leaves; one indistinguishable copy remains
+
+    game.resolve_top_of_stack()
+
+    assert [p.card.name for p in p1.battlefield] == ["Grizzly Bears"], game.log
+    assert not any("every target is illegal" in line for line in game.log), game.log
+
+
+@pytest.mark.cr("608.2b")
+def test_608_2b_only_the_vanished_slot_of_a_several_target_return_is_unaffected(
+    set_pool, cards,
+):
+    """CR 608.2b's last sentence, one zone over: with one of two chosen cards
+    gone, the spell still resolves and the surviving target is still returned —
+    while the vanished card's slot, which the Hill Giant has slid into, is
+    left alone rather than inherited. Sanguine Indulgence names the Bears
+    (slot 0) and the Angel (slot 1); the Angel is exiled in response."""
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("M21")["Sanguine Indulgence"]],
+        graveyard=[cards["Grizzly Bears"], cards["Serra Angel"], cards["Hill Giant"]],
+    )
+    game = _two_player_game(p1, PlayerState(name="P2"))
+    game.queue_from_hand(0, "Sanguine Indulgence", target_permanent_index=[0, 1])
+
+    p1.graveyard.pop(1)  # the Angel is exiled; the Hill Giant slides into slot 1
+
+    game.resolve_top_of_stack()
+
+    assert [c.name for c in p1.hand] == ["Grizzly Bears"], game.log
+    assert [c.name for c in p1.graveyard] == ["Hill Giant", "Sanguine Indulgence"]
+
+
+@pytest.mark.cr("601.2c")
+@pytest.mark.parametrize("name", ["Fungal Rebirth", "Experimental Overload"])
+def test_601_2c_a_sequence_wrapped_graveyard_target_must_sit_in_a_pile_the_spell_reads(
+    set_pool, name,
+):
+    """"…from **your** graveyard" is part of what makes an announcement legal,
+    for a spell exactly as the activation twin already enforced for an ability
+    (CR 601.2c). Both of these spells print their graveyard return as a later
+    sentence, so their compiled program is a ``sequence`` and the per-kind arms
+    in ``_validate_cast_targets`` never see the target — an announcement naming
+    an opponent's pile was accepted and silently re-pointed at the caster's
+    own. It is refused instead, before any cost is paid: the spell stays in
+    hand and neither graveyard moves."""
+    pool = set_pool("M21")
+    p1 = PlayerState(name="P1", hand=[pool[name]], graveyard=[pool["Shock"]])
+    p2 = PlayerState(name="P2", graveyard=[pool["Opt"]])
+    game = _two_player_game(p1, p2)
+
+    result = game.cast_from_hand(
+        0, name, target_player_index=1, target_permanent_index=0,
+    )
+
+    assert result.supported is False
+    assert "no valid target" in result.details
+    assert [c.name for c in p1.hand] == [name]
+    assert [c.name for c in p1.graveyard] == ["Shock"]
+    assert [c.name for c in p2.graveyard] == ["Opt"]
+
+
+@pytest.mark.cr("601.2c")
+def test_601_2c_a_legal_graveyard_announcement_still_returns_the_named_card(
+    set_pool, cards,
+):
+    """The control: the picker never offered the illegal choice, so the gate
+    must change nothing about a legal one. Fungal Rebirth names slot 1 of its
+    caster's own pile and returns exactly that card, whether the seat is left
+    implicit or named as the caster's own."""
+    pool = set_pool("M21")
+    for seat in (None, 0):
+        p1 = PlayerState(
+            name="P1", hand=[pool["Fungal Rebirth"]],
+            graveyard=[cards["Sol Ring"], cards["Grizzly Bears"]],
+        )
+        game = _two_player_game(p1, PlayerState(name="P2"))
+
+        result = game.cast_from_hand(
+            0, "Fungal Rebirth",
+            target_player_index=seat, target_permanent_index=1,
+        )
+
+        assert result.supported is True, result.details
+        assert [c.name for c in p1.hand] == ["Grizzly Bears"]
+        assert [c.name for c in p1.graveyard] == ["Sol Ring", "Fungal Rebirth"]
+
+
+@pytest.mark.cr("601.2c")
+def test_601_2c_a_legal_sequence_wrapped_announcement_still_resolves_its_other_steps(
+    set_pool,
+):
+    """Experimental Overload's graveyard target is one step of three; a legal
+    announcement must still run the steps around it — the Weird token arrives
+    sized by the instants and sorceries in the caster's graveyard."""
+    pool = set_pool("M21")
+    p1 = PlayerState(
+        name="P1", hand=[pool["Experimental Overload"]],
+        graveyard=[pool["Shock"], pool["Opt"]],
+    )
+    game = _two_player_game(p1, PlayerState(name="P2"))
+
+    result = game.cast_from_hand(
+        0, "Experimental Overload", target_permanent_index=1,
+    )
+
+    assert result.supported is True, result.details
+    assert [(p.card.name, p.effective_power) for p in p1.battlefield] == [
+        ("Weird Token", 2)
+    ], game.log
+# --- end GyRes ---

@@ -1215,10 +1215,26 @@ class GameHelpersMixin:
     def chosen_graveyard_index(self, target, index):
         """The graveyard slot a cast-time choice named, re-located now.
 
-        Additive for the same reason ``chosen_permanent`` is: a stamp that no
-        longer resolves falls through to the index the caller already had, so
-        this can only turn a wrong answer into a right one. Mirrors the shape it
-        is given — one slot, a list of them, or None.
+        Mirrors the shape it is given — one slot, a list of them, or None —
+        and gives each stamp one of three answers:
+
+        * a stamp with a surviving copy re-locates to it, clamping to the last
+          one where fewer remain than the ordinal asked for —
+          ``graveyard_index_of``'s deliberately ambiguous case;
+        * a stamp with **no** surviving copy answers None, because the chosen
+          card is gone and the slot it sat in now names a different card. This
+          used to fall through to the stale index on the claim that falling
+          through "can only turn a wrong answer into a right one" — false for
+          exactly this path: exile the Serra Angel a Resurrection targeted and
+          the stale index reanimated the Grizzly Bears beneath it. CR 608.2b
+          owns the gone target instead: a spell whose every stamp answers None
+          is removed from the stack by ``illegal_targets_refusal`` before any
+          handler runs, and a handler handed None for one slot of several
+          leaves that slot's vanished card unaffected (the rule's last
+          sentence) while the surviving targets still resolve;
+        * no stamp at all keeps the caller's index — nothing was recorded, so
+          there is no choice to have gone stale (an untargeted cast still
+          resolves its own pick, exactly as before).
         """
         if isinstance(target, list):
             slots = index if isinstance(index, list) else []
@@ -1226,8 +1242,9 @@ class GameHelpersMixin:
                 self.chosen_graveyard_index(stamp, slots[i] if i < len(slots) else None)
                 for i, stamp in enumerate(target)
             ]
-        found = self.graveyard_index_of(target)
-        return index if found is None else found
+        if target is None:
+            return index
+        return self.graveyard_index_of(target)
 
     def stamp_graveyard_targets(self, seat, index):
         """Every chosen graveyard slot, named. Mirrors the index's own shape."""

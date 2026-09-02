@@ -133,17 +133,41 @@ def test_the_chosen_cards_go_on_top_in_the_order_they_were_named(set_pool):
     assert [card.name for card in p2.library[:2]] == ["Su-Chi", "Ornithopter"]
 
 
-def test_a_nonartifact_slot_is_dropped_rather_than_moved(set_pool):
-    """CR 608.2b: an illegal choice is not performed, and the rest of the
-    effect still happens."""
+def test_a_nonartifact_slot_is_an_illegal_announcement(set_pool):
+    """CR 601.2c: naming the Citanul Druid for "target artifact card" is an
+    illegal announcement, so the cast is refused with nothing spent and
+    nothing moved. This used to be accepted and cleaned up at resolution —
+    the graveyard target reached no announcement gate at all — which is the
+    laxity the GyRes round in tests/rules/test_targets_and_costs.py closed."""
     game, pool, p1, p2 = _drafna(set_pool)
 
-    game.cast_from_hand(
+    result = game.cast_from_hand(
         0, "Drafna's Restoration",
         target_player_index=1, target_permanent_index=[1, 0],
     )
 
-    assert [card.name for card in p2.graveyard] == ["Citanul Druid", "Su-Chi"]
+    assert not result.supported
+    assert [card.name for card in p1.hand] == ["Drafna's Restoration"]
+    assert [card.name for card in p2.graveyard] == [
+        "Ornithopter", "Citanul Druid", "Su-Chi",
+    ]
+
+
+def test_a_slot_whose_card_left_in_response_is_dropped_rather_than_moved(set_pool):
+    """CR 608.2b's last sentence: a chosen card that left the pile with the
+    spell on the stack is simply not moved, and the surviving target still
+    goes on top — never the card that slid into the vacated slot."""
+    game, pool, p1, p2 = _drafna(set_pool)
+    game.queue_from_hand(
+        0, "Drafna's Restoration",
+        target_player_index=1, target_permanent_index=[2, 0],
+    )
+
+    p2.graveyard.pop(2)  # the Su-Chi is exiled in response
+
+    game.resolve_top_of_stack()
+
+    assert [card.name for card in p2.graveyard] == ["Citanul Druid"]
     assert p2.library[0].name == "Ornithopter"
 
 
