@@ -1,14 +1,15 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **1,610** unique cards (LEA/LEB/2ED/ARN/ATQ/
-3ED/LEG/DRK/FEM/4ED/ICE/M21, all shipped and all supported) to the full release
-line — **137 sets, 33,594 printings, 26,113 unique cards** per
-`set_progress.json`. Twelve sets, and the recent arrivals span the whole range:
-4ED is a pure reprint set that bought printings rather than cards, Ice Age
-brought 346 new ones (the largest addition since Alpha), and Fallen Empires
+Target: grow the card pool from **1,725** unique cards (LEA/LEB/2ED/ARN/ATQ/
+3ED/LEG/DRK/FEM/4ED/ICE/HML/M21, all shipped and all supported) to the full
+release line — **137 sets, 33,594 printings, 26,113 unique cards** per
+`set_progress.json`. Thirteen sets, and the recent arrivals span the whole
+range: 4ED is a pure reprint set that bought printings rather than cards, Ice
+Age brought 346 new ones (the largest addition since Alpha), Fallen Empires
 brought 102 of which every single one was new — the smallest work set so far,
 and the first inserted into the middle of the printing order rather than
-appended.
+appended — and Homelands repeated that all-new shape at 115 of 115, inserted
+at index 11 between Ice Age and M21.
 
 **The reprint shape recurs and is worth planning for** — `set_progress.json`
 records 13 sets in the release line with zero new cards, and ten are still
@@ -31,12 +32,13 @@ need the reasoning behind one of these bullets; do not add a new round here.
 The process a set follows, phase by phase, is `SET_PLAYBOOK.md`. Numbers go
 here, process goes there, and neither repeats the other.
 
-**Why the journal is culled, and this is the second time.** It first reached
+**Why the journal is culled, and this is the third time.** It first reached
 2,700 lines, of which 2,350 were narrative that no longer changed anyone's
-decisions; that cull is at `ee28617`. Ice Age then put 1,800 lines back, and the
-same rule applies to them — those rounds are readable at and before `49f74af`.
-A file nobody reads to the end is a file whose *live* items go unread with the
-dead ones. The parts that were still doing work are all below.
+decisions; that cull is at `ee28617`. Ice Age then put 1,800 lines back
+(readable at and before `49f74af`), and Homelands put 400 back (readable at
+and before `0a1ce5d1`) — the same rule applies each time. A file nobody reads
+to the end is a file whose *live* items go unread with the dead ones. The
+parts that were still doing work are all below.
 
 ---
 
@@ -46,7 +48,7 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **11,923 tests**, CI budget **500s**, CI-measured
+2. **The suite stays fast.** **12,035 tests**, CI budget **500s**, CI-measured
    baseline **260s** (`ci.yml`). The budget catches a step change; the baseline
    is what catches creep, and it is the number to keep honest. Raising the
    budget is a decision, not maintenance — it has been raised four times on
@@ -166,36 +168,55 @@ the code with no test behind it.
 
 ### Open blocks, still standing
 
-- **`card.name` has no ratchet.** The legend rule read the printed name for a
-  year and a half (fixed post-LEG; `perm.effective_card.name` and
-  `printed_supertypes(perm.effective_card.type_line)` now, the idiom
-  `engine/landwalk.py` was already using). The guard that would have caught it
-  does not exist: `tests/engine/test_layer_reads.py` ratchets `card.type_line`,
-  `card.colors`, `card.oracle_text` and `card.keywords`, and `card.name` is not
-  among them because hundreds of reads are log lines, prompt labels and fixture
-  decklists. It needs a census that separates a *dispatch* on the name from a
-  *mention* of it — the same distinction `test_card_name_reads.py` already
-  draws for `engine/`, applied to one field.
-- **An AI seat never casts its commander** (the Commander variant's known
-  deferral). `ai_policy.py` and `ai_valuation.py` read the hand and the
-  battlefield; neither names `command_zone`, so an AI commander sits there for
-  the whole game and Commander-vs-AI is a handicap match. The CR 903.9 zone
-  prompt already defaults safely for AI seats — this is a missing *policy*, not
-  a rules gap. Wants the same shape as every other AI read: derived from the
-  compiled program in `ai_valuation.py`, weight tuning in `ai_policy.py`.
-- **A *toll* has no default anybody chose.** Its twin is closed: a *free*
-  `optional_pay` offer is refused when the offered action spends the seat's own
-  resources and the card prints nothing for refusing
-  (`ai_valuation.offered_action_is_a_payment`, over the instruction kinds the
-  rules define as done to oneself — CR 701.21a sacrifice, 701.9a discard,
-  118.3b pay life, 407.4 ante, 701.13a exile). That is the stated policy **take
-  gifts, pay tolls, make no trades**. A toll is still asked and answered by
-  affordability alone — pay if the mana is floating, else take the penalty — and
-  nine cards ride on it. The missing piece is a valuation of which of two losses
-  is smaller, because nothing in the compiled program separates "pay Season of
-  the Witch's 2 life" from "sacrifice Curse Artifact's artifact". By CLAUDE.md's
-  split that is `ai_policy` work with an `ai_valuation` derivation behind it,
-  not another branch in `_default_optional_pay`.
+- **Drained 2026-09-02: `card.name` has its ratchet.**
+  `tests/engine/test_printed_name_reads.py` separates a *dispatch* on the
+  printed name from a *mention* of it (956 reads censused across `engine/` and
+  `web/`: 45 dispatch-shaped, the rest f-strings, labels and serialization).
+  Four dispatch sites were live Clone-shaped bugs, each fixed with a CR 707.2
+  test that fails on the old engine: the same-name CDA count (a Clone of
+  Plague Rats neither was one nor counted one), `UNTAPPED_ARTIFACT_PROTECTORS`
+  (a Clone of Guardian Beast protected nothing), `ON_LEAVE_BATTLEFIELD` (a
+  Clone of Gaea's Liege left its Forests standing) and Goblin Artisans' rival
+  scan. 39 reads in 9 modules are ratcheted (counts may only shrink). The
+  largest ratcheted family — 29 reads — is one migration: the upkeep-prompt
+  wire protocol keys prompts by printed name on both the write and read side;
+  draining it means `permanent_id` keys on both sides in one round, which also
+  stops two same-named permanents sharing one prompt answer. Two
+  dispatch-in-spirit shapes are invisible to the classifier and recorded here:
+  `commander.py`'s CR 903.10a damage tally keys by name through an
+  intermediate tuple (harmless today — no pool commander can change names),
+  and names carried into records whose comparisons happen later on plain
+  `.name` (`dead_name` is *correct* by CR 707.2 — copy effects end on leaving
+  the battlefield, so a graveyard card is the printed face).
+
+- **Drained 2026-09-02: an AI seat casts its commander.**
+  `ai_valuation.castable_commanders` asks the engine's own commander seam
+  (`may_cast_from_command_zone`, `commander_tax`) rather than the compiled
+  program — CR 903.8 is a rule, not oracle text, so the seam is the honest
+  derivation — and `choose_cast_action` runs its ordinary per-card body over
+  the command zone with the tax threaded in as extra generic cost;
+  `COMMAND_ZONE_CAST_BONUS` in `ai_policy.py` prices the netted card.
+  `CastAction` carries `from_zone`, and both executors forward it. A duel's
+  command zone is never read, and determinism is untouched.
+
+- **Drained 2026-09-02: a toll compares its two losses.**
+  `ai_valuation.toll_branch_loss` prices one branch's loss off the compiled
+  program — life paid or damage taken, cards discarded or anted, self-mill,
+  and the actual permanents lost via the engine's own sacrifice ordering —
+  returning None for any step it cannot price;
+  `ai_policy.toll_decline_is_smaller_loss` compares the sides in
+  life-equivalents (lethal outprices everything), asked once beside the
+  existing unpriced-trade question in `_default_optional_pay` — no per-shape
+  branch, no card name. The item's "nine cards" was stale: the pool holds
+  **22** toll cards. **8** are now decided by the comparison (Curse
+  Artifact's victim takes the 2 damage rather than sacrificing, paying only
+  when declining would be lethal; Hecatomb sacrifices itself, not four
+  creatures), **8** are mana-priced and deliberately left to the
+  floating-mana policy, and **6** have an unpriceable side — counter that
+  spell, a coin flip, counter placement (Mana Vortex, Amulet of Quoz, the
+  Chants, Koskun Falls, Essence Vortex) — where pay-tolls stands. Those six
+  are the item's residue: the comparison reaches them when those losses have
+  valuations.
 
 ### Recorded, measured, and not yet fixed
 
@@ -254,50 +275,47 @@ last re-probed. Re-probe before scheduling one.
   fixing the card is not closing the report. Re-check it in the app and record
   the pass through the Debug Menu, or the repo goes on advertising a live bug.
 
-- **A trigger's "that player" back-reference falls through to `target_player`
-  rather than refusing.** `lowering/_events.py` says in its own docstring that
-  "a condition absent from a table refuses the line instead", and the damage
-  family's last `elif` breaks that contract: a condition in neither
-  `_EVENT_SUBJECT_CONTROLLERS` nor `_EVENT_SUBJECT_PLAYERS` silently becomes a
-  *target* the card never offers.
+- **Drained 2026-09-02: the "that player" fall-through refuses.** The damage
+  family's last `elif` in `lowering/_events.py` now raises a `LoweringError`
+  naming the event that freezes no seat, restoring the module's own documented
+  contract. The pre-fix census read **12** trigger riders, not the recorded 11
+  — Takklemaggot's granted upkeep line had joined — plus five spells
+  (Detonate, Icequake, Leeches, Word of Blasting, Worms of the Earth) whose
+  "that player" is a sentence back-reference resolved off the resolution
+  context: the fall-through's legitimate remainder, untouched. The
+  hand-written fire sites (Ankh of Mishra, Dingus Egg) now enqueue the
+  compiled instruction with the land's controller frozen under
+  `event_subject_controller`, retiring the synthetic swap; the upkeep-registry
+  seats ride `event_subject_player`; Lim-Dûl's Hex's pronoun binds to the
+  innermost `for_each` loop by marker. Twelve programs moved, nothing else.
+  Incidental yield: a `may` whose frozen seat has **left the game** now runs
+  its decline branch (CR 800.4f — a departed player's cost "is not paid");
+  the old fallback had skipped Erosion's consequence for a departed payer.
 
-  **Re-censused 2026-08-31: still 11 triggered abilities**, the same count as
-  when it was written and not the same list — the three live bugs left and
-  Lim-Dûl's Hex (ICE) joined. Every one is correct **by accident**, and there
-  are now three different accidents: Ankh of Mishra and Dingus Egg replace the
-  compiled instruction outright at a hand-written fire site carrying their own
-  `victim_player_index`; Manabarbs and the seven `upkeep_enchanted_controller`
-  Auras get the seat from a registry; and Lim-Dûl's Hex is inside a `for_each`
-  over each player, so the **loop** binds the pronoun the table would have.
-  Closing the fall-through means giving those fire sites the compiled
-  instruction first, or Ankh of Mishra becomes unsupported. **Its own round, and
-  that census is its work list.**
+- **Drained 2026-09-02: the two layer-4 reads agree, and board-wide layer-4
+  statics chain in timestamp order (CR 613.7).** Both `land_types.py`
+  predicates now judge against `layer_bridge.types_before_timestamp` — the
+  intermediate state built by replaying only the layer-4 effects stamped
+  earlier than the asking effect — and `_refresh_static_land_types` walks all
+  applicable statics timestamp-sorted instead of breaking at the first, so
+  Conversion sees the Mountain Blood Moon made (Blood Moon earlier: Tundra
+  ends a Plains; Conversion earlier: Tundra ends a Mountain). The same
+  intermediate state also lets a static chain with the *recorded* channel — a
+  Phantasmal-Terrain-shaped contribution with an earlier stamp is visible to
+  a later Conversion — a third disagreement the item never named.
+  `static_source_timestamp` now stamps the first refresh that *sees* a source
+  rather than the first that applies it (CR 613.7a wants the ability's
+  object; an inapplicable-on-arrival static previously had no place in the
+  order at all). Zero compiled programs moved; seven CR-cited tests.
 
-  **Every candidate is now cleared rather than suspected** (HML wave 2,
-  2026-09-02). Ten of them were played at a **three-seat** table with the Aura's
-  controller as a third party — two seats hide this class entirely, which is why
-  the earlier censuses could only call them "correct by accident" — and Cursed
-  Land, Feedback, Maddening Wind, Mind Whip, Wanderlust, Warp Artifact, Curse
-  Artifact, Manabarbs and Dingus Egg all damage the right seat. Ankh of Mishra is
-  correct through its only fire site, and the land-put-onto-the-battlefield gap
-  it also has reproduced as the separately-recorded item it is rather than a seat
-  bug. Two CR 608.2h tests pin it, one per mechanism (seat off an attachment,
-  seat off an event). **The fall-through in `_events.py`'s last `elif` is still
-  open** — the contract its own docstring states is still broken — but the round
-  that closes it now has a verified list instead of a suspicion, and Reef Pirates
-  (HML) refuses on its own rather than riding it.
-
-- **Two layer reads disagree about the same land.** In `engine/land_types.py`,
-  `static_supertype_removal_applies` asks `permanent.has_type` (layer 4) while
-  `static_land_type_change_applies` beside it tests its `from_type` against
-  `effective_card.type_line` (layer 3) — so Conversion cannot see a Mountain
-  that Blood Moon made, two layer-4 effects CR 613.7 says should chain by
-  timestamp. Confirmed still open 2026-08-31, and reachable now that Blood Moon
-  ships. Deliberately **not** taken with the CR 305.7 round: asking `has_type`
-  there reads layer 4's result while computing layer 4's inputs, so the fix is a
-  dependency ordering rather than a changed accessor. The caller's `break` after
-  the first matching source (`permanent_state._refresh_static_land_types`) is
-  the same round's second half — CR 613.7 chains statics, it does not pick one.
+- **CR 613.8 dependency is not implemented, and Blood Moon/Conversion is its
+  reproduction.** Under full rules Conversion *depends on* Blood Moon
+  (applying one changes what the other applies to), so it would apply after
+  it regardless of timestamps and **both** orders would yield Plains; the
+  engine's timestamp-only answer is what makes the order observable. The
+  Conversion-first test documents in its docstring that its expectation is
+  the one that must flip when dependency arrives. Recorded 2026-09-02; no
+  pool interaction beyond this pair is known to need it.
 
 - **CR 608.2b is enforced for instants and sorceries only, and the rest is
   blocked on a different bug.** The rule ("if all its targets are now illegal,
@@ -326,27 +344,38 @@ last re-probed. Re-probe before scheduling one.
     is the ambiguous case: two copies of one card in one graveyard are literally
     one `CardDefinition`, so resolution clamps to the last surviving copy.
 
-    **Two graveyard residuals have reproductions and were deliberately left**
-    (2026-08-31). The *unambiguous* case is answerable and answered wrong: with
-    the chosen card gone from the pile entirely, `graveyard_index_of` returns
-    None and `chosen_graveyard_index` falls through to the stale index, which
-    now names a different card — exile the Serra Angel a Resurrection targeted
-    and it reanimates the Grizzly Bears beneath it. The docstring's "this can
-    only turn a wrong answer into a right one" is false for that path. And two
-    cast-side graveyard targets reach no gate at all: `cast_target_refusal`
-    excludes `graveyard_creature`, and `_validate_cast_targets` keys on the
-    *primary* instruction kind, so a spell whose targeting sits inside a
-    `sequence` (Fungal Rebirth, Experimental Overload) accepts an announcement
-    naming an opponent's graveyard and re-points it at the caster's own. The web
-    picker never offers the illegal choice, so it is engine-level laxity rather
-    than a reachable misplay.
+    **The two answerable graveyard residuals were closed 2026-09-02.** The
+    unambiguous stale-index fall-through is gone: a graveyard stamp whose
+    card has no surviving copy answers None, `illegal_targets_refusal` reads
+    the stamps, and a Resurrection whose Serra Angel is exiled in response
+    now leaves the stack unresolved (CR 608.2b) instead of reanimating the
+    Grizzly Bears beneath it; the same-name clamp for surviving copies
+    deliberately stays. On the cast side, `graveyard_creature` left the
+    unchecked list and sequence-wrapped graveyard targets (Fungal Rebirth,
+    Experimental Overload) are validated against the same enumeration the
+    picker uses (CR 601.2c). One deliberate behaviour shift rode along:
+    Drafna's Restoration naming an ineligible card is refused at announcement
+    with nothing spent, where it used to be accepted and dropped at
+    resolution. Two residuals remain recorded: an activated or triggered
+    ability whose stamped graveyard choice vanishes no longer reads the stale
+    slot but falls to its untargeted deterministic pick, which can still pick
+    a card nobody named (it belongs to the triggered-ability round above);
+    and an *untargeted* sequence-wrapped graveyard spell is still accepted
+    against an empty graveyard and resolves doing nothing — CR 601.2c's "can
+    the announcement be made at all?" half is asked per primary kind only.
 
 - **Five handler paths still resolve by index alone**, reached today only by
   instants and so caught by the CR 608.2b gate first. The next *activated*
-  ability printed with "return target creature to its owner's hand" walks in.
-  Recorded at five after Ice Age's follow-on rounds and **not re-counted since**
-  — most target resolution goes through `resolve_target_permanent`, which reads
-  the id itself, so the census has to distinguish the paths that never had one.
+  ability printed with the same text walks in. **Re-counted 2026-09-02: still
+  five, and now named** — an AST census over `engine/handlers/` for functions
+  that read `context.target_permanent_index` and subscript a battlefield
+  without ever touching `target_permanent_id` or the resolution seam:
+  `board_misc.mark_text_modified`, `combat.remove_creature_from_combat`,
+  `prevention.apply_prevention_shield`, `zones.exile_target_creature_until_eot`
+  and `zones.exile_creature_gain_life_equal_to_power`. All five also carry a
+  "fall back to the first matching permanent" default, the look-alike class.
+  (The graveyard-index paths the same census surfaces are index-addressed by
+  design and belong to the CR 608.2b graveyard entry above, not here.)
 
 - **CR 508.5's second sentence is not implemented** — "if that creature is no
   longer attacking, the defending player it's referring to is the player that
@@ -743,80 +772,64 @@ before citing it.**
 
 ## The next set, measured rather than guessed
 
-**Re-censused 2026-08-31 against the post-ICE compiler**, five near-term
-candidates fetched to a scratch directory (never `cards/`), measured with
+**Re-censused 2026-09-02 against the post-HML compiler**, the candidates
+fetched to a scratch directory (never `cards/`), measured with
 `support_report.refusals_report` so "a refused line" means what the work lists
 mean by it:
 
 | Set | Cards | New to pool | New & unsupported | New per unit work | Lines/distinct | Blocked by exactly one line |
 | --- | --: | --: | --: | --: | --: | --: |
-| 5ED | 434 | 58 | 18 | 3.2 | **1.00** | 18 of 18 |
-| FEM | 102 | 102 | 33 | 2.6 | **1.00** | 28 of 33 |
-| 6ED | 335 | 169 | 62 | 2.5 | **1.00** | 57 of 62 |
-| HML | 115 | 115 | 41 | 2.5 | **1.00** | 36 of 41 |
-| ALL | 144 | 144 | 88 | 1.3 | 1.02 | 67 of 88 |
+| 5ED | 434 | **0** | 0 | — | — | — |
+| 6ED | 335 | 152 | 53 | 2.6 | **1.00** | 48 of 53 |
+| ALL | 144 | 144 | 82 | 1.4 | 1.02 | 61 of 82 |
 
 (TMP/MIR/VIS/WTH were not re-fetched — none is a near-term candidate and their
 pre-ICE rows all read ~1.7–2.2 new-per-unit with no repeated sentence.)
 
-**The headline movement is 5ED, and it is Ice Age's doing**: its "new to pool"
-fell 147 → 58, because most of what 5ED still had to offer was ICE reprints. At
-58 new cards over 434, Fifth Edition is now closer to 4ED's shape than to a
-work set — 18 pieces of work, every one a card blocked by exactly one line —
-but it still reprints from FEM and HML, so the sequencing rule holds it behind
-them. Alliances got cheaper too (99 → 88 unsupported; cumulative upkeep
-shipped with ICE and its ALL 9 / MIR 5 / VIS 5 / WTH 14 printings now cost
-whatever *else* they print).
+**Fifth Edition reached zero.** Its post-ICE row read 58 new cards, and those
+58 were exactly its FEM and HML reprints (29 each); both sets shipping took it
+to **434 of 434 already in the pool, all supported** — origins: LEA 158,
+ICE 89, LEG 53, ATQ 31, HML 29, FEM 29, DRK 28, ARN 16, LEB 1. 5ED is now
+literally 4ED's shape: it enters `measured` fully supported and promotes the
+same day, buying printings, a promotion rehearsal, and nothing else. Ingest it
+whenever the rehearsal is worth the hour; it no longer competes with the work
+sets. It thereby joins FBB/SUM/4BB as a zero-new-card set *relative to this
+pool* — and the release-line note below still applies to the rest of the
+core-set line.
 
-**The leverage argument did not move, and FEM proved it was asking the wrong
-question.** Four of the five candidates measure exactly 1.00 lines per distinct
-sentence — every refused line a different sentence, no production shared by even
-two cards — and ALL's 1.02 is noise. FEM measured 1.00 too, and then paid for
-*four* shared productions anyway, because the sentences it repeats pair a
-refused card with a **supported** one and this table is built from refusals
-only. **Read the next candidate's `parse_coverage.py` and `--hollow-lines`
-numbers beside this table**, not after the ingest: a supported card carrying an
-unimplemented sentence is a work-list entry the refusal census cannot see, and
-on FEM those were where all the leverage was.
+**The next work set is Alliances (ALL).** It appends (released 1996-06-10,
+after HML's 1995-10-01 — and everything after ALL appends too), it closes the
+Ice Age block, and for the first time the leverage instruments agree with the
+refusal census at ingest-estimate time rather than contradicting it later:
 
-**HML shipped (115/115, at index 11), so the pick is now 5ED**, whose two
-remaining sources — FEM and HML — are both in the pool. Its row above read 58
-new cards over 434 and 18 pieces of work, every one a card blocked by exactly one
-line, measured against the *post-ICE* compiler; HML's productions have moved
-that, so **re-census before committing**. Fifth Edition is closer to 4ED's shape
-than to a work set, which makes it the cheapest set on the board and the one
-where a promotion rehearsal is most of the cost.
+- The fragment census over its refused lines has real groups — **"at the
+  beginning of" (17 cards)**, "of your library" (13), "until end of turn" (13),
+  "exile the top" (8), "onto the battlefield" (8) — where four consecutive
+  earlier sets measured no shared fragment at all. The delayed/upkeep-trigger
+  and library-top families are where its wave groups are.
+- `--hollow-lines` over its 62 supported new cards reads **five** (Tidal
+  Control, Dystopia, Death Spark, Tornado, Sol Grail) — the FEM class (a
+  supported card carrying an unimplemented sentence) visible *before* the
+  ingest this time. Those five are work-list entries the refusal census cannot
+  see.
 
-**And run the fragment census as well as the refusal one.** Four candidates in
-the table measure exactly 1.00 refused lines per distinct sentence, which is the
-reading that said HML had no leverage in it — while ten of its cards printed one
-untap-denial clause and three of them already compiled. An n-gram over the
-refused lines is four lines of Python and it named every group boundary the
-sentence census missed. Read it beside `parse_coverage.py`'s measured section,
-`--hollow-lines`, and the **picker sweep** (see the HML entry: run at Phase 1 it
-turns a promotion-gate finding into a work-list entry, and it found a shipped
-Aura no player could cast).
+6ED came down to 53 pieces of work (its own leverage is the tutor family —
+"search your library" over 7 cards) but stays sequenced behind Mirage, Visions
+and Weatherlight: its 152 new cards are their reprints, and a core set ingested
+before its sources arrives carrying cards nothing supports with their origins
+mis-stamped.
 
-**FEM was the only near-term candidate that inserts rather than appends, and
-the insert is done.** Fallen Empires released 1994-11-01, between DRK (index 7)
-and 4ED (now index 9), and the manifest is printing-ordered because
-`CardDefinition.original_printing` is the first entry in `printings`. Nothing in
-the pool moved — all 102 of its cards were new here — which is exactly why
-`test_appending_a_set_never_changes_an_existing_original_printing` could not
-have caught a wrong index: it checks the consequence, and there was none to
-observe. What held the order was
-`test_the_shipped_sets_are_in_printing_order`, comparing the `released` dates
-the entries already carry. HML (1995-10-01) and everything later append.
-
-**The three remaining zero-new-card sets are not 4ED again.** FBB, SUM and 4BB
-are the only sets that would bring nothing new to *this* pool, and they are the
-Revised and Fourth lists a second and third time: they buy printings and no
-cards, and 4ED already produced the one finding that shape had to give (a guard
-that could not tell the manifest roles apart). `set_progress.json` lists ten
-more zero-new-card sets, but that field is relative to the whole **release
-line**, not to this pool — 5ED and 6ED read 0 there and bring 147 and 200 cards
-here, because the sets they reprint from are not ingested. Sequence a core set
-after its sources or it arrives carrying cards nothing supports.
+**Read the next candidate's `parse_coverage.py` and `--hollow-lines` numbers
+beside this table**, not after the ingest — FEM proved the refusal census alone
+asks the wrong question (its repeated sentences paired a refused card with a
+**supported** one, invisible to a census built from refusals only), and ALL's
+five hollow lines above are that lesson applied at estimate time. **And run the
+fragment census as well as the refusal one** — four candidates in a row
+measured exactly 1.00 refused lines per distinct sentence, the reading that
+said HML had no leverage in it, while ten of its cards printed one untap-denial
+clause and three already compiled. Read both beside the **picker sweep** (run
+at Phase 1 it turns a promotion-gate finding into a work-list entry; at HML it
+found a shipped Aura no player could cast).
 
 **Three structural gaps bound everything after Innistrad**, and the first is a
 hard wall rather than a backlog. `card_loader.REQUIRED_FIELDS` demands a
@@ -833,404 +846,76 @@ which blocks the buyback/flashback/evoke/madness family wholesale.
 
 ## Homelands (HML) — shipped
 
-**Census at ingest: 115 cards, 76 supported (66.1%), 39 unsupported, 44 refused
-lines.** 140 printings dedupe to 115 by `oracle_id`, and **all 115 are new to
-this pool** — zero overlap with the shipped 1,610, so Phase 1 step 5's question
-answers *implement*. Grammar coverage at ingest: 75.1% parsed, 70.4% lowered,
-45.5% executed, 62 distinct unparsed lines, 0 name-keyed hooks.
+**Census at ingest: 115 cards, 76 supported (66.1%), 44 refused lines over 44
+distinct sentences.** All 115 new to the pool — the second all-new set after
+FEM — inserted at printing-order index 11 (released 1995-10-01, after ICE,
+before M21). **Final: 115/115 supported, hollow lines 0, unclaimed sentences
+0**, pool 1,610 → **1,725** over thirteen sets, grammar 88.0% → **88.3%**
+parsed with every existing set's floor rising, suite 11,176 → **11,547** tests.
+Two waves of five worktree groups plus one closer for Giant Oyster; **zero
+name-keyed hooks across all 39 cards**, so reliance fell while the pool grew:
+3.9% → **3.6%** of supported cards. The wave-by-wave narrative is readable at
+and before `0a1ce5d1`; what follows is only what changes future decisions.
 
-**HML released 1995-10-01, so the entry belongs at printing-order index 11** —
-after Ice Age and before M21, which is an *insert* in the list and an append in
-the release line. Nothing in the shipped pool can move: every HML card is new,
-so no `original_printing` has an earlier candidate to lose. That is FEM's blind
-spot again — `test_appending_a_set_never_changes_an_existing_original_printing`
-cannot fail from any index — and
-`test_the_shipped_sets_are_in_printing_order` is the guard that fires, off the
-`released` dates the entries already carry.
+**Apocalypse Chime is the second card to read `original_printing` as data**
+(Golgothian Sylex's twin, aimed at its own set): if HML's manifest entry ever
+sits after a set that reprints it, the Chime stops seeing its own set. The
+insert itself was held by `test_the_shipped_sets_are_in_printing_order` — the
+prefix guard cannot fire on an all-new set from any index, FEM's blind spot
+again.
 
-**The order is load-bearing for one card anyway, in the other direction.**
-Apocalypse Chime destroys "all nontoken permanents with a name originally
-printed in the Homelands expansion" — Golgothian Sylex's twin, and the second
-card in the pool to read `original_printing` as data. Its own set is the one
-being inserted, so the card is the assertion: if HML's entry ever sits after a
-set that reprints it, the Chime stops seeing its own set.
+**Rank the next set by the fragment, not the sentence** — the set's headline
+transferable finding, now folded into "The next set" above: the sentence census
+read 1.00 (no leverage) while ten cards shared one untap-denial fragment,
+three already compiling, so seven cards cost one group one subject widening.
 
-**Both Phase 2 subsystem sweeps came back empty**, as at FEM. Every card is
-`layout: normal`; the type words are ones the pool already has (`World` included
-— CR 704.5k's world rule ships and is CR-cited in
-`tests/rules/test_state_based_actions.py`), and the three new creature subtypes
-(Badger, Ferret, Oyster) are in the committed vocabulary. Every keyword HML
-prints — defender, first strike, flying, haste, protection, reach, shroud,
-trample, vigilance, plus the Scryfall tags Enchant / Mill / Regenerate whose
-behaviour lives elsewhere — is in `IMPLEMENTED_KEYWORDS`, and none is in
-`UNSUPPORTED_KEYWORDS` (which holds only Phasing). **So HML opens with no
-keyword round**, the second set running.
+**Nine shipped cards were mis-playing and no instrument could see any of them**
+— each found by a group giving the behaviour a game, each invisible to the
+census, `--hollow-lines` and `parse_coverage.py` because all three ask whether
+a line produced *something* and each of these produced the wrong thing:
+Pyroclasm damaging every Mountain (two drifted lowerings of one sweep); a Copy
+Artifact copying Su-Chi surviving Golgothian Sylex (CR 206.3b names, not
+physical printings — three sites); Whippoorwill exiling itself (bare-pronoun
+collapse); six permanents releasing a linked lock a turn early under AI play
+plus Phyrexian Gremlins re-locking without a second activation (CR 611.2a/b —
+fixed post-wave, `_holds_a_live_untap_lock`); an activation cost charged during
+the "may I activate?" half (CR 601.2h asked destructively); Amulet of Quoz
+anteing nothing against an empty library; Winter Sky drawing for the wrong
+seat; Divine Offering gaining 5 or 0 depending on how its target was named;
+the AI aiming Daughter of Autumn at the opponent's creature (a CR 614.9
+redirect categorised `damage` — right family, backwards side).
 
-**The ingest's yield was four cards and one ratchet.**
-`test_no_card_in_the_pool_loses_a_word_to_the_expansion` went red on Eron the
-Relentless, Hazduhr the Abbot, Rashka the Slayer and Veldrane of Sengir — every
-one a legend whose printed text calls it by its first word ("Regenerate Eron",
-"is dealt to Hazduhr instead"), which is exactly the case CR 201.5's expansion
-exists for and exactly the read the ratchet exists to force. Four cards' lines
-would otherwise have refused at a name no reader knew. The rule was right; the
-ratchet is now seven names.
+**The whole-pool differential map must carry the compiled program's full
+`repr`.** Keyed on ability counts it cannot see a trigger narrowed from
+"blocks anything" to "blocks a black creature" (Rashka the Slayer — reported
+unimplemented, actually implemented *too widely*); keyed on instruction kinds
+it cannot see a `type_filter` restored to a payload (Pyroclasm). Both natural
+abbreviations are blind to precisely the narrowing class the instrument exists
+to catch. Two groups and the integrator each wrote a lossy version
+independently. (`scripts/oracle_diff.py` is this finding as a script.)
 
-### The census is flat again, and the fragment census is not
+**The refusal taxonomy has a fifth layer: `engine/oracle.py`'s
+trigger-condition table.** Two trigger front ends exist and only the regex
+table feeds dispatch — a condition the grammar reads perfectly can still fire
+on the wrong event, which is what Rashka did. And a refusal site is a work-list
+entry, not a diagnosis: Giant Oyster refused at `expected 'gain'` for two waves
+on a sentence that is a control change in nobody's reading, because a probe
+order manufactured the site.
 
-**The refusal rollup measures 44 lines over 44 distinct sentences — 1.00, the
-fourth set running.** Twelve lines stop at "expected a subject", eight at
-"unconsumed text", five at "unrecognized effect verb", and seventeen sites carry
-one line each. Read as FEM's table reads it, that says *no production here buys
-two cards*.
+**A decline list is a lead the next reader corrects, like a brief.** Giant
+Oyster landed on the third pass: W2G4 disproved two of W1G1's six named
+blockers, and the closer found a sixth nobody had named — "remove all counters
+from **the** creature" read as the bare source pronoun, so the card compiled
+supported, claimed every sentence, carried no hollow line, and took its own
+counters off.
 
-It is wrong, and the reason is one level below the sentence. **HML repeats
-fragments, not sentences.** Ten of its cards print an untap-denial clause and
-the census sees ten different sentences:
-
-| Card | The clause | Compiles? |
-| --- | --- | --- |
-| Black Carriage | This creature doesn't untap during your untap step. | supported |
-| Marjhan | This creature doesn't untap during your untap step. | supported |
-| Roots | Enchanted creature doesn't untap during its controller's untap step. | supported |
-| Reveka, Wizard Savant | …and doesn't untap during your next untap step. | refused |
-| Samite Alchemist | It doesn't untap during your next untap step. | refused |
-| Spectral Bears | …it doesn't untap during your next untap step. | refused |
-| Labyrinth Minotaur | that creature doesn't untap during its controller's next untap step | refused |
-| Joven's Ferrets | They don't untap during their controller's next untap step. | refused |
-| An-Zerrin Ruins | Creatures of the chosen type don't untap during their controllers' untap steps. | refused |
-| Giant Oyster | target tapped creature doesn't untap during its controller's untap step | refused |
-
-Three of the ten already work, which is the FEM pairing arriving a second time
-and from the other side: the fragment has readers, and what the seven refused
-cards need is the *subject* widened, not the clause built. Seven cards, one
-family.
-
-**So rank the next set by the fragment, not by the sentence.** The n-gram census
-over the refused lines is four lines of Python and it named every group boundary
-below; the sentence census named none of them. This is the same finding FEM
-recorded ("the leverage is somewhere the census structurally cannot look")
-arriving one abstraction lower, and it generalises further: FEM's instrument
-found repeats between a refused card and a supported one, and this one finds
-repeats *inside* a sentence neither instrument reads whole.
-
-**The two sentence-level instruments, run at ingest as Phase 1 requires.**
-`--hollow-lines` reads **0**. `parse_coverage.py`'s measured section reads **6
-unclaimed sentences across 4 supported cards**: Aether Storm ("creature spells
-can't be cast"), Jinx ("target land becomes the basic land type of your choice
-until end of turn"), Prophecy (three sentences — reveal the top card of target
-opponent's library / if it's a land, you gain 1 life / then that player
-shuffles) and Rashka the Slayer ("blocks one or more black creatures, gets
-+1/+2"). Rashka pairs straight into the block-trigger group below; the other
-three are their own work.
-
-### The round plan — two waves of five
-
-43 work items: 39 unsupported cards plus the 4 supported ones carrying an
-unimplemented sentence. Wave 1 takes the five families the fragment census
-found; wave 2 takes the remainder and whatever wave 1 declines with its parts
-enumerated. **The split below is the one that ran**, and it differs from the
-first draft in two ways worth recording: the untap-denial family was kept whole
-in one group rather than split across two, because two groups editing one
-production is a merge conflict scheduled on purpose; and Roots joined wave 2
-after the Phase 4 picker sweep, run early, found it uncastable.
-
-**Wave 1** — W1G1 untap denial ×7 (Reveka, Spectral Bears, Labyrinth Minotaur,
-Joven's Ferrets, An-Zerrin Ruins, Samite Alchemist, Giant Oyster); W1G2 counted
-amounts ×4 (An-Havva Constable, An-Havva Inn, Aysen Crusader, Baki's Curse);
-W1G3 prevention and redirection ×4 (Daughter of Autumn, Hazduhr the Abbot,
-Evaporate, Leeches); W1G4 filtered statics and block triggers ×4 (Serra Aviary,
-Rashka the Slayer, Mammoth Harness, Sea Troll); W1G5 upkeep, counters and forced
-sacrifice ×4 (Trade Caravan, Koskun Falls, Orcish Mine, Funeral March).
-
-**Wave 2** — W2G1 sequenced spells ×4 (Forget, Truce, Retribution, Broken
-Visage); W2G2 library search, reveal and tuck ×4 (Merchant Scroll, Memory Lapse,
-Prophecy, Jinx); W2G3 combat restrictions and shroud exceptions ×5 (Ironclaw
-Curse, Joven's Tools, Dwarven Sea Clan, Autumn Willow, Roots); W2G4 combat memory
-and counters ×5 (Giant Albatross, Greater Werewolf, Rysorian Badger, Reef
-Pirates, Giant Oyster); W2G5 cast locks, cost taxes and the tail ×4 (Aether
-Storm, Irini Sengir, Apocalypse Chime, Timmerian Fiends).
-
-### Wave 1 — five worktree groups, 76 → 97
-
-Twenty-one cards in one pass, and **zero name-keyed hooks added** across all
-five groups. Every group ran its own whole-pool differential and every group
-reported the ratio the playbook predicts: authorship took roughly as long as
-integration, and integration was almost entirely merges rather than cards.
-
-| Group | Cards | Landed |
-| --- | --- | ---: |
-| W1G1 untap denial | Reveka, Spectral Bears, Labyrinth Minotaur, Joven's Ferrets, An-Zerrin Ruins, Samite Alchemist, Giant Oyster | 6 of 7 |
-| W1G2 counted amounts | An-Havva Constable, An-Havva Inn, Aysen Crusader, Baki's Curse | 4 |
-| W1G3 prevention and redirection | Daughter of Autumn, Hazduhr the Abbot, Evaporate, Leeches | 4 |
-| W1G4 filtered statics, block triggers | Serra Aviary, Rashka the Slayer, Mammoth Harness, Sea Troll | 4 |
-| W1G5 upkeep, counters, forced sacrifice | Trade Caravan, Koskun Falls, Orcish Mine, Funeral March | 4 |
-
-**The fragment thesis paid.** The seven untap-denial cards cost one group one
-production widening, because three cards in the set already compiled the same
-clause — exactly what the sentence census could not see and the n-gram census
-could. W1G2's pairing held the same way: An-Havva Constable's toughness and
-An-Havva Inn's life gain compile to a **byte-identical `count_spec`**, pinned by
-a test.
-
-**Five shipped cards were silently mis-playing, and no instrument in the repo
-could see any of them.** This is the wave's real yield, and every one was found
-by a group giving a behaviour a game rather than by a gate:
-
-- **Pyroclasm dealt its 2 damage to every Mountain on the table** (and Sorrow's
-  Path to every permanent its controller had). The described-set damage sweep had
-  *two* lowerings — the "all" spelling exiled into `_common.py`, the "each"
-  spelling still inline in `damage.py` — and they had drifted: the inline one
-  checked the head noun and then **stripped it from the payload**, while the
-  handler walks `all_permanents()` and asks only the payload. Nothing failed,
-  because only a creature is buried by lethal damage — but it stamped the
-  "dealt damage this turn" record a printed noun phrase can test, and spent any
-  shield the land carried.
-- **Six permanents release a linked lock a turn early under headless/AI play.**
-  `SELF_MAY_KEEP_TAPPED_PHRASE` only keeps a permanent tapped when a live
-  *control steal* depends on it, so Phyrexian Gremlins can never hold a Mox
-  through a turn cycle, Zelyon Sword's +2/+0 evaporates at its own untap step,
-  and Bottomless Vault never banks a storage counter. Ashnod's Battle Gear,
-  Tawnos's Weaponry, Spirit Shield and Tawnos's Coffin are the same shape.
-  Deliberately not fixed mid-wave — it moves AI-visible behaviour and the AI
-  regressions seed on deterministic play. **Its own round.**
-- **A counter-removal activation cost was charged during the "may I activate?"
-  half.** It was the only cost in that function spent above the gates instead of
-  beside the mana, so an activation refused by CR 602.5 timing, a permission, a
-  per-turn cap, an unpayable secondary cost *or* insufficient mana had already
-  taken the counters off. CR 601.2h asks what a player is *able* to do, and this
-  asked it destructively.
-- **Rashka the Slayer was implemented too widely**, which is the direction that
-  matters. Its +1/+2 effect compiled and fired; the trigger's *narrowing* did
-  not, so the pump arrived on blocking anything at all. Both the census and
-  `parse_coverage.py` reported it as "sentence unimplemented".
-- **Orcish Mine's payoff sentence already parsed and lowered — wrongly.**
-  "Destroy enchanted land and this Aura deals 2 damage to that land's
-  controller" compiled to `recipient: target_player` for a trigger that targets
-  nothing, so it burned whatever seat the resolution context happened to carry.
-
-**Rashka is why the differential instrument had to be rebuilt twice, and that is
-the transferable finding.** Phase 3 tells every group to build a whole-pool map
-of compiled programs ad hoc. Keyed on ability *counts* it misses a trigger
-narrowed from "blocks anything" to "blocks a black creature"; keyed on
-instruction *kinds* it misses a `type_filter` restored to a payload. **Both
-natural abbreviations are blind to precisely the class the instrument exists to
-catch**, because a narrowing changes neither how many of a thing there are nor
-what the thing is called. Two of five groups and the integrator each wrote a
-lossy version independently before noticing. The map has to carry the compiled
-program's full `repr`.
-
-**Every brief was about a third wrong, again, and one was wrong in a new way.**
-W1G1's said "grep for how the engine already stores a chosen creature type —
-several cards do this"; **nothing does**. The engine stores a chosen *colour*
-and an ordered pair of basic land types, and An-Zerrin Ruins is the pool's first
-creature-type choice, so the whole prompt path was new. An inherited estimate
-that is merely *pessimistic* costs a round; one that sends a group looking for
-something absent costs the search as well. Three more corrections in the same
-direction: Trade Caravan's activated ability already parsed **and lowered** in
-full and the only failure was one missing table row; Samite Alchemist needed no
-new `Shield` because the blanket production already read both printed word
-orders; and Leeches' back-reference was already fully built, with the missing
-piece in the *first* sentence — idiom 7 working exactly as designed.
-
-**A fifth layer had to be added to the parse / lowering / no-handler / gate
-taxonomy: `engine/oracle.py`'s trigger-condition table.** There are two trigger
-front ends and only one feeds dispatch — the regex table produces the
-`TriggerCondition` the phase steps read, and the grammar's `TriggerEvent` does
-not. A condition can be read perfectly by the grammar and still fire on the
-wrong event, which is what Rashka did.
-
-**Integration: five merges, five suites, four hazards fired.** The dangerous one
-was a single line in `handlers/_common.py`, where W1G2 had hoisted an iteration
-into a `scanned` variable and W1G1 had inserted a chosen-creature-type
-resolution at the same spot; git offered them as alternatives and **taking
-either side silently drops the other group's card**. Two groups split
-`lowering/damage.py` in the same wave along two different family lines
-(`_sweeps.py` and `upkeep.py`), and their import blocks met: HEAD kept an import
-whose users had moved out, theirs dropped one still used — **neither side was
-right**, and the resolution was counting references in the merged body. The
-per-set test files behaved exactly as the block convention intends: every
-conflict was two appends, resolved by a union script that refuses anything else.
-
-### Wave 2, the last card, and how it closed
-
-Wave 2's five groups took 97 → 114 and cleared every remaining unclaimed
-sentence; a sixth agent took Giant Oyster to **115/115**. **Zero name-keyed
-hooks across all 39 cards**, so reliance fell while the pool grew by 7%:
-3.9% → **3.6%** of supported cards, 4.2 → **3.9** entries per 100.
-
-**Final: 115/115 supported, hollow lines 0, unclaimed parse sentences 0**, the
-manifest entry moved from `measured` to `sets` at printing-order index 11 —
-between Ice Age and Core Set 2021. The pool went 1,610 → **1,725** unique cards
-over thirteen sets. Grammar 88.0% → **88.3%** parsed and 56.1% → **56.5%**
-executed, with HML itself at 92.6%; **every existing set's floor rose**, so the
-aggregate moved on productions rather than on membership — the opposite of the
-reading 4ED warned about. The suite went 11,176 → **11,547** tests.
-
-### The transferable finding: rank by the fragment, not the sentence
-
-The refusal census measured 44 lines over 44 distinct sentences — 1.00, the
-fourth set running, which by FEM's table means "no production here buys two
-cards". It was wrong one level down, and an n-gram census over the refused lines
-found the leverage in four lines of Python: **ten HML cards print an untap-denial
-clause and three of them already compiled**, so seven cards cost one group one
-*subject widening*. Every wave-1 group boundary came out of that census and none
-out of the sentence one.
-
-This is FEM's finding arriving one abstraction lower. FEM's instruments found
-sentences repeated between a refused card and a supported one; this one finds
-them repeated *inside* sentences neither instrument reads whole.
-
-### Nine shipped cards were mis-playing, and no instrument could see any of them
-
-The set's real yield. Every one was found by a group giving a behaviour a game,
-and every one was invisible to the census, to `--hollow-lines` and to
-`parse_coverage.py` — because all three ask whether a line produced *something*,
-and each of these produced the wrong thing.
-
-- **Pyroclasm dealt its 2 damage to every Mountain on the table**, and Sorrow's
-  Path to every permanent its controller had. One sweep had two lowerings and
-  they had drifted: the inline one checked the head noun and then **stripped it
-  from the payload**, while the handler walks `all_permanents()` and asks only
-  the payload. Nothing failed, because only a creature is buried by lethal
-  damage — but it stamped the "dealt damage this turn" record a printed noun
-  phrase can test, and spent any shield the land carried.
-- **A Copy Artifact copying Su-Chi survived Golgothian Sylex.** Three sites read
-  `perm.card.original_printing` — where the *physical card* came from — when
-  CR 206.3b states an expansion as a list of **names** and a copy's name is the
-  name it copied. City in a Bottle had it too.
-- **Whippoorwill exiled itself.** "When that creature dies this turn, exile
-  **it**" — the noun parser collapses "the creature" onto the same bare-pronoun
-  spec `it` produces, where a card naming *itself* parses to `this`. Its own
-  test passed throughout, because it asserted instruction *kinds*.
-- **Six permanents released a linked lock a turn early** under headless/AI play
-  — Phyrexian Gremlins could never hold a Mox through a turn cycle, Zelyon
-  Sword's +2/+0 evaporated at its own untap step, Bottomless Vault never banked
-  a counter. **And Phyrexian Gremlins re-locked its artifact whenever it tapped
-  again**, with no second activation, because an ended "for as long as"
-  duration was never cleared (CR 611.2a/611.2b).
-- **A counter-removal activation cost was charged during the "may I activate?"
-  half** — the only cost in that function spent above the gates, so an
-  activation refused by CR 602.5 timing, a permission, a cap or unpayable mana
-  had already taken the counters off. CR 601.2h asks what a player is *able* to
-  do, and this asked it destructively.
-- **Amulet of Quoz bought itself off for free** against an empty library: the
-  ante was offered, "accepted", anted nothing, and the coin never flipped.
-- **Winter Sky drew for one seat — the opponent**, never the caster.
-- **Divine Offering gained 5 life or 0** depending on whether its target was
-  named by slot or by stable id, because a gate asked `isinstance(index, int)`
-  as a proxy for "was a target named?".
-- **The AI aimed Daughter of Autumn at the opponent's creature**, spending mana
-  to shield the enemy: a CR 614.9 redirect is categorised `damage`, which is
-  right about the family and backwards about the side.
-
-### An instrument that hides the class it exists to catch
-
-Phase 3 tells every group to build a whole-pool map of compiled programs. Keyed
-on ability **counts** it cannot see a trigger narrowed from "blocks anything" to
-"blocks a black creature" (Rashka the Slayer, which arrived reported as
-*unimplemented* and was in fact implemented **too widely**). Keyed on instruction
-**kinds** it cannot see a `type_filter` restored to a payload (Pyroclasm). **Both
-natural abbreviations are blind to precisely the narrowing class the instrument
-exists to catch**, because a narrowing changes neither how many of a thing there
-are nor what the thing is called. Two of five groups and the integrator each
-wrote a lossy version independently before noticing. The map has to carry the
-compiled program's full `repr`.
-
-The same shape turned up in a **shipped test** (Whippoorwill's, asserting kinds)
-and in a **second differential** W2G5 had to invent, because the compiled-program
-map cannot see a text-keyed table at all — theirs showed the old cost-tax reader
-produced a modifier for Irini Sengir's *white* half alone.
-
-### A fifth layer, and a refusal site that was manufactured
-
-The parse / lowering / no-handler / gate taxonomy needed a fifth entry:
-**`engine/oracle.py`'s trigger-condition table**. There are two trigger front
-ends and only one feeds dispatch — the regex table produces the
-`TriggerCondition` the phase steps read, and the grammar's `TriggerEvent` does
-not. A condition can be read perfectly by the grammar and still fire on the
-wrong event.
-
-And the set produced the sharpest instance yet of "a refusal site is a work-list
-entry, not a diagnosis": Giant Oyster refused at `expected 'gain'` for two whole
-waves on a sentence that is a control change in nobody's reading, because
-`_parse_leading_linked_duration` hands its tail to `_parse_gain_control`, which
-opens with `expect_word("gain")` and **raises** — so the probe order *replaced*
-the untap restriction's own refusal with a manufactured one. Two other cards had
-their quoted site name a production three sentences away, and one (Retribution)
-named Petra Sphinx's paragraph, reached as a fall-through on the word "chooses".
-
-### The decline list compounds, and the next reader corrects it
-
-Giant Oyster was declined twice and landed on the third pass. W1G1 left six
-named pieces; W2G4 **disproved two of them** ("no delayed ability in the engine
-repeats" — two cards use `once=False`; "the bound-object event is armed only by
-the gain-control lowering" — disproved with a synthetic card) and left five; the
-third pass found the five real and added a **sixth nobody had named**, which is
-the one that mattered: the card prints "remove all counters from **the**
-creature", which `parse_recipient` reads as the bare source pronoun, so with
-everything else built it compiled **supported, claimed every sentence, carried no
-hollow line — and took its own counters off**. A decline list is a lead the next
-reader corrects, exactly like a brief.
-
-### Integration, and the merge hazards that fired
-
-Eleven merges, a full suite between each. The dangerous conflict was one line in
-`handlers/_common.py` where two groups added different fixes at the same spot and
-git offered them as alternatives — **taking either side silently drops the other
-group's card**. Two groups split `lowering/damage.py` in one wave along two
-different family lines, and their import blocks met with **neither side right**:
-HEAD kept an import whose users had moved out, theirs dropped one still used.
-Two groups added a **fourth binder probe** to one function for different cards,
-unioned as one parse asked two questions rather than two stacked probes.
-
-**The per-set test block convention worked and its one failure mode showed
-itself.** Every per-set conflict was two appends. One came back as *two* regions
-because both branches' helpers ended with the same two lines, which git matched
-as common context — a naive union would have spliced one group's helper body onto
-the other's signature. The union script refuses anything but a single
-two-append region, and the fallback is reconstruction from the merge base with
-"both sides are pure appends" asserted rather than assumed.
-
-Four modules crossed the 1,000-line guard: `lowering/damage.py` (twice, into
-`_sweeps` and `upkeep`), `lowering/library.py` (into the existing `exile`),
-`effects/board.py` (into `attachments`), `lowering/tapping.py` (into
-`untap_restrictions`) and `amounts.py` (into a new `records`). **Every one reused
-a name the other side of the pipeline already carried.**
-
-### Where the promotion gate collected
-
-The rehearsal turned seven guards red and three were real work. The one worth
-carrying: **`tests/rules/test_aura_support.py` split raw `oracle_text` instead of
-starting from `expand_ability_lines`**, so Orcish Mine's conjoined trigger — which
-that rewrite splits into the two triggers the claim table implements — reported
-as implemented by nothing. CLAUDE.md names three readers that must start there;
-this was a fourth nobody had listed. The card worked; the guard was reading a
-different card.
-
-The other two: four activated and three triggered abilities were taking their
-`effect_kind` from the grammar category rather than the label tables, and Koskun
-Falls' per-attacker attack toll is a derivation-table kind with no grammar
-production, so it joined `unclaimed_kinds` with its reason — the same row ICE's
-promotion had to add for the same structural reason.
-
-### The picker sweep, moved up a phase
-
-Phase 4 says to sweep what the target pickers *offer*. **Run at Phase 1 it costs
-nothing and turns a promotion-gate finding into a work-list entry**, which is the
-argument Phase 1 already makes for `parse_coverage.py` and `--hollow-lines`. It
-found **Roots** on the day of the ingest: a supported Aura, no hollow line, every
-sentence claimed, and `derive_cast_spec` returning None — the exact value the
-client tests to decide whether to ask for a target, so the app sent a bare cast
-and the engine refused it. All 127 other shipped Auras derive a spec.
-
-And the line had **two contradictory failures**: `permanent_matches_enchant_noun`
-took its *permissive* fallback, so the printed "without flying" exclusion was
-**enforced by nothing** and the Aura could be attached to a flyer. The picker
-sweep sees only the first. Both were hidden by one gate — `_aura_line_claimed`
-and `parse_coverage`'s channel each claimed any line starting with `"enchant "`.
-
-Narrowed and run over the whole shipped pool afterwards, **no shipped card
-carries the Roots shape**; its six hits are triggered abilities and a static.
+**The promotion gate's carryable finding**: `tests/rules/test_aura_support.py`
+split raw `oracle_text` instead of starting from `expand_ability_lines` — a
+fourth reader beyond the three CLAUDE.md names, reading a different card than
+the compiler compiles. The picker sweep, run at Phase 1 rather than Phase 4,
+found Roots (a supported Aura no player could cast, its "without flying"
+exclusion enforced by nothing) on the day of the ingest; narrowed and run over
+the whole shipped pool, no other card carries the shape.
 
 ## Fallen Empires (FEM) — shipped
 
