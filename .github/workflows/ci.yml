@@ -102,18 +102,37 @@ jobs:
       # multiple, not a 10%, so 400 still catches one while surviving two or
       # three more sets.
       #
-      # **BASELINE is deliberately NOT changed, and it is stale.** It is
-      # runner-measured at 10,821 tests, and the only clock this session had was
-      # a local one — mixing a local number into a runner-measured one is exactly
-      # what left both wrong in opposite directions for three sets. So it stays
-      # at 180 as the last honest reading, and the creep warning below (1.5x
-      # BASELINE = 270s) may now fire on a normal run. **If it does, that is
-      # BASELINE being stale rather than the suite creeping**: re-read it from
-      # the step's own output across several runs and update it then.
+      # BASELINE 180 -> 235 (2026-09-02). Still not a runner reading of *this*
+      # tree — it is a projection — but for the first time the multiplier in it
+      # was **measured** rather than guessed, which is the thing this block has
+      # been wrong about twice.
+      #
+      # How. This workflow's own logs carry the readings: `gh run view <id>
+      # --log | grep "suite wall time"` over the recent successful runs gives
+      # 106s, 112s, 92s, 172s, 206s and **217s**, the last of them run
+      # 33564882929 on commit 1a294522 — which is exactly the commit this branch
+      # is based on. Checking that commit out into a worktree and timing it here
+      # gives 128s / 125s / 125s. So this machine's local -> runner multiplier,
+      # measured on one commit rather than inferred across three, is
+      # **217 / 126 = 1.72**. The current tree measures 137s / 141s / 138s
+      # locally, so the runner should land near 138 * 1.72 = **237s**.
+      #
+      # Two things that projection settles. It confirms the BUDGET raise above
+      # was not precautionary: at 237s this suite would have run at **99% of the
+      # old 240**, i.e. passing or failing on runner weather alone. And it puts
+      # the creep warning (1.5x BASELINE = 352s) below BUDGET again, which is the
+      # design — the warning is supposed to be able to fire *before* the gate.
+      #
+      # 235 rather than 237 because a creep detector should err low: a baseline
+      # under the truth makes the warning slightly eager, which is the safe
+      # direction, while one over it hides exactly what it is watching for.
+      # **Replace it with a real reading the first time this step runs on this
+      # tree** — the number is one grep away, and a measured multiplier is still
+      # a multiplier.
       - name: Enforce the suite-time budget
         env:
           BUDGET: 400
-          BASELINE: 180
+          BASELINE: 235
         run: |
           START=$(date +%s)
           python -m pytest -q > /dev/null

@@ -46,19 +46,21 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **11,923 tests**, CI budget **400s**, CI-measured
-   baseline **180s** (`ci.yml`, and that baseline is knowingly stale — see
-   below). The budget catches a step change; the baseline
+2. **The suite stays fast.** **11,923 tests**, CI budget **400s**, baseline
+   **235s** (`ci.yml`). The budget catches a step change; the baseline
    is what catches creep, and it is the number to keep honest. Raising the
-   budget is a decision, not maintenance — it has been raised three times on
+   budget is a decision, not maintenance — it has been raised four times on
    purpose.
 
-   **Both numbers are runner-measured, and that is the whole lesson.** They sat
-   wrong in opposite directions for three sets because `BASELINE` was recorded
-   from a *local* run and compared against an `ELAPSED` the step measures on the
-   runner — the multiplier was never in the arithmetic at all, it was the
-   arithmetic's missing term. Do not "fix" a suspicious ratio by editing either
-   number from a local timing; read the step's own output across several runs.
+   **`ELAPSED` is runner-measured, and that is the whole lesson.** The two
+   numbers sat wrong in opposite directions for three sets because `BASELINE`
+   was recorded from a *local* run and compared against an `ELAPSED` the step
+   measures on the runner — the multiplier was never in the arithmetic at all,
+   it was the arithmetic's missing term. So a local timing may only enter these
+   numbers **through a multiplier that was itself measured**, and the way to
+   measure one is to time a commit this workflow has already run and divide:
+   `gh run view <id> --log | grep "suite wall time"` is where the runner's half
+   lives, and every successful run has it.
 
    **Re-read at Phase 0, 2026-08-31, from four runner runs**: 172s, 186s,
    163s, 205s at 10,821 tests. `BASELINE` moved 110 → 180 as the record of
@@ -78,13 +80,25 @@ Anything that weakens these is a regression regardless of what it enables:
    than on a step change. 400 is ~2x the middle of that projection and
    deliberately not another doubling; the full arithmetic is in `ci.yml`.
 
-   **`BASELINE` was left at 180 and is knowingly stale**, because it is
-   runner-measured at 10,821 tests and this session had only a local clock —
-   mixing the two is the exact mistake that left both numbers wrong for three
-   sets. The creep warning (1.5x BASELINE = 270s) may now fire on a normal run;
-   **if it does, that is the stale baseline talking, not creep.** Re-read it
-   from the step's own output across several runs and update it then. That is
-   the one piece of work this invariant still owes.
+   **`BASELINE` 180 -> 235, and the multiplier in it is measured rather than
+   guessed** — which is the thing this invariant had been wrong about twice.
+   The workflow's own logs carry the readings (`gh run view <id> --log | grep
+   "suite wall time"`): 106s, 112s, 92s, 172s, 206s and **217s**, the last on
+   commit `1a294522` — the commit this branch is based on. Timing that same
+   commit in a worktree here gives 125s, so this machine's local -> runner
+   multiplier is **217/126 = 1.72**, measured on one commit rather than inferred
+   across three. At 138s local the current tree projects to **~237s**.
+
+   That projection is what makes the budget raise a finding rather than a
+   precaution: at 237s this suite would have run at **99% of the old 240**,
+   passing or failing on runner weather alone. `BASELINE` is set to 235 rather
+   than 237 because a creep detector should err low — an under-reading makes the
+   warning eager, which is the safe direction, and it puts the warning threshold
+   (1.5x = 352s) back below `BUDGET`, which is the design.
+
+   **It is still a projection.** Replace it with the step's own output the first
+   time CI runs on this tree; the number is one grep away, and a measured
+   multiplier is still a multiplier.
 3. **Determinism.** A given seed reproduces a run exactly. Parsing and lowering
    are pure functions of card text.
 4. **Ratchets only tighten.** Coverage floors, probe baselines, and accepted-diff
