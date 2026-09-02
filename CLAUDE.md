@@ -158,10 +158,10 @@ python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set impl
 python scripts/check_all.py           # every CI guard check, in ci.yml's order, one summary table (--freshness adds the tracker regenerations + a clean-tree check)
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests
 python scripts/rules_gaps.py          # rank untested CR rules by engine citations + section momentum; also flags stale CR citations in engine/web (advisory, stdout only)
-python scripts/behaviour_classes.py   # regenerate BEHAVIOUR_CLASSES.md (behavioural-equivalence tracker); --check fails on drift, --accept re-snapshots
-python scripts/parse_coverage.py      # regenerate PARSE_COVERAGE.md (oracle-text parse-coverage tracker); --check fails on unclaimed text
-python scripts/grammar_coverage.py    # regenerate GRAMMAR_COVERAGE.md (how much of the pool the parser reads); --check fails on regression, --accept re-snapshots floors
-python scripts/hook_reliance.py       # regenerate HOOK_RELIANCE.md (how much of the pool is supported by its *name*); --check fails on a rise, --accept re-snapshots ceilings
+python scripts/behaviour_classes.py   # regenerate BEHAVIOUR_CLASSES.md (behavioural-equivalence tracker); --check fails on drift, --accept re-snapshots; --set <CODE> prints which existing classes that set's cards land in (stdout only)
+python scripts/parse_coverage.py      # regenerate PARSE_COVERAGE.md (oracle-text parse-coverage tracker); --check fails on unclaimed text; --set <CODE> prints that set's per-card claims/unclaimed (stdout only)
+python scripts/grammar_coverage.py    # regenerate GRAMMAR_COVERAGE.md (how much of the pool the parser reads); --check fails on regression, --accept re-snapshots floors; --set <CODE> prints that set's row (stdout only)
+python scripts/hook_reliance.py       # regenerate HOOK_RELIANCE.md (how much of the pool is supported by its *name*); --check fails on a rise, --accept re-snapshots ceilings; --set <CODE> prints that set's row + its hooked cards (stdout only)
 python scripts/fetch_vocabulary.py    # re-fetch data/vocabulary/*.json from Scryfall (run when a new set adds creature/land types); --check only confirms the catalogs are present (CI)
 python scripts/ingest_set.py 3ED --fetch   # add a new set: download from Scryfall into the engine's card format
 python scripts/ingest_set.py --all --check # report card-file sizes without writing
@@ -191,6 +191,11 @@ copy of the registry. An unknown code exits naming the codes that ship, because
 a `--set` resolving to an empty pool would let `support_report.py` report
 perfect coverage over zero cards and `simulate_ai_games.py` report a clean run
 it never had. Guarded by `tests/engine/test_script_set_argument.py`.
+The four whole-pool instruments (grammar_coverage, hook_reliance,
+parse_coverage, behaviour_classes) scope with `--set` only, as a stdout report
+— their `--check`/`--accept` and the committed .md always cover the whole
+pool (a per-set baseline would fork the ratchets), and they refuse `--all` /
+`--cards` at runtime because their default already reads both manifest roles.
 
 **`engine/card_loader.py` is the only module that opens that file.** A private
 reader is the same second copy as a spelled-out filename and goes stale the same

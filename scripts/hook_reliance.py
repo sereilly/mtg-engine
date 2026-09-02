@@ -63,9 +63,11 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import engine.card_hooks as card_hooks
+from set_argument import add_set_argument, resolve_set  # noqa: E402
 import engine.oracle as oracle
 from engine.card_loader import (
     load_cards,
@@ -510,13 +512,78 @@ def check(measures: dict[str, dict[str, float]]) -> list[str]:
     return failures
 
 
-def main() -> int:
+def _resolve_scope(parser, args):
+    """The ``--set`` contract for a whole-pool instrument (see
+    grammar_coverage.py): a specific ``--set CODE`` is a stdout-only report,
+    never a write of the committed .md and never a ratchet move; ``--all`` and
+    ``--cards`` are refused because the default already reads both manifest
+    roles and a path outside the manifest has no row here."""
+    if args.whole_pool:
+        parser.error(
+            "--all is this instrument's default behaviour (it always reads "
+            "both manifest roles); use --set CODE to scope the report"
+        )
+    if args.cards_path:
+        parser.error(
+            "this instrument's analysis is keyed by manifest sets; "
+            "use --set CODE"
+        )
+    if args.set_code is None:
+        return None
+    for flag in ("check", "accept", "accept_probe"):
+        if getattr(args, flag, False):
+            parser.error(
+                f"--set is a stdout-only report; --{flag.replace('_', '-')} "
+                "always covers the whole pool"
+            )
+    return resolve_set(parser, args)
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="fail if any measure rose")
     parser.add_argument("--accept", action="store_true", help="re-snapshot the ceilings")
+    add_set_argument(parser, default=None)
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
     args = parser.parse_args()
+    selection = _resolve_scope(parser, args)
 
     per_set, overall, registries, measured_codes = analyze()
+
+    if selection is not None:
+        code = args.set_code.upper()
+        stats = per_set.get(code) or per_set.get(args.set_code.lower())
+        if stats is None:
+            parser.error(f"no per-set row for {code}")
+        print(f"Pool: {selection.label}")
+        d = stats.as_dict()
+        print(
+            f"{stats.cards} cards ({stats.supported_cards} supported): "
+            f"{stats.hooked_cards} hooked "
+            f"({d['hooked_cards_pct_of_supported']}% of supported), "
+            f"{stats.entries} entries "
+            f"({d['entries_per_100_supported_cards']} per 100 supported)"
+        )
+        names = {
+            card.name
+            for path in selection.paths
+            for card in load_cards(str(path))
+        }
+        hooked_here = sorted(
+            names & set().union(*(r.cards for r in registries))
+        ) if registries else []
+        if hooked_here:
+            print("Hooked cards in this set:")
+            for name in hooked_here:
+                where = ", ".join(
+                    r.name for r in registries if name in r.cards
+                )
+                print(f"  {name}  ({where})")
+        return 0
     measures = _measures(per_set, overall, measured_codes)
 
     if args.check:

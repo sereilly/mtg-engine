@@ -33,7 +33,11 @@ from engine.card_loader import (
     manifest_set_paths,
 )
 
+import behaviour_classes  # noqa: E402
+import grammar_coverage  # noqa: E402
+import hook_reliance  # noqa: E402
 import ingest_set  # noqa: E402
+import parse_coverage  # noqa: E402
 import picker_sweep  # noqa: E402
 import retrieve_oracle  # noqa: E402
 import run_duel  # noqa: E402
@@ -47,6 +51,10 @@ from tests.source_index import source_text, source_tree
 # grew a hardcoded path again would simply not appear in a registry it was
 # never added to.
 SCRIPTS_UNDER_TEST = [
+    pytest.param(behaviour_classes, [], id="behaviour_classes"),
+    pytest.param(grammar_coverage, [], id="grammar_coverage"),
+    pytest.param(hook_reliance, [], id="hook_reliance"),
+    pytest.param(parse_coverage, [], id="parse_coverage"),
     pytest.param(picker_sweep, [], id="picker_sweep"),
     pytest.param(retrieve_oracle, ["Black Lotus"], id="retrieve_oracle"),
     pytest.param(run_duel, [], id="run_duel"),

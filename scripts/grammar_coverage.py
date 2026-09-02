@@ -45,9 +45,11 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from engine.card_loader import load_cards, manifest_measured_codes, manifest_set_paths
+from set_argument import add_set_argument, resolve_set
 from engine.grammar import GRAMMAR_CATEGORIES, compile_line
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -336,13 +338,69 @@ def check(measures: dict[str, dict[str, float]]) -> list[str]:
     return failures
 
 
-def main() -> int:
+def _resolve_scope(parser, args):
+    """The ``--set`` contract for a whole-pool instrument.
+
+    A specific ``--set CODE`` is a stdout-only report scoped to that set —
+    never a write of the committed .md and never a ratchet move, because a
+    per-set baseline would fork the floors/ceilings the whole-pool run owns.
+    ``--all`` and ``--cards`` are refused at runtime: the default run already
+    reads both manifest roles, and a path outside the manifest has no row in
+    the per-set analysis.
+    """
+    if args.whole_pool:
+        parser.error(
+            "--all is this instrument's default behaviour (it always reads "
+            "both manifest roles); use --set CODE to scope the report"
+        )
+    if args.cards_path:
+        parser.error(
+            "this instrument's analysis is keyed by manifest sets; "
+            "use --set CODE"
+        )
+    if args.set_code is None:
+        return None
+    for flag in ("check", "accept", "accept_probe"):
+        if getattr(args, flag, False):
+            parser.error(
+                f"--set is a stdout-only report; --{flag.replace('_', '-')} "
+                "always covers the whole pool"
+            )
+    return resolve_set(parser, args)
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="fail if any measure regressed")
     parser.add_argument("--accept", action="store_true", help="re-snapshot the ratchet floors")
+    add_set_argument(parser, default=None)
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
     args = parser.parse_args()
+    selection = _resolve_scope(parser, args)
 
     per_set, overall, reasons, executed_lines, distinct_texts, measured_codes = analyze()
+
+    if selection is not None:
+        code = args.set_code.upper()
+        stats = per_set.get(code) or per_set.get(args.set_code.lower())
+        if stats is None:
+            parser.error(f"no per-set row for {code}")
+        print(f"Pool: {selection.label}")
+        print(
+            f"{stats.cards} cards, {stats.lines} lines: "
+            f"parsed {stats.pct(stats.parsed)}% | "
+            f"lowered {stats.pct(stats.lowered)}% | "
+            f"executed {stats.pct(stats.executed)}%"
+        )
+        print(
+            "(refusal detail per card: scripts/support_report.py "
+            f"--set {code} --refusals --fragments)"
+        )
+        return 0
     measures = _measures(per_set, overall, measured_codes)
 
     if args.check:

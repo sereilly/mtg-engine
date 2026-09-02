@@ -49,9 +49,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(REPO_ROOT))
 
 from engine import card_hooks, load_cards  # noqa: E402
+from set_argument import add_set_argument, resolve_set  # noqa: E402
 from engine.card_loader import manifest_set_paths  # noqa: E402
 from engine.grammar import compile_line as compile_grammar_line  # noqa: E402
 from engine.oracle_types import (OracleInstruction,  # noqa: E402
@@ -1277,14 +1279,73 @@ def render_markdown(coverages: list[CardCoverage]) -> str:
     return "\n".join(lines)
 
 
-def main() -> int:
+def _resolve_scope(parser, args):
+    """The ``--set`` contract for a whole-pool instrument (see
+    grammar_coverage.py): a specific ``--set CODE`` is a stdout-only report,
+    never a write of the committed .md and never a ratchet move; ``--all`` and
+    ``--cards`` are refused because the default already reads both manifest
+    roles and a path outside the manifest has no row here."""
+    if args.whole_pool:
+        parser.error(
+            "--all is this instrument's default behaviour (it always reads "
+            "both manifest roles); use --set CODE to scope the report"
+        )
+    if args.cards_path:
+        parser.error(
+            "this instrument's analysis is keyed by manifest sets; "
+            "use --set CODE"
+        )
+    if args.set_code is None:
+        return None
+    for flag in ("check", "accept", "accept_probe"):
+        if getattr(args, flag, False):
+            parser.error(
+                f"--set is a stdout-only report; --{flag.replace('_', '-')} "
+                "always covers the whole pool"
+            )
+    return resolve_set(parser, args)
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="exit 1 on unacknowledged/stale findings")
     parser.add_argument(
         "--accept-probe", action="store_true",
         help="snapshot the current deletion-probe findings as the reviewed baseline",
     )
+    add_set_argument(parser, default=None)
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
     args = parser.parse_args()
+    selection = _resolve_scope(parser, args)
+
+    if selection is not None:
+        names = {
+            card.name
+            for path in selection.paths
+            for card in load_cards(str(path))
+        }
+        print(f"Pool: {selection.label}")
+        scoped = [
+            c for c in analyze_pool(run_probe=False) if c.name in names
+        ]
+        gaps = [c for c in scoped if c.unclaimed or c.acknowledged]
+        claimed = len(scoped) - len(gaps)
+        print(
+            f"{len(scoped)} cards analysed: {claimed} fully claimed, "
+            f"{len(gaps)} with unclaimed or acknowledged text"
+        )
+        for coverage in gaps:
+            marker = "" if coverage.supported else "  [unsupported]"
+            print(f"{coverage.name}{marker}")
+            for sentence in coverage.unclaimed:
+                print(f"  unclaimed: {sentence}")
+            for sentence, reason in coverage.acknowledged:
+                print(f"  acknowledged: {sentence}  ({reason})")
+        return 0
 
     coverages = analyze_pool()
     measured = collect_measured_findings(coverages)

@@ -25,10 +25,12 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(REPO_ROOT))
 
 from engine.behaviour_signature import behaviour_classes  # noqa: E402
-from engine.card_loader import load_catalog  # noqa: E402
+from engine.card_loader import load_catalog, load_cards  # noqa: E402
+from set_argument import add_set_argument, resolve_set  # noqa: E402
 
 SNAPSHOT_PATH = Path(__file__).resolve().parent / "behaviour_classes_snapshot.json"
 OUTPUT_PATH = REPO_ROOT / "BEHAVIOUR_CLASSES.md"
@@ -101,11 +103,74 @@ def write_markdown(classes: list[list[str]]) -> None:
     OUTPUT_PATH.write_text(render_markdown(classes), encoding="utf-8")
 
 
-def main() -> int:
+def _resolve_scope(parser, args):
+    """The ``--set`` contract for a whole-pool instrument (see
+    grammar_coverage.py): a specific ``--set CODE`` is a stdout-only report,
+    never a write of the committed .md and never a ratchet move; ``--all`` and
+    ``--cards`` are refused because the default already reads both manifest
+    roles and a path outside the manifest has no row here."""
+    if args.whole_pool:
+        parser.error(
+            "--all is this instrument's default behaviour (it always reads "
+            "both manifest roles); use --set CODE to scope the report"
+        )
+    if args.cards_path:
+        parser.error(
+            "this instrument's analysis is keyed by manifest sets; "
+            "use --set CODE"
+        )
+    if args.set_code is None:
+        return None
+    for flag in ("check", "accept", "accept_probe"):
+        if getattr(args, flag, False):
+            parser.error(
+                f"--set is a stdout-only report; --{flag.replace('_', '-')} "
+                "always covers the whole pool"
+            )
+    return resolve_set(parser, args)
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="exit 1 if classes drifted")
     parser.add_argument("--accept", action="store_true", help="re-snapshot after review")
+    add_set_argument(parser, default=None)
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
     args = parser.parse_args()
+    selection = _resolve_scope(parser, args)
+
+    if selection is not None:
+        # The Phase 2 question: which of this set's cards land in an existing
+        # class? Classes are computed over the shipped catalog plus the
+        # selection (deduped by name), so a measured set's card can join a
+        # shipped card's class before anyone implements it.
+        catalog = {card.name: card for card in load_catalog()}
+        set_names = set()
+        for path in selection.paths:
+            for card in load_cards(str(path)):
+                set_names.add(card.name)
+                catalog.setdefault(card.name, card)
+        groups = behaviour_classes(catalog.values())
+        multi = [
+            names for names in groups.values()
+            if len(names) > 1 and any(name in set_names for name in names)
+        ]
+        multi.sort(key=lambda names: (-len(names), names[0]))
+        print(f"Pool: {selection.label}")
+        print(
+            f"{len(set_names)} cards; {len(multi)} multi-member class(es) "
+            "contain at least one of them (* = in this set):"
+        )
+        for names in multi:
+            shown = ", ".join(
+                f"*{name}" if name in set_names else name for name in names
+            )
+            print(f"  [{len(names)}] {shown}")
+        return 0
 
     classes = current_classes()
 
