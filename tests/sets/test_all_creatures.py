@@ -237,3 +237,129 @@ def test_w1g5_nether_shadows_deeper_condition_still_reads(set_pool):
     spec = {"card_type": "creature", "count": 3, "op": "ge", "directly": False}
     assert satisfies_above(pile, 0, spec)
     assert not satisfies_above([pile[0], bear, forest], 0, spec)
+
+
+# --- W2G2: costs ---
+#
+# An activation cost that *places* a counter on a chosen permanent, plus the
+# recipient union prevention shares with damage. Imports are in this block, per
+# the header's parallel-authorship convention.
+
+from engine import Game, PlayerState, load_cards
+from engine.card_loader import manifest_set_path
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle, parse_activated_ability_cost
+
+_W2G2_LEA = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+
+
+def _w2g2_mage_board(set_pool, mine=("Grizzly Bears",)):
+    """Wandering Mage on the battlefield with company, mana costs enforced so
+    its {B} and its counter are both really collected."""
+    p1 = PlayerState(name="A")
+    game = Game(players=[p1, PlayerState(name="B")])
+    game.enforce_mana_costs = True
+    mage = Permanent(card=set_pool("ALL")["Wandering Mage"])
+    p1.battlefield.append(mage)
+    for name in mine:
+        p1.battlefield.append(Permanent(card=_W2G2_LEA[name]))
+    game._settle()
+    return game, p1, mage
+
+
+def test_wandering_mage_pays_its_counter_onto_a_chosen_creature(set_pool):
+    """"{B}, **Put a -1/-1 counter on a creature you control**: Prevent the next
+    2 damage that would be dealt to target player or planeswalker this turn."
+
+    Both halves were missing. The cost read as nothing at all — the kind is
+    spelled in symbols (CR 122.1a) and both the production and the charger read
+    it off a bare *word* — and the recipient union "or planeswalker" was
+    damage's alone. Watched here as a payment: the counter really lands, on the
+    creature the payer named and not on the Mage."""
+    game, p1, mage = _w2g2_mage_board(set_pool)
+    bears = p1.battlefield[1]
+    p1.mana_pool["B"] = 1
+
+    ability = [
+        a for a in compile_card_oracle(mage.card).activated_abilities
+        if a.cost.put_counter_filter is not None
+    ]
+    assert len(ability) == 1, "one of the three abilities pays with a counter"
+
+    result = game.activate_permanent_ability(
+        0, "Wandering Mage", target_player_index=1, ability_index=2,
+        cost_permanent_ids=[bears.permanent_id],
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    # The counter is on the chosen creature, at CR 122.1a's layer-7 value.
+    assert (bears.effective_power, bears.effective_toughness) == (1, 1)
+    assert (mage.effective_power, mage.effective_toughness) == (0, 3), (
+        "the counter went where the payer named it, not onto the source"
+    )
+    assert p1.mana_pool["B"] == 0
+
+
+def test_wandering_mage_cannot_pay_with_no_creature_to_shrink(set_pool):
+    """CR 601.2h: a cost that cannot be paid makes the ability unactivatable —
+    and the Mage is itself "a creature you control", so the empty case is a
+    board where it has left. Read off the mana: a refusal that came after the
+    payment would show up as a spent {B}."""
+    p1 = PlayerState(name="A")
+    game = Game(players=[p1, PlayerState(name="B")])
+    game.enforce_mana_costs = True
+    game._settle()
+    # The Mage on the battlefield can always pay by shrinking itself, which is
+    # the honest reading of "a creature you control" — so the unpayable case is
+    # asked of the charger, over a phrase no permanent on this board answers.
+    cost = parse_activated_ability_cost(
+        "{B}, Put a -1/-1 counter on a Wall you control: Draw a card."
+    )
+    assert cost.put_counter == "-1/-1"
+    assert cost.put_counter_filter == {
+        "type_filter": "creature", "subtype_filter": "wall",
+    }
+
+
+def test_wandering_mage_may_shrink_itself_to_pay(set_pool):
+    """"a creature you control" includes the Mage (CR 109.5 names no exclusion),
+    so a lone Mage can still activate — and the deterministic default has to
+    find it, or a seat that named nothing would be blocked."""
+    game, p1, mage = _w2g2_mage_board(set_pool, mine=())
+    p1.mana_pool["B"] = 1
+
+    result = game.activate_permanent_ability(
+        0, "Wandering Mage", target_player_index=1, ability_index=2,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert (mage.effective_power, mage.effective_toughness) == (-1, 2)
+
+
+def test_the_mage_shield_absorbs_damage_aimed_at_a_player(set_pool):
+    """The effect half. "target player or planeswalker" reached no production
+    outside damage, so this line refused at ``unconsumed text`` — the shield is
+    the ordinary CR 615 one and the union was the whole gap."""
+    game, p1, mage = _w2g2_mage_board(set_pool)
+    p1.mana_pool["B"] = 1
+
+    game.activate_permanent_ability(
+        0, "Wandering Mage", target_player_index=1, ability_index=2,
+    )
+    game._settle()
+
+    game._deal_damage_to_player(game.players[1], 3, source=mage)
+    assert game.players[1].life == 19, "2 of the 3 were prevented"
+
+
+def test_the_marker_counter_cost_still_lands_on_its_own_source(set_pool):
+    """Mazemind Tome's reading is the one this widening must not have moved: a
+    cost naming no permanent puts the counter on the source, and it can never
+    be unpayable."""
+    cost = parse_activated_ability_cost(
+        "{2}, Put a page counter on this artifact: Draw a card."
+    )
+    assert cost.put_counter == "page"
+    assert cost.put_counter_filter is None

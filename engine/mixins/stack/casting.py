@@ -2056,6 +2056,43 @@ class SpellCastingMixin:
             elif not any(_legal_pump_target(p) for p in self.all_permanents()):
                 return False, f"no valid target for {card.name}"
 
+        elif primary.kind in (
+            "gain_control_of_target", "gain_control_until_eot",
+        ):
+            # "Gain control of target **nonartifact, nonblack** creature."
+            # (Ritual of the Machine.) The printed narrowing rides the target
+            # description, and this chain is where a cast-side narrowing is
+            # enforced — ``derive_cast_spec`` reduces both these kinds to a bare
+            # ``{"kind": "creature"}`` picker, exactly as it does for Terror,
+            # and Terror's exclusions are honoured by *its* arm here rather than
+            # by the spec. Without an arm the announcement was legal, the
+            # additional sacrifice was paid, and the steal then found nothing at
+            # resolution: a card lost to a cast CR 601.2c forbids.
+            #
+            # Asked through the same ``subject_matches`` the bounce arm above
+            # uses, over the same description the handler re-checks with, so the
+            # picker's enumeration (which probes through this method) and the
+            # gate cannot disagree.
+            if not primary.payload.get("permanents_from"):
+                # The bound spelling (Disharmony, Ray of Command) chose nothing
+                # at announcement: the object comes from an earlier step of the
+                # same resolution, so there is no named target to check.
+                steal_filter = (primary.payload.get("targets") or {}).get("filter") or {}
+
+                def _legal_steal_target(perm) -> bool:
+                    return subject_matches(
+                        self, perm, steal_filter, observer=caster_index
+                    )
+
+                if isinstance(target_permanent_index, int):
+                    chosen = self.permanent_at(target_idx, target_permanent_index)
+                    if chosen is None or not _legal_steal_target(chosen):
+                        return False, f"no valid target for {card.name}"
+                elif not any(
+                    _legal_steal_target(p) for p in self.all_permanents()
+                ):
+                    return False, f"no valid target for {card.name}"
+
         elif primary.kind in ("tap_target_permanent", "untap_target_permanent"):
             if not target.battlefield:
                 return False, f"no valid target for {card.name}"
