@@ -77,14 +77,15 @@ from .board import (
     _parse_counted_sacrifice,
     _parse_sacrifice_expansion_permanents,
     _parse_delayed_self_action,
-    parse_player_chooses_permanent,
     _parse_return,
     _parse_put_source_into_zone,
     _parse_destroy,
     _parse_further_subjects,
     _parse_that_object,
+)
+from .attachments import (
     _parse_attach,
-
+    parse_player_chooses_permanent,
 )
 from .control_changes import (
     _parse_exchange_control,

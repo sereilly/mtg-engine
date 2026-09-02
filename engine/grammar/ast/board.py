@@ -599,16 +599,24 @@ class DestroyEachUnlessPaid:
     offer is made per permanent, and a seat that pays for one land has said
     nothing about the next.
 
-    ``payer`` is the printed noun phrase's kind rather than a seat, because
-    "**any** player" means the offer goes round every one of them in turn — the
-    lowering refuses any other spelling instead of narrowing it to the
-    controller, since a buyout nobody but the caster is offered is a different
-    card.
+    ``payer`` is the printed noun phrase's kind rather than a seat, and it is
+    the whole of what separates the two cards that print this sentence:
+    "**any** player" (Cleansing) means the offer goes round every one of them in
+    turn, "**its controller**" (Giant Albatross) means the one seat that
+    member belongs to. Anything else refuses, because a buyout offered to a
+    different set of seats than the card names is a different card again.
+
+    ``no_regen`` is CR 701.19c's rider, printed as its own sentence about the
+    *effect* — "A creature destroyed this way can't be regenerated." The same
+    field :class:`Destroy` carries, read by the same production, because it
+    says the same thing about a destruction this node performs rather than
+    delegates.
     """
 
     filter: ObjectFilter
     life: int
     payer: str = "any_player"
+    no_regen: bool = False
 
 
 @dataclass(frozen=True)

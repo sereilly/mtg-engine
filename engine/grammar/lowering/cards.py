@@ -453,7 +453,9 @@ def _lower_draw(node: ast.Draw) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction(kind, "", payload),)
 
 
-def _lower_mill(node: ast.Mill) -> tuple[OracleInstruction, ...]:
+def _lower_mill(
+    node: ast.Mill, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     """"Target player mills N cards." (CR 701.13a, Millstone.)
 
     The miller travels on the payload under the same ``recipient`` key
@@ -464,6 +466,27 @@ def _lower_mill(node: ast.Mill) -> tuple[OracleInstruction, ...]:
     which is the original reason this function refused everything.
     """
     payload: dict[str, object] = {"amount": _amount_payload(node.count)}
+    if node.player.kind == "that_player":
+        # "Whenever this creature deals damage to an opponent, **that player**
+        # mills a card." (Reef Pirates.) The seat is the one the damage event
+        # froze (CR 603.10), read from the trigger's context under the key
+        # every damage announcement stamps — the same reading the on-damage
+        # discard (Nicol Bolas) and the on-damage poison counter (Pit Scorpion)
+        # take of the same two words.
+        #
+        # Gated on the event rather than admitted outright, because a trigger
+        # that offers no choice has nothing in ``context.target`` but whatever
+        # the resolution was already carrying: this phrase reads a seat the
+        # fire site froze or it refuses, which is the contract `_events.py`
+        # states and the one the damage family's own fall-through breaks.
+        if event not in _DAMAGED_PLAYER_EVENTS:
+            raise LoweringError(
+                '"that player" mills only under a trigger whose event froze a '
+                "damaged player",
+                node=node,
+            )
+        payload["recipient"] = "damaged_player"
+        return (OracleInstruction("mill_target_player", "", payload),)
     if node.player.kind in ("target_player", "target_opponent"):
         # "Target **opponent** mills two cards" (Teferi's Tutelage). The handler
         # already mills ``context.target``, whoever that is; what "opponent"

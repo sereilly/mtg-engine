@@ -1,6 +1,6 @@
-"""The battlefield: destruction, bouncing, sacrificing, attaching.
+"""The battlefield: destruction, bouncing, sacrificing.
 
-Return-to-zone, destroy, sacrifice, attach, and `_parse_that_object` — the
+Return-to-zone, destroy, sacrifice, and `_parse_that_object` — the
 back-reference a delayed effect uses to name the permanent its trigger bound
 ("destroy *that creature* at end of combat").
 
@@ -8,7 +8,15 @@ Tapping left for ``effects/tapping.py`` when this module reached the
 thousand-line guard, and it left under that name because ``lowering/tapping.py``
 has carried it since the lowering side crossed the same cap — so the mirror
 re-forms rather than forking, which is the whole of the naming rule in
-CLAUDE.md.
+CLAUDE.md. ``attachments`` left the next time the guard fired, under
+``lowering/attachments.py``'s name and for that same rule: an attachment is a
+relation between two permanents, where everything here acts on one at a time.
+
+**Ten imports had outlived the productions that used them** when
+``attachments`` left — ``CARD_TYPES``, ``parse_bound_subject`` and eight more,
+stranded by the earlier splits and invisible because an unused import is not an
+error. Sweeping the module a split takes functions *out* of is the other half
+of taking one.
 
 These productions read a zone through `phrases._parse_zone`; they do not define
 one, because "search your library" needs the same fragment and neither family
@@ -24,15 +32,12 @@ from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..lexer import NUMBER
 from ..readers import accept_source_reference
-from ..references import parse_player_ref, parse_recipient, parse_target_spec
+from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
-from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, NUMBER_WORDS, SUBTYPE_INDEX, match_longest)
 from ..phrases import (
-    _accept_number, _accept_self_reference, _parse_counted_sacrifice,
+    _accept_number, _parse_counted_sacrifice,
     _parse_mana_payment, _parse_pay_life,
     _parse_sacrificed_subject, _parse_that_object, _parse_zone,
-    parse_bound_subject, parse_counted_subject, parse_pair_ordinal_subject,
-    parse_subject_filter_at,
 )
 
 
@@ -596,30 +601,6 @@ _DESTROYED_THIS_WAY_NOUNS: tuple[str, ...] = (
 )
 
 
-def _parse_attach(stream: TokenStream) -> ast.Statement:
-    """``Attach <subject> to <host>`` (CR 701.3).
-
-    The sentence CR 702.6a expands equip into — "Attach this permanent to
-    target creature you control" — and its one generalisation, a chosen
-    Equipment ("Attach target Equipment you control to target creature you
-    control"). Both halves go through `parse_recipient`, so a narrowed host
-    ("target legendary creature you control", CR 702.6c's "Equip [quality]")
-    is read by the noun phrase every other production already uses rather than
-    by anything here. The whole line must be consumed: a trailing clause this
-    does not read is a refusal, never a silent partial attach.
-    """
-    stream.expect_word("attach")
-    subject = parse_recipient(stream)
-    if subject is None:
-        raise stream.error("expected what to attach")
-    if not stream.accept_word("to"):
-        raise stream.error("expected 'to' after what is attached")
-    host = parse_recipient(stream)
-    if host is None:
-        raise stream.error("expected what to attach to")
-    return ast.Attach(subject, host)
-
-
 def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     """"<player> sacrifices <noun>", with the verb already consumed.
 
@@ -852,72 +833,6 @@ def _parse_delayed_self_action(stream: TokenStream) -> ast.Statement | None:
     return ast.DelayedSelfAction(action, subject=subject)
 
 
-def parse_player_chooses_permanent(
-    stream: TokenStream, chooser: "ast.PlayerRef"
-) -> "ast.ChoosePermanent | None":
-    """``<player> chooses <noun phrase> [that this card could enchant].``
-    ``<player> chooses up to <N> <noun phrase>.``
-
-    "That creature's controller chooses a creature that this card could
-    enchant." (Takklemaggot.) The subject has already been read, so this starts
-    at the verb.
-
-    Nothing is targeted: the sentence prints no "target" and the pick is made as
-    the ability resolves (CR 601.2c/115.1b), which is exactly the shape
-    ``engine/handlers/permanent_choices.py`` already performs — so this is a
-    noun phrase and a seat, not a new mechanism.
-
-    The relative clause is read **here** rather than taught to
-    ``parse_object_filter``, the same rule ``_parse_that_object`` follows: it
-    is a question about a *pair* of permanents (may this Aura enchant that
-    creature?), and the shared filter matcher answers about one. Teaching it to
-    the noun parser would hand the words to every line that prints them and
-    then drop them.
-
-    Returns None with the cursor untouched when the sentence is a different
-    "chooses" — a card name, a colour, a mode — so those keep their own
-    readings.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("chooses", "choose"):
-        return None
-    spec = parse_target_spec(stream)
-    if spec is None or spec.targeted:
-        stream.reset(mark)
-        return None
-    if spec.quantifier == "up_to":
-        # "that player **chooses up to two Plains**" (Raiding Party). The plural
-        # of the same sentence, and the same node: how many may be picked is
-        # already what ``TargetSpec.quantifier`` and ``count`` say, so a second
-        # field here would be a number the spec beside it also carries.
-        #
-        # No relative clause is read for it, and none is tolerated: the tail
-        # below is Takklemaggot's enchant legality, which is a question about a
-        # *pair* of permanents and means nothing for a set. Anything else the
-        # phrase printed is left in the stream and refuses the line, which is
-        # full token consumption doing its job.
-        return ast.ChoosePermanent(chooser, spec)
-    if spec.quantifier != "a" or spec.count != 1:
-        stream.reset(mark)
-        return None
-    host_for_source = False
-    if stream.accept_phrase("that", "this", "card", "could", "enchant"):
-        host_for_source = True
-    elif stream.accept_phrase("that", "this", "aura", "could", "enchant"):
-        host_for_source = True
-    if not host_for_source:
-        # Every other narrowing a "chooses" sentence could print is one this
-        # production has no answer for, and a choice made from a wider set than
-        # the card names is not the card. Refused rather than admitted with the
-        # clause dropped.
-        stream.reset(mark)
-        return None
-    # The choice is optional exactly when the sentences behind it print both
-    # branches; the rider that reads "If they don't" is what says so, and it
-    # sets the flag through `dataclasses.replace`.
-    return ast.ChoosePermanent(chooser, spec, host_for_source=host_for_source)
-
-
 def _parse_for_each_destroy_unless_paid(
     stream: TokenStream,
 ) -> "ast.DestroyEachUnlessPaid | None":
@@ -936,9 +851,13 @@ def _parse_for_each_destroy_unless_paid(
     * the back-reference must name the same noun the loop does ("for each
       **land** … destroy that **land**"), so a sentence iterating one set and
       destroying another refuses rather than compiling into the wrong sweep;
-    * the payer must be printed "any player" — the lowering has nowhere to put
-      a narrower one, and a buyout offered to fewer seats than the card names
-      is a different card;
+    * the payer must be one of the two printed spellings — "any player", the
+      offer that goes round every seat in turn (Cleansing), or "**its
+      controller**", the offer made to exactly the seat that permanent belongs
+      to (Giant Albatross). They are different cards, so the word is carried on
+      the node and the loop is told which; anything else refuses, because a
+      buyout offered to a different set of seats than the card names is a
+      different card again.
     * the cost must be a printed number of life, since the loop charges it
       literally.
 
@@ -968,7 +887,18 @@ def _parse_for_each_destroy_unless_paid(
         stream.reset(mark)
         return None
     stream.advance()
-    if not stream.accept_phrase("unless", "any", "player", "pays"):
+    if not stream.accept_word("unless"):
+        stream.reset(mark)
+        return None
+    if stream.accept_phrase("any", "player", "pays"):
+        payer = "any_player"
+    elif stream.accept_phrase("its", "controller", "pays"):
+        # "…destroy that creature unless **its controller** pays 2 life."
+        # (Giant Albatross.) "Its" is the loop's own member — the same
+        # back-reference the noun two words earlier is — so the seat varies per
+        # round of the loop and is never a seat the sentence chose.
+        payer = "controller"
+    else:
         stream.reset(mark)
         return None
     # A printed integer, read straight off the token rather than through
@@ -986,4 +916,14 @@ def _parse_for_each_destroy_unless_paid(
     if not stream.accept_word("life"):
         stream.reset(mark)
         return None
-    return ast.DestroyEachUnlessPaid(filt, life)
+    # "**A creature destroyed this way can't be regenerated.**" (Giant
+    # Albatross.) CR 701.19c, printed as a sentence of its own about the whole
+    # loop rather than as a pronoun about one member — the same clause the
+    # ordinary destroy reads at the same point in its own production, and read
+    # here because this production returns before that one is ever reached.
+    tail = stream.mark()
+    stream.accept_punct(".", ",")
+    no_regen = _accept_destroyed_this_way_no_regen(stream)
+    if not no_regen:
+        stream.reset(tail)
+    return ast.DestroyEachUnlessPaid(filt, life, payer, no_regen)

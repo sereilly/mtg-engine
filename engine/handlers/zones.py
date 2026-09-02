@@ -2501,8 +2501,15 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
 
     The same ``recipient`` key ``target_loses_life`` reads: absent means the
     spell's target, "caster" the controller ("Mill four cards."),
-    "each_opponent" every living opponent. Each miller mills their own library,
-    which is why the loop is per victim rather than a shared count.
+    "each_opponent" every living opponent, "damaged_player" the seat a damage
+    trigger's fire site froze ("whenever this creature deals damage to an
+    opponent, **that player** mills a card", Reef Pirates). Each miller mills
+    their own library, which is why the loop is per victim rather than a shared
+    count.
+
+    A ``damaged_player`` with no record mills nobody, never the ability's own
+    controller: that is the seat this effect must not hit, and it is the same
+    rule ``discard_hand`` follows for the same words under the same event.
     """
     amount = resolve_amount(instruction.payload.get("amount", 1) or 1, context.x_value)
     recipient = instruction.payload.get("recipient")
@@ -2513,6 +2520,12 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
             game.players[i]
             for i in game.opponents_of(game.players.index(context.caster))
         ]
+    elif recipient == "damaged_player":
+        seat = (context.trigger_context or {}).get("defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{context.card.name}: no recorded player, no mill")
+            return True, "resolved"
+        victims = [game.players[seat]]
     else:
         victims = [context.target]
     for victim in victims:

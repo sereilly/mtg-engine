@@ -1010,6 +1010,14 @@ def destroy_attached_permanent(game: Game, instruction: OracleInstruction, conte
     return True, "resolved"
 
 
+#: The stand-in a per-controller buyout puts where a seat number would go. A
+#: sentinel rather than a seat, because which seat "its controller" names is a
+#: question about *this member of the loop* at the moment its round comes up:
+#: the loop removes permanents as it goes, and a control change between two
+#: rounds moves the offer with the permanent (CR 613 layer 2).
+_CONTROLLER = object()
+
+
 @effect_handler("destroy_each_unless_life_paid")
 def destroy_each_unless_life_paid(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"For each land, destroy that land unless any player pays 1 life."
@@ -1031,15 +1039,48 @@ def destroy_each_unless_life_paid(game: Game, instruction: OracleInstruction, co
     not an identity, and this loop removes permanents as it goes). A land that
     has left by the time its round comes up is simply skipped: it is no longer
     there to destroy, and nobody should be charged to save it.
+
+    Two payload keys say which card this is, and both are absent for Cleansing
+    so its behaviour is untouched:
+
+    * ``payer`` — "…unless **its controller** pays 2 life" (Giant Albatross)
+      offers each member's round to exactly one seat rather than to every seat
+      in turn. The seat is read per member, as the round comes up, because a
+      control change between two members' rounds moves the offer with the
+      permanent (CR 613 layer 2).
+    * ``from_damage_record`` — "for each creature **that dealt damage to this
+      creature this turn**". Not a narrowing of the board sweep but the set
+      itself, read off the record the damage seam kept on the victim. Giant
+      Albatross' trigger fires on its own death, so at resolution the source is
+      a card in a graveyard and there is no battlefield read that could answer
+      (CR 603.10) — the record travels with the removed ``Permanent``, which is
+      the same reading Brine Hag's base-P/T rewrite makes of the same relation.
     """
     filters = dict(instruction.payload.get("filter") or {})
     life = int(instruction.payload.get("life", 1))
+    payer = str(instruction.payload.get("payer") or "any_player")
+    allow_regeneration = not instruction.payload.get("bypass_regeneration")
     seats = len(game.players)
     active = game.active_player_index if game.active_player_index is not None else 0
     apnap = [(active + offset) % seats for offset in range(seats)]
+    if instruction.payload.get("from_damage_record"):
+        source = context.source_permanent
+        # The record is a list of ``Permanent`` objects; a damager that has
+        # itself left is skipped here rather than at its round, because
+        # ``permanent_by_id`` is what the loop addresses members by and a
+        # departed permanent has no live id to offer.
+        damagers = (
+            (source.metadata.get("damaged_by_sources_this_turn") or [])
+            if source is not None else []
+        )
+        candidates = [
+            perm for perm in damagers if game.is_on_battlefield(perm)
+        ]
+    else:
+        candidates = list(game.all_permanents())
     targets = [
         perm.permanent_id
-        for perm in sorted(game.all_permanents(), key=lambda p: p.permanent_id)
+        for perm in sorted(candidates, key=lambda p: p.permanent_id)
         if permanent_matches_filter(perm, filters)
     ]
     if not targets:
@@ -1050,10 +1091,16 @@ def destroy_each_unless_life_paid(game: Game, instruction: OracleInstruction, co
     # records the rest of *itself* before each step, and a nested loop would
     # need its own record for the offers still owed about the land it stopped
     # on. The `None` seat is that land's verdict.
+    #
+    # ``_CONTROLLER`` stands where a seat number would for the per-controller
+    # form: which seat that is cannot be settled here, because the loop removes
+    # permanents as it goes and a control change between two rounds moves the
+    # offer with its permanent.
+    offered = apnap if payer == "any_player" else [_CONTROLLER]
     steps = [
         (permanent_id, seat)
         for permanent_id in targets
-        for seat in [*apnap, None]
+        for seat in [*offered, None]
     ]
 
     def _step(item) -> None:
@@ -1068,12 +1115,17 @@ def destroy_each_unless_life_paid(game: Game, instruction: OracleInstruction, co
             game._destroy_swept_permanents(
                 game.players[controller],
                 lambda candidate, target=permanent: candidate is target,
+                allow_regeneration=allow_regeneration,
             )
             game.log.append(
                 f"{context.card.name} destroyed {permanent.card.name} "
                 "(nobody paid to save it)"
             )
             return
+        if seat is _CONTROLLER:
+            seat = game.controller_index_of(permanent)
+            if seat is None:
+                return
         if game.players[seat].lost:
             return
         game.arm_pending_choice(
