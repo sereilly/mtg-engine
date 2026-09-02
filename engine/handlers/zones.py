@@ -10,6 +10,7 @@ from ..keywords import grant_keyword
 from ..models import Permanent
 from ._common import (
     _card_matches_filter,
+    _one_choice,
     evaluate_count,
     frozen_that_player_seat,
     graveyard_card_matches,
@@ -1768,8 +1769,17 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
         # creature, so ``permanent_by_id`` no longer finds it while every Aura
         # still holds the record of what it was on. CR 400.7 makes the id
         # unique to that object, so a look-alike cannot answer to it.
-        host_id = context.target_permanent_id if attached_to == "target" else None
-        if host_id is None:
+        # Through ``_one_choice``, because the two callers hand this field
+        # different shapes: a *spell* records one id (Word of Undoing) and an
+        # *activated ability* records the whole announced list, even when the
+        # list is one long. Read raw, an ability's `[7]` never equals any
+        # permanent's id and the sweep found nothing on a host the player had
+        # chosen — Scarab of the Unseen is the first ability to reach here.
+        host_id = (
+            _one_choice(context.target_permanent_id)
+            if attached_to == "target" else None
+        )
+        if not isinstance(host_id, int):
             # The relation is the whole narrowing, so a referent this cannot
             # resolve ends the sweep rather than widening it to the board.
             game.log.append(

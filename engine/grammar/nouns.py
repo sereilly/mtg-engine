@@ -212,6 +212,7 @@ class _FilterDraft:
     original_expansion: str | None = None
     attached_to: str | None = None
     attached_to_filter: ast.ObjectFilter | None = None
+    attached_to_target: ast.ObjectFilter | None = None
     # "…**whose controller controls an Island**" (Seasinger) — see
     # ``ast.ObjectFilter``.
     controller_controls: ast.ObjectFilter | None = None
@@ -742,6 +743,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         not_enchanted=d.not_enchanted,
         attached_to=d.attached_to,
         attached_to_filter=d.attached_to_filter,
+        attached_to_target=d.attached_to_target,
         controller_controls=d.controller_controls,
         of_bound_type=d.of_bound_type,
         in_combat_with_source=d.in_combat_with_source,
