@@ -853,6 +853,22 @@ def _player_recipient_spec(payload: dict) -> dict | None:
     return _from_targets_payload(payload.get("targets")) or {"kind": "player"}
 
 
+def _look_top_pick_spec(payload: dict) -> dict | None:
+    """Ashnod's Cylix's picker, or None for every other card in the family.
+
+    "**Target player** looks at the top three cards of their library" chooses a
+    seat as the ability is activated (CR 602.2b); "Look at the top five cards of
+    **your** library" (Browse, See the Truth, Diabolic Vision) chooses nobody,
+    and raising a player picker in front of one of those would ask its
+    controller to name a target the handler ignores — the twelve-card mistake
+    ``_player_recipient_spec`` above records, which is why this is derived from
+    the payload rather than declared flat for the kind.
+    """
+    if payload.get("looker") != "target_player":
+        return None
+    return {"kind": "player"}
+
+
 def _counter_spec(payload: dict) -> dict:
     """A counterspell, narrowed to the colour its payload names.
 
@@ -1218,6 +1234,7 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     "grant_whole_prevention_shield": _whole_prevention_shield_spec,
     "set_base_pt_target_until_eot": _set_base_pt_spec,
     "grant_cast_permission": _cast_permission_spec,
+    "look_top_pick_to_hand": _look_top_pick_spec,
 }
 
 

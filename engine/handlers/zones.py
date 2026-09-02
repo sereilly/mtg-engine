@@ -3766,8 +3766,22 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
     than the hand, in which case every looked-at card goes to the hand and
     there is nothing to choose. ``context.cast_from_zone`` is the field the
     permission-seam round added for exactly this sentence."""
-    caster = context.caster
     payload = instruction.payload
+    # Whose library. "Target player looks at the top three cards of **their**
+    # library" (Ashnod's Cylix) names a seat the activation chose, and the
+    # looker and the pile are the same player by construction — the possessive
+    # says so — so one lookup answers both. Every other card in this family
+    # prints "your library", which is the ability's own controller and the key
+    # is absent. A named looker the ability never chose does nothing at all:
+    # looking at a library the card did not name would be worse than the
+    # ability fizzling, and the pile is hidden, so nobody would see it.
+    if payload.get("looker") == "target_player":
+        if context.target not in game.players:
+            game.log.append(f"{context.card.name}: no player chosen")
+            return True, "resolved"
+        caster = context.target
+    else:
+        caster = context.caster
     # "Look at **that many** cards" (Garruk's Harbinger): the number the firing
     # event carried, frozen by the fire site. An absent record looks at nothing
     # rather than falling back to a count the card never printed.
@@ -3800,6 +3814,7 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
         optional=bool(payload.get("optional")),
         rest_order=payload.get("rest_order", "any"),
         rest_destination=payload.get("rest_destination", "library_bottom"),
+        pick_destination=payload.get("pick_destination", "hand"),
     )
     game.log.append(f"{caster.name} is looking at the top {top_count} cards of their library")
     return True, "pending_look_top_pick"

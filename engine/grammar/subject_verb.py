@@ -58,6 +58,7 @@ from .effects import (
     _parse_has,
     _parse_loses,
     _parse_mill,
+    parse_player_looks_at_own_library_top,
     _parse_player_adds_mana,
     _parse_player_puts_hand_cards_on_library,
     _parse_player_puts_whole_hand_on_library,
@@ -272,6 +273,19 @@ def parse_subject_verb(
             return _parse_discard(stream, source_spec)
         if token.text in ("mills", "mill") and isinstance(source_spec, ast.PlayerRef):
             return _parse_mill(stream, source_spec)
+        # "**Target player** looks at the top three cards of their library…"
+        # (Ashnod's Cylix.) The look-and-pick template with its looker printed:
+        # every other card in that family looks at its own controller's library,
+        # so "your library" was a literal and the seat was never a field.
+        # Dispatched on the verb like every other player action, and the
+        # production declines without consuming — "Look at target player's
+        # hand" and Visions' look at somebody else's library top keep their own
+        # readings, which are reached from the bare imperative and not from
+        # here.
+        if token.text in ("looks", "look") and isinstance(source_spec, ast.PlayerRef):
+            looked = parse_player_looks_at_own_library_top(stream, source_spec)
+            if looked is not None:
+                return looked
         # "**That player** exiles all cards from their library." (Thought
         # Lash.) The only player-subject sentence in the exile family;
         # declines without consuming, so every other printed exile keeps the
