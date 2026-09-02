@@ -586,6 +586,12 @@ def _lower_choose_target(node: ast.ChooseTarget) -> tuple[OracleInstruction, ...
         # targets were chosen as the spell was cast (CR 601.2c) — but nothing
         # else in the resolution can say which attacking creatures those were.
         _describe_several_targets(payload, node.subject)
+        if node.subject.same_controller:
+            # "…**controlled by the same opponent**" (Retribution). A relation
+            # between the targets, so it rides the *description* the picker and
+            # the CR 601.2c gate read rather than the filter every matcher
+            # tests one permanent against — no such matcher could answer it.
+            payload["targets"]["same_controller"] = True
         return (OracleInstruction("choose_target_permanents", "", payload),)
     _describe_targets(payload, node.subject)
     if "targets" not in payload:

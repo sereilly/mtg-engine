@@ -1059,12 +1059,27 @@ class LegalityMixin:
             if t.get("kind") == "permanent" and t.get("index") is not None
         }
         refused = f"no valid target for {card.name}"
+        chosen: list = []
         for permanent_id in named_ids:
             target = self.permanent_by_id(permanent_id)
             if target is None:
                 return refused
             slot = (self.controller_index_of(target), self.battlefield_index_of(target))
             if slot not in legal:
+                return refused
+            chosen.append(target)
+        if spec.get("same_controller") and len(chosen) > 1:
+            # "Choose two target creatures **controlled by the same opponent**."
+            # (Retribution, CR 601.2c.) A relation between the targets, so it
+            # cannot be part of the per-candidate enumeration above — that one
+            # answers "is each of these a legal target", and two creatures each
+            # controlled by a *different* opponent both pass it. Asked here,
+            # over the whole announcement, and only where the caster named more
+            # than one: a single named target trivially shares a controller
+            # with itself and refusing on a half-made announcement would refuse
+            # a legal cast.
+            seats = {self.controller_index_of(perm) for perm in chosen}
+            if len(seats) != 1 or None in seats:
                 return refused
         if named_ids:
             # Ids are the precise answer; an index beside them is the same

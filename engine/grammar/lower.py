@@ -355,7 +355,9 @@ def lower_statement(
         # dict dispatch however deeply it is nested. The same reading
         # ``_lower_destroy`` above takes, and for the same reason: Curse
         # Artifact's sacrifice lowers under a ``May``.
-        return _lower_sacrifice(statement, event)
+        # ``produced`` for the same reason ``_lower_destroy`` takes it: "one of
+        # those creatures" names a set an earlier step of this effect chose.
+        return _lower_sacrifice(statement, event, produced)
     if isinstance(statement, ast.DiscardRevealedUnlessPayLife):
         return _lower_discard_revealed_unless_pay_life(statement, produced)
     if isinstance(statement, ast.LookTopPickToHand):

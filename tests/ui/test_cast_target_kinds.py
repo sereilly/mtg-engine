@@ -202,8 +202,11 @@ def test_a_printed_number_is_reported_exact():
     specs = _several_target_cards()
     exact = {name for name, spec in specs.items() if spec.get("exact_targets")}
 
-    # "Destroy two target nonartifact creatures" / "Exile two target artifacts".
-    assert exact == {"Ashes to Ashes", "Dust to Dust"}, sorted(exact)
+    # "Destroy two target nonartifact creatures" / "Exile two target artifacts"
+    # / "Choose two target creatures controlled by the same opponent".
+    assert exact == {
+        "Ashes to Ashes", "Dust to Dust", "Retribution",
+    }, sorted(exact)
     # And the "up to" ones must not claim it, or the picker would refuse an
     # announcement the card allows — CR 601.2c lets those choose fewer, none
     # included.

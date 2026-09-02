@@ -1155,3 +1155,34 @@ def destroy_tapped_land_and_reoffer_aura(
     if any(perm.card.primary_type == "land" for perm in game.controlled_by(controller_index)):
         game.arm_pending_choice("kudzu_reattach", controller_index, aura=aura)
     return True, "resolved"
+
+
+@effect_handler("sacrifice_recorded_permanent")
+def sacrifice_recorded_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"That player chooses and sacrifices one of those creatures."
+    (Retribution.)
+
+    The sacrifice half of Preacher's decomposition, one rule over from
+    ``destroy_target_permanent``'s ``permanents_from`` reading: a
+    ``choose_permanent`` step ahead of this one asked the affected seat which,
+    and recorded the answer by id.
+
+    Its own kind rather than the destroy with a flag, for
+    ``sacrifice_bound_permanent``'s reason: CR 701.21a is a sacrifice, so
+    regeneration does not save it, an indestructible permanent still goes, and
+    no "if it would be destroyed" replacement ever sees an event.
+
+    Nothing recorded, or a permanent that has left since, sacrifices nothing —
+    CR 608.2b doing as much as it can rather than a failure.
+    """
+    key = instruction.payload.get("permanents_from")
+    recorded = context.results.get(key) if key is not None else None
+    victim = (
+        game.permanent_by_id(recorded) if isinstance(recorded, int) else None
+    )
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: nothing was chosen to sacrifice")
+        return True, "resolved"
+    game.sacrifice_permanent(victim)
+    game.log.append(f"{context.card.name}: {victim.card.name} was sacrificed")
+    return True, "resolved"

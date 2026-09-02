@@ -1787,6 +1787,14 @@ def _from_targets_payload(targets) -> dict | None:
         # the picker offered "up to 2" for a card that prints a number.
         if targets.get("quantifier") == "exactly":
             flags = {**flags, "exact_targets": True}
+        if targets.get("same_controller"):
+            # "Choose two target creatures **controlled by the same
+            # opponent**." (Retribution, CR 601.2c.) A relation over the whole
+            # announcement, which is why it travels beside ``max_targets``
+            # rather than inside the per-candidate filter: enumerating
+            # candidates one at a time can never see it, and the gate that
+            # checks what the caster *named* is where it is answered.
+            flags = {**flags, "same_controller": True}
     elif count == "x":
         # "**X** target creatures" (Part Water, Winter Blast). The count is the
         # announced X, so there is no number here to be a maximum — and saying

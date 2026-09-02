@@ -93,6 +93,24 @@ def choose_target_permanents(game: Game, instruction: OracleInstruction, context
         predicate=lambda perm: permanent_matches_filter(perm, described),
     )
     context.results[CHOSEN_TARGET_PERMANENTS] = chosen
+    if (instruction.payload.get("targets") or {}).get("same_controller"):
+        # "…**controlled by the same opponent**. **That player** chooses and
+        # sacrifices one of those creatures." (Retribution.) The sentence names
+        # a player, and this step is the only one that can say which: the
+        # relation is what makes the answer a single seat, and by the sentence
+        # after it one of the creatures is on its way to a graveyard. Written
+        # under the key every other "the player this effect chose" is written
+        # under (`_chooser_seat`'s ``chosen_player``), so the prompt behind it
+        # needs no reader of its own.
+        seats = {game.controller_index_of(perm) for perm in chosen}
+        if len(seats) == 1:
+            seat = seats.pop()
+            if seat is not None:
+                # The literal every other handler that writes this key spells
+                # (`control_changes`, `damage`); it is declared in
+                # `grammar/lowering/_events.CHOSEN_PLAYER`, which the handler
+                # layer does not import from.
+                context.results["chosen_player"] = seat
     if not chosen:
         game.log.append(f"{context.card.name} had no legal targets")
         return True, "no target"

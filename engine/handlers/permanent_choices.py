@@ -108,6 +108,15 @@ def permanent_choice_candidates(game, payload: dict, context, among=None) -> lis
     if host is not None and not game.is_on_battlefield(host):
         host = None
 
+    recorded = payload.get("among_record")
+    if among is None and recorded is not None:
+        # "…sacrifices one of **those creatures**" (Retribution). The offer is
+        # the set an earlier step of this same resolution chose, not the board:
+        # scanning the board would let the player give up any creature they
+        # control, which is a strictly better card than the one printed. An
+        # unwritten record offers nothing, which is the honest outcome — the
+        # sentence names a set nobody made.
+        among = tuple(context.results.get(str(recorded)) or ())
     pool = list(among) if among is not None else list(game.all_permanents())
     out = []
     for perm in pool:
@@ -242,6 +251,19 @@ def _chooser_seat(game, payload: dict, context) -> int | None:
         if isinstance(seat, int) and 0 <= seat < len(game.players):
             return seat
         return None
+    if chooser == "chosen_player":
+        # "Choose two target creatures controlled by the same opponent.
+        # **That player** chooses and sacrifices one of those creatures."
+        # (Retribution.) The seat an earlier step of this same resolution
+        # recorded — the one the printed relation named — read back through the
+        # key every "the player this effect chose" is written under. None when
+        # nothing recorded one, which the caller reports as a choice nobody
+        # could make rather than handing the pick to the ability's controller,
+        # the seat the card has just said must not choose.
+        seat = (context.results or {}).get("chosen_player")
+        if isinstance(seat, int) and 0 <= seat < len(game.players):
+            return seat
+        return None
     if chooser == "target":
         # "**their** controller chooses one of them" (Juxtapose): the seat the
         # candidates were drawn from, which for this side is the spell's chosen
@@ -330,6 +352,14 @@ def choose_permanent(
     payload = instruction.payload
     result_key = payload["result_key"]
     context.results[result_key] = None
+    # "Put a -1/-1 counter on **the other**." (Retribution.) The member of the
+    # offered set the pick did *not* take. Written here for ``result_key``'s
+    # reason — a later step reading it finds None rather than a key error when
+    # there was nothing to choose — and filled in beside the answer below,
+    # which is the one moment both halves are in hand.
+    remainder_key = payload.get("remainder_key")
+    if remainder_key is not None:
+        context.results[str(remainder_key)] = None
     seat = _chooser_seat(game, payload, context)
     if seat is not None:
         # Who was asked, for a later sentence that speaks about them rather than
@@ -364,5 +394,6 @@ def choose_permanent(
         context=context,
         candidates=candidates,
         optional=bool(payload.get("optional")),
+        remainder_key=(None if remainder_key is None else str(remainder_key)),
     )
     return True, "resolved"

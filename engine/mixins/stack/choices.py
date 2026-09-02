@@ -2489,6 +2489,7 @@ class PendingChoicesMixin:
         context,
         candidates,
         optional: bool = False,
+        remainder_key: str | None = None,
     ) -> PendingChoice | None:
         """Queue "choose one of these permanents" for *player_index*.
 
@@ -2511,6 +2512,12 @@ class PendingChoicesMixin:
             _context=context,
             _candidates=tuple(candidates),
             optional=optional,
+            # "Put a -1/-1 counter on **the other**." (Retribution.) Which
+            # scratchpad key the *unchosen* candidates are recorded under. It
+            # rides the prompt because the answer is what decides them, and the
+            # only place the answer and the offered set are both in hand is
+            # where the answer is recorded.
+            remainder_key=remainder_key,
         )
 
     def live_permanent_choices(self, choice: PendingChoice) -> list:
@@ -2535,7 +2542,25 @@ class PendingChoicesMixin:
         )
 
     def _record_permanent_choice(self, choice: PendingChoice, permanent_id) -> None:
-        choice.data["_context"].results[choice.data["result_key"]] = permanent_id
+        results = choice.data["_context"].results
+        results[choice.data["result_key"]] = permanent_id
+        remainder_key = choice.data.get("remainder_key")
+        if remainder_key is not None:
+            # "That player chooses and sacrifices one of those creatures. Put a
+            # -1/-1 counter on **the other**." (Retribution.) The offered
+            # candidates minus the one taken, by id — resolved here because
+            # this is the only moment both the set and the answer exist, and by
+            # the next step of the resolution one of them is in a graveyard.
+            #
+            # A bare id rather than a list, and refused above one: "the other"
+            # is a phrase about a pair, and a two-member answer to it would be
+            # read by the single-permanent channel as whichever came first.
+            others = [
+                perm.permanent_id
+                for perm in (choice.data.get("_candidates") or ())
+                if perm.permanent_id != permanent_id
+            ]
+            results[str(remainder_key)] = others[0] if len(others) == 1 else None
         self.discard_pending_choice(choice)
 
     def _resolve_permanent_choice(self, choice: PendingChoice, permanent_id) -> bool:

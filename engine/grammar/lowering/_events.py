@@ -362,6 +362,15 @@ _DAMAGED_PERMANENTS = "damaged_permanents"
 # on this card that is a spell that reports itself resolved and deals nothing.
 CHOSEN_PLAYER = "chosen_player"
 
+#: "That player chooses and sacrifices one of those creatures. Put a -1/-1
+#: counter on **the other**." (Retribution.) The member of a chosen pair the
+#: pick did *not* take, written by the same step that records the pick — the
+#: only moment both are in hand. Asking the board instead would find whichever
+#: of the two is still there, which is the same permanent on a card whose
+#: sacrifice was replaced and a different one on a card whose other half died
+#: to something else in between.
+OTHER_CHOSEN_PERMANENT = "other_chosen_permanent"
+
 # The scratchpad key a "<player> chooses <permanent>" step writes and the
 # sentences behind it read — "attach it to **that** permanent" (Enchantment
 # Alteration), "return this card … **attached to that creature**"

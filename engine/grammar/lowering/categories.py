@@ -239,6 +239,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # sacrifice is not a destruction and no replacement may stop it — so it is
     # its own kind with its own handler, in the family that owns the verb.
     "sacrifice_bound_permanent": "destruction",
+    # "That player chooses and sacrifices one of those creatures."
+    # (Retribution.) The sacrifice acting on a permanent a ``choose_permanent``
+    # step recorded, beside the one acting on a permanent a trigger bound.
+    "sacrifice_recorded_permanent": "destruction",
     "destroy_self": "destruction",
     "destroy_all_artifacts_creatures_enchantments": "destruction",
     "delayed_destroy_blocked_or_blocker": "destruction",

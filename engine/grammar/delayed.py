@@ -766,6 +766,21 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
         # choice can give: a set of creatures is bound by a sentence that
         # repeats over it, not by one that says "that creature".
         binds = bool(stream.accept_phrase("for", "each", "of", "those"))
+    if not binds:
+        # …or a sentence that names **one member** of the set — "That player
+        # chooses and sacrifices **one of those creatures**." (Retribution.)
+        # The fourth answer to the same question, asked of the parsed sentence
+        # rather than of its opening words: a loop announces itself in four
+        # tokens and a selector does not, so the probe here is the statement
+        # itself, parsed and handed straight back exactly as the delayed
+        # reading above is.
+        probe = stream.mark()
+        try:
+            following = parse_statement(stream)
+        except GrammarError:
+            following = None
+        stream.reset(probe)
+        binds = following is not None and _names_a_chosen_member(following)
     stream.reset(after_filter)
     if not binds:
         stream.reset(mark)
@@ -903,3 +918,23 @@ def _parse_choose_then_gain(stream: TokenStream) -> "ast.GainKeyword | None":
     return ast.GainKeyword(
         subject, keywords, _parse_duration(stream), choose_one=True
     )
+
+
+def _names_a_chosen_member(node) -> bool:
+    """Whether *node* names one member of a set an earlier sentence chose.
+
+    A walk over the dataclass rather than a check on the top-level statement,
+    for :func:`_names_a_bound_object`'s reason: the reference can be nested
+    inside an offer, a sequence or a toll, and a statement class added later is
+    covered by default instead of silently answering False.
+    """
+    if isinstance(node, ast.TargetSpec) and node.quantifier == "one_of_those":
+        return True
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        return any(
+            _names_a_chosen_member(getattr(node, field.name))
+            for field in dataclasses.fields(node)
+        )
+    if isinstance(node, (tuple, list)):
+        return any(_names_a_chosen_member(item) for item in node)
+    return False

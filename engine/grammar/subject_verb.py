@@ -742,6 +742,21 @@ def parse_subject_verb(
             chosen = parse_player_chooses_permanent(stream, source_spec)
             if chosen is not None:
                 return chosen
+            # "That player **chooses and sacrifices** one of those creatures."
+            # (Retribution.) CR 701.21a already makes the sacrificing player the
+            # one who picks, so the two printed verbs are one action — the same
+            # reading `_parse_sacrifice` gives the "of their choice" it consumes
+            # and drops. Read here for the reason every sibling above is: it
+            # declines without consuming, and the paragraph at the bottom of
+            # this branch expects "a card name" from its second word and would
+            # fail the line on "and".
+            mark_and_sacrifices = stream.mark()
+            stream.advance()
+            if stream.accept_word("and") and stream.accept_word(
+                "sacrifices", "sacrifice"
+            ):
+                return _parse_sacrifice(stream, source_spec)
+            stream.reset(mark_and_sacrifices)
             # "…**chooses three cards from their hand and puts them on top of
             # their library**" (Stunted Growth). Same reason it is read here:
             # it declines without consuming, and the paragraph below would fail

@@ -32,7 +32,8 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_CAST_DAMAGE,
                       CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       COUNTED_NUMBER, CREATED_TOKEN, DAMAGE_RECIPIENT,
-                      EXILED_THIS_WAY, _EVENT_SUBJECT_POWER_RECORD,
+                      EXILED_THIS_WAY, OTHER_CHOSEN_PERMANENT,
+                      _EVENT_SUBJECT_POWER_RECORD,
                       _EVENT_SUBJECT_TOUGHNESS_RECORD,
                       _PERMANENTS_GIVEN_COUNTERS,
                       _REANIMATED_PERMANENTS)
@@ -58,7 +59,14 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # chosen permanent's id, which is both what the branch tests and what the
     # step behind it acts on — the choice is not a target, so nothing on the
     # board or on the stack records it.
-    "choose_permanent": CHOSEN_PERMANENT,
+    #
+    # …and the **other** member of the set it was offered: "That player chooses
+    # and sacrifices one of those creatures. Put a -1/-1 counter on **the
+    # other**." (Retribution.) The pick is the only step holding both halves,
+    # and by the sentence behind it the chosen one is in a graveyard — so a
+    # read of the board would answer "whichever of the two is still there",
+    # which is the right permanent only when nothing else went wrong.
+    "choose_permanent": (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT),
     # "Count the number of permanents. **If the number** is odd, …" (Chaos
     # Moon.) The count is the whole of what the sentence does, and the only
     # place the two conditions behind it can read that number from — asking the
@@ -165,7 +173,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # it named, which is the only place the loop behind it can read it from —
     # nothing about a board says which attacking creatures a spell targeted, and
     # by the time the loop runs one of them may have left combat.
-    "choose_target_permanents": CHOSEN_TARGET_PERMANENTS,
+    # Two records, because "controlled by the same opponent" names a *player*
+    # as well as a set: "**That player** chooses and sacrifices one of those
+    # creatures" (Retribution) reads the seat, and this step is the only one
+    # that can supply it — the relation is what makes the answer a single seat,
+    # and the sacrifice behind it is about to empty one of the two slots. The
+    # set is the primary, being what a step of this kind always records.
+    "choose_target_permanents": (CHOSEN_TARGET_PERMANENTS, CHOSEN_PLAYER),
     # "Target player loses all poison counters. Leeches deals **that much**
     # damage to that player." The removal records how many actually came off,
     # which is the only place the sentence behind it can read the number: by
