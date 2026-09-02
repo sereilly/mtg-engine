@@ -936,6 +936,116 @@ Wave 2 holds the unblocked-attacker family (`defending_player` life loss,
 poison, hand-revealing), the `An opponent chooses one —` modal, and the
 remaining singletons.
 
+### W1G1 — the land cycle. Merged; supported 62 → 70 (all eight cards).
+
+Lands 1/8 → 7/8 (only W1G5's Thawing Glaciers left), artifacts 3/14 → 5/14,
+**zero hooks added**, and the differential moved exactly the eight programs it
+should have out of 1,869.
+
+**The brief was wrong about both derivation tables and about the decline.**
+`land_animation.py` is a board-wide static keyed to a land *type* ("All Swamps
+are 1/1 creatures"), recomputed every pass — Mishra's Groundbreaker is a
+one-shot *targeted* animation with an indefinite duration, a different
+mechanism the file explicitly distinguishes itself from. `land_play_allowance.py`
+existed but was `you`-scoped, so Storm Cauldron was a widening rather than a
+lookup. And Storm Cauldron's second line, flagged as a possible decline, was
+**the most valuable card in the group**: its refusal site was accurate and its
+*layer* was wrong — `land_tapped_for_mana` already parsed and
+`engine/oracle.py`'s condition table already produced the right
+`TriggerCondition`, so the gap was one lowering branch plus one fire-site arm.
+
+**The five-card cycle is not a `REPLACEMENT_LINES` job; it is both files with
+one claim.** Frankenstein's Monster had already established the shape — the
+"if you can't" half is a CR 614 interceptor, the cost itself is entry state,
+and the claim for all three sentences lives in `enter_effects.py` and
+deliberately *not* in `REPLACEMENT_LINES`, because three sentences are one
+paragraph and claiming one twice is two claims free to drift. **The sacrifice
+is mandatory-if-able**, not optional (CR, plus Gatherer's Lake of the Dead
+ruling), which is what kept the web layer untouched: the only choice left is
+*which* permanent, and the existing `sacrifice` pending choice already renders
+that end to end. Read as optional it would have cost a new `ReplacementChoice`
+kind, a renderer, an action handler, a schema literal and ~8 edits in `app.js`.
+
+**Three silent defects, all in the name-reading path, all found by the first
+card in the pool that names itself in its own rules text.** `parse_card_name`
+swallowed a trailing seat clause — `permanents named X you control` produced
+a name that matches nothing **and** dropped `controller`; both halves silent
+and both toward a wider sweep. `_self_normalized` collapsed a card's own name
+*inside* a `named` clause, so Sheltered Valley would have compiled supported
+and sacrificed nothing, forever. And `_unread_land_text` handed
+`enter_effect_line` a pre-collapsed line with no card name, so the gate and the
+runtime reader were reading different cards — the exact hazard that function's
+own docstring warns about, and every other caller already passed the name.
+
+**A gate asymmetry worth its own round.** The artifact/enchantment support gate
+asks "is *any* ability implemented" where the creature gate asks "is *every*
+trigger". Storm Cauldron briefly compiled supported with its bounce line inert
+the moment its first line was claimed. It was left alone deliberately — the two
+shipped cards a tightening would fail on are legitimate (Howling Mine's
+draw-step modifier and Creature Bond's Aura death trigger both live where the
+compiler cannot see them) — but the population it admits is now named: in
+measured ALL, **Sol Grail, Dystopia, Tidal Control, Tornado and Death Spark**.
+Any group that makes one of those cards' *other* line supported ships a dead
+ability.
+
+Free for every set: **"or fewer" now parses** in the `you control N ...`
+condition. `_compare_count` had answered "le" all along and nothing had ever
+printed the word that reached it.
+
+### W1G3 — Aura effect templates. Merged; supported 70 → 77 (7 of 8).
+
+Enchantments 10/24 → 17/24, zero hooks added, and the differential moved seven
+of 1,869 — all seven the group's own, no collateral across the other 313
+enchantments.
+
+**Four of the brief's claims about the seam were wrong, and all in the same
+direction: the machinery already existed.** `Tap enchanted creature:` already
+parses as a cost, is already paid, and three shipped cards already use it — all
+three cards' real gaps were noun-phrase and restriction clauses. Veteran's
+Voice's "Activate only if enchanted creature is untapped" was already enforced
+verbatim; only Nature's Chosen's **colour** conjunct had a gap.
+`AURA_REANIMATION_PHRASES` is Animate Dead's *enters* trigger and not False
+Demise's seam at all — its blocker was one lowering branch, and the handler it
+needed already existed for Seraph and Krovikan Vampire. **The verb was the
+entire difference.** And a line the brief omitted from Bestial Fury turned out
+to already work on `main`.
+
+**Two already-supported behaviours were silently wrong, and one is the
+attachment seam.** `aura_static_pt_grant` read "gets +N/+N" off *any* line, so
+a P/T printed inside a **triggered** ability also became a permanent layer-7c
+grant: Bestial Fury got +4/+0 the moment it attached, kept it through
+opponents' turns, and got a **second** +4/+0 when actually blocked. Two
+independent defects — no static/triggered distinction, and a duration check
+that only looked immediately after the numbers, so "+4/+0 and gains trample
+until end of turn" slipped between both — and the trample half being correct is
+what hid it. Separately, `attach_source_to_target` asked `equip_refusal` at all
+three sites, and that predicate's CR 301.5c guard refuses anything without the
+Equipment subtype: **any Aura with its own attach ability got an empty picker
+and an ability that logged "resolved" having moved nothing**, plus a log line
+calling the Aura "no longer an Equipment". CR 701.3a says an attachment cannot
+go where it could not "enchant, equip, or fortify, **respectively**";
+`equipment.attachment_refusal` is now that *respectively*.
+
+Two audits came back clean and are recorded as negatives so nobody re-runs
+them: the 12 Auras whose trigger conditions no `attached_subject_triggers` call
+scans all fire through `emit`/`event_filter` instead, and the 3 attachments
+with two P/T readers genuinely print a static line *and* an activated one.
+
+**Declined — Awesome Presence, four named parts:** a `combat_restrictions.py`
+entry for the "can't be blocked unless a player pays a cost" template; a cost
+scaled by the *declaration* (3 generic per blocker assigned to this attacker,
+computed at CR 509.1b when the assignment is known but not yet legal); a
+`PendingChoice` offering that payment to the **defending** player with
+`holds_priority` so the step waits; and **a rollback of the block declaration**
+when the payment is declined or unpayable, for which the declare-blockers path
+has no seam today. Parts 1 and 3 are the ones another group may build
+incidentally.
+
+**Size watch:** `engine/auras.py` is now 2,111 lines. It is outside the grammar
+cap, but it is visibly two files — the claim tables, and the attach/derive
+machinery from `auras_attached_to` down — and should be split before the next
+Aura-heavy round.
+
 ### W1G4 — alternative costs (CR 118.9). Merged; supported 62 → 62.
 
 **The flat count is the finding, and the brief was wrong about the size in
