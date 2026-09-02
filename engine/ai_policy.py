@@ -8,12 +8,14 @@ from .ai_valuation import (
     activation_target_side,
     cards_drawn_by_controller,
     cards_drawn_by_target,
+    castable_commanders,
     counters_a_spell,
     destroyed_permanent_filter,
     is_mana_ability,
     mana_ability_amount,
     returns_creature_to_hand,
     several_target_slot_sides,
+    toll_branch_loss,
 )
 from .activation_permissions import activation_permission_denial
 from .auras import controller_cast_ban
@@ -57,6 +59,12 @@ class CastAction:
     # creature … another target creature") cannot be expressed by it — the gap
     # round 40 closed on the wire, arriving here through the AI.
     target_permanent_ids: list[int] | None = None
+    # Which zone ``hand_index`` indexes into, in the vocabulary the cast path
+    # already speaks ("hand" / "command", `_cast_onto_stack`'s `from_zone`).
+    # "command" is a commander cast (CR 903.8); every executor forwards it
+    # unchanged, so an ordinary duel — where nothing but "hand" is ever
+    # proposed — is untouched.
+    from_zone: str = "hand"
 
 
 @dataclass(frozen=True)
@@ -85,81 +93,128 @@ def choose_attack_target(game: Game, player_index: int) -> int:
     return min(opponents, key=lambda idx: (game.players[idx].life, idx))
 
 
+#: What casting from the command zone is worth over casting the same card from
+#: hand: a net card. A command-zone cast spends nothing from hand — the
+#: commander is CR 903.8's standing extra card — and `_score_cast` already
+#: prices a net card at 4.0 (its draw weight), so the same number is used
+#: rather than a second opinion about what a card is worth. The tax needs no
+#: weight of its own: it is generic mana in the cost, so an unaffordable recast
+#: is skipped by the tap planner exactly as any other unaffordable spell is.
+COMMAND_ZONE_CAST_BONUS = 4.0
+
+
 def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
-    player = game.players[player_index]
-
     best: CastAction | None = None
-    for hand_index, card in enumerate(player.hand):
-        if (
-            card.primary_type == "land"
-            and game.enforce_mana_costs
-            and not game._may_play_another_land(player_index)
-        ):
-            continue
-        if not _can_cast_with_targets(game, player_index, card):
-            continue
-        # CR 601.2's printed timing gates ("Cast this spell only during an
-        # opponent's turn…"), through the table the cast path itself reads.
-        # Asked here for the same reason every other gate in this function is:
-        # a cast the engine will refuse is a turn the AI spends on nothing, and
-        # it re-proposes the same card the next turn and the next. Siren's Call
-        # did exactly that for ten consecutive turns once the simulator started
-        # dealing whole sets.
-        if check_cast_timing(game, player_index, (card.oracle_text or "").lower()):
-            continue
+    for hand_index, card in enumerate(game.players[player_index].hand):
+        candidate = _cast_candidate(game, player_index, card, hand_index)
+        if candidate is not None and _is_better_cast(candidate, best):
+            best = candidate
 
-        # X first: an X-draw spell's target choice depends on how many cards it
-        # would draw (a spell that empties your own library is aimed elsewhere),
-        # so the value has to exist before the target is picked.
-        x_value = _pick_x_value(game, player, card)
-        if x_value == 0:
-            continue
-        target = _choose_target_for_spell(card, player_index, game, x_value)
-        target_permanent_index: int | list[int] | None = None
-        target_permanent_ids: list[int] | None = None
-        if aura_enchant_noun(card) is not None:
-            aura_choice = _choose_aura_target(game, player_index, card)
-            if aura_choice is None:
-                continue  # Aura spells require a legal target (Rule 115.1b)
-            target, target_permanent_index = aura_choice
-        else:
-            roles = _choose_role_targets(game, player_index, card)
-            if roles is not None:
-                if roles == ():
-                    # A roles spell with no legal chain of targets. Skipped
-                    # rather than cast: CR 601.2c needs every role filled, and
-                    # the cast gate would refuse it — an AI turn spent on an
-                    # action the game then rejects.
-                    continue
-                target, target_permanent_index, target_permanent_ids = roles
-            else:
-                several = _choose_several_targets(game, player_index, card)
-                if several is not None:
-                    target, target_permanent_index, target_permanent_ids = several
-        tap_indices: tuple[int, ...] = ()
-
-        if game.enforce_mana_costs and card.primary_type != "land":
-            required = _cost_for(game, player, card, x_value)
-            plan = _plan_taps_for_cost(player, required)
-            if plan is None:
-                continue
-            tap_indices = tuple(plan)
-
-        score = _score_cast(game, player_index, card, target, x_value)
-        candidate = CastAction(
-            card_name=card.name,
-            target_player_index=target,
-            x_value=x_value,
-            land_tap_indices=tap_indices,
-            score=score,
-            hand_index=hand_index,
-            target_permanent_index=target_permanent_index,
-            target_permanent_ids=target_permanent_ids,
+    # CR 903.8: the seat's commander is castable from the command zone, and an
+    # AI seat that never read that zone sat its commander there for the whole
+    # game. Which casts are on offer is `ai_valuation.castable_commanders` —
+    # the engine's own seam, empty outside a Commander game — and the tax
+    # arrives as extra generic in the cost, the same way the cast path charges
+    # it, so affordability is judged against what will actually be paid.
+    for zone_index, card, tax in castable_commanders(game, player_index):
+        candidate = _cast_candidate(
+            game, player_index, card, zone_index,
+            from_zone="command", extra_generic=tax,
         )
-        if _is_better_cast(candidate, best):
+        if candidate is not None and _is_better_cast(candidate, best):
             best = candidate
 
     return best
+
+
+def _cast_candidate(
+    game: Game,
+    player_index: int,
+    card: CardDefinition,
+    hand_index: int,
+    *,
+    from_zone: str = "hand",
+    extra_generic: int = 0,
+) -> CastAction | None:
+    """The `CastAction` casting *card* from *from_zone* would be, or None when
+    the cast is illegal, unaffordable or has nothing legal to point at.
+
+    One body for the hand and the command zone (CR 903.8), because everything
+    it checks is about the *card* and the board rather than about the zone:
+    the zone contributes only where the executor finds the card (`from_zone`,
+    `hand_index`) and what the cast additionally costs (*extra_generic*, the
+    commander tax).
+    """
+    player = game.players[player_index]
+    if (
+        card.primary_type == "land"
+        and game.enforce_mana_costs
+        and not game._may_play_another_land(player_index)
+    ):
+        return None
+    if not _can_cast_with_targets(game, player_index, card):
+        return None
+    # CR 601.2's printed timing gates ("Cast this spell only during an
+    # opponent's turn…"), through the table the cast path itself reads.
+    # Asked here for the same reason every other gate in this function is:
+    # a cast the engine will refuse is a turn the AI spends on nothing, and
+    # it re-proposes the same card the next turn and the next. Siren's Call
+    # did exactly that for ten consecutive turns once the simulator started
+    # dealing whole sets.
+    if check_cast_timing(game, player_index, (card.oracle_text or "").lower()):
+        return None
+
+    # X first: an X-draw spell's target choice depends on how many cards it
+    # would draw (a spell that empties your own library is aimed elsewhere),
+    # so the value has to exist before the target is picked.
+    x_value = _pick_x_value(game, player, card, extra_generic)
+    if x_value == 0:
+        return None
+    target = _choose_target_for_spell(card, player_index, game, x_value)
+    target_permanent_index: int | list[int] | None = None
+    target_permanent_ids: list[int] | None = None
+    if aura_enchant_noun(card) is not None:
+        aura_choice = _choose_aura_target(game, player_index, card)
+        if aura_choice is None:
+            return None  # Aura spells require a legal target (Rule 115.1b)
+        target, target_permanent_index = aura_choice
+    else:
+        roles = _choose_role_targets(game, player_index, card)
+        if roles is not None:
+            if roles == ():
+                # A roles spell with no legal chain of targets. Skipped
+                # rather than cast: CR 601.2c needs every role filled, and
+                # the cast gate would refuse it — an AI turn spent on an
+                # action the game then rejects.
+                return None
+            target, target_permanent_index, target_permanent_ids = roles
+        else:
+            several = _choose_several_targets(game, player_index, card)
+            if several is not None:
+                target, target_permanent_index, target_permanent_ids = several
+    tap_indices: tuple[int, ...] = ()
+
+    if game.enforce_mana_costs and card.primary_type != "land":
+        required = _cost_for(game, player, card, x_value, extra_generic=extra_generic)
+        plan = _plan_taps_for_cost(player, required)
+        if plan is None:
+            return None
+        tap_indices = tuple(plan)
+
+    score = _score_cast(game, player_index, card, target, x_value)
+    if from_zone == "command":
+        score += COMMAND_ZONE_CAST_BONUS
+    return CastAction(
+        card_name=card.name,
+        target_player_index=target,
+        x_value=x_value,
+        land_tap_indices=tap_indices,
+        score=score,
+        hand_index=hand_index,
+        target_permanent_index=target_permanent_index,
+        target_permanent_ids=target_permanent_ids,
+        from_zone=from_zone,
+    )
 
 
 def choose_activation_action(game: Game, player_index: int) -> ActivationAction | None:
@@ -1432,6 +1487,101 @@ def _score_activation(
     return score
 
 
+# --- What a toll's two losses are worth against each other -------------------
+#
+# The prices, in life-equivalents. Weights are tuning and belong here; *which
+# resources a branch takes* is `ai_valuation.toll_branch_loss`'s derivation
+# from the compiled program, and the permanents it hands back are the engine's
+# own default picks, so the comparison prices exactly what would be given up.
+
+#: A branch whose life cost meets or beats the seat's total. Never the smaller
+#: loss against anything survivable, whatever the other side gives up.
+_TOLL_LETHAL_PRICE = 1000.0
+#: A card out of hand (a discard) or out of the game (an ante): the classic
+#: two-for-one accounting — a card is worth about two life.
+_TOLL_CARD_PRICE = 2.0
+#: A card milled off the seat's own library: barely a loss at all, but not
+#: nothing (CR 704.5b is somewhere down there).
+_TOLL_MILL_PRICE = 0.25
+#: What any permanent is worth just by being one — a card that reached the
+#: battlefield — before `_permanent_value` adds its stats and cost. Without a
+#: floor a Mox prices at 0.0 (no P/T, no cmc) and the seat gives it up to dodge
+#: any damage at all.
+_TOLL_PERMANENT_FLOOR = 2.5
+#: Tapping the source: a turn's use of it, not the card.
+_TOLL_TAP_PRICE = 1.0
+
+
+def _toll_loss_price(game: Game, player_index: int, loss) -> float:
+    """One branch's `ai_valuation.TollLoss`, priced in life-equivalents."""
+    player = game.players[player_index]
+    if loss.life and loss.life >= player.life:
+        return _TOLL_LETHAL_PRICE
+    price = float(loss.life)
+    price += loss.cards * _TOLL_CARD_PRICE
+    price += loss.milled * _TOLL_MILL_PRICE
+    for permanent in loss.permanents:
+        price += _TOLL_PERMANENT_FLOOR + _permanent_value(permanent)
+    if loss.taps_source:
+        price += _TOLL_TAP_PRICE
+    return price
+
+
+def toll_decline_is_smaller_loss(
+    game: Game, player_index: int, entry: dict, self_recipients=()
+) -> bool:
+    """Whether taking this toll's printed penalty loses less than paying its
+    price — the valuation behind **take gifts, pay tolls, make no trades**'
+    middle word, for the seat nobody asked (`_default_optional_pay`).
+
+    A *toll* is an offer with a printed decline consequence, so both answers
+    are losses: "pay 2 life" against "sacrifice this enchantment" (Season of
+    the Witch), "sacrifice that artifact" against "2 damage" (Curse Artifact).
+    Both sides are derived from the compiled program by
+    `ai_valuation.toll_branch_loss` and priced by the weights above; a side the
+    program cannot price answers False, which keeps the standing policy — pay
+    tolls — rather than comparing a number to a guess.
+
+    Deliberately silent on a mana-priced toll: the default pays those out of
+    floating mana only, and mana that would otherwise empty at the end of the
+    step is not a loss this comparison could improve on.
+
+    *entry* is the armed `optional_pay` data and *self_recipients* the printed
+    player references that resolve to the offered seat, both supplied by the
+    resolution because only it knows them.
+    """
+    penalty_steps = tuple(entry.get("_on_decline") or ())
+    legacy_damage = int(entry.get("damage", 0) or 0)
+    if not penalty_steps and not legacy_damage:
+        return False  # not a toll; the unpriced-trade policy owns free offers
+    if (
+        entry.get("cost")
+        or entry.get("cost_alternatives")
+        or entry.get("graded_options")
+    ):
+        return False  # mana-priced: the floating-mana policy stands
+    source = entry.get("_source_permanent")
+    paying = toll_branch_loss(
+        game, player_index, tuple(entry.get("_on_accept") or ()),
+        self_recipients, source,
+    )
+    if paying is None:
+        return False
+    life_cost = int(entry.get("life_cost", 0) or 0)
+    if life_cost:
+        paying = paying.plus_life(life_cost)
+    declining = toll_branch_loss(
+        game, player_index, penalty_steps, self_recipients, source
+    )
+    if declining is None:
+        return False
+    if legacy_damage:
+        declining = declining.plus_life(legacy_damage)
+    return _toll_loss_price(game, player_index, declining) < _toll_loss_price(
+        game, player_index, paying
+    )
+
+
 def _choose_equip_target(game: Game, player_index: int, equipment) -> int | None:
     """The battlefield index of the creature *equipment* should be moved onto,
     or None when it is already on the best one (or there is none).
@@ -1511,10 +1661,19 @@ def _creature_stat(card: CardDefinition, key: str) -> int:
 
 
 def _cost_for(
-    game: Game, player: PlayerState, card: CardDefinition, x_value: int | None
+    game: Game,
+    player: PlayerState,
+    card: CardDefinition,
+    x_value: int | None,
+    extra_generic: int = 0,
 ) -> dict[str, int]:
     """What *player* actually pays for *card* — CR 601.2f, increases then
     reductions, through the same three functions the cast path calls.
+
+    *extra_generic* is a generic surcharge the cast will carry that no
+    registered modifier states — today the commander tax (CR 903.8), which the
+    cast path adds to its own ``extra_generic_tax`` the same way. Zero for
+    every hand cast.
 
     The seat is threaded rather than assumed. This used to pass 0 with a comment
     saying no registered modifier depended on it, which was true while every one
@@ -1525,6 +1684,7 @@ def _cost_for(
     """
     seat = next((i for i, seated in enumerate(game.players) if seated is player), 0)
     tax, _names = spell_cost_tax(game, seat, card)
+    tax += max(0, extra_generic)
     # The coloured half of the same taxes (Derelor). Asked here too, because the
     # AI prices a spell to decide whether it can cast it — priced without the
     # pip it proposes a cast the rules then refuse, every turn, forever.
@@ -1549,19 +1709,23 @@ def _cost_for(
     )
 
 
-def _pick_x_value(game: Game, player: PlayerState, card: CardDefinition) -> int | None:
+def _pick_x_value(
+    game: Game, player: PlayerState, card: CardDefinition, extra_generic: int = 0
+) -> int | None:
     if "{X}" not in card.mana_cost.upper():
         return None
 
-    max_x = _max_affordable_x(game, player, card)
+    max_x = _max_affordable_x(game, player, card, extra_generic)
     return max_x
 
 
-def _max_affordable_x(game: Game, player: PlayerState, card: CardDefinition) -> int:
+def _max_affordable_x(
+    game: Game, player: PlayerState, card: CardDefinition, extra_generic: int = 0
+) -> int:
     pool = _preview_pool_with_all_untapped_lands(game, player)
 
     for x_value in range(15, -1, -1):
-        required = _cost_for(game, player, card, x_value)
+        required = _cost_for(game, player, card, x_value, extra_generic=extra_generic)
         if _can_pay_cost(pool, required, player.can_spend_white_as_red):
             return x_value
     return 0

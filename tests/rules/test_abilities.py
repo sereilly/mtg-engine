@@ -1318,15 +1318,18 @@ def test_603_5_an_interactive_seat_is_asked_for_the_gift_and_may_refuse_it():
 
 
 @pytest.mark.cr("603.5")
-def test_603_5_a_toll_is_still_paid_because_refusing_it_is_not_free():
-    """The "unless" half of CR 603.5, and the line the policy draws. Here
-    refusing costs the controller something too — the enchantment taps — so
-    which of the two losses is smaller is the seat's judgement rather than a
-    default's, and the default keeps paying the printed price."""
+def test_603_5_a_declined_tolls_unless_part_is_dealt_with_at_resolution():
+    """The "unless" half of CR 603.5: the consequence is "dealt with when the
+    ability resolves", whichever way the option goes. Here the seat nobody
+    asked *declines* — the two losses are compared now
+    (`ai_policy.toll_decline_is_smaller_loss`; a creature outprices a tap) —
+    and the rule's demand is that the printed consequence then actually lands:
+    the enchantment taps, and the creature the seat kept stays. The paying
+    arm of the same comparison is `tests/ai/test_ai_toll_valuation.py`."""
     game, _p1, engine_perm, bear_perm = _lead_c_board(_LEAD_C_TOLL)
 
     game.auto_resolve_pending_choices()
 
-    assert not game.is_on_battlefield(bear_perm), game.log
-    assert not engine_perm.tapped, game.log
+    assert game.is_on_battlefield(bear_perm), game.log
+    assert engine_perm.tapped, game.log
 # --- end LeadC ---

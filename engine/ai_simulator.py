@@ -515,7 +515,17 @@ def run_ai_simulation(
 
                 cast_action = choose_cast_action(game, active)
                 if cast_action is not None:
-                    card_to_cast = game.players[active].hand[cast_action.hand_index]
+                    # `hand_index` indexes the zone `from_zone` names. The
+                    # simulator's games are ordinary duels, so today this is
+                    # always the hand — but the executor reads the field rather
+                    # than assuming it, or a commander game run through here
+                    # would cast the wrong card.
+                    cast_zone = (
+                        game.players[active].command_zone
+                        if cast_action.from_zone == "command"
+                        else game.players[active].hand
+                    )
+                    card_to_cast = cast_zone[cast_action.hand_index]
 
                     for permanent_index in cast_action.land_tap_indices:
                         permanent = game.players[active].battlefield[permanent_index]
@@ -535,6 +545,7 @@ def run_ai_simulation(
                         target_permanent_index=cast_action.target_permanent_index,
                         target_permanent_ids=cast_action.target_permanent_ids,
                         x_value=cast_action.x_value,
+                        from_zone=cast_action.from_zone,
                     )
                     _resolve_pending_choices(game)
                     after = _snap(game)

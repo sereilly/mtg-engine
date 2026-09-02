@@ -290,6 +290,151 @@ def offered_action_is_a_payment(steps, self_recipients=()) -> bool:
     return _step_is_a_payment(leading, frozenset(self_recipients))
 
 
+@dataclass(frozen=True)
+class TollLoss:
+    """What one branch of a *toll* takes from the offered seat, as resources.
+
+    A toll is an offer with a printed penalty for refusing ("…unless you pay 2
+    life", "…deals 2 damage to that player unless they sacrifice that
+    artifact"), so both of its branches are losses and the seat's answer is
+    whichever loss is smaller. This is the loss as the compiled program states
+    it — counts of resources, with the permanents resolved to the very objects
+    the engine's own deterministic picks would give up — and pricing those
+    resources against each other is the weights' job in ``ai_policy``
+    (`_toll_loss_price`), which is the same split as every other derivation
+    here.
+    """
+
+    life: int = 0
+    #: Cards leaving the seat's hand or (for an ante) its library for good.
+    cards: int = 0
+    #: Cards milled off the seat's own library — a loss, but a far smaller one.
+    milled: int = 0
+    #: The permanents this branch takes off the seat's battlefield: the source
+    #: itself, the attached host, or the engine's own default sacrifice picks.
+    permanents: tuple = ()
+    #: Whether the branch taps the source permanent (a turn's use, not a card).
+    taps_source: bool = False
+
+    def plus_life(self, amount: int) -> "TollLoss":
+        return TollLoss(
+            life=self.life + amount, cards=self.cards, milled=self.milled,
+            permanents=self.permanents, taps_source=self.taps_source,
+        )
+
+
+def toll_branch_loss(
+    game, player_index: int, steps, self_recipients=(), source_permanent=None
+) -> TollLoss | None:
+    """The loss running *steps* costs seat *player_index*, or None when a step's
+    loss is not derivable from the compiled program.
+
+    None is a refusal, not a zero: a branch containing any step this cannot
+    price ("counter that spell", "creatures able to block it do so") makes the
+    whole branch unpriceable, and the caller keeps the standing policy — pay
+    tolls — rather than comparing a number to a guess.
+
+    The permanents are resolved to the engine's own answers so the valuation
+    and the execution cannot disagree about what is given up:
+    ``_sacrifice_candidate_indices`` is what a forced sacrifice may take and
+    ``default_sacrifice_pick``'s ordering is which one a seat nobody asked
+    gives, exactly as ``destroyed_permanent_filter`` above reuses the engine's
+    filter matcher instead of holding a second opinion.
+
+    *self_recipients* is the same set ``offered_action_is_a_payment`` takes,
+    resolved by the caller, for the steps whose payload names a printed player
+    reference (``deal_damage``, a self-mill).
+    """
+    from .handlers._common import attached_host
+
+    player = game.players[player_index]
+    recipients = frozenset(self_recipients)
+    life = 0
+    cards = 0
+    milled = 0
+    permanents: list = []
+    taps_source = False
+    for step in steps:
+        kind = getattr(step, "kind", None)
+        payload = getattr(step, "payload", None) or {}
+        if kind == "pay_life":
+            amount = payload.get("amount")
+            if not isinstance(amount, int):
+                return None
+            life += amount
+        elif kind == "deal_damage":
+            amount = payload.get("amount")
+            if not isinstance(amount, int) or payload.get("recipient") not in recipients:
+                return None
+            life += amount
+        elif kind in ("sacrifice_self", "destroy_self"):
+            if source_permanent is None or not game.is_on_battlefield(source_permanent):
+                return None
+            permanents.append(source_permanent)
+        elif kind in ("sacrifice_attached_permanent", "destroy_attached_permanent"):
+            host = attached_host(game, source_permanent)
+            if host is None:
+                return None
+            permanents.append(host)
+        elif kind == "sacrifice_matching_permanent":
+            count = int(payload.get("count", 1) or 1)
+            exclude = source_permanent if payload.get("exclude_self") else None
+            # Indices resolved through the seam (`permanent_at`), never by
+            # subscripting the battlefield here — the slot is the engine's to
+            # interpret (tests/engine/test_control_reads.py).
+            candidates = [
+                permanent
+                for index in game._sacrifice_candidate_indices(
+                    player, dict(payload.get("filter") or {}), exclude
+                )
+                for permanent in (game.permanent_at(player, index),)
+                if permanent is not None
+            ]
+            if len(candidates) < count:
+                return None
+            candidates.sort(key=game.sacrifice_preference_key)
+            permanents.extend(candidates[:count])
+        elif kind == "discard_controller_cards":
+            amount = payload.get("amount")
+            if not isinstance(amount, int):
+                return None
+            cards += amount
+        elif kind == "ante_top_card":
+            cards += 1
+        elif kind == "mill_target_player":
+            amount = payload.get("amount")
+            if not isinstance(amount, int) or payload.get("recipient") not in recipients:
+                return None
+            milled += amount
+        elif kind == "tap_self":
+            taps_source = True
+        else:
+            return None
+    return TollLoss(
+        life=life, cards=cards, milled=milled,
+        permanents=tuple(permanents), taps_source=taps_source,
+    )
+
+
+def castable_commanders(game, player_index: int):
+    """Each ``(zone_index, card, tax)`` the seat may cast from its command zone
+    right now — CR 903.8's grant, with CR 903.8's tax beside it.
+
+    Asked of the engine's own commander seam (``may_cast_from_command_zone``,
+    ``commander_tax``) rather than derived a second time, so the AI is offered
+    exactly the casts the browser's zone badge offers a human seat
+    (``cast_permissions.playable_from_zones``) and the tax it must price is the
+    one the cast path will charge. Empty outside a Commander game — the zone is
+    empty and the seam answers False — so an ordinary duel never reads it.
+    """
+    player = game.players[player_index]
+    return tuple(
+        (index, card, game.commander_tax(player_index, card))
+        for index, card in enumerate(player.command_zone)
+        if game.may_cast_from_command_zone(player_index, card)
+    )
+
+
 def is_mana_ability(instruction: OracleInstruction) -> bool:
     """Whether *instruction* adds mana to its controller's pool."""
     return instruction.kind in MANA_ABILITY_KINDS
@@ -436,8 +581,10 @@ __all__ = [
     "SELF_PAYMENT_KINDS",
     "SPELL_TYPES",
     "CounterProfile",
+    "TollLoss",
     "cards_drawn_by_controller",
     "cards_drawn_by_target",
+    "castable_commanders",
     "counters_a_spell",
     "destroyed_permanent_filter",
     "is_mana_ability",
@@ -445,4 +592,5 @@ __all__ = [
     "offered_action_is_a_payment",
     "returns_creature_to_hand",
     "several_target_slot_sides",
+    "toll_branch_loss",
 ]

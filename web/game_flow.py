@@ -128,7 +128,14 @@ def _ai_step(session: Session) -> bool:
     )
     cast_action = choose_cast_action(game, seat) if sorcery_speed_ok else None
     if cast_action is not None:
-        card_to_cast = game.players[seat].hand[cast_action.hand_index]
+        # `hand_index` indexes the zone `from_zone` names — the command zone
+        # for a commander cast (CR 903.8), the hand for everything else.
+        cast_zone = (
+            game.players[seat].command_zone
+            if cast_action.from_zone == "command"
+            else game.players[seat].hand
+        )
+        card_to_cast = cast_zone[cast_action.hand_index]
         for permanent_index in cast_action.land_tap_indices:
             permanent = game.players[seat].battlefield[permanent_index]
             game.tap_land_for_mana(seat, permanent.card.name, permanent_index=permanent_index)
@@ -141,6 +148,7 @@ def _ai_step(session: Session) -> bool:
                 target_permanent_index=cast_action.target_permanent_index,
                 target_permanent_ids=cast_action.target_permanent_ids,
                 x_value=cast_action.x_value,
+                from_zone=cast_action.from_zone,
             )
             if result.supported:
                 game.note_priority_action_taken(seat)
@@ -161,6 +169,7 @@ def _ai_step(session: Session) -> bool:
                 target_permanent_index=cast_action.target_permanent_index,
                 target_permanent_ids=cast_action.target_permanent_ids,
                 x_value=cast_action.x_value,
+                from_zone=cast_action.from_zone,
             )
             _auto_resolve_ai_pending(session)
 

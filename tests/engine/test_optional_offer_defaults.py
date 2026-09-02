@@ -214,13 +214,14 @@ def test_the_pool_holds_free_offers_of_both_kinds(catalog):
 
 
 def test_a_toll_is_still_paid_because_refusing_it_is_not_free(catalog):
-    """The line the policy draws, asked of the pool rather than asserted about
-    one card: **no** offer with a printed "if you don't" branch is refused by
-    the default, however expensive taking it is. Elder Spawn's Island is a
-    price and so is the 6 damage and the 7/7 behind refusing it; picking the
-    cheaper is valuation, and a default that guessed would guess wrong on
-    Season of the Witch (2 life against the enchantment) in the same breath as
-    it guessed right on Curse Artifact."""
+    """The line the *trade* question draws, asked of the pool rather than
+    asserted about one card: **no** offer with a printed "if you don't" branch
+    is an unpriced trade, however expensive taking it is. Elder Spawn's Island
+    is a price and so is the 6 damage and the 7/7 behind refusing it; picking
+    the cheaper of two losses is a different question with its own answer —
+    ``ai_policy.toll_decline_is_smaller_loss``, tested in
+    ``tests/ai/test_ai_toll_valuation.py`` — and where its derivation cannot
+    price a side, this default (pay tolls) is still what stands."""
     refused_tolls = [
         card.name
         for card, payload, accept, otherwise in _free_offers(catalog)
