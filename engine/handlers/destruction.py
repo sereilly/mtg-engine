@@ -631,7 +631,21 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     # Death Mage), and by then the permanent is gone — record it now
     # (CR 608.2h, last-known information).
     chosen_index = context.target_permanent_index
-    if isinstance(chosen_index, int):
+    # **Was a target named at all** — by slot *or* by stable id. The gate used
+    # to ask only about the slot, which is a gate standing in for a question it
+    # does not ask: a caller that names its target the way CLAUDE.md asks for,
+    # by `permanent_id` alone, left `chosen_index` None and skipped this whole
+    # block — so `its_mana_value`, `destroyed_target` and the P/T records were
+    # never written and every rider reading them read a zero. Divine Offering
+    # gained 5 life for an artifact named by slot and **0** for the same
+    # artifact named by id, with nothing failing. The web layer sends both
+    # (`web/actions.py`), which is why the app never showed it — the same
+    # "one caller's spelling enforced, another's silently not" the CR 702.16b
+    # gate in `mixins/stack/casting.py` records about itself.
+    named_id = context.target_permanent_id
+    if isinstance(named_id, list):
+        named_id = next((pid for pid in named_id if isinstance(pid, int)), None)
+    if isinstance(chosen_index, int) or isinstance(named_id, int):
         # Resolved **once**, by id, and the slot re-derived from what came back.
         # This site used to resolve twice: `chosen_permanent` here for the
         # last-known-information records, and the raw index again inside

@@ -47,6 +47,31 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
     honest answer is to draw nothing rather than to fall back on
     ``context.target``, which is a seat this sentence never mentions.
     """
+    # "**Each player** draws a card." (Winter Sky.) A set of seats, named by the
+    # same ``recipient`` key `mill_target_player` reads for the same phrase one
+    # zone over. Read before the per-object record below, which names one seat
+    # per iteration of a loop this branch is not inside. Each drawer draws from
+    # their own library, which is why it is a loop rather than a shared count.
+    recipient = instruction.payload.get("recipient")
+    if recipient in ("each_player", "each_opponent"):
+        caster_index = game.players.index(context.caster)
+        # CR 101.4's order for "each player", and the caster excluded for "each
+        # opponent". A seat that has left the game draws nothing (CR 800.4a).
+        if recipient == "each_opponent":
+            seats = [s for s in game.opponents_of(caster_index) if not game.players[s].lost]
+        else:
+            total = len(game.players)
+            active = game.active_player_index or 0
+            seats = sorted(
+                (i for i, p in enumerate(game.players) if not p.lost),
+                key=lambda i: ((i - active) % total, i),
+            )
+        count = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+        for seat in seats:
+            drawer = game.players[seat]
+            drawn = game._draw_with_replacements(drawer, count)
+            game.log.append(f"{drawer.name} drew {drawn} cards")
+        return True, "resolved"
     drawer_seat = instruction.payload.get("drawer_seat")
     if drawer_seat is not None:
         seat = context.iteration_seats.get(str(drawer_seat))

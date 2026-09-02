@@ -438,6 +438,17 @@ def _lower_draw(
     kind = (
         "draw_controller_cards" if node.player.kind == "you" else "draw_target_cards"
     )
+    # "**Each player** draws a card." (Winter Sky.) A *set* of seats, which the
+    # bare `draw_target_cards` reading cannot express: the handler draws for
+    # `context.target`, one seat, so a card printing "each player" drew for the
+    # opponent alone — the right answer for nobody and, in a duel, half the
+    # card. The same ``recipient`` key `mill_target_player` already reads for
+    # exactly this phrase one zone over, so nothing new is invented: which
+    # seats an effect happens to is one convention across the engine.
+    looped_seats = (
+        node.player.kind
+        if node.player.kind in ("each_player", "each_opponent") else None
+    )
     halved = (
         halved_count_spec(node.count, node) if isinstance(node.count, ast.Half) else None
     )
@@ -483,6 +494,8 @@ def _lower_draw(
         payload = {"amount": _amount_payload(node.count)}
     if drawer_seat is not None:
         payload["drawer_seat"] = drawer_seat
+    if looped_seats is not None:
+        payload["recipient"] = looped_seats
     _describe_targets(payload, node.player)
     return (OracleInstruction(kind, "", payload),)
 

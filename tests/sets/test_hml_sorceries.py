@@ -228,3 +228,228 @@ def test_bakis_curse_counts_an_opponents_aura_on_your_creature(set_pool):
 
     assert mine.damage_marked == 2
 
+
+# --- W2G1: sequenced spells ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+
+
+def _w2g1_game(*players: PlayerState, interactive=()) -> Game:
+    game = Game(players=list(players))
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game._settle()
+    return game
+
+
+def _w2g1_resolve(game: Game) -> None:
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+
+# --- Forget ----------------------------------------------------------------
+
+
+def _w2g1_forget(set_pool, hand_size: int, library: int = 10):
+    lea = set_pool("LEA")
+    filler = [lea["Black Lotus"], lea["Mox Pearl"], lea["Mox Jet"], lea["Mox Ruby"]]
+    caster = PlayerState(name="P0", hand=[set_pool("HML")["Forget"]])
+    victim = PlayerState(
+        name="P1", hand=filler[:hand_size], library=[lea["Plains"]] * library,
+    )
+    return _w2g1_game(caster, victim), caster, victim
+
+
+def test_forget_replaces_the_two_cards_it_took(set_pool):
+    """"Target player discards two cards, then draws as many cards as they
+    discarded this way." Two out, two in, and the two in come off the library."""
+    game, caster, victim = _w2g1_forget(set_pool, hand_size=4)
+
+    result = game.cast_from_hand(0, "Forget", target_player_index=1)
+    _w2g1_resolve(game)
+
+    assert result.supported, result.details
+    assert len(victim.hand) == 4
+    assert len(victim.graveyard) == 2
+    assert len(victim.library) == 8
+    # The two that came back are the ones drawn, not the ones discarded.
+    assert [c.name for c in victim.hand][-2:] == ["Plains", "Plains"]
+
+
+def test_forget_draws_only_what_was_actually_discarded(set_pool):
+    """The count is a back-reference, not the printed two. A player holding one
+    card discards that one and draws one — reading the printed number would
+    hand them a card they never paid for."""
+    game, caster, victim = _w2g1_forget(set_pool, hand_size=1)
+
+    game.cast_from_hand(0, "Forget", target_player_index=1)
+    _w2g1_resolve(game)
+
+    assert len(victim.hand) == 1
+    assert len(victim.graveyard) == 1
+    assert len(victim.library) == 9
+
+
+def test_forget_over_an_empty_hand_draws_nothing(set_pool):
+    """Nothing discarded is nothing drawn. A missing record reads as zero, which
+    is what the sentence says when the step in front of it did nothing."""
+    game, caster, victim = _w2g1_forget(set_pool, hand_size=0)
+
+    game.cast_from_hand(0, "Forget", target_player_index=1)
+    _w2g1_resolve(game)
+
+    assert victim.hand == []
+    assert victim.graveyard == []
+    assert len(victim.library) == 10
+
+
+def test_forget_waits_for_the_discard_before_it_draws(set_pool):
+    """The discard is a prompt, so the draw is a later step of a suspended
+    resolution: run eagerly it would draw against a hand the player has not
+    emptied yet, and the count would be zero."""
+    game, caster, victim = _w2g1_forget(set_pool, hand_size=4)
+    game.interactive_seats = {1}
+
+    game.cast_from_hand(0, "Forget", target_player_index=1)
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("discard", 1)]
+    assert len(victim.library) == 10          # nothing drawn while the prompt stands
+
+    assert game.confirm_discard(1, [0, 1])
+    game._settle()
+
+    assert len(victim.library) == 8
+    # Removed in descending index order, so the graveyard reads back-to-front.
+    assert sorted(c.name for c in victim.graveyard) == ["Black Lotus", "Mox Pearl"]
+
+
+# --- Retribution -----------------------------------------------------------
+
+
+def _w2g1_retribution(set_pool, interactive=()):
+    lea = set_pool("LEA")
+    big = Permanent(card=lea["Hill Giant"])          # 3/3
+    small = Permanent(card=lea["Grizzly Bears"])     # 2/2
+    caster = PlayerState(name="P0", hand=[set_pool("HML")["Retribution"]])
+    victim = PlayerState(name="P1", battlefield=[big, small])
+    game = _w2g1_game(caster, victim, interactive=interactive)
+    return game, caster, victim, big, small
+
+
+def test_retribution_lets_the_opponent_pick_which_of_the_two_dies(set_pool):
+    """"That player chooses and sacrifices one of those creatures. Put a -1/-1
+    counter on the other."
+
+    The pick belongs to the opponent, not to the caster, and the counter lands
+    on whichever creature they left.
+    """
+    game, caster, victim, big, small = _w2g1_retribution(set_pool, interactive=(1,))
+
+    result = game.cast_from_hand(
+        0, "Retribution",
+        target_permanent_ids=[big.permanent_id, small.permanent_id],
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert result.supported, result.details
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("permanent_choice", 1)
+    ]
+
+    assert game.confirm_permanent_choice(1, small.permanent_id)
+    game._settle()
+
+    assert [c.name for c in victim.graveyard] == ["Grizzly Bears"]
+    assert [p.card.name for p in victim.battlefield] == ["Hill Giant"]
+    assert (big.effective_power, big.effective_toughness) == (2, 2)
+
+
+def test_retribution_offers_only_the_two_creatures_it_targeted(set_pool):
+    """The sacrifice comes out of the set the first sentence chose, not off the
+    opponent's board: a third creature they control is not an answer."""
+    lea = set_pool("LEA")
+    big = Permanent(card=lea["Hill Giant"])
+    small = Permanent(card=lea["Grizzly Bears"])
+    spare = Permanent(card=lea["Craw Wurm"])
+    caster = PlayerState(name="P0", hand=[set_pool("HML")["Retribution"]])
+    victim = PlayerState(name="P1", battlefield=[big, small, spare])
+    game = _w2g1_game(caster, victim, interactive=(1,))
+
+    game.cast_from_hand(
+        0, "Retribution",
+        target_permanent_ids=[big.permanent_id, small.permanent_id],
+    )
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    choice = game.pending_choices[0]
+    assert {p.permanent_id for p in game.live_permanent_choices(choice)} == {
+        big.permanent_id, small.permanent_id,
+    }
+    assert game.confirm_permanent_choice(1, spare.permanent_id) is False
+
+
+def test_retribution_headless_still_marks_the_creature_left_standing(set_pool):
+    """A non-interactive opponent takes the stated default (the first live
+    candidate) and the counter still lands on the *other* one — the record the
+    pick leaves behind, not "whichever is still on the board"."""
+    game, caster, victim, big, small = _w2g1_retribution(set_pool)
+
+    game.cast_from_hand(
+        0, "Retribution",
+        target_permanent_ids=[big.permanent_id, small.permanent_id],
+    )
+    _w2g1_resolve(game)
+
+    assert [c.name for c in victim.graveyard] == ["Hill Giant"]
+    assert (small.effective_power, small.effective_toughness) == (1, 1)
+
+
+# --- Winter Sky ------------------------------------------------------------
+#
+# A card that was already *supported* and already wrong. Its second half is the
+# ordinary "each player draws a card", which the draw lowering had no reading
+# for: every drawer that is not "you" became `draw_target_cards`, whose handler
+# draws for one seat, so the caster never drew. Found while giving the draw
+# family a per-seat record for Truce.
+
+
+def test_winter_sky_draws_for_every_seat_not_just_the_opponent(set_pool):
+    """"If you lose the flip, **each player** draws a card."
+
+    Both seats, including the caster. One seat is not "each player" and is not
+    half of the card either: the caster is the seat the printed text is most
+    obviously about, and it was the one that never drew.
+    """
+    import random
+
+    lea = set_pool("LEA")
+    caster = PlayerState(
+        name="P0", hand=[set_pool("HML")["Winter Sky"]],
+        library=[lea["Plains"]] * 10,
+    )
+    other = PlayerState(name="P1", library=[lea["Plains"]] * 10)
+    game = _w2g1_game(caster, other)
+
+    # A seed on which the flip is lost, so the draw half is the one that runs.
+    for seed in range(20):
+        random.seed(seed)
+        caster.hand = [set_pool("HML")["Winter Sky"]]
+        caster.library = [lea["Plains"]] * 10
+        other.library = [lea["Plains"]] * 10
+        caster.life = other.life = 20
+        game.cast_from_hand(0, "Winter Sky")
+        _w2g1_resolve(game)
+        if caster.life == 20:                    # the flip was lost
+            break
+    else:                                        # pragma: no cover - defensive
+        raise AssertionError("no seed in range lost the flip")
+
+    assert (len(caster.hand), len(other.hand)) == (1, 1)
+    assert (len(caster.library), len(other.library)) == (9, 9)
