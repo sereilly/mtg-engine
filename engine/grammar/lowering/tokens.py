@@ -188,6 +188,16 @@ def _lower_create_token(
         payload["oracle_text"] = chr(10).join(node.granted_lines)
     if node.recipient_players:
         payload["recipient_players"] = node.recipient_players
+        if node.recipient_players == "target_opponent":
+            # "**Target** opponent creates …" (Phantasmal Sphere, Phelddagrif)
+            # chooses a seat, so the ability targets (CR 115.4) and the picker
+            # has to be told — a recipient the enumerator never hears about is
+            # an ability that hands its token to whichever seat the handler
+            # reached for. The same description every other opponent-targeted
+            # effect carries, so one vocabulary answers every player picker.
+            payload["targets"] = {
+                "quantifier": "target", "kind": "player", "opponents_only": True,
+            }
     count = _stamp_token_count(payload, node)
     # "…that are tapped and attacking" (Basri Ket): entry state the handler
     # stamps as the tokens arrive.

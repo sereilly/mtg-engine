@@ -1119,6 +1119,14 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     who = payload.get("recipient_players")
     if who == "each_opponent":
         recipients = list(game.opponents_of(controller_index))
+    elif who == "target_opponent":
+        # "**Target** opponent creates …" (Phantasmal Sphere, Phelddagrif). The
+        # seat chosen when the ability went on the stack (CR 115.4), read off
+        # the context rather than guessed — with no target chosen there is
+        # nobody the card names, and creating the token for the controller
+        # instead would be the opposite of what it says.
+        chosen = context.target
+        recipients = [] if chosen is None else [game.seat_index(chosen)]
     elif who == "each_player":
         recipients = [i for i, p in enumerate(game.players) if not p.lost]
     for seat in recipients:

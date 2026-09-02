@@ -308,12 +308,19 @@ def _parse_token_keywords(stream: TokenStream) -> tuple[str, ...]:
         name, consumed = matched
         keywords.append(name)
         stream.advance(consumed)
+        # A separator is only a separator when a keyword follows it. "…creature
+        # token **with flying, where X is** the number of +1/+1 counters on this
+        # creature" (Phantasmal Sphere) ends the list at the comma and carries
+        # on with the sentence; consumed unconditionally, the comma made the
+        # loop demand a keyword where "where" stands and refused the whole line.
+        separator = stream.mark()
         if stream.accept_punct(","):
             stream.accept_word("and")
-            continue
-        if stream.accept_word("and"):
-            continue
-        break
+        elif not stream.accept_word("and"):
+            break
+        if match_longest(stream.words_from(), 0, KEYWORD_INDEX) is None:
+            stream.reset(separator)
+            break
     return tuple(keywords)
 
 
