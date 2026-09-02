@@ -270,6 +270,42 @@ class GameEndingMixin:
                         changed = True
                         break
 
+            # "When this creature's power is 7 or greater, sacrifice it."
+            # (Phyrexian Devourer.) The fourth state trigger (CR 603.8) in this
+            # sweep, and the first that reads a *characteristic* rather than a
+            # census: the threshold is payload, and `effective_power` is what
+            # answers it, so layer 6's granted power and layer 7's counters both
+            # count exactly as a printed number does (CR 613.1).
+            #
+            # Here rather than at a call site for the reason the three above are:
+            # a power can change from a counter, an Aura, an anthem, a pump or a
+            # layer effect ending, and a list of those fire sites goes stale.
+            # The sweep asks the state, which is what CR 603.8 says the trigger
+            # watches.
+            #
+            # Sacrificed inline like its three neighbours rather than put on the
+            # stack. CR 603.8 would give the ability a resolution the controller
+            # could respond to, and none of the four state triggers here does —
+            # the divergence is the sweep's, not this row's, and doing it
+            # differently for one card would be two answers to one question.
+            for seat, player in enumerate(self.players):
+                for perm in list(self.controlled_by(player)):
+                    for trig in matching_triggers(
+                        perm.effective_card,
+                        condition_kinds={"source_power_at_least"},
+                        instruction_kinds={"sacrifice_self"},
+                    ):
+                        threshold = trig.condition.payload.get("power_count")
+                        if threshold is None or perm.effective_power < int(threshold):
+                            continue
+                        self.sacrifice_permanent(perm)
+                        self.log.append(
+                            f"{perm.card.name} sacrificed (its power reached "
+                            f"{threshold})"
+                        )
+                        changed = True
+                        break
+
             # "Sacrifice the creature when you lose control of this creature."
             # (Seraph, Krovikan Vampire.) CR 603.7's delayed trigger over an
             # event with no single fire site — a permanent leaves, a control

@@ -817,6 +817,34 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("counters_reach_threshold",
      r"whenever there are (?P<counter_count>[a-z]+) or more (?P<counter_kind>[a-z]+) counters on this "
      r"(?:artifact|creature|enchantment|permanent|land)"),
+    # "**When** this creature's power is 7 or greater, sacrifice it."
+    # (Phyrexian Devourer.) CR 603.8 again, and the first state trigger that
+    # reads a *characteristic* rather than a census or a counter store — so
+    # it is checked by the state-based sweep beside the other three, where a
+    # layer-computed power is what answers (CR 613.1f: a creature *given*
+    # power counts, exactly as a printed one does).
+    #
+    # In the whenever table though the card prints "when", for the reason
+    # `counters_reach_threshold` above it is: a kind lives in one table and
+    # this is the table both printed words reach.
+    #
+    # The threshold is delimited here and read by `_NUMBER_WORDS`, so a card
+    # printing any other number is payload rather than a second row.
+    ("source_power_at_least",
+     r"whenever this creature's power is (?P<power_count>[a-z0-9]+) or greater"),
+    # "**When** a player doesn't pay this enchantment's cumulative upkeep, …"
+    # (Thought Lash.) Not a state trigger: CR 702.24a's ability resolves and
+    # *fails to be paid* at one identifiable moment, so this is announced from
+    # the one place that decides it (`phases/upkeep_effects.py`) rather than
+    # swept for. The seat that did not pay is frozen on the event, because "that
+    # player" behind it names them and nothing on a board records who declined.
+    #
+    # In the whenever table under the "when" the card prints, for the reason
+    # every row above it gives: a kind lives in one table, and this is the one
+    # both printed words reach.
+    ("cumulative_upkeep_unpaid",
+     r"whenever a player doesn't pay this "
+     r"(?:artifact|creature|enchantment|permanent|land)'s cumulative upkeep"),
 )
 
 # "when" triggers (enter/leave events)
@@ -1439,8 +1467,31 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # does; what the phrase names is read by the noun parser, because a regex
     # approximating it is a second reader of one clause and the direction
     # those drift in is a cost charged more widely than the card prints.
+    # "Exile **the top card of your library**" / "…the top **two** cards…"
+    # (Royal Herbalist, Whirling Catapult, Phyrexian Devourer). The one exile
+    # cost whose tail is not a noun phrase — the cards are named by position —
+    # so it is read here rather than handed to the noun parser, and read
+    # *before* the chosen-object patterns below, which would otherwise find
+    # nothing at all and charge the cost as none.
+    #
+    # The count is delimited by the regex and read by ``_NUMBER_WORDS``, the
+    # split every other counted clause in this file makes. A word that is not a
+    # number leaves the cost unread, which keeps this reader and the grammar's
+    # (``grammar/costs._accept_exile_top_of_library``, which admits only a fixed
+    # positive count) admitting exactly the same clauses.
+    exile_top_of_library = 0
+    top_exile = re.search(
+        r"\bexile the top (?:(\w+) cards|card) of your library\b", cost_lower
+    )
+    if top_exile is not None:
+        word = top_exile.group(1)
+        if word is None:
+            exile_top_of_library = 1
+        else:
+            number = int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
+            exile_top_of_library = number if number >= 2 else 0
     chosen_exile = (
-        None if exile_self
+        None if exile_self or exile_top_of_library
         else re.search(r"\bexile ((?:another|an?) [^,:]+?)\s*(?=,|$)", cost_lower)
     )
     exile_filter = (
@@ -1469,7 +1520,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # rewritten to the phrase the noun parser already reads ("a graveyard") so
     # there is one reader of a zone tail; the second has no filter to live on
     # and is recorded beside the count.
-    if exile_filter is None and not exile_self:
+    if exile_filter is None and not exile_self and not exile_top_of_library:
         counted_exile = re.search(
             r"\bexile (\w+) ([^,:]+?)\s*(?=,|$)", cost_lower
         )
@@ -1671,6 +1722,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         pay_life=_life_payment_cost(cost_lower),
         tap_attached=_taps_the_attached_permanent(cost_lower),
         mana_from_attached=_pays_the_attached_permanents_mana_cost(cost_lower),
+        exile_top_of_library=exile_top_of_library,
     )
 
 
@@ -1775,7 +1827,15 @@ def _resolve_subject_groups(payload: dict) -> dict | None:
     for key, word in payload.items():
         if not key.endswith(_COUNT_GROUP_SUFFIX):
             continue
-        count = _NUMBER_WORDS.get(str(word).strip())
+        # A printed *digit* is a printed number. "When this creature's power
+        # is **7** or greater" (Phyrexian Devourer) is the only spelling that
+        # card uses, and `_NUMBER_WORDS` holds words alone — so without this
+        # the group came back None and the whole condition refused, which is
+        # the same shape `_chargeable_tap_cost` hit when "an" was missing from
+        # that table. Read the same way every other counted clause in this
+        # file reads one.
+        text = str(word).strip()
+        count = int(text) if text.isdigit() else _NUMBER_WORDS.get(text)
         if count is None:
             return None
         resolved[key] = count

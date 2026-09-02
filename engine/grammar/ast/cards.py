@@ -451,6 +451,23 @@ class ExileGraveyard:
 
 
 @dataclass(frozen=True)
+class ExileEntireLibrary:
+    """``That player exiles all cards from their library.`` (Thought Lash.)
+
+    Beside :class:`ExileTopOfLibrary` rather than a very large count of it: that
+    one names a printed number and can exile fewer cards than it says when the
+    library runs short, and this one is defined by the *zone being emptied* — so
+    it is payable, and meaningful, on a library of any size including none.
+
+    Carries whose library, because the sentence names a seat and the pool prints
+    both readings ("**you** exile" / "**that player** exiles"). Dropping it
+    would empty the resolving player's library for a card naming somebody
+    else's.
+    """
+    player: "PlayerRef"
+
+
+@dataclass(frozen=True)
 class ExileTopOfLibrary:
     """``Exile the top three cards of your library.`` (Chandra, Heart of Fire's
     +1.) Always the controller's own library — no card prints another player's

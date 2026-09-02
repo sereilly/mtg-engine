@@ -30,7 +30,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | HML | 115 | 189 | 92.6% | 92.6% | 64.0% | 93 |
 | 5ED | 434 | 631 | 92.6% | 92.4% | 60.1% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 60.2% | 55.0% | 37.5% | 73 |
+| ALL *(measured)* | 144 | 251 | 64.5% | 59.4% | 41.8% | 81 |
 | **All (shipped)** | **3439** | **5016** | **88.8%** | **87.9%** | **56.9%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -43,7 +43,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 285 | 130 | expected a subject |  |
+| 282 | 127 | expected a subject |  |
 | 140 | 59 | unrecognized effect verb |  |
 | 78 | 41 | unconsumed text |  |
 | 39 | 39 | unrecognized activation cost |  |
@@ -54,7 +54,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 8 | 7 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
 | 7 | 2 | expected who takes the redirected damage |  |
-| 7 | 7 | expected what to exile as a cost |  |
 | 6 | 3 | expected a destination zone after 'return' |  |
 | 5 | 1 | expected 'card' |  |
 | 5 | 1 | back-reference to 'its_toughness' with no producer in this effect |  |
@@ -68,6 +67,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 3 | 3 | expected 'counter or counters' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | unrecognized "can't be" restriction |  |
+| 2 | 2 | a counter-removal cost only reads the ability's own source |  |
 
 ## Cards executing through the grammar
 
@@ -637,6 +637,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: This creature deals 1 damage to target player or planeswalker.`
 - **Chandra's Pyreling**
   - `Whenever a source you control deals noncombat damage to an opponent, this creature gets +1/+0 and gains double strike until end of turn. (It deals both first-strike and regular combat damage.)`
+- **Chaos Harlequin**
+  - `{R}: Exile the top card of your library. If that card is a land card, this creature gets -4/-0 until end of turn. Otherwise, this creature gets +2/+0 until end of turn.`
 - **Chaos Lord**
   - `At the beginning of your upkeep, target opponent gains control of this creature if the number of permanents is even.`
 - **Chaos Moon**
@@ -2862,6 +2864,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: Return Phelddagrif to its owner's hand. Target opponent may draw a card.`
 - **Phyrexian Boon**
   - `Enchanted creature gets +2/+1 as long as it's black. Otherwise, it gets -1/-2.`
+- **Phyrexian Devourer**
+  - `When this creature's power is 7 or greater, sacrifice it.`
+  - `Exile the top card of your library: Put X +1/+1 counters on this creature, where X is the exiled card's mana value.`
 - **Phyrexian Gremlins**
   - `{T}: Tap target artifact. It doesn't untap during its controller's untap step for as long as this creature remains tapped.`
 - **Phyrexian War Beast**
@@ -3226,6 +3231,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Destroy target tapped creature.`
   - `{T}: Destroy target tapped creature.`
   - `{T}: Destroy target tapped creature.`
+- **Royal Herbalist**
+  - `{2}, Exile the top card of your library: You gain 1 life.`
 - **Rubinia Soulsinger**
   - `{T}: Gain control of target creature for as long as you control Rubinia Soulsinger and Rubinia Soulsinger remains tapped.`
 - **Rugged Highlands**
@@ -3359,6 +3366,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of the end step, destroy all untapped creatures that didn't attack this turn, except for creatures that couldn't attack.`
 - **Seasoned Hallowblade**
   - `Discard a card: Tap this creature. It gains indestructible until end of turn. (Damage and effects that say "destroy" don't destroy it.)`
+- **Seasoned Tactician**
+  - `{3}, Exile the top four cards of your library: The next time a source of your choice would deal damage to you this turn, prevent that damage.`
 - **Secure the Scene**
   - `Exile target nonland permanent. Its controller creates a 1/1 white Soldier creature token.`
 - **Sedge Troll**
@@ -3527,6 +3536,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}{C}.`
 - **Sol'kanar the Swamp King**
   - `Whenever a player casts a black spell, you gain 1 life.`
+- **Soldevi Digger**
+  - `{2}: Put the top card of your graveyard on the bottom of your library.`
 - **Soldevi Excavations**
   - `{T}: Add {C}{U}.`
   - `{1}, {T}: Scry 1.`
@@ -3658,6 +3669,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, it deals 2 damage to each opponent.`
 - **Storm Cauldron**
   - `Whenever a land is tapped for mana, return it to its owner's hand.`
+- **Storm Elemental**
+  - `{U}, Exile the top card of your library: Tap target creature with flying.`
+  - `{U}, Exile the top card of your library: If the exiled card is a snow land, this creature gets +1/+1 until end of turn.`
 - **Storm Seeker**
   - `Storm Seeker deals damage to target player equal to the number of cards in that player's hand.`
 - **Storm Shaman**
@@ -3872,6 +3886,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Thornwood Falls**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {G} or {U}.`
+- **Thought Lash**
+  - `When a player doesn't pay this enchantment's cumulative upkeep, that player exiles all cards from their library.`
+  - `Exile the top card of your library: Prevent the next 1 damage that would be dealt to you this turn.`
 - **Thoughtlace**
   - `Target spell or permanent becomes blue. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes blue. (Mana symbols on that permanent remain unchanged.)`
@@ -4278,6 +4295,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, {T}: Target creature with power 3 or less gains flying until end of turn.`
 - **Whippoorwill**
   - `{G}{G}, {T}: Target creature can't be regenerated this turn. Damage that would be dealt to that creature this turn can't be prevented or dealt instead to another permanent or player. When the creature dies this turn, exile the creature.`
+- **Whirling Catapult**
+  - `{2}, Exile the top two cards of your library: This artifact deals 1 damage to each creature with flying and each player.`
 - **Whirling Dervish**
   - `At the beginning of each end step, if this creature dealt damage to an opponent this turn, put a +1/+1 counter on it.`
   - `At the beginning of each end step, if this creature dealt damage to an opponent this turn, put a +1/+1 counter on it.`

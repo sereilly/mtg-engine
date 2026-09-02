@@ -354,6 +354,15 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         if ability.cost.sacrifice_filter is not None or ability.cost.discard_cards:
             continue
 
+        # "Exile the top card of your library" (Royal Herbalist, Phyrexian
+        # Devourer). The same floor one zone over, and the sharper case for it:
+        # the resource spent is the seat's remaining turns (CR 704.5b — a player
+        # who would draw from an empty library loses), which this policy has no
+        # term for at all. Left in, a seat with two mana gains 1 life every turn
+        # until it decks itself, which is a loss traded for nothing.
+        if ability.cost.exile_top_of_library:
+            continue
+
         # CR 602.1a and its exceptions: a permanent whose printed permission
         # closes its ability to *its own controller* — "Only your opponents may
         # activate this ability" (Clergy of the Holy Nimbus), "Only the

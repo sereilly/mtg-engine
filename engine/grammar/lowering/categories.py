@@ -465,6 +465,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # grant over it. All zone work — the permission is about which zone a card
     # may be cast from — so no new category and GRAMMAR_CATEGORIES is unchanged.
     "exile_top_of_library": "zones",
+    "exile_entire_library": "zones",
     "exile_chosen_card_from_hand": "zones",
     "put_exiled_with_source": "zones",
     "exile_graveyard_until_leaves": "zones",
@@ -495,6 +496,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "choose_cards_in_hand": "zones",
     "put_iterated_card_on_library": "zones",
     "put_graveyard_card_on_library_bottom": "zones",
+    "put_top_of_graveyard_on_library_bottom": "zones",
     # Unsubstantiate: a spell unstacked to its owner's hand, or a creature bounced.
     "return_spell_or_creature_to_hand": "zones",
     "put_cards_from_hand_onto_battlefield": "zones",

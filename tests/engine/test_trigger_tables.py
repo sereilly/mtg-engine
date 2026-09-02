@@ -149,6 +149,20 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever there are four or more tide counters on this creature",
         "when there are four or more page counters on this artifact",
     ),
+    # Phyrexian Devourer. CR 603.8 read off a characteristic, and the row is in
+    # the *whenever* table under the "when" the card prints — so the "whenever"
+    # spelling is the one that table is asked about and the printed one is here
+    # for the reason the threshold trigger's is.
+    "source_power_at_least": (
+        "whenever this creature's power is 7 or greater",
+        "when this creature's power is 7 or greater",
+    ),
+    # Thought Lash. Same table and same reason: the card prints "when" and the
+    # row lives where both words reach it.
+    "cumulative_upkeep_unpaid": (
+        "whenever a player doesn't pay this enchantment's cumulative upkeep",
+        "when a player doesn't pay this enchantment's cumulative upkeep",
+    ),
     # Two rows share this kind — the union narrowing and the single-type one —
     # so both spellings are named, which is what the "one entry may hold
     # several" shape above exists for.
