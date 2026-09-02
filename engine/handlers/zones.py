@@ -2207,11 +2207,15 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     # "You gain life equal to **its toughness**" (Exile) is a later step of the
     # same resolution asking a question about an object that will by then be a
     # card in exile — CR 613.1 gives it no computed characteristics at all, so
-    # both numbers are frozen here, one line before the removal, exactly as
-    # ``destroy_target_permanent`` freezes them one line before the destroy
-    # (CR 608.2h). The effective values, so a pumped or counter-laden creature
-    # is worth what it was worth on the battlefield.
-    context.results["its_power"] = max(0, int(perm.effective_power))
+    # the number is frozen here, one line before the removal, exactly as
+    # ``destroy_target_permanent`` freezes its pair one line before the destroy
+    # (CR 608.2h). The effective value, so a pumped or counter-laden creature is
+    # worth what it was worth on the battlefield.
+    #
+    # Toughness alone. The power of an exiled permanent has an owner already —
+    # ``_fused_exile_then_controller_life`` — and ``_records._PRODUCES`` says
+    # at length why declaring it here would un-refuse a near-miss that reads
+    # the wrong seat.
     context.results["its_toughness"] = max(0, int(perm.effective_toughness))
     game.remove_from_battlefield(perm)
     if owner_index is None:
