@@ -70,11 +70,23 @@ def _has_cost_picker(spec: dict | None) -> bool:
     return isinstance(nested, dict) and any(nested.get(flag) for flag in _COST_FLAGS)
 
 
-def _cast_cost_cards() -> list[str]:
-    return sorted(
-        name for name, card in _POOL.items()
-        if any(c.sacrifice_filter is not None or c.discard_cards for c in additional_costs(card))
-    )
+def _cast_cost_cards() -> list[tuple[str, str]]:
+    """Every ``(card, zone)`` whose cast **from that zone** charges a choosable
+    cost.
+
+    The zone is part of the question rather than a detail of it: Demonic Embrace
+    charges a discard when it is cast from the graveyard and nothing at all when
+    it is cast from the hand, so asking the card alone demanded a picker for a
+    cost that cast never pays — and the picker it demanded took the place of the
+    Aura's own enchant target, which made the card uncastable from either zone.
+    """
+    found = set()
+    for name, card in _POOL.items():
+        for cost in additional_costs(card):
+            if cost.sacrifice_filter is None and not cost.discard_cards:
+                continue
+            found.add((name, cost.from_zone or "hand"))
+    return sorted(found)
 
 
 def _activation_cost_abilities() -> list[tuple[str, int]]:
@@ -98,21 +110,43 @@ def test_the_pool_has_costs_of_both_kinds_to_check():
     assert _activation_cost_abilities(), "no ability in the pool charges one"
 
 
-@pytest.mark.parametrize("card_name", _cast_cost_cards())
-def test_every_printed_cast_cost_derives_a_picker(card_name):
+@pytest.mark.parametrize("card_name,zone", _cast_cost_cards())
+def test_every_printed_cast_cost_derives_a_picker(card_name, zone):
     """CR 601.2b: the caster announces how they will pay, so there has to be
     somewhere to announce it."""
     card = _POOL[card_name]
-    spec = derive_cast_spec(card, compile_card_oracle(card))
+    spec = derive_cast_spec(card, compile_card_oracle(card), from_zone=zone)
 
     assert spec is not None, (
-        f"{card_name} charges a printed additional cost and derives no picker — "
-        "a human seat pays it with whatever the deterministic default picks"
+        f"{card_name} charges a printed additional cost when cast from the "
+        f"{zone} and derives no picker — a human seat pays it with whatever the "
+        "deterministic default picks"
     )
     assert _has_cost_picker(spec), (
-        f"{card_name}'s spec {spec!r} names no cost field, so the client would "
-        "send the answer as a target"
+        f"{card_name}'s spec {spec!r} for a cast from the {zone} names no cost "
+        "field, so the client would send the answer as a target"
     )
+
+
+def test_a_zone_scoped_cost_is_not_charged_to_a_cast_from_elsewhere():
+    """The other half of the same rule, and the bug this pair was widened for.
+
+    Demonic Embrace prints one card with two prices — {1}{B}{B} from the hand,
+    and {1}{B}{B} plus 3 life plus a card from the graveyard. A picker derived
+    from the card alone asked a hand cast to name a discard it would never be
+    charged for, and, being a cost picker, was returned *instead of* the Aura's
+    enchant target: the browser never asked what to enchant and the engine
+    refused the cast for want of a target it had itself declined to describe.
+    """
+    card = _POOL["Demonic Embrace"]
+    program = compile_card_oracle(card)
+
+    from_hand = derive_cast_spec(card, program, from_zone="hand")
+    assert from_hand == {"kind": "creature"}
+
+    from_graveyard = derive_cast_spec(card, program, from_zone="graveyard")
+    assert from_graveyard["kind"] == "creature"
+    assert from_graveyard["cost_spec"]["discard_cost"] is True
 
 
 @pytest.mark.parametrize(

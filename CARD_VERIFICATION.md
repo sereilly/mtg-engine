@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **1610**
-- Passed: **472** (385 checked in-game, 87 auto-passed)
+- Passed: **474** (387 checked in-game, 87 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **19**
-- Untested: **1119**
+- Untested: **1117**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -330,7 +330,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Delif's Cube | ⬜ untested |  |
 | Demonic Attorney | ✅ pass |  |
 | Demonic Consultation | ⬜ untested |  |
-| Demonic Embrace | ⬜ untested |  |
+| Demonic Embrace | ✅ pass |  |
 | Demonic Hordes | ✅ pass |  |
 | Demonic Torment | ⬜ untested |  |
 | Demonic Tutor | ✅ pass |  |
@@ -584,7 +584,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Goblin Chirurgeon | ⬜ untested |  |
 | Goblin Digging Team | ⬜ untested |  |
 | Goblin Flotilla | ⬜ untested |  |
-| Goblin Grenade | ⬜ untested |  |
+| Goblin Grenade | ✅ pass |  |
 | Goblin Hero | ✅ pass | auto-pass: no abilities |
 | Goblin King | ✅ pass |  |
 | Goblin Kites | ⬜ untested |  |

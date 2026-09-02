@@ -648,6 +648,7 @@ class SpellCastingMixin:
             target_player_index=target_player_index,
             target_permanent_index=target_permanent_index,
             target_permanent_ids=target_permanent_ids,
+            from_zone=from_zone,
         )
         if named_refusal is not None:
             self.log.append(named_refusal)

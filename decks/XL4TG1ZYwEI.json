@@ -1,0 +1,177 @@
+{
+  "id": "XL4TG1ZYwEI",
+  "name": "Kaervek's Blight",
+  "description": "Mono-black Brawl. Kaervek, the Spiteful shrinks every other creature on the board by -1/-1, so the deck is built entirely out of bodies that survive it \u2014 Hooded Blightfang, Carrion Grub, Crypt Lurker and Massacre Wurm \u2014 while the opponent's one-toughness creatures simply fall off. Grasp of Darkness and Pestilent Haze finish what Kaervek starts, Underworld Dreams and Hypnotic Specter tax the refill, and Short Sword hands one attacker its point back. (Black)",
+  "format": "brawl",
+  "cards": [
+    {
+      "name": "Swamp",
+      "count": 20
+    },
+    {
+      "name": "Fabled Passage",
+      "count": 1
+    },
+    {
+      "name": "Radiant Fountain",
+      "count": 1
+    },
+    {
+      "name": "Desert",
+      "count": 1
+    },
+    {
+      "name": "Library of Alexandria",
+      "count": 1
+    },
+    {
+      "name": "Liliana's Steward",
+      "count": 1
+    },
+    {
+      "name": "Fetid Imp",
+      "count": 1
+    },
+    {
+      "name": "Kitesail Freebooter",
+      "count": 1
+    },
+    {
+      "name": "Hooded Blightfang",
+      "count": 1
+    },
+    {
+      "name": "Caged Zombie",
+      "count": 1
+    },
+    {
+      "name": "Liliana's Devotee",
+      "count": 1
+    },
+    {
+      "name": "Sparkhunter Masticore",
+      "count": 1
+    },
+    {
+      "name": "Crypt Lurker",
+      "count": 1
+    },
+    {
+      "name": "Skeleton Archer",
+      "count": 1
+    },
+    {
+      "name": "Carrion Grub",
+      "count": 1
+    },
+    {
+      "name": "Hypnotic Specter",
+      "count": 1
+    },
+    {
+      "name": "Solemn Simulacrum",
+      "count": 1
+    },
+    {
+      "name": "Juggernaut",
+      "count": 1
+    },
+    {
+      "name": "Blood Glutton",
+      "count": 1
+    },
+    {
+      "name": "Sengir Vampire",
+      "count": 1
+    },
+    {
+      "name": "Bad Deal",
+      "count": 1
+    },
+    {
+      "name": "Massacre Wurm",
+      "count": 1
+    },
+    {
+      "name": "Nightmare",
+      "count": 1
+    },
+    {
+      "name": "Gloom Sower",
+      "count": 1
+    },
+    {
+      "name": "Liliana, Waker of the Dead",
+      "count": 1
+    },
+    {
+      "name": "Liliana, Death Mage",
+      "count": 1
+    },
+    {
+      "name": "Duress",
+      "count": 1
+    },
+    {
+      "name": "Village Rites",
+      "count": 1
+    },
+    {
+      "name": "Dark Ritual",
+      "count": 1
+    },
+    {
+      "name": "Eliminate",
+      "count": 1
+    },
+    {
+      "name": "Grasp of Darkness",
+      "count": 1
+    },
+    {
+      "name": "Short Sword",
+      "count": 1
+    },
+    {
+      "name": "Pestilent Haze",
+      "count": 1
+    },
+    {
+      "name": "Mind Rot",
+      "count": 1
+    },
+    {
+      "name": "Demonic Embrace",
+      "count": 1
+    },
+    {
+      "name": "Liliana's Scorn",
+      "count": 1
+    },
+    {
+      "name": "Finishing Blow",
+      "count": 1
+    },
+    {
+      "name": "Underworld Dreams",
+      "count": 1
+    },
+    {
+      "name": "Ashnod's Altar",
+      "count": 1
+    },
+    {
+      "name": "Tormod's Crypt",
+      "count": 1
+    }
+  ],
+  "sideboard": [],
+  "commander": [
+    {
+      "name": "Kaervek, the Spiteful",
+      "count": 1
+    }
+  ],
+  "created_at": 1788310374.307622,
+  "updated_at": 1788310432.6633334
+}

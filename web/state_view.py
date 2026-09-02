@@ -287,9 +287,20 @@ def _card_castable_now(
             return False
 
     # Target validation (aura enchant targets, removal targets, counter targets, etc.)
-    target_ok, _ = game._validate_cast_targets(card, player_index, None)
-    if not target_ok:
-        return False
+    if "Aura" in card.type_line:
+        # An Aura is *always* targeted (CR 115.1b), so its arm in
+        # ``_validate_cast_targets`` demands a named permanent — and this call
+        # names none, which made the answer "no" for every Aura in every hand
+        # and took the castable glow away from all ten of M21's. The question
+        # the highlight actually asks is "is there anything it could enchant?",
+        # and that is the picker's own enumeration, run through the very arm
+        # that would judge the cast.
+        if not game.cast_target_spec(player_index, card).get("valid_targets"):
+            return False
+    else:
+        target_ok, _ = game._validate_cast_targets(card, player_index, None)
+        if not target_ok:
+            return False
 
     # Land play restriction: CR 305.2's one per turn, plus whatever the
     # allowances on this seat's battlefield add (engine/land_play_allowance.py).

@@ -12,6 +12,8 @@ identity the id resolves to, and the refusal when nothing can pay.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from engine import load_cards
@@ -21,6 +23,10 @@ from web.app import app, store
 from tests.helpers import LEA_PATH
 
 client = TestClient(app)
+
+APP_JS = (Path(__file__).resolve().parents[2] / "web" / "static" / "app.js").read_text(
+    encoding="utf-8"
+)
 
 # The whole shipped pool, not just Alpha: Dwarven Weaponsmith — the one card
 # whose ability announces a target *and* a cost — is a Revised printing.
@@ -247,3 +253,147 @@ def test_the_counter_lands_on_the_named_creature_and_the_named_artifact_pays():
     ]
     assert [c.name for c in game.players[0].graveyard] == ["Black Lotus"]
     assert (bears.effective_power, bears.effective_toughness) == (3, 3)
+
+
+# ---------------------------------------------------------------------------
+# A *spell* with a target and a cost — the same two announcements, one rule
+# earlier
+# ---------------------------------------------------------------------------
+#
+# Dwarven Weaponsmith's shape reaches the cast side through Demonic Embrace,
+# Goblin Grenade and Soul Exchange, and the cast side used to answer with the
+# cost *instead of* the target: `derive_cast_spec` returned the first cost
+# picker and stopped. So the browser opened one prompt, sent a cast naming no
+# target, and the engine refused it — "Demonic Embrace requires a target" — for
+# a target it had itself declined to describe. Goblin Grenade did not even
+# refuse: "any target" is not gated at announcement, so the Goblin was eaten and
+# the 5 damage went wherever the fallback pointed.
+#
+# Demonic Embrace adds the half that is not Dwarven Weaponsmith's: its cost
+# names a *zone*, so one card has two prices and the picker has to charge the
+# one this cast pays.
+
+
+def _embrace_session(*, in_graveyard: bool):
+    sid, session, game = _session("Alpine Watchdog")
+    embrace = _M21["Demonic Embrace"]
+    game.players[0].hand = [_M21["Shock"], _M21["Swamp"]]
+    game.players[0].graveyard = []
+    if in_graveyard:
+        game.players[0].graveyard = [embrace]
+    else:
+        game.players[0].hand.insert(0, embrace)
+    game.players[0].battlefield[0].metadata["summoning_sickness_turn"] = -99
+    game.start_priority_window(0)
+    return sid, session, game
+
+
+def test_the_hand_copy_is_offered_its_enchant_target_and_no_cost():
+    """CR 601.2b charges what the *zone* prints. From the hand Demonic Embrace
+    is an ordinary Aura at {1}{B}{B}, so the only announcement is its target."""
+    sid, _sess, _game = _embrace_session(in_graveyard=False)
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    spec = _hand_card(state, "Demonic Embrace")["target_spec"]
+
+    assert spec["kind"] == "creature"
+    assert "cost_spec" not in spec and not spec.get("discard_cost")
+    assert [t["name"] for t in spec["valid_targets"]] == ["Alpine Watchdog"]
+
+
+def test_the_graveyard_copy_is_offered_both_and_keeps_them_apart():
+    """From the graveyard the same card prints a second price, and the two
+    announcements ride two fields: the Aura's target on the spec itself, the
+    discard beside it under ``cost_spec``."""
+    sid, _sess, _game = _embrace_session(in_graveyard=True)
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    spec = state["players"][0]["graveyard"][0]["target_spec"]
+
+    assert spec["kind"] == "creature"
+    assert [t["name"] for t in spec["valid_targets"]] == ["Alpine Watchdog"]
+    cost = spec["cost_spec"]
+    assert cost["discard_cost"] is True
+    # The whole hand pays: CR 601.2a put the *graveyard* copy on the stack, so
+    # nothing of the hand is withheld.
+    assert [t["name"] for t in cost["valid_targets"]] == ["Shock", "Swamp"]
+
+
+def test_casting_the_hand_copy_needs_only_the_target():
+    sid, _sess, game = _embrace_session(in_graveyard=False)
+    watchdog = game.players[0].battlefield[0]
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0, "action": "cast", "card_name": "Demonic Embrace",
+            "target_seat": 0, "target_permanent_id": watchdog.permanent_id,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    game._settle()
+
+    assert game.players[0].life == 20, "the graveyard's 3 life is not a hand price"
+    assert [c.name for c in game.players[0].hand] == ["Shock", "Swamp"]
+    assert (watchdog.effective_power, watchdog.effective_toughness) == (5, 3)
+
+
+def test_casting_the_graveyard_copy_carries_both_answers():
+    """Both fields on one action, the way the Weaponsmith's two arrive."""
+    sid, _sess, game = _embrace_session(in_graveyard=True)
+    watchdog = game.players[0].battlefield[0]
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0, "action": "cast", "card_name": "Demonic Embrace",
+            "from_zone": "graveyard",
+            "target_seat": 0, "target_permanent_id": watchdog.permanent_id,
+            "cost_hand_index": 1,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    game._settle()
+
+    assert game.players[0].life == 17
+    assert [c.name for c in game.players[0].hand] == ["Shock"]
+    assert [c.name for c in game.players[0].graveyard] == ["Swamp"]
+    assert (watchdog.effective_power, watchdog.effective_toughness) == (5, 3)
+
+
+def test_goblin_grenade_reports_the_goblin_as_a_cost_and_the_damage_as_a_target():
+    """The sacrifice-cost twin, and the one the engine could not refuse: "any
+    target" is unchecked at announcement, so a spec that hid the target spent
+    the Goblin and pointed the damage at the fallback."""
+    sid, _sess, game = _session("Goblin Balloon Brigade", "Grizzly Bears")
+    game.players[0].hand = [_CARDS["Goblin Grenade"]]
+    game.start_priority_window(0)
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    spec = _hand_card(state, "Goblin Grenade")["target_spec"]
+
+    assert spec["kind"] == "any"
+    assert spec["cost_spec"]["sacrifice_cost"] is True
+    # Only the Goblin can pay; the damage may go anywhere, the Goblin included.
+    assert [t["name"] for t in spec["cost_spec"]["valid_targets"]] == [
+        "Goblin Balloon Brigade"
+    ]
+    assert "Grizzly Bears" in [t.get("name") for t in spec["valid_targets"]]
+
+
+def test_the_client_runs_the_second_prompt_instead_of_sending():
+    """The client half of the same contract, and where the bug actually bit.
+
+    The cost cascade used to sit above the target cascade with the note "none of
+    the cards printing this one also targets", and its prompt sent the cast the
+    moment the payment was picked. Three cards print both, so the payment has to
+    be *held* — on ``pendingCastCost``, which rides sendAction the way the cast
+    zone does — while the target prompt the spell still owes is run.
+    """
+    assert "function castCostSpec(" in APP_JS
+    assert "function continueCastAfterCost(" in APP_JS
+    assert "pendingCastCost" in APP_JS
+    # The discard pick and the sacrifice/exile pick both continue rather than
+    # send when a target is still owed.
+    assert "thenTarget" in APP_JS
+    assert "__castCostStage" in APP_JS

@@ -470,10 +470,18 @@ class LegalityMixin:
         return pairs
 
     # -- Targeting ---------------------------------------------------------
-    def cast_target_spec(self, caster_index: int, card: CardDefinition) -> dict:
-        """Target spec for casting ``card`` from ``caster_index``'s hand: the target
-        kind plus every legal target, enumerated and gated through the engine's own
-        cast-target validation so the UI offers exactly what would resolve."""
+    def cast_target_spec(
+        self, caster_index: int, card: CardDefinition, *, from_zone: str = "hand",
+    ) -> dict:
+        """Target spec for casting ``card`` from ``caster_index``'s *from_zone*:
+        the target kind plus every legal target, enumerated and gated through the
+        engine's own cast-target validation so the UI offers exactly what would
+        resolve.
+
+        ``from_zone`` is the zone the cast would leave, because a printed
+        additional cost may name one (Demonic Embrace's graveyard price) and the
+        picker has to charge what the payment path will charge — the same test
+        ``queue_from_hand`` makes."""
         # Modal "Choose one —" spells choose a mode first; each mode carries its
         # own target spec (filled in by the web layer per mode), so report "modal"
         # and let the UI run its mode-choice flow rather than enumerating here.
@@ -484,7 +492,7 @@ class LegalityMixin:
         # narrow the picker (own_only, stack filters, sacrifice_cost, ...).
         # There is no text cascade behind this any more: a program that
         # describes no cast-time choice means the spell makes none.
-        spec = derive_cast_spec(card, program) or {"kind": "none"}
+        spec = derive_cast_spec(card, program, from_zone=from_zone) or {"kind": "none"}
         spec["requires_target"] = spec["kind"] != "none"
         # CR 107.3c: a spell that defines its own X takes the announcement away
         # from the caster, so the picker must not ask for one — and a divided
@@ -517,6 +525,18 @@ class LegalityMixin:
             )
             return spec
         spec["valid_targets"] = self._enumerate_targets(caster_index, card, spec, for_cast=True)
+        # Demonic Embrace, Goblin Grenade, Soul Exchange: a spell with a target
+        # *and* a choosable cost carries two pickers, each enumerating its own
+        # candidates — the cost over the caster's own cards with no targeting
+        # legality, the target through everything above. The activation side has
+        # answered this way since Dwarven Weaponsmith; the cast side used to
+        # answer with the cost alone, which is how the target went unasked.
+        if spec.get("cost_spec"):
+            cost_spec = dict(spec["cost_spec"])
+            cost_spec["valid_targets"] = self._enumerate_targets(
+                caster_index, card, cost_spec, for_cast=True,
+            )
+            spec["cost_spec"] = cost_spec
         # "Any number of target …" (Drafna's Restoration) prints no maximum, so
         # the cap is however many legal targets there are — a number that exists
         # here and nowhere earlier. Filled in as an ordinary `max_targets` so
@@ -970,7 +990,7 @@ class LegalityMixin:
     def cast_target_refusal(
         self, caster_index: int, card: CardDefinition, *,
         target_player_index=None, target_permanent_index=None,
-        target_permanent_ids=None,
+        target_permanent_ids=None, from_zone: str = "hand",
     ) -> str | None:
         """CR 601.2c: a **named** permanent target must be a legal one, checked
         before any cost is paid. Returns the refusal, or None.
@@ -1013,7 +1033,7 @@ class LegalityMixin:
             # legal cast. The chosen mode's own targets are checked by the arms
             # in ``_validate_cast_targets``, which is handed the mode index.
             return None
-        spec = derive_cast_spec(card, program)
+        spec = derive_cast_spec(card, program, from_zone=from_zone)
         if spec is None or spec.get("kind") in _UNCHECKED_CAST_TARGET_KINDS:
             return None
         if spec_roles(spec):
@@ -1647,21 +1667,28 @@ class LegalityMixin:
         """The cards that may pay a "discard a card" cost.
 
         **What is withheld is the whole difference between the two callers.**
-        Casting withholds the spell: CR 601.2a puts it on the stack before its
-        costs are paid, so it is not in the hand to be discarded (with two
-        copies in hand the *other* is a legal payment, so exactly one occurrence
-        goes — the one the hand lookup will cast). Activating withholds nothing:
-        the source is a permanent, and a copy of it sitting in hand is an
-        ordinary card like any other.
+        Casting from the hand withholds the spell: CR 601.2a puts it on the
+        stack before its costs are paid, so it is not in the hand to be
+        discarded (with two copies in hand the *other* is a legal payment, so
+        exactly one occurrence goes — the one the hand lookup will cast).
+        Casting from anywhere else withholds nothing, for the same reason
+        activating does not: the object on the stack came from another zone, so
+        a copy sitting in hand is an ordinary card like any other.
 
         A hint, not the authority: both payment paths re-check the answer on the
         way back in, so a client that offers a whole hand cannot turn the cost
         into "discard nothing".
         """
         hand = self.players[caster_index].hand
+        # …and only when the hand is the zone the spell left. A cast from the
+        # graveyard (Demonic Embrace) put nothing of the caster's hand on the
+        # stack, so a second copy held there is an ordinary card and a legal
+        # payment; withholding it would hide the only discard a one-card hand
+        # can make.
+        leaves_hand = (spec or {}).get("cast_zone", "hand") == "hand"
         spell_index = (
             next((i for i, held in enumerate(hand) if held.name == card.name), None)
-            if for_cast
+            if for_cast and leaves_hand
             else None
         )
         # "Discard a **land card or Shrine card**" (Sanctum of Shattered

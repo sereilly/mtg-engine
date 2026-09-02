@@ -1,0 +1,80 @@
+{
+  "id": "bVapI2J4nw8",
+  "name": "Orcish Onslaught",
+  "description": "A goblin-and-orc horde that attacks through anything: Goblin War Drums gives the team menace, Mightstone pushes the damage through, and Goblin Grenade turns a spare Goblin into five to the face. (Red \u2014 FEM/DRK/LEG/ATQ)",
+  "format": "casual",
+  "cards": [
+    {
+      "name": "Goblin Chirurgeon",
+      "count": 4
+    },
+    {
+      "name": "Brassclaw Orcs",
+      "count": 3
+    },
+    {
+      "name": "Orgg",
+      "count": 2
+    },
+    {
+      "name": "Goblin Grenade",
+      "count": 4
+    },
+    {
+      "name": "Goblin War Drums",
+      "count": 3
+    },
+    {
+      "name": "Dwarven Ruins",
+      "count": 2
+    },
+    {
+      "name": "Goblins of the Flarg",
+      "count": 4
+    },
+    {
+      "name": "Goblin Hero",
+      "count": 3
+    },
+    {
+      "name": "Orc General",
+      "count": 2
+    },
+    {
+      "name": "Goblin Wizard",
+      "count": 2
+    },
+    {
+      "name": "Ball Lightning",
+      "count": 2
+    },
+    {
+      "name": "Mountain Yeti",
+      "count": 2
+    },
+    {
+      "name": "Crimson Manticore",
+      "count": 2
+    },
+    {
+      "name": "Chain Lightning",
+      "count": 3
+    },
+    {
+      "name": "Mightstone",
+      "count": 2
+    },
+    {
+      "name": "Mishra's Factory",
+      "count": 2
+    },
+    {
+      "name": "Mountain",
+      "count": 18
+    }
+  ],
+  "sideboard": [],
+  "commander": [],
+  "created_at": 1788309048.5068266,
+  "updated_at": 1788309048.5068266
+}

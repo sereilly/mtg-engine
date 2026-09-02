@@ -545,6 +545,7 @@ def get_card_target_spec(
     session_id: str,
     card_name: str = Query(...),
     seat: int = Query(..., ge=0),
+    from_zone: str = Query("hand"),
 ):
     """The cast target spec (kind + enumerated legal targets) for a card cast by
     ``seat`` in this session. Hand cards already carry this in the serialized
@@ -558,7 +559,7 @@ def get_card_target_spec(
         raise HTTPException(status_code=404, detail="card not found")
     return {
         "name": card.name,
-        "target_spec": session.game.cast_target_spec(seat, card),
+        "target_spec": session.game.cast_target_spec(seat, card, from_zone=from_zone),
         "modes": _serialize_modes(card, session.game, seat),
         # Whether more than one of those modes may be chosen (CR 700.2d). The
         # client fetches the spec before it opens the mode prompt, so this is

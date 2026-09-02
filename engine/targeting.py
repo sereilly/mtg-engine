@@ -1125,23 +1125,40 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
 }
 
 
-def derive_cast_spec(card, program) -> dict | None:
-    """The cast-time target spec of *card*, or None when it chooses nothing.
+def _cast_cost_picker(card, from_zone: str) -> dict | None:
+    """The picker a printed additional cost needs when *card* is cast from
+    *from_zone*, or None when the costs charged there choose nothing.
 
-    None is the answer for a permanent whose only targeting belongs to an
-    activated ability — Royal Assassin picks its victim when the ability is
-    activated, not when the creature is cast.
+    **Zone-scoped, exactly as the payment is.** ``queue_from_hand`` gathers the
+    costs it will charge with the same test, because a cost naming a zone is a
+    price for casting from *that* zone: Demonic Embrace pays 3 life and a card
+    from the graveyard and nothing at all from the hand, so a picker that read
+    the card alone asked a hand cast to name a discard it would never be
+    charged for — and then, being a cost picker, took the place of the Aura's
+    enchant target and made the card uncastable from either zone.
     """
-    # A printed additional cost is picked as the spell is cast, before any
-    # target — and unlike a target it belongs to the *cost*, so it is read from
-    # the cost table rather than from any instruction. `sacrifice_cost` is what
-    # tells the client to send it on the cost field and to say "sacrifice"
-    # rather than "target".
     for cost in additional_costs(card):
+        if cost.from_zone is not None and cost.from_zone != from_zone:
+            continue
         cost_spec = _cost_picker_spec(cost)
         if cost_spec is not None:
+            # The zone the cast leaves, carried so the enumerator can tell a
+            # hand cast from a graveyard one: CR 601.2a withholds the spell
+            # itself from a discard cost only when the hand is where it came
+            # from, and a second copy of Demonic Embrace in hand really can pay
+            # for the one in the graveyard. Emitted only for a cast from
+            # somewhere else, so every spec written before a zone-scoped cost
+            # existed is unchanged and "hand" stays the reader's default.
+            if from_zone != "hand":
+                return {**cost_spec, "cast_zone": from_zone}
             return cost_spec
+    return None
 
+
+def _cast_target_spec(card, program) -> dict | None:
+    """What *card* announces as a **target** when it is cast (CR 601.2c), or
+    None when it targets nothing. The cost half of the announcement is
+    :func:`_cast_cost_picker`; :func:`derive_cast_spec` is the two together."""
     graveyard_aura = _ENCHANT_GRAVEYARD_LINE.search(program.normalized_text or "")
     if graveyard_aura is not None:
         # Animate Dead. `_apply_aura_effect` reads the chosen index out of
@@ -1184,9 +1201,50 @@ def derive_cast_spec(card, program) -> dict | None:
     ])
 
 
-def derive_cast_target(card, program) -> str | None:
+def derive_cast_spec(card, program, *, from_zone: str = "hand") -> dict | None:
+    """The cast-time spec of *card* cast from *from_zone*, or None when it
+    chooses nothing.
+
+    None is the answer for a permanent whose only targeting belongs to an
+    activated ability — Royal Assassin picks its victim when the ability is
+    activated, not when the creature is cast.
+
+    A printed additional cost is picked as the spell is cast and belongs to the
+    *cost*, so it is read from the cost table rather than from any instruction;
+    ``sacrifice_cost`` / ``discard_cost`` / ``exile_cost`` are what tell the
+    client to send it on the cost field and to say "sacrifice" rather than
+    "target".
+    """
+    cost_spec = _cast_cost_picker(card, from_zone)
+    target_spec = _cast_target_spec(card, program)
+    if cost_spec is None:
+        return target_spec
+    if target_spec is None:
+        return cost_spec
+    # A spell whose *effect* is the payment (a forced sacrifice read off the
+    # instruction) already is the cost picker, and a second one would ask twice
+    # for one permanent. The same guard ``derive_activation_spec`` makes for
+    # Diamond Valley, one announcement step over.
+    if (
+        target_spec.get("sacrifice_cost")
+        or target_spec.get("discard_cost")
+        or target_spec.get("exile_cost")
+    ):
+        return target_spec
+    # Demonic Embrace, Goblin Grenade, Soul Exchange: a real target *and* a
+    # cost, which CR 601.2b and CR 601.2c make two separate announcements
+    # carrying two separate fields. One spec cannot be both, so the cost rides
+    # beside the target under its own key and the client runs two prompts —
+    # this is `derive_activation_spec`'s Dwarven Weaponsmith case on the cast
+    # side, and it was missing here: the cost was returned *instead of* the
+    # target, so the Aura was never asked what to enchant and the engine refused
+    # the cast it had itself described.
+    return {**target_spec, "cost_spec": cost_spec}
+
+
+def derive_cast_target(card, program, *, from_zone: str = "hand") -> str | None:
     """The cast-time target *kind* of *card*, for callers that need no flags."""
-    spec = derive_cast_spec(card, program)
+    spec = derive_cast_spec(card, program, from_zone=from_zone)
     return spec["kind"] if spec is not None else None
 
 

@@ -1,0 +1,72 @@
+{
+  "id": "hgmaKLubqxc",
+  "name": "Thrull Uprising",
+  "description": "Fallen Empires Thrulls throw themselves away for value: unblocked Thrulls sacrifice to strip the hand or kill a blocker, Hymn to Tourach and Rag Man empty it further, and The Rack punishes what's left. (Black \u2014 FEM/DRK/LEG/ATQ)",
+  "format": "casual",
+  "cards": [
+    {
+      "name": "Initiates of the Ebon Hand",
+      "count": 4
+    },
+    {
+      "name": "Basal Thrull",
+      "count": 4
+    },
+    {
+      "name": "Order of the Ebon Hand",
+      "count": 4
+    },
+    {
+      "name": "Mindstab Thrull",
+      "count": 3
+    },
+    {
+      "name": "Necrite",
+      "count": 3
+    },
+    {
+      "name": "Hymn to Tourach",
+      "count": 4
+    },
+    {
+      "name": "Thrull Retainer",
+      "count": 2
+    },
+    {
+      "name": "Soul Exchange",
+      "count": 2
+    },
+    {
+      "name": "Ebon Stronghold",
+      "count": 3
+    },
+    {
+      "name": "Rag Man",
+      "count": 2
+    },
+    {
+      "name": "Ashes to Ashes",
+      "count": 2
+    },
+    {
+      "name": "Fallen Angel",
+      "count": 2
+    },
+    {
+      "name": "Greed",
+      "count": 2
+    },
+    {
+      "name": "The Rack",
+      "count": 3
+    },
+    {
+      "name": "Swamp",
+      "count": 20
+    }
+  ],
+  "sideboard": [],
+  "commander": [],
+  "created_at": 1788309020.6734514,
+  "updated_at": 1788309020.6734514
+}

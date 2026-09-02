@@ -74,6 +74,13 @@ let pendingModeCollection = null;
 // Rides sendAction the same way pendingCastModeIndex does, so every cast path
 // (targeted, X, auto-tap retry) carries it without threading it manually.
 let pendingCastFromZone = null;
+// A printed additional cost the caster has already chosen how to pay
+// (CR 601.2b), as the action fields carrying it: `cost_hand_index` for a
+// discard, `cost_permanent_index`/`cost_permanent_id` for a sacrifice or an
+// exile. It rides sendAction exactly as pendingCastFromZone does, because the
+// cost is announced before the target (CR 601.2c) and whichever target prompt
+// ends up sending the cast must carry the payment made one prompt earlier.
+let pendingCastCost = null;
 let debugSearchTimer = null;
 let debugAddManaMode = false;
 let symbolMap = {};
@@ -3251,6 +3258,7 @@ function beginPendingHandCast(card, handIndex = null) {
   pendingCastModeIndex = null;
   // A fresh cast is from the hand; a zone cast sets the zone right after.
   pendingCastFromZone = null;
+  pendingCastCost = null;
   pendingCastHandCard = {
     cardName,
     handIndex: Number.isInteger(handIndex) && handIndex >= 0 ? handIndex : null,
@@ -3268,6 +3276,7 @@ function clearPendingHandCast() {
   pendingModalChoice = null;
   pendingCastModeIndex = null;
   pendingCastFromZone = null;
+  pendingCastCost = null;
   document.querySelectorAll(".casting-card").forEach((el) => el.classList.remove("casting-card"));
 }
 
@@ -7999,22 +8008,31 @@ function renderActivationPrompt() {
     // **The type comes from the spec**, never the word "creature": Atog eats an
     // artifact and Dwarven Weaponsmith's second prompt does too, so a fixed noun
     // told the player to look for something the picker was not offering.
-    const pendingCostStage = !!(pendingCastTarget.__costOnly || pendingCastTarget.__costStage);
+    const pendingCostStage = !!(
+      pendingCastTarget.__costOnly
+      || pendingCastTarget.__costStage
+      || pendingCastTarget.__castCostStage
+    );
     const pendingSpec = targetSpecOf(pendingCastTarget.card);
     const costSpec = pendingCostStage
       ? (pendingSpec?.cost_spec || pendingSpec)
       : null;
-    const isSacrificeCost = !!(costSpec?.sacrifice_cost || pendingSpec?.sacrifice_cost);
+    const isSacrificeCost = !!(costSpec?.sacrifice_cost || costSpec?.exile_cost
+      || pendingSpec?.sacrifice_cost || pendingSpec?.exile_cost);
+    // Soul Exchange exiles where Atog sacrifices; the printed verb is the
+    // cost's, so the prompt reads it off the spec rather than saying
+    // "sacrifice" for a cost that does no such thing.
+    const costVerb = (costSpec?.exile_cost || pendingSpec?.exile_cost) ? "exile" : "sacrifice";
     const sacrificeNoun = costSpec?.kind || pendingSpec?.kind || "permanent";
     title.textContent = isSacrificeCost
-      ? `Choose ${/^[aeiou]/.test(sacrificeNoun) ? "an" : "a"} ${sacrificeNoun} to sacrifice for ${pendingCastTarget.cardName}`
+      ? `Choose ${/^[aeiou]/.test(sacrificeNoun) ? "an" : "a"} ${sacrificeNoun} to ${costVerb} for ${pendingCastTarget.cardName}`
       : `Choose target for ${pendingCastTarget.cardName}`;
     if (pendingCastTarget.targetKind === "land") {
       body.textContent = "Click a valid land on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "creature") {
       body.textContent = isSacrificeCost
-        ? `Click ${/^[aeiou]/.test(sacrificeNoun) ? "an" : "a"} ${sacrificeNoun} you control on the battlefield to sacrifice it.`
+        ? `Click ${/^[aeiou]/.test(sacrificeNoun) ? "an" : "a"} ${sacrificeNoun} you control on the battlefield to ${costVerb} it.`
         : "Click a valid creature on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "artifact") {
@@ -8025,7 +8043,7 @@ function renderActivationPrompt() {
         .toLowerCase()
         .includes("enchant enchantment");
       body.textContent = isSacrificeCost
-        ? `Click ${/^[aeiou]/.test(sacrificeNoun) ? "an" : "a"} ${sacrificeNoun} you control on the battlefield to sacrifice it.`
+        ? `Click ${/^[aeiou]/.test(sacrificeNoun) ? "an" : "a"} ${sacrificeNoun} you control on the battlefield to ${costVerb} it.`
         : pendingCastTarget.alsoStack
         ? "Click a permanent on the battlefield, or a glowing spell on the stack, to choose the target."
         : isEnchantEnchantment
@@ -9252,16 +9270,36 @@ function cardIsModal(card) {
   return cardModeOptions(card).length >= 2;
 }
 
+// The picker a printed additional cost needs (CR 601.2b), or null. A spell
+// whose cost is the *whole* choice is its own cost spec (Village Rites, Thrill
+// of Possibility); a spell that pays a cost **and** targets carries two specs,
+// the target as the spec itself and the cost beside it under `cost_spec`
+// (Demonic Embrace, Goblin Grenade, Soul Exchange) — engine/targeting.py builds
+// both, exactly as it does for an activated ability.
+function castCostSpec(card) {
+  const spec = targetSpecOf(card);
+  if (spec?.cost_spec) return spec.cost_spec;
+  if (spec?.discard_cost || spec?.sacrifice_cost || spec?.exile_cost) return spec;
+  return null;
+}
+
+// Whether that cost is a second announcement beside a real target, rather than
+// the whole of what the cast chooses. The difference is what the pick does
+// next: send the cast, or open the target prompt still owed.
+function castCostIsSeparate(card) {
+  return !!targetSpecOf(card)?.cost_spec;
+}
+
 // A printed "discard a card" additional cost, and the cards that may pay it.
-// The engine enumerates them (it withholds the copy about to be cast, which
-// CR 601.2a has already put on the stack) and re-checks the answer, so this is
-// a hint rather than the authority.
+// The engine enumerates them (it withholds the copy about to be cast when the
+// hand is the zone it leaves, which CR 601.2a has already put on the stack) and
+// re-checks the answer, so this is a hint rather than the authority.
 function cardRequiresDiscardCost(card) {
-  return !!targetSpecOf(card)?.discard_cost;
+  return !!castCostSpec(card)?.discard_cost;
 }
 
 function discardCostOptions(card) {
-  const spec = targetSpecOf(card);
+  const spec = castCostSpec(card);
   return (spec?.valid_targets || []).filter((option) => Number.isInteger(option?.hand_index));
 }
 
@@ -9273,7 +9311,13 @@ function startCastDiscardCostPrompt(card, castAction = "cast") {
   if (!cardName) return false;
   const options = discardCostOptions(card);
   if (!options.length) return false;
-  pendingDiscardCost = { card, cardName, castAction, options };
+  pendingDiscardCost = {
+    card, cardName, castAction, options,
+    // Demonic Embrace: the discard is CR 601.2b and the Aura's enchant target
+    // is still CR 601.2c, so the pick continues into the target cascade instead
+    // of sending the cast.
+    thenTarget: castCostIsSeparate(card),
+  };
   renderActivationPrompt();
   return true;
 }
@@ -9303,6 +9347,15 @@ function payDiscardCost(handIndex) {
     sendAction(body)
       .then(() => updateActionHint(`Activated ${choice.cardName}.`))
       .catch((e) => updateActionHint(e.message, true));
+    return;
+  }
+
+  // Half an announcement: the payment is chosen, the target is not. Record what
+  // was paid and run the rest of the cast — `pendingCastCost` carries the
+  // discard onto whichever body the target prompt finally sends.
+  if (choice.thenTarget) {
+    pendingCastCost = { cost_hand_index: handIndex };
+    continueCastAfterCost(choice.card, choice.castAction || "cast");
     return;
   }
 
@@ -9488,6 +9541,100 @@ function dispatchModalCast(card, castAction, targetKind, validTargets = null) {
       clearPendingHandCast();
       updateActionHint(e.message, true);
     });
+}
+
+// The one cast targeting cascade, in the order the backend's spec kinds have to
+// be asked in. The three places a cast can begin — a hand click, a drag onto the
+// battlefield, a cast from the graveyard/exile/command zone — each spelled it
+// out in full, and the cost stage below has to re-enter it after the payment is
+// chosen, so it is one function. Returns true when it opened a prompt (the
+// caller is finished) and false when the card chooses no target and the caller
+// should send the cast itself.
+function startCastTargetCascade(card, castAction = "cast", targetSeat = null) {
+  if (!card || typeof card !== "object") return false;
+  if (cardRequiresTargetRoles(card)) { startCastRolesTargetPrompt(card, castAction); return true; }
+  if (cardRequiresTargetGraveyardCreature(card)) { startCastGraveyardCreatureTargetPrompt(card, castAction); return true; }
+  if (cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card, castAction); return true; }
+  if (cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card, castAction); return true; }
+  if (cardRequiresSeveralTargets(card)) { startCastSeveralTargetsPrompt(card, castAction); return true; }
+  if (cardOffersCopyCreatureChoice(card)) { startCastCreatureTargetPrompt(card, castAction); return true; }
+  if (cardOffersCopyArtifactChoice(card)) { startCastArtifactTargetPrompt(card, castAction); return true; }
+  if (cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card, castAction); return true; }
+  if (cardRequiresTargetPermanent(card)) { startCastPermanentTargetPrompt(card, castAction); return true; }
+  if (cardRequiresTargetStackSpell(card)) { startCastStackSpellPrompt(card, castAction); return true; }
+  if (cardRequiresDividedDamage(card)) { startCastDividedPrompt(card, castAction); return true; }
+  if (cardRequiresTargetAny(card)) { startCastAnyTargetPrompt(card, castAction); return true; }
+  if (cardRequiresTargetPlayer(card)) { startCastTargetPrompt(card, castAction); return true; }
+  if (hasXCost(card)) {
+    startCastXPrompt(
+      card,
+      Number.isInteger(targetSeat) ? targetSeat : getDefaultTargetSeat(normalizeCardName(card)),
+      null,
+      castAction,
+    );
+    return true;
+  }
+  return false;
+}
+
+// CR 601.2b: a printed additional cost the caster *chooses* is announced before
+// the target. Opens the picker that cost needs and returns true when it did.
+// What the pick then does is settled by whether the spell also targets: for
+// Village Rites the cost is the whole announcement and its own prompt sends the
+// cast, while Demonic Embrace, Goblin Grenade and Soul Exchange still owe a
+// target and continue into the cascade above.
+function startCastCostPrompt(card, castAction = "cast") {
+  const costSpec = castCostSpec(card);
+  if (!costSpec) return false;
+  if (costSpec.discard_cost) return startCastDiscardCostPrompt(card, castAction);
+  // A lone permanent cost *is* the card's spec, so the cascade's own permanent
+  // picker already asks for it and sends the answer on the cost field. Only a
+  // cost riding beside a target needs a prompt of its own.
+  if (!castCostIsSeparate(card)) return false;
+  return startCastCostPermanentPrompt(card, castAction, costSpec);
+}
+
+// The battlefield picker for a "sacrifice a Goblin" / "exile a creature you
+// control" cost that is announced beside a target. The cost's own enumerated
+// candidates, never the target's: they are two lists from two questions, and
+// offering one for the other is how the cost came to eat the creature the spell
+// was aimed at.
+function startCastCostPermanentPrompt(card, castAction, costSpec) {
+  const cardName = normalizeCardName(card);
+  if (!cardName) return false;
+  const verb = costSpec.exile_cost ? "exile" : "sacrifice";
+  const fields = pendingTargetFields(card, costSpec.valid_targets || []);
+  if (fields.validKeys.size === 0) {
+    clearPendingHandCast();
+    updateActionHint(`${cardName} has nothing it can ${verb} for its cost.`, true);
+    return true;
+  }
+  pendingCastTarget = {
+    card, cardName, targetKind: "permanent", castAction,
+    __castCostStage: true, ...fields,
+  };
+  renderActivationPrompt();
+  renderBoard(currentState);
+  updateActionHint(`Choose what ${cardName} will ${verb} to pay its cost.`);
+  return true;
+}
+
+// The rest of a cast whose additional cost has just been paid: the target
+// cascade when the spell targets, the plain cast when it does not. The payment
+// itself is already on `pendingCastCost` and rides whichever body is sent.
+function continueCastAfterCost(card, castAction = "cast") {
+  if (startCastTargetCascade(card, castAction)) return;
+  const cardName = normalizeCardName(card);
+  updateActionHint(`Casting ${cardName}...`);
+  sendAction({
+    seat,
+    action: castAction,
+    card_name: cardName,
+    target_seat: getDefaultTargetSeat(cardName),
+  })
+    .then(() => updateActionHint(`Cast ${cardName}.`))
+    .catch((e) => updateActionHint(e.message, true))
+    .finally(() => clearPendingHandCast());
 }
 
 // Each start function takes the card and (for a chosen modal mode) the mode's
@@ -10336,6 +10483,18 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   }
   clearFfaTargetingHighlights();
   renderActivationPrompt();
+
+  // CR 601.2b's payment for a spell that also targets (Goblin Grenade's Goblin,
+  // Soul Exchange's exiled creature): what was clicked is a cost, not a target.
+  // Record it and run the rest of the cast — `pendingCastCost` carries it onto
+  // whichever body the target prompt then sends.
+  if (pending.__castCostStage) {
+    pendingCastCost = { cost_permanent_index: selectedPermanentIndex };
+    const costPermanentId = permanentIdAt(selectedTarget, selectedPermanentIndex);
+    if (Number.isInteger(costPermanentId)) pendingCastCost.cost_permanent_id = costPermanentId;
+    continueCastAfterCost(pending.card, pending.castAction || "cast");
+    return;
+  }
 
   // Fork copy retarget: the chosen permanent becomes the copy's new target. Send
   // the Fork cast carrying both the copied-spell index and the new target.
@@ -11763,84 +11922,18 @@ function createCardElement(card, options = {}) {
           return;
         }
 
-        // A printed additional cost is announced before any target (CR 601.2b
-        // precedes 601.2c), and none of the cards printing this one also
-        // targets, so it comes first among the target cascades below.
-        if (cardRequiresDiscardCost(card) && startCastDiscardCostPrompt(card)) {
+        // A printed additional cost the caster chooses is announced before any
+        // target (CR 601.2b precedes 601.2c), so it comes first — and a spell
+        // that has both runs the cascade below once its payment is named.
+        if (startCastCostPrompt(card)) {
           return;
         }
 
-        if (cardRequiresTargetRoles(card)) {
-          startCastRolesTargetPrompt(card);
-          return;
-        }
-
-        if (cardRequiresTargetGraveyardCreature(card)) {
-          startCastGraveyardCreatureTargetPrompt(card);
-          return;
-        }
-
-        if (cardRequiresTargetLand(card)) {
-          startCastLandTargetPrompt(card);
-          return;
-        }
-
-        if (cardRequiresTargetArtifact(card)) {
-          startCastArtifactTargetPrompt(card);
-          return;
-        }
-
-        if (cardRequiresSeveralTargets(card)) {
-          startCastSeveralTargetsPrompt(card);
-          return;
-        }
-
-        if (cardOffersCopyCreatureChoice(card)) {
-          startCastCreatureTargetPrompt(card);
-          return;
-        }
-
-        if (cardOffersCopyArtifactChoice(card)) {
-          startCastArtifactTargetPrompt(card);
-          return;
-        }
-
-        if (cardRequiresTargetCreature(card)) {
-          startCastCreatureTargetPrompt(card);
-          return;
-        }
-
-        if (cardRequiresTargetPermanent(card)) {
-          startCastPermanentTargetPrompt(card);
-          return;
-        }
-
-        if (cardRequiresTargetStackSpell(card)) {
-          startCastStackSpellPrompt(card);
-          return;
-        }
-
-        if (cardRequiresDividedDamage(card)) {
-          startCastDividedPrompt(card);
-          return;
-        }
-
-        if (cardRequiresTargetAny(card)) {
-          startCastAnyTargetPrompt(card);
-          return;
-        }
-
-        if (cardRequiresTargetPlayer(card)) {
-          startCastTargetPrompt(card);
+        if (startCastTargetCascade(card)) {
           return;
         }
 
         const targetSeat = getDefaultTargetSeat(cardName);
-        if (hasXCost(card)) {
-          startCastXPrompt(card, targetSeat);
-          return;
-        }
-
         const actionBody = { seat, action: "cast", card_name: cardName, target_seat: targetSeat };
         try {
           await sendAction(actionBody);
@@ -12232,22 +12325,9 @@ async function beginZoneCast(card, zone) {
   pendingCastFromZone = zone;
   try {
     if (cardIsModal(card) && startModalChoicePrompt(card)) return;
-    if (cardRequiresDiscardCost(card) && startCastDiscardCostPrompt(card)) return;
-    if (cardRequiresTargetRoles(card)) { startCastRolesTargetPrompt(card); return; }
-    if (cardRequiresTargetGraveyardCreature(card)) { startCastGraveyardCreatureTargetPrompt(card); return; }
-    if (cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
-    if (cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
-    if (cardRequiresSeveralTargets(card)) { startCastSeveralTargetsPrompt(card); return; }
-    if (cardOffersCopyCreatureChoice(card)) { startCastCreatureTargetPrompt(card); return; }
-    if (cardOffersCopyArtifactChoice(card)) { startCastArtifactTargetPrompt(card); return; }
-    if (cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card); return; }
-    if (cardRequiresTargetPermanent(card)) { startCastPermanentTargetPrompt(card); return; }
-    if (cardRequiresTargetStackSpell(card)) { startCastStackSpellPrompt(card); return; }
-    if (cardRequiresDividedDamage(card)) { startCastDividedPrompt(card); return; }
-    if (cardRequiresTargetAny(card)) { startCastAnyTargetPrompt(card); return; }
-    if (cardRequiresTargetPlayer(card)) { startCastTargetPrompt(card); return; }
+    if (startCastCostPrompt(card)) return;
+    if (startCastTargetCascade(card)) return;
     const castTargetSeat = getDefaultTargetSeat(cardName);
-    if (hasXCost(card)) { startCastXPrompt(card, castTargetSeat); return; }
     const actionBody = { seat, action: "cast", card_name: cardName, target_seat: castTargetSeat, from_zone: zone };
     try {
       await sendAction(actionBody);
@@ -14822,22 +14902,9 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       const card = findCardInCurrentHand(payload.name);
       beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
       if (card && cardIsModal(card) && startModalChoicePrompt(card)) { return; }
-      if (card && cardRequiresDiscardCost(card) && startCastDiscardCostPrompt(card)) { return; }
-      if (card && cardRequiresTargetRoles(card)) { startCastRolesTargetPrompt(card); return; }
-      if (card && cardRequiresTargetGraveyardCreature(card)) { startCastGraveyardCreatureTargetPrompt(card); return; }
-      if (card && cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card); return; }
-      if (card && cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card); return; }
-      if (card && cardRequiresSeveralTargets(card)) { startCastSeveralTargetsPrompt(card); return; }
-      if (card && cardOffersCopyCreatureChoice(card)) { startCastCreatureTargetPrompt(card); return; }
-      if (card && cardOffersCopyArtifactChoice(card)) { startCastArtifactTargetPrompt(card); return; }
-      if (card && cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card); return; }
-      if (card && cardRequiresTargetPermanent(card)) { startCastPermanentTargetPrompt(card); return; }
-      if (card && cardRequiresTargetStackSpell(card)) { startCastStackSpellPrompt(card); return; }
-      if (card && cardRequiresDividedDamage(card)) { startCastDividedPrompt(card); return; }
-      if (card && cardRequiresTargetAny(card)) { startCastAnyTargetPrompt(card); return; }
-      if (card && cardRequiresTargetPlayer(card)) { startCastTargetPrompt(card); return; }
+      if (card && startCastCostPrompt(card)) { return; }
+      if (card && startCastTargetCascade(card)) { return; }
       const castTargetSeat = card ? getDefaultTargetSeat(payload.name) : targetSeat;
-      if (card && hasXCost(card)) { startCastXPrompt(card, castTargetSeat); return; }
       const actionBody = { seat, action: "cast", card_name: payload.name, target_seat: castTargetSeat };
       try {
         await sendAction(actionBody);
@@ -15865,6 +15932,15 @@ async function sendAction(actionBody) {
   // engine learns which zone the card leaves.
   if (body.action === "cast" && body.from_zone == null && pendingCastFromZone != null) {
     body.from_zone = pendingCastFromZone;
+  }
+  // And for a printed additional cost already paid: CR 601.2b's announcement
+  // happens a prompt before CR 601.2c's, so the payment has to survive whichever
+  // targeting path finally sends the cast. Never overwrites a field the caller
+  // set — the single-prompt cost flows put it on the body themselves.
+  if (_CAST_ACTIONS.has(body.action) && pendingCastCost) {
+    for (const [field, value] of Object.entries(pendingCastCost)) {
+      if (body[field] == null) body[field] = value;
+    }
   }
   const payload = await postJson(`/api/sessions/${sessionId}/action`, body);
   renderState(payload);

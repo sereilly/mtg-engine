@@ -118,3 +118,57 @@ def test_the_hand_still_answers_through_the_same_computation():
 
     game.lands_played_this_turn[0] = 1
     assert _state(session_id)["players"][0]["playable_hand_indices"] == []
+
+
+# ---------------------------------------------------------------------------
+# An Aura in hand — the one card type the highlight could never say yes about
+# ---------------------------------------------------------------------------
+#
+# ``_card_castable_now`` asked ``_validate_cast_targets`` with no target named,
+# and an Aura's arm there demands one (CR 115.1b: an Aura spell is always
+# targeted), so the answer was "no" for every Aura in every hand however
+# castable it was. The question the highlight means is "is there anything it
+# could enchant?", which is the picker's own enumeration.
+
+
+def _aura_session() -> str:
+    response = client.post("/api/sessions", json={
+        "mode": "human_vs_ai",
+        "host_name": "Host",
+        "host_colors": 2,
+        "guest_colors": 2,
+        "seed": 4412,
+        "host_deck_cards": [{"name": "Swamp", "count": 40}],
+        "guest_deck_cards": [{"name": "Forest", "count": 40}],
+    })
+    assert response.status_code == 200, response.text
+    return response.json()["session_id"]
+
+
+def _aura_board(session_id: str, *, with_creature: bool):
+    from engine.card_loader import load_catalog
+
+    pool = {card.name: card for card in load_catalog()}
+    session, game = _on_priority(session_id)
+    game.players[0].hand = [pool["Demonic Embrace"]]
+    game.players[0].mana_pool.update({"B": 2, "C": 1})
+    if with_creature:
+        creature = Permanent(card=pool["Alpine Watchdog"])
+        game.players[0].battlefield.append(creature)
+    return session, game
+
+
+def test_an_aura_is_highlighted_when_something_can_be_enchanted():
+    session_id = _aura_session()
+    _aura_board(session_id, with_creature=True)
+
+    assert _state(session_id)["players"][0]["playable_hand_indices"] == [0]
+
+
+def test_an_aura_is_not_highlighted_with_nothing_to_enchant():
+    """The other direction, which is what keeps the fix from being "say yes to
+    every Aura": CR 601.2c makes an Aura with no legal target uncastable."""
+    session_id = _aura_session()
+    _aura_board(session_id, with_creature=False)
+
+    assert _state(session_id)["players"][0]["playable_hand_indices"] == []

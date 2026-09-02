@@ -458,7 +458,13 @@ def _gloom_white_tax(card, game: Game | None) -> int:
     return 3 if has_gloom else 0
 
 
-def _serialize_card(card, game: Game | None = None, caster_index: int | None = None) -> dict:
+def _serialize_card(
+    card,
+    game: Game | None = None,
+    caster_index: int | None = None,
+    *,
+    from_zone: str = "hand",
+) -> dict:
     # Cost increasers (Gloom) are applied at payment time by the engine; reflect
     # them in the cost the UI shows and auto-taps for, so the pay-mana prompt
     # matches what the player actually pays. ``printed_mana_cost`` keeps the
@@ -482,8 +488,14 @@ def _serialize_card(card, game: Game | None = None, caster_index: int | None = N
     })
     # The viewer's own hand cards carry a backend-computed target spec (kind +
     # enumerated legal targets) so the UI never re-derives targeting from text.
+    # ``from_zone`` is which zone this copy would be cast from, because a
+    # printed additional cost may name one: Demonic Embrace's discard is a
+    # graveyard price, so the copy in hand and the copy in the graveyard are two
+    # different prompts for one card.
     if game is not None and caster_index is not None:
-        serialized["target_spec"] = game.cast_target_spec(caster_index, card)
+        serialized["target_spec"] = game.cast_target_spec(
+            caster_index, card, from_zone=from_zone
+        )
     return serialized
 
 
@@ -780,7 +792,7 @@ def _exile_payload(
             payload.append("<hidden>")
             continue
         payload.append(
-            _serialize_card(card, game, seat) if viewer_seat == seat
+            _serialize_card(card, game, seat, from_zone="exile") if viewer_seat == seat
             else _serialize_card(card)
         )
     return payload
@@ -876,7 +888,8 @@ def _serialize_player(
         # card does, because a cast permission (engine/cast_permissions.py) can
         # make one castable — and the cast prompts read the spec off the card.
         "graveyard": _crowned([
-            _serialize_card(card, game, seat) if viewer_seat == seat else _serialize_card(card)
+            _serialize_card(card, game, seat, from_zone="graveyard")
+            if viewer_seat == seat else _serialize_card(card)
             for card in player.graveyard
         ], player.graveyard),
         "exile": _crowned(_exile_payload(game, player, viewer_seat, seat), player.exile),
@@ -889,7 +902,8 @@ def _serialize_player(
         # cast prompt reads its target spec off the card exactly as a hand
         # card's. Empty outside a Commander game.
         "command_zone": _crowned([
-            _serialize_card(card, game, seat) if viewer_seat == seat else _serialize_card(card)
+            _serialize_card(card, game, seat, from_zone="command")
+            if viewer_seat == seat else _serialize_card(card)
             for card in player.command_zone
         ], player.command_zone),
         # CR 903.8: what each commander in that zone would cost extra to cast

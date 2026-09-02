@@ -1,0 +1,173 @@
+{
+  "id": "g4hZCRP69gA",
+  "name": "Gadrak's Hoard",
+  "description": "Mono-red Brawl. Gadrak, the Crown-Scourge is a 5/4 flier that can't attack until you control four artifacts, so the deck runs fourteen of them \u2014 Ornithopter and Prismite come down early, Juggernaut and Solemn Simulacrum carry the midgame, and Ashnod's Altar turns spare bodies into mana. Every creature that dies becomes a Treasure at end of turn, which is both more artifacts for Gadrak and the mana for Terror of the Peaks, Shivan Dragon and Fiery Emancipation. (Red)",
+  "format": "brawl",
+  "cards": [
+    {
+      "name": "Mountain",
+      "count": 21
+    },
+    {
+      "name": "Fabled Passage",
+      "count": 1
+    },
+    {
+      "name": "Desert",
+      "count": 1
+    },
+    {
+      "name": "Ornithopter",
+      "count": 1
+    },
+    {
+      "name": "Tormod's Crypt",
+      "count": 1
+    },
+    {
+      "name": "Short Sword",
+      "count": 1
+    },
+    {
+      "name": "Silent Dart",
+      "count": 1
+    },
+    {
+      "name": "Mazemind Tome",
+      "count": 1
+    },
+    {
+      "name": "Prismite",
+      "count": 1
+    },
+    {
+      "name": "Ashnod's Altar",
+      "count": 1
+    },
+    {
+      "name": "Palladium Myr",
+      "count": 1
+    },
+    {
+      "name": "Skyscanner",
+      "count": 1
+    },
+    {
+      "name": "Sparkhunter Masticore",
+      "count": 1
+    },
+    {
+      "name": "Icy Manipulator",
+      "count": 1
+    },
+    {
+      "name": "Juggernaut",
+      "count": 1
+    },
+    {
+      "name": "Solemn Simulacrum",
+      "count": 1
+    },
+    {
+      "name": "Meteorite",
+      "count": 1
+    },
+    {
+      "name": "Goblin Arsonist",
+      "count": 1
+    },
+    {
+      "name": "Chandra's Magmutt",
+      "count": 1
+    },
+    {
+      "name": "Heartfire Immolator",
+      "count": 1
+    },
+    {
+      "name": "Hobblefiend",
+      "count": 1
+    },
+    {
+      "name": "Conspicuous Snoop",
+      "count": 1
+    },
+    {
+      "name": "Bolt Hound",
+      "count": 1
+    },
+    {
+      "name": "Storm Caller",
+      "count": 1
+    },
+    {
+      "name": "Battle-Rattle Shaman",
+      "count": 1
+    },
+    {
+      "name": "Brash Taunter",
+      "count": 1
+    },
+    {
+      "name": "Havoc Jester",
+      "count": 1
+    },
+    {
+      "name": "Pitchburn Devils",
+      "count": 1
+    },
+    {
+      "name": "Terror of the Peaks",
+      "count": 1
+    },
+    {
+      "name": "Shivan Dragon",
+      "count": 1
+    },
+    {
+      "name": "Ball Lightning",
+      "count": 1
+    },
+    {
+      "name": "Lightning Bolt",
+      "count": 1
+    },
+    {
+      "name": "Shock",
+      "count": 1
+    },
+    {
+      "name": "Chain Lightning",
+      "count": 1
+    },
+    {
+      "name": "Goblin Grenade",
+      "count": 1
+    },
+    {
+      "name": "Scorching Dragonfire",
+      "count": 1
+    },
+    {
+      "name": "Soul Sear",
+      "count": 1
+    },
+    {
+      "name": "Volcanic Geyser",
+      "count": 1
+    },
+    {
+      "name": "Fiery Emancipation",
+      "count": 1
+    }
+  ],
+  "sideboard": [],
+  "commander": [
+    {
+      "name": "Gadrak, the Crown-Scourge",
+      "count": 1
+    }
+  ],
+  "created_at": 1788310374.3089414,
+  "updated_at": 1788310374.3089416
+}
