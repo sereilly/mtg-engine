@@ -2365,6 +2365,45 @@ def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, cont
     return True, "resolved"
 
 
+@effect_handler("exile_cards_from_graveyard")
+def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…exile up to two target creature cards from defending player's
+    graveyard." (Rysorian Badger.)
+
+    The counted twin of ``exile_target_graveyard_card``, and a *prompt* rather
+    than an announced list of targets: no picker in this engine names two cards
+    in one graveyard, and a triggered ability's targets are chosen at
+    resolution here (see the CR 608.2b entry in ROADMAP.md). The seat that
+    would have announced them picks them instead, out of the same pile, as the
+    ability resolves.
+
+    Whose pile is the seat the *combat* named (CR 506.2), frozen into the
+    trigger's context by the declare-attackers fire site — the same key the
+    defending player's discard reads. A seat nobody recorded is not a pile to
+    exile from: the attacker can have left combat by the time this resolves,
+    and picking some other graveyard would be a card doing what it never said.
+
+    ``exiled_this_way`` is written by the *answer*, not here, which is why the
+    choice spec suspends: "you gain 1 life for each card exiled this way" is a
+    later step of this same resolution and would read a zero otherwise.
+    """
+    owner = str(instruction.payload.get("graveyard_owner") or "")
+    if owner != "defending_player":
+        game.log.append(f"{context.card.name}: no graveyard named")
+        return True, "resolved"
+    seat = (context.trigger_context or {}).get("trigger_defending_player_index")
+    if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+        game.log.append(
+            f"{context.card.name}: no defending player was recorded"
+        )
+        return True, "resolved"
+    caster_index = game.players.index(context.caster)
+    game.arm_graveyard_exile_pick(
+        caster_index, seat, dict(instruction.payload), context
+    )
+    return True, "resolved"
+
+
 @effect_handler("phase_out_target_creature_until_source_leaves")
 def phase_out_target_creature_until_source_leaves(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card

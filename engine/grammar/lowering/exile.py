@@ -31,6 +31,12 @@ from ._common import (
 
 _EXILED_CREATURE = ast.ObjectFilter(card_types=("creature",))
 
+#: Whose graveyard a counted exile may read, by the printed referent's kind.
+#: Idiom 2 as a set rather than a fall-through: the handler resolves exactly
+#: these, and a referent it cannot name would be dropped and the pile taken
+#: from whoever the resolution happened to be carrying.
+_GRAVEYARD_PILE_SEATS = frozenset({"defending_player"})
+
 
 def _lower_exile_card_from_hand(
     node: ast.Exile, subject: ast.TargetSpec
@@ -271,6 +277,68 @@ def _lower_exile(
                 "exile_created_token", "", {"created_with_source": True}
             ),
         )
+    # "You may exile **up to two target creature cards from defending player's
+    # graveyard**." (Rysorian Badger.) Several cards out of one named pile,
+    # which is neither of the two shapes around it: the several-target branch
+    # below resolves a list of *permanents*, and the single-card graveyard
+    # branch further down reads one card out of whichever pile it finds.
+    #
+    # A prompt rather than an announced list of targets, and that is a stated
+    # deviation rather than an oversight: this engine chooses a triggered
+    # ability's targets at resolution (see ROADMAP's CR 608.2b entry — the
+    # death sweep's mis-targeting is the reason 603.3d's announcement is not
+    # asked of a trigger), and there is no picker in the pool that names two
+    # cards in one graveyard. The seat picks as the ability resolves, which is
+    # a decision made later than CR 603.3d puts it and by the same player over
+    # the same set.
+    #
+    # Read above the several-target branch, which refuses every non-battlefield
+    # phrase outright, and gated on every part of the sentence: which pile,
+    # how many, and what kind of card. A dropped narrowing here is a card
+    # exiling more, or from somewhere else, than it says.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and _names_several_targets(subject)
+        and subject.filter.zone == "graveyard"
+        and subject.filter.is_card
+    ):
+        filt = subject.filter
+        owner = filt.zone_owner
+        if owner is None or owner.kind not in _GRAVEYARD_PILE_SEATS:
+            raise LoweringError(
+                "the counted graveyard exile reads one named player's pile",
+                node=node,
+            )
+        if len(filt.card_types) > 1:
+            # A union ("artifact or creature card") is a second shape the
+            # prompt's candidate rule would have to learn; until a card prints
+            # one it refuses rather than collapsing to the first type.
+            raise LoweringError(
+                "no graveyard pick reads a union of card types yet", node=node
+            )
+        leftover = _restrictions_beyond(
+            filt, frozenset({"card_types", "zone", "zone_owner", "is_card"})
+        )
+        if leftover:
+            raise LoweringError(
+                f"the counted graveyard exile does not honour {leftover[0]!r}",
+                node=node,
+            )
+        if node.counters:
+            raise LoweringError(
+                "a counted graveyard exile carries no counters", node=node
+            )
+        pile: dict[str, object] = {
+            "count": int(subject.count),
+            "graveyard_owner": owner.kind,
+            # "**up to** two" is a ceiling, and the difference is the whole of
+            # what the seat is being asked: a fixed count would make a pile of
+            # one card an unanswerable prompt.
+            "up_to": subject.quantifier == "up_to",
+        }
+        if filt.card_types:
+            pile["card_type"] = filt.card_types[0]
+        return (OracleInstruction("exile_cards_from_graveyard", "", pile),)
     # "Exile **two target** nonartifact creatures." (Ashes to Ashes; Dust to
     # Dust prints the same over artifacts.) One announcement collecting several
     # targets, resolved as a list — so it is the same instruction with the

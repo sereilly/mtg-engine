@@ -85,6 +85,7 @@ ActionKind = Literal[
     "exile_from_hand_confirm",
     "put_from_hand_confirm",
     "choose_cards_in_hand_confirm",
+    "graveyard_exile_confirm",
     "time_vault_skip",
     "time_vault_decline",
     "island_sanctuary_skip",
@@ -328,6 +329,11 @@ class GameActionRequest(BaseModel):
     # whole answer at once, because the prompt owes a *set* and a card at a
     # time would leave a half-made choice the engine has no state for.
     hand_indices: list[int] | None = None
+    # "Exile up to two target creature cards from defending player's graveyard"
+    # (Rysorian Badger): the whole answer at once, for ``hand_indices``' reason
+    # — the prompt owes a *set*, and "up to" makes the empty set one of its
+    # legal answers, which a card-at-a-time flow could not express.
+    graveyard_indices: list[int] | None = None
     mana_color: Literal["W", "U", "B", "R", "G", "C"] | None = None
     # "…become the color **or colors** of your choice" (Shyft). A *set*,
     # which `mana_color` above cannot carry: CR 105.2 makes a two-coloured

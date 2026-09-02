@@ -10,9 +10,10 @@ change a characteristic; where it sits is incidental.
 """
 
 from .. import ast
-from ..amounts import (accept_counters_on_source, accept_fraction_head,
-                       accept_life_gain_cap, accept_rounding, expect_pt,
-                       parse_amount, parse_equal_to)
+from ..amounts import (_parse_for_each_this_way, accept_counters_on_source,
+                       accept_fraction_head, accept_life_gain_cap,
+                       accept_rounding, expect_pt, parse_amount,
+                       parse_equal_to)
 from ..errors import GrammarError
 from ..lexer import (GToken, PT, PUNCT, QUOTE, SELF, WORD, tokenize)
 from ..nouns import parse_object_filter
@@ -189,6 +190,26 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                 # unconsumed and the line failed loudly — which was right, and
                 # is why the ordering matters rather than the fallback.
                 per_each: object | None = _parse_for_each(stream)
+                # "…you gain 1 life **for each card exiled this way**."
+                # (Rysorian Badger.) A *count* an earlier step of this same
+                # effect recorded, not a set the board holds — so it replaces
+                # the gain's number instead of multiplying it, exactly as the
+                # counter placement one family over treats the same clause.
+                #
+                # Read after the history clause above, which declines without
+                # consuming, and only over a printed 1: "gain 2 life for each"
+                # is a multiplication `ThatMuch` cannot carry, and reading the
+                # clause while dropping the printed count would gain one life
+                # where the card says two.
+                if per_each is None:
+                    counted = _parse_for_each_this_way(stream)
+                    if counted is not None:
+                        if not (isinstance(amount, ast.Fixed) and amount.value == 1):
+                            raise stream.error(
+                                "life gained per recorded unit is gained one "
+                                "at a time"
+                            )
+                        return ast.GainLife(player, counted)
                 if per_each is None:
                     for_each_mark = stream.mark()
                     if stream.accept_phrase("for", "each"):

@@ -2622,6 +2622,19 @@ function getRevealedHandPickInfo(state = currentState) {
   return info;
 }
 
+// Rysorian Badger: the attacker's controller picks up to two creature cards
+// out of the defending player's graveyard to exile. A *set* with one Confirm,
+// like the untap-up-to picker, because "up to two" includes none and a
+// card-at-a-time flow has no way to say "that is enough".
+let graveyardExileSelected = new Set();
+
+function getGraveyardExilePickInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.graveyard_exile_pick;
+  if (!info || info.player_seat !== seat) return null;
+  return info;
+}
+
 function getManaPaymentInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.mana_payment;
@@ -6840,6 +6853,67 @@ function renderRevealedHandPickModal(info) {
   }
 }
 
+// The defending player's graveyard, with only the positions the printed noun
+// phrase admits selectable — a graveyard is a public zone (CR 400.2), so the
+// rest of the pile is shown and marked illegal rather than hidden.
+function renderGraveyardExileModal(info) {
+  const modal = document.getElementById("graveyardExileModal");
+  if (!modal) return;
+  if (!info) {
+    modal.classList.add("hidden");
+    graveyardExileSelected = new Set();
+    return;
+  }
+  modal.classList.remove("hidden");
+  const legal = new Set(info.legal_indices || []);
+  const cap = Number(info.count || 0);
+  const subtitle = document.getElementById("graveyardExileSubtitle");
+  if (subtitle) {
+    subtitle.textContent =
+      `${info.card_name || "Choose"}: exile ${info.up_to ? "up to " : ""}${cap} ` +
+      `card(s) from ${info.owner_name || "that player"}'s graveyard, then Confirm.`;
+  }
+  const grid = document.getElementById("graveyardExileGrid");
+  const confirmBtn = document.getElementById("graveyardExileConfirmBtn");
+  if (grid) {
+    grid.innerHTML = (info.cards || [])
+      .map((card, idx) => {
+        const inner = card.image_uri
+          ? `<img src="${escapeHtml(card.image_uri)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
+          : `<div class="library-card-text-placeholder">${escapeHtml(card.name)}</div>`;
+        const selected = graveyardExileSelected.has(idx) ? " selected" : "";
+        const cls = legal.has(idx)
+          ? `library-card-choice${selected}`
+          : "library-card-choice illegal";
+        return `<div class="${cls}" data-idx="${idx}">${inner}<div class="library-card-choice-name">${escapeHtml(card.name)}</div></div>`;
+      })
+      .join("") || `<div class="modal-empty-note">That graveyard is empty.</div>`;
+    grid.querySelectorAll(".library-card-choice").forEach((el) => {
+      el.addEventListener("click", () => {
+        const idx = Number(el.dataset.idx);
+        if (!legal.has(idx)) {
+          updateActionHint("That card can't be chosen with this effect.", true);
+          return;
+        }
+        if (graveyardExileSelected.has(idx)) graveyardExileSelected.delete(idx);
+        else if (graveyardExileSelected.size < cap) graveyardExileSelected.add(idx);
+        else return;
+        el.classList.toggle("selected");
+      });
+    });
+  }
+  if (confirmBtn && !confirmBtn.dataset.bound) {
+    confirmBtn.dataset.bound = "1";
+    confirmBtn.addEventListener("click", async () => {
+      const picks = [...graveyardExileSelected];
+      graveyardExileSelected = new Set();
+      delete confirmBtn.dataset.bound;
+      modal.classList.add("hidden");
+      await sendAction({ seat, action: "graveyard_exile_confirm", graveyard_indices: picks });
+    });
+  }
+}
+
 // Rewind's "Untap up to four lands": a resolution-time multi-select over
 // matching permanents, capped at the printed amount. Confirming with nothing
 // selected is legal ("up to" includes zero).
@@ -7767,6 +7841,12 @@ function renderActivationPrompt() {
   // The revealed-hand pick has its own card-grid modal
   // (renderRevealedHandPickModal); it claims the slot without a panel.
   if (getRevealedHandPickInfo()) {
+    panel.classList.add("hidden");
+    return;
+  }
+
+  // The graveyard exile pick does the same (renderGraveyardExileModal).
+  if (getGraveyardExilePickInfo()) {
     panel.classList.add("hidden");
     return;
   }
@@ -14660,6 +14740,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   renderPermanentSetChoiceModal(getPermanentSetChoiceInfo(state));
   renderLookTopPickModal(getLookTopPickInfo(state));
   renderRevealedHandPickModal(getRevealedHandPickInfo(state));
+  renderGraveyardExileModal(getGraveyardExilePickInfo(state));
   renderReorderLibraryModal(reorderLibraryInfo);
   renderScryModal(getScryInfo(state));
   renderHandRevealModal(getHandRevealInfo(state));

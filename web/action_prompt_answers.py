@@ -599,6 +599,28 @@ def _action_choose_cards_in_hand_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
 
+@action_handler("graveyard_exile_confirm")
+def _action_graveyard_exile_confirm(session, req, seat_type):
+    # Rysorian Badger: the seat picks which cards in the defending player's
+    # graveyard to exile. The engine re-checks the picks against the same
+    # candidate rule the prompt was drawn from, so a client sending the whole
+    # pile cannot widen the choice — and the empty answer is legal here,
+    # because the sentence says "up to".
+    pending = next(
+        (c for c in session.game.pending_choices_of("graveyard_exile_pick")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no graveyard choice pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.graveyard_indices is None:
+        raise HTTPException(status_code=400, detail="graveyard_indices is required")
+    if not session.game.confirm_graveyard_exile_pick(
+        req.seat, req.graveyard_indices
+    ):
+        raise HTTPException(status_code=400, detail="invalid card choice")
+
+
 @action_handler("face_down_cast_confirm")
 def _action_face_down_cast_confirm(session, req, seat_type):
     # Illusionary Mask: the controller picks a hand creature to cast face down,

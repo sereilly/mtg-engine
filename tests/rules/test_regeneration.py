@@ -127,3 +127,51 @@ def test_the_static_is_read_off_the_effective_card():
     game, clergy = _r29_game(_LEG["Clergy of the Holy Nimbus"])
     assert regenerates_itself(clergy)
     assert clergy.effective_card.oracle_text == clergy.card.oracle_text
+
+
+# --- HML W2G4: the per-member buyout's "can't be regenerated" ---
+@pytest.mark.cr("701.19c", "608.2h")
+def test_a_creature_a_per_member_buyout_destroys_cannot_be_regenerated():
+    """"…destroy that creature unless its controller pays 2 life. **A creature
+    destroyed this way can't be regenerated.**" (Giant Albatross.)
+
+    CR 701.19c: the shield is not applied. The rider is printed as a sentence
+    about the whole loop rather than as a pronoun about one member, which is
+    what made it a different production from the ordinary destroy's — and a
+    rider read by the parser and dropped by the lowering is the loudest way for
+    a card to be a better card than the one printed.
+
+    CR 608.2h is the other half of the same instruction: the set the loop walks
+    is what the dying source recorded, read off its last known information.
+    """
+    from engine.grammar import compile_line
+
+    line = (
+        "for each creature that dealt damage to this creature this turn, "
+        "destroy that creature unless its controller pays 2 life. "
+        "a creature destroyed this way can't be regenerated"
+    )
+    compiled = compile_line(line)
+    assert compiled.parse_error is None, compiled.parse_error
+    assert compiled.lowering_error is None, compiled.lowering_error
+    (instruction,) = compiled.instructions
+    assert instruction.kind == "destroy_each_unless_life_paid"
+    assert instruction.payload["bypass_regeneration"] is True
+    assert instruction.payload["from_damage_record"] is True
+    assert instruction.payload["payer"] == "controller"
+
+
+@pytest.mark.cr("701.19c")
+def test_the_same_loop_without_the_rider_leaves_regeneration_alone():
+    """Cleansing prints no such sentence, so its members keep their shields —
+    the flag is read off the printed rider rather than assumed for the kind."""
+    from engine.grammar import compile_line
+
+    compiled = compile_line(
+        "for each land, destroy that land unless any player pays 1 life"
+    )
+    assert compiled.lowering_error is None, compiled.lowering_error
+    (instruction,) = compiled.instructions
+    assert "bypass_regeneration" not in instruction.payload
+    assert "payer" not in instruction.payload
+# --- end HML W2G4 ---

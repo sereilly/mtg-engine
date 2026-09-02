@@ -522,6 +522,13 @@ def _parse_postmodifiers(
             # count their own graveyard.
             elif stream.accept_phrase("target", "opponent", "'s"):
                 owner = ast.PlayerRef("target_opponent")
+            # "from **defending player's** graveyard" (Rysorian Badger). CR
+            # 506.2's seat, which the *combat* named rather than the sentence:
+            # nothing is chosen, so it is neither of the two target spellings
+            # above, and the lowering admits it only under a trigger whose fire
+            # site froze one (`_events._DEFENDING_PLAYER_EVENTS`).
+            elif stream.accept_phrase("defending", "player", "'s"):
+                owner = ast.PlayerRef("defending_player")
             else:
                 stream.accept_word("a", "an", "the")
             noun = stream.peek_word()

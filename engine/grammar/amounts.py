@@ -8,6 +8,7 @@ place here and an unknown quantity word is an error, not a zero.
 
 from __future__ import annotations
 
+from ..oracle_types import EXILED_THIS_WAY
 from . import ast
 from .errors import GrammarError
 from .lexer import MANA, NUMBER, PT, SELF, WORD
@@ -706,6 +707,13 @@ def accept_exiled_for_cost(stream: "TokenStream") -> "ast.ExiledForCost | None":
 # nobody printed and refuses instead of quietly counting cards.
 _THIS_WAY_COUNTS: dict[tuple[str, str], str] = {
     ("card", "discarded"): "discarded_count",
+    # "…you gain 1 life for each card **exiled this way**." (Rysorian Badger.)
+    # The count the graveyard exile in front of it recorded. The key is
+    # ``oracle_types``' own constant rather than a fourth spelling of the
+    # string: the handler writes it, ``lowering/_records`` declares it and this
+    # table reads it, and a second spelling is how a producer gate goes vacuous
+    # while the amount reads an empty record.
+    ("card", "exiled"): EXILED_THIS_WAY,
     # "…for each 1 **damage prevented** this way." (Sacred Boon.) What the
     # earlier step recorded here is the *shield*, not a number — the total is
     # not known when the spell resolves and goes on accumulating all turn — so

@@ -357,6 +357,11 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # of the library — and, one step earlier, whether the seat behind this
         # one is offered it at all.
         "revealed_draw_buyout",
+        # "You may exile up to two target creature cards from defending
+        # player's graveyard. **If you do, you gain 1 life for each card exiled
+        # this way** …" (Rysorian Badger.) The answer is the count the step
+        # behind it reads, which is Recall's shape one zone over.
+        "graveyard_exile_pick",
     }, suspending
 
 

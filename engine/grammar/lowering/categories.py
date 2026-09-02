@@ -660,6 +660,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # id the token maker recorded. A zone change like the two beside it.
     "exile_created_token": "zones",
     "exile_target_graveyard_card": "zones",
+    # "…exile up to two target creature cards from defending player's
+    # graveyard" (Rysorian Badger) — the counted twin of the row above, whose
+    # picks are made through a prompt.
+    "exile_cards_from_graveyard": "zones",
     # "Put it into your graveyard." (All Hallow's Eve, from exile.) The
     # ability's own source moving zones — the same category as the self-exile
     # above, because it is the same kind of move made by the same kind of
