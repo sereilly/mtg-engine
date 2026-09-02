@@ -397,3 +397,58 @@ def test_the_client_runs_the_second_prompt_instead_of_sending():
     # send when a target is still owed.
     assert "thenTarget" in APP_JS
     assert "__castCostStage" in APP_JS
+
+
+def test_soul_exchange_reports_the_exile_as_a_cost_and_the_graveyard_as_a_target():
+    """The third card of the class, and the one whose two prompts are on two
+    *different surfaces*: the cost is a permanent clicked on the canvas, the
+    target a card clicked in the zone-reveal panel.
+
+    That is why it is worth pinning separately from Goblin Grenade's — the
+    client runs `startCastCostPermanentPrompt` and then hands off to the
+    graveyard prompt, which reads the card's own spec rather than a per-mode
+    list, so the two stages have to agree about which spec is whose.
+    """
+    sid, _sess, game = _session("Basal Thrull", "Homarid")
+    game.players[0].hand = [_CARDS["Soul Exchange"]]
+    game.players[0].graveyard = [_CARDS["Hill Giant"]]
+    game.start_priority_window(0)
+
+    state = client.get(f"/api/sessions/{sid}/state?seat=0").json()
+    spec = _hand_card(state, "Soul Exchange")["target_spec"]
+
+    assert spec["kind"] == "graveyard_creature" and spec["own_graveyard_only"] is True
+    assert [t["name"] for t in spec["valid_targets"]] == ["Hill Giant"]
+    cost = spec["cost_spec"]
+    assert cost["exile_cost"] is True
+    assert [t["name"] for t in cost["valid_targets"]] == ["Basal Thrull", "Homarid"]
+
+
+def test_soul_exchange_carries_both_answers_and_reads_the_cost_back():
+    """Both fields on one action, and the rider that proves the cost was
+    collected rather than defaulted: "+2/+2 **if the exiled creature was a
+    Thrull**". The Thrull is second on the battlefield, so a deterministic
+    default would have taken the Homarid and left the Giant at 3/3.
+    """
+    sid, _sess, game = _session("Homarid", "Basal Thrull")
+    game.players[0].hand = [_CARDS["Soul Exchange"]]
+    game.players[0].graveyard = [_CARDS["Hill Giant"]]
+    thrull = game.players[0].battlefield[1]
+    game.start_priority_window(0)
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0, "action": "cast", "card_name": "Soul Exchange",
+            "target_seat": 0, "target_permanent_index": 0,
+            "cost_permanent_id": thrull.permanent_id,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    game._settle()
+
+    assert [c.name for c in game.players[0].exile] == ["Basal Thrull"]
+    giant = next(
+        perm for perm in game.players[0].battlefield if perm.card.name == "Hill Giant"
+    )
+    assert (giant.effective_power, giant.effective_toughness) == (5, 5)

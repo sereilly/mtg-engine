@@ -1731,6 +1731,16 @@ function pendingTargetFields(card, validTargetsOverride = null) {
 // clicks.
 function cardRequiresTargetRoles(card) { return specKind(card) === "roles"; }
 function cardRequiresTargetPlayer(card) { return specKind(card) === "player"; }
+// "target player or planeswalker" (Eternal Flame, Touch of Death). Its own
+// predicate rather than a second kind folded into the one above, because the
+// two take different prompts: a bare player target is the life pills alone,
+// this one is those plus the planeswalkers the backend enumerated beside them.
+// Nothing asked for it at all until now — the cascade fell past every branch to
+// the untargeted cast, which aimed at `getDefaultTargetSeat` and could never hit
+// a planeswalker or, in a free-for-all, let the caster pick which opponent.
+function cardRequiresTargetPlayerOrPlaneswalker(card) {
+  return specKind(card) === "player_or_planeswalker";
+}
 function cardRequiresTargetLand(card) { return specKind(card) === "land"; }
 function cardRequiresTargetGraveyardCreature(card) { return specKind(card) === "graveyard_creature"; }
 function cardReanimatesOwnGraveyardOnly(card) { return !!targetSpecOf(card).own_graveyard_only; }
@@ -8051,7 +8061,13 @@ function renderActivationPrompt() {
         : "Click any permanent on the battlefield to choose the target.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "any") {
-      body.textContent = "Click a creature on the battlefield, or click a player's life pill (glowing yellow) to target them.";
+      // What the picker is actually offering: "any target" enumerates creatures
+      // beside the seats, "target player or planeswalker" enumerates
+      // planeswalkers. Naming the wrong one tells the player to look for
+      // something that is not glowing.
+      body.textContent = pendingSpec?.kind === "player_or_planeswalker"
+        ? "Click a planeswalker on the battlefield, or click a player's life pill (glowing yellow) to target them."
+        : "Click a creature on the battlefield, or click a player's life pill (glowing yellow) to target them.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "divided") {
       body.textContent =
@@ -8081,16 +8097,20 @@ function renderActivationPrompt() {
       customOkBtn.disabled = true;
       return;
     } else if (pendingCastTarget.targetKind === "several") {
+      const severalExact = severalTargetsAreExact(pendingCastTarget);
+      const severalChosen = pendingCastTarget.severalTargets.length;
       body.textContent =
-        `Click up to ${pendingCastTarget.maxTargets} valid permanents to choose them, then confirm. ` +
+        `Click ${severalExact ? "" : "up to "}${pendingCastTarget.maxTargets} valid permanents to choose them, then confirm. ` +
         "Click a chosen one again to deselect it.";
       steps.innerHTML = [
         `<div>Card: ${escapeHtml(pendingCastTarget.cardName)}</div>`,
         `<div>${escapeHtml(severalTargetsHint())}</div>`,
-        `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="severalConfirmBtn">Confirm targets</button></div>`,
+        `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="severalConfirmBtn"`
+          + `${severalExact && severalChosen < pendingCastTarget.maxTargets ? " disabled" : ""}>Confirm targets</button></div>`,
       ].join("");
-      // Never disabled: "up to N" may legally choose none (CR 601.2c), so
-      // confirming with nothing selected has to be reachable.
+      // Disabled only while a card that prints a *number* is short of it:
+      // "up to N" may legally choose none (CR 601.2c), so confirming with
+      // nothing selected has to stay reachable for those.
       const severalBtn = document.getElementById("severalConfirmBtn");
       if (severalBtn) severalBtn.addEventListener("click", confirmSeveralTargets);
       cancelBtn.classList.remove("hidden");
@@ -9501,33 +9521,28 @@ function chooseModalMode(index) {
 // when the mode targets nothing.
 function dispatchModalCast(card, castAction, targetKind, validTargets = null) {
   // A mode naming several targets takes the several-target prompt whatever its
-  // kind says, for the same reason the cast cascades check it first.
+  // kind says, for the same reason the cast cascade checks it first.
   if (cardRequiresSeveralTargets(card)) {
     startCastSeveralTargetsPrompt(card, castAction, validTargets);
     return;
   }
-  switch (targetKind) {
-    case "creature":
-      startCastCreatureTargetPrompt(card, castAction, validTargets);
-      return;
-    case "artifact":
-      startCastArtifactTargetPrompt(card, castAction, validTargets);
-      return;
-    case "permanent":
-      startCastPermanentTargetPrompt(card, castAction, validTargets);
-      return;
-    case "stack":
-      startCastStackSpellPrompt(card, castAction, validTargets);
-      return;
-    case "any":
-      startCastAnyTargetPrompt(card, castAction, validTargets);
-      return;
-    case "player":
-      startCastTargetPrompt(card, castAction, validTargets);
-      return;
-    default:
-      break; // "none" — no target to choose.
+  if (targetKind !== "none" && !startCastPromptForKind(card, castAction, targetKind, validTargets)) {
+    // A kind the client cannot collect. The mode's kind comes from a *different*
+    // backend function than a card's cast spec does
+    // (`web/serialization._mode_target_kind`, whose own fall-through answers
+    // "player" for anything it does not recognize), so the two can name kinds
+    // this switch has never heard of. This used to fall through to the cast
+    // below and send a modal spell with no target at all — a silent wrong cast,
+    // which is the trade `engine/grammar/` refuses in the same words: loud
+    // failure beats a silent partial match. `tests/ui/test_modal_target_kinds.py`
+    // is what keeps this branch unreachable for the pool.
+    clearPendingHandCast();
+    updateActionHint(
+      `${normalizeCardName(card)}: that mode's target can't be chosen here yet.`, true,
+    );
+    return;
   }
+  if (targetKind !== "none") return;
 
   const cardName = normalizeCardName(card);
   const targetSeat = getDefaultTargetSeat(cardName);
@@ -9543,6 +9558,57 @@ function dispatchModalCast(card, castAction, targetKind, validTargets = null) {
     });
 }
 
+// Route one target *kind* to the prompt that collects it — the single table of
+// kinds this client can ask a player for. Read by the cascade below over a
+// card's own cast spec, and by `dispatchModalCast` over one mode's kind, which
+// the backend derives in a different function; one table is what keeps the two
+// from drifting into a kind only one of them knows. Returns false for a kind it
+// does not route, which every caller must treat as a refusal rather than as
+// "no target needed" — "none" is its own answer and never reaches here.
+function startCastPromptForKind(card, castAction, kind, validTargets = null) {
+  switch (kind) {
+    case "roles":
+      startCastRolesTargetPrompt(card, castAction);
+      return true;
+    case "graveyard_creature":
+      startCastGraveyardCreatureTargetPrompt(card, castAction);
+      return true;
+    case "land":
+      startCastLandTargetPrompt(card, castAction, validTargets);
+      return true;
+    case "artifact":
+      startCastArtifactTargetPrompt(card, castAction, validTargets);
+      return true;
+    case "creature":
+      startCastCreatureTargetPrompt(card, castAction, validTargets);
+      return true;
+    case "permanent":
+    case "spell_or_permanent":
+      startCastPermanentTargetPrompt(card, castAction, validTargets);
+      return true;
+    case "stack":
+      startCastStackSpellPrompt(card, castAction, validTargets);
+      return true;
+    case "divided":
+      startCastDividedPrompt(card, castAction, validTargets);
+      return true;
+    case "any":
+    // "…deals 5 damage to target player **or planeswalker**" (Eternal Flame,
+    // Touch of Death). The backend enumerates both the seats and the
+    // planeswalkers, so it is the two-surface picker rather than the
+    // life-pill-only one — which would offer the seats and silently drop every
+    // planeswalker the spell may legally hit.
+    case "player_or_planeswalker":
+      startCastAnyTargetPrompt(card, castAction, validTargets);
+      return true;
+    case "player":
+      startCastTargetPrompt(card, castAction, validTargets);
+      return true;
+    default:
+      return false;
+  }
+}
+
 // The one cast targeting cascade, in the order the backend's spec kinds have to
 // be asked in. The three places a cast can begin — a hand click, a drag onto the
 // battlefield, a cast from the graveyard/exile/command zone — each spelled it
@@ -9553,10 +9619,22 @@ function dispatchModalCast(card, castAction, targetKind, validTargets = null) {
 function startCastTargetCascade(card, castAction = "cast", targetSeat = null) {
   if (!card || typeof card !== "object") return false;
   if (cardRequiresTargetRoles(card)) { startCastRolesTargetPrompt(card, castAction); return true; }
+  // "Return **up to two** target creature cards from your graveyard" (Sanguine
+  // Indulgence) names several targets and is still asked here rather than by
+  // the several-permanents question below: its click surface is the zone-reveal
+  // panel rather than the canvas, which is why that prompt carries a
+  // multi-select of its own.
   if (cardRequiresTargetGraveyardCreature(card)) { startCastGraveyardCreatureTargetPrompt(card, castAction); return true; }
+  // **Before every per-kind prompt.** A card that names several targets is
+  // answered by the several picker whatever kind they are, and this used to sit
+  // below `land` and `artifact` — so "Exile **two** target artifacts" (Dust to
+  // Dust) opened the single-artifact prompt, the caster clicked once, and the
+  // spell exiled one. "Destroy **X** target snow lands" (Avalanche) and
+  // Volcanic Eruption's Mountains lost the same way. The engine took the list
+  // correctly the whole time; nothing ever sent it one.
+  if (cardRequiresSeveralTargets(card)) { startCastSeveralTargetsPrompt(card, castAction); return true; }
   if (cardRequiresTargetLand(card)) { startCastLandTargetPrompt(card, castAction); return true; }
   if (cardRequiresTargetArtifact(card)) { startCastArtifactTargetPrompt(card, castAction); return true; }
-  if (cardRequiresSeveralTargets(card)) { startCastSeveralTargetsPrompt(card, castAction); return true; }
   if (cardOffersCopyCreatureChoice(card)) { startCastCreatureTargetPrompt(card, castAction); return true; }
   if (cardOffersCopyArtifactChoice(card)) { startCastArtifactTargetPrompt(card, castAction); return true; }
   if (cardRequiresTargetCreature(card)) { startCastCreatureTargetPrompt(card, castAction); return true; }
@@ -9564,6 +9642,7 @@ function startCastTargetCascade(card, castAction = "cast", targetSeat = null) {
   if (cardRequiresTargetStackSpell(card)) { startCastStackSpellPrompt(card, castAction); return true; }
   if (cardRequiresDividedDamage(card)) { startCastDividedPrompt(card, castAction); return true; }
   if (cardRequiresTargetAny(card)) { startCastAnyTargetPrompt(card, castAction); return true; }
+  if (cardRequiresTargetPlayerOrPlaneswalker(card)) { startCastAnyTargetPrompt(card, castAction); return true; }
   if (cardRequiresTargetPlayer(card)) { startCastTargetPrompt(card, castAction); return true; }
   if (hasXCost(card)) {
     startCastXPrompt(
@@ -9945,13 +10024,20 @@ function startCastSeveralTargetsPrompt(card, castAction = "cast", validTargets =
   updateActionHint(severalTargetsHint());
 }
 
+// Whether the prompt in progress names exactly its maximum, or may stop short.
+// "X target creatures" names exactly the X that was announced, and "two target
+// artifacts" names two (CR 601.2c); "up to two" is the only one that may choose
+// fewer, and the backend tells them apart because the grammar does.
+function severalTargetsAreExact(pending) {
+  return (pending.announcedX !== null && pending.announcedX !== undefined)
+    || !!targetSpecOf(pending.card).exact_targets;
+}
+
 function severalTargetsHint() {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "several") return "";
   const n = p.severalTargets.length;
-  // "X target creatures" names exactly X (CR 601.2c), not "up to" — so the
-  // hint does not offer a choice the card refuses.
-  const exact = p.announcedX !== null && p.announcedX !== undefined;
+  const exact = severalTargetsAreExact(p);
   const bound = exact ? `${p.maxTargets}` : `up to ${p.maxTargets}`;
   return n === 0
     ? `Choose ${bound} targets for ${p.cardName} (click each), then confirm.`

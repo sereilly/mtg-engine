@@ -1779,6 +1779,14 @@ def _from_targets_payload(targets) -> dict | None:
     count = targets.get("count")
     if isinstance(count, int) and count > 1:
         flags = {**flags, "max_targets": count}
+        # "Exile **two** target artifacts" (Dust to Dust) against "Return **up
+        # to two**" (Sanguine Indulgence): CR 601.2c lets the second announce
+        # fewer and does not let the first, and the grammar has told the two
+        # apart since it parsed them — `quantifier` is "exactly" or "up_to".
+        # The spec dropped the distinction and reported both as a maximum, so
+        # the picker offered "up to 2" for a card that prints a number.
+        if targets.get("quantifier") == "exactly":
+            flags = {**flags, "exact_targets": True}
     elif count == "x":
         # "**X** target creatures" (Part Water, Winter Blast). The count is the
         # announced X, so there is no number here to be a maximum — and saying

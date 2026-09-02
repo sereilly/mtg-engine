@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **1610**
-- Passed: **474** (387 checked in-game, 87 auto-passed)
+- Passed: **477** (390 checked in-game, 87 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **19**
-- Untested: **1117**
+- Untested: **1114**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -376,7 +376,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Dub | ⬜ untested |  |
 | Duress | ⬜ untested |  |
 | Durkwood Boars | ✅ pass | auto-pass: no abilities |
-| Dust to Dust | ⬜ untested |  |
+| Dust to Dust | ✅ pass |  |
 | Dwarven Armorer | ⬜ untested |  |
 | Dwarven Armory | ⬜ untested |  |
 | Dwarven Catapult | ⬜ untested |  |
@@ -435,7 +435,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Essence Filter | ⬜ untested |  |
 | Essence Flare | ≡ equivalent | same behaviour as Unstable Mutation |
 | Essence Vortex | ⬜ untested |  |
-| Eternal Flame | ⬜ untested |  |
+| Eternal Flame | ✅ pass |  |
 | Eternal Warrior | ⬜ untested |  |
 | Eureka | ⬜ untested |  |
 | Evil Eye of Orms-by-Gore | ⬜ untested |  |
@@ -1296,7 +1296,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Sorrow's Path | ⬜ untested |  |
 | Soul Barrier | ⬜ untested |  |
 | Soul Burn | ⬜ untested |  |
-| Soul Exchange | ⬜ untested |  |
+| Soul Exchange | ✅ pass |  |
 | Soul Kiss | ⬜ untested |  |
 | Soul Net | ✅ pass |  |
 | Soul Sear | ⬜ untested |  |
