@@ -320,7 +320,17 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # like `zones`, `types`, `destruction` and `counter_removal`: the parse side
 # stays in `effects/game.py`, where a token line is one production over a
 # shared body vocabulary.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "attachments", "types", "destruction", "counter_removal", "tokens"]
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "attachments", "types", "destruction", "counter_removal", "tokens", "upkeep"]
+# `upkeep` is the fourth lowering-only family and the fourth time the same thing
+# happened: `lowering/damage.py` reached the guard below and shed the
+# pay-or-consequence shapes — the damage a player is *offered the chance not to
+# take* — where everything left in it is a damage event happening. The name is
+# the one `grammar/upkeep.py` carries one package over, which
+# `lowering/categories.py` had already given the kinds they produce, so the
+# mirror re-forms rather than forking. `effects/` has no `upkeep`: the parse
+# side's module is a top-level `grammar/upkeep.py` (a paragraph reader, not an
+# effect production), which is the same asymmetry `zones`/`library` document
+# above, one layer over.
 # The AST side has no `library`: what a search or a look-at *is* — the pile, the
 # filter, the fate of what was found — is a handful of nodes that sit perfectly
 # well beside the other card nodes, and the split that made `library` a family

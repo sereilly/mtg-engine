@@ -23,8 +23,8 @@ this one beside `_common` in its `shared` tuple.
 
 from __future__ import annotations
 
-from ...oracle_types import (EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
-                             HAND_CARDS_TO_LIBRARY)
+from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER, EXILED_THIS_WAY,
+                             EXILED_THIS_WAY_OBJECTS, HAND_CARDS_TO_LIBRARY)
 from ...tokens import CREATED_TOKEN_RESULT_KEY
 from .. import ast
 from ..errors import LoweringError
@@ -100,6 +100,14 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     # path. Absent from this table the phrase fell through to `target_player`,
     # a choice neither card offers — which is Psychic Venom's bug one row up.
     "matching_permanent_enters",
+    # Funeral March — the departing host's. CR 603.6c's event about the
+    # permanent an Aura or Equipment is attached to, announced from the one
+    # transition off the battlefield (`remove_all_from_battlefield`), which
+    # freezes the seat while the host is still on a battlefield. "Its
+    # controller" cannot be re-derived at resolution: by then the host is in a
+    # graveyard, an exile or a hand, and under a control-change effect that
+    # seat was never its owner.
+    "attached_creature_leaves_battlefield",
 })
 
 

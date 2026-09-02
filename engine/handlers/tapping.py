@@ -542,6 +542,15 @@ def tap_recorded_permanents(game: Game, instruction: OracleInstruction, context:
     recorded = (context.results or {}).get(
         str(instruction.payload.get("permanents_from", ""))
     ) or ()
+    # A producer may record **one** id rather than a list: `choose_permanent`
+    # writes a single pick ("unless you tap an untapped creature you control",
+    # Koskun Falls) where the sweeps write a tuple. Both are ids of permanents
+    # this step is to tap, so both are read here rather than a second handler
+    # existing to read the singular — which is how a record and its reader come
+    # apart. `destroy_target_permanent` already reads the same producer this way
+    # one family over.
+    if isinstance(recorded, int):
+        recorded = (recorded,)
     tapped = []
     for permanent_id in recorded:
         permanent = game.permanent_by_id(permanent_id)

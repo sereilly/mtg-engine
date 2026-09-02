@@ -41,6 +41,15 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # in a way this table could derive.
     ("attached_creature_dies", ("equipped", "creature", "dies")),
     ("attached_creature_dies", ("enchanted", "creature", "dies")),
+    # "When enchanted creature leaves the battlefield, …" (Funeral March). The
+    # row above widened from a death (CR 704.5g) to CR 603.6c's whole event, so
+    # a host exiled, bounced or tucked fires it as well as one that died. Both
+    # printed words for the row above's reason, and both spellings of
+    # "attached" for the same one.
+    ("attached_creature_leaves_battlefield",
+     ("equipped", "creature", "leaves", "the", "battlefield")),
+    ("attached_creature_leaves_battlefield",
+     ("enchanted", "creature", "leaves", "the", "battlefield")),
     # "…becomes the target of a spell or ability an opponent controls" (Warden
     # of the Woods). Longest first, as everywhere in this table: the narrowed
     # wording has the unnarrowed one as a strict prefix, so matching that first

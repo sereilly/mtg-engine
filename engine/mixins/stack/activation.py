@@ -427,9 +427,16 @@ class AbilityActivationMixin:
         # payload (CR 122.1's kinds are open), and what the ability *does* is
         # not the cost's business. An ability granted with any other counter's
         # word paid nothing and could be activated for ever.
+        # **Counted here, charged with the other costs below.** This block used
+        # to take the counters off at this point, which is *above* CR 602.5's
+        # timing gate -- so Trade Caravan, activated outside an opponent's
+        # upkeep, was refused with two currency counters already gone. CR 602.2b
+        # reverses an activation that turns out to be illegal, and the rest of
+        # this function is arranged that way already: every other cost checks
+        # its payability here and pays further down.
         counters_removed_for_cost = 0
         if ability.cost.remove_counter:
-            from ...named_counters import counters_on, remove_counters
+            from ...named_counters import counters_on
 
             kind = ability.cost.remove_counter
             held = counters_on(permanent, kind)
@@ -453,9 +460,6 @@ class AbilityActivationMixin:
                     self.log.append(details)
                     return SimulationResult(permanent.card.name, False, "unsupported", details)
                 counters_removed_for_cost = int(wanted)
-            # Through the one removal seam, so a cost that takes the last
-            # counter off is the same event as an effect that does.
-            remove_counters(permanent, kind, counters_removed_for_cost)
 
         # Per-ability timing restrictions are scoped to the *selected* ability's
         # own clause, not the whole card. Rock Hydra's "Activate only during your
@@ -911,6 +915,18 @@ class AbilityActivationMixin:
             # first of them, so a counted cost adds a record rather than moving
             # one.
             exiled_for_cost = exiled_set_for_cost[0]
+
+        # The counter-removal cost, charged here rather than where it was
+        # counted: every gate between the two can still refuse the activation,
+        # and a refusal after the counters came off is a cost paid for nothing
+        # (CR 602.2b). Through the one removal seam, so a cost that takes the
+        # last counter off is the same event as an effect that does.
+        if counters_removed_for_cost:
+            from ...named_counters import remove_counters
+
+            remove_counters(
+                permanent, ability.cost.remove_counter, counters_removed_for_cost
+            )
 
         required_cost = dict(ability.cost.mana)
         # "**Pay enchanted creature's mana cost**: …" (Merseine.) The symbols

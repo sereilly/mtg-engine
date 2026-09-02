@@ -794,6 +794,20 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # compiles supported.
     ("created_token_leaves_battlefield",
      r"when the token leaves(?: the battlefield)?"),
+    # "When enchanted creature leaves the battlefield, its controller
+    # sacrifices a creature of their choice." (Funeral March.) CR 603.6c's
+    # event asked about the permanent this one is *attached to* —
+    # `attached_creature_dies` below widened from a death to any move off the
+    # battlefield, so an exiled, bounced or tucked host fires it too.
+    #
+    # Above the generic row and deliberately not folded into it, exactly as
+    # `created_token_leaves_battlefield` is: that row's `.+` swallows
+    # "enchanted creature" and reports the ability as watching the **Aura**, so
+    # the card would compile supported and fire when the Aura itself left. That
+    # is idiom 1 in its purest form — a condition narrowed on the grammar side
+    # alone, with this table quietly naming a different event.
+    ("attached_creature_leaves_battlefield",
+     r"when(?:ever)? (?:equipped|enchanted) creature leaves(?: the battlefield)?"),
     ("leaves_battlefield",          r"when (?:this|.+) leaves(?: the battlefield)?"),
     ("attached_creature_dies",      r"when(?:ever)? (?:equipped|enchanted) creature dies"),
     # CR 701.26a's event with the one-shot trigger word (Blight: "**When**
@@ -828,7 +842,18 @@ WHEN_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # record `named_counters.remove_counters` writes is what the sweep reads.
     ("last_counter_removed",
      r"when you remove the last (?P<counter_kind>[a-z]+) counter from this "
-     r"(?:artifact|creature|enchantment|permanent|land)"),
+     r"(?:artifact|aura|creature|enchantment|permanent|land)"),
+    # "When the last ore counter **is removed** from this Aura, …" (Orcish
+    # Mine.) The same event in the passive voice, and it has to be the same
+    # kind: CR 121.3's removal is one event however it happened, and the
+    # dispatcher behind it (`mixins/game_ending.py`) reads the record
+    # `named_counters.remove_counters` writes rather than any call site — which
+    # is exactly why the printed voice cannot matter. Orcish Mine's counters
+    # come off through its *own* trigger, so an active-voice-only table would
+    # have left the card's whole payoff unreadable.
+    ("last_counter_removed",
+     r"when the last (?P<counter_kind>[a-z]+) counter is removed from this "
+     r"(?:artifact|aura|creature|enchantment|permanent|land)"),
     # "When a spell or ability an opponent controls causes you to discard this
     # card, …" (Psychic Purge.) CR 113.6d: an ability that functions from the
     # hand. The one discard seam (`Game._discard_card`) is what announces it,
@@ -3715,6 +3740,62 @@ def expand_modal_activated_lines(oracle_text: str) -> str:
     return "\n".join(out)
 
 
+#: "At the beginning of your upkeep **and** whenever enchanted land becomes
+#: tapped, remove an ore counter from this Aura." (Orcish Mine.) CR 603.1 lets
+#: one triggered ability name several trigger events; the printed shape is two
+#: conditions joined by "and", one comma, then the effect they share.
+#:
+#: Neither condition may contain a comma, which is what pins the shape: the
+#: single comma in the line is the boundary between the conditions and the
+#: effect. Chaos Moon prints "…red creatures get +1/+1 **and whenever** a player
+#: taps a Mountain for mana, that player adds…" and is *not* this shape — its
+#: first clause ends in a comma long before the joining word, so the pattern
+#: cannot reach across it.
+_CONJOINED_TRIGGER_LINE = re.compile(
+    r"^(?P<first>(?:at|whenever|when) [^,]+?)"
+    r" and (?P<second>(?:at|whenever|when) [^,]+?), (?P<effect>.+)$",
+    re.IGNORECASE,
+)
+
+
+def expand_conjoined_trigger_lines(oracle_text: str) -> str:
+    """*oracle_text* with a two-condition trigger line rewritten as two lines.
+
+    "At the beginning of your upkeep and whenever enchanted land becomes tapped,
+    remove an ore counter from this Aura" is one ability with two trigger events
+    (CR 603.1), and it triggers on each of them — which is behaviourally what
+    two abilities with one event each and the same effect do. Rewriting it here
+    is the ``expand_equip_lines`` move: from this point on the grammar, the
+    condition table, the Aura gate, the parse-coverage census and the hook
+    census all read two ordinary trigger lines that already work, and none of
+    them learns a second shape.
+
+    A representation instead — a list of conditions on ``ParsedTriggeredAbility``
+    — would have to be taught to every fire site in the engine, each of which
+    matches on one condition kind.
+
+    The safety here is the full-consumption invariant, not this function's
+    judgement: a split that produced a sentence the grammar cannot read leaves
+    the card unsupported naming the line, which is the loud direction. What it
+    must never do is *quietly* rewrite a line that was not this shape, which is
+    why both conditions are comma-free and the joining word must begin a trigger
+    word rather than merely appear.
+    """
+    if not oracle_text or " and " not in oracle_text:
+        return oracle_text
+    out: list[str] = []
+    for line in oracle_text.splitlines():
+        match = _CONJOINED_TRIGGER_LINE.match(line.strip())
+        if match is None:
+            out.append(line)
+            continue
+        effect = match.group("effect")
+        second = match.group("second")
+        out.append(f"{match.group('first')}, {effect}")
+        out.append(f"{second[:1].upper()}{second[1:]}, {effect}")
+    return "\n".join(out)
+
+
 def _printed_line_for(expanded_line: str | None, printed_text: str) -> str:
     """The printed line *expanded_line* was rewritten from, or the line itself.
 
@@ -3764,7 +3845,9 @@ def expand_ability_lines(
     oracle_text = expand_short_self_references(
         oracle_text, card_name, legendary=legendary
     )
-    return expand_equip_lines(expand_modal_activated_lines(oracle_text))
+    return expand_conjoined_trigger_lines(
+        expand_equip_lines(expand_modal_activated_lines(oracle_text))
+    )
 
 def expand_card_lines(card) -> list[str]:
     """*card*'s printed lines after every rewrite :func:`expand_ability_lines`

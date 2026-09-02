@@ -6,7 +6,7 @@ from ..auras import detach_aura
 from ..dexterity import flip_lands_on
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
-from ..oracle_types import PER_OBJECT_SEAT_RECORDS
+from ..oracle_types import ATTACHED_PERMANENT_CONTROLLER, PER_OBJECT_SEAT_RECORDS
 from ..resumption import run_resumable
 from ._common import (
     frozen_that_player_seat,
@@ -993,6 +993,13 @@ def destroy_attached_permanent(game: Game, instruction: OracleInstruction, conte
     if seat is None:
         game.log.append(f"{context.card.name}: nothing attached to destroy")
         return True, "resolved"
+    # "…**and this Aura deals 2 damage to that land's controller**." (Orcish
+    # Mine.) The seat is recorded *before* the destroy, which is the only moment
+    # it can be read: the sentence behind this step names the land's controller,
+    # and by then the land is a card in a graveyard that CR 400.7 makes a
+    # different object with no controller at all. Declared in
+    # ``grammar/lowering/_records._PRODUCES``, which is what admits the phrase.
+    context.results[ATTACHED_PERMANENT_CONTROLLER] = seat
     destroyed = game._destroy_swept_permanents(
         game.players[seat],
         lambda candidate: candidate is attached,

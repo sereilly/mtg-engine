@@ -264,3 +264,54 @@ def test_an_activated_head_the_engine_cannot_carry_out_is_not_expanded():
     assert not program.supported
     assert program.reason.endswith("{2}: Choose two —"), program.reason
     assert not program.activated_abilities
+
+
+# --- expand_conjoined_trigger_lines: one ability, two trigger events
+# --- (W1G5, Homelands)
+
+
+def test_a_two_condition_trigger_line_becomes_two_lines():
+    """"At the beginning of your upkeep **and** whenever enchanted land becomes
+    tapped, remove an ore counter from this Aura." (Orcish Mine.)
+
+    CR 603.1 lets one triggered ability name several events, and it triggers on
+    each. The rewrite is what lets every downstream reader — the grammar, the
+    condition table, the Aura gate, the parse-coverage census — see two ordinary
+    trigger lines it already understands instead of learning a second shape.
+    """
+    from engine.oracle import expand_conjoined_trigger_lines
+
+    line = (
+        "At the beginning of your upkeep and whenever enchanted land becomes "
+        "tapped, remove an ore counter from this Aura."
+    )
+    assert expand_conjoined_trigger_lines(line).split("\n") == [
+        "At the beginning of your upkeep, remove an ore counter from this Aura.",
+        "Whenever enchanted land becomes tapped, remove an ore counter from "
+        "this Aura.",
+    ]
+
+
+def test_a_conjoined_trigger_rewrite_leaves_every_other_line_alone():
+    """The refusal half, written because a rewrite that fires on a line it was
+    not meant for is silent: the card still compiles, and it compiles as a
+    different card.
+
+    Three shapes that must pass through untouched — an "and" joining two
+    *effects* rather than two conditions, a sentence whose "and whenever" sits
+    behind an earlier comma (Chaos Moon, the one card in the pool that comes
+    close), and a conjunction whose second half is not a trigger word at all
+    (Merchant Ship's "attacks and isn't blocked").
+    """
+    from engine.oracle import expand_conjoined_trigger_lines
+
+    for line in (
+        "At the beginning of your upkeep, draw a card and lose 1 life.",
+        "At the beginning of each upkeep, count the number of permanents. If "
+        "the number is odd, until end of turn, red creatures get +1/+1 and "
+        "whenever a player taps a Mountain for mana, that player adds an "
+        "additional {R}.",
+        "Whenever this creature attacks and isn't blocked, draw a card.",
+        "Destroy target creature and target land.",
+    ):
+        assert expand_conjoined_trigger_lines(line) == line, line

@@ -18,7 +18,8 @@ from ._common import (
     frozen_that_player_seat, permanent_matches_filter, resolve_amount,
     resolve_target_permanent, resolve_target_permanents,
 )
-from ..oracle_types import X_FROM_COUNT_PER_RECIPIENT
+from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
+                           X_FROM_COUNT_PER_RECIPIENT)
 from .registry import effect_handler
 from ..mana_payment import generic_cost
 
@@ -362,6 +363,33 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         game._deal_damage_to_player(
             chosen, damage, source=source_permanent or card,
             then=_report_chosen, asks=True,
+        )
+        return True, "resolved"
+    if instruction.payload.get("recipient") == ATTACHED_PERMANENT_CONTROLLER:
+        # "Destroy enchanted land and this Aura deals 2 damage to **that land's
+        # controller**." (Orcish Mine.) The seat the destroy step in front of
+        # this one recorded about the permanent it destroyed — the sentence's
+        # own antecedent rather than a target or a frozen event subject. By now
+        # the land is a card in a graveyard, which CR 400.7 makes a different
+        # object with no controller to ask. No record means the step in front
+        # destroyed nothing, and no damage is dealt rather than a guess being
+        # damaged — the same rule the two branches above follow.
+        seat = context.results.get(ATTACHED_PERMANENT_CONTROLLER)
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no recorded controller, no damage dealt")
+            return True, "resolved"
+        host_controller = game.players[seat]
+
+        def _report_host(dealt: int) -> None:
+            context.results["damage_dealt"] = dealt
+            if dealt:
+                game.log.append(
+                    f"{card.name} dealt {dealt} damage to {host_controller.name}"
+                )
+
+        game._deal_damage_to_player(
+            host_controller, damage, source=source_permanent or card,
+            then=_report_host, asks=True,
         )
         return True, "resolved"
     if instruction.payload.get("recipient") == "target_player":

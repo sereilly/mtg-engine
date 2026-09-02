@@ -213,8 +213,21 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # site — the first from the record `named_counters.remove_counters` writes
     # (removal has four sites), the second from the discard seam, which is the
     # only place a card's own from-hand trigger (CR 113.6d) is in view.
-    "last_counter_removed":
+    # Both printed voices, because the kind now has a pattern for each: the
+    # active one Divine Intervention prints and the passive one Orcish Mine
+    # does. One example would leave the second pattern unexercised by the
+    # shadowing guard, which looks the wording up by kind.
+    "last_counter_removed": (
         "when you remove the last intervention counter from this enchantment",
+        "when the last ore counter is removed from this aura",
+    ),
+    # "When enchanted creature leaves the battlefield, its controller
+    # sacrifices a creature of their choice." (Funeral March.) CR 603.6c's
+    # event about the permanent this one is attached to — `attached_creature_dies`
+    # widened from a death to any move off the battlefield.
+    "attached_creature_leaves_battlefield":
+        "when enchanted creature leaves the battlefield, its controller "
+        "sacrifices a creature of their choice.",
     "discarded_by_opponent_effect":
         "when a spell or ability an opponent controls causes you to discard this card",
     "no_islands": "when you control no islands",

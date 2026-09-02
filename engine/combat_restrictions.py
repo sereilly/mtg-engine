@@ -64,6 +64,9 @@ class CombatRestriction:
 #   cant_attack_unless_defender_acted  phases/declare_attackers_step.can_attack
 #   cant_attack_unless_pay          phases/declare_attackers_step.can_attack
 #                                   + declare_attackers (the charge)
+#   creatures_cant_attack_you_unless_pay
+#                                   phases/declare_attackers_step.can_attack
+#                                   + declare_attackers (the charge)
 #   cant_block                      phases/declare_blockers_step
 #   must_attack_each_combat         phases/declare_attackers_step._must_attack_if_able
 #   attacks_as_though_hasty_unless_it_entered
@@ -136,6 +139,28 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"(?P<attack_mana>(?:\{[^}]+\})+)$"
         ),
         "cant_attack_unless_pay",
+    ),
+    (
+        # "Creatures can't attack you unless their controller pays {2} for each
+        # creature they control that's attacking you." (Koskun Falls.) The same
+        # CR 508.1g cost read from the *defending* side: the row above is
+        # printed on the attacker (or on an Aura about it) and this one on a
+        # permanent the defending player controls, so the third channel
+        # ``_attack_mana_costs_of`` consults is the defender's own board.
+        #
+        # "**For each** creature they control that's attacking you" needs no
+        # multiplier here, and that is the whole reason this is the same shape
+        # as Brainwash rather than a scaling one: the declaration's cost is
+        # summed per attacker already (``_declaration_mana_plan``), so a
+        # per-attacker {2} *is* {2} for each attacking creature. A payload
+        # carrying the multiplication would be a second way to say what the
+        # summing already says, free to disagree with it.
+        re.compile(
+            r"^creatures can't attack you unless their controller pays "
+            r"(?P<attack_mana>(?:\{[^}]+\})+) for each creature they control "
+            r"that's attacking you$"
+        ),
+        "creatures_cant_attack_you_unless_pay",
     ),
     # "…unless **you** control four or more artifacts" (Gadrak). The count and
     # the type are payload for the reason the land type above is: a card printed

@@ -711,6 +711,21 @@ def _parse_sacrifice(stream: TokenStream, player: ast.PlayerRef) -> ast.Statemen
             otherwise=ast.Sacrifice(player, subject),
         )
     stream.reset(mark)
+    # "… unless you **tap an untapped creature you control**." (Koskun Falls.)
+    # The third printed alternative, decomposed for the reason the sacrifice
+    # above is: an "unless" is an offer with a penalty, and `May` already says
+    # that — so the offer, the penalty and the "you have nothing to tap" case
+    # all come from machinery that works. Nothing new is fused, because nothing
+    # implements a tap-or-else prompt whole.
+    if stream.accept_phrase("unless", "you", "tap"):
+        tapped = parse_recipient(stream)
+        if tapped is not None:
+            return ast.May(
+                actor=player,
+                action=ast.Tap(tapped),
+                otherwise=ast.Sacrifice(player, subject),
+            )
+    stream.reset(mark)
     return ast.Sacrifice(player, subject)
 
 

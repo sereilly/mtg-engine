@@ -747,11 +747,34 @@ def _parse_trigger_event(stream: TokenStream) -> ast.TriggerEvent | None:
                     if stream.at_kind(SELF) or stream.at_word("this"):
                         stream.advance()
                         stream.accept_word(
-                            "artifact", "creature", "enchantment",
+                            "artifact", "aura", "creature", "enchantment",
                             "permanent", "land",
                         )
                         return ast.TriggerEvent("last_counter_removed", "when")
         stream.reset(mark_removal)
+        # "When the last ore counter **is removed** from this Aura" (Orcish
+        # Mine). The passive voice of the branch above and the same event: a
+        # counter removal is one event whoever performed it (CR 121.3), and the
+        # sweep that announces it reads the record every removal path writes.
+        # Read on this front end as well as in `engine/oracle.py`'s table, for
+        # the reason the active voice is: a condition only one of them reads
+        # leaves the other refusing the effect behind it.
+        mark_passive = stream.mark()
+        if stream.accept_phrase("the", "last"):
+            kind = stream.peek_word()
+            if kind:
+                stream.advance()
+                if stream.accept_word("counter") and stream.accept_phrase(
+                    "is", "removed", "from"
+                ):
+                    if stream.at_kind(SELF) or stream.at_word("this"):
+                        stream.advance()
+                        stream.accept_word(
+                            "artifact", "aura", "creature", "enchantment",
+                            "permanent", "land",
+                        )
+                        return ast.TriggerEvent("last_counter_removed", "when")
+        stream.reset(mark_passive)
         # "When a spell or ability an opponent controls causes you to discard
         # this card" (Psychic Purge). Read on both front ends, same reason.
         if stream.accept_phrase(
