@@ -931,6 +931,13 @@
   ]
  },
  {
+  "card": "Truce",
+  "clause": "each player may draw up to two cards. for each card less than two a player draws this way, that player gains 2 life",
+  "ignored": [
+   "may"
+  ]
+ },
+ {
   "card": "Tsunami",
   "clause": "destroy all islands",
   "ignored": [

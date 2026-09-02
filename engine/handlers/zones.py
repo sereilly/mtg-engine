@@ -4088,15 +4088,33 @@ def shuffle_hand_into_library(game: Game, instruction: OracleInstruction, contex
     else:  # pragma: no cover - the lowering admits no other subject
         return False, "no player to shuffle"
     then_draw = bool(instruction.payload.get("then_draw"))
+    # "…their hand **and graveyard** into their library." (Diminishing Returns.)
+    # The second pile joins the *same* move, which is why it rides this
+    # instruction: CR 701.19 randomises the library once, and a graveyard
+    # shuffle written as a statement after this one would shuffle it twice with
+    # the hand's cards already down among the graveyard's.
+    with_graveyard = bool(instruction.payload.get("with_graveyard"))
     for player in players:
         moved = len(player.hand)
-        player.library.extend(player.hand)
+        # Through the library seam, not a bare extend: CR 903.9b has no single
+        # fire site, and a commander shuffled in from a hand is exactly the
+        # "would be put into its owner's library from anywhere" the rule names.
+        for card in list(player.hand):
+            game.put_card_into_library(player, card)
         player.hand.clear()
+        buried = 0
+        if with_graveyard:
+            buried = len(player.graveyard)
+            for card in list(player.graveyard):
+                game.put_card_into_library(player, card)
+            player.graveyard.clear()
         # Through the module-level RNG every other shuffle uses, so a seeded run
         # stays reproducible (the determinism invariant).
         random.shuffle(player.library)
         game.log.append(
-            f"{player.name} shuffled {moved} card(s) from their hand into their library"
+            f"{player.name} shuffled {moved} card(s) from their hand"
+            + (f" and {buried} from their graveyard" if with_graveyard else "")
+            + " into their library"
         )
         if then_draw and moved:
             game._draw_with_replacements(player, moved)

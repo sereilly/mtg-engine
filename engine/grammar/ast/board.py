@@ -692,6 +692,15 @@ class ShuffleHandIntoLibrary:
     #: cards, and a hidden zone means nobody else can (CR 402.1). So the two
     #: readings lower to two handlers, and this field is what tells them apart.
     count: int | None = None
+    #: "Each player shuffles their hand **and graveyard** into their library."
+    #: (Diminishing Returns.) A second pile joining the same move, and part of
+    #: this node rather than a `ShuffleGraveyardIntoLibrary` beside it because
+    #: CR 701.19 makes the whole thing **one** shuffle: two statements would
+    #: randomise the library twice and, worse, would let a card land in the
+    #: library from the hand and then be shuffled again knowing it was there.
+    #: The seats also have to agree — "their … their" is one player per
+    #: iteration, which two independent statements cannot promise.
+    with_graveyard: bool = False
 
 
 @dataclass(frozen=True)

@@ -644,7 +644,20 @@ def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | Non
         # "shuffles their hand" the older one; they name the same cards, so the
         # phrase is optional rather than a second production.
         stream.accept_phrase("the", "cards", "from")
-    if not stream.accept_phrase(whose, "hand", "into", whose, "library"):
+    # "…their hand **and graveyard** into their library." (Diminishing
+    # Returns.) One shuffle over two piles, read here rather than as a second
+    # sentence: CR 701.19 randomises the library once, and two statements would
+    # do it twice with the hand's cards already down among the graveyard's.
+    with_graveyard = False
+    conjunct = stream.mark()
+    if stream.accept_phrase(whose, "hand", "and", "graveyard"):
+        with_graveyard = True
+    else:
+        stream.reset(conjunct)
+        if not stream.accept_phrase(whose, "hand"):
+            stream.reset(mark)
+            return None
+    if not stream.accept_phrase("into", whose, "library"):
         stream.reset(mark)
         return None
     then_draw = False
@@ -655,7 +668,9 @@ def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | Non
         then_draw = True
     else:
         stream.reset(probe)
-    return ast.ShuffleHandIntoLibrary(player, then_draw=then_draw, count=count)
+    return ast.ShuffleHandIntoLibrary(
+        player, then_draw=then_draw, count=count, with_graveyard=with_graveyard,
+    )
 
 
 def _parse_shuffle_library(stream: TokenStream) -> ast.Statement | None:

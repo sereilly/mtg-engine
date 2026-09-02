@@ -393,7 +393,15 @@ def _lower_shuffle_hand_into_library(
         OracleInstruction(
             "shuffle_hand_into_library",
             "",
-            {"whose": node.whose.kind, "then_draw": node.then_draw},
+            {
+                "whose": node.whose.kind,
+                "then_draw": node.then_draw,
+                # "…their hand **and graveyard** into their library."
+                # (Diminishing Returns.) A second pile in the same move, and a
+                # flag on the same instruction rather than a second one for the
+                # reason the node records: CR 701.19 shuffles the library once.
+                "with_graveyard": node.with_graveyard,
+            },
         ),
     )
 

@@ -420,13 +420,27 @@ def _lower_draw(
     # silent widening `PER_OBJECT_SEAT_RECORDS` exists to close.
     if node.up_to:
         # "…may draw **up to** two cards" (Truce). A ceiling is a *decision* —
-        # how many, answered by the drawing seat — and no draw handler asks one.
-        # The one shape that works is the whole "each player may draw up to N"
-        # sentence, which `control_flow._each_player_optional_draw` collapses
-        # into a prompt before this lowering is ever reached. Everywhere else
-        # the words refuse: read as an amount they would draw the maximum, and a
-        # forced draw is a different card from an offered one — on Truce, the
-        # difference is the whole of what the card does.
+        # how many, answered by the drawing seat — and only the prompt behind
+        # `each_player_draws_up_to_cards` asks one.
+        #
+        # "**Then each player draws up to seven cards.**" (Diminishing Returns.)
+        # The same decision with no "may" printed in front of it, which is not a
+        # different card: "up to seven" already lets a seat draw none, so the
+        # offer `control_flow._each_player_optional_draw` collapses was never
+        # what made the choice — the ceiling was. That collapse reaches this
+        # instruction from a `May` node; this reaches it from the bare sentence,
+        # and both arrive at one handler so what a seat is asked cannot depend
+        # on which spelling the card used.
+        if node.player.kind in ("each_player", "each_opponent"):
+            return (
+                OracleInstruction(
+                    "each_player_draws_up_to_cards", "",
+                    {"amount": _amount_payload(node.count), "actor": node.player.kind},
+                ),
+            )
+        # Every other drawer still refuses: read as an amount they would draw
+        # the maximum, and a forced draw is a different card from an offered
+        # one — on Truce, the difference is the whole of what the card does.
         raise LoweringError(
             "no draw handler offers a ceiling the drawer chooses under",
             node=node,
