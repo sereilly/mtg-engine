@@ -838,7 +838,7 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (488 of the 1,725 catalog cards passing — 390
+manually validated in-game (489 of the 1,725 catalog cards passing — 391
 checked in-game and 98 auto-passed — with 21 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires and Homelands, all seven promoted before their in-game pass — have no

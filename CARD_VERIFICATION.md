@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **1725**
-- Passed: **488** (390 checked in-game, 98 auto-passed)
+- Passed: **489** (391 checked in-game, 98 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **21**
-- Untested: **1216**
+- Untested: **1215**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -116,7 +116,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Ayesha Tanaka | ⬜ untested |  |
 | Aysen Abbey | ⬜ untested |  |
 | Aysen Bureaucrats | ⬜ untested |  |
-| Aysen Crusader | ⬜ untested |  |
+| Aysen Crusader | ✅ pass |  |
 | Aysen Highway | ⬜ untested |  |
 | Azure Drake | ✅ pass | auto-pass: keywords only (flying) |
 | Azusa, Lost but Seeking | ⬜ untested |  |
