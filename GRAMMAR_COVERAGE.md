@@ -16,20 +16,20 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 84.3% | 83.0% | 46.6% | 165 |
-| LEB | 292 | 389 | 84.3% | 83.0% | 46.8% | 166 |
-| 2ED | 292 | 389 | 84.3% | 83.0% | 46.8% | 166 |
+| LEA | 290 | 388 | 84.5% | 83.0% | 46.6% | 165 |
+| LEB | 292 | 389 | 84.6% | 83.0% | 46.8% | 166 |
+| 2ED | 292 | 389 | 84.6% | 83.0% | 46.8% | 166 |
 | ARN | 78 | 108 | 76.9% | 73.1% | 50.9% | 46 |
 | ATQ | 85 | 120 | 90.0% | 90.0% | 62.5% | 68 |
-| 3ED | 296 | 389 | 86.6% | 84.8% | 49.4% | 173 |
+| 3ED | 296 | 389 | 86.9% | 84.8% | 49.4% | 173 |
 | LEG | 310 | 431 | 89.1% | 87.9% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
-| 4ED | 368 | 520 | 90.4% | 90.0% | 53.8% | 246 |
+| 4ED | 368 | 520 | 90.6% | 90.0% | 53.8% | 246 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| HML *(measured)* | 115 | 189 | 83.1% | 81.0% | 54.5% | 77 |
-| **All (shipped)** | **2890** | **4196** | **88.0%** | **87.1%** | **56.1%** | **1985** |
+| HML *(measured)* | 115 | 189 | 92.1% | 92.1% | 63.5% | 92 |
+| **All (shipped)** | **2890** | **4196** | **88.1%** | **87.1%** | **56.1%** | **1985** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -41,31 +41,31 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 232 | 99 | expected a subject |  |
-| 118 | 51 | unrecognized effect verb |  |
-| 58 | 28 | unconsumed text |  |
+| 229 | 96 | expected a subject |  |
+| 116 | 49 | unrecognized effect verb |  |
+| 54 | 24 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 16 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 8 | 2 | expected a keyword ability |  |
-| 7 | 2 | no lowering for RawEffect |  |
 | 7 | 2 | expected 'the number of' in a where-clause |  |
 | 7 | 7 | expected 'unless defending player controls' |  |
+| 6 | 1 | no lowering for RawEffect |  |
 | 6 | 2 | expected who takes the redirected damage |  |
 | 5 | 1 | expected 'card' |  |
-| 5 | 1 | expected 'equal to' quantity for damage |  |
+| 5 | 1 | back-reference to 'its_toughness' with no producer in this effect |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
-| 4 | 2 | expected a colour or a creature body after 'becomes' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
+| 3 | 1 | expected a colour or a creature body after 'becomes' |  |
 | 3 | 1 | expected a destination zone after 'return' |  |
-| 3 | 3 | unrecognized "can't be" restriction |  |
-| 3 | 3 | expected 'a' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+| 2 | 2 | unrecognized "can't be" restriction |  |
 | 2 | 2 | a counter-removal cost only reads the ability's own source |  |
-| 2 | 2 | expected what this creature can't block, or a duration |  |
+| 1 | 1 | expected what to gain control of |  |
+| 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
 
 ## Cards executing through the grammar
 
@@ -186,6 +186,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a land enters, this artifact deals 2 damage to that land's controller.`
 - **Anointed Chorister**
   - `{4}{W}: This creature gets +3/+3 until end of turn.`
+- **Apocalypse Chime**
+  - `{2}, {T}, Sacrifice this artifact: Destroy all nontoken permanents with a name originally printed in the Homelands expansion. They can't be regenerated.`
 - **Apprentice Wizard**
   - `{U}, {T}: Add {C}{C}{C}.`
   - `{U}, {T}: Add {C}{C}{C}.`
@@ -256,6 +258,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice an artifact: This creature gets +2/+2 until end of turn.`
 - **Aurochs**
   - `Whenever this creature attacks, it gets +1/+0 until end of turn for each other attacking Aurochs.`
+- **Autumn Willow**
+  - `{G}: Until end of turn, Autumn Willow can be the target of spells and abilities controlled by target player as though it didn't have shroud.`
 - **Avalanche**
   - `Destroy X target snow lands.`
 - **Aven Gagglemaster**
@@ -475,6 +479,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Brine Shaman**
   - `{T}, Sacrifice a creature: Target creature gets +2/+2 until end of turn.`
   - `{1}{U}{U}, Sacrifice a creature: Counter target creature spell.`
+- **Broken Visage**
+  - `Destroy target nonartifact attacking creature. It can't be regenerated. Create a black Spirit creature token. Its power is equal to that creature's power and its toughness is equal to that creature's toughness. Sacrifice the token at the beginning of the next end step.`
 - **Bronze Tablet**
   - `{4}, {T}: Exile this artifact and target nontoken permanent an opponent owns. That player may pay 10 life. If they do, put this card into its owner's graveyard. Otherwise, that player owns this card and you own the other exiled card.`
   - `{4}, {T}: Exile this artifact and target nontoken permanent an opponent owns. That player may pay 10 life. If they do, put this card into its owner's graveyard. Otherwise, that player owns this card and you own the other exiled card.`
@@ -976,6 +982,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Dwarven Ruins**
   - `{T}: Add {R}.`
   - `{T}, Sacrifice this land: Add {R}{R}.`
+- **Dwarven Sea Clan**
+  - `{T}: Choose target attacking or blocking creature whose controller controls an Island. This creature deals 2 damage to that creature at end of combat. Activate only before the end of combat step.`
 - **Dwarven Soldier**
   - `Whenever this creature blocks or becomes blocked by one or more Orcs, this creature gets +0/+2 until end of turn.`
 - **Dwarven Song**
@@ -1217,6 +1225,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, this creature deals 8 damage to you unless you pay {G}{G}{G}{G}.`
 - **Forethought Amulet**
   - `At the beginning of your upkeep, sacrifice this artifact unless you pay {3}.`
+- **Forget**
+  - `Target player discards two cards, then draws as many cards as they discarded this way.`
 - **Forgotten Lore**
   - `Target opponent chooses a card in your graveyard. You may pay {G}. If you do, repeat this process except that opponent can't choose a card already chosen for Forgotten Lore. Then put the last chosen card into your hand.`
 - **Formation**
@@ -1324,6 +1334,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Discard a card: This creature can't be blocked this turn.`
 - **Ghosts of the Damned**
   - `{T}: Target creature gets -1/-0 until end of turn.`
+- **Giant Albatross**
+  - `When this creature dies, you may pay {1}{U}. If you do, for each creature that dealt damage to this creature this turn, destroy that creature unless its controller pays 2 life. A creature destroyed this way can't be regenerated.`
 - **Giant Growth**
   - `Target creature gets +3/+3 until end of turn.`
   - `Target creature gets +3/+3 until end of turn.`
@@ -1454,6 +1466,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature gets +0/+X until end of turn, where X is its mana value.`
 - **Greater Realm of Preservation**
   - `{1}{W}: The next time a black or red source of your choice would deal damage to you this turn, prevent that damage.`
+- **Greater Werewolf**
+  - `At end of combat, put a -0/-2 counter on each creature blocking or blocked by this creature.`
 - **Greed**
   - `{B}, Pay 2 life: Draw a card.`
   - `{B}, Pay 2 life: Draw a card.`
@@ -1781,6 +1795,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Jihad**
   - `White creatures get +2/+1 as long as the chosen player controls a nontoken permanent of the chosen color.`
 - **Jinx**
+  - `Target land becomes the basic land type of your choice until end of turn.`
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Johan**
   - `At the beginning of combat on your turn, you may have Johan gain "Johan can't attack" until end of combat. If you do, attacking doesn't cause creatures you control to tap this combat if Johan is untapped.`
@@ -1796,6 +1811,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Joven's Ferrets**
   - `Whenever this creature attacks, it gets +0/+2 until end of turn.`
   - `At end of combat, tap all creatures that blocked this creature this turn. They don't untap during their controller's next untap step.`
+- **Joven's Tools**
+  - `{4}, {T}: Target creature can't be blocked this turn except by Walls.`
 - **Jovial Evil**
   - `Jovial Evil deals X damage to target opponent, where X is twice the number of white creatures that player controls.`
 - **Jump**
@@ -2149,8 +2166,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `You choose which creatures block this combat and how those creatures block.`
 - **Melting**
   - `All lands are no longer snow.`
+- **Memory Lapse**
+  - `Counter target spell. If that spell is countered this way, put it on top of its owner's library instead of into that player's graveyard.`
 - **Mercenaries**
   - `{3}: The next time this creature would deal damage to you this turn, prevent that damage. Any player may activate this ability.`
+- **Merchant Scroll**
+  - `Search your library for a blue instant card, reveal that card, put it into your hand, then shuffle.`
 - **Merchant Ship**
   - `This creature can't attack unless defending player controls an Island.`
   - `Whenever this creature attacks and isn't blocked, you gain 2 life.`
@@ -2552,6 +2573,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: This creature deals 1 damage to any target.`
   - `{T}: This creature deals 1 damage to any target.`
 - **Prophecy**
+  - `Reveal the top card of target opponent's library. If it's a land, you gain 1 life. Then that player shuffles.`
   - `Draw a card at the beginning of the next turn's upkeep.`
 - **Psionic Blast**
   - `Psionic Blast deals 4 damage to any target and 2 damage to you.`
@@ -2673,6 +2695,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Remove any number of charge counters from this artifact: Add {R}, then add an additional {R} for each charge counter removed this way.`
 - **Red Scarab**
   - `Enchanted creature gets +2/+2 as long as an opponent controls a red permanent.`
+- **Reef Pirates**
+  - `Whenever this creature deals damage to an opponent, that player mills a card.`
 - **Reflecting Mirror**
   - `{X}, {T}: Change the target of target spell with a single target if that target is you. The new target must be a player. X is twice the mana value of that spell.`
 - **Regeneration**
@@ -2710,6 +2734,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return target creature card from your graveyard to the battlefield.`
   - `Return target creature card from your graveyard to the battlefield.`
   - `Return target creature card from your graveyard to the battlefield.`
+- **Retribution**
+  - `Choose two target creatures controlled by the same opponent. That player chooses and sacrifices one of those creatures. Put a -1/-1 counter on the other.`
 - **Return to Nature**
   - `• Destroy target artifact.`
   - `• Destroy target enchantment.`
@@ -2807,6 +2833,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: Target attacking creature gets +2/+0 until end of turn. When that creature leaves the battlefield this turn, sacrifice this artifact. If the creature deals damage to a creature this turn, the creature dealt damage can't be regenerated this turn. If a creature dealt damage by the targeted creature would die this turn, exile that creature instead.`
 - **Rust**
   - `Counter target activated ability from an artifact source. (Mana abilities can't be targeted.)`
+- **Rysorian Badger**
+  - `Whenever this creature attacks and isn't blocked, you may exile up to two target creature cards from defending player's graveyard. If you do, you gain 1 life for each card exiled this way and this creature assigns no combat damage this turn.`
 - **Sabertooth Mauler**
   - `At the beginning of your end step, if a creature died this turn, put a +1/+1 counter on this creature and untap it.`
 - **Sacred Boon**
@@ -3408,6 +3436,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Take an extra turn after this one.`
   - `Take an extra turn after this one.`
   - `Take an extra turn after this one.`
+- **Timmerian Fiends**
+  - `{B}{B}{B}, Sacrifice this creature: The owner of target artifact may ante the top card of their library. If that player doesn't, exchange ownership of that artifact and Timmerian Fiends. Put the artifact card into your graveyard and Timmerian Fiends from anywhere into that player's graveyard. This change in ownership is permanent.`
 - **Tinder Wall**
   - `Sacrifice this creature: Add {R}{R}.`
   - `{R}, Sacrifice this creature: It deals 2 damage to target creature it's blocking.`
@@ -3479,6 +3509,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Triskelion**
   - `Remove a +1/+1 counter from this creature: It deals 1 damage to any target.`
   - `Remove a +1/+1 counter from this creature: It deals 1 damage to any target.`
+- **Truce**
+  - `Each player may draw up to two cards. For each card less than two a player draws this way, that player gains 2 life.`
 - **Trufflesnout**
   - `• Put a +1/+1 counter on this creature.`
   - `• You gain 4 life.`

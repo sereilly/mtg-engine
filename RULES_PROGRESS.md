@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**342 / 612 tracked rules covered (55%)** — 1744 tests, 0 unannotated.
+**342 / 612 tracked rules covered (55%)** — 1774 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -193,7 +193,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **108.1** Use the Oracle card reference when determining a card’s wording. A card’s Oracle text can be foun...
 - [ ] **108.2** When a rule or text on a card refers to a “card,” it means only a Magic card or an object represe...
-- [x] **108.3** The owner of a card in the game is the player who started the game with it in their deck. If a ca... *(6 tests)*
+- [x] **108.3** The owner of a card in the game is the player who started the game with it in their deck. If a ca... *(8 tests)*
 - [ ] **108.4** A card doesn’t have a controller unless that card represents a permanent or spell; in those cases...
 - [ ] **108.5** Nontraditional Magic cards can’t start the game in any zone other than the command zone (see rule...
 - [ ] **108.6** For more information about cards, see section 2, “Parts of a Card.”
@@ -345,7 +345,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 122. Counters
 
-- [x] **122.1** A counter is a marker placed on an object or player that modifies its characteristics and/or inte... *(15 tests, subrules af)*
+- [x] **122.1** A counter is a marker placed on an object or player that modifies its characteristics and/or inte... *(20 tests, subrules af)*
 - [x] **122.2** Counters on an object are not retained if that object moves from one zone to another. The counter... *(1 tests)*
 - [x] **122.3** If a permanent has both a +1/+1 counter and a -1/-1 counter on it, N +1/+1 and N -1/-1 counters a... *(2 tests)*
 - [ ] **122.4** If a permanent with an ability that says it can’t have more than N counters of a certain kind on ...
@@ -380,7 +380,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 205. Type Line
 
 - [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(5 tests, subrules ab)*
-- [x] **205.2** Card Types *(7 tests, subrules ab)*
+- [x] **205.2** Card Types *(8 tests, subrules ab)*
 - [x] **205.3** Subtypes *(3 tests, subrules bi)*
 - [x] **205.4** Supertypes *(10 tests, subrules abcd)*
 
@@ -430,7 +430,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **303.1** A player who has priority may cast an enchantment card from their hand during a main phase of the... *(2 tests)*
 - [x] **303.2** When an enchantment spell resolves, its controller puts it onto the battlefield under their control. *(4 tests)*
 - [x] **303.3** Enchantment subtypes are always a single word and are listed after a long dash: “Enchantment — Sh... *(3 tests)*
-- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(38 tests, subrules abcdefghijm)*
+- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(39 tests, subrules abcdefghijm)*
 - [x] **303.5** Some enchantments have the subtype “Saga.” See rule 714 for more information about Saga cards. *(2 tests)*
 - [x] **303.6** Some enchantments have the subtype “Class.” See rule 716 for more information about Class cards. *(2 tests)*
 - [x] **303.7** Some Aura enchantments also have the subtype “Role.” *(3 tests, subrules a)*
@@ -542,10 +542,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 407. Ante
 
-- [x] **407.1** Earlier versions of the Magic rules included an ante rule as a way of playing “for keeps.” Playin... *(4 tests)*
+- [x] **407.1** Earlier versions of the Magic rules included an ante rule as a way of playing “for keeps.” Playin... *(5 tests)*
 - [x] **407.2** When playing for ante, each player puts one random card from their deck into the ante zone after ... *(17 tests)*
 - [x] **407.3** A few cards have the text “Remove this card from your deck before playing if you’re not playing f... *(17 tests)*
-- [x] **407.4** To ante an object is to put that object into the ante zone from whichever zone it’s currently in.... *(7 tests)*
+- [x] **407.4** To ante an object is to put that object into the ante zone from whichever zone it’s currently in.... *(10 tests)*
 
 ### 408. Command
 
@@ -626,7 +626,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(46 tests, subrules abcghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(48 tests, subrules abcghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(9 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
@@ -662,8 +662,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(123 tests, subrules abcdefghi)*
-- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(6 tests)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(130 tests, subrules abcdefghi)*
+- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(10 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
 - [ ] **601.6** Some spells specify that one of their controller’s opponents does something the controller would ...
@@ -685,7 +685,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(4 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(6 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(2 tests, subrules c)*
-- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(17 tests, subrules bcde)*
+- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(19 tests, subrules bcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(3 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
 - [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(4 tests)*
@@ -730,7 +730,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(37 tests, subrules bcdhn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(42 tests, subrules bcdhn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -738,7 +738,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **609.1** An effect is something that happens in the game as a result of a spell or ability. When a spell, ... *(3 tests)*
 - [x] **609.2** Effects apply only to permanents unless the instruction’s text states otherwise or they clearly c... *(3 tests)*
 - [x] **609.3** If an effect attempts to do something impossible, it does only as much as possible. *(4 tests)*
-- [x] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat... *(4 tests)*
+- [x] **609.4** Some effects state that a player may do something “as though” some condition were true or a creat... *(5 tests)*
 - [ ] **609.5** If an effect could result in a tie, the text of the spell or ability that created the effect will...
 - [ ] **609.6** Some continuous effects are replacement effects or prevention effects. See rules 614 and 615.
 - [x] **609.7** Some effects apply to damage from a source—for example, “The next time a red source of your choic... *(3 tests, subrules bc)*
@@ -772,10 +772,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(76 tests, subrules bcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(78 tests, subrules bcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(13 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
-- [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(71 tests, subrules abcd)*
+- [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(72 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [ ] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each...
 - [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(17 tests, subrules be)*
@@ -857,7 +857,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.14** Fight *(4 tests, subrules abd)*
 - [x] **701.17** Mill *(5 tests, subrules a)*
 - [x] **701.18** Play *(4 tests, subrules a)*
-- [x] **701.19** Regenerate *(24 tests, subrules abc)*
+- [x] **701.19** Regenerate *(26 tests, subrules abc)*
 - [x] **701.20** Reveal *(2 tests, subrules a)*
 - [x] **701.21** Sacrifice *(10 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
@@ -871,7 +871,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.2** Deathtouch *(4 tests, subrules bc)*
 - [x] **702.3** Defender *(6 tests, subrules b)*
 - [x] **702.4** Double Strike *(3 tests, subrules b)*
-- [x] **702.5** Enchant *(5 tests, subrules a)*
+- [x] **702.5** Enchant *(7 tests, subrules a)*
 - [x] **702.6** Equip *(15 tests, subrules ace)*
 - [x] **702.7** First Strike *(5 tests, subrules b)*
 - [x] **702.8** Flash *(2 tests, subrules ab)*
@@ -883,7 +883,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.15** Lifelink *(8 tests, subrules b)*
 - [x] **702.16** Protection *(41 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
-- [x] **702.18** Shroud *(3 tests, subrules a)*
+- [x] **702.18** Shroud *(4 tests, subrules a)*
 - [x] **702.19** Trample *(9 tests, subrules bf)*
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
 - [x] **702.22** Banding *(35 tests, subrules abcdefghjk)*
