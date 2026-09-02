@@ -306,9 +306,19 @@ def _lower_gain_keyword(
     # block trigger fire once with several creatures in hand and no way to say
     # which "that creature" is, so the narrowing has to be printed. Under any
     # other event the words name nothing and the refusal below stands.
+    #
+    # "…**the other** creature gains first strike until end of turn." (Mammoth
+    # Harness.) The same referent under a different printed word: a block binds
+    # two creatures, the trigger's own is one of them, and the ordinal names the
+    # one left — which is exactly the creature ``block_pair_permanents``
+    # returns. ``lowering/destruction.py`` already reads the pair's two
+    # spellings as one referent (Thicket Basilisk's "that creature", Infinite
+    # Authority's "the other creature"); this is that same equality in the
+    # keyword family, and the ordinal is admitted **only** here, where a pair is
+    # what the trigger bound.
     if (
         isinstance(node.subject, ast.TargetSpec)
-        and node.subject.quantifier == "that"
+        and node.subject.quantifier in ("that", "other")
         and binds_block_pair(event, event_subject)
     ):
         if _restrictions_beyond(node.subject.filter, frozenset({"card_types"})):

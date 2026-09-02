@@ -153,6 +153,60 @@ def _readable_controlled_board(match: "re.Match[str]") -> bool:
 
 
 @lru_cache(maxsize=None)
+def _block_partner_phrase(phrase: str) -> "dict | None":
+    """"a blue creature" in a block-history clause, as a filter payload.
+
+    The same reader :func:`_controlled_board_phrase` is, for the reason it gives
+    about its own phrase: `subject_matches` answers this clause at every
+    activation, and a second reader of "a blue creature" would be free to
+    disagree with it. The *negative* article that reader also admits is refused
+    here -- "blocked or was blocked by **no** blue creature" is a sentence Magic
+    does not print, and reading it as presence would be a restriction lifted on
+    exactly the board the card forbids.
+    """
+    read = _controlled_board_phrase(phrase)
+    if read is None:
+        return None
+    described, present = read
+    return described if present else None
+
+
+def _readable_block_partner(match: "re.Match[str]") -> bool:
+    """Whether the creature a block-history clause names is one this can test."""
+    return _block_partner_phrase(match.group("partner")) is not None
+
+
+def _blocked_or_was_blocked_by_this_turn(
+    game: "Game", controller_index: int, source, match: "re.Match[str]"
+) -> bool:
+    """"Activate only if this creature blocked or was blocked by a blue creature
+    this turn." (Sea Troll.)
+
+    CR 509.1a's relation read in both directions -- one printed clause, one
+    question -- off the pair records the declare blockers step keeps.
+    `turn_state.block_partners_this_turn` is the one reader of both lists, so
+    "blocked" and "was blocked by" cannot come to mean two different windows,
+    and a creature an *effect* made block counts exactly as a declared one does.
+
+    The noun phrase is payload, exactly as the board clause's is: a card
+    printing "…by a green creature" or "…by a Wall" is this rule and needs no
+    row here. CR 109.5's observer is the seat whose ability this is.
+    """
+    from .subject_filters import subject_matches
+    from .turn_state import block_partners_this_turn
+
+    described = _block_partner_phrase(match.group("partner"))
+    if described is None or source is None:
+        return False
+    return any(
+        subject_matches(
+            game, other, described, observer=controller_index, source=source
+        )
+        for other in block_partners_this_turn(game, source)
+    )
+
+
+@lru_cache(maxsize=None)
 def _counted_board_phrase(phrase: str) -> "dict | None":
     """"snow Swamps" as a filter payload, for a clause that *counts* them.
 
@@ -1060,6 +1114,22 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         _blocked_by_at_least,
         "not enough creatures are blocking it",
         reads_payload=True,
+    ),
+    ActivationRestriction(
+        # "Activate only if this creature blocked or was blocked by a blue
+        # creature this turn." (Sea Troll.) A *history* clause rather than a
+        # board one -- the creature it names may be dead, and the row above asks
+        # about a block happening right now. Beside it all the same, because
+        # what makes both readable is the one thing: a printed noun phrase the
+        # matcher can test, refused by `payload_readable` when it is not.
+        re.compile(
+            r"^activate only if this creature blocked or was blocked by "
+            r"(?P<partner>.+) this turn$"
+        ),
+        _blocked_or_was_blocked_by_this_turn,
+        "it hasn't been in a block with such a creature this turn",
+        reads_payload=True,
+        payload_readable=_readable_block_partner,
     ),
     ActivationRestriction(
         re.compile(

@@ -1738,6 +1738,15 @@ class PermanentStateMixin:
             target_perm.effective_card.name
         ) != name_key(str(filt.named)):
             return False
+        # "Creatures **with flying** get +1/+1." (Serra Aviary.) Layer 6 asked
+        # from layer 7c — ``has_keyword``, never ``card.keywords``, so a
+        # creature wearing an Aura's flying is in the anthem (CR 613.1f) and one
+        # a removal took it from is out. The reads-not-recompute direction is
+        # what makes that free: this predicate runs on every recompute and the
+        # answer is derived each time, so a word gained or lost moves the
+        # creature in or out with nothing to add back or subtract (CR 613.5).
+        if any(not target_perm.has_keyword(word) for word in filt.with_keywords):
+            return False
         return True
 
     def _protection_qualities(self, permanent: Permanent) -> set[tuple[str, str]]:
@@ -2111,6 +2120,21 @@ class PermanentStateMixin:
         _matches = self._lord_buff_matches
 
         # Step 2: re-apply from every permanent currently on the battlefield.
+        #
+        # **Gathered first, then applied in two passes, in CR 613's own order.**
+        # A lord contributes to two layers — 6 (the keyword grants and removals)
+        # and 7c (the P/T delta) — and layer 6 is applied first (CR 613.3,
+        # CR 613.4). That was invisible while every filter asked only about
+        # printed characteristics; "Creatures **with flying** get +1/+1" (Serra
+        # Aviary) makes the 7c pass ask a layer-6 question, so a single pass
+        # would answer it off a half-built layer 6 and the anthem would reach
+        # or miss a creature depending on the order the battlefield happens to
+        # hold its lords in.
+        #
+        # A keyword-filtered buff that itself *grants* a keyword is CR 613.8b's
+        # dependency loop, and it gets 613.8b's answer: pass 2a reads layer 6 as
+        # it stood when the recompute began, which is timestamp order.
+        gathered: list[tuple] = []
         for ctrl_seat, source_perm in self.permanents_with_controller():
             ctrl_player = self.players[ctrl_seat]
             program = compile_card_oracle(_eff_card(source_perm))
@@ -2149,23 +2173,38 @@ class PermanentStateMixin:
                     scope = [p for p in self.players if p is not ctrl_player]
                 else:
                     scope = self.players
-                keywords = list(buff.keywords)
                 flag = (
                     GRANTED_ACTIVATED_ABILITIES[buff.granted_ability]
                     if buff.granted_ability
                     else None
                 )
-                for player in scope:
-                    for target_perm in self.controlled_by(player):
-                        if not _matches(target_perm, source_perm, buff):
-                            continue
-                        _add_static_buff(target_perm, buff)
-                        for keyword in keywords:
-                            add_derived_grant(target_perm, keyword)
-                        for keyword in buff.lost_keywords:
-                            add_derived_removal(target_perm, keyword)
-                        if flag is not None:
-                            _grant_ability(target_perm, flag)
+                gathered.append((source_perm, buff, flag, scope))
+
+        def _reached_by(source_perm, buff, scope):
+            for player in scope:
+                for target_perm in self.controlled_by(player):
+                    if _matches(target_perm, source_perm, buff):
+                        yield target_perm
+
+        # Pass 2a — layer 6 (CR 613.3): every ability this board's lords grant
+        # or take away ("Other Goblins … have mountainwalk", Gravity Sphere's
+        # "All creatures lose flying").
+        for source_perm, buff, _flag, scope in gathered:
+            if not (buff.keywords or buff.lost_keywords):
+                continue
+            for target_perm in _reached_by(source_perm, buff, scope):
+                for keyword in buff.keywords:
+                    add_derived_grant(target_perm, keyword)
+                for keyword in buff.lost_keywords:
+                    add_derived_removal(target_perm, keyword)
+
+        # Pass 2b — layer 7c (CR 613.4c) and the granted activated ability,
+        # over a board whose layer 6 is complete.
+        for source_perm, buff, flag, scope in gathered:
+            for target_perm in _reached_by(source_perm, buff, scope):
+                _add_static_buff(target_perm, buff)
+                if flag is not None:
+                    _grant_ability(target_perm, flag)
 
         # Step 3: conditional self-grants — the keyword half of "…as long as
         # <condition>" (Sigiled Contender's lifelink, Gnarled Sage's

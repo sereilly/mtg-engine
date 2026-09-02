@@ -25,6 +25,7 @@ from .auras import (
     aura_conditional_grant_holds,
     aura_conditional_keyword_grants,
     aura_keyword_grants,
+    aura_keyword_removals,
     aura_pt_grant_per_counter,
     aura_static_pt_grant,
     aura_type_grants,
@@ -537,13 +538,29 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
             for keyword, state in aura_conditional_keyword_grants(text)
             if aura_conditional_grant_holds(perm, state)
         ]
+        stamp = int(aura.metadata.get("aura_timestamp", 0))
+        # "Enchanted creature **loses** flying." (Mammoth Harness.) The same
+        # layer and the same attach timestamp, contributed in the opposite
+        # direction — which is what CR 613.9's ordering needs: a removal
+        # recorded later beats an earlier grant and a grant recorded later beats
+        # an earlier removal, and only two contributions in one order can say
+        # that. Derived here on every recompute like its mirror, so detaching
+        # the Aura gives the ability back with nothing to undo.
+        removed = aura_keyword_removals(text)
+        if removed:
+            effects.append(
+                remove_abilities(
+                    only, list(removed), timestamp=stamp,
+                    label=f"aura:{aura.card.name}",
+                )
+            )
         if not granted:
             continue
         effects.append(
             grant_abilities(
                 only,
                 granted,
-                timestamp=int(aura.metadata.get("aura_timestamp", 0)),
+                timestamp=stamp,
                 label=f"aura:{aura.card.name}",
             )
         )

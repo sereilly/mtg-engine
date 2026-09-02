@@ -214,6 +214,24 @@ class LordBuffFilter:
     # (CR 707.2) and a text change has changed, never the printed face. By name,
     # not identity: a second copy and a token wearing the name both match.
     named: str | None = None
+    # "Creatures **with flying** get +1/+1." (Serra Aviary.) The buffed set
+    # narrowed by an *ability* rather than by a printed characteristic — which
+    # makes it the one field of this filter whose answer comes out of another
+    # layer: the anthem is layer 7c (CR 613.4c) and "has flying" is layer 6, so
+    # it is asked through ``Permanent.has_keyword`` and never read off
+    # ``card.keywords``. A creature wearing an Aura's flying is a creature with
+    # flying (CR 613.1f) and is buffed; one a removal took it from is not.
+    #
+    # CR 613.5's own worked example is this shape one layer over — "White
+    # creatures you control get +1/+1" against a creature an effect turned
+    # white — and it says the same thing this field needs: the set is re-derived
+    # on every recompute, so a creature that gains or loses the word joins or
+    # leaves the anthem at once, with nothing to add or subtract.
+    #
+    # A tuple because a sentence may print a run ("with flying and first
+    # strike"); every word must hold, which is what the English conjunction
+    # means and the only reading :func:`_parse_subject` will produce.
+    with_keywords: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -432,6 +450,7 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
     subtypes: list[str] = []
     supertypes: list[str] = []
     with_plus1_counter = False
+    with_keywords: tuple[str, ...] = ()
 
     # "Each creature you control…" / "All creatures…": a distributive article
     # naming exactly the set an unqualified anthem already reaches, so it is
@@ -497,6 +516,17 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
     if words[index:index + 6] == ["with", "a", "+1/+1", "counter", "on", "it"]:
         with_plus1_counter = True
         index += 6
+    # "Creatures **with flying**…" (Serra Aviary). Read after the counter phrase
+    # above, which also begins with "with": the counter phrase is spelled out
+    # word for word and this one is a keyword run, so trying it first would let
+    # "with a +1/+1 counter on it" fall to :func:`_filter_keywords`, be refused
+    # there, and take a line the counter branch reads perfectly.
+    elif index < len(words) and words[index] == "with":
+        found = _filter_keywords(words[index + 1:])
+        if found is None:
+            return None
+        with_keywords = found
+        index = len(words)
 
     if index != len(words):
         return None
@@ -508,7 +538,30 @@ def _parse_subject(words: list[str]) -> LordBuffFilter | None:
         other_than_source=other,
         qualifiers=tuple(qualifiers),
         with_plus1_counter=with_plus1_counter,
+        with_keywords=with_keywords,
     )
+
+
+def _filter_keywords(words: list[str]) -> tuple[str, ...] | None:
+    """The keyword run "with **flying and first strike**" names, or None.
+
+    Gated on ``grantable_keywords`` rather than on the whole keyword registry,
+    and that is the same gate for the opposite reason it guards a *grant*: a
+    word ``Permanent.has_keyword`` cannot answer makes the restriction silently
+    inert, not loud — the positive form this field takes would then match no
+    creature and the anthem would apply to nothing while the card reports
+    supported. The three words that set excludes ("protection", "landwalk",
+    "bands with other") are category words naming no ability, so
+    ``has_keyword`` answers "no" to each of them for every creature in the pool.
+    """
+    grantable = grantable_keywords()
+    run = " ".join(words)
+    if not run:
+        return None
+    found = tuple(part.strip() for part in re.split(r",| and ", run) if part.strip())
+    if not found or any(word not in grantable for word in found):
+        return None
+    return found
 
 
 def _creature_subtype(word: str) -> str | None:
@@ -641,6 +694,8 @@ def lord_buff_payload(buff: LordBuff) -> dict[str, object]:
         payload["with_plus1_counter"] = True
     if buff.filter.named:
         payload["named"] = buff.filter.named
+    if buff.filter.with_keywords:
+        payload["with_keywords"] = list(buff.filter.with_keywords)
     if buff.keywords:
         payload["keywords"] = list(buff.keywords)
     if buff.lost_keywords:
@@ -668,6 +723,7 @@ def lord_buff_from_payload(payload: dict) -> LordBuff:
             qualifiers=tuple(payload.get("while") or ()),
             with_plus1_counter=bool(payload.get("with_plus1_counter")),
             named=payload.get("named"),
+            with_keywords=tuple(payload.get("with_keywords") or ()),
         ),
         power=int(payload.get("power", 0)),
         toughness=int(payload.get("toughness", 0)),

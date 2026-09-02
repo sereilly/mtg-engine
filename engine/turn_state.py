@@ -138,6 +138,47 @@ def record_block_involvement(permanent, seat: int, seat_turn: int) -> None:
     }
 
 
+#: The two id lists ``phases/declare_blockers_step._record_block_history``
+#: writes, one per side of the relation: the attackers a creature blocked, and
+#: the blockers that blocked it. Named here because :func:`block_partners_this_turn`
+#: is the first reader that wants *both* — "blocked **or was blocked by**" is one
+#: question about a symmetric relation, and reading one list would answer it for
+#: half the combats the creature was in.
+BLOCKED_ATTACKER_IDS_KEY = "blocked_attacker_ids_this_turn"
+BLOCKED_BY_BLOCKER_IDS_KEY = "blocked_by_blocker_ids_this_turn"
+
+
+def block_partners_this_turn(game, permanent) -> list:
+    """Every creature on the far side of a block *permanent* was in this turn.
+
+    Both directions of CR 509.1a's relation, from the pair records the declare
+    blockers step writes — which is where a block becomes a fact about the two
+    permanents rather than about the declaration, so an effect that *made* a
+    creature block (Sorrow's Path) is counted here exactly as a declaration is.
+
+    **Only survivors are returned**, by the same ``permanent_by_id`` resolution
+    every other reader of those lists uses (``handlers/destruction.py``,
+    ``targeting.py``): the record is a list of ids, and a creature that has left
+    the battlefield has no object to ask a characteristic of. That is a real
+    narrowing on a clause like "blocked or was blocked by a blue creature this
+    turn", whose answer under the rules does not depend on the other creature
+    still being there; it is the narrowing this engine already lives with
+    everywhere else these records are read, and closing it means last-known
+    information for a departed permanent, which nothing here has.
+    """
+    ids: list[int] = []
+    for key in (BLOCKED_ATTACKER_IDS_KEY, BLOCKED_BY_BLOCKER_IDS_KEY):
+        for permanent_id in permanent.metadata.get(key) or ():
+            if permanent_id not in ids:
+                ids.append(permanent_id)
+    found = []
+    for permanent_id in ids:
+        other = game.permanent_by_id(permanent_id)
+        if other is not None:
+            found.append(other)
+    return found
+
+
 def in_a_block_since_seats_last_upkeep(game, permanent, seat: int) -> bool:
     """Whether *permanent* has blocked or been blocked since *seat*'s previous
     upkeep (Wiitigo).

@@ -1189,6 +1189,27 @@ _KEYWORD_GRANT = _LazyPattern(lambda: re.compile(
 ))
 
 
+#: "Enchanted creature **loses** flying." (Mammoth Harness.) The exact mirror of
+#: ``_KEYWORD_GRANT``, in the same layer and built out of the same alternation —
+#: which is the point: a word the Aura may grant is a word it may take away, and
+#: two vocabularies would let one of them drift. The optional P/T prefix is the
+#: same split every other pattern in this file makes, so "gets +2/+2 and loses
+#: flying" is one line read into two channels rather than a line matching
+#: nothing.
+#:
+#: Its own pattern rather than an optional verb inside the grant's, because the
+#: two are **opposite contributions to one layer** (CR 613.4/613.9) and the
+#: consumer has to be able to tell them apart: folded together, "loses flying"
+#: would come back through ``aura_keyword_grants`` and hand the host the very
+#: ability the Aura removes. The same reason ``lord_buffs.LordBuff`` keeps
+#: ``lost_keywords`` beside ``keywords`` instead of signing one list.
+_KEYWORD_REMOVAL = _LazyPattern(lambda: re.compile(
+    rf"^{_ATTACHED} {_NOUN}(?: gets [+-]\d+/[+-]\d+ and)? loses "
+    rf"(?P<keyword>(?:{_keyword_alternation()})"
+    rf"(?:(?:, and |, | and )(?:{_keyword_alternation()}))*)$"
+))
+
+
 _COMPOUND_INDESTRUCTIBLE = re.compile(
     rf"^enchanted {_NOUN} has indestructible and can't be enchanted by other auras$"
 )
@@ -1308,6 +1329,30 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
             # the compound is spelled out rather than matched loosely.
             grants.append("indestructible")
     return tuple(grants)
+
+
+def aura_keyword_removals(oracle_text: str) -> tuple[str, ...]:
+    """Keyword abilities an Aura **takes away** from the permanent it enchants.
+
+    "Enchanted creature loses flying." (Mammoth Harness.) CR 613 layer 6 again,
+    and derived on every recompute exactly as :func:`aura_keyword_grants` is —
+    so the ability comes back the moment the Aura stops being attached, with no
+    remembered grant to restore. That symmetry is the reason this is a
+    derivation rather than a `remove_keyword` call at attach time: a stored
+    removal would have to be found and undone by whichever of the ways an Aura
+    can leave happened to run.
+
+    Kept apart from the grant for the reason the module comment on
+    ``_KEYWORD_REMOVAL`` gives: grants and removals share the layer and are
+    opposite contributions, so one list would make them indistinguishable —
+    and the wrong reading of "loses flying" is an Aura that grants it.
+    """
+    removals: list[str] = []
+    for raw_line in (oracle_text or "").split("\n"):
+        match = _KEYWORD_REMOVAL.match(_line_text(raw_line))
+        if match is not None:
+            removals.extend(_keyword_list(match.group("keyword")))
+    return tuple(removals)
 
 
 # ---------------------------------------------------------------------------
@@ -1864,6 +1909,8 @@ def aura_continuous_claim(line: str) -> str | None:
         return "per-counter P/T grant (layer 7c) — auras.aura_pt_grant_per_counter"
     if aura_keyword_grants(normalized):
         return "keyword grant (layer 6) — auras.aura_keyword_grants"
+    if aura_keyword_removals(normalized):
+        return "keyword removal (layer 6) — auras.aura_keyword_removals"
     if aura_conditional_keyword_grants(normalized):
         return (
             "state-conditioned keyword grant (layer 6) — "

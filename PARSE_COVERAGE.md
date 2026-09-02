@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**6 unclaimed sentence(s) across 4 supported card(s).**
+**5 unclaimed sentence(s) across 3 supported card(s).**
 
 - **Aether Storm**
   - `creature spells can't be cast`
@@ -35,8 +35,6 @@ anything anyone did, and every ingest would arrive red.
   - `reveal the top card of target opponent's library`
   - `if it's a land, you gain 1 life`
   - `then that player shuffles`
-- **Rashka the Slayer**
-  - `one or more black creatures, this creature gets +1/+2 until end of turn`
 
 ## Acknowledged simplifications
 

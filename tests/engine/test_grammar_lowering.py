@@ -167,8 +167,21 @@ def test_a_restriction_the_table_cannot_carry_is_refused_not_widened():
     the parser produced, so a restriction the table has no field for refuses
     instead of being silently dropped — and a field added to ``ObjectFilter``
     later is refused by default rather than ignored by a check that predates
-    it."""
-    result = compile_line("Creatures with flying get +1/+1.", card_name="Invented Anthem")
+    it.
+
+    The example used to be "Creatures **with** flying get +1/+1", which Serra
+    Aviary then printed and ``LordBuffFilter.with_keywords`` learned to carry.
+    Its negation is the sharper pin anyway: the two sentences differ by one
+    word, one of them is a restriction the consumer can test and the other is
+    not — so what this asserts is the round trip deciding, rather than the
+    table happening to be small.
+    """
+    carried = compile_line("Creatures with flying get +1/+1.", card_name="Invented Anthem")
+    assert carried.lowered, carried.failure_reason
+
+    result = compile_line(
+        "Creatures without flying get +1/+1.", card_name="Invented Anthem"
+    )
 
     assert result.parsed, result.failure_reason
     assert not result.lowered
