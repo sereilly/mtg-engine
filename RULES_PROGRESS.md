@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**346 / 612 tracked rules covered (56%)** — 1857 tests, 0 unannotated.
+**346 / 612 tracked rules covered (56%)** — 1858 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -707,7 +707,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(3 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
 - [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(11 tests, subrules abc)*
-- [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(4 tests, subrules a)*
+- [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(5 tests, subrules a)*
 - [x] **605.5** Abilities that don’t meet the criteria specified in rules 605.1a–b and spells aren’t mana abilities. *(3 tests, subrules ab)*
 
 ### 606. Loyalty Abilities

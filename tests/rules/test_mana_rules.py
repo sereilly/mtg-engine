@@ -622,3 +622,63 @@ def test_106_6_a_restriction_narrows_a_payment_not_only_a_cast():
     assert restriction_admits(
         "artifact", PaymentPurpose(ACTIVATE, source=artifact)
     ) is False
+
+
+# --- W2G5: what the inline land-tap fire site may resolve ---
+
+
+def _w2g5_land_tap_watcher(text: str) -> CardDefinition:
+    """An invented permanent whose one line watches lands being tapped for mana.
+    Invented rather than named, because what is under test is which *effects*
+    the fire site may carry out — a question about the site, not about a card."""
+    return CardDefinition(
+        name="W2G5 Land Watcher", mana_cost="{2}{R}", cmc=3.0,
+        type_line="Enchantment", oracle_text=text, colors=("R",),
+        color_identity=("R",), keywords=(), produced_mana=(), raw={},
+    )
+
+
+@pytest.mark.cr("605.4a")
+def test_the_land_tap_site_resolves_damage_and_skips_what_it_cannot():
+    """CR 605.4a keeps a triggered mana ability off the stack, so this event is
+    resolved inline — inside a cost payment (CR 601.2g), where there is no
+    priority window to give a non-mana effect.
+
+    The arm that carries out Manabarbs' damage used to be the loop's ``else``:
+    any instruction kind it did not recognize was read for an ``amount`` and
+    dealt as damage, defaulting to 1. A trigger on this event whose effect is a
+    *draw* therefore dealt a point of damage — silently, on a card reporting
+    itself supported. The kind is now named, and anything else is skipped with a
+    line in the log."""
+    from engine.oracle import compile_card_oracle
+
+    burn = _w2g5_land_tap_watcher(
+        "Whenever a player taps a Mountain for mana, "
+        "this enchantment deals 2 damage to that player."
+    )
+    draw = _w2g5_land_tap_watcher(
+        "Whenever a player taps a Mountain for mana, that player draws a card."
+    )
+    assert compile_card_oracle(burn).supported
+    assert compile_card_oracle(draw).supported, (
+        "both lower; the difference is what the fire site can perform"
+    )
+
+    for card, expected_life, expected_hand in ((burn, 18, 0), (draw, 20, 0)):
+        game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+        game.enforce_mana_costs = False
+        game._put_permanent_onto_battlefield(0, Permanent(card=card), None)
+        mountain = CardDefinition(
+            name="Mountain", mana_cost="", cmc=0.0, type_line="Basic Land — Mountain",
+            oracle_text="", colors=(), color_identity=(), keywords=(),
+            produced_mana=("R",), raw={},
+        )
+        game._put_permanent_onto_battlefield(0, Permanent(card=mountain), None)
+        game.players[0].library = [mountain]
+
+        assert game.tap_land_for_mana(0, "Mountain")
+
+        assert game.players[0].life == expected_life
+        assert len(game.players[0].hand) == expected_hand, (
+            "the draw is skipped, not turned into damage"
+        )

@@ -191,6 +191,46 @@ def _parse_damage_dealt_event(
     return ast.TriggerEvent("damage_dealt", word, subject=subject)
 
 
+def _accept_land_tapped_for_mana_by_a_player(
+    stream: TokenStream,
+) -> ast.TriggerEvent | None:
+    """``a player taps <land phrase> for mana`` — the event, or None.
+
+    The active-voice spelling of ``land_tapped_for_mana``, which
+    ``_WHENEVER_EVENTS`` carries only in its unnarrowed form ("a player taps a
+    land for mana", Manabarbs): that table matches literal words and has no
+    slot for the noun phrase Winter's Night prints. The same words are already
+    read one module up for the *delayed* spelling of this ability
+    (``delayed._parse_land_tapped_for_mana``, Chaos Moon's odd branch); this
+    reader is its printed-on-a-permanent twin and produces the same subject
+    filter, so the fire site tests one narrowing however the ability was made.
+
+    A land, and the parser says so rather than the fire site: the tap seam only
+    ever announces a land, so a phrase describing anything else would arm an
+    ability that can never fire. Non-consuming on refusal, so every other
+    "whenever a player …" opener keeps its reading.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("a", "player", "taps"):
+        stream.reset(mark)
+        return None
+    stream.accept_word("a", "an")
+    try:
+        land = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("for", "mana"):
+        stream.reset(mark)
+        return None
+    if land.card_types not in ((), ("land",)) or (
+        not land.subtypes and not land.supertypes and land.card_types != ("land",)
+    ):
+        stream.reset(mark)
+        return None
+    return ast.TriggerEvent("land_tapped_for_mana", "whenever", subject=land)
+
+
 def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
     """"Whenever **a Forest an opponent controls** becomes tapped" (Lifetap) /
     "Whenever **a Mountain** is tapped for mana" (Gauntlet of Might).
@@ -209,6 +249,15 @@ def _parse_quantified_tap_event(stream: TokenStream) -> ast.TriggerEvent | None:
     exists to catch.
     """
     mark = stream.mark()
+    # "Whenever **a player taps a snow land for mana**" (Winter's Night). The
+    # active voice of the same event, which ``_WHENEVER_EVENTS`` carries only as
+    # a fixed seven-word phrase with no room for a narrowing — so a card that
+    # names one falls past the table to here. Read before the passive probe
+    # below because "a player" would otherwise be parsed as the tapped subject
+    # and the phrase would fail on "taps".
+    active = _accept_land_tapped_for_mana_by_a_player(stream)
+    if active is not None:
+        return active
     spec = parse_target_spec(stream)
     # Only the indefinite "a <filter>" reading. "each"/"all"/"target" would be a
     # different event, and "this"/"enchanted" belong to the table above.
