@@ -29,7 +29,8 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
                              PER_OBJECT_SEAT_RECORDS,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
-from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
+from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_CAST_DAMAGE,
+                      CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       COUNTED_NUMBER, CREATED_TOKEN, DAMAGE_RECIPIENT,
                       EXILED_THIS_WAY, _PERMANENTS_GIVEN_COUNTERS,
                       _REANIMATED_PERMANENTS)
@@ -303,6 +304,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # because by the time the life gain runs the permanent is gone — reading it
     # off the battlefield would find nothing and gain nothing.
     "bounce_target_creature": "returned_mana_value",
+    # "Destroy enchanted land **and this Aura deals 2 damage to that land's
+    # controller**." (Orcish Mine.) The victim's seat, read before the destroy:
+    # the sentence behind this step names a player and the only place that
+    # player exists by then is this record (CR 608.2h).
+    "destroy_attached_permanent": ATTACHED_PERMANENT_CONTROLLER,
     # "Destroy target artifact. You gain life equal to **its** mana value."
     # (Divine Offering.) The destruction records the mana value of the
     # permanent it was aimed at — read *before* the destroy, so a regenerated

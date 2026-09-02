@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**341 / 612 tracked rules covered (55%)** — 1734 tests, 0 unannotated.
+**342 / 612 tracked rules covered (55%)** — 1744 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -29,7 +29,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [117. Timing and Priority](#117-timing-and-priority) | 6/6 | 100% |
 | [118. Costs](#118-costs) | 9/14 | 64% |
 | [119. Life](#119-life) | 3/10 | 30% |
-| [120. Damage](#120-damage) | 4/10 | 40% |
+| [120. Damage](#120-damage) | 5/10 | 50% |
 | [121. Drawing a Card](#121-drawing-a-card) | 3/9 | 33% |
 | [122. Counters](#122-counters) | 4/9 | 44% |
 | [200. General](#200-general) | 0/3 | 0% |
@@ -320,10 +320,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 120. Damage
 
-- [ ] **120.1** Objects can deal damage to battles, creatures, planeswalkers, and players. This is generally detr...
+- [x] **120.1** Objects can deal damage to battles, creatures, planeswalkers, and players. This is generally detr... *(1 tests, subrules a)*
 - [ ] **120.2** Any object can deal damage.
-- [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(6 tests, subrules acf)*
-- [x] **120.4** Damage is processed in a four-part sequence. *(11 tests, subrules bc)*
+- [x] **120.3** Damage may have one or more of the following results, depending on whether the recipient of the d... *(7 tests, subrules acf)*
+- [x] **120.4** Damage is processed in a four-part sequence. *(12 tests, subrules bc)*
 - [ ] **120.5** Damage dealt to a creature, planeswalker, or battle doesn’t destroy it. Likewise, the source of t...
 - [ ] **120.6** Damage marked on a creature remains until the cleanup step, even if that permanent stops being a ...
 - [x] **120.7** The source of damage is the object that dealt it. If an effect requires a player to choose a sour... *(1 tests)*
@@ -508,7 +508,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 403. Battlefield
 
-- [x] **403.1** Most of the area between the players represents the battlefield. The battlefield starts out empty... *(2 tests)*
+- [x] **403.1** Most of the area between the players represents the battlefield. The battlefield starts out empty... *(3 tests)*
 - [ ] **403.2** A spell or ability affects and checks only the battlefield unless it specifically mentions a play...
 - [x] **403.3** Permanents exist only on the battlefield. Every object on the battlefield is a permanent. See rul... *(2 tests)*
 - [x] **403.4** Whenever a permanent enters the battlefield, it becomes a new object and has no relationship to a... *(2 tests)*
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(122 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(123 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(6 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -675,7 +675,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(22 tests, subrules ab)*
 - [ ] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou...
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
-- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(28 tests, subrules ac)*
+- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(31 tests, subrules ac)*
 
 ### 603. Handling Triggered Abilities
 
@@ -696,7 +696,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **604.1** Static abilities do something all the time rather than being activated or triggered. They are wri... *(2 tests)*
 - [x] **604.2** Static abilities create continuous effects, some of which are prevention effects or replacement e... *(2 tests)*
-- [x] **604.3** Some static abilities are characteristic-defining abilities. A characteristic-defining ability co... *(12 tests)*
+- [x] **604.3** Some static abilities are characteristic-defining abilities. A characteristic-defining ability co... *(15 tests)*
 - [ ] **604.4** Many Auras, Equipment, and Fortifications have static abilities that modify the object they’re at...
 - [ ] **604.5** Some static abilities apply while a spell is on the stack. These are often abilities that refer t...
 - [ ] **604.6** Some static abilities apply while a card is in any zone that you could cast or play it from (usua...
@@ -754,7 +754,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 611. Continuous Effects
 
 - [x] **611.1** A continuous effect modifies characteristics of objects, modifies control of objects, or affects ... *(2 tests)*
-- [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(21 tests, subrules abc)*
+- [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(22 tests, subrules abc)*
 - [x] **611.3** A continuous effect may be generated by the static ability of an object. *(49 tests, subrules abc)*
 
 ### 612. Text-Changing Effects
@@ -775,7 +775,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(76 tests, subrules bcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(13 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
-- [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(70 tests, subrules abcd)*
+- [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(71 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [ ] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each...
 - [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(17 tests, subrules be)*
@@ -794,7 +794,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **614.6** If an event is replaced, it never happens. A modified event occurs instead, which may in turn tri... *(9 tests)*
 - [x] **614.7** If a replacement effect would replace an event, but that event never happens, the replacement eff... *(5 tests, subrules a)*
 - [x] **614.8** Regeneration is a destruction-replacement effect. The word “instead” doesn’t appear on the card b... *(9 tests)*
-- [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(8 tests)*
+- [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(11 tests)*
 - [x] **614.10** An effect that causes a player to skip an event, step, phase, or turn is a replacement effect. “S... *(4 tests, subrules a)*
 - [ ] **614.11** Some effects replace card draws. These effects are applied even if no cards could be drawn becaus...
 - [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(3 tests)*
@@ -812,7 +812,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **615.4** Prevention effects must exist before the appropriate damage event occurs—they can’t “go back in t...
 - [x] **615.5** Some prevention effects also include an additional effect, which may refer to the amount of damag... *(1 tests)*
 - [x] **615.6** If damage that would be dealt is prevented, it never happens. A modified event may occur instead,... *(1 tests)*
-- [x] **615.7** Some prevention effects generated by the resolution of a spell or ability refer to a specific amo... *(10 tests)*
+- [x] **615.7** Some prevention effects generated by the resolution of a spell or ability refer to a specific amo... *(12 tests)*
 - [x] **615.8** Some prevention effects generated by the resolution of a spell or ability refer to the next time ... *(7 tests)*
 - [x] **615.9** Some effects generated by the resolution of a spell or ability prevent damage from a source of a ... *(4 tests)*
 - [ ] **615.10** Some prevention effects generated by static abilities refer to a specific amount of damage—for ex...
@@ -880,7 +880,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.11** Hexproof *(2 tests, subrules bd)*
 - [x] **702.12** Indestructible *(2 tests, subrules b)*
 - [x] **702.14** Landwalk *(17 tests, subrules abc)*
-- [x] **702.15** Lifelink *(7 tests, subrules b)*
+- [x] **702.15** Lifelink *(8 tests, subrules b)*
 - [x] **702.16** Protection *(41 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(3 tests, subrules a)*

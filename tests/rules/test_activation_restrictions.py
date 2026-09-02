@@ -20,7 +20,7 @@ from engine.activation_restrictions import (
     unreadable_activation_clauses,
 )
 from engine.card_loader import load_catalog
-from engine.named_counters import add_counters
+from engine.named_counters import add_counters, counters_on
 from engine.models import CardDefinition, Permanent, PlayerState
 from tests.helpers import _nosick
 
@@ -520,4 +520,103 @@ def test_602_5_a_board_clause_whose_noun_nothing_can_test_is_unreadable():
     # more" silently answered as "at least one" is a restriction lifted early.
     assert not activation_restriction_line(
         "Activate only if you control two or more snow lands."
+    )
+
+
+# --- "Activate only during an opponent's upkeep", and what a refused
+# --- activation costs (W1G5, Homelands)
+
+
+def _opponent_upkeep_card(cost: str = "{T}") -> CardDefinition:
+    """An artifact whose one ability is gated to an opponent's upkeep.
+
+    Invented for `_clause_card`'s reason, with the cost left open because the
+    second test below is about *what a refusal charges*, which only a non-mana
+    cost can show.
+    """
+    text = f"{cost}: You gain 1 life. Activate only during an opponent's upkeep."
+    return CardDefinition(
+        name="Caravan Engine",
+        mana_cost="{1}",
+        cmc=1.0,
+        type_line="Artifact",
+        oracle_text=text,
+        colors=(),
+        color_identity=(),
+        keywords=(),
+        produced_mana=(),
+        raw={"name": "Caravan Engine", "type_line": "Artifact"},
+    )
+
+
+def _opponent_upkeep_game(*, active_seat: int, step: str | None):
+    card = _opponent_upkeep_card()
+    source = Permanent(card=card)
+    _nosick(source)
+    p1 = PlayerState(name="P1", battlefield=[source])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = active_seat
+    game.current_step = step
+    game.current_turn_phase = "beginning" if step == "upkeep" else "precombat_main"
+    game._sync_control()
+    return game, source, card
+
+
+@pytest.mark.cr("602.5")
+def test_602_5_an_opponents_upkeep_is_a_step_and_a_seat():
+    """"Activate only during an opponent's upkeep." (Trade Caravan.)
+
+    Two halves, and dropping either one widens the window: the *step* (an
+    opponent's main phase is not their upkeep) and the *seat* (your own upkeep
+    is an upkeep). A row that answered only one would be a restriction wearing
+    the card's words while permitting activations the card forbids -- this
+    file's whole subject.
+    """
+    game, source, card = _opponent_upkeep_game(active_seat=1, step="upkeep")
+    assert activation_denial(game, 0, source, card.oracle_text) is None
+
+    game, source, card = _opponent_upkeep_game(active_seat=0, step="upkeep")
+    assert activation_denial(game, 0, source, card.oracle_text) is not None
+
+    game, source, card = _opponent_upkeep_game(active_seat=1, step=None)
+    assert activation_denial(game, 0, source, card.oracle_text) is not None
+
+
+@pytest.mark.cr("602.5", "601.2h")
+def test_602_5_a_prohibited_activation_pays_no_counter_removal_cost():
+    """CR 602.5 forbids a player from *beginning* to activate a prohibited
+    ability, so none of CR 601.2's steps happen -- the cost included.
+
+    The activation path used to charge a counter-removal cost (CR 601.2h)
+    **above** the timing gate, so an ability refused here had already given up
+    its counters: the only cost in the engine that was spent during the
+    "may I?" half rather than the "pay" half. Every other cost checks its
+    payability where this one was and pays further down, which is what this
+    asserts by counting the counters after a refusal.
+    """
+    card = _opponent_upkeep_card(cost="Remove two charge counters from this artifact")
+    source = Permanent(card=card)
+    _nosick(source)
+    p1 = PlayerState(name="P1", battlefield=[source])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0          # the controller's own upkeep: refused
+    game.current_step = "upkeep"
+    game.current_turn_phase = "beginning"
+    game._sync_control()
+    add_counters(source, "charge", 3)
+
+    result = game.activate_permanent_ability(0, card.name, permanent_index=0)
+
+    assert not result.supported
+    assert counters_on(source, "charge") == 3
+
+
+@pytest.mark.cr("602.5")
+def test_602_5_the_opponent_upkeep_clause_is_readable_by_the_gate():
+    """The support gate reads the same table the activation path does, so a
+    card printing this clause is admitted rather than refused for it."""
+    assert not unreadable_activation_clauses(
+        _opponent_upkeep_card().oracle_text
     )

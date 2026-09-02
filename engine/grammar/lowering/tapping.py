@@ -35,7 +35,8 @@ from ._common import (
     _targets_payload,
 )
 from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
-                      EVENT_SUBJECT_PLAYER, binds_block_pair,
+                      CHOSEN_PERMANENT, EVENT_SUBJECT_PLAYER,
+                      binds_block_pair,
                       names_attached_permanent)
 
 #: The scratchpad key a tap records what it chose under, so a later sentence
@@ -372,6 +373,55 @@ def _lower_tap(
             return (OracleInstruction("untap_target_permanent", "", several),)
         raise LoweringError("no handler taps or untaps several targets", node=node)
     if not _is_target(spec):
+        # "…unless you **tap an untapped creature you control**." (Koskun
+        # Falls.) A tap the payer *chooses* rather than one the sentence
+        # targets, which is the pick-then-act pair three other lowering families
+        # already emit (`counters`, `destruction`, `control_changes`): the
+        # prompt records one permanent's id and the step behind it acts on that
+        # record. Never a bare `tap_target_permanent` — nothing targeted here,
+        # so the handler would read whatever the resolution context happened to
+        # be carrying.
+        #
+        # Narrow on purpose. The article and the count are what say "one, the
+        # payer picks"; the seat has to be the payer's own board, because that
+        # is what makes this a price the offered seat pays and what
+        # `_action_is_takeable` asks about; and every remaining key must be one
+        # `subject_matches` answers, or the prompt would offer permanents the
+        # printed phrase excludes.
+        if (
+            isinstance(node, ast.Tap)
+            and isinstance(spec, ast.TargetSpec)
+            and spec.quantifier in ("a", "an")
+            and spec.count == 1
+            and spec.filter.controller == "you"
+        ):
+            described = _filter_payload(
+                dataclasses.replace(spec.filter, controller=None)
+            )
+            if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+                raise LoweringError(
+                    "the tap prompt cannot test this restriction", node=node
+                )
+            return (
+                OracleInstruction(
+                    "choose_permanent", "",
+                    {
+                        "result_key": CHOSEN_PERMANENT,
+                        "chooser": "you",
+                        # Off the *chooser's* own battlefield, which is what
+                        # "you control" says — named once as the seat asked and
+                        # once as the board drawn from, exactly as the counter
+                        # placement one family over names it.
+                        "controlled_by": "chooser",
+                        "filter": described,
+                        "prompt": "Choose a permanent to tap.",
+                    },
+                ),
+                OracleInstruction(
+                    "tap_recorded_permanents", "",
+                    {"permanents_from": CHOSEN_PERMANENT},
+                ),
+            )
         raise LoweringError("no handler for non-targeted tap/untap", node=node)
     payload = _filter_payload(spec.filter)
 

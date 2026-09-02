@@ -153,10 +153,17 @@ def _lower_sacrifice_unless_pay(node: ast.SacrificeUnlessPay) -> tuple[OracleIns
 # one more entry in the same list the handler already builds.
 
 
+# ``controller`` is the possessive with nothing in front of it — "**its**
+# controller sacrifices a creature of their choice" (Funeral March). It names
+# the controller of the object the *trigger's own event* was about, which is
+# the same seat ``that_player`` resolves to under an object event, reached by a
+# pronoun instead of a demonstrative. Admitted only under an event that freezes
+# one, exactly as ``that_player`` is: without that gate "its" would fall
+# through to the handler's unknown-payer branch, or worse, to the caster.
 _SACRIFICE_PAYERS: frozenset[str] = frozenset(
     {
         "you", "each_player", "each_opponent", "target_opponent",
-        "target_player", "that_player",
+        "target_player", "that_player", "controller",
     }
 )
 
@@ -311,6 +318,21 @@ def _lower_sacrifice(
                     f"no event named {event!r} freezes the seat 'that player' names",
                     node=node,
                 )
+        elif node.player.kind == "controller":
+            # "When enchanted creature leaves the battlefield, **its
+            # controller** sacrifices a creature of their choice." (Funeral
+            # March.) The possessive names the departing host's controller, not
+            # the Aura's — they are different seats whenever the Aura is on an
+            # opponent's creature, which is every printing of this card that
+            # matters. By resolution the host is in a graveyard, an exile or a
+            # hand, so the seat is the one the fire site froze (CR 603.10,
+            # idiom 6) rather than one re-derived here.
+            if event not in _EVENT_SUBJECT_CONTROLLERS:
+                raise LoweringError(
+                    f"no event named {event!r} freezes the seat 'its controller' names",
+                    node=node,
+                )
+            payload["who"] = EVENT_SUBJECT_CONTROLLER
         elif node.player.kind != "you":
             payload["who"] = node.player.kind
         return (OracleInstruction("sacrifice_matching_permanent", "", payload),)

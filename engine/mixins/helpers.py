@@ -1319,6 +1319,14 @@ class GameHelpersMixin:
         # filter below has to ask about the token while the stack item names
         # the enchantment.
         leaving: list[tuple[Permanent, dict]] = []
+        # Every permanent attached through the single ``attached_to`` slot, read
+        # once for the whole sweep rather than once per departing permanent: a
+        # mass removal is the common case and this is the one board-wide scan in
+        # the function. (The Aura *list* is on the host, so it costs nothing.)
+        attachments = [
+            perm for perm in self.all_permanents()
+            if perm.metadata.get("attached_to") is not None
+        ]
         for perm in targets:
             seat = self.controller_index_of(perm)
             if seat is None:
@@ -1327,6 +1335,42 @@ class GameHelpersMixin:
                 perm.effective_card, condition_kinds={"leaves_battlefield"}
             ):
                 leaving.append((perm, make_trigger_event(seat, perm, trig)))
+            # "When enchanted creature leaves the battlefield, its controller
+            # sacrifices a creature of their choice." (Funeral March.) The same
+            # CR 603.6c event watched by what the departing permanent is
+            # *carrying* — the mirror of the `attached_creature_dies` scan in
+            # `_fire_creature_dies_triggers`, one event wider: a host exiled,
+            # bounced or tucked never dies, and this is the one transition all
+            # four moves pass through.
+            #
+            # The seat is frozen here, not read at resolution (CR 603.10,
+            # idiom 6): by the time the ability resolves the host is in another
+            # zone with no controller to ask, and under a control-change effect
+            # the seat that controlled it was never its owner. Both spellings of
+            # "attached" are asked because both exist — the list an Aura joins
+            # and the single slot an Equipment sets.
+            attached_context = {"event_subject_controller": seat}
+            observers: list[Permanent] = list(auras_attached_to(perm))
+            for other in attachments:
+                if other.metadata.get("attached_to") is perm and not any(
+                    other is already for already in observers
+                ):
+                    observers.append(other)
+            for observer in observers:
+                observer_seat = self.controller_index_of(observer)
+                if observer_seat is None:
+                    continue
+                for trig in matching_triggers(
+                    observer.effective_card,
+                    condition_kinds={"attached_creature_leaves_battlefield"},
+                ):
+                    leaving.append((
+                        perm,
+                        make_trigger_event(
+                            observer_seat, observer, trig,
+                            trigger_context=dict(attached_context),
+                        ),
+                    ))
             # "When **the token** leaves the battlefield, sacrifice this
             # enchantment." (Dance of Many.) The same CR 603.6c event about a
             # different object: the ability belongs to the permanent that

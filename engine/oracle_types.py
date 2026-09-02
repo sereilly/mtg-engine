@@ -522,6 +522,22 @@ COUNTERS_REMOVED = "counters_removed"
 CHOSEN_TARGET_PERMANENTS = "chosen_target_permanents"
 
 
+#: The seat "destroy enchanted land" records: the controller of the permanent
+#: the Aura was attached to, read *before* the destroy (CR 608.2h, idiom 6) so
+#: the sentence behind it — "and this Aura deals 2 damage to **that land's
+#: controller**" (Orcish Mine) — has a seat to name. By resolution the land is a
+#: card in a graveyard, which CR 400.7 makes a different object no board read
+#: can find a controller for; under a control-change effect that seat was never
+#: its owner either.
+#:
+#: Here rather than beside the lowering that gates on it, for ``EXILED_THIS_WAY``'s
+#: reason: the ``destruction`` handler writes it, the ``damage`` handler reads
+#: it and ``grammar/lowering/_records._PRODUCES`` declares it, so the three sit
+#: at opposite ends of the pipeline and a second spelling would make the
+#: producer gate vacuous while the handler read an empty record.
+ATTACHED_PERMANENT_CONTROLLER = "attached_permanent_controller"
+
+
 PER_OBJECT_SEAT_RECORDS: dict[str, str] = {
     "controller_when_blocked": "blocked_controller_seats",
     # "For each creature exiled this way, **its controller** draws a card."

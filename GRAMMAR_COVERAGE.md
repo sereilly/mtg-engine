@@ -28,7 +28,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4ED | 368 | 520 | 90.4% | 90.0% | 53.8% | 246 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| HML *(measured)* | 115 | 189 | 81.0% | 78.8% | 52.4% | 74 |
+| HML *(measured)* | 115 | 189 | 83.1% | 81.0% | 54.5% | 77 |
 | **All (shipped)** | **2890** | **4196** | **88.0%** | **87.1%** | **56.1%** | **1985** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -41,9 +41,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 235 | 102 | expected a subject |  |
+| 232 | 99 | expected a subject |  |
 | 118 | 51 | unrecognized effect verb |  |
-| 59 | 29 | unconsumed text |  |
+| 58 | 28 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 16 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -1251,6 +1251,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}: This creature gets +1/+1 until end of turn.`
 - **Fumarole**
   - `Destroy target creature and target land.`
+- **Funeral March**
+  - `When enchanted creature leaves the battlefield, its controller sacrifices a creature of their choice.`
 - **Fungal Bloom**
   - `{G}{G}: Put a spore counter on target Fungus.`
 - **Fungal Rebirth**
@@ -1890,6 +1892,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `All Swamps are 1/1 black creatures that are still lands.`
   - `All Swamps are 1/1 black creatures that are still lands.`
   - `All Swamps are 1/1 black creatures that are still lands.`
+- **Koskun Falls**
+  - `At the beginning of your upkeep, sacrifice this enchantment unless you tap an untapped creature you control.`
 - **Koskun Keep**
   - `{T}: Add {C}.`
   - `{1}, {T}: Add {R}.`
@@ -2369,6 +2373,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice a Forest: Add three mana in any combination of {R} and/or {G}.`
 - **Orcish Mechanics**
   - `{T}, Sacrifice an artifact: This creature deals 2 damage to any target.`
+- **Orcish Mine**
+  - `When the last ore counter is removed from this Aura, destroy enchanted land and this Aura deals 2 damage to that land's controller.`
 - **Orcish Oriflamme**
   - `Attacking creatures you control get +1/+0.`
   - `Attacking creatures you control get +1/+0.`
@@ -3446,6 +3452,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{G}{G}, {T}: This creature deals damage equal to its power to target creature. That creature deals damage equal to its power to this creature.`
 - **Trade Caravan**
   - `At the beginning of your upkeep, put a currency counter on this creature.`
+  - `Remove two currency counters from this creature: Untap target basic land. Activate only during an opponent's upkeep.`
 - **Trailblazer**
   - `Target creature can't be blocked this turn.`
 - **Traitorous Greed**

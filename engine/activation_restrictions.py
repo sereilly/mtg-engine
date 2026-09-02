@@ -365,6 +365,19 @@ def _during_your_upkeep(game: "Game", controller_index: int, source) -> bool:
     return game.current_step == "upkeep" and game.active_player_index == controller_index
 
 
+def _during_an_opponents_upkeep(game: "Game", controller_index: int, source) -> bool:
+    """"Activate only during an opponent's upkeep." (Trade Caravan.)
+
+    The third upkeep window, and a row of its own rather than a tail on
+    `_during_your_upkeep` for the reason Norritt is a row beside Nettling Imp:
+    the seat *is* the restriction here, and the two clauses are satisfied by
+    disjoint turns. The seat test is the spelling
+    `_opponents_turn_before_attackers` already uses -- this engine has no teams,
+    so every seat that is not yours is an opponent (CR 102.1).
+    """
+    return game.current_step == "upkeep" and game.active_player_index != controller_index
+
+
 def _during_your_turn(game: "Game", controller_index: int, source) -> bool:
     """Disrupting Scepter, Instill Energy. The "only once each turn" half of
     Instill Energy's clause is *not* here: it is per-permanent state, not a
@@ -1185,6 +1198,11 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         re.compile(r"^activate only during your upkeep$"),
         _during_your_upkeep,
         "only during your upkeep",
+    ),
+    ActivationRestriction(
+        re.compile(r"^activate only during an opponent's upkeep$"),
+        _during_an_opponents_upkeep,
+        "only during an opponent's upkeep",
     ),
     ActivationRestriction(
         re.compile(r"^activate only during your turn$"),

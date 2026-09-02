@@ -170,7 +170,16 @@ class DeclareAttackersStepMixin:
         # payment, planned here - before anything is tapped and before anything
         # is committed - so the gate and the charge below read the same board.
         declaration_mana, mana_plan = self._declaration_mana_plan(
-            controller_index, declared_attackers
+            controller_index,
+            declared_attackers,
+            # Who each attacker is attacking, in the order the attackers are
+            # listed — CR 508.5's planeswalker attacks contribute None, because
+            # a toll on attacking a *player* (Koskun Falls) is not owed by a
+            # creature attacking that player's planeswalker.
+            [
+                None if idx in per_attacker_walker else per_attacker_defender[idx]
+                for idx in unique_indices
+            ],
         )
         if declaration_mana and mana_plan is None:
             return False, (
@@ -410,17 +419,28 @@ class DeclareAttackersStepMixin:
             f"({len(plan)} sacrificed)"
         )
 
-    def _attack_mana_costs_of(self, attacker: Permanent) -> list[dict[str, int]]:
+    def _attack_mana_costs_of(
+        self, attacker: Permanent, attacked_seat: int | None = None
+    ) -> list[dict[str, int]]:
         """The mana costs *attacker* owes to be declared (CR 508.1g).
 
         "Enchanted creature can't attack unless its controller pays {3}."
-        (Brainwash.) Two channels, one reader: the restriction printed on the
-        creature itself, which reaches its compiled program as an instruction,
-        and the one printed on an Aura *about* the creature, which does not -
-        that text is on the Aura, so it is read through
-        ``auras.attached_combat_restrictions``. Both come from one table
-        (``combat_restrictions._PATTERNS``) asked with the subject rewritten,
-        which is why a card printing either wording needs nothing here.
+        (Brainwash.) Three channels, one reader: the restriction printed on the
+        creature itself, which reaches its compiled program as an instruction;
+        the one printed on an Aura *about* the creature, which does not - that
+        text is on the Aura, so it is read through
+        ``auras.attached_combat_restrictions``; and the one printed on a
+        permanent the **defending player** controls ("Creatures can't attack you
+        unless their controller pays {2} for each creature they control that's
+        attacking you", Koskun Falls). All three come from one table
+        (``combat_restrictions._PATTERNS``), which is why a card printing any of
+        those wordings needs nothing here.
+
+        *attacked_seat* is the player this attacker is attacking, or None when
+        it attacks a planeswalker instead (CR 508.5 - it still has a defending
+        player, but it is not attacking that **player**, and Koskun Falls' toll
+        is on attacking one). None is also what a caller with no combat in view
+        passes, and it costs only the third channel.
 
         One reader for the gate in ``can_attack`` and the charge in
         ``declare_attackers``, exactly as ``_attack_costs_of`` below is: a cost
@@ -438,6 +458,20 @@ class DeclareAttackersStepMixin:
             for restriction in attached_combat_restrictions(attacker)
             if restriction.kind == "cant_attack_unless_pay"
         ]
+        if attacked_seat is not None:
+            # Once per attacker, which is what "for each creature they control
+            # that's attacking you" prints: the declaration sums every
+            # attacker's costs into one payment
+            # (``_declaration_mana_plan``), so the multiplication is the sum
+            # rather than a number in the payload.
+            sources += [
+                instruction.payload
+                for permanent in self.controlled_by(attacked_seat)
+                for instruction in compile_card_oracle(
+                    permanent.effective_card
+                ).instructions
+                if instruction.kind == "creatures_cant_attack_you_unless_pay"
+            ]
         for payload in sources:
             cost = {
                 symbol: int(amount)
@@ -448,7 +482,10 @@ class DeclareAttackersStepMixin:
         return costs
 
     def _declaration_mana_plan(
-        self, controller_index: int, attackers: list[Permanent]
+        self,
+        controller_index: int,
+        attackers: list[Permanent],
+        attacked_seats: list[int | None] | None = None,
     ):
         """How the whole declaration's CR 508.1g mana is paid, or None.
 
@@ -465,8 +502,9 @@ class DeclareAttackersStepMixin:
         land would otherwise be spent twice.
         """
         total: dict[str, int] = {}
-        for attacker in attackers:
-            for cost in self._attack_mana_costs_of(attacker):
+        seats = attacked_seats or [None] * len(attackers)
+        for attacker, attacked_seat in zip(attackers, seats):
+            for cost in self._attack_mana_costs_of(attacker, attacked_seat):
                 for symbol, amount in cost.items():
                     total[symbol] = total.get(symbol, 0) + amount
         if not total:
@@ -761,7 +799,10 @@ class DeclareAttackersStepMixin:
         # `declare_attackers` is what adds several attackers' costs together;
         # this one answers only for this creature, which is all a per-creature
         # predicate can honestly say.
-        for cost in self._attack_mana_costs_of(attacker):
+        for cost in self._attack_mana_costs_of(
+            attacker,
+            None if attacking_planeswalker else defending_player_index,
+        ):
             if plan_payment(
                 self.players[attacker_seat].mana_pool,
                 [

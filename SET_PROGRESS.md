@@ -23,7 +23,7 @@ Do not edit by hand — re-run the script instead.
 | 9 | Fallen Empires | FEM | 1994-11-01 | 102 | 102 | Complete (102/102 supported) |
 | 10 | Fourth Edition | 4ED | 1995-04-01 | 368 | 0 | Complete (368/368 supported) |
 | 11 | Ice Age | ICE | 1995-06-03 | 373 | 346 | Complete (373/373 supported) |
-| 12 | Homelands | HML | 1995-10-01 | 115 | 115 | Measured (76/115 supported, not shipped) |
+| 12 | Homelands | HML | 1995-10-01 | 115 | 115 | Measured (97/115 supported, not shipped) |
 | 13 | Alliances | ALL | 1996-06-10 | 144 | 144 | Not Implemented |
 | 14 | Mirage | MIR | 1996-10-08 | 335 | 313 | Not Implemented |
 | 15 | Visions | VIS | 1997-02-03 | 167 | 167 | Not Implemented |
