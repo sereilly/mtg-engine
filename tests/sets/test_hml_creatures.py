@@ -1663,3 +1663,265 @@ def test_dwarven_sea_clan_closes_at_the_end_of_combat_step(set_pool):
     assert open_steps == ["upkeep", "precombat_main", "declare_attackers",
                           "combat_damage"]
     assert shut_steps == ["end_of_combat", "postcombat_main", "end"]
+
+
+# --- Giant Oyster: the linked lock ---
+
+from engine import Game, PlayerState  # noqa: E402
+from engine.models import CardDefinition, Permanent  # noqa: E402
+from engine.named_counters import counters_on  # noqa: E402
+from engine.oracle import compile_card_oracle  # noqa: E402
+from engine.targeting import derive_activation_spec  # noqa: E402
+
+
+def _oyster_creature(name: str, power: int = 4, toughness: int = 4) -> CardDefinition:
+    """A vanilla creature big enough to survive two -1/-1 counters, so the
+    release can be observed on a permanent that is still there."""
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Bear",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _oyster_board(set_pool, victim_tapped: bool = True, toughness: int = 4):
+    """The Oyster ready to act, one creature opposite it in the named state."""
+    oyster = Permanent(card=set_pool("HML")["Giant Oyster"])
+    oyster.metadata["summoning_sickness_turn"] = -99
+    victim = Permanent(card=_oyster_creature("Craw Wurm", 4, toughness))
+    victim.tapped = victim_tapped
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[oyster]),
+        PlayerState(name="P2", battlefield=[victim]),
+    ])
+    game.enforce_mana_costs = False
+    game._settle()
+    return game, oyster, victim
+
+
+def _oyster_settle(game):
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+
+def _oyster_lock(game, oyster, victim):
+    result = game.activate_permanent_ability(
+        0, "Giant Oyster", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    _oyster_settle(game)
+    return result
+
+
+def test_giant_oyster_is_supported_in_full(set_pool):
+    """Both printed lines, and the second one is three effects: the untap lock,
+    the draw-step drip and the release. A card is supported when *any* line is,
+    so the ability's own steps are asserted rather than the card's flag."""
+    program = compile_card_oracle(set_pool("HML")["Giant Oyster"])
+
+    assert program.supported
+    assert len(program.activated_abilities) == 1
+    steps = program.activated_abilities[0].instruction.payload["steps"]
+    assert [step.kind for step in steps] == [
+        "restrict_untap_while_source_tapped",
+        "create_delayed_trigger",
+        "create_delayed_trigger",
+    ]
+    assert steps[1].payload["event"] == "controllers_draw_step"
+    assert steps[1].payload["duration"] == "while_source_tapped"
+    assert steps[1].payload["once"] is False
+    assert steps[1].payload["instruction"].kind == "add_counter_to_bound_permanent"
+    assert steps[2].payload["event"] == "bound_permanent_leaves_or_untaps"
+    # "...remove all -1/-1 counters from **the creature**." The definite article
+    # names the creature the sentence in front of it chose, not the Oyster: read
+    # as the bare source pronoun this lowered to `remove_all_counters_from_self`
+    # and the Oyster took its own counters off, with every instrument in the
+    # repo reporting the card fine.
+    assert steps[2].payload["instruction"].kind == "remove_all_counters_from_bound"
+    assert steps[2].payload["binds_target"] is True
+
+
+def test_giant_oyster_offers_only_tapped_creatures(set_pool):
+    """"...**target tapped creature**..." The adjective is part of the target
+    description, so the picker never offers an untapped creature."""
+    game, oyster, tapped = _oyster_board(set_pool)
+    untapped = Permanent(card=_oyster_creature("Fresh Bear"))
+    game.players[1].battlefield.append(untapped)
+    game._settle()
+    ability = compile_card_oracle(oyster.card).activated_abilities[0]
+
+    offered = game._enumerate_targets(
+        0, oyster.card, derive_activation_spec(ability), for_cast=False,
+        ability_instruction=ability.instruction,
+        ability_source=oyster, source_permanent=oyster,
+    )
+
+    assert [entry["name"] for entry in offered] == ["Craw Wurm"]
+
+
+def test_giant_oyster_refuses_with_nothing_tapped_and_pays_nothing(set_pool):
+    """CR 602.2b: an ability whose only target cannot be filled is not
+    activated. The tap in its cost must not be spent - a refusal that tapped the
+    Oyster would hand a free untap lock to nobody."""
+    game, oyster, _victim = _oyster_board(set_pool, victim_tapped=False)
+
+    result = game.activate_permanent_ability(
+        0, "Giant Oyster", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+
+    assert not result.supported
+    assert oyster.tapped is False
+
+
+def test_giant_oyster_holds_its_target_through_the_untap_step(set_pool):
+    """CR 502.3: "effects can keep one or more of a player's permanents from
+    untapping". The record lives on the Oyster and the untap step reads it back,
+    so the restriction lasts as long as the Oyster stays tapped rather than one
+    step."""
+    game, oyster, victim = _oyster_board(set_pool)
+    _oyster_lock(game, oyster, victim)
+
+    assert oyster.tapped is True
+
+    game.resolve_untap_step(1)
+    assert victim.tapped is True
+    game.resolve_untap_step(1)
+    assert victim.tapped is True, "the lock lasted one step instead of a state"
+
+
+def test_giant_oyster_puts_a_counter_on_every_one_of_your_draw_steps(set_pool):
+    """"...at the beginning of **each of** your draw steps, put a -1/-1 counter
+    on that creature." Repeating (CR 603.7b), and the counter carries its P/T
+    with it (CR 122.1a) rather than being a record nothing reads."""
+    game, oyster, victim = _oyster_board(set_pool)
+    _oyster_lock(game, oyster, victim)
+
+    game.resolve_draw_step(0)
+    _oyster_settle(game)
+    assert counters_on(victim, "-1/-1") == 1
+    assert (victim.effective_power, victim.effective_toughness) == (3, 3)
+
+    game.resolve_draw_step(0)
+    _oyster_settle(game)
+    assert counters_on(victim, "-1/-1") == 2
+    assert (victim.effective_power, victim.effective_toughness) == (2, 2)
+
+
+def test_giant_oyster_drips_on_your_draw_step_and_not_the_victims(set_pool):
+    """"**your** draw steps" is seated. Asserted beside the row above, because
+    an unseated announcement passes that one and doubles the card's rate."""
+    game, oyster, victim = _oyster_board(set_pool)
+    _oyster_lock(game, oyster, victim)
+
+    game.resolve_draw_step(1)
+    _oyster_settle(game)
+
+    assert counters_on(victim, "-1/-1") == 0
+
+
+def test_untapping_the_oyster_takes_every_counter_off(set_pool):
+    """"When this creature leaves the battlefield **or becomes untapped**,
+    remove all -1/-1 counters from the creature." The counters come off the
+    creature the ability bound, and the P/T they were carrying comes back with
+    them (CR 122.1a)."""
+    game, oyster, victim = _oyster_board(set_pool)
+    _oyster_lock(game, oyster, victim)
+    game.resolve_draw_step(0)
+    _oyster_settle(game)
+    game.resolve_draw_step(0)
+    _oyster_settle(game)
+    assert counters_on(victim, "-1/-1") == 2
+
+    game.become_untapped(oyster)
+    _oyster_settle(game)
+
+    assert counters_on(victim, "-1/-1") == 0
+    assert (victim.effective_power, victim.effective_toughness) == (4, 4)
+    assert counters_on(oyster, "-1/-1") == 0, (
+        "the Oyster emptied itself instead of the creature it named"
+    )
+
+
+def test_untapping_the_oyster_releases_the_lock_and_stops_the_drip(set_pool):
+    """The whole effect is "for as long as this creature remains tapped", so
+    every part of it ends together - and none of it starts again when the
+    Oyster taps once more (CR 611.2a)."""
+    game, oyster, victim = _oyster_board(set_pool)
+    _oyster_lock(game, oyster, victim)
+
+    game.become_untapped(oyster)
+    _oyster_settle(game)
+
+    game.resolve_untap_step(1)
+    assert victim.tapped is False
+
+    game.become_tapped(oyster)
+    victim.tapped = True
+    game.resolve_draw_step(0)
+    _oyster_settle(game)
+    assert counters_on(victim, "-1/-1") == 0, (
+        "the drip restarted on a duration that had already ended"
+    )
+    game.resolve_untap_step(1)
+    assert victim.tapped is False
+
+
+def test_the_oyster_leaving_the_battlefield_releases_everything(set_pool):
+    """CR 603.6c's wider event, and the same duration read the other way: a
+    permanent off the battlefield is not a tapped permanent on it."""
+    game, oyster, victim = _oyster_board(set_pool)
+    _oyster_lock(game, oyster, victim)
+    game.resolve_draw_step(0)
+    _oyster_settle(game)
+    assert counters_on(victim, "-1/-1") == 1
+
+    game.remove_from_battlefield(oyster)
+    _oyster_settle(game)
+
+    assert counters_on(victim, "-1/-1") == 0
+    assert game.delayed_triggers == []
+    game.resolve_untap_step(1)
+    assert victim.tapped is False
+
+
+def test_the_oyster_keeps_itself_tapped_while_its_lock_is_live(set_pool):
+    """"You may choose not to untap this creature during your untap step."
+
+    A seat that untaps releases what it is holding, which is legal and never
+    what the ability was activated for - so headless and AI play keep the
+    permanent tapped while the lock is live, the same default the linked steal
+    already had. A human's explicit choice still wins."""
+    game, oyster, victim = _oyster_board(set_pool)
+    _oyster_lock(game, oyster, victim)
+
+    game.resolve_untap_step(0)
+    assert oyster.tapped is True
+    assert victim.tapped is True
+
+    game.resolve_untap_step(0, keep_tapped_indices=[])
+    _oyster_settle(game)
+    assert oyster.tapped is False
+    game.resolve_untap_step(1)
+    assert victim.tapped is False
+
+
+def test_the_counters_kill_a_creature_small_enough(set_pool):
+    """CR 704.5f through the ordinary sweep: the drip is real -1/-1 counters
+    and a 2/2 dies on the second one. The release then finds nothing, which is
+    CR 608.2b doing as much as it can rather than a failure."""
+    game, oyster, victim = _oyster_board(set_pool, toughness=2)
+    _oyster_lock(game, oyster, victim)
+
+    game.resolve_draw_step(0)
+    _oyster_settle(game)
+    game.resolve_draw_step(0)
+    _oyster_settle(game)
+
+    assert game.is_on_battlefield(victim) is False
+    game.become_untapped(oyster)
+    _oyster_settle(game)
+    assert any("is gone" in line for line in game.log)

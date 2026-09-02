@@ -300,7 +300,7 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     # than distributed like an ordinary one, because a linked duration is a
     # *string* on that node naming which conditions the sweep re-checks, not a
     # `Duration` any effect can carry.
-    leading_link = _parse_leading_linked_duration(stream)
+    leading_link = _parse_leading_linked_duration(stream, _parse_statement_body)
     if leading_link is not None:
         return leading_link
     revealed = _parse_reveal_hand_and_choose(stream)

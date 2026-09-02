@@ -156,6 +156,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "add_named_counter_to_target": "pump",
     "add_counter_to_self": "pump",
     "add_counter_to_target": "pump",
+    # Giant Oyster's draw-step drip. The bound-object twin of the row above,
+    # in the same category because it is the same effect about an object the
+    # creating ability named rather than one the picker offers.
+    "add_counter_to_bound_permanent": "pump",
     "double_target_power_until_eot": "pump",
     # CR 613.4d layer 7d. "pump" because the switch is the same
     # question the pump category answers — what this permanent's
@@ -184,6 +188,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "player_gets_poison_counters": "counters",
     "remove_counter_from_self": "counters",
     "remove_all_counters_from_self": "counters",
+    # Giant Oyster's release. The bound-object twin of the row above — same
+    # effect, and the object is the one the creating ability bound rather
+    # than the ability's own source.
+    "remove_all_counters_from_bound": "counters",
     # A counter on a **player** (CR 122.1f poison) coming off, the mirror of
     # ``player_gets_poison_counters`` above it. Same category: the store differs
     # and the question does not.

@@ -26,6 +26,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._common import _amount_payload, _describe_targets, _is_source
+from ._events import _BOUND_OBJECT_DELAYED_EVENTS
 
 #: The player counters this engine has a store for. CR 122.1 lets a counter have
 #: any name, and a player carries exactly one kind here
@@ -150,6 +151,36 @@ def _lower_remove_counter(
         return (
             OracleInstruction(
                 "remove_counter_from_attached", "", {"counter": node.counter}
+            ),
+        )
+    # "When this creature leaves the battlefield or becomes untapped, remove all
+    # -1/-1 counters from **the creature**." (Giant Oyster.) The object the
+    # *creating* ability bound (CR 603.7c), named by id in the delayed trigger's
+    # context. Its own kind beside the self-reading removal below, for
+    # ``destroy_bound_permanent``'s reason: that handler empties the ability's
+    # own source, which here is the Oyster rather than the creature it locked
+    # down — a card that would compile clean and take its own counters off.
+    #
+    # Admitted only under an event whose fire site records an object, exactly as
+    # the enchanted-creature row above is gated on the one trigger head that
+    # binds one: everywhere else the words name a creature nobody recorded.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+        and event in _BOUND_OBJECT_DELAYED_EVENTS
+    ):
+        if not isinstance(node.count, ast.AllOf):
+            # "All" is a number nobody knows until the permanent is looked at,
+            # and it is the only count this pair of handlers has. A fixed
+            # removal from a bound object would need its own handler; refusing
+            # leaves the line's refusal rather than emptying what the card meant
+            # to decrement.
+            raise LoweringError(
+                "the bound counter removal takes all of them", node=node
+            )
+        return (
+            OracleInstruction(
+                "remove_all_counters_from_bound", "", {"counter": node.counter}
             ),
         )
     if not _is_source(node.subject):

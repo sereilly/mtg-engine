@@ -325,6 +325,102 @@ def rebind_pump_pronoun_to_sentence_target(statement: ast.Statement) -> ast.Stat
     return replace(statement, steps=tuple(steps))
 
 
+def _rebind_source_watching_delay(node, bound: "ast.TargetSpec"):
+    """*node* with every source-watching delay's bare pronoun pointed at
+    *bound*.
+
+    Narrow on purpose, the way :func:`_rebind_pump_subject` is: it rewrites one
+    node type, under one condition, and leaves every other reading of a bare
+    pronoun exactly as it was. See
+    :func:`rebind_delayed_pronoun_to_sentence_target` for the argument.
+    """
+    if isinstance(node, ast.CreateDelayedTrigger) and node.watches == "source":
+        rebound = _walk_specs(
+            node.effect,
+            lambda spec: (
+                bound
+                if spec.quantifier == "it"
+                and spec.filter.is_source
+                and spec.filter.to_payload() == {}
+                else None
+            ),
+        )
+        if rebound is not node.effect:
+            # CR 603.7c: the ability is now *about* an object the creating
+            # effect chose, which is exactly what ``binds_target`` says — and
+            # the opener already granted the permission by naming a different
+            # object as the one it watches. Set here rather than left to
+            # ``delay_binds_an_object``, which ran on the sentence before the
+            # pronoun had an antecedent and could only answer False.
+            return replace(node, effect=rebound, binds_target=True)
+        return node
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        changes = {
+            field.name: rebound
+            for field in dataclasses.fields(node)
+            for rebound in (_rebind_source_watching_delay(getattr(node, field.name), bound),)
+            if rebound is not getattr(node, field.name)
+        }
+        return replace(node, **changes) if changes else node
+    if isinstance(node, (tuple, list)):
+        walked = [_rebind_source_watching_delay(item, bound) for item in node]
+        if all(a is b for a, b in zip(walked, node)):
+            return node
+        return type(node)(walked)
+    return node
+
+
+def rebind_delayed_pronoun_to_sentence_target(statement: ast.Statement) -> ast.Statement:
+    """"{T}: For as long as this creature remains tapped, **target tapped
+    creature** doesn't untap … . When this creature leaves the battlefield or
+    becomes untapped, remove all -1/-1 counters from **the creature**."
+    (Giant Oyster.)
+
+    The sixth rebinder, and :func:`rebind_pump_pronoun_to_sentence_target`'s
+    sibling: the antecedent is in a *previous sentence of the same printed
+    line*, which nothing inside the second sentence's parse can see.
+    ``parse_recipient`` reads "the creature" as the bare pronoun — the same spec
+    a card naming itself produces — so the removal lowered to
+    ``remove_all_counters_from_self`` and the Oyster took its own counters off.
+    A card that compiles supported, claims every printed sentence and carries no
+    hollow line, doing something other than what it says.
+
+    **The gate is the delay saying which object it watches.** A delay whose
+    opener names its own source ("when **this creature** leaves the battlefield
+    or becomes untapped") has already spent that reference: the sentence behind
+    the comma is about something else, or it is about a permanent the opener
+    just said had left. Merieke Ri Berit, War Barge and Phantasmal Mount all
+    print "that creature" there and are untouched by this; no card in the pool
+    prints a bare pronoun under a source-watching delay meaning its own source,
+    and a card that did would have to say "this creature" to be readable at
+    all — which is a different spec and is not rewritten.
+
+    That narrowness is the whole design, and it is
+    :func:`rebind_pump_pronoun_to_sentence_target`'s lesson applied rather than
+    re-learned: the obvious version walks every spec in every later sentence,
+    and eight shipped cards print a bare "it" after a targeting sentence whose
+    lowerings already resolve the ability's target themselves.
+    """
+    if not isinstance(statement, ast.Sequence):
+        return statement
+    announced: "ast.TargetSpec | None" = None
+    steps: list[ast.Statement] = []
+    for step in statement.steps:
+        if announced is not None:
+            step = _rebind_source_watching_delay(step, announced)
+        elif (found := _announced_target(step)) is not None:
+            # The bound spec keeps the sentence's noun phrase and **stops being
+            # a target**: CR 601.2c chose the object once, when the ability was
+            # activated, and a second targeted spec would ask the picker again.
+            # The same choice :func:`rebind_pronoun_to_delay_target` makes, and
+            # the opposite of the pump one — a delayed ability fires later.
+            announced = replace(found, quantifier="that", targeted=False)
+        steps.append(step)
+    if all(a is b for a, b in zip(steps, statement.steps)):
+        return statement
+    return replace(statement, steps=tuple(steps))
+
+
 def _names_a_target(node) -> bool:
     """Whether any part of *node* announces a target (CR 601.2c)."""
     if isinstance(node, ast.TargetSpec) and node.targeted:

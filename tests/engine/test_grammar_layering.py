@@ -342,7 +342,24 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # like `zones`, `types`, `destruction` and `counter_removal`: the parse side
 # stays in `effects/game.py`, where a token line is one production over a
 # shared body vocabulary.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "types", "destruction", "counter_removal", "tokens", "upkeep"]
+# `untap_restrictions` split out of `lowering/tapping.py` at 1,001, the round
+# Giant Oyster's fronted linked duration landed — along the boundary that
+# module's own docstring had already drawn and then argued against. The line is
+# the CR's: CR 701.20 is a keyword action a resolving effect performs now, which
+# is every production left in `tapping`, and CR 502.3 is "effects can keep one
+# or more of a player's permanents from untapping" — a continuous effect
+# (CR 611.2a) whose only observable moment is a turn-based action a turn or more
+# later, so every production that moved lowers to a *record* the untap step
+# reads back. The name is `engine/untap_restrictions.py`'s, which is the same
+# sentence read off a permanent's own printed line, so the mirror re-forms
+# rather than forking. The two halves share no name in either direction,
+# checked at the split: the one thing they had in common was the scratchpad key
+# a tap records what it chose under, and that already lived in `_events.py`
+# under the same spelling — a second copy of one record key, deleted at the
+# split. Asymmetric like `zones`, `types`, `destruction` and `counter_removal`:
+# the parse side stays in `effects/tapping.py`, where "tap it" and "it doesn't
+# untap" are printed in one sentence on Frost Breath, Telekinesis and Mind Whip.
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "types", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions"]
 # `upkeep` is the fourth lowering-only family and the fourth time the same thing
 # happened: `lowering/damage.py` reached the guard below and shed the
 # pay-or-consequence shapes — the damage a player is *offered the chance not to

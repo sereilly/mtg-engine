@@ -730,6 +730,46 @@ def add_pt_counters_to_attached(game: Game, instruction: OracleInstruction, cont
     return True, "resolved"
 
 
+@effect_handler("add_counter_to_bound_permanent")
+def add_counter_to_bound_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…at the beginning of each of your draw steps, put a -1/-1 counter on
+    **that creature**." (Giant Oyster.)
+
+    The counter's home is the object the *creating* ability bound (CR 603.7c),
+    carried by id in the delayed trigger's context — never a pick. Its own kind
+    beside ``add_counter_to_target`` for ``destroy_bound_permanent``'s reason:
+    routed through the targeted placement, ``engine/targeting.py`` would raise a
+    picker for a choice CR 603.3d says was never offered, and the handler would
+    then put the counter on whichever permanent the resolution context happened
+    to carry.
+
+    Through ``Game.place_pt_counters``, the one placement seam, so the P/T
+    channel and the counter record cannot drift and the CR 704.5q annihilation
+    sweep has a counter to find.
+
+    A creature already gone takes no counter, which is CR 608.2b doing as much
+    as it can rather than a failure — and a repeating ability keeps waiting,
+    because whether it is still armed is its duration's question, not this
+    one's.
+    """
+    victim = game.permanent_by_id(
+        (context.trigger_context or {}).get("bound_permanent_id")
+    )
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: the creature it named is gone")
+        return True, "resolved"
+    kind = str(instruction.payload.get("counter", "+1/+1"))
+    how_many = resolve_amount(instruction.payload.get("count", 1), context.x_value)
+    if how_many <= 0:
+        return True, "resolved"
+    game.place_pt_counters(victim, kind, how_many)
+    game.log.append(
+        f"{victim.card.name} gets {how_many} {kind} counter(s) "
+        f"({context.card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("add_counter_to_target")
 def add_counter_to_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Put a +1/+1 counter on target creature", and on *each of up to N* target

@@ -37,6 +37,27 @@ from ..untap_restrictions import (
 _LIMITED_TYPES = ("land", "creature", "artifact")
 
 
+def _holds_a_live_untap_lock(game, permanent) -> bool:
+    """Whether *permanent* is holding another one down by staying tapped.
+
+    Phyrexian Gremlins and Giant Oyster both print "You may choose not to untap
+    this creature during your untap step" above an ability whose whole effect
+    lasts only "for as long as this creature remains tapped". A seat that
+    untaps releases what it is holding — legal, and never what the card was
+    activated for — so the same default the linked *steal* already has applies
+    here: while the lock is live, AI and headless play keep the permanent
+    tapped. A human's explicit choice still wins, through ``keep_tapped_indices``
+    at the call site.
+
+    Derived from the record the lock itself writes rather than from a list of
+    cards, and re-checked against the battlefield: an id whose permanent has
+    gone is a lock that ended with it (CR 400.7), and holding a creature back
+    for it would be paying a price for nothing.
+    """
+    held = permanent.metadata.get(UNTAP_LOCK_WHILE_TAPPED_KEY)
+    return held is not None and game.permanent_by_id(held) is not None
+
+
 def _skip_next_untap_names_this_step(permanent, seat: int) -> bool:
     """Whether a permanent's ``skip_next_untap`` marker is about *seat*'s step.
 
@@ -356,8 +377,8 @@ class UntapStepMixin:
 
             # Old Man of the Sea: "You may choose not to untap this creature
             # during your untap step." A human's explicit keep-tapped choice is
-            # honored; AI/headless play keeps it tapped while its linked steal
-            # is alive (untapping would end the control effect).
+            # honored; AI/headless play keeps it tapped while an effect that
+            # ends when it untaps is still live.
             if SELF_MAY_KEEP_TAPPED_PHRASE in permanent.effective_card.oracle_text.lower():
                 if keep_tapped_indices is not None:
                     if idx in keep_tapped_indices:
@@ -372,6 +393,8 @@ class UntapStepMixin:
                     or "source_remains_tapped"
                     in (permanent.metadata.get(LINKED_CONTROL_CONDITIONS) or ())
                 ) and self.permanents_controlled_via(permanent):
+                    continue
+                elif _holds_a_live_untap_lock(self, permanent):
                     continue
 
             # "<noun phrase> don't untap during their controllers' untap

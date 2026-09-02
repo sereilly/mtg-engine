@@ -241,6 +241,11 @@ _BOUND_OBJECT_DELAYED_EVENTS: frozenset[str] = frozenset({
     # Merieke Ri Berit: watches its own source, destroys **that creature** —
     # the same two-object shape War Barge prints, with the wider event.
     "bound_permanent_leaves_or_untaps",
+    # "…at the beginning of each of your draw steps, put a -1/-1 counter on
+    # **that creature**." (Giant Oyster.) A *step* event that names an object,
+    # exactly as the two rows above it are: the step says when, and the sentence
+    # behind it says what the ability is about.
+    "controllers_draw_step",
 })
 
 #: The payload key the delayed machinery stamps that object's id under.

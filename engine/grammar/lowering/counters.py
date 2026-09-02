@@ -29,6 +29,7 @@ from ._common import (
     describe_target_roles,
 )
 from ._events import (
+    _BOUND_OBJECT_DELAYED_EVENTS,
     CHOSEN_PERMANENT,
     OTHER_CHOSEN_PERMANENT,
     EVENT_SUBJECT_CONTROLLER,
@@ -695,6 +696,43 @@ def _lower_put_counter(
                 "add_counter_to_target", "",
                 {"counter": node.counter, "permanents_from": CHOSEN_PERMANENT},
             ),
+        )
+    # "…at the beginning of each of your draw steps, put a -1/-1 counter on
+    # **that creature**." (Giant Oyster.) The object the *creating* ability
+    # bound (CR 603.7c), named by id in the delayed trigger's context — never a
+    # choice, so nothing is described for a picker. Its own kind beside the
+    # targeted placement for ``destroy_bound_permanent``'s reason, and admitted
+    # only under an event whose fire site records an object: everywhere else
+    # "that" has no referent and the counter would land on whatever the
+    # resolution context happened to hold.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "that"
+        and event in _BOUND_OBJECT_DELAYED_EVENTS
+    ):
+        if node.up_to or node.then_double:
+            raise LoweringError(
+                "a bound placement carries no rider", node=node
+            )
+        if not is_pt_counter(node.counter):
+            # ``Game.place_pt_counters`` derives the P/T from the counter's own
+            # name (CR 122.1a) and has nowhere to put a counter that has none.
+            # Refused rather than compiled onto it, which would raise mid-
+            # resolution.
+            raise LoweringError(
+                f"no handler puts a {node.counter} counter on a bound object",
+                node=node,
+            )
+        if not isinstance(node.count, ast.Fixed) or node.count.value < 1:
+            raise LoweringError(
+                "a bound placement counts a fixed number", node=node
+            )
+        return (
+            OracleInstruction("add_counter_to_bound_permanent", "", {
+                "counter": node.counter,
+                "count": node.count.value,
+                **_filter_payload(node.subject.filter),
+            }),
         )
     if node.counter != "+1/+1" or node.up_to:
         raise LoweringError(f"no handler for {node.counter} counters", node=node)

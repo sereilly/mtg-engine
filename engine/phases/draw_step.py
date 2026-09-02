@@ -18,6 +18,7 @@ matched — did nothing whatsoever.
 """
 
 from ..card_hooks import DRAW_STEP_MODIFIERS
+from ..delayed_triggers import fire_delayed_triggers
 from ..draw_step_modifiers import (draw_step_bonus_for, draw_step_skip_for,
                                    skips_own_draw_step)
 from ..game_types import OracleExecutionContext
@@ -181,6 +182,15 @@ class DrawStepMixin:
         # relative to the draw: the batch sits on the stack until the priority
         # window at the end of the step drains it.
         self._enqueue_draw_step_triggers(player_index)
+
+        # "…at the beginning of **each of your draw steps**, put a -1/-1
+        # counter on that creature." (Giant Oyster.) A delayed ability
+        # (CR 603.7) belongs to no permanent, so the scan above cannot reach it
+        # — it is announced here, at the same moment as the battlefield's own
+        # draw-step triggers, and scoped to the entry's own controller because
+        # that is what "your" says: a draw step belongs to one player, so an
+        # ability an opponent created is not waiting for this one.
+        fire_delayed_triggers(self, "controllers_draw_step", seat=player_index)
 
         # CR 103.8a: in a two-player game, the player who plays first skips
         # the draw step of their first turn. game.turn is 1 exactly during the

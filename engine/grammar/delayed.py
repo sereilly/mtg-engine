@@ -97,6 +97,20 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     # the step rather than expiring with the turn.
     (("at", "the", "beginning", "of", "your", "next", "upkeep"),
      "controllers_next_upkeep", True, "until_it_triggers", False),
+    # "…at the beginning of **each of your draw steps**, put a -1/-1 counter on
+    # that creature." (Giant Oyster.) The repeating row: "each of" is CR 603.7b's
+    # stated-duration half of the rule, so the ability fires at every one of its
+    # controller's draw steps rather than at the next one — which is why `once`
+    # is False here where every row around it is True.
+    #
+    # Its duration is **unstated**, the shape `land_tapped_for_mana` below
+    # already has: the window is printed once in front of the whole sentence
+    # ("for as long as this creature remains tapped") and shared with the untap
+    # restriction beside it, so the opener leaves it None and the leading linked
+    # duration fills it in. A node that reaches the lowering still None refuses,
+    # because a repeating ability with no window is one nothing ever lifts.
+    (("at", "the", "beginning", "of", "each", "of", "your", "draw", "steps"),
+     "controllers_draw_step", False, None, True),
     # "…at the beginning of **the next turn's** upkeep" (Ice Age's cantrip
     # cycle). Whichever upkeep comes next rather than the controller's own —
     # see `delayed_triggers.DELAYED_EVENTS` for why that is a separate event

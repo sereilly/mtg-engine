@@ -13,6 +13,9 @@ template has one home on each side — prowess parses in
     types            CR 205 / layer 4: animation, a gained card type, a
                      supertype, a basic land type
     counters         putting and removing them, and the per-death repetition
+    tapping          CR 701.20/701.21, the keyword action itself
+    untap_restrictions
+                     CR 502.3, what keeps a permanent from untapping
     board            destruction, bouncing, tapping, control, exile
     cards            draw, discard, mill, scry
     library          search, reveal, look-at, exile linkage — the hidden zones
@@ -206,11 +209,13 @@ from .control_changes import (
 from .tapping import (
     _lower_for_each_tapped,
     _lower_tap,
-    _lower_doesnt_untap_next_step,
-    _lower_untap_restriction,
     _lower_untap_chosen_by_paying,
     _lower_tap_or_untap,
     _fused_upkeep_pay_to_untap,
+)
+from .untap_restrictions import (
+    _lower_doesnt_untap_next_step,
+    _lower_untap_restriction,
     _lower_doesnt_untap_while_source_tapped,
 )
 from .cards import (

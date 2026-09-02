@@ -102,6 +102,59 @@ def _parse_doesnt_untap_next_step(
     return _parse_next_untap_steps(stream, subject, whose="controller")
 
 
+def _parse_linked_untap_restriction(
+    stream: TokenStream,
+) -> "ast.DoesntUntapWhileSourceTapped | None":
+    """``<subject> doesn't untap during its controller's untap step`` — the
+    same restriction :func:`_parse_doesnt_untap_next_step` reads, printed with
+    its duration in **front** of the sentence instead of behind it.
+
+    "For as long as this creature remains tapped, **target tapped creature
+    doesn't untap during its controller's untap step**" (Giant Oyster) against
+    "It doesn't untap during its controller's untap step **for as long as this
+    creature remains tapped**" (Phyrexian Gremlins). One effect, one node, two
+    printed word orders — and the fronted one has to be read from the subject
+    on, because by the time the reader above is reached the duration is already
+    behind it.
+
+    So this is called **only** from ``sentence_clauses``' leading-linked-duration
+    production, which has just consumed those words. That is the whole of the
+    safety: with no duration in front of it, "target creature doesn't untap
+    during its controller's untap step" states no duration at all, which
+    CR 611.2a makes a restriction lasting until the end of the game — a strictly
+    larger effect this engine has no handler for, and one that goes on failing
+    on the missing "next" exactly as it did. A production reachable from the
+    ordinary sentence loop would admit it and quietly link it to a source
+    nothing said anything about.
+
+    Returns None with the cursor untouched for anything else, so the caller can
+    fall back to its own refusal.
+    """
+    mark = stream.mark()
+    subject = parse_recipient(stream)
+    if subject is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("don't", "doesn't"):
+        stream.reset(mark)
+        return None
+    # Every word of the restriction is consumed, and the possessive is the one
+    # that matters: "its controller's untap step" is the per-creature reading
+    # the handler implements, where "your untap step" names a seat. The seated
+    # spelling is not printed with a fronted duration on any card, so admitting
+    # it here would be inventing text and then holding the wrong step.
+    if not stream.accept_phrase("untap", "during"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("their", "its"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("controller", "'s", "untap", "step"):
+        stream.reset(mark)
+        return None
+    return ast.DoesntUntapWhileSourceTapped(subject)
+
+
 def _parse_next_untap_steps(
     stream: TokenStream, subject: ast.Recipient, *, whose: str
 ) -> ast.Statement:

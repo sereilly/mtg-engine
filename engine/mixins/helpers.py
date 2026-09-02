@@ -12,7 +12,8 @@ from ..control import (
     has_control_change,
     set_base_controller,
 )
-from ..delayed_triggers import fire_delayed_triggers
+from ..delayed_triggers import (end_source_tapped_delayed_triggers,
+                                fire_delayed_triggers)
 from ..enter_effects import ENTERED_BATTLEFIELD_TURN
 from ..events import emit
 from ..layer_bridge import computed_controller
@@ -960,6 +961,25 @@ class GameHelpersMixin:
         fire_delayed_triggers(
             self, "bound_permanent_leaves_or_untaps", subject=permanent,
         )
+        # "**For as long as this creature remains tapped,** …" (Giant Oyster).
+        # The same moment read the other way round: the abilities *this*
+        # permanent created under that duration end now, because the condition
+        # has stopped holding (CR 611.2b). Beside the announcement above for the
+        # reason it is here — this is the one place a permanent becomes
+        # untapped — and it ends them outright rather than leaving them to be
+        # skipped, because a "for as long as" duration does not start again.
+        end_source_tapped_delayed_triggers(self, permanent)
+        # The other record the same duration governs: "it doesn't untap during
+        # its controller's untap step **for as long as this creature remains
+        # tapped**" (Phyrexian Gremlins, and Giant Oyster's first clause). Ended
+        # here for the reason above and not merely skipped while the holder is
+        # untapped — a record left in place re-locked the permanent the next
+        # time the holder tapped for any reason at all. Imported locally, the
+        # way this module's other handler read is: a mixin composed onto `Game`
+        # sits under the handlers that dispatch through it.
+        from ..handlers.tapping import end_untap_lock
+
+        end_untap_lock(permanent)
         # "When this artifact leaves the battlefield **or becomes untapped**,
         # return that exiled card…" (Tawnos's Coffin). The second of the two
         # things that end a linked exile, and it is here for the reason the
@@ -1441,6 +1461,11 @@ class GameHelpersMixin:
             fire_delayed_triggers(
                 self, "bound_permanent_leaves_or_untaps", subject=perm,
             )
+            # The other half of the condition above: a permanent off the
+            # battlefield is not a tapped permanent on it, so the abilities it
+            # created "for as long as this creature remains tapped" end here
+            # too (CR 611.2b).
+            end_source_tapped_delayed_triggers(self, perm)
         # An Aura's continuous effects end when it leaves (CR 611.3), and this
         # is the one transition it can leave by. It was wired into
         # ``_permanent_to_graveyard`` alone, which is the *destination* rather

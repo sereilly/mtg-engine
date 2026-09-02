@@ -17,7 +17,9 @@ import pytest
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_path
 from engine.damage_events import deal_damage
-from engine.delayed_triggers import DelayedTrigger, fire_delayed_triggers
+from engine.delayed_triggers import (WHILE_SOURCE_TAPPED, DelayedTrigger,
+                                     end_source_tapped_delayed_triggers,
+                                     fire_delayed_triggers)
 from engine.models import CardDefinition, Permanent
 from engine.oracle_types import OracleInstruction
 
@@ -540,3 +542,155 @@ def test_the_delayed_damage_finds_nobody_when_its_object_has_gone():
     game._settle()
 
     assert bystander.damage_marked == 0
+
+
+# ---------------------------------------------------------------------------
+# The draw step, and a duration that is a *state* rather than a moment
+# (CR 504.1, CR 603.7b, CR 611.2a) — Giant Oyster's round.
+# ---------------------------------------------------------------------------
+
+
+def _tapped_source(game: Game, seat: int = 0) -> Permanent:
+    """A tapped permanent on *seat*'s battlefield, standing in for the object
+    whose staying tapped is a delayed ability's stated duration."""
+    holder = Permanent(card=_creature("Holder", type_line="Creature - Oyster"))
+    holder.tapped = True
+    game.players[seat].battlefield.append(holder)
+    game._settle()
+    return holder
+
+
+def _draw_step_entry(game: Game, holder: Permanent, seat: int = 0) -> DelayedTrigger:
+    entry = DelayedTrigger(
+        controller_index=seat, event="controllers_draw_step",
+        instruction=_gain_life(1), card=_SOURCE,
+        source_permanent_id=holder.permanent_id,
+        once=False, duration=WHILE_SOURCE_TAPPED,
+    )
+    game.delayed_triggers.append(entry)
+    return entry
+
+
+@pytest.mark.cr("603.7", "504.1")
+def test_a_delayed_ability_can_wait_for_the_draw_step():
+    """"At the beginning of each of your draw steps, …" The draw step is a step
+    like the upkeep and the end step, and an ability armed for it is announced
+    there — beside the battlefield's own draw-step triggers, and before the
+    turn-based draw the step is otherwise for."""
+    game, p1, _p2, _watched = _board()
+    holder = _tapped_source(game)
+    _draw_step_entry(game, holder)
+
+    game.resolve_draw_step(0)
+    game._settle()
+
+    assert p1.life == 21
+
+
+@pytest.mark.cr("603.7", "504.1")
+def test_your_draw_step_is_not_an_opponents():
+    """The event is seated: a draw step belongs to one player, so an ability
+    its opponent created is not waiting for this one. Asserted beside the row
+    above, because an unseated announcement passes that one too."""
+    game, p1, _p2, _watched = _board()
+    holder = _tapped_source(game)
+    _draw_step_entry(game, holder)
+
+    game.resolve_draw_step(1)
+    game._settle()
+
+    assert p1.life == 20
+    assert game.delayed_triggers, "the entry was spent on the wrong seat's step"
+
+
+@pytest.mark.cr("603.7b")
+def test_a_stated_duration_makes_the_draw_step_ability_repeat():
+    """"A delayed triggered ability will trigger only once — the next time its
+    trigger event occurs — **unless it has a stated duration**." "For as long as
+    this creature remains tapped" is that duration, so the ability fires at
+    every one of its controller's draw steps."""
+    game, p1, _p2, _watched = _board()
+    holder = _tapped_source(game)
+    _draw_step_entry(game, holder)
+
+    for _ in range(3):
+        game.resolve_draw_step(0)
+        game._settle()
+
+    assert p1.life == 23
+
+
+@pytest.mark.cr("603.7b", "611.2a")
+def test_the_ability_ends_when_its_source_stops_being_tapped():
+    """CR 611.2a: the ability lasts as long as the card states and no longer.
+    Untapping the permanent ends the duration, so the entry is gone rather than
+    merely skipped."""
+    game, p1, _p2, _watched = _board()
+    holder = _tapped_source(game)
+    _draw_step_entry(game, holder)
+
+    game.become_untapped(holder)
+
+    assert game.delayed_triggers == []
+
+    game.resolve_draw_step(0)
+    game._settle()
+    assert p1.life == 20
+
+
+@pytest.mark.cr("603.7b", "611.2a")
+def test_the_ended_ability_does_not_come_back_when_the_source_taps_again():
+    """The point of ending it rather than skipping it. Nothing re-creates a
+    delayed ability whose stated duration has run out — only activating the
+    ability that made it would — so a permanent that taps again is not holding
+    anybody down."""
+    game, p1, _p2, _watched = _board()
+    holder = _tapped_source(game)
+    _draw_step_entry(game, holder)
+
+    game.become_untapped(holder)
+    game.become_tapped(holder)
+
+    game.resolve_draw_step(0)
+    game._settle()
+
+    assert p1.life == 20
+
+
+@pytest.mark.cr("603.7b", "611.2a")
+def test_the_ability_ends_when_its_source_leaves_the_battlefield():
+    """The other half of the condition: a permanent off the battlefield is not
+    a tapped permanent on it. CR 400.7 makes what comes back a different
+    object, so nothing can restart the duration either."""
+    game, p1, _p2, _watched = _board()
+    holder = _tapped_source(game)
+    _draw_step_entry(game, holder)
+
+    game.remove_from_battlefield(holder)
+    game._settle()
+
+    assert game.delayed_triggers == []
+
+    game.resolve_draw_step(0)
+    game._settle()
+    assert p1.life == 20
+
+
+@pytest.mark.cr("603.7b")
+def test_only_the_ending_permanents_own_abilities_end():
+    """The sweep is keyed to the permanent whose duration it is. Two Oysters
+    each holding something down are two abilities, and one untapping must not
+    take the other's with it — the look-alike bug, in a list this time."""
+    game, p1, _p2, _watched = _board()
+    first = _tapped_source(game)
+    second = _tapped_source(game)
+    _draw_step_entry(game, first)
+    _draw_step_entry(game, second)
+
+    assert end_source_tapped_delayed_triggers(game, first) == 1
+    assert len(game.delayed_triggers) == 1
+    assert game.delayed_triggers[0].source_permanent_id == second.permanent_id
+
+    game.resolve_draw_step(0)
+    game._settle()
+    assert p1.life == 21

@@ -117,6 +117,7 @@ from .effects import (
     _parse_shuffle_hand_into_library,
     _parse_search_library,
     _parse_doesnt_untap_next_step,
+    _parse_linked_untap_restriction,
     _parse_tap_untap,
     _parse_attach,
     _parse_exchange_control,
@@ -446,17 +447,88 @@ def _distribute_duration(
     return dataclasses.replace(statement, duration=duration)
 
 
-def _parse_leading_linked_duration(stream: TokenStream) -> "ast.GainControl | None":
-    """``For as long as <self> remains tapped, gain control of <subject>.``
-    (Preacher.)
+#: The condition a fronted "for as long as <self> remains tapped" names, spelled
+#: the way ``engine/control.LINKED_CONTROL_CONDITIONS`` and
+#: ``DelayedTrigger.duration`` both read it. One name, because the control
+#: contribution, the untap lock and the delayed ability behind that comma are
+#: three readers of one printed clause.
+LINKED_WHILE_SOURCE_TAPPED = "while_source_tapped"
+
+
+def _link_leading_duration(statement: "ast.Statement", stream: TokenStream) -> "ast.Statement":
+    """*statement* with the fronted "for as long as this creature remains
+    tapped" attached, or a refusal naming what could not take it.
+
+    The linked twin of :func:`_distribute_duration`, and separate from it for
+    the reason that function's ``CreateDelayedTrigger`` branch already states:
+    a linked duration is not a :class:`ast.Duration` node at all. It is a
+    *string* naming the condition a sweep re-checks (the control contribution),
+    the state a record is read back under (the untap lock), or CR 603.7b's
+    stated duration on a delayed ability — three different fields, one printed
+    clause.
+
+    Recursing through a conjunction is the whole point: Giant Oyster prints the
+    clause once and shares it between the restriction and the delayed ability
+    behind the comma, exactly as Chaos Moon shares "until end of turn" between
+    its anthem and its delayed mana trigger.
+    """
+    if isinstance(statement, ast.Conjunction):
+        return dataclasses.replace(
+            statement,
+            effects=tuple(
+                _link_leading_duration(effect, stream)
+                for effect in statement.effects
+            ),
+        )
+    if isinstance(statement, ast.Sequence):
+        return dataclasses.replace(
+            statement,
+            steps=tuple(
+                _link_leading_duration(step, stream) for step in statement.steps
+            ),
+        )
+    if isinstance(statement, ast.DoesntUntapWhileSourceTapped):
+        # The node *is* the linked restriction — its whole meaning is this
+        # duration, which is what the trailing spelling states in its own
+        # words. Nothing to attach.
+        return statement
+    if isinstance(statement, ast.CreateDelayedTrigger):
+        if statement.duration not in (None, LINKED_WHILE_SOURCE_TAPPED):
+            raise stream.error("this sentence prints two different durations")
+        return dataclasses.replace(
+            statement, duration=LINKED_WHILE_SOURCE_TAPPED
+        )
+    raise stream.error(
+        "a leading linked duration has nothing to attach to in "
+        f"{type(statement).__name__}"
+    )
+
+
+def _parse_leading_linked_duration(
+    stream: TokenStream, parse_body
+) -> "ast.Statement | None":
+    """``For as long as <self> remains tapped, <effect>.`` (Preacher, Giant
+    Oyster.)
 
     Returns None with the cursor untouched for anything else opening "for as
     long as", so the trailing spelling every other card prints keeps its reader
     and an unreadable condition still fails loudly on its own words.
 
-    Only the control change takes it. A leading duration on any other sentence
-    is the ordinary ``Duration`` the reader below distributes; this one names
-    the conditions a *sweep* re-checks, which only the control contribution has.
+    Two effects take it, and both for the same reason: the clause names a
+    *condition* something re-checks rather than a moment anything could hook, so
+    it cannot be the ordinary ``Duration`` the reader below distributes. A
+    control change carries it as the link its sweep re-asks (Preacher); an untap
+    restriction carries it as the record the untap step reads back off the
+    source (Giant Oyster) — the very same effect Phyrexian Gremlins prints with
+    the clause behind the sentence instead of in front of it.
+
+    Whatever follows the restriction's comma is governed by the clause too, and
+    is read by the ordinary sentence parser rather than by a branch here: Giant
+    Oyster's "…, **and at the beginning of each of your draw steps, put a -1/-1
+    counter on that creature**" is a delayed triggered ability whose CR 603.7b
+    window is this same condition. It is required to be a shape
+    :func:`_link_leading_duration` can attach the clause to — a conjunct that
+    silently kept its own duration would be an ability nothing ever lifts.
     """
     mark = stream.mark()
     if not stream.accept_phrase("for", "as", "long", "as"):
@@ -468,11 +540,41 @@ def _parse_leading_linked_duration(stream: TokenStream) -> "ast.GainControl | No
     ):
         stream.reset(mark)
         return None
-    control = _parse_gain_control(stream, leading_duration="while_source_tapped")
-    if control is None:
+    # Gated on the verb rather than tried and caught: `_parse_gain_control`
+    # opens with ``expect_word("gain")`` and *raises* on anything else, so
+    # calling it speculatively would replace the untap restriction's own
+    # refusal with "expected 'gain'" — which is the refusal Giant Oyster
+    # reported for two rounds while the sentence it prints was a control change
+    # in nobody's reading.
+    if stream.at_word("gain"):
+        control = _parse_gain_control(
+            stream, leading_duration=LINKED_WHILE_SOURCE_TAPPED
+        )
+        if control is not None:
+            return control
         stream.reset(mark)
         return None
-    return control
+    lock = _parse_linked_untap_restriction(stream)
+    if lock is None:
+        stream.reset(mark)
+        return None
+    # "…, **and** at the beginning of each of your draw steps, …" The rest of
+    # the sentence, under the same clause. Read only when the conjunction is
+    # printed; without it the restriction is the whole sentence and the caller's
+    # own end-of-sentence check does the rest.
+    conjoined = stream.mark()
+    if not (stream.accept_punct(",") and stream.accept_word("and")):
+        stream.reset(conjoined)
+        return lock
+    try:
+        rest = parse_body(stream)
+    except GrammarError:
+        # The conjunct is part of this sentence and the clause governs it, so a
+        # half-read one is not a shorter card — it is the linked window silently
+        # dropped off whatever follows. Declining leaves the line's own refusal.
+        stream.reset(mark)
+        return None
+    return ast.Sequence((lock, _link_leading_duration(rest, stream)))
 
 
 def _parse_unless_player_pays(stream: TokenStream, parse_body) -> "ast.UnlessPlayerPays | None":
