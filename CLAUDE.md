@@ -150,6 +150,8 @@ python scripts/support_report.py      # per-category card-support coverage (whol
 python scripts/support_report.py --set ATQ --hollow-lines   # supported cards carrying an ability with no instruction behind it (a Phase 3 exit criterion)
 python scripts/support_report.py --set LEG --refusals   # every refused line of every unsupported card with its exact refusal site (the plain census quotes only the first) — the work list backlog rounds are planned from
 python scripts/retrieve_oracle.py "Black Lotus"   # oracle text by name (whole pool)
+python scripts/oracle_diff.py snapshot   # record every card's full compiled program (both manifest roles) before a change
+python scripts/oracle_diff.py compare    # every card whose program moved since the snapshot, payloads and all; exit 1 if any did
 python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set implementation tracker); --refresh re-fetches Scryfall data
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests
 python scripts/rules_gaps.py          # rank untested CR rules by engine citations + section momentum; also flags stale CR citations in engine/web (advisory, stdout only)

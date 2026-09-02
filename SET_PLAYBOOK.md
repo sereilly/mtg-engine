@@ -508,11 +508,12 @@ measured set so per-card tests can land as the cards do. **Exit:**
    all passed.
 
    **Diff the whole pool's compiled programs before believing a change is
-   local.** Build the map once before the change and once after —
-   `{card.name: repr((supported, instructions, activated, triggered))}` over
-   `manifest_set_paths(include_measured=True)` — and read every card that moved.
-   **Record the instructions and abilities in full, with their payloads: not
-   their kinds, and not their counts.** Both abbreviations are natural and both
+   local.** `python scripts/oracle_diff.py snapshot` before the change,
+   `python scripts/oracle_diff.py compare` after — and read every card that
+   moved. The script exists because the by-hand rebuild of this map kept being
+   lossy; it stores the programs
+   **in full, with their payloads: not their kinds, and not their counts**
+   (pinned by `tests/engine/test_oracle_diff.py`). Both abbreviations are natural and both
    are blind to exactly the narrowing class this instrument exists to catch,
    because a narrowing changes neither how many of a thing there are nor what the
    thing is called. Keyed on counts it cannot see a trigger narrowed from "blocks
