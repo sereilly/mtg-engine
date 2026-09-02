@@ -60,7 +60,6 @@ from .lowering import (
     _lower_coin_flip_damage_loop,
     _lower_coin_flip_stakes_loop,
     _lower_damage_this_game_history,
-    _lower_draw,
     _lower_put_source_into_zone,
     _lower_extra_turn,
     _lower_choose_cards_in_hand,
