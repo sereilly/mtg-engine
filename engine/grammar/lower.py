@@ -37,7 +37,7 @@ from ..oracle_types import OracleInstruction
 from . import ast
 from .derived import derived_instruction_for_line
 from .errors import LoweringError
-from .lowering._events import CHOSEN_PLAYER
+from .lowering._events import CHOSEN_PLAYER, LOOP_BOUND_PLAYER
 from .lowering.where_x import lower_where_x
 from .statics import _lower_static_ability
 from .lowering.control_flow import (
@@ -652,9 +652,16 @@ def lower_statement(
                 statement, repeated(), produced
             )
         # "**For each player,** …" (Lim-Dûl's Hex) — a loop over seats, whose
-        # iteration binds "that player" the way an object loop binds "it".
+        # iteration binds "that player" the way an object loop binds "it". The
+        # body is lowered knowing it: the marker is what lets a damage clause
+        # inside the loop read the target slot the handler rebinds per seat,
+        # where the same words under the bare trigger refuse for want of a
+        # frozen seat.
         if isinstance(statement.iterator, ast.PlayerRef):
-            return _lower_for_each_player(statement, repeated())
+            return _lower_for_each_player(statement, lower_statement(
+                statement.effect, produced | {LOOP_BOUND_PLAYER},
+                event=event, event_subject=event_subject, whole_effect=False,
+            ))
         # "**For each attacking red creature,** …" (Heroism, Tidal Flats) — the
         # set the board holds now. Read before the tally below, which is the
         # *other* thing an untyped iterator can be: that one's iterator is a

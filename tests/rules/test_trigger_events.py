@@ -702,3 +702,60 @@ def test_manabarbs_burns_the_player_who_tapped_the_land(set_pool):
 
     assert [p.life for p in game.players] == [20, 20, 19], game.log
 # --- end HML W2G4 ---
+
+
+@pytest.mark.cr("608.2h", "603.10a")
+def test_dingus_egg_burns_the_dead_lands_controller_not_a_bystander(set_pool):
+    """"Whenever a land is put into a graveyard from the battlefield, this
+    artifact deals 2 damage to **that land's controller**." (Dingus Egg.)
+
+    The seat cannot be re-derived at resolution: the land is a card in a
+    graveyard by then (CR 400.7), so the fire site freezes it as it announces
+    the death — CR 603.10a's look-back, read at resolution as last known
+    information (CR 608.2h). The Egg's controller and the destroying player
+    are both third parties here, and both are asserted untouched, because
+    "the right player lost life" is only half of "nobody else did".
+
+    This used to hold through a hand-built ``deal_damage_to_player`` the fire
+    site swapped in for the compiled instruction; it now holds through the
+    compiled ``recipient: event_subject_controller`` payload itself, which is
+    what retired the lowering's silent ``target_player`` fall-through.
+    """
+    egg = Permanent(card=_w2g4_pool(set_pool, "LEA", "Dingus Egg"))
+    land = Permanent(card=_card("Fen", "", "Land"))
+    game = _w2g4_three_seats([egg], [], [land])
+
+    game.remove_from_battlefield(land)
+    game._permanent_to_graveyard(game.players[2], land)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert not game.is_on_battlefield(land)
+    assert [p.life for p in game.players] == [20, 20, 18], game.log
+
+
+@pytest.mark.cr("608.2h")
+def test_ankh_of_mishra_burns_the_entering_lands_controller_not_a_bystander(set_pool):
+    """"Whenever a land enters, this artifact deals 2 damage to **that land's
+    controller**." (Ankh of Mishra.)
+
+    The seat is a fact about the *event* — whoever the land entered under —
+    and neither the Ankh's controller nor the third seat is it. The compiled
+    instruction names ``event_subject_controller`` and the fire site freezes
+    the seat while enqueuing it; nothing here is a target, so a resolution
+    that read the context's target slot would have had nobody honest to hit.
+    """
+    ankh = Permanent(card=_w2g4_pool(set_pool, "LEA", "Ankh of Mishra"))
+    game = _w2g4_three_seats([ankh], [], [])
+    game.players[2].hand.append(_card("Fen", "", "Land"))
+
+    game.cast_from_hand(2, "Fen")
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert any(perm.card.name == "Fen" for perm in game.controlled_by(2))
+    assert [p.life for p in game.players] == [20, 20, 18], game.log

@@ -1476,38 +1476,53 @@ class EffectsMixin:
         return True
 
     def _process_land_enters(self, land_controller_index: int) -> None:
-        """Put "whenever a land enters the battlefield, deal 2 damage" triggers onto
-        the stack; they resolve off the stack (CR 603.3)."""
+        """Put "whenever a land enters the battlefield" triggers (Ankh of
+        Mishra) onto the stack; they resolve off the stack (CR 603.3),
+        executing each card's own compiled instruction.
+
+        The fire site freezes the entering land's controller into the
+        trigger's context (CR 603.10) — `land_enters` is in
+        `_EVENT_SUBJECT_CONTROLLERS` on the strength of this stamp, and "that
+        land's controller" compiles to the recipient that reads it. It used to
+        swap in a hand-built ``deal_damage_to_player`` carrying its own victim
+        and a hard-coded 2 instead, so the compiled program was never what
+        ran and the lowering's fall-through went unnoticed.
+        """
         events = [
             make_trigger_event(
                 controller_index, permanent, trig,
-                instruction=OracleInstruction("deal_damage_to_player", None, {}),
                 effect_kind="triggered_damage",
                 ability_text=None,
-                trigger_context={"victim_player_index": land_controller_index, "amount": 2},
+                trigger_context={"event_subject_controller": land_controller_index},
             )
             for controller_index, permanent, trig in iter_triggered_abilities(
                 self, condition_kinds={"land_enters"}
             )
+            if trig.instruction is not None
         ]
         self._enqueue_triggered_batch(events)
 
     def _process_land_dies(self, land_controller_index: int) -> None:
-        """Put land_dies triggered abilities (e.g. Dingus Egg) onto the stack when a
-        land is put into a graveyard; they resolve off the stack (CR 603.3)."""
+        """Put land_dies triggered abilities (Dingus Egg) onto the stack when a
+        land is put into a graveyard; they resolve off the stack (CR 603.3),
+        executing each card's own compiled instruction.
+
+        The dead land's controller is frozen here (CR 603.10) for the reason
+        `_process_land_enters` states one method up — and it *cannot* be
+        re-derived at resolution: by then the land is a card in a graveyard
+        (CR 400.7), and under a control-change effect that seat was never its
+        owner.
+        """
         events = [
             make_trigger_event(
                 controller_index, permanent, trig,
-                instruction=OracleInstruction("deal_damage_to_player", None, {}),
                 effect_kind="triggered_damage",
-                trigger_context={
-                    "victim_player_index": land_controller_index,
-                    "amount": int(trig.instruction.payload.get("amount", 2)),
-                },
+                trigger_context={"event_subject_controller": land_controller_index},
             )
             for controller_index, permanent, trig in iter_triggered_abilities(
                 self, condition_kinds={"land_dies"}, first_match_only=False
             )
+            if trig.instruction is not None
         ]
         self._enqueue_triggered_batch(events)
 
