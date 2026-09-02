@@ -57,6 +57,17 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     # positive half, that *either* colour is enough, is demonstrated below,
     # because a matcher reading the list as AND also passes this row.
     ("any_colors", {"any_colors": ["W", "U"]}, "Grizzly Bears"),
+    # "a **black or artifact** creature" (Soldevi Adnate). A union across two
+    # *axes*, so this row is not a second copy of ``any_colors`` above: Grizzly
+    # Bears is green and not an artifact, and it is the pair of axes rather
+    # than the pair of alternatives that a matcher can drop. The positive half
+    # — that either alternative is enough, on *either* axis — is demonstrated
+    # below, because a matcher reading the union as AND also passes this row.
+    (
+        "any_classes",
+        {"any_classes": [["color", "B"], ["card_type", "artifact"]]},
+        "Grizzly Bears",
+    ),
     ("exclude_colors", {"exclude_colors": ["G"]}, "Grizzly Bears"),
     ("exclude_types", {"exclude_types": ["creature"]}, "Grizzly Bears"),
     ("exclude_subtypes", {"exclude_subtypes": ["bear"]}, "Grizzly Bears"),
@@ -106,6 +117,33 @@ def test_every_promised_key_actually_narrows(pool, key, payload, card_name):
         "proves nothing about the key"
     )
     assert not subject_matches(game, perm, {"type_filter": "creature", **payload})
+
+
+def test_a_class_union_matches_on_either_axis(pool):
+    """The positive half of ``any_classes``: "a black **or** artifact creature"
+    is satisfied by a black creature that is no artifact **and** by an artifact
+    creature of any colour.
+
+    The rejection row above is passed by a matcher that ANDs the alternatives,
+    which is the reading that made the union unsayable in the first place —
+    ``colors`` plus ``card_types`` describes a black artifact creature, and the
+    pool has none. So the OR has to be demonstrated separately.
+    """
+    described = {
+        "type_filter": "creature",
+        "any_classes": [["color", "B"], ["card_type", "artifact"]],
+    }
+    black = Permanent(card=pool["Bog Wraith"])
+    artifact = Permanent(card=pool["Clockwork Beast"])
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[black, artifact]),
+            PlayerState(name="P2"),
+        ]
+    )
+
+    assert subject_matches(game, black, described), "black, and no artifact"
+    assert subject_matches(game, artifact, described), "an artifact, and colourless"
 
 
 def test_untapped_only_rejects_a_tapped_permanent(pool):
