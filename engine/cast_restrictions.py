@@ -365,3 +365,66 @@ def check_cast_timing(game: "Game", caster_index: int, oracle_text_lower: str) -
         if not _nothing_matches(game, caster_index, payload):
             return f"can only be cast if no {board} are on the battlefield"
     return None
+
+
+# --- The board half of CR 601.3: a prohibition a *permanent* imposes ---------
+#
+# Everything above is read off the **casting card's own text** — a gate the
+# spell prints about itself. "Creature spells can't be cast." (Aether Storm) is
+# the other direction entirely: the sentence is printed on a permanent, it names
+# no seat, and it stops *every* player casting spells of a type (CR 601.3a).
+# So it is a scan of the battlefields rather than a scan of the spell, and its
+# own reader for that reason.
+#
+# The card **type** is payload, for `auras.aura_controller_cast_ban`'s reason:
+# "Artifact spells can't be cast." is the same sentence and must need no second
+# row. That reader is deliberately *not* widened into this one — what differs
+# between them is the **scope**, and a scope taken from the wrong half of a
+# sentence bans the wrong players. Aether Storm's ban reaches its own
+# controller; Brand of Ill Omen's reaches only the enchanted creature's.
+_BANNABLE_SPELL_TYPES = (
+    r"(?:artifact|creature|enchantment|instant|sorcery|planeswalker|battle)"
+)
+_GLOBAL_CAST_BAN = re.compile(
+    rf"^(?P<type>{_BANNABLE_SPELL_TYPES}) spells can't be cast$"
+)
+
+
+@lru_cache(maxsize=None)
+def global_cast_ban_line(line: str) -> str | None:
+    """The card type *line* forbids anybody from casting, or None.
+
+    One reader, two callers, exactly as :func:`auras.aura_controller_cast_ban`
+    has: ``engine/grammar/registries.py`` asks it so the printed line is
+    *claimed*, and ``mixins/stack/casting.py`` asks it at CR 601.2 so the line
+    is *enforced*. A restriction that is claimed and not enforced is an
+    enchantment that reports supported and lets every creature through, which is
+    the one failure this seam exists to make impossible.
+    """
+    match = _GLOBAL_CAST_BAN.match(line.strip().lower().rstrip("."))
+    return match.group("type") if match is not None else None
+
+
+def global_cast_ban(game: "Game", card) -> str | None:
+    """The name of a permanent forbidding *card* from being cast, or None.
+
+    Every battlefield, and no seat comparison: the sentence names nobody, so it
+    binds everybody including the permanent's own controller (CR 601.3a).
+
+    ``effective_card`` rather than the printed face, for the reason the cost-tax
+    scan reads it: a type word rewritten by a text-changing effect (CR 613 layer
+    3) changes which spells the line stops, and this table should not have to
+    know that text can change.
+
+    The type test is :func:`search_filters.card_has_type`, not ``primary_type``:
+    a card has **every** type its line names (CR 205.2), so an artifact creature
+    is a creature spell and Aether Storm stops it.
+    """
+    from .search_filters import card_has_type
+
+    for _seat, permanent in game.permanents_with_controller():
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            banned = global_cast_ban_line(raw_line)
+            if banned is not None and card_has_type(card, banned):
+                return permanent.card.name
+    return None

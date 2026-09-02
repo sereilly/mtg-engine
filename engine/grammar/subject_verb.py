@@ -25,6 +25,7 @@ from .paragraphs import (
     _parse_exile_until_leaves_or_untaps, _parse_name_and_strip,
     _parse_name_then_consult,
     _parse_name_then_random_reveal, _parse_name_then_reveal_top,
+    _parse_ante_offer_ownership_exchange,
     _parse_ownership_exchange_unless_paid, _parse_random_reveal_ownership_exchange,
     _parse_transmute_by_sacrifice,
 )
@@ -181,6 +182,13 @@ def parse_subject_verb(
     efreet = _parse_random_reveal_ownership_exchange(stream)
     if efreet is not None:
         return efreet
+    # Timmerian Fiends' whole ability, beside the Efreet's for the same reason:
+    # it opens on a noun phrase ("The owner of target artifact") that the noun
+    # parser reads and then a "may" no production of its own would finish.
+    # Refuses without consuming.
+    fiends = _parse_ante_offer_ownership_exchange(stream)
+    if fiends is not None:
+        return fiends
     colour_shield = _parse_source_of_choice_effect(stream)
     if colour_shield is not None:
         return colour_shield

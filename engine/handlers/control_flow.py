@@ -947,6 +947,20 @@ def _action_is_takeable(game: Game, player, instruction: OracleInstruction, sour
             subject_matches(game, perm, described, observer=seat, source=source)
             for perm in game.controlled_by(seat)
         )
+    if instruction.kind == "ante_top_card":
+        # "…may **ante the top card of their library**" (Amulet of Quoz,
+        # Rebirth, Timmerian Fiends). An empty library is a real and checkable
+        # "nothing to give": accepting would ante nothing and still skip the
+        # penalty the card prints for not anting, which is the same failure the
+        # sacrifice above is gated on.
+        #
+        # Only the "that player" spelling is answered, because only there is the
+        # anteing seat the offered seat. A sweep over every player is not a
+        # price this one pays, and answering False for it would withdraw an
+        # offer the card makes.
+        if instruction.payload.get("players") != "that_player":
+            return True
+        return bool(player.library)
     if instruction.kind == "discard_controller_cards":
         described = dict(instruction.payload.get("filter") or {})
         return any(_card_matches_filter(card, described) for card in player.hand)

@@ -233,3 +233,82 @@ def test_118_7a_a_generic_reduction_clamps_at_zero_without_touching_pips():
     assert reduce_cost({"generic": 1, "W": 1}, CostReduction(2)) == {
         "generic": 0, "W": 1,
     }
+
+
+# --- W2G5: one sentence, several printed subjects ---
+
+
+@pytest.mark.cr("601.2f")
+def test_601_2f_a_tax_sentence_may_name_several_subjects():
+    """"Green enchantment spells **and** white enchantment spells cost {2} more
+    to cast." (Irini Sengir's wording.)
+
+    Idiom 38: a restriction printed as one sentence is a conjunction, and each
+    conjunct has to be read. Read as one subject the pattern matched from the
+    *second* one onwards, which is a tax on half the card.
+    """
+    modifier = _only(
+        "Green enchantment spells and white enchantment spells cost {2} more to cast."
+    )
+
+    assert (modifier.colour, modifier.card_types) == ("G", ("enchantment",))
+    assert modifier.alternative_subjects == (("W", ("enchantment",)),)
+    assert modifier.amount == 2
+
+
+@pytest.mark.cr("601.2f")
+def test_601_2f_several_subjects_are_still_one_cost_increase():
+    """CR 601.2f applies each increase once. Two printed noun phrases describe
+    one set of spells, so a spell answering to both is taxed once — which is
+    what keeps the conjuncts from being emitted as two modifiers."""
+    class _Card:
+        colors = ("G", "W")
+        type_line = "Enchantment"
+        keywords = ()
+
+    modifiers = cost_modifiers_for(
+        "green enchantment spells and white enchantment spells cost {2} more to cast"
+    )
+
+    assert len(modifiers) == 1
+    assert sum(m.amount for m in modifiers) == 2
+    from engine.cost_modifiers import _matches
+
+    assert _matches(modifiers[0], _Card())
+
+
+@pytest.mark.cr("601.2f")
+def test_601_2f_the_subjects_may_differ_on_both_axes():
+    """Nothing in the template pairs the conjuncts on one characteristic: a
+    sentence naming a colour in one and a card type in the other is the same
+    shape, which is why the alternatives are whole noun phrases rather than a
+    list of colours."""
+    modifier = _only("Red spells and artifact spells cost {1} more to cast.")
+
+    assert (modifier.colour, modifier.card_types) == ("R", ())
+    assert modifier.alternative_subjects == ((None, ("artifact",)),)
+
+
+@pytest.mark.cr("601.2f")
+def test_601_2f_a_printed_type_list_is_still_one_subject():
+    """"Instant and enchantment spells" (Mana Matrix) uses the same word inside
+    a *type list*. Splitting on every "and" would leave "instant" reading as
+    nothing and take the whole clause with it, so the split is guarded on the
+    word a subject ends with."""
+    modifier = _only("Instant and enchantment spells cost {1} less to cast.")
+
+    assert modifier.card_types == ("instant", "enchantment")
+    assert modifier.alternative_subjects == ()
+
+
+@pytest.mark.cr("601.2f")
+def test_601_2f_a_conjunct_that_cannot_be_read_refuses_the_whole_clause():
+    """A conjunct nothing reads makes the whole sentence unreadable — which is
+    what stops a card being admitted with half its subject enforced. The claim
+    and the charge are one reader, so an unreadable clause is neither."""
+    from engine.cost_modifiers import cost_modifier_claims_line
+
+    text = "Green enchantment spells and every second spell cost {2} more to cast."
+
+    assert cost_modifiers_for(text.lower().rstrip(".")) == ()
+    assert not cost_modifier_claims_line(text)

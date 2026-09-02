@@ -138,6 +138,7 @@ from .counters import (
 )
 from .zones import (
     _lower_ownership_exchange_unless_paid,
+    _lower_ante_offer_ownership_exchange,
     _lower_random_reveal_ownership_exchange,
     _lower_shuffle_graveyard_into_library,
     _lower_shuffle_hand_into_library,
@@ -460,6 +461,7 @@ __all__ = [
     "_lower_transmute_by_sacrifice",
     "_lower_exile_until_leaves_or_untaps",
     "_lower_ownership_exchange_unless_paid",
+    "_lower_ante_offer_ownership_exchange",
     "_lower_random_reveal_ownership_exchange",
     "_lower_exile_top_of_library",
     "_lower_put_exiled_with_source",

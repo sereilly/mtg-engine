@@ -376,6 +376,8 @@ def test_every_sacrifice_filter_in_the_pool_is_one_the_prompt_can_test():
 # rather than a different permanent. Each names the test that exercises it, so
 # a key can only be listed here by someone who wrote one.
 _COVERED_ELSEWHERE = {
+    "original_expansion":
+        "test_original_expansion_reads_the_first_printing_not_every_printing",
     "nontoken": "test_nontoken_rejects_a_token",
     "token_only": "test_token_only_rejects_a_nontoken",
     "untapped_only": "test_untapped_only_rejects_a_tapped_permanent",
@@ -444,6 +446,44 @@ def test_not_enchanted_rejects_a_permanent_carrying_an_aura(pool):
     assert subject_matches(game, bare, {"not_enchanted": True})
     assert subject_matches(game, equipped, {"not_enchanted": True})
     assert not subject_matches(game, enchanted, {"not_enchanted": True})
+
+
+def test_original_expansion_reads_the_first_printing_not_every_printing(pool):
+    """"…with **a name originally printed in the Homelands expansion**"
+    (Apocalypse Chime; Golgothian Sylex prints it about Antiquities).
+
+    Its own demonstration rather than a row in ``_REJECTIONS``, because a
+    rejection alone would pass for a matcher that answered False to everything.
+    The load-bearing half is the word **originally**: Grizzly Bears was printed
+    in Revised, and a matcher reading the printing *list* — or the set a copy
+    happened to be loaded from — would hand it to a Revised sweep. CR 201.5's
+    answer is ``printings[0]``, and only that.
+
+    The Antiquities/Revised overlap is the case the Sylex exists for and the
+    reason this is not a hypothetical: nineteen of its cards were reprinted, and
+    Ornithopter is one of them.
+    """
+    bears = Permanent(card=pool["Grizzly Bears"])
+    thopter = Permanent(card=pool["Ornithopter"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bears, thopter]),
+        PlayerState(name="P2"),
+    ])
+
+    assert subject_matches(game, bears, {"type_filter": "creature"}), (
+        "the control: the bare noun phrase must match, or the rejections below "
+        "prove nothing about the key"
+    )
+    assert subject_matches(game, bears, {"original_expansion": "lea"})
+    assert not subject_matches(game, bears, {"original_expansion": "hml"})
+    # Printed in Revised and originally printed in Alpha — the whole content of
+    # the word this key is named for.
+    assert "3ed" in pool["Grizzly Bears"].printings
+    assert not subject_matches(game, bears, {"original_expansion": "3ed"})
+    # …and the same for the card the Sylex was actually printed to catch.
+    assert "3ed" in pool["Ornithopter"].printings
+    assert subject_matches(game, thopter, {"original_expansion": "atq"})
+    assert not subject_matches(game, thopter, {"original_expansion": "3ed"})
 
 
 def test_enchanted_only_rejects_a_permanent_with_no_aura(pool):

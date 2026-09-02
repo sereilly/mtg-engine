@@ -1249,3 +1249,77 @@ def test_601_2b_a_bound_the_board_grows_lets_a_bigger_x_be_announced():
     p1.battlefield.append(Permanent(card=forest))
     assert game.cast_from_hand(0, "Bounded Draw", x_value=2).supported
 # --- end W4G4 ---
+
+
+# --- W2G5: a permanent's board-wide prohibition (CR 601.3) ---
+
+
+def _w2g5_ban_board(banned_type: str = "creature"):
+    """An invented enchantment printing the prohibition, on P2's battlefield.
+
+    Invented rather than named, for this file's stated reason: a test naming
+    Aether Storm could pass against a reader keyed to Aether Storm, and what is
+    being checked is that the card **type** is payload.
+    """
+    ban = _mk_card(
+        "Storm Front", "Enchantment",
+        f"{banned_type.capitalize()} spells can't be cast.",
+    )
+    bear = _mk_card("Test Bear", "Creature - Bear", mana_cost="{1}{G}", cmc=2.0)
+    bolt = _mk_card("Test Bolt", "Instant", mana_cost="{R}", cmc=1.0)
+    thopter = _mk_card(
+        "Test Thopter", "Artifact Creature - Thopter", mana_cost="{0}",
+    )
+    p1 = PlayerState(name="P1", hand=[bear, bolt, thopter], life=20)
+    p2 = PlayerState(
+        name="P2", hand=[bear], battlefield=[Permanent(card=ban)], life=20,
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game
+
+
+@pytest.mark.cr("601.3")
+def test_601_3_a_permanent_may_prohibit_a_whole_class_of_spells():
+    """"A player can begin to cast a spell only if … no rule or effect prohibits
+    that player from casting it." The prohibition is printed on a permanent and
+    names no seat, so it is read off the board at every cast rather than off the
+    spell's own text."""
+    game = _w2g5_ban_board()
+
+    refused = game.cast_from_hand(0, "Test Bear")
+
+    assert not refused.supported
+    assert "Storm Front" in refused.details
+
+
+@pytest.mark.cr("601.3")
+def test_601_3_a_seatless_prohibition_binds_its_own_controller_too():
+    """The sentence names nobody. A ban that spared the player who set it up
+    would be a strictly better card than the one printed — and that asymmetry is
+    exactly what separates this from the Aura form, which names one seat."""
+    game = _w2g5_ban_board()
+
+    assert not game.cast_from_hand(1, "Test Bear").supported
+
+
+@pytest.mark.cr("601.3", "205.2")
+def test_601_3_a_card_is_prohibited_by_every_type_its_line_names():
+    """CR 205.2: an artifact creature spell is a creature spell. Asking
+    ``primary_type`` picks one type off a list and would let it through — the
+    reading ``search_filters.card_has_type`` exists to stop being made again."""
+    game = _w2g5_ban_board()
+
+    assert not game.cast_from_hand(0, "Test Thopter").supported
+
+
+@pytest.mark.cr("601.3")
+def test_601_3_the_prohibition_is_exactly_the_class_it_prints():
+    """The card type is payload: the same sentence about artifacts stops
+    artifacts and nothing else."""
+    game = _w2g5_ban_board()
+    assert game.cast_from_hand(0, "Test Bolt").supported
+
+    artifacts = _w2g5_ban_board("artifact")
+    assert artifacts.cast_from_hand(0, "Test Bear").supported
+    assert not artifacts.cast_from_hand(0, "Test Thopter").supported

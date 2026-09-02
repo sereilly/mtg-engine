@@ -285,6 +285,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     "produce_mana_instead": "activated_mana",
     # Tempest Efreet is Bronze Tablet's sibling — an ownership exchange with a
     # card that ends up somewhere it can be used again.
+    "ante_or_exchange_ownership": "activated_recursion",
     "random_reveal_ownership_exchange": "activated_recursion",
     # Alchor's Tomb changes a permanent's colour. Antiquities' `gain_type`
     # settled this: the report's word for a permanent changing what it *is* is

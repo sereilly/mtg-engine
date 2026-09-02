@@ -58,7 +58,8 @@ from engine.oracle_types import (OracleInstruction,  # noqa: E402
                                  x_spend_colors_from_text)
 from engine.cast_costs import cast_cost_claims_line  # noqa: E402
 from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
-                                      cast_absence_line, cast_condition_line)
+                                      cast_absence_line, cast_condition_line,
+                                      global_cast_ban_line)
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for  # noqa: E402
 from engine.draw_step_modifiers import (  # noqa: E402
@@ -239,6 +240,13 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # scan; the claim asks the reader that answers it, for the reason above.
     ("cast_restrictions.py (board absence)",
      lambda s: cast_absence_line(s) is not None),
+    # The *other* board half of CR 601.3a — "Creature spells can't be cast."
+    # (Aether Storm.) Not a gate the casting card prints about itself but a
+    # prohibition a permanent imposes on every player, enforced by
+    # `cast_restrictions.global_cast_ban` from `mixins/stack/casting.py`. Its
+    # own channel, asking the reader that answers it.
+    ("cast_restrictions.py (board-wide ban)",
+     lambda s: global_cast_ban_line(s) is not None),
     # A CR 614 replacement effect, in full. `engine/replacements.py`'s
     # REPLACEMENT_LINES *is* the set of constants its interceptors probe for, so
     # asking it is asking the code that carries the line out. Three of these

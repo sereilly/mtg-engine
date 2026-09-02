@@ -400,6 +400,29 @@ def _lower_shuffle_library(node: ast.ShuffleLibrary) -> tuple[OracleInstruction,
     return (OracleInstruction("shuffle_library", "", payload),)
 
 
+def _lower_ante_offer_ownership_exchange(
+    node: "ast.AnteOfferOwnershipExchange",
+) -> tuple[OracleInstruction, ...]:
+    """Timmerian Fiends. The printed card type is payload, described the way
+    every other object target is so the activation picker, the CR 602.2b
+    legality gate and the handler all ask one question."""
+    return (
+        OracleInstruction(
+            "ante_or_exchange_ownership", "",
+            {
+                "type_word": node.type_word,
+                "targets": {
+                    "quantifier": "target",
+                    "kind": "object",
+                    "filter": {"type_filter": node.type_word},
+                },
+                "type_filter": node.type_word,
+            },
+        ),
+    )
+
+
+
 def _lower_random_reveal_ownership_exchange(
     node: "ast.RandomRevealOwnershipExchange",
 ) -> tuple[OracleInstruction, ...]:

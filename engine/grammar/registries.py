@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from ..auras import aura_continuous_claim
 from ..cast_restrictions import (CAST_RESTRICTIONS, cast_absence_line,
-                                 cast_condition_line)
+                                 cast_condition_line, global_cast_ban_line)
 from ..cost_modifiers import cost_modifier_claims_line
 from ..cost_x_definitions import cast_x_ceiling_line, cast_x_definition_line
 from ..damage_source_colors import colorless_source_line
@@ -89,6 +89,15 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # it, so a board the matcher cannot test leaves the line unclaimed rather
     # than admitted with the restriction dropped.
     if cast_absence_line(normalized) is not None:
+        return "cast_restrictions"
+
+    # engine/cast_restrictions.py — the *board* half of CR 601.3a: "Creature
+    # spells can't be cast." (Aether Storm.) Not a gate the casting card prints
+    # about itself but a prohibition a permanent imposes on every player, so it
+    # carries no instruction for the same reason the rows above carry none —
+    # `global_cast_ban` runs it off the board's text at every cast. Claimed
+    # through the reader that enforces it, so the claim cannot outlive the ban.
+    if global_cast_ban_line(normalized) is not None:
         return "cast_restrictions"
 
     # engine/untap_restrictions.py — CR 502 "don't untap" templates (Stasis,

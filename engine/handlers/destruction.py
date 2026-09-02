@@ -755,6 +755,14 @@ def sacrifice_expansion_permanents(game: Game, instruction: OracleInstruction, c
     Antiquities cards were reprinted in Revised, and reading the loaded set code
     would miss every one of them. It is the same read City in a Bottle makes.
 
+    **Read off ``effective_card``, because CR 206.3b is a list of *names*.** The
+    rule spells the set out as "those names are Amulet of Kroog, Argivian
+    Archaeologist, …", so what the sweep asks is whether *this object's* name is
+    one of them — and a copy's name is the name it copied (CR 707.2). A Copy
+    Artifact copying Su-Chi is a permanent named Su-Chi and the Sylex takes it;
+    reading the printed face asked where the physical card came from, which is a
+    different question, and left it on the battlefield.
+
     The Sylex sacrifices itself: it is an Antiquities card and its own ability
     does not exempt it. Nothing here excludes the source, deliberately.
     """
@@ -766,7 +774,7 @@ def sacrifice_expansion_permanents(game: Game, instruction: OracleInstruction, c
         (seat, perm)
         for seat, perm in game.permanents_with_controller()
         if not perm.metadata.get("is_token")
-        and perm.card.original_printing.lower() == wanted
+        and perm.effective_card.original_printing.lower() == wanted
     ]
     for seat, perm in doomed:
         game._permanent_to_graveyard(game.players[seat], perm)

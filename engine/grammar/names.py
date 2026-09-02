@@ -61,3 +61,51 @@ def parse_card_name(stream: TokenStream) -> str:
 
 
 __all__ = ["parse_card_name"]
+
+
+def accept_original_expansion(stream: TokenStream) -> str | None:
+    """``a name originally printed in the <Set> expansion`` -- the *set code*
+    the printed expansion name resolves to, or None with the cursor unmoved.
+
+    A set name is a literal string read off the stream, which is this module's
+    subject: it shares no vocabulary with the filter parser above, so the scan
+    that reads one lives here beside the card-name scan for the same reason.
+
+    Two readers ask it -- the noun phrase's postmodifier ("all nontoken
+    permanents **with** a name originally printed in the Homelands expansion",
+    Apocalypse Chime) and the passive sacrifice production ("Each nontoken
+    permanent with a name originally printed in the Antiquities expansion is
+    sacrificed by its controller", Golgothian Sylex). One reader, because two
+    scans of one printed phrase are two spellings free to disagree about where
+    the set name ends (idiom 36).
+
+    The name is resolved through ``card_loader.set_code_for_expansion_name`` --
+    the manifest already holds both the name and the code, so the mapping is a
+    projection of the registry rather than a second table. A name the manifest
+    does not know refuses without consuming, which is the right answer: the
+    effect would otherwise sweep whichever set the caller guessed.
+    """
+    from ..card_loader import set_code_for_expansion_name
+
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "a", "name", "originally", "printed", "in", "the"
+    ):
+        stream.reset(mark)
+        return None
+    words: list[str] = []
+    while not stream.exhausted and not stream.at_word("expansion"):
+        word = stream.peek_word()
+        if word is None:
+            stream.reset(mark)
+            return None
+        words.append(word)
+        stream.advance()
+    if not words or not stream.accept_word("expansion"):
+        stream.reset(mark)
+        return None
+    set_code = set_code_for_expansion_name(" ".join(words))
+    if set_code is None:
+        stream.reset(mark)
+        return None
+    return set_code

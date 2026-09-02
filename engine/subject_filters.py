@@ -56,6 +56,13 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     "tapped_only", "untapped_only",
     "mana_value", "power", "toughness", "with_plus1_counter",
     "nontoken", "named", "supertypes",
+    # "…with **a name originally printed in the Homelands expansion**"
+    # (Apocalypse Chime). A fact about the card, read off
+    # ``original_printing`` (off ``effective_card``, since CR 206.3 states the
+    # set as a list of names) -- so the pure matcher answers it exactly as it
+    # answers ``named``, and the phrase composes with any verb instead of
+    # buying one production its one card.
+    "original_expansion",
     # "Sacrifice a **Caribou token**" (Caribou Range). The positive twin of
     # ``nontoken``, read off the same CR 111.1 fact the matcher already tests —
     # and it must be here, not merely tested: the key set is what a compiler

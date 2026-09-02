@@ -544,6 +544,31 @@ class OwnershipExchangeUnlessPaid:
 
 
 @dataclass(frozen=True)
+class AnteOfferOwnershipExchange:
+    """Timmerian Fiends' whole four-sentence ability.
+
+    "The owner of target <type> may ante the top card of their library. If that
+    player doesn't, exchange ownership of that <type> and this permanent. Put
+    the <type> card into your graveyard and this permanent from anywhere into
+    that player's graveyard. This change in ownership is permanent."
+
+    One node, in `paragraphs.py`'s family and for
+    :class:`RandomRevealOwnershipExchange`'s reason: sentence two names "that
+    <type>", which only sentence one chose; sentence three is *how* sentence
+    two's exchange is carried out, since this engine's ownership is which
+    player's zone a card sits in; and sentence four (CR 108.3's ante exception,
+    CR 407) is what makes the two moves permanent rather than a loan.
+
+    ``type_word`` is the printed card type the ability targets, and it is
+    payload rather than part of the node: the same paragraph about a creature is
+    the same effect, and the word has to be *the same* in all three sentences
+    or the paragraph is not describing one object.
+    """
+
+    type_word: str
+
+
+@dataclass(frozen=True)
 class RandomRevealOwnershipExchange:
     """Tempest Efreet's whole five-sentence ability.
 

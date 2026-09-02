@@ -330,8 +330,12 @@ class GameEndingMixin:
                 for player in self.players:
                     for perm in list(self.controlled_by(player)):
                         # The card's original printing, not whichever set loaded
-                        # first — see _set_lockout_banning_card.
-                        card_set = perm.card.original_printing.lower()
+                        # first — see _set_lockout_banning_card. Off
+                        # ``effective_card``, because CR 206.3a is a list of
+                        # *names* and a copy's name is the one it copied
+                        # (CR 707.2): a Vesuvan Doppelganger wearing Serendib
+                        # Efreet's name is a permanent this sentence names.
+                        card_set = perm.effective_card.original_printing.lower()
                         if (
                             id(perm) not in banner_perm_ids
                             and not perm.metadata.get("is_token")

@@ -22,6 +22,7 @@ from ..amounts import (_parse_for_each_this_way, accept_fraction_head,
                        accept_rounding, parse_amount)
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
+from ..names import accept_original_expansion
 from ..lexer import NUMBER
 from ..readers import accept_source_reference
 from ..references import parse_player_ref, parse_recipient, parse_target_spec
@@ -733,38 +734,29 @@ def _parse_sacrifice_expansion_permanents(stream: TokenStream) -> ast.Statement 
     """``Each nontoken permanent with a name originally printed in the <Set>
     expansion is sacrificed by its controller.`` (Golgothian Sylex.)
 
-    The set *name* is printed and the engine wants its code, so the mapping is
-    asked of the manifest — the registry that already holds both — rather than
-    written out here. A name the manifest does not know leaves the line
-    unconsumed and its card unsupported, which is the right answer: the effect
-    would otherwise sacrifice the permanents of whichever set the caller
-    guessed, or of none, and neither is what the card says.
-    """
-    from ...card_loader import set_code_for_expansion_name
+    The printed expansion phrase is read by ``names.accept_original_expansion``,
+    the same reader the noun phrase's postmodifier uses for Apocalypse Chime's
+    "Destroy all nontoken permanents **with a name originally printed in the
+    Homelands expansion**" — one scan, because two scans of one printed phrase
+    are two spellings free to disagree about where the set name ends (idiom 36).
+    A name the manifest does not know leaves the line unconsumed and its card
+    unsupported, which is the right answer: the effect would otherwise sacrifice
+    the permanents of whichever set the caller guessed.
 
+    Still its own production, because what the noun phrase is *attached to* here
+    is a passive verb no other production reads — "is sacrificed by its
+    controller" — and the sentence has no imperative for the statement parser to
+    dispatch on.
+    """
     mark = stream.mark()
-    if not stream.accept_phrase(
-        "each", "nontoken", "permanent", "with", "a", "name",
-        "originally", "printed", "in", "the",
-    ):
+    if not stream.accept_phrase("each", "nontoken", "permanent", "with"):
         stream.reset(mark)
         return None
-    words: list[str] = []
-    while not stream.exhausted and not stream.at_word("expansion"):
-        word = stream.peek_word()
-        if word is None:
-            stream.reset(mark)
-            return None
-        words.append(word)
-        stream.advance()
-    if not words or not stream.accept_word("expansion"):
+    set_code = accept_original_expansion(stream)
+    if set_code is None:
         stream.reset(mark)
         return None
     if not stream.accept_phrase("is", "sacrificed", "by", "its", "controller"):
-        stream.reset(mark)
-        return None
-    set_code = set_code_for_expansion_name(" ".join(words))
-    if set_code is None:
         stream.reset(mark)
         return None
     return ast.SacrificeExpansionPermanents(set_code)
