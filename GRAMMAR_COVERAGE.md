@@ -30,7 +30,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | HML | 115 | 189 | 92.6% | 92.6% | 64.0% | 93 |
 | 5ED | 434 | 631 | 92.6% | 92.4% | 60.1% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 54.2% | 48.2% | 33.5% | 66 |
+| ALL *(measured)* | 144 | 251 | 56.6% | 51.0% | 36.3% | 71 |
 | **All (shipped)** | **3439** | **5016** | **88.8%** | **87.9%** | **56.9%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -43,9 +43,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 295 | 140 | expected a subject |  |
-| 142 | 61 | unrecognized effect verb |  |
-| 80 | 43 | unconsumed text |  |
+| 292 | 137 | expected a subject |  |
+| 141 | 60 | unrecognized effect verb |  |
+| 78 | 41 | unconsumed text |  |
 | 39 | 39 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -403,6 +403,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `This creature gets +1/+1 as long as an opponent controls a nontoken white permanent.`
 - **Bestial Fury**
   - `When this Aura enters, draw a card at the beginning of the next turn's upkeep.`
+  - `Whenever enchanted creature becomes blocked, it gets +4/+0 and gains trample until end of turn.`
 - **Binding Grasp**
   - `At the beginning of your upkeep, sacrifice this Aura unless you pay {1}{U}.`
   - `At the beginning of your upkeep, sacrifice this Aura unless you pay {1}{U}.`
@@ -1258,6 +1259,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Fallen Angel**
   - `Sacrifice a creature: This creature gets +2/+1 until end of turn.`
   - `Sacrifice a creature: This creature gets +2/+1 until end of turn.`
+- **False Demise**
+  - `When enchanted creature dies, return that card to the battlefield under your control.`
 - **Fanatical Fever**
   - `Target creature gets +3/+0 and gains trample until end of turn.`
 - **Farrel's Mantle**
@@ -1538,6 +1541,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{5}: At the beginning of your next upkeep, choose a basic land type. This creature gains landwalk of the chosen type until the end of that turn. (It can't be blocked as long as defending player controls a land of that type.)`
 - **Giant Trap Door Spider**
   - `{1}{R}{G}, {T}: Exile this creature and target creature without flying that's attacking you.`
+- **Gift of the Woods**
+  - `Whenever enchanted creature blocks or becomes blocked, it gets +0/+3 until end of turn and you gain 1 life.`
 - **Glacial Chasm**
   - `When this land enters, sacrifice a land.`
 - **Glacial Crevasses**
@@ -2156,6 +2161,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Kjeldoran Outpost**
   - `{T}: Add {W}.`
   - `{1}{W}, {T}: Create a 1/1 white Soldier creature token.`
+- **Kjeldoran Pride**
+  - `{2}{U}: Attach this Aura to target creature other than enchanted creature.`
 - **Kjeldoran Royal Guard**
   - `{T}: All combat damage that would be dealt to you by unblocked creatures this turn is dealt to this creature instead.`
   - `{T}: All combat damage that would be dealt to you by unblocked creatures this turn is dealt to this creature instead.`
@@ -2623,6 +2630,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Look at the top three cards of target player's library, then put them back in any order. You may have that player shuffle.`
 - **Nature's Chosen**
   - `{0}: Untap enchanted creature. Activate only during your turn and only once each turn.`
+  - `Tap enchanted creature: Untap target artifact, creature, or land. Activate only if enchanted creature is white and untapped and only once each turn.`
 - **Nature's Lore**
   - `Search your library for a Forest card, put that card onto the battlefield, then shuffle.`
   - `Search your library for a Forest card, put that card onto the battlefield, then shuffle.`
@@ -2850,6 +2858,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Phelddagrif**
   - `{W}: Phelddagrif gains flying until end of turn. Target opponent gains 2 life.`
   - `{U}: Return Phelddagrif to its owner's hand. Target opponent may draw a card.`
+- **Phyrexian Boon**
+  - `Enchanted creature gets +2/+1 as long as it's black. Otherwise, it gets -1/-2.`
 - **Phyrexian Gremlins**
   - `{T}: Tap target artifact. It doesn't untap during its controller's untap step for as long as this creature remains tapped.`
 - **Phyrexian War Beast**
@@ -4128,6 +4138,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever you cast an enchantment spell, you may draw a card.`
 - **Vertigo**
   - `Vertigo deals 2 damage to target creature with flying. That creature loses flying until end of turn.`
+- **Veteran's Voice**
+  - `Tap enchanted creature: Target creature other than the creature tapped this way gets +2/+1 until end of turn. Activate only if enchanted creature is untapped.`
 - **Vexing Arcanix**
   - `{3}, {T}: Target player chooses a card name, then reveals the top card of their library. If that card has the chosen name, that player puts it into their hand. Otherwise, they put it into their graveyard and this artifact deals 2 damage to them.`
 - **Vibrating Sphere**

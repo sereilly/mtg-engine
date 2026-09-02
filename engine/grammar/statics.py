@@ -264,6 +264,49 @@ def _lower_anthem_condition(condition: ast.Condition, node: ast.StaticAbilityNod
     return _lower_anthem_condition_payload(_lower_condition(condition), node)
 
 
+def _conditional_static_effect(
+    effects: tuple[ast.Statement, ...], node: ast.StaticAbilityNode
+) -> tuple[int, int, list[str]]:
+    """The ``(power, toughness, keywords)`` a conditional static's arm carries.
+
+    Extracted so the "Otherwise, …" arm is read by **this** function rather
+    than by a second copy of it: the two arms of Phyrexian Boon are the same
+    kind of thing (CR 613.1 criteria that happen to be complementary), and an
+    arm admitted by laxer rules than its sibling is an arm that lowers a delta
+    the refresh cannot apply.
+    """
+    power = toughness = 0
+    keywords: list[str] = []
+    for effect in effects:
+        if isinstance(effect, ast.Pump):
+            if effect.per_each is not None:
+                raise LoweringError(
+                    "the conditional static channel carries a fixed delta",
+                    node=node,
+                )
+            power = _signed(effect.power, effect.power_negative)
+            toughness = _signed(effect.toughness, effect.toughness_negative)
+            if not isinstance(power, int) or not isinstance(toughness, int):
+                raise LoweringError(
+                    "a variable conditional bonus has no channel", node=node
+                )
+        elif isinstance(effect, ast.GainKeyword):
+            for keyword in effect.keywords:
+                if keyword not in grantable_keywords():
+                    raise LoweringError(
+                        f"the derived-grant channel gives no {keyword!r} at "
+                        "layer 6",
+                        node=node,
+                    )
+                keywords.append(keyword)
+        else:
+            raise LoweringError(
+                "a conditional static bonus is derived by engine/static_bonuses.py",
+                node=node,
+            )
+    return power, toughness, keywords
+
+
 def _lower_self_conditional_static(
     node: ast.StaticAbilityNode, effects: tuple[ast.Statement, ...]
 ) -> tuple[OracleInstruction, ...]:
@@ -297,38 +340,23 @@ def _lower_self_conditional_static(
     lowered into a payload no pass reads is a static that never applies while
     the card reports supported.
     """
-    power = toughness = 0
-    keywords: list[str] = []
-    for effect in effects:
-        if isinstance(effect, ast.Pump):
-            if effect.per_each is not None:
-                raise LoweringError(
-                    "the conditional static channel carries a fixed delta",
-                    node=node,
-                )
-            power = _signed(effect.power, effect.power_negative)
-            toughness = _signed(effect.toughness, effect.toughness_negative)
-            if not isinstance(power, int) or not isinstance(toughness, int):
-                raise LoweringError(
-                    "a variable conditional bonus has no channel", node=node
-                )
-        elif isinstance(effect, ast.GainKeyword):
-            for keyword in effect.keywords:
-                if keyword not in grantable_keywords():
-                    raise LoweringError(
-                        f"the derived-grant channel gives no {keyword!r} at "
-                        "layer 6",
-                        node=node,
-                    )
-                keywords.append(keyword)
-        else:
-            raise LoweringError(
-                "a conditional static bonus is derived by engine/static_bonuses.py",
-                node=node,
-            )
-    condition = _lower_anthem_condition(node.condition, node)
+    power, toughness, keywords = _conditional_static_effect(effects, node)
     attached = _is_enchanted(
         getattr(effects[0], "subject", None) if effects else None
+    )
+    # "…**as long as it's black**" (Phyrexian Boon). The pronoun is the
+    # sentence's own subject — the enchanted creature — which is a referent the
+    # general condition lowering has no way to see: it resolves "it" to a
+    # *chosen target*, and an "as long as" clause chooses nothing (CR 613.1), so
+    # it refuses there with "'it' has no target to be a colour of here". Asked
+    # here, where the subject is in hand, and answered as the
+    # ``attached_matches`` payload ``conditional_static_holds`` already
+    # evaluates — so the colour is read by ``subject_matches`` through the
+    # layers, and an Aura on a creature something has recoloured switches arms
+    # by itself.
+    colour = _attached_colour_condition(node.condition) if attached else None
+    condition = colour if colour is not None else _lower_anthem_condition(
+        node.condition, node
     )
     # **Where the split with ``engine/static_bonuses.py`` runs.** That table
     # reads the sentence printed about "this creature" and every condition it
@@ -373,7 +401,91 @@ def _lower_self_conditional_static(
         # read this one key.
         payload["subject"] = "attached"
         payload["condition"] = _condition_about_the_host(condition)
+    if node.otherwise is not None:
+        _add_otherwise_arm(payload, node, attached)
     return (OracleInstruction("conditional_static", "", payload),)
+
+
+def _add_otherwise_arm(
+    payload: dict, node: ast.StaticAbilityNode, attached: bool
+) -> None:
+    """Fold "Otherwise, it gets -1/-2." into *payload* (Phyrexian Boon).
+
+    **One instruction, not two.** The obvious shape is a second
+    ``conditional_static`` carrying the negated condition, and it is wrong twice
+    over. The compiler wraps a line that lowers to several instructions in a
+    ``sequence`` (``_line_instruction``), and every pass that applies a
+    conditional static scans ``prog.instructions`` for that *kind* — so the
+    wrapper hides both arms and the card does nothing at all while reporting
+    supported. And two payloads is two conditions, asked separately, free to
+    both answer True on a board where the negation and the assertion disagree.
+
+    Asked once and answered once: the refresh evaluates the criteria and applies
+    whichever arm the answer selects, so the two arms partition the board by
+    construction rather than by a negation somebody has to keep exact.
+
+    A keyword arm refuses. The delta arm is read by ``_refresh_dynamic_creatures``
+    and the keyword arm would have to be read by ``_recalculate_lord_buffs``
+    as well; no card in the pool prints one, and a keyword lowered into a
+    payload that pass does not read is a grant that never happens — the
+    unread-rider failure this whole family is arranged against.
+    """
+    other_effect = node.otherwise
+    other_effects = (
+        other_effect.effects
+        if isinstance(other_effect, ast.Conjunction) else (other_effect,)
+    )
+    if _is_enchanted(getattr(other_effects[0], "subject", None)) != attached:
+        raise LoweringError(
+            "an 'otherwise' arm applies to the same permanent as the arm it "
+            "complements",
+            node=node,
+        )
+    other_power, other_toughness, other_keywords = _conditional_static_effect(
+        other_effects, node
+    )
+    if other_keywords:
+        raise LoweringError(
+            "_recalculate_lord_buffs reads no 'otherwise' keyword arm",
+            node=node,
+        )
+    if not (other_power or other_toughness):
+        raise LoweringError(
+            "an 'otherwise' arm with no delta is a sentence nothing applies",
+            node=node,
+        )
+    payload["otherwise_power"] = other_power
+    payload["otherwise_toughness"] = other_toughness
+
+
+def _attached_colour_condition(condition) -> dict | None:
+    """``as long as it's <colour>`` about an Aura's host, as a payload.
+
+    None for anything else, so the ordinary condition lowering runs unchanged —
+    this is a branch the general reader genuinely cannot take, not a shortcut
+    around it.
+
+    The colour becomes a **filter**, asked through ``subject_matches`` like
+    every other printed noun-phrase narrowing in the engine, rather than a
+    bespoke "is it black" test that would be a second reader free to disagree
+    with the layers about what black is.
+    """
+    from ..subject_filters import untestable_filter_keys
+
+    if not isinstance(condition, ast.ItIsColor):
+        return None
+    if condition.negated:
+        # "as long as it's **not** black" has no printing in the pool and
+        # ``attached_matches`` has no negation, so the word would be consumed
+        # and dropped — a criteria clause reading as its own opposite. None
+        # here sends the line to the general lowering, which refuses it by name.
+        return None
+    described = {"color_filter": condition.color}
+    if untestable_filter_keys(described):
+        return None
+    return {"kind": "attached_matches", "filter": described}
+
+
 
 
 def _condition_about_the_host(condition: dict) -> dict:

@@ -213,7 +213,16 @@ def _parse_static_condition_line(stream: TokenStream) -> ast.StaticAbilityNode |
         stream.reset(mark)
         return None
     stream.accept_punct(".")
+    otherwise = _accept_static_otherwise(stream, statement)
     if not stream.exhausted or not _looks_static(statement):
+        stream.reset(mark)
+        return None
+    if otherwise is not None and not _looks_static(otherwise):
+        # The complement has to be the same *kind* of thing as the arm it
+        # complements. A one-shot in the second sentence would be an effect
+        # happening once beside one that applies continuously, and no card
+        # prints that — so the line goes back to the ordinary path rather than
+        # being claimed and half-read.
         stream.reset(mark)
         return None
     # A fourth reducing gate, in the spirit of the three above: a condition
@@ -228,7 +237,75 @@ def _parse_static_condition_line(stream: TokenStream) -> ast.StaticAbilityNode |
     if getattr(getattr(condition, "filter", None), "chosen_color", False):
         stream.reset(mark)
         return None
-    return ast.StaticAbilityNode(statement, condition)
+    return ast.StaticAbilityNode(statement, condition, otherwise=otherwise)
+
+
+def _accept_static_otherwise(
+    stream: TokenStream, statement: ast.Statement
+) -> ast.Statement | None:
+    """``Otherwise, <continuous effect>.`` after an "as long as" sentence.
+
+    "Enchanted creature gets +2/+1 as long as it's black. **Otherwise, it gets
+    -1/-2.**" (Phyrexian Boon.) Two continuous effects with complementary
+    criteria (CR 613.1), printed as two sentences on one line.
+
+    Deliberately **not** ``control_flow._attach_otherwise``, which is the same
+    printed word on a one-shot: that one hangs a branch off an
+    ``ast.Conditional`` whose condition is tested once as the spell resolves.
+    Here nothing resolves — the criteria are re-asked on every recompute
+    (CR 611.3b), and the arm that applies changes the moment the creature does.
+    One word, two sentences, and the difference is which node it lands on.
+
+    Returns None and consumes nothing when the word is absent, so every line
+    that parsed before this existed parses identically.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("otherwise"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    try:
+        arm = parse_statement(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    return _rebind_otherwise_subject(arm, statement)
+
+
+def _rebind_otherwise_subject(
+    arm: ast.Statement, statement: ast.Statement
+) -> ast.Statement:
+    """*arm* with its "it" pointed at whatever the first sentence was about.
+
+    "**Enchanted creature** gets +2/+1 as long as it's black. Otherwise, **it**
+    gets -1/-2." The pronoun opening the second sentence names the subject of
+    the first, and the parser has no way to know that on its own: a bare "it"
+    reads as the ability's own source, so Phyrexian Boon's penalty arm arrived
+    pointing at the **Aura** — a permanent with no power or toughness at all.
+    Left alone it would have lowered to a -1/-2 on nothing, on a card reporting
+    supported.
+
+    The same substitution ``rebinding.rebind_pronoun_to_condition_target``
+    performs for a one-shot's arms, with the referent taken from the sentence
+    rather than from a targeting condition: an "as long as" clause chooses
+    nothing (CR 613.1), so there is no target to inherit and the subject is the
+    only referent there is.
+
+    A second sentence that names its subject outright keeps it. Only the
+    pronoun is rewritten, so a printing whose arms are about different
+    permanents still reaches the lowering with both subjects intact — and is
+    refused there rather than silently merged.
+    """
+    subject = getattr(statement, "subject", None)
+    arm_subject = getattr(arm, "subject", None)
+    if not isinstance(subject, ast.TargetSpec) or not isinstance(
+        arm_subject, ast.TargetSpec
+    ):
+        return arm
+    if arm_subject.quantifier not in ("it", "this") or not arm_subject.filter.is_source:
+        return arm
+    return replace(arm, subject=subject)
 
 
 def _distributive_subject(statement: ast.Statement) -> ast.TargetSpec | None:

@@ -135,6 +135,22 @@ def _parse_attached_step_event(
 _ATTACHED_COMBAT_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("attacks", "and", "isn't", "blocked"), "attacks_unblocked"),
     (("attacks", "or", "blocks"), "creature_attacks_or_blocks"),
+    # The two block halves (Gift of the Woods, Bestial Fury). Longest first, as
+    # everywhere: "becomes blocked" is not a prefix of "blocks or becomes
+    # blocked" — they diverge at the first word — but the joined sentence is
+    # listed above its own halves anyway, because the next one printed may be.
+    #
+    # Both are the **bare** spellings. The narrowed "…blocks or becomes blocked
+    # **by** <noun>" (Infinite Authority) is a `_FILTERED_EVENTS` row, and that
+    # table is tried before this production — so the narrowing is read there and
+    # never reaches here to be dropped. A narrowed "…becomes blocked by <noun>"
+    # on an Aura has no row on either side: this production consumes "becomes
+    # blocked", the trailing noun phrase is left over, and the line fails as
+    # unconsumed text. That is the intended refusal — the alternative is a card
+    # admitted with its noun phrase silently gone, which is CR 509.3c's firing
+    # standing in for CR 509.3d's.
+    (("blocks", "or", "becomes", "blocked"), "creature_blocks_or_blocked_by"),
+    (("becomes", "blocked"), "creature_becomes_blocked"),
 )
 
 

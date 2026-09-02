@@ -876,6 +876,40 @@ def aura_pt_grant_per_counter(oracle_text: str) -> tuple[int, int, str] | None:
     return None
 
 
+#: A line that is **not** a static ability, however much of one its middle
+#: looks like. A continuous grant is derived from an Aura's text on every
+#: recompute, so it may only be read off a line that is continuously true: a
+#: triggered ability's effect is a one-shot (CR 603.1) and an activated
+#: ability's is spent when it resolves (CR 602.1), and reading either as a
+#: static grant applies it *before the ability has done anything* and never
+#: stops.
+#:
+#: Bestial Fury is the card. "Whenever enchanted creature becomes blocked, it
+#: gets +4/+0 and gains trample until end of turn" was read here as a permanent
+#: +4/+0: the enchanted creature got it the moment the Aura attached, kept it
+#: through the opponent's turns, and got a *second* +4/+0 on top whenever it was
+#: actually blocked. The trample half was correct — the keyword reader below
+#: takes only whole "…has <keyword>" lines — so one printed sentence had one
+#: half continuous and one half not, which is the shape that makes this kind of
+#: bug invisible in a game.
+_NON_STATIC_LINE = re.compile(r"^(?:when|whenever|at the beginning|at end of)\b")
+
+
+def _static_ability_line(line: str) -> bool:
+    """Whether *line* is a static ability, and so may be read as a continuous
+    grant at all.
+
+    An activated ability is caught by the colon its cost ends at (CR 602.1),
+    which is the same delimiter ``_parse_activated_ability`` splits on — asked
+    here as the shape rather than by calling that parser, because the question
+    is only "is there a cost in front of this", and a line whose *effect* the
+    compiler cannot read is still not a static ability.
+    """
+    if _NON_STATIC_LINE.match(line):
+        return False
+    return ":" not in line.split(" gets ")[0]
+
+
 def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
     """The permanent +P/+T an Aura grants while attached, or None.
 
@@ -893,8 +927,17 @@ def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
         match = _STATIC_PT_GRANT.search(line)
         if match is None:
             continue
+        # Only a static ability grants continuously — see `_NON_STATIC_LINE`.
+        if not _static_ability_line(line):
+            continue
         tail = line[match.end():].lstrip()
-        if tail.startswith("until end of turn"):
+        # The duration, wherever in the tail it is printed. `_STATIC_PT_GRANT`'s
+        # own lookahead and this check both used to require it immediately after
+        # the numbers, so "gets +4/+0 **and gains trample** until end of turn"
+        # slipped between them and was read as permanent. Two readers of one
+        # clause, and the sentence only has to put a word between them to defeat
+        # both.
+        if "until end of turn" in tail:
             continue
         # "…gets +2/+2 **as long as an opponent controls a black permanent**"
         # (Ice Age's five Scarabs), and "for as long as this artifact remains

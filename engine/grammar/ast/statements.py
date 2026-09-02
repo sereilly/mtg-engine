@@ -588,6 +588,16 @@ class StaticAbilityNode:
     effect: Statement
     condition: Condition | None = None
     duration: Duration = field(default_factory=Duration)
+    #: "Enchanted creature gets +2/+1 as long as it's black. **Otherwise, it
+    #: gets -1/-2.**" (Phyrexian Boon.) The other arm of ``condition``, and a
+    #: *continuous* one: both arms apply exactly while their half of the
+    #: condition holds, so neither is the one-shot ``Conditional.otherwise``
+    #: that ``control_flow._attach_otherwise`` builds — reading it as that would
+    #: test the colour once and keep whichever delta it found.
+    #:
+    #: Meaningless without ``condition``, which is what it is the complement of;
+    #: the production that fills it only reaches this line after one parsed.
+    otherwise: Statement | None = None
 
 
 @dataclass(frozen=True)

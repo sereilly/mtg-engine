@@ -407,11 +407,32 @@ def _attached_permanent_state(
     host. An Aura that is not attached to anything satisfies no state, so the
     ability cannot be activated — which is also what CR 704.5m would already
     have done to the Aura.
+
+    "Activate only if enchanted creature is **white and** untapped." (Nature's
+    Chosen.) The colour is a second conjunct of the same clause, not a second
+    clause — ``_conjuncts`` splits on "and only", which this "and" is not — so
+    it is read here or it is dropped, and dropped it would be an ability usable
+    off a green creature the card never allows. Asked through
+    ``effective_colors`` so layer 5 answers: an Aura on a creature a Painter's
+    Servant has made white can be activated, and one whose host stops being
+    white cannot.
     """
     host = getattr(source, "metadata", {}).get("attached_to") if source else None
     if host is None or not game.is_on_battlefield(host):
         return False
+    colour = match.groupdict().get("colour")
+    if colour and _COLOR_LETTERS[colour] not in host.effective_colors:
+        return False
     return host.tapped if match.group("state") == "tapped" else not host.tapped
+
+
+#: The printed colour words this file reads, as the single letters the engine's
+#: colour channel uses. Its own map rather than an import, because
+#: ``activation_restrictions`` is imported by the compiler and the grammar's
+#: word tables import back the other way.
+_COLOR_LETTERS = {
+    "white": "W", "blue": "U", "black": "B", "red": "R", "green": "G",
+}
 
 
 def _during_end_of_combat(game: "Game", controller_index: int, source) -> bool:
@@ -1170,6 +1191,7 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         # changes.
         re.compile(
             r"^activate only if (?:enchanted|equipped) \w+ is "
+            r"(?:(?P<colour>white|blue|black|red|green) and )?"
             r"(?P<state>untapped|tapped)$"
         ),
         _attached_permanent_state,

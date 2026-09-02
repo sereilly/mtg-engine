@@ -1511,11 +1511,33 @@ class LegalityMixin:
             # from its colour (702.16d), the Equipment itself (301.5c). Asked of
             # the same predicate the resolution asks, so a creature offered here
             # is one the attach then lands on.
-            from .equipment import equip_refusal
+            # ``attachment_refusal``, not ``equip_refusal``: CR 701.3's action
+            # is asked of whichever kind of Attachment printed the ability, and
+            # an Aura's legality is its enchant clause (CR 702.5), not
+            # CR 301.5's. Asking the Equipment predicate of an Aura refused
+            # every host and emptied the picker.
+            from .equipment import attachment_refusal
 
             if not permanent_matches_filter(perm, instruction.payload):
                 return False
-            return source_permanent is None or equip_refusal(self, source_permanent, perm) is None
+            # The printed narrowing lives on the ``targets`` filter as well as
+            # on the payload root — "other than enchanted creature" (Kjeldoran
+            # Pride) is a relative key, which ``permanent_matches_filter`` (the
+            # pure half) cannot answer at all. So it is asked of
+            # ``subject_matches``, the half that has the game and the source
+            # (imported at module scope, not here: a second, function-level
+            # import of a module-level name turns it local for the *whole*
+            # function and breaks every other branch that reads it).
+            described = (instruction.payload.get("targets") or {}).get("filter") or {}
+            if described and not subject_matches(
+                self, perm, described, observer=controller_index,
+                source=source_permanent,
+            ):
+                return False
+            return (
+                source_permanent is None
+                or attachment_refusal(self, source_permanent, perm) is None
+            )
         if instruction.kind == "add_counter_to_target":
             # Tempered Veteran's "target creature with a +1/+1 counter on it" —
             # the same filter the handler enforces at resolution, so the picker

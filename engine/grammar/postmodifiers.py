@@ -24,6 +24,13 @@ its docstring in `nouns`.
 
 from __future__ import annotations
 
+#: "…other than **the creature tapped this way**" (Veteran's Voice). The
+#: production above resolves it to the attached host, which is only the same
+#: permanent while the ability's cost is the one that taps the host. Named
+#: here so the production and the compiler's gate read one string rather
+#: than two spellings of it.
+COST_TAPPED_REFERENT = "the creature tapped this way"
+
 from typing import Callable
 
 from . import ast
@@ -460,6 +467,45 @@ def _parse_postmodifiers(
                     stream.advance()
                     d.other_than_source = True
                     continue
+            # "target creature **other than enchanted creature**" (Kjeldoran
+            # Pride). Not ``other_than_source``: the Aura is the source, and
+            # excluding *it* from a set of creatures excludes nothing at all —
+            # an Aura is not a creature, so the restriction would read as
+            # satisfied by every creature on the board including the one the
+            # card names. Its own field, tested by ``subject_matches`` off the
+            # attachment record.
+            elif stream.accept_phrase("than", "enchanted"):
+                noun = stream.peek_word()
+                if noun is not None:
+                    stream.advance()
+                    d.other_than_attached_host = True
+                    continue
+            # "target creature **other than the creature tapped this way**"
+            # (Veteran's Voice). The referent is whatever this ability's *cost*
+            # taps, and the only cost in this engine that taps a named permanent
+            # is "Tap enchanted creature" — so the phrase resolves to the
+            # attached host, the same field the sentence beside it reads.
+            #
+            # It cannot be answered off the cost-tap record
+            # (``engine/cost_tap_records.py``), which is what Vodalian War
+            # Machine's "tapped this turn to pay for its abilities" reads:
+            # CR 601.2h pays costs **after** targets are chosen, so at
+            # announcement that record is still empty and the picker would
+            # cheerfully offer the very creature the card excludes — then fizzle
+            # at resolution, once the record had filled in. A picker and an
+            # enforcement disagreeing about one list is the failure
+            # ``legality.activation_target_refusal`` exists to prevent.
+            #
+            # Resolving the pronoun to the host is only true while the cost is
+            # the one that taps it, which no filter can check. The compiler
+            # checks it instead, where the cost and the effect are both in
+            # hand — see ``COST_TAPPED_REFERENT`` below and its reader in
+            # ``oracle._parse_activated_ability``.
+            elif stream.accept_phrase(
+                "than", "the", "creature", "tapped", "this", "way",
+            ):
+                d.other_than_attached_host = True
+                continue
             elif stream.accept_word("than"):
                 # "other than Halfdane" — the card excluding itself by name,
                 # which the lexer already collapsed to one SELF token. The same

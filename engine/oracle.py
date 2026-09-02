@@ -62,6 +62,7 @@ from .cumulative_upkeep import cumulative_upkeep_triggers
 from .rampage import rampage_amount, rampage_triggers
 from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
+from .grammar.postmodifiers import COST_TAPPED_REFERENT
 from .grammar.vocabulary import IMPLEMENTED_KEYWORDS
 
 __all__ = [
@@ -364,6 +365,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # "by a creature that has been dealt damage this turn" as the effect clause.
     ("creature_blocks_or_blocked_by",
      r"whenever this creature blocks or becomes blocked"),
+    # The same bare joined sentence watched by an Aura (Gift of the Woods).
+    # Below the narrowed enchanted row above, which it is a strict prefix of —
+    # matching here first would read Infinite Authority's "by a creature that
+    # has been dealt damage this turn" as the effect clause. CR 509.3c/509.3d
+    # give it the once-per-block firing the bare row beside it already has; the
+    # only difference is `combatant_attached`, which is what sends the two
+    # combat dispatchers to the combatant's attachments instead of its own card.
+    ("creature_blocks_or_blocked_by",
+     r"whenever enchanted (?P<combatant_attached>[a-z]+) blocks or becomes blocked"),
     # "Whenever **enchanted creature** attacks or blocks" (Imprison). One kind
     # with the source's own spelling below it: it is the same event about the
     # same creature, and which permanent's ability watches it is the narrowing
@@ -495,6 +505,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("creature_becomes_blocked",
      r"whenever this creature becomes blocked by (?P<blocker_subject>(?:a|another) [^,]+)"),
     ("creature_becomes_blocked",    r"whenever this creature becomes blocked"),
+    # "Whenever **enchanted creature** becomes blocked" (Bestial Fury). The
+    # attacking half of the pair above watched by an Aura rather than by the
+    # creature — one kind, because it is one event, with `combatant_attached`
+    # carrying which permanent's ability is watching. No narrowed "…by <noun>"
+    # spelling is listed: none is printed in the pool, and an unlisted one is
+    # refused loudly by both front ends rather than read as this bare row with
+    # its noun phrase dropped.
+    ("creature_becomes_blocked",
+     r"whenever enchanted (?P<combatant_attached>[a-z]+) becomes blocked"),
     ("creature_dealt_damage",               r"whenever this creature is dealt damage"),
     ("creature_dealt_damage_by_self_dies",  r"whenever a creature dealt damage by this creature this turn dies"),
     # "Whenever this creature becomes the target of a spell or ability an
@@ -2464,12 +2483,27 @@ def _parse_activated_ability(line: str, card_name: str | None = None) -> ParsedA
     instruction, effect_kind = _reading(
         _line_instruction(line, card_name, activated=True)
     )
+    cost = parse_activated_ability_cost(line)
+    # "Tap enchanted creature: Target creature **other than the creature tapped
+    # this way** …" (Veteran's Voice). The grammar resolved that pronoun to the
+    # attached host, because a target filter is tested before the cost is paid
+    # (CR 601.2h) and the cost-tap record is still empty then. That resolution is
+    # true exactly while the cost is the one that taps the host — a claim about
+    # the *cost*, which no target filter can see and which is checked here,
+    # where both halves of the line are in hand.
+    #
+    # An ability printing the phrase with any other cost is refused rather than
+    # read as excluding the host: the referent would be a permanent this
+    # ability's cost never touched, and the card would target a set it does not
+    # print.
+    if COST_TAPPED_REFERENT in effect_text and not cost.tap_attached:
+        instruction, effect_kind = None, "unsupported"
     supported = instruction is not None
     return ParsedActivatedAbility(
         source_line=line,
         normalized_effect=effect_text,
         supported=supported,
-        cost=parse_activated_ability_cost(line),
+        cost=cost,
         effect_kind=effect_kind,
         instruction=instruction,
     )

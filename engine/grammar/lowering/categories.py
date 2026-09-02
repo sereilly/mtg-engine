@@ -151,6 +151,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # lasts, not what kind of effect it is.
     "remove_self_keyword": "pump",
     "grant_self_keyword_until_eot": "pump",
+    "grant_enchanted_keyword_until_eot": "pump",
     "grant_banding_to_target": "pump",
     "add_named_counter_to_self": "pump",
     "add_named_counter_to_target": "pump",

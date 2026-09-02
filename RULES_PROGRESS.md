@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**342 / 612 tracked rules covered (55%)** — 1809 tests, 0 unannotated.
+**342 / 612 tracked rules covered (55%)** — 1813 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -411,7 +411,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **301.2** When an artifact spell resolves, its controller puts it onto the battlefield under their control.
 - [ ] **301.3** Artifact subtypes are always a single word and are listed after a long dash: “Artifact — Equipmen...
 - [ ] **301.4** Artifacts have no characteristics specific to their card type. Most artifacts have no colored man...
-- [x] **301.5** Some artifacts have the subtype “Equipment.” An Equipment can be attached to a creature. It can’t... *(13 tests, subrules abcdf)*
+- [x] **301.5** Some artifacts have the subtype “Equipment.” An Equipment can be attached to a creature. It can’t... *(14 tests, subrules abcdf)*
 - [ ] **301.6** Some artifacts have the subtype “Fortification.” A Fortification can be attached to a land. It ca...
 - [ ] **301.7** Some artifacts have the subtype “Vehicle.” Most Vehicles have a crew ability which allows them to...
 
@@ -430,7 +430,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **303.1** A player who has priority may cast an enchantment card from their hand during a main phase of the... *(2 tests)*
 - [x] **303.2** When an enchantment spell resolves, its controller puts it onto the battlefield under their control. *(4 tests)*
 - [x] **303.3** Enchantment subtypes are always a single word and are listed after a long dash: “Enchantment — Sh... *(3 tests)*
-- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(39 tests, subrules abcdefghijm)*
+- [x] **303.4** Some enchantments have the subtype “Aura.” An Aura enters the battlefield attached to an object o... *(41 tests, subrules abcdefghijm)*
 - [x] **303.5** Some enchantments have the subtype “Saga.” See rule 714 for more information about Saga cards. *(2 tests)*
 - [x] **303.6** Some enchantments have the subtype “Class.” See rule 716 for more information about Class cards. *(2 tests)*
 - [x] **303.7** Some Aura enchantments also have the subtype “Role.” *(3 tests, subrules a)*
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(133 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(134 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(10 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -672,7 +672,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 602. Activating Activated Abilities
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(14 tests, subrules ab)*
-- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(22 tests, subrules ab)*
+- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(23 tests, subrules ab)*
 - [ ] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou...
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
 - [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(31 tests, subrules ac)*
@@ -846,7 +846,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 701. Keyword Actions
 
 - [x] **701.2** Activate *(4 tests, subrules a)*
-- [x] **701.3** Attach *(10 tests, subrules abcd)*
+- [x] **701.3** Attach *(13 tests, subrules abcd)*
 - [x] **701.5** Cast *(4 tests, subrules a)*
 - [x] **701.6** Counter *(3 tests, subrules ab)*
 - [x] **701.7** Create *(3 tests, subrules a)*
