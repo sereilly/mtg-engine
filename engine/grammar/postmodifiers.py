@@ -38,11 +38,11 @@ from .amounts import accept_source_relative_comparison, parse_comparison
 from .errors import GrammarError
 from .lexer import PT, SELF
 from .names import accept_original_expansion, parse_card_name
-from .readers import _SELF_NOUNS, accept_source_reference
+from .readers import (_SELF_NOUNS, _accept_back_referenced_controller,
+                      _parse_keyword_list, accept_source_reference)
 from .stream import TokenStream
 from .zones import accept_zone_scope
-from .vocabulary import (CARD_TYPES, KEYWORD_INDEX, match_longest,
-                         singular as _singular)
+from .vocabulary import CARD_TYPES, singular as _singular
 
 # "…attached to that creature" / "…attached to it" — the trailing clause naming
 # what an Aura or Equipment is on, and the referent each consumer resolves.
@@ -50,81 +50,6 @@ from .vocabulary import (CARD_TYPES, KEYWORD_INDEX, match_longest,
 # relation dropped, and a dropped relation on a sweep takes the whole board.
 _ATTACHED_TO_REFERENTS = {("that", "creature"): "target", ("it",): "source"}
 
-
-
-def _accept_back_referenced_controller(stream: TokenStream) -> bool:
-    """``that player|opponent [or that <type>'s controller] control[s]`` — True
-    with the phrase consumed, or False with the cursor unmoved.
-
-    One reader for both spellings, because they are one referent. Goblin Lyre
-    targets "target opponent **or planeswalker**" (CR 115.4 without the creature
-    half) and then counts "the number of creatures **that opponent or that
-    planeswalker's controller** controls" — a seat either way, and the same seat
-    the earlier sentence chose. So the disjunction is a *spelling* of
-    `that_player`, the way `references.py` already reads Chain Lightning's "that
-    player or that permanent's controller"; a kind of its own would be one
-    card's private address for a referent every consumer already has.
-
-    Read inline rather than through `parse_player_ref`: that reader is in
-    `references`, two layers above this file, which sits below `nouns` so the
-    recursion can run one way.
-    """
-    mark = stream.mark()
-    if stream.accept_phrase("that", "player") or stream.accept_phrase(
-        "that", "opponent"
-    ):
-        _accept_same_seat_disjunct(stream)
-        if stream.accept_word("controls", "control"):
-            return True
-    stream.reset(mark)
-    return False
-
-
-def _accept_same_seat_disjunct(stream: TokenStream) -> None:
-    """The optional ``or that <type>'s controller`` arm, consumed only when it
-    really names the same seat as the arm in front of it.
-
-    Any other "or" is left where it is, for whatever production reads a
-    disjunction of two *different* things — consuming it here would silently
-    merge them.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("or"):
-        return
-    if stream.accept_word("that", "this", "the"):
-        noun = stream.peek_word()
-        if noun is not None and _singular(noun) in CARD_TYPES:
-            stream.advance()
-            if stream.accept_phrase("'s", "controller"):
-                return
-    stream.reset(mark)
-
-
-def _parse_keyword_list(stream: TokenStream) -> tuple[str, ...]:
-    """Parse one or more keyword names ("flying", "first strike and trample").
-
-    The conjunction is only consumed when a keyword actually follows it:
-    "each creature without flying and each player" continues with a second
-    *recipient*, not a second keyword, and eating that "and" would strand the
-    rest of the clause.
-    """
-    keywords: list[str] = []
-    while True:
-        matched = match_longest(stream.words_from(), 0, KEYWORD_INDEX)
-        if matched is None:
-            break
-        name, consumed = matched
-        keywords.append(name)
-        stream.advance(consumed)
-        conjunction = stream.mark()
-        if not (stream.accept_word("and") or stream.accept_word("or")):
-            break
-        if match_longest(stream.words_from(), 0, KEYWORD_INDEX) is None:
-            stream.reset(conjunction)
-            break
-    if not keywords:
-        raise stream.error("expected a keyword ability")
-    return tuple(keywords)
 
 
 def _parse_postmodifiers(
@@ -828,6 +753,30 @@ def _parse_postmodifiers(
                 if matched is not None:
                     d.attached_to = matched[1]
                     continue
+                # "…attached to **target permanent you own**" (Scarab of the
+                # Unseen). The host as a chosen object rather than as a
+                # back-reference: the same relation the table above reads, with
+                # the spell picking the host itself instead of pointing at
+                # something an earlier clause picked. Read here rather than
+                # through ``references.parse_target_spec`` for the reason
+                # ``_accept_back_referenced_controller`` is read inline — that
+                # module sits two layers above this one, so the recursion has to
+                # run the other way — and the word is the whole of what it adds:
+                # everything after it is the ordinary noun phrase.
+                chosen = stream.mark()
+                if stream.accept_word("target"):
+                    try:
+                        host_target = parse_filter(stream)
+                    except GrammarError:
+                        host_target = None
+                    # A phrase that narrowed nothing would make the picker offer
+                    # every permanent on the board, which is not what any card
+                    # printing this says; the nested branch below refuses an
+                    # empty filter for the same reason.
+                    if host_target is not None and host_target != ast.ObjectFilter():
+                        d.attached_to_target = host_target
+                        continue
+                stream.reset(chosen)
                 # "target Aura **attached to a creature or land**" (Enchantment
                 # Alteration) / "…Auras you own **attached to permanents you
                 # control**" (Remove Enchantments). Not a back-reference but a

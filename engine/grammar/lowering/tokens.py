@@ -188,6 +188,17 @@ def _lower_create_token(
         payload["oracle_text"] = chr(10).join(node.granted_lines)
     if node.recipient_players:
         payload["recipient_players"] = node.recipient_players
+        if node.recipient_players == "target_opponent":
+            # "**Target opponent** creates a 1/1 green Hippo creature token."
+            # (Phelddagrif.) The seat is chosen, so the ability has a target and
+            # the picker has to be told — a `recipient_players` key with no
+            # description beside it would name a seat nothing ever asks for, and
+            # the ability would resolve onto whatever ``context.target`` last
+            # held. The same player-target description "target opponent gains 2
+            # life" carries one ability line over on the same card.
+            payload["targets"] = {
+                "quantifier": "target", "kind": "player", "opponents_only": True,
+            }
     count = _stamp_token_count(payload, node)
     # "…that are tapped and attacking" (Basri Ket): entry state the handler
     # stamps as the tokens arrive.

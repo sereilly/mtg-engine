@@ -64,7 +64,8 @@ from .rampage import rampage_amount, rampage_triggers
 from .static_bonuses import static_bonus_for
 from .grammar import ast as grammar_ast, compile_line as compile_grammar_line
 from .grammar.postmodifiers import COST_TAPPED_REFERENT
-from .grammar.vocabulary import IMPLEMENTED_KEYWORDS
+from .grammar.vocabulary import (IMPLEMENTED_KEYWORDS,
+                                 TYPE_LINE_SUPERTYPES as _TYPE_LINE_SUPERTYPES)
 
 __all__ = [
     "ActivatedAbilityCost",
@@ -618,7 +619,36 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # undispatched — the card compiled supported on its cumulative upkeep and
     # made no mana at all. The sibling row above it already spelled it this way.
     ("land_tapped_for_mana",        r"whenever an? (?P<tapped_land_subtype>[a-z]+) is tapped for mana"),
+    # "Whenever a player taps a **snow** land for mana" (Winter's Night). The
+    # active voice with a *supertype* narrowing, and its own group because a
+    # supertype is not a type: the fire site asks ``has_type`` for
+    # ``tapped_land_subtype`` (CR 613 layer 4) and ``has_supertype`` for this
+    # one (CR 205.4a), and a supertype read through the type accessor answers
+    # False for every land — a trigger that never fires, on a card reporting
+    # itself supported.
+    #
+    # The alternation is built from ``TYPE_LINE_SUPERTYPES`` rather than
+    # spelled out, so it is the vocabulary catalog's list and not a second copy
+    # of it. A bare ``[a-z]+`` here would match "nonbasic land", which is a
+    # negation no supertype accessor answers — the narrowing would be dropped
+    # and the trigger would fire on every land.
+    #
+    # Before the bare row below, which is its prefix in everything but the
+    # narrowing.
+    ("land_tapped_for_mana",
+     r"whenever a player taps an? (?P<tapped_land_supertype>"
+     + "|".join(sorted(_TYPE_LINE_SUPERTYPES)) + r") land for mana"),
     ("land_tapped_for_mana",        r"whenever a player taps a land for mana"),
+    # "Whenever a player taps a **Mountain** for mana" — the active voice with a
+    # land *type*, the twin of the passive row above it. No card prints it, and
+    # it is here for the reason the two front ends exist at all: the grammar
+    # reads the active voice through one noun-phrase parser, so a spelling it
+    # admits and this table does not is a card whose trigger compiles on one
+    # side and is invisible on the other — supported, with the ability simply
+    # absent. Last of the three, because "a land for mana" and "a snow land for
+    # mana" are both shapes the rows above answer more exactly.
+    ("land_tapped_for_mana",
+     r"whenever a player taps an? (?P<tapped_land_subtype>[a-z]+) for mana"),
     # A colour-narrowed cast trigger (the Rod/Cup/Sphere cycle). The colour is
     # captured into the condition payload so one dispatcher covers every card
     # written this way; must precede the unnarrowed form below.

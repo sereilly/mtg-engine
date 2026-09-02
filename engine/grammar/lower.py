@@ -102,6 +102,7 @@ from .lowering import (
     _lower_choose_permanents,
     _lower_gain_control,
     _lower_gain_ability_text,
+    _lower_prevent_damage,
     _lower_gain_keyword,
     _lower_lose_keyword,
     _lower_gain_life,
@@ -254,10 +255,17 @@ def lower_statement(
         # Authority, whose "destroy the other creature at end of combat" is the
         # first of a trigger's *two* sentences and so lowers under a `Sequence`.
         return _lower_destroy(statement, event, event_subject, produced)
-    # In the chain rather than the name-only table, both: each acts on what an
-    # earlier step recorded, and `produced` refuses when nothing did.
+    # In the chain rather than the name-only table, all three: each acts on what
+    # an earlier step recorded, and `produced` refuses when nothing did.
     if isinstance(statement, ast.GainAbilityText):
         return _lower_gain_ability_text(statement, produced)
+    # "Untap any number of target creatures. Prevent all combat damage that
+    # would be dealt to and dealt by **those creatures** this turn." (Energy
+    # Arc.) The shield's recipients are the set the sentence in front of it
+    # untapped, so this left `by_node.py` the day it stopped being a lowering
+    # that needs nothing but its node.
+    if isinstance(statement, ast.PreventDamage):
+        return _lower_prevent_damage(statement, produced)
     if isinstance(statement, (ast.DoesntUntapNextStep, ast.DoesntUntapWhileCounter)):
         # The **unfiltered** event, for `_lower_destroy`'s reason one branch
         # up: whose creature "that creature" names is a fact about the trigger

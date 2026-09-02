@@ -10,6 +10,7 @@ from ..keywords import grant_keyword
 from ..models import Permanent
 from ._common import (
     _card_matches_filter,
+    _one_choice,
     evaluate_count,
     frozen_that_player_seat,
     graveyard_card_matches,
@@ -1774,8 +1775,17 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
         # creature, so ``permanent_by_id`` no longer finds it while every Aura
         # still holds the record of what it was on. CR 400.7 makes the id
         # unique to that object, so a look-alike cannot answer to it.
-        host_id = context.target_permanent_id if attached_to == "target" else None
-        if host_id is None:
+        # Through ``_one_choice``, because the two callers hand this field
+        # different shapes: a *spell* records one id (Word of Undoing) and an
+        # *activated ability* records the whole announced list, even when the
+        # list is one long. Read raw, an ability's `[7]` never equals any
+        # permanent's id and the sweep found nothing on a host the player had
+        # chosen — Scarab of the Unseen is the first ability to reach here.
+        host_id = (
+            _one_choice(context.target_permanent_id)
+            if attached_to == "target" else None
+        )
+        if not isinstance(host_id, int):
             # The relation is the whole narrowing, so a referent this cannot
             # resolve ends the sweep rather than widening it to the board.
             game.log.append(
@@ -2210,6 +2220,19 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
         return True, "resolved"
     controller_index = game.controller_index_of(perm)
     owner_index = game.owner_index_of(perm)
+    # "You gain life equal to **its toughness**" (Exile) is a later step of the
+    # same resolution asking a question about an object that will by then be a
+    # card in exile — CR 613.1 gives it no computed characteristics at all, so
+    # the number is frozen here, one line before the removal, exactly as
+    # ``destroy_target_permanent`` freezes its pair one line before the destroy
+    # (CR 608.2h). The effective value, so a pumped or counter-laden creature is
+    # worth what it was worth on the battlefield.
+    #
+    # Toughness alone. The power of an exiled permanent has an owner already —
+    # ``_fused_exile_then_controller_life`` — and ``_records._PRODUCES`` says
+    # at length why declaring it here would un-refuse a near-miss that reads
+    # the wrong seat.
+    context.results["its_toughness"] = max(0, int(perm.effective_toughness))
     game.remove_from_battlefield(perm)
     if owner_index is None:
         owner_index = controller_index if controller_index is not None else 0

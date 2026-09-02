@@ -535,6 +535,16 @@ class TurnManagementMixin:
             subtype = trig.condition.payload.get("tapped_land_subtype")
             if subtype and not land.has_type(str(subtype)):
                 continue
+            # "Whenever a player taps a **snow** land for mana" (Winter's
+            # Night). A supertype (CR 205.4a), not a type, so it is asked of
+            # `has_supertype` — the accessor the type test above would answer
+            # False for on every land, which is a trigger that never fires
+            # rather than one that fires too often. Layer 4 either way: a land
+            # an effect *made* snow counts and one that stopped being snow does
+            # not.
+            supertype = trig.condition.payload.get("tapped_land_supertype")
+            if supertype and not land.has_supertype(str(supertype)):
+                continue
             if trig.instruction.kind == "add_mana_for_tapped_land":
                 self._add_triggered_land_mana(
                     trig.instruction, player_index, land, mana_symbol, perm
@@ -552,6 +562,27 @@ class TurnManagementMixin:
             # leaving afterwards takes nothing back.
             if trig.instruction.kind == "return_tapped_land_to_hand":
                 self._return_tapped_land_to_hand(land, perm)
+                continue
+            # **Damage, and only damage.** This arm used to be the loop's
+            # `else`: any instruction kind it did not recognize was read for an
+            # `amount` and dealt as damage, defaulting to 1 when the payload had
+            # none. A trigger under this condition whose effect is a draw
+            # ("Whenever a Mountain is tapped for mana, that player draws a
+            # card" — an invented line, but one the grammar has always lowered)
+            # therefore dealt a point of damage instead, silently and on a card
+            # reporting itself supported.
+            #
+            # Named rather than defaulted, so a kind nobody has taught this site
+            # is skipped with a line in the log. Skipping is the safe reading
+            # here for the reason the delayed loop below already gives: this
+            # resolution happens inside a cost payment (CR 601.2g), so it cannot
+            # give a non-mana effect the priority window the stack would, and
+            # doing *nothing* visible beats doing something the card never said.
+            if trig.instruction.kind != "deal_damage":
+                self.log.append(
+                    f"{perm.card.name}: nothing here resolves "
+                    f"{trig.instruction.kind!r} inside a cost payment"
+                )
                 continue
             # The compiled payload names its victim ``event_subject_player`` —
             # `land_tapped_for_mana` is in `_EVENT_SUBJECT_PLAYERS` on the

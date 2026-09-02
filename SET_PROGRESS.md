@@ -24,7 +24,7 @@ Do not edit by hand — re-run the script instead.
 | 10 | Fourth Edition | 4ED | 1995-04-01 | 368 | 0 | Complete (368/368 supported) |
 | 11 | Ice Age | ICE | 1995-06-03 | 373 | 346 | Complete (373/373 supported) |
 | 12 | Homelands | HML | 1995-10-01 | 115 | 115 | Complete (115/115 supported) |
-| 13 | Alliances | ALL | 1996-06-10 | 144 | 144 | Measured (108/144 supported, not shipped) |
+| 13 | Alliances | ALL | 1996-06-10 | 144 | 144 | Measured (115/144 supported, not shipped) |
 | 14 | Mirage | MIR | 1996-10-08 | 335 | 313 | Not Implemented |
 | 15 | Visions | VIS | 1997-02-03 | 167 | 167 | Not Implemented |
 | 16 | Fifth Edition | 5ED | 1997-03-24 | 434 | 0 | Complete (434/434 supported) |

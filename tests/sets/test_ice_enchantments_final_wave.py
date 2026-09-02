@@ -473,16 +473,56 @@ def test_a_delayed_mana_ability_refuses_without_a_stated_duration(set_pool):
     CR 603.7b's other reading -- "will trigger only once" -- is a different
     card. So the opener leaves the duration unstated and the lowering refuses
     unless a leading "until end of turn" filled it in.
+
+    **Asserted on the node, not on a parse, and that is the round W2G5 taught.**
+    This used to hand `parse_line` the bare "Whenever a player taps a Mountain
+    for mana, ..." on the grounds that nothing else read it. Something does now:
+    Alliances' Winter's Night prints the active voice on a *permanent*, so
+    `grammar/triggers.py` reads that sentence as an ordinary triggered ability
+    — which is the right reading for a printed line and the wrong input for this
+    guard. The rule being guarded is `_lower_create_delayed_trigger`'s, so the
+    delayed node is built directly and the parse precedence can move again
+    without taking the rule's cover with it.
     """
-    from engine.grammar import parse_line
+    from engine.grammar import ast
     from engine.grammar.errors import LoweringError
     from engine.grammar.lower import lower_ability
 
+    undated = ast.SpellEffectLine(ast.CreateDelayedTrigger(
+        event="land_tapped_for_mana",
+        effect=ast.AddManaForTappedLand(
+            recipient=ast.PlayerRef("that_player"),
+            pips=(("R", 1),),
+            additional=True,
+        ),
+        once=False,
+        duration=None,
+        subject=ast.ObjectFilter(card_types=("land",), subtypes=("mountain",)),
+    ))
+
     with pytest.raises(LoweringError):
-        lower_ability(parse_line(
-            "Whenever a player taps a Mountain for mana, "
-            "that player adds an additional {R}."
-        ))
+        lower_ability(undated)
+
+
+def test_the_same_sentence_printed_on_a_permanent_is_an_ordinary_trigger(set_pool):
+    """The other half of the guard above, and the reason it had to move.
+
+    With no "until end of turn" in front of it the sentence is not a delayed
+    ability at all — it is what a permanent prints, the active-voice twin of
+    Gauntlet of Might's "Whenever a Mountain **is tapped** for mana". Both
+    spellings reach `land_tapped_for_mana` with the same narrowing, which is
+    what keeps one event from having two dispatchers.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.lower import lower_ability
+
+    lowered = lower_ability(parse_line(
+        "Whenever a player taps a Mountain for mana, "
+        "that player adds an additional {R}."
+    ))
+
+    assert [i.kind for i in lowered] == ["add_mana_for_tapped_land"]
+    assert lowered[0].payload["additional"] is True
 
 
 def test_a_delayed_mana_opener_refuses_an_effect_the_seam_cannot_resolve(set_pool):

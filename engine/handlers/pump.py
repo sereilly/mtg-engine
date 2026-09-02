@@ -315,6 +315,7 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     attacking_only = bool(instruction.payload.get("attacking_only"))
     blocking_only = bool(instruction.payload.get("blocking_only"))
     subtypes = tuple(instruction.payload.get("subtypes") or ())
+    exclude_types = tuple(instruction.payload.get("exclude_types") or ())
     # "**Other** creatures you control" (Bolt Hound) — CR 109.5's exclusion of
     # the ability's own source, which no per-permanent filter can test.
     exclude_self = (
@@ -358,6 +359,14 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
             # one does not (CR 613 layer 4) — the same reader the type test
             # above it uses, rather than the printed type line.
             if subtypes and not any(perm.has_type(name) for name in subtypes):
+                continue
+            # "**Nonartifact** creatures get -1/-1 until end of turn." (Stench
+            # of Decay.) The same layer-4 reader in the other direction, for
+            # the same reason ``exclude_colors`` is: an artifact creature the
+            # sweep is not printed to reach must survive it, including one that
+            # became an artifact after the spell was cast but before it
+            # resolved (CR 611.2c fixes the set at resolution, which is now).
+            if exclude_types and any(perm.has_type(name) for name in exclude_types):
                 continue
             apply_temp_pt_boost(perm, power_delta, toughness_delta)
     game.log.append(f"{card.name} buffed matching creatures")

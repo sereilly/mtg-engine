@@ -439,12 +439,22 @@ def _describe_several_targets(payload: dict[str, object], recipient: ast.TargetS
         # picker that offers nothing.
         "count": "x" if recipient.count_from_x else recipient.count,
     }
-    if recipient.quantifier == "one_or_more":
+    if recipient.quantifier in ("one_or_more", "any_number"):
         # No printed maximum, so the cap is however many legal targets there
         # are — a number that only exists once the picker has enumerated them
         # (engine/legality.py fills it in as an ordinary `max_targets`). A
         # `count` of 0 here would otherwise read as "no targets" and show a
         # picker that offers nothing.
+        #
+        # Both quantifiers, because the maximum is the same question for each.
+        # Their *minimum* is not — "any number of" (Energy Arc) may name none
+        # and "one or more" (Heaven's Gate and its four colour siblings) may
+        # not — and nothing here or downstream carries a floor: there is no
+        # `min_targets` in the engine, so the five "one or more" cards already
+        # shipped may legally be cast naming nothing. That is a pre-existing
+        # looseness this widening inherits rather than one it introduces, and
+        # it is the only shape where "any number of" is not simply the more
+        # permissive twin.
         payload["targets"]["unbounded"] = True
 
 
@@ -753,7 +763,12 @@ def _names_several_targets(subject: ast.Recipient) -> bool:
             # qualifies on the quantifier alone — the same way "X target lands"
             # above does, and for the same reason: the count is not knowable
             # here, only that it can exceed one.
-            or subject.quantifier == "one_or_more"
+            #
+            # "**Any number of** target creatures" (Energy Arc) is the same
+            # shape one word over. The two differ only in their *floor* — CR
+            # 601.2c lets "any number of" name none where "one or more" must
+            # name one — and the floor is not what this predicate asks about.
+            or subject.quantifier in ("one_or_more", "any_number")
         )
     )
 
@@ -913,12 +928,26 @@ def _refuse_unfused_distinctness(steps: tuple[ast.Statement, ...]) -> None:
     Positioned **after** the fusers on purpose: a shape that grows a fused
     lowering later is claimed above this and never reaches it, so this refusal
     can only shrink as the engine learns more, never has to be edited.
+
+    **The count that matters is of targets, not of clauses.** "This creature
+    deals damage equal to its power to **another** target creature. That
+    creature deals damage equal to its power to this creature." (Gargantuan
+    Gorilla — Tracker's sentence with the word added.) Two clauses and *one*
+    target: the second names its subject with a back-reference to what the
+    first one chose, so there is no prior choice for "another" to differ from
+    and the only object left in the sentence for it to exclude is the ability's
+    source, which is CR 109.5 and exactly what ``_targets_payload`` turns it
+    into one function above. Refusing on the clause count instead read the
+    hazard off the wrong number — the hazard is two pickers reading one answer,
+    which needs two printed targets to exist at all.
     """
-    for step in steps:
-        for spec in _targeted_specs(step):
-            if spec.distinct_from_prior:
-                raise LoweringError(
-                    'a printed "another target" in a multi-clause sentence needs '
-                    "a lowering with a slot per clause",
-                    node=spec,
-                )
+    targeted = [spec for step in steps for spec in _targeted_specs(step)]
+    if len(targeted) < 2:
+        return
+    for spec in targeted:
+        if spec.distinct_from_prior:
+            raise LoweringError(
+                'a printed "another target" in a multi-clause sentence needs '
+                "a lowering with a slot per clause",
+                node=spec,
+            )

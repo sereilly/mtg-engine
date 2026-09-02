@@ -548,7 +548,9 @@ def lower_untargeted_return(
         # dropped attachment relation on a sweep returns every white Aura on
         # the board rather than the ones on the creature.
         unread = _restrictions_beyond(
-            filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {"attached_to"}
+            filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {
+                "attached_to", "attached_to_target",
+            }
         )
         if unread:
             raise LoweringError(
@@ -580,6 +582,28 @@ def lower_untargeted_return(
                     f"target, not to the {filt.attached_to}", node=node,
                 )
             attached_referent = filt.attached_to
+        host_target: dict[str, object] | None = None
+        if filt.attached_to_target is not None:
+            # "Return all Auras attached to **target permanent you own** to
+            # their owners' hands." (Scarab of the Unseen.) The same relation
+            # the referent above carries, with this spell choosing the host
+            # instead of pointing at a host an earlier clause chose — so the
+            # handler resolves it exactly the same way (``attached_to:
+            # "target"``, compared by id) and the only extra thing this shape
+            # owes is the target *description*, which is what the picker offers.
+            # Without it the ability targets a permanent no picker names, and
+            # the sweep would find nothing on a host nobody chose.
+            if attached_referent is not None:
+                raise LoweringError(
+                    "the sweep bounce names one host, not a referent and a "
+                    "target", node=node,
+                )
+            attached_referent = "target"
+            host_target = {
+                "quantifier": "target",
+                "kind": "object",
+                "filter": _filter_payload(filt.attached_to_target),
+            }
         # Every permanent goes to *its owner's* hand (CR 400.3), which is what
         # the handler does whatever the card printed. "…to your hand" is
         # therefore only the same sentence when the noun phrase says you own
@@ -600,6 +624,8 @@ def lower_untargeted_return(
             # referent and compares hosts by identity, and a key inside the
             # filter would reach ``subject_matches``, which has no answer for it.
             bounce_payload["attached_to"] = attached_referent
+        if host_target is not None:
+            bounce_payload["targets"] = host_target
         return (OracleInstruction("return_all_matching", "", bounce_payload),)
     # "**Each player** returns all creature cards from their graveyard to the
     # battlefield." (All Hallow's Eve.) A sweep *reanimation*: every card a

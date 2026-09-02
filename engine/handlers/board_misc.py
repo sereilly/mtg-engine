@@ -1111,6 +1111,19 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         recipients = list(game.opponents_of(controller_index))
     elif who == "each_player":
         recipients = [i for i, p in enumerate(game.players) if not p.lost]
+    elif who == "target_opponent":
+        # "**Target opponent** creates a 1/1 green Hippo creature token."
+        # (Phelddagrif.) One chosen seat rather than every opponent, read the
+        # way every other targeted-seat handler reads it. A target that has
+        # left the game makes no token (CR 800.4a) rather than falling back to
+        # the controller, which would hand the tokens to the wrong side of the
+        # card's own drawback.
+        chosen = context.target
+        recipients = (
+            [game.players.index(chosen)]
+            if chosen is not None and chosen in game.players and not chosen.lost
+            else []
+        )
     for seat in recipients:
       for _ in range(count):
         metadata: dict = {"is_token": True}

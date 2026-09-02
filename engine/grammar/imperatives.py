@@ -18,7 +18,6 @@ One call goes upward, the same inversion `subject_verb` itself makes:
 `statements`' job.
 """
 
-import dataclasses
 from . import ast
 from .paragraphs import (
     _parse_coin_flip_damage_loop,
@@ -55,7 +54,7 @@ from .effects import (
     _parse_copy_that_spell,
     _parse_copy_this_spell,
     _parse_counter,
-    _parse_create_token,
+    _parse_create_token, _parse_create_token_for_recipient,
     _parse_damage_redirect,
     _parse_destroy,
     _parse_discard,
@@ -495,15 +494,13 @@ def parse_imperative(
         if this_spell is not None:
             return this_spell
         return _parse_copy_that_spell(stream)
-    # "**Each opponent** creates a … token" (Pursued Whale). The token maker
-    # with a different recipient, which is payload rather than a second
-    # production — everything else about the sentence is identical.
-    mark_recipient = stream.mark()
-    if stream.accept_phrase("each", "opponent") and stream.at_word("creates"):
-        token = _parse_create_token(stream)
-        assert isinstance(token, ast.CreateToken)
-        return dataclasses.replace(token, recipient_players="each_opponent")
-    stream.reset(mark_recipient)
+    # A token maker with a **recipient** printed in front of it — "Each
+    # opponent creates …" (Pursued Whale), "Target opponent creates …"
+    # (Phelddagrif). One reader, beside the token production itself, and
+    # non-consuming on refusal.
+    for_recipient = _parse_create_token_for_recipient(stream)
+    if for_recipient is not None:
+        return for_recipient
     if stream.at_word("choose"):
         # Nettling Imp / Norritt's three sentences, which are one effect. Tried
         # first because the sentence *after* the one this opens has nothing to

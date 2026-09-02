@@ -577,16 +577,6 @@ def prevent_damage_to_target_until_eot(game: Game, instruction: OracleInstructio
     # as well as unhurt, the other only unhurt.
     both_ends = bool(instruction.payload.get("to_and_by"))
     direction = COMBAT_SHIELD_BOTH if both_ends else COMBAT_SHIELD_TO
-    # Through the innermost binding, so a shield printed inside a loop is armed
-    # on the creature the iteration is on rather than on the first of the
-    # resolution's targets (Winter's Chill). Outside a loop `bound_permanent`
-    # *is* the target resolution this line has always done.
-    perm = bound_permanent(game, context, predicate=lambda p: p.is_creature)
-    if perm is None:
-        perm = context.source_permanent
-    if perm is None:
-        game.log.append(f"{context.card.name}: no permanent to shield")
-        return True, "resolved"
     # "…this turn" (Maze of Ith) or "…**this combat**" (Winter's Chill). The
     # window is payload, so the shield ends where the card says rather than
     # where the only sweep that existed happened to run.
@@ -597,16 +587,57 @@ def prevent_damage_to_target_until_eot(game: Game, instruction: OracleInstructio
         if instruction.payload.get("duration") == "end_of_combat"
         else END_OF_TURN
     )
-    add_directional_shield(
-        perm, direction, combat_only=combat_only, lifetime=lifetime,
-    )
-    game.log.append(
-        f"all {'combat ' if combat_only else ''}damage that would be dealt to "
-        + ("and dealt by " if both_ends else "")
-        + f"{perm.card.name} "
-        + ("this combat" if lifetime == END_OF_COMBAT else "this turn")
-        + f" is prevented ({context.card.name})"
-    )
+
+    def arm(permanent) -> None:
+        add_directional_shield(
+            permanent, direction, combat_only=combat_only, lifetime=lifetime,
+        )
+        game.log.append(
+            f"all {'combat ' if combat_only else ''}damage that would be dealt "
+            "to " + ("and dealt by " if both_ends else "")
+            + f"{permanent.card.name} "
+            + ("this combat" if lifetime == END_OF_COMBAT else "this turn")
+            + f" is prevented ({context.card.name})"
+        )
+
+    # "Untap any number of target creatures. Prevent all combat damage that
+    # would be dealt to and dealt by **those creatures** this turn." (Energy
+    # Arc.) A *set* rather than one recipient, and the set is whatever an
+    # earlier step of this same effect recorded — CR 611.2c fixed it when the
+    # effect began, and the record is the only place it can be read from now.
+    # The shield is the same shield armed several times, which is what makes
+    # this a payload key rather than a second kind.
+    #
+    # By id, because a permanent may have left in between: a returning one is a
+    # new object (CR 400.7) that this effect never named, so it is simply not
+    # shielded. An empty record is a legal outcome — the spell may name no
+    # targets at all — not an error.
+    recorded_key = instruction.payload.get("permanents_from")
+    if recorded_key is not None:
+        recorded = (context.results or {}).get(str(recorded_key)) or ()
+        if isinstance(recorded, int):
+            recorded = (recorded,)
+        shielded = 0
+        for permanent_id in recorded:
+            permanent = game.permanent_by_id(permanent_id)
+            if permanent is None:
+                continue
+            arm(permanent)
+            shielded += 1
+        if not shielded:
+            game.log.append(f"{context.card.name}: nothing was left to shield")
+        return True, "resolved"
+    # Through the innermost binding, so a shield printed inside a loop is armed
+    # on the creature the iteration is on rather than on the first of the
+    # resolution's targets (Winter's Chill). Outside a loop `bound_permanent`
+    # *is* the target resolution this line has always done.
+    perm = bound_permanent(game, context, predicate=lambda p: p.is_creature)
+    if perm is None:
+        perm = context.source_permanent
+    if perm is None:
+        game.log.append(f"{context.card.name}: no permanent to shield")
+        return True, "resolved"
+    arm(perm)
     return True, "resolved"
 
 

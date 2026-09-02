@@ -687,3 +687,141 @@ def test_w2g4_browse_looks_at_what_is_left_when_the_library_is_short(set_pool):
 
     assert [c.name for c in me.hand] == ["Only Card"]
     assert me.exile == []
+
+
+# --- W2G5: damage, prevention and zones ---
+#
+# Two enchantments, both declined, both recorded as the pieces they need. The
+# refusal *sites* on each are accurate and the layer each names is not the
+# whole story, which is why the parts below are written out.
+
+from engine import Game, PlayerState, load_cards
+from engine.card_loader import manifest_set_path
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle, trigger_condition_of_line
+
+_W2G5E_POOLS: dict = {}
+
+
+def _w2g5e_from(code: str, name: str) -> CardDefinition:
+    if code not in _W2G5E_POOLS:
+        _W2G5E_POOLS[code] = {
+            card.name: card for card in load_cards(manifest_set_path(code))
+        }
+    return _W2G5E_POOLS[code][name]
+
+
+def _w2g5e_ice(name: str) -> CardDefinition:
+    return _w2g5e_from("ICE", name)
+
+
+def _w2g5e_lea(name: str) -> CardDefinition:
+    return _w2g5e_from("LEA", name)
+
+
+def test_the_snow_land_tap_trigger_fires_end_to_end():
+    """The three parts of Winter's Night this group *did* build, exercised on an
+    invented card carrying only its first sentence — which is the check
+    CLAUDE.md asks for when a shape has one printed instance: give the same text
+    to a card the engine invents and watch the behaviour happen.
+
+    A snow land tapped for mana adds its mana twice; an ordinary Forest adds it
+    once. That covers the new condition row in ``engine/oracle.py``, the
+    active-voice production in ``engine/grammar/triggers.py``, and the
+    ``has_supertype`` test at the inline fire site (CR 605.4a) - three readers
+    that all had to agree before anything could fire at all.
+    """
+    snow_forest = _w2g5e_ice("Snow-Covered Forest")
+    card = CardDefinition(
+        name="W2G5 Snow Test", mana_cost="{R}{G}{W}", cmc=3.0,
+        type_line="World Enchantment",
+        oracle_text=(
+            "Whenever a player taps a snow land for mana, that player adds "
+            "one mana of any type that land produced."
+        ),
+        colors=("R", "G", "W"), color_identity=("R", "G", "W"),
+        keywords=(), produced_mana=(), raw={},
+    )
+    assert compile_card_oracle(card).supported
+
+    game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    for permanent in (
+        Permanent(card=card),
+        Permanent(card=snow_forest),
+        Permanent(card=_w2g5e_lea("Forest")),
+    ):
+        game._put_permanent_onto_battlefield(0, permanent, None)
+
+    assert game.tap_land_for_mana(0, "Snow-Covered Forest")
+    assert game.players[0].mana_pool["G"] == 2, "the land's own mana, plus the trigger's"
+
+    assert game.tap_land_for_mana(0, "Forest")
+    assert game.players[0].mana_pool["G"] == 3, (
+        "a land without the supertype is not one the trigger names"
+    )
+
+
+def test_winters_night_is_declined_naming_one_remaining_part(set_pool):
+    """Its condition, its narrowing and its first sentence all work now (see
+    the test above). What is left is the **second** sentence, and the blocker is
+    not the sentence - it is where this trigger resolves.
+
+    CR 605.4a keeps a triggered mana ability off the stack, so
+    ``mixins/turn_management`` resolves this event *inline*, dispatching on
+    ``trig.instruction.kind``. A two-sentence effect lowers to a ``sequence``,
+    which that dispatch has no arm for - and ``lower.py``'s ``whole_effect``
+    gate refuses the nested occurrence for exactly that reason rather than
+    emitting a kind nothing would reach. So the remaining work is two pieces:
+
+    1. **The inline fire site walking a ``sequence``.** Every other dispatcher
+       in the engine reaches an instruction through ``EFFECT_HANDLERS``; this
+       one reads the ability's whole instruction kind, so a composed effect is
+       invisible to it. ``targeting._from_instructions`` already recurses into
+       ``sequence`` steps for the picker, and this site wants the same shape.
+    2. **A referent for the trigger's own land.** "**That land** doesn't untap
+       during its controller's next untap step" names the event's subject - a
+       sixth referent for ``_lower_doesnt_untap_next_step``, beside the fifth
+       (``block_pair``, Labyrinth Minotaur) it already has and built the same
+       way: a ``subject`` value the marker's handler resolves rather than a
+       scratchpad record, because no step of this effect chose the land.
+
+    The refusal is at least accurate now. Before this round the whole line fell
+    past the trigger table into the *delayed*-ability production and refused
+    with "this delayed ability states no duration" - a message about a
+    mechanism the card does not use.
+    """
+    program = compile_card_oracle(set_pool("ALL")["Winter's Night"])
+
+    assert not program.supported
+    assert program.reason == "unsupported triggered ability"
+
+    card = set_pool("ALL")["Winter's Night"]
+    condition, _ = trigger_condition_of_line(card.oracle_text.split(chr(10))[0], card.name)
+    assert condition is not None and condition.kind == "land_tapped_for_mana"
+    assert condition.payload == {"tapped_land_supertype": "snow"}
+
+
+def test_natures_blessing_is_declined_naming_two_parts(set_pool):
+    """"{G}{W}, Discard a card: Put a +1/+1 counter on target creature **or**
+    that creature gains banding, first strike, or trample. (This effect lasts
+    indefinitely.)"
+
+    Both halves of the ability already exist in isolation - the counter
+    placement lowers, and each of the three keywords is in
+    ``vocabulary.IMPLEMENTED_KEYWORDS``. Two parts are missing:
+
+    1. **A modal written with "or" rather than "Choose one -".** The engine's
+       modes come from bulleted lines (``OracleProgram.modes``); this is pre-
+       Sixth-Edition templating that prints the alternatives inline, and the
+       nested "banding, first strike, or trample" is a *second* choice inside
+       the second mode, so the sentence offers four modes and not two.
+    2. **A keyword grant with an indefinite duration (CR 611.2a).** "Target
+       creature gains first strike." with no duration refuses today with
+       "continuous keyword grant needs the CR 613 layers engine" - the grant
+       kinds in the pool all end at a sweep (end of turn, end of combat), and
+       an effect that lasts indefinitely has no sweep to end it and so must be
+       a layer-6 contribution that outlives the resolution.
+    """
+    program = compile_card_oracle(set_pool("ALL")["Nature's Blessing"])
+    assert not program.supported

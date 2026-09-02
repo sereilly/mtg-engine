@@ -317,14 +317,25 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
             stream.expect_word("damage")
             second_amount = _accept_rounding_rider(stream, second_amount)
             stream.expect_word("to")
-            second_recipient = parse_recipient(stream)
-            if second_recipient is None:
-                raise stream.error("expected a damage recipient")
-            second_chooser, second_recipient = _parse_opponents_choice(
-                stream, second_recipient
+            # The **same** list reader the first clause uses, and for the same
+            # reason the deferred-amount branch above was made to share it:
+            # this read one recipient and stopped, so "deals 2 damage to each
+            # attacking creature and 1 damage to you **and each creature you
+            # control**" (Hail Storm) stranded the third recipient and failed
+            # the whole line. A recipient list is a property of a damage
+            # clause, not of whether it is the first one in the sentence.
+            second_recipients = _parse_recipient_list(stream)
+            # "…of an opponent's choice" rides the recipient it was printed
+            # after, so it is lifted off the last of them — the only position
+            # the rider can occupy — and the rest of the list is untouched.
+            second_chooser, lifted = _parse_opponents_choice(
+                stream, second_recipients[-1]
             )
+            if lifted is not None:
+                second_recipients[-1] = lifted
             second = ast.DealDamage(
-                source, second_amount, (second_recipient,), ast.DamageRiders(), second_chooser
+                source, second_amount, tuple(second_recipients),
+                ast.DamageRiders(), second_chooser,
             )
             # The trailing "…, where X is the number of Mountains you control"
             # (Eternal Flame) is *not* read here. It defines the X both halves

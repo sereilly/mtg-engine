@@ -226,7 +226,28 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     "exile_any_number_of_own_tokens": "trigger_count",
     # The exile records whose permanent it removed, which is what "Its
     # controller creates a token" reads (Angelic Ascension, Secure the Scene).
-    "exile_target_permanent": "exiled_permanent_controller",
+    # …and its **toughness**: "Exile target nonwhite attacking creature. You
+    # gain life equal to **its toughness**" (Exile) asks a question about an
+    # object that by then is a card in exile with no computed characteristics
+    # at all (CR 613.1), so the number is frozen where it still had one
+    # (CR 608.2h), exactly as the destroy row below freezes its pair.
+    #
+    # The **power** is deliberately not declared, and this is the one place in
+    # the table where a step records something the declaration withholds. That
+    # reading of this sentence already has an owner:
+    # ``_fused_exile_then_controller_life`` implements Swords to Plowshares,
+    # and `test_exile_shapes_the_fused_handler_does_not_implement_refuse` holds
+    # its two near-misses to a refusal. Declaring the power un-refuses both,
+    # and one of them is wrong — "Exile target artifact. **Its controller**
+    # gains life equal to its power" lowers with ``recipient: "target"``, a
+    # different seat from the one the sentence names, while
+    # ``exiled_permanent_controller`` (declared right here) is the key that
+    # answers it. Widening the fusion to the artifact subject and routing the
+    # recipient through that key is a round of its own; until then the words
+    # refuse for want of a producer, which is the loud failure.
+    "exile_target_permanent": (
+        "exiled_permanent_controller", _EVENT_SUBJECT_TOUGHNESS_RECORD,
+    ),
     # "Create Stangg Twin, a … token. Exile **that token** when …" (Stangg).
     # The token maker records which permanent it made, which is the only place
     # a later sentence of the same effect can name it from — a token is a new

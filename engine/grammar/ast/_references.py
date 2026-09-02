@@ -269,6 +269,21 @@ class ObjectFilter:
     # through the very matcher testing the attachment, so whatever a noun phrase
     # can say about a permanent it can say about a host, once.
     attached_to_filter: "ObjectFilter | None" = None
+    # "Return all Auras attached to **target permanent you own** to their
+    # owners' hands." (Scarab of the Unseen.) The host again, and neither of the
+    # two fields above can say it: ``attached_to`` names a referent some earlier
+    # clause already chose, and ``attached_to_filter`` is a description the
+    # matcher *tests* the host against. This one is a description the spell
+    # **chooses** — CR 601.2c picks it as the spell is cast — so it is the only
+    # one of the three that a picker has to be told about, and it is carried as
+    # the phrase rather than as a flag because that phrase is exactly what the
+    # picker offers.
+    #
+    # Kept out of ``to_payload`` for ``attached_to``'s reason: no read of the
+    # attachment alone can answer "is your host the one that was targeted?",
+    # so the handler resolves the id and the lowering emits the target
+    # description beside the filter.
+    attached_to_target: "ObjectFilter | None" = None
     # "target creature **whose controller controls an Island**" (Seasinger).
     # A narrowing that is not about the object at all: it is about what the
     # seat holding it has elsewhere on the battlefield. A nested filter for

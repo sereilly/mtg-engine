@@ -855,3 +855,133 @@ def test_benthic_explorers_declines_on_three_named_parts(set_pool):
     assert subject_filter_payload("a tapped land an opponent controls") == {
         "type_filter": "land", "tapped_only": True, "controller": "opponent",
     }
+
+
+# --- W2G5: damage, prevention and zones ---
+#
+# One creature landed and one declined. Phelddagrif's three abilities are the
+# same shape and only one of them failed; Gargantuan Gorilla's {T} ability now
+# lowers and its upkeep trigger is the decline, which is why the *card* is
+# still unsupported - the creature gate asks whether every trigger is
+# implemented, not whether any ability is.
+
+from engine import Game, PlayerState, load_cards
+from engine.card_loader import manifest_set_path
+from engine.models import Permanent
+from engine.grammar import lower_ability, parse_line
+from engine.oracle import compile_card_oracle
+
+_W2G5C_LEA = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+
+
+def _w2g5c_duel() -> Game:
+    game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    return game
+
+
+def _w2g5c_put(game: Game, seat: int, card, *, ready: bool = False) -> Permanent:
+    perm = Permanent(card=card if not isinstance(card, str) else _W2G5C_LEA[card])
+    if ready:
+        perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    return perm
+
+
+def test_phelddagrif_makes_the_hippo_for_the_opponent_it_targets(set_pool):
+    """"{G}: ... **Target opponent** creates a 1/1 green Hippo creature token."
+    The token maker with a chosen recipient. The drawback is the whole card, so
+    a token landing on the activator's own board would be a strictly better
+    card than the one printed."""
+    game = _w2g5c_duel()
+    hippo = _w2g5c_put(game, 0, set_pool("ALL")["Phelddagrif"], ready=True)
+
+    assert game.activate_permanent_ability(
+        0, "Phelddagrif", ability_index=0, target_player_index=1,
+    ).supported
+
+    assert hippo.has_keyword("trample")
+    assert [p.card.name for p in game.players[1].battlefield] == ["Hippo Token"]
+    assert [p.card.name for p in game.players[0].battlefield] == ["Phelddagrif"]
+
+
+def test_phelddagrifs_other_two_abilities_were_never_the_problem(set_pool):
+    """Two of its three lines lowered on `main`; only the token one refused.
+    Asserted because the brief said all three were in the same shape, and a
+    round that "fixed" three abilities when one was broken is a round that
+    changed two working programs."""
+    program = compile_card_oracle(set_pool("ALL")["Phelddagrif"])
+
+    assert program.supported, program.reason
+    kinds = [
+        [step.kind for step in ability.instruction.payload["steps"]]
+        for ability in program.activated_abilities
+    ]
+    assert kinds == [
+        ["grant_self_keyword_until_eot", "create_token"],
+        ["grant_self_flying_until_eot", "target_gains_life"],
+        ["return_source_card_to_owners_hand", "may"],
+    ]
+
+
+def test_gargantuan_gorillas_bite_line_lowers_with_the_word_another(set_pool):
+    """"{T}: This creature deals damage equal to its power to **another** target
+    creature. That creature deals damage equal to its power to this creature."
+
+    Tracker's sentence with one word added, and the word was the whole refusal:
+    the multi-clause distinctness guard counted *clauses* where the hazard it
+    guards (two pickers reading one answer) needs two printed **targets**. The
+    second clause names its subject with a back-reference, so there is one
+    target here and "another" can only mean CR 109.5's source exclusion.
+
+    Asserted on the **line**, not on the card: the creature gate is "is every
+    trigger implemented", so the Gorilla's unread upkeep paragraph keeps the
+    whole program empty and this ability out of ``activated_abilities``. A test
+    reading the card would report this fix as having done nothing.
+    """
+    gorilla = set_pool("ALL")["Gargantuan Gorilla"]
+    bite = next(
+        line for line in gorilla.oracle_text.split(chr(10)) if line.startswith("{T}:")
+    )
+
+    node = parse_line(bite, card_name=gorilla.name)
+    lowered = lower_ability(node)
+
+    assert [i.kind for i in lowered] == ["source_bites_target", "bound_bites_source"]
+    assert lowered[0].payload["targets"]["filter"]["exclude_self"] is True, (
+        "\"another\" is CR 109.5's source exclusion here, not a second target"
+    )
+    assert lowered[1].payload["permanents_from"] == "damaged_permanents", (
+        "the second clause reads what the first one bit"
+    )
+
+
+def test_gargantuan_gorilla_is_declined_naming_three_parts(set_pool):
+    """The {T} line above lowers; the upkeep trigger does not, and the creature
+    gate is "every trigger", so the card stays unsupported. Three parts, and two
+    of the paragraph's three sentences already parse on their own:
+
+    1. **A restated action after "If you don't".** The pool's every other
+       printing is the bare "If you don't,"; this one writes the offer out
+       ("If you don't **sacrifice a Forest**, ..."). Today those words are read
+       as the *first action of the else-branch*, so the branch would sacrifice a
+       Forest and then the Gorilla - a silent mis-play rather than a refusal,
+       which is why this decline is written down rather than left to the
+       compile. The fix is to consume the restatement only when it equals the
+       offer's own action; ``parse_subject_verb`` reads exactly one clause and
+       stops at the comma, which is the reader that shape needs.
+    2. **A record of *which* permanent a forced sacrifice ate.** "If you
+       sacrifice a **snow** Forest this way" asks about the answer to a prompt.
+       ``arm_forced_sacrifice`` already takes a ``record`` that appends the
+       sacrificed cards (Transmute Artifact reads it), but
+       ``sacrifice_matching_permanent`` passes none - it records only the
+       boolean "could this be paid".
+    3. **A condition testing a narrowing against that record.** "a snow Forest"
+       is a supertype question about a card that is in a graveyard by the time
+       it is asked (CR 608.2h), and no condition kind reads a sacrifice record.
+    """
+    program = compile_card_oracle(set_pool("ALL")["Gargantuan Gorilla"])
+
+    assert not program.supported
+    assert program.reason == "unsupported triggered ability"
+    assert [t.supported for t in program.triggered_abilities] == [False]

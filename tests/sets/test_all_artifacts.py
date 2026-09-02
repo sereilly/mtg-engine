@@ -457,3 +457,148 @@ def test_w2g4_bauble_moves_the_cards_and_the_owner_draws_next_upkeep(set_pool):
     game.resolve_upkeep(1)
     game._settle()
     assert [c.name for c in p2.hand] == ["Island"]
+
+
+# --- W2G5: damage, prevention and zones ---
+#
+# Two artifacts and one decline. Both landed cards refused on a narrowing the
+# *lowering* had written down and the handler never had: a several-targets tap
+# that demanded creatures where its untap twin demands nothing, and an
+# attachment host the sweep could describe but not choose.
+
+from engine import Game, PlayerState, load_cards
+from engine.auras import attach_aura
+from engine.card_loader import manifest_set_path
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+_W2G5A_LEA = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+
+
+def _w2g5a_duel() -> Game:
+    game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    return game
+
+
+def _w2g5a_put(game: Game, seat: int, card, *, ready: bool = False) -> Permanent:
+    perm = Permanent(card=card if not isinstance(card, str) else _W2G5A_LEA[card])
+    if ready:
+        perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    return perm
+
+
+def test_floodwater_dam_taps_exactly_x_lands_and_nothing_else(set_pool):
+    """"{X}{X}{1}, {T}: Tap **X target lands**." The several-targets tap arm
+    demanded creatures where its untap twin (Candelabra of Tawnos, shipped)
+    demands nothing at all - so a card type, the one thing the pure matcher can
+    always answer, was the restriction that refused the line."""
+    game = _w2g5a_duel()
+    dam = _w2g5a_put(game, 0, set_pool("ALL")["Floodwater Dam"], ready=True)
+    lands = [_w2g5a_put(game, 1, "Forest") for _ in range(3)]
+    creature = _w2g5a_put(game, 1, "Grizzly Bears")
+
+    assert game.activate_permanent_ability(
+        0, "Floodwater Dam", x_value=2,
+        target_permanent_ids=[lands[0].permanent_id, lands[1].permanent_id],
+    ).supported
+
+    assert [land.tapped for land in lands] == [True, True, False]
+    assert not creature.tapped
+    assert dam.tapped, "the ability's own {T} was paid"
+
+
+def test_floodwater_dam_charges_one_generic_per_x_symbol(set_pool):
+    """Its cost prints **two** {X}, so X=2 is {5} and not {3}. The activation
+    path counts the symbols in the printed cost rather than reading a number off
+    the parsed cost, which is why neither this card nor Candelabra carries an X
+    in ``ActivatedAbilityCost.mana``."""
+    game = _w2g5a_duel()
+    game.enforce_mana_costs = True
+    _w2g5a_put(game, 0, set_pool("ALL")["Floodwater Dam"], ready=True)
+    land = _w2g5a_put(game, 1, "Forest")
+    game.players[0].mana_pool["C"] = 4
+
+    refused = game.activate_permanent_ability(
+        0, "Floodwater Dam", x_value=2,
+        target_permanent_ids=[land.permanent_id],
+    )
+    assert not refused.supported, "{1} plus two lots of X=2 is five mana, not four"
+
+    game.players[0].mana_pool["C"] = 5
+    assert game.activate_permanent_ability(
+        0, "Floodwater Dam", x_value=2,
+        target_permanent_ids=[land.permanent_id],
+    ).supported
+
+
+def test_scarab_of_the_unseen_returns_each_aura_to_its_own_owner(set_pool):
+    """"Return all Auras attached to **target permanent you own** to **their
+    owners'** hands." Two things this checks that the compile cannot: the host
+    is a permanent the ability *chooses*, and each Aura goes to the seat that
+    owns it rather than to the activator."""
+    game = _w2g5a_duel()
+    _w2g5a_put(game, 0, set_pool("ALL")["Scarab of the Unseen"], ready=True)
+    host = _w2g5a_put(game, 0, "Grizzly Bears")
+    elsewhere = _w2g5a_put(game, 0, "Hill Giant")
+    mine = _w2g5a_put(game, 0, "Holy Strength")
+    theirs = _w2g5a_put(game, 1, "Unholy Strength")
+    untouched = _w2g5a_put(game, 0, "Firebreathing")
+    attach_aura(mine, host)
+    attach_aura(theirs, host)
+    attach_aura(untouched, elsewhere)
+
+    assert game.activate_permanent_ability(
+        0, "Scarab of the Unseen", target_player_index=0,
+        target_permanent_index=game.battlefield_index_of(host),
+    ).supported
+
+    assert [c.name for c in game.players[0].hand] == ["Holy Strength"]
+    assert [c.name for c in game.players[1].hand] == ["Unholy Strength"]
+    assert untouched in game.players[0].battlefield, "a different host is untouched"
+
+
+def test_scarab_of_the_unseen_refuses_a_host_it_does_not_own(set_pool):
+    """"target permanent **you own**" is enforced before anything is paid
+    (CR 602.2b): the artifact's cost sacrifices it, so an unenforced restriction
+    here would be a card thrown away for nothing."""
+    game = _w2g5a_duel()
+    scarab = _w2g5a_put(game, 0, set_pool("ALL")["Scarab of the Unseen"], ready=True)
+    host = _w2g5a_put(game, 1, "Grizzly Bears")
+    attach_aura(_w2g5a_put(game, 0, "Holy Strength"), host)
+
+    refused = game.activate_permanent_ability(
+        0, "Scarab of the Unseen", target_player_index=1,
+        target_permanent_index=game.battlefield_index_of(host),
+    )
+
+    assert not refused.supported
+    assert scarab in game.players[0].battlefield, "nothing was paid"
+
+
+# --- W2G5 declines, each naming the part it is waiting on -------------------
+
+
+def test_gusthas_scepter_is_declined_naming_four_parts(set_pool):
+    """All three of its lines refuse, and they need four separate pieces:
+
+    1. **A face-down exile from a hand.** ``exile_chosen_card_from_hand``
+       exists (Ice Cauldron) but nothing carries "face down": the words are
+       unconsumed text, and CR 406.3 makes a face-down exiled card hidden from
+       every other player, which no zone in ``PlayerState`` distinguishes.
+    2. **A per-viewer look permission with an open-ended duration.** "You may
+       look at it **for as long as it remains exiled**" is a permission, not an
+       effect - there is no instruction kind for "this seat may see this card",
+       and the web layer has no channel that shows one seat a card in exile.
+    3. **A return *out of* the linked-exile pile chosen by its owner.**
+       ``engine/linked_exile.py`` records what was exiled with a source and
+       Safe Haven already returns *all* of it; this returns **one card the
+       activator picks**, which needs a ``PendingChoice`` over a hidden pile.
+    4. **A "when you lose control of this permanent" trigger.** No condition in
+       ``engine/oracle.py``'s table names it and no fire site announces it;
+       ``engine/control.py`` is where a control change ends, so the
+       announcement would go there beside ``end_control_change``.
+    """
+    program = compile_card_oracle(set_pool("ALL")["Gustha's Scepter"])
+    assert not program.supported
