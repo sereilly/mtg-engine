@@ -148,7 +148,8 @@ python scripts/run_duel.py            # scripted deterministic duel, no server (
 python scripts/simulate_ai_games.py --set DRK   # AI-vs-AI batch over one set; deterministic per seed (default LEA)
 python scripts/support_report.py      # per-category card-support coverage (whole pool)
 python scripts/support_report.py --set ATQ --hollow-lines   # supported cards carrying an ability with no instruction behind it (a Phase 3 exit criterion)
-python scripts/support_report.py --set LEG --refusals   # every refused line of every unsupported card with its exact refusal site (the plain census quotes only the first) — the work list backlog rounds are planned from
+python scripts/support_report.py --set LEG --refusals   # every refused line of every unsupported card with its exact refusal site (the plain census quotes only the first) — the work list backlog rounds are planned from; the rollup counts lines / distinct sentences / cards per site
+python scripts/support_report.py --set HML --fragments   # n-gram census over the refused lines, ranked by how many cards share each fragment — the leverage number below the sentence (--json emits every census as one object)
 python scripts/retrieve_oracle.py "Black Lotus"   # oracle text by name (whole pool)
 python scripts/oracle_diff.py snapshot   # record every card's full compiled program (both manifest roles) before a change
 python scripts/oracle_diff.py compare    # every card whose program moved since the snapshot, payloads and all; exit 1 if any did

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import textwrap
 from pathlib import Path
@@ -46,6 +47,19 @@ def build_parser() -> argparse.ArgumentParser:
             "census quotes (SET_PLAYBOOK.md Phase 1). This is the work list a "
             "backlog round is planned from: lines group by refusal site "
             "mechanically, where the reason histogram groups them by prose."
+        ),
+    )
+    parser.add_argument(
+        "--fragments",
+        action="store_true",
+        help=(
+            "N-gram census over the refused lines: every word fragment two or "
+            "more cards share, ranked by how many CARDS share it. The "
+            "instrument the sentence rollup cannot be: four sets running "
+            "measured 1.00 refused lines per distinct sentence ('no "
+            "production here buys two cards') while ten Homelands cards "
+            "printed one untap-denial fragment inside ten different "
+            "sentences. Rank a backlog by this column."
         ),
     )
     parser.add_argument(
@@ -209,6 +223,75 @@ def print_refusals(findings) -> None:
             print(f"  {name}: {headline}")
 
 
+_FRAGMENT_TOKEN = re.compile(r"[a-z0-9'{}/+-]+")
+
+
+def fragment_census(findings, min_cards: int = 2, min_words: int = 3, max_words: int = 8):
+    """Word n-grams over the refused/unlowered lines, attributed to cards.
+
+    Returns ``[(fragment, sorted card names), ...]`` sorted by (cards desc,
+    fragment length desc). A fragment counts once per card however many of its
+    lines carry it, and a fragment is dropped when a strictly longer one is
+    shared by the identical card set — the longer phrasing is the same group
+    boundary said better.
+
+    This is the "four lines of Python" ROADMAP.md's Homelands retrospective
+    named the highest-leverage instrument of the set and nobody had scripted:
+    the census that found ten cards sharing one untap-denial clause while the
+    sentence rollup read 1.00 lines per distinct sentence.
+    """
+    fragment_cards: dict[tuple[str, ...], set[str]] = {}
+    for name, _primary_type, _headline, lines in findings:
+        grams: set[tuple[str, ...]] = set()
+        for status, line, _detail in lines:
+            if status == "clean":
+                continue
+            words = _FRAGMENT_TOKEN.findall(line.lower())
+            for n in range(min_words, max_words + 1):
+                for i in range(len(words) - n + 1):
+                    grams.add(tuple(words[i : i + n]))
+        for gram in grams:
+            fragment_cards.setdefault(gram, set()).add(name)
+
+    kept = {g: c for g, c in fragment_cards.items() if len(c) >= min_cards}
+
+    # Prune subsumed fragments: same card set, contained in a longer fragment.
+    by_cards: dict[frozenset, list[tuple[str, ...]]] = {}
+    for gram, cards in kept.items():
+        by_cards.setdefault(frozenset(cards), []).append(gram)
+
+    def contained(short: tuple, long: tuple) -> bool:
+        return len(short) < len(long) and any(
+            long[i : i + len(short)] == short for i in range(len(long) - len(short) + 1)
+        )
+
+    results = []
+    for cards, grams in by_cards.items():
+        for gram in grams:
+            if any(contained(gram, other) for other in grams):
+                continue
+            results.append((" ".join(gram), sorted(cards)))
+    results.sort(key=lambda item: (-len(item[1]), -len(item[0].split()), item[0]))
+    return results
+
+
+def print_fragments(fragments, limit: int = 40) -> None:
+    print(f"Shared refused fragments ({len(fragments)} of 2+ cards; top {limit}):")
+    if not fragments:
+        print("  none — no fragment is shared by two refused cards")
+        return
+    for fragment, cards in fragments[:limit]:
+        print(f"  {len(cards)} cards: \"{fragment}\"")
+        print(
+            textwrap.fill(
+                ", ".join(cards),
+                width=96,
+                initial_indent="      ",
+                subsequent_indent="      ",
+            )
+        )
+
+
 def print_hollow_lines(findings) -> None:
     print(f"Supported cards with an instruction-less ability part: "
           f"{len({name for name, _, _ in findings})} ({len(findings)} part(s))")
@@ -288,22 +371,36 @@ def main() -> int:
     cards = load_cards(selection.paths)
 
     if args.json:
+        payload_findings = refusals_report(cards)
         payload = {
             "pool": selection.label,
             "census": census_json(build_support_report(cards)),
-            "refusals": refusals_json(refusals_report(cards)),
+            "refusals": refusals_json(payload_findings),
             "hollow_lines": [
                 {"name": name, "kind": kind, "line": line}
                 for name, kind, line in hollow_lines_report(cards)
             ],
         }
+        payload["fragments"] = [
+            {"fragment": fragment, "cards": names}
+            for fragment, names in fragment_census(payload_findings)[:200]
+        ]
         print(json.dumps(payload, indent=1, ensure_ascii=False))
         return 0
 
     print(f"Pool: {selection.label}")
     sections_printed = False
+    section_findings = None
     if args.refusals:
-        print_refusals(refusals_report(cards))
+        section_findings = refusals_report(cards)
+        print_refusals(section_findings)
+        sections_printed = True
+    if args.fragments:
+        if section_findings is None:
+            section_findings = refusals_report(cards)
+        if sections_printed:
+            print()
+        print_fragments(fragment_census(section_findings))
         sections_printed = True
     if args.hollow_lines:
         if sections_printed:

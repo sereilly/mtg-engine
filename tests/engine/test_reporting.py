@@ -94,3 +94,49 @@ def test_refusal_rollup_counts_cards_per_site():
     assert payload["front_end_only"] == [
         {"name": "Card C", "headline": "front-end headline"}
     ]
+
+
+def test_fragment_census_ranks_sub_sentence_leverage_by_cards():
+    """The census exists because leverage hides BELOW the sentence: on
+    Homelands ten cards printed one untap-denial fragment inside ten
+    different sentences, and the sentence rollup read 1.00 lines per
+    distinct sentence. A fragment shared by 7 cards must outrank a whole
+    sentence shared by 2, and a fragment subsumed by a longer one with the
+    identical card set must not appear beside it.
+    """
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+    from support_report import fragment_census
+
+    def finding(name, line):
+        return (name, "creature", "reason", [("refused", line, "site")])
+
+    findings = [
+        finding("Card %d" % i,
+                "%s doesn't untap during your untap step." % subject)
+        for i, subject in enumerate(
+            ["This creature", "Enchanted creature", "Target artifact",
+             "That land", "Each Wall", "The chosen permanent", "It"])
+    ] + [
+        finding("Twin A", "Sacrifice a Swamp: regenerate this."),
+        finding("Twin B", "Sacrifice a Swamp: regenerate this."),
+    ]
+
+    census = fragment_census(findings)
+    top_fragment, top_cards = census[0]
+    assert len(top_cards) == 7
+    assert "untap during your untap step" in top_fragment
+    # The 2-card whole sentence is present but ranked below.
+    assert any(len(cards) == 2 and "regenerate" in fragment
+               for fragment, cards in census)
+    assert all(len(cards) <= 7 for _, cards in census[1:])
+    # Subsumption: no shorter fragment with exactly the 7-card set survives
+    # beside the maximal one it sits inside.
+    seven_card_fragments = [f for f, cards in census if len(cards) == 7]
+    for fragment in seven_card_fragments:
+        assert not any(
+            other != fragment and fragment in other
+            for other in seven_card_fragments
+        ), (fragment, seven_card_fragments)

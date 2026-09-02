@@ -351,6 +351,15 @@ is green, the trackers carry its row, and the census is in hand.
    site, plus a rollup by site — run it too, and plan Phase 3's rounds from
    it rather than re-probing the compiler card by card.
 
+   **Beside it, run the census below the sentence:** `support_report.py --set
+   <CODE> --fragments`, an n-gram over the same refused lines ranked by how
+   many **cards** share each fragment. The rollup's lines-per-distinct-sentence
+   ratio measured 1.00 for four sets running ("no production here buys two
+   cards") while ten HML cards shared one untap-denial clause inside ten
+   different sentences; the fragment census named every wave-1 group boundary
+   and the sentence census named none. Rank the backlog by its cards column.
+   (`--json` carries every census this script computes in one object.)
+
    **Then run the two sentence-level instruments, here and not at Phase 4:**
    `scripts/parse_coverage.py` (whose measured-set section is reported and not
    gated) and `support_report.py --set <CODE> --hollow-lines`. Both name
