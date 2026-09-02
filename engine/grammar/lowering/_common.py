@@ -874,12 +874,26 @@ def _refuse_unfused_distinctness(steps: tuple[ast.Statement, ...]) -> None:
     Positioned **after** the fusers on purpose: a shape that grows a fused
     lowering later is claimed above this and never reaches it, so this refusal
     can only shrink as the engine learns more, never has to be edited.
+
+    **The count that matters is of targets, not of clauses.** "This creature
+    deals damage equal to its power to **another** target creature. That
+    creature deals damage equal to its power to this creature." (Gargantuan
+    Gorilla — Tracker's sentence with the word added.) Two clauses and *one*
+    target: the second names its subject with a back-reference to what the
+    first one chose, so there is no prior choice for "another" to differ from
+    and the only object left in the sentence for it to exclude is the ability's
+    source, which is CR 109.5 and exactly what ``_targets_payload`` turns it
+    into one function above. Refusing on the clause count instead read the
+    hazard off the wrong number — the hazard is two pickers reading one answer,
+    which needs two printed targets to exist at all.
     """
-    for step in steps:
-        for spec in _targeted_specs(step):
-            if spec.distinct_from_prior:
-                raise LoweringError(
-                    'a printed "another target" in a multi-clause sentence needs '
-                    "a lowering with a slot per clause",
-                    node=spec,
-                )
+    targeted = [spec for step in steps for spec in _targeted_specs(step)]
+    if len(targeted) < 2:
+        return
+    for spec in targeted:
+        if spec.distinct_from_prior:
+            raise LoweringError(
+                'a printed "another target" in a multi-clause sentence needs '
+                "a lowering with a slot per clause",
+                node=spec,
+            )

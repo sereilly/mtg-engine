@@ -9,6 +9,8 @@ permanent's characteristics, and none of them shares vocabulary with another
 family.
 """
 
+import dataclasses
+
 from ...tokens import PREDEFINED_TOKENS
 from .. import ast
 from ..amounts import expect_pt, parse_amount
@@ -396,6 +398,41 @@ def _parse_token_name_words(stream: TokenStream) -> str | None:
         parts.append(token.text)
         stream.advance()
     return " ".join(parts) if parts else None
+
+
+#: A token maker's printed **recipient**, by the words in front of the verb.
+#: "Each opponent creates a … token" (Pursued Whale), "Target opponent creates a
+#: 1/1 green Hippo creature token" (Phelddagrif). Payload rather than a second
+#: production, because everything else about the sentence is identical — and a
+#: table rather than two branches, because the next such prefix is a row.
+_TOKEN_RECIPIENT_PREFIXES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("each", "opponent"), "each_opponent"),
+    (("target", "opponent"), "target_opponent"),
+)
+
+
+def _parse_create_token_for_recipient(
+    stream: TokenStream,
+) -> "ast.CreateToken | None":
+    """``<recipient> creates <token>`` — the token maker with somebody else's
+    name in front of it.
+
+    Beside the token production rather than in ``subject_verb``, where the
+    "each opponent" spelling used to sit alone: this is one reading of one
+    clause of the token grammar, and a second prefix written at the dispatch
+    site would have been the same words read in two places.
+
+    Non-consuming on refusal, so every other sentence opening with "each" or
+    "target" keeps the reading and the refusal it has today.
+    """
+    mark = stream.mark()
+    for words, who in _TOKEN_RECIPIENT_PREFIXES:
+        if stream.accept_phrase(*words) and stream.at_word("creates"):
+            token = _parse_create_token(stream)
+            assert isinstance(token, ast.CreateToken)
+            return dataclasses.replace(token, recipient_players=who)
+        stream.reset(mark)
+    return None
 
 
 def _parse_create_token(

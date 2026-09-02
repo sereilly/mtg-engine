@@ -440,6 +440,17 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     if stream.accept_phrase("its", "mana", "value"):
         return ast.ThatMuch("its_mana_value")
 
+    # "equal to **its** toughness" (Exile: "Exile target nonwhite attacking
+    # creature. You gain life equal to its toughness."). The same
+    # back-reference "that creature's toughness" reads below, written with the
+    # pronoun instead of the noun spelled out — one key, because it is one
+    # question about one recorded object, and the producer gate in
+    # ``_back_reference_payload`` is what makes the words legal either way.
+    # A card whose first sentence records no toughness refuses by name rather
+    # than gaining zero life.
+    if stream.accept_phrase("its", "toughness"):
+        return ast.ThatMuch("its_toughness")
+
     # "equal to **that creature's** power" (Terror of the Peaks) — the power of
     # the creature the *trigger's event* was about, not of the ability's source.
     # A different referent from "its power" above and so a different key: read

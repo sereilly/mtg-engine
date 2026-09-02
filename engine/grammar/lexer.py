@@ -117,6 +117,12 @@ def _self_reference_spans(normalized: str, card_name: str | None) -> list[tuple[
     none, so the pump resolves for +0/+0 on a card reporting itself supported.
     ``oracle._collapse_self_references`` applies the same rule on the
     static-line path, in the one spelling that path cannot share.
+
+    **And a name that is also an effect verb is left alone in verb position.**
+    Exile prints "Exile target nonwhite attacking creature": collapsed to SELF
+    the sentence has a subject and no verb, and the card refuses on
+    "unrecognized effect verb" — a refusal naming a word it does not print.
+    See :func:`_in_verb_position`.
     """
     if not card_name:
         return []
@@ -163,6 +169,7 @@ def _self_reference_spans(normalized: str, card_name: str | None) -> list[tuple[
                 and _ends_a_word(end)
                 and not any(s <= start < e for s, e in spans)
                 and not _in_type_position(normalized, start, needle)
+                and not _in_verb_position(normalized, start, end, needle)
             ):
                 spans.append((start, end))
             start = normalized.find(needle, start + 1)
@@ -177,6 +184,55 @@ _TYPE_POSITION_WORDS = frozenset({
     "a", "an", "another", "any", "attacking", "blocking", "each", "every",
     "other", "target", "untapped", "tapped", "all", "no",
 })
+
+
+#: Card names that are also the imperative verb an effect sentence opens with.
+#: Held to what the pool prints rather than to every verb the grammar reads:
+#: the whole *name* has to be the verb, so the collision needs a one-word card
+#: name that is exactly an effect verb **and** a sentence in that card's own
+#: text that opens with it. A pool scan over both manifest roles finds exactly
+#: one — Alliances' Exile — and the three other cards whose name is followed by
+#: a noun-phrase opener (Sacrifice, Axelrod Gunnarson, Baron Sengir) are all
+#: genuine self-references, which is why the word set is a condition here and
+#: not merely the position.
+_VERB_NAMES = frozenset({"exile"})
+
+#: Words that open the noun phrase an imperative verb takes. A self-reference is
+#: always a *subject*, so it is always followed by a verb ("Lightning Bolt
+#: **deals**", "Halfdane**'s** base power") and never by one of these.
+_OBJECT_POSITION_WORDS = frozenset({
+    "target", "all", "a", "an", "each", "any", "up", "x", "the", "that",
+    "this", "those", "these", "another", "other", "two", "three", "it",
+    "them",
+})
+
+
+def _in_verb_position(normalized: str, start: int, end: int, needle: str) -> bool:
+    """Whether the match at *start* is the card's name used as an effect verb.
+
+    Two conditions, both required, because either alone is wrong. The word must
+    be one a sentence can open with (:data:`_VERB_NAMES`) — Axelrod Gunnarson
+    and Baron Sengir both print their names before a noun-phrase opener
+    ("dealt damage by Baron Sengir **this** turn") and both are self-references.
+    And the match must sit where a verb goes: at the start of a sentence, with a
+    noun phrase after it. "Exile deals 3 damage" would be the card naming
+    itself, and this leaves that reading alone.
+
+    Only ever true for a card whose own name is an effect verb — one in the
+    pool — so it costs two set lookups on every other card and nothing else.
+
+    ``oracle._collapse_self_references`` deliberately grows no twin of this. Its
+    collapse is a *retry* run only when the plain reading found no trigger
+    condition, so a verb-named card with no trigger never reaches it; a
+    verb-named card that printed one would need the rule there too.
+    """
+    if needle not in _VERB_NAMES:
+        return False
+    before = normalized[:start].rstrip()
+    if before and before[-1] not in ".;—":
+        return False
+    after = normalized[end:].lstrip()
+    return after.split(" ", 1)[0].strip(".,;:") in _OBJECT_POSITION_WORDS
 
 
 def _in_type_position(normalized: str, start: int, needle: str) -> bool:

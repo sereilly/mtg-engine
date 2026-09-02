@@ -226,7 +226,18 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     "exile_any_number_of_own_tokens": "trigger_count",
     # The exile records whose permanent it removed, which is what "Its
     # controller creates a token" reads (Angelic Ascension, Secure the Scene).
-    "exile_target_permanent": "exiled_permanent_controller",
+    # …and its power and its toughness, the destroy row's pair for the destroy
+    # row's reason: "Exile target nonwhite attacking creature. You gain life
+    # equal to **its toughness**" (Exile) asks a question about an object that
+    # by then is a card in exile with no computed characteristics at all
+    # (CR 613.1), so the numbers are frozen where it still had them
+    # (CR 608.2h). Both, because one printed sentence may ask either and a
+    # record written only when a card happens to print it is a record whose
+    # absence is indistinguishable from a bug.
+    "exile_target_permanent": (
+        "exiled_permanent_controller",
+        _EVENT_SUBJECT_POWER_RECORD, _EVENT_SUBJECT_TOUGHNESS_RECORD,
+    ),
     # "Create Stangg Twin, a … token. Exile **that token** when …" (Stangg).
     # The token maker records which permanent it made, which is the only place
     # a later sentence of the same effect can name it from — a token is a new

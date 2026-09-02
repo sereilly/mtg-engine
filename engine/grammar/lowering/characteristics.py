@@ -338,6 +338,7 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
             frozenset({
                 "card_types", "colors", "excluded_colors", "controller",
                 "attacking", "blocking", "other_than_source", "subtypes",
+                "excluded_types",
             }),
         )
         if leftover:
@@ -380,6 +381,16 @@ def _lower_pump(node: ast.Pump) -> tuple[OracleInstruction, ...]:
         # the permanent matcher OR's them.
         if filt.subtypes:
             payload["subtypes"] = list(filt.subtypes)
+        # "**Nonartifact** creatures get -1/-1 until end of turn." (Stench of
+        # Decay.) The type twin of ``exclude_colors`` above, and it is the same
+        # argument for carrying it: the noun phrase already read the exclusion,
+        # and dropping it here is a strictly wider sweep than the card prints —
+        # here one that also shrinks the caster's own artifact creatures.
+        # Tested through ``has_type`` rather than the printed type line, so a
+        # creature *animated* into an artifact escapes and one that stopped
+        # being one is caught (CR 613 layer 4).
+        if filt.excluded_types:
+            payload["exclude_types"] = list(filt.excluded_types)
         payload["all"] = filt.controller != "you"
         # "**Other** creatures you control get +1/+0" (Bolt Hound). Dropped, the
         # Hound buffed itself as well: a strictly better card than the one
