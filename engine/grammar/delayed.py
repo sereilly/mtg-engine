@@ -766,6 +766,24 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
         # choice can give: a set of creatures is bound by a sentence that
         # repeats over it, not by one that says "that creature".
         binds = bool(stream.accept_phrase("for", "each", "of", "those"))
+    if not binds:
+        # …or the same delayed ability with its delay printed **after** the
+        # effect: "This creature deals 2 damage to that creature **at end of
+        # combat**." (Dwarven Sea Clan.) A fourth answer to the one question,
+        # and it has to be asked of the whole statement parser rather than of
+        # `_parse_create_delayed_trigger` above, because the trailing spelling
+        # is read by ``statements.parse_statement``'s own trailing-delay clause
+        # (Hazezon Tamar's) and not by the openers. Asking the reader that will
+        # really parse this sentence a moment later is also what keeps the two
+        # from disagreeing about whether it binds.
+        try:
+            following = parse_statement(stream, top_level=True)
+        except GrammarError:
+            following = None
+        binds = (
+            isinstance(following, ast.CreateDelayedTrigger)
+            and following.binds_target
+        )
     stream.reset(after_filter)
     if not binds:
         stream.reset(mark)
