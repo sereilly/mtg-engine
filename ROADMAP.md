@@ -848,6 +848,94 @@ Third, **alternative costs (CR 118.9) do not exist** — `cast_costs.py` impleme
 *additional* costs well, and the phrase appears in the engine only in comments —
 which blocks the buyback/flashback/evoke/madness family wholesale.
 
+## Alliances (ALL) — in progress
+
+**Census at ingest (2026-09-02): 144 cards, 62 supported (43.1%), 82
+unsupported over 105 refused lines.** All 144 new to the pool, every one
+`normal` layout, no planeswalkers — so Phase 2's first two sweeps are clean and
+the whole set is text work. Its keyword field carries nothing in
+`UNSUPPORTED_KEYWORDS` (only `Phasing` is gated, and ALL prints none); the tags
+that look missing — Enchant, Cumulative upkeep, Regenerate, Mill, Scry — are
+Scryfall's, not CR 702's, and are implemented elsewhere. Registered under
+`measured` at release index between HML and M21; the promotion insert is
+Phase 4's hand move.
+
+**The ingest's own yield was the set's code.** `grammar_coverage.py` and
+`hook_reliance.py` each build one row per manifest entry plus an aggregate
+keyed `"ALL"` — safe for exactly as long as no set was called ALL. While the
+set is `measured` the collision is loud: `_measures` drops it from the per-set
+rows and then re-adds the string as the aggregate, so the guard proving a
+measured set is never ratcheted reported a leak that was really the aggregate
+wearing Alliances' code. **After promotion it would have gone silent instead** —
+the per-set entry computed and immediately overwritten, `"ALL"` genuinely in
+the baseline, and Alliances' own floor and ceiling simply absent with every
+guard green. The aggregate is now keyed `set_argument.POOL_SCOPE` (`"<pool>"`),
+a spelling no alphanumeric set code can take, both baselines migrated key-only,
+and `tests/engine/test_scope_keys.py` asserts the shape and the *row count*
+rather than today's set list — the count being the only assertion that can see
+the post-promotion form.
+
+**This is the first set where the leverage instruments agreed with the refusal
+census at estimate time**, which is what HML's retrospective asked for. The
+fragment census has real groups in it after four consecutive sets measured no
+shared fragment at all:
+
+| Fragment | Cards |
+| --- | --: |
+| `at the beginning of` | 17 |
+| `until end of turn` | 13 |
+| `of your library` | 13 |
+| `exile the top` | 8 |
+| `onto the battlefield` | 8 |
+| `if this land would enter` | 6 |
+
+The sentence census reads 1.02 lines per distinct sentence — the reading that
+says a set has no leverage in it — and is wrong again, for the fifth time.
+
+**Three instruments run at Phase 1 found what the census cannot see.**
+`--hollow-lines`: five supported cards carrying an ability part with no
+instruction behind it (Tidal Control, Dystopia, Death Spark, Tornado, Sol
+Grail). `parse_coverage.py --set ALL`: 16 unclaimed sentences on 14 supported
+cards, including **Force of Will's and Pyrokinesis' defining line** — the
+alternative cost is claimed by nothing and both cards compile supported on
+their other line. `picker_sweep.py --set ALL`: three findings, Arcane Denial in
+the Roots class (text names a choice, derivation offers no picker, so the client
+sends a bare cast) plus Tidal Control and Tornado.
+
+### Round plan — wave 1, five worktree groups
+
+Split by grammar family, ranked by the fragment census rather than the
+sentence one:
+
+- **W1G1 — the land cycle.** Six lands print `If this land would enter,
+  sacrifice a <type> instead. If you do, put this land onto the battlefield. If
+  you don't, put it into its owner's graveyard.` with one word changed, plus
+  Sheltered Valley's unconditional variant. One CR 614 replacement for six
+  cards; the highest-leverage single production in the set. Mishra's
+  Groundbreaker and Storm Cauldron ride the existing `land_animation.py` /
+  `land_play_allowance.py` tables.
+- **W1G2 — library-top costs.** `Exile the top N cards of your library` as a
+  component of an activation cost (CR 118.3) over six cards, plus Chaos
+  Harlequin (the same phrase as an *effect*) and Soldevi Digger. Several need
+  the exiled card readable by the sentence after the one that exiled it, which
+  is the `permanents_from` arity question in `SET_PLAYBOOK.md`'s Known gaps.
+- **W1G3 — Aura effect templates.** Eight `unimplemented aura effect` lines in
+  four shapes: a conditional static with an `Otherwise` branch, two
+  blocks/becomes-blocked triggers, three activated abilities whose cost is
+  tapping the enchanted creature, and a reanimating death trigger.
+- **W1G4 — alternative costs, CR 118.9.** The subsystem ROADMAP names as one
+  of three structural gaps bounding everything after Innistrad, and Alliances
+  is the set that pays for it: the pitch cycle (Force of Will, Pyrokinesis,
+  Contagion, Bounty of the Hunt, Scars of the Veteran) plus the repeated
+  additional cost (`you may pay {1}{G} any number of times`).
+- **W1G5 — delayed triggers.** `at the beginning of the next <step>` over five
+  cards, the graveyard-position pair (Krovikan Horror, Death Spark) and the
+  graveyard→library-top production Lodestone Bauble bridges to.
+
+Wave 2 holds the unblocked-attacker family (`defending_player` life loss,
+poison, hand-revealing), the `An opponent chooses one —` modal, and the
+remaining singletons.
+
 ## Homelands (HML) — shipped
 
 **Census at ingest: 115 cards, 76 supported (66.1%), 44 refused lines over 44
