@@ -183,3 +183,50 @@ def test_w1g5_reinforcements_offers_only_its_own_graveyard(set_pool):
     assert spec is not None
     assert spec.get("own_graveyard_only") is True
     assert spec.get("count") == 3
+
+
+def test_w1g5_lat_nams_legacy_shuffles_a_chosen_card_and_cantrips_next_upkeep(set_pool):
+    """Three things in one sentence, and the middle one is the hard one: the
+    shuffle *suspends* the resolution on a prompt (CR 402.1 — only the hand's
+    owner may look), so the "if you do" behind it has to run after the answer
+    rather than before it."""
+    legacy = set_pool("ALL")["Lat-Nam's Legacy"]
+    game, p1, p2 = _w1g5_duel()
+    game.interactive_seats = {0}
+    bear = _w1g5_lea("Grizzly Bears")
+    forest = _w1g5_lea("Forest")
+    p1.hand.extend([bear, forest])
+    p1.library.extend([forest] * 6)
+
+    game._apply_spell_text(p1, p2, legacy)
+    game._settle()
+    assert [c.kind for c in game.pending_choices] == ["hand_to_library"]
+
+    assert game.confirm_hand_to_library(0, [0])
+    game._settle()
+    assert [card.name for card in p1.hand] == ["Forest"]
+    assert len(p1.library) == 7
+
+    # The draw waits: "at the beginning of the next turn's upkeep" is whichever
+    # upkeep comes next, so it lands on the opponent's turn.
+    assert [t.event for t in game.delayed_triggers] == ["next_turns_upkeep"]
+    game.active_player_index = 1
+    game.resolve_upkeep(1)
+    game._settle()
+    assert len(p1.hand) == 3
+
+
+def test_w1g5_lat_nams_legacy_draws_nothing_from_an_empty_hand(set_pool):
+    """"If you do" reads what the step really moved. CR 608.2 does as much as it
+    can, and with no card to shuffle the sentence did not happen — so the
+    delayed ability is never created at all."""
+    legacy = set_pool("ALL")["Lat-Nam's Legacy"]
+    game, p1, p2 = _w1g5_duel()
+    game.interactive_seats = {0}
+    p1.library.extend([_w1g5_lea("Forest")] * 6)
+
+    game._apply_spell_text(p1, p2, legacy)
+    game._settle()
+
+    assert game.pending_choices == []
+    assert game.delayed_triggers == []

@@ -364,6 +364,31 @@ def _lower_shuffle_hand_into_library(
             f"no handler shuffles {node.whose.kind!r}'s hand into their library",
             node=node,
         )
+    if node.count is not None:
+        # "Shuffle **a card** from your hand into your library."
+        # (Lat-Nam's Legacy.) Its own kind rather than a count on the sweep
+        # above, because a counted subset of a hidden zone is a *decision*
+        # (CR 402.1: only its owner may look) where a whole hand is a move. The
+        # handler arms the prompt that asks it; the sweep above has nothing to
+        # ask.
+        if node.then_draw:
+            # "…then draws that many cards" counts what the whole-hand move
+            # took. Behind a printed number the phrase would be that number
+            # said twice, and no card prints the pair — so it refuses rather
+            # than guessing which of the two the sentence meant.
+            raise LoweringError(
+                "a counted shuffle has no 'that many' to draw", node=node
+            )
+        if node.whose.kind != "you":
+            raise LoweringError(
+                "a counted shuffle into a library is the controller's own hand",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "shuffle_hand_cards_into_library", "", {"amount": node.count},
+            ),
+        )
     return (
         OracleInstruction(
             "shuffle_hand_into_library",

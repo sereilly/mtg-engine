@@ -3915,14 +3915,22 @@ function applyHandToLibraryPrompt(info) {
   cancelBtn.disabled = true;
   customOkBtn.disabled = true;
 
-  title.textContent = target === 1 ? "Put a Card Back" : `Put ${target} Cards Back`;
-  body.textContent =
-    `Select ${target} card(s) from your hand to put on top of your library.`;
-  // The order matters and the player is told so: the first click ends up on top.
+  const shuffles = Boolean(info.shuffle);
+  title.textContent = shuffles
+    ? (target === 1 ? "Shuffle a Card Away" : `Shuffle ${target} Cards Away`)
+    : (target === 1 ? "Put a Card Back" : `Put ${target} Cards Back`);
+  body.textContent = shuffles
+    ? `Select ${target} card(s) from your hand to shuffle into your library.`
+    : `Select ${target} card(s) from your hand to put on top of your library.`;
+  // The order matters and the player is told so: the first click ends up on
+  // top. It does not matter at all when the cards are shuffled in (CR 701.19),
+  // and saying it would would be a promise the rules break a moment later.
   steps.innerHTML = [
     `<div><strong>Selected ${selectedCount} of ${target}</strong> (${remaining} more)</div>`,
     "<div>Action: click cards in your hand to select; click a highlighted card again to unselect it.</div>",
-    "<div>The first card you pick goes on top.</div>",
+    shuffles
+      ? "<div>Your library is shuffled afterward, so the order you pick does not matter.</div>"
+      : "<div>The first card you pick goes on top.</div>",
   ].join("");
 }
 

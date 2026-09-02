@@ -667,6 +667,15 @@ class ShuffleHandIntoLibrary:
     """
     whose: PlayerRef
     then_draw: bool = False
+    #: How many cards move, when the sentence names a **number** of them rather
+    #: than the whole zone: "Shuffle **a card** from your hand into your
+    #: library." (Lat-Nam's Legacy.) None is Winds of Change's whole hand.
+    #:
+    #: The difference is a decision, not only a count. A whole hand moves with
+    #: nothing to choose; a counted subset is the hand's owner picking which
+    #: cards, and a hidden zone means nobody else can (CR 402.1). So the two
+    #: readings lower to two handlers, and this field is what tells them apart.
+    count: int | None = None
 
 
 @dataclass(frozen=True)

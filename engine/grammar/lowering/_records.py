@@ -156,6 +156,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # by then the hand is empty and the library has grown by an amount nothing
     # else records.
     "put_hand_cards_on_library": HAND_CARDS_TO_LIBRARY,
+    # "Shuffle a card from your hand into your library. **If you do**, draw
+    # two cards at the beginning of the next turn's upkeep." (Lat-Nam's
+    # Legacy.) The same record its twin one destination over writes, and the
+    # same reason: the number is settled before the prompt is armed, so the
+    # rider behind it reads what the step really moved rather than what the
+    # card asked for — an empty hand shuffles nothing and draws nothing.
+    "shuffle_hand_cards_into_library": HAND_CARDS_TO_LIBRARY,
     # "Return that card to its owner's hand. **If that card is returned to
     # its owner's hand this way**, …" (Puppet Master.) The return records
     # whether it actually took place, which is what the rider after it asks —

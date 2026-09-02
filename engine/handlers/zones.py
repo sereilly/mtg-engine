@@ -3938,6 +3938,52 @@ def return_spell_or_creature_to_hand(game: Game, instruction: OracleInstruction,
     return True, "resolved"
 
 
+@effect_handler("shuffle_hand_cards_into_library")
+def shuffle_hand_cards_into_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Shuffle **a card** from your hand into your library." (Lat-Nam's Legacy.)
+
+    The whole-hand shuffle below with a number in front of it, and a different
+    handler for the one reason that matters: a counted subset of a hidden zone
+    is a *decision*. CR 402.1 lets only its owner look at a hand, so nobody else
+    can pick, and the pick has to be asked rather than taken — which is what
+    arming the prompt does and what the sweep below has nothing to do.
+
+    The prompt is ``hand_to_library``, the one Brainstorm already uses, with the
+    shuffle as a flag on it. The two sentences differ by where the cards land
+    and by nothing else: both take a chosen number out of a hand and put them in
+    the library through the two seams (``take_card_from_hand``,
+    ``put_card_into_library``), and a second prompt kind would be a second copy
+    of that, free to forget one of them.
+
+    **Not a discard.** CR 701.9a makes discarding an action abilities watch, and
+    none of that is happening here — the same distinction the handler below the
+    prompt already draws.
+
+    An empty hand moves nothing, and the "if you do" behind this reads the count
+    rather than the answer: CR 608.2 does as much as it can, and with no card to
+    move the sentence did not happen.
+    """
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    player = context.caster
+    actual = min(amount, len(player.hand))
+    # Recorded before the prompt and whatever the answer is, exactly as the
+    # Brainstorm handler records its own count: the number is settled here and
+    # the prompt only decides which cards. "If you do, draw two cards at the
+    # beginning of the next turn's upkeep" is the step that reads it.
+    context.results[HAND_CARDS_TO_LIBRARY] = actual
+    if actual <= 0:
+        game.log.append(f"{player.name} has no card to shuffle away")
+        return True, "resolved"
+    game.arm_pending_choice(
+        "hand_to_library", game.players.index(player),
+        count=actual, shuffle=True,
+    )
+    game.log.append(
+        f"{player.name} must choose {actual} card(s) to shuffle into their library"
+    )
+    return True, "pending_hand_to_library"
+
+
 @effect_handler("shuffle_hand_into_library")
 def shuffle_hand_into_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Winds of Change: "Each player shuffles the cards from their hand into
