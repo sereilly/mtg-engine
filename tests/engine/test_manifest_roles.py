@@ -180,8 +180,14 @@ def test_registration_inserts_in_release_order(manifest_copy):
     register_measured_set(_entry("ZZB", "1996-06-01"), manifest_path=manifest_copy)
     register_measured_set(_entry("ZZA", "1995-01-01"), manifest_path=manifest_copy)
     register_measured_set(_entry("ZZC", "1997-01-01"), manifest_path=manifest_copy)
-    codes = [e["code"] for e in manifest_measured_sets(manifest_copy)]
-    assert codes == ["ZZA", "ZZB", "ZZC"]
+    entries = manifest_measured_sets(manifest_copy)
+    # The copy starts from the real manifest, which may already carry measured
+    # sets — asserting the list *equals* the three fakes baked in "measured is
+    # empty", which broke the day 5ED was ingested. The invariant is the order.
+    released = [e["released"] for e in entries]
+    assert released == sorted(released)
+    codes = [e["code"] for e in entries]
+    assert [c for c in codes if c.startswith("ZZ")] == ["ZZA", "ZZB", "ZZC"]
 
 
 def test_registration_refuses_a_code_in_either_role(manifest_copy):
