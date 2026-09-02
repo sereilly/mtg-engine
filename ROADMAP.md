@@ -46,8 +46,9 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **11,667 tests**, CI budget **240s**, CI-measured
-   baseline **180s** (`ci.yml`). The budget catches a step change; the baseline
+2. **The suite stays fast.** **11,923 tests**, CI budget **400s**, CI-measured
+   baseline **180s** (`ci.yml`, and that baseline is knowingly stale — see
+   below). The budget catches a step change; the baseline
    is what catches creep, and it is the number to keep honest. Raising the
    budget is a decision, not maintenance — it has been raised three times on
    purpose.
@@ -68,14 +69,22 @@ Anything that weakens these is a regression regardless of what it enables:
    run before letting the next ingest force the budget decision, and remember
    the `slow` marker exists if the AI-batch tests are the growth.
 
-   **HML made that decision due, and deliberately did not take it.** The set
-   added **846 tests** (10,821 → 11,667, +7.8%) on top of a run that was already
-   at 85% of budget, and neither number here was touched — because both are
-   runner-measured and this session only had a local clock, which is exactly the
-   mistake that left them wrong in opposite directions for three sets. **Read the
-   step's own output on the next CI run before the next ingest.** If it is over,
-   the choice is `--durations` first and the `slow` marker second; raising
-   `BUDGET` a fourth time is the last resort and is a decision, not maintenance.
+   **HML made that decision due and it was taken: `BUDGET` 240 → 400,
+   2026-09-02, the fourth raise.** The set took the suite to 11,923 tests, +10%
+   on a run already reading 205s against 240. Three local runs measure a steady
+   137s / 141s / 138s, and this gate's observed local→runner multiplier spans
+   1.3x–1.6x, so the runner now lands somewhere between ~180s and ~250s —
+   *straddling* the old budget, which is a gate failing on runner weather rather
+   than on a step change. 400 is ~2x the middle of that projection and
+   deliberately not another doubling; the full arithmetic is in `ci.yml`.
+
+   **`BASELINE` was left at 180 and is knowingly stale**, because it is
+   runner-measured at 10,821 tests and this session had only a local clock —
+   mixing the two is the exact mistake that left both numbers wrong for three
+   sets. The creep warning (1.5x BASELINE = 270s) may now fire on a normal run;
+   **if it does, that is the stale baseline talking, not creep.** Re-read it
+   from the step's own output across several runs and update it then. That is
+   the one piece of work this invariant still owes.
 3. **Determinism.** A given seed reproduces a run exactly. Parsing and lowering
    are pure functions of card text.
 4. **Ratchets only tighten.** Coverage floors, probe baselines, and accepted-diff
@@ -365,38 +374,43 @@ last re-probed. Re-probe before scheduling one.
   prompt. The reason is written beside the code; this entry exists so the next
   card printing the shape does not have to rediscover it.
 
-- **310 imports across `engine/` are unused in their own module and imported
-  back out by nobody** — the moved-block hazard's *silent* twin. The playbook
-  records the loud half: a function moved out leaves a needed import behind, the
-  suite fails with mass collection errors, and it gets fixed. The other half is a
-  function moved out leaving its now-unneeded import behind, and **nothing ever
-  fails**. Every grammar family split since the layering began has deposited
-  some: `sentence_clauses.py` carries 89, `statements.py` 70,
-  `effects/control_changes.py` 21, `keywords.py` 20, `by_node.py` 16,
-  `lowering/board.py` 13. Measured at HML's wave-2 integration (2026-09-02) after
-  a group swept ten out of `effects/board.py` and flagged its sibling; the count
-  excludes the nine genuine re-export hubs, and was spot-verified rather than
-  trusted (`_parse_destroy` is imported by `statements` and `sentence_clauses`,
-  used by neither, and its real caller imports it straight from `effects`).
+- **Drained 2026-09-02: the dead-import backlog is swept and guarded.** It stood
+  here as 310 imports across 36 modules that no module used and none re-exported
+  — the moved-block hazard's silent twin, deposited by every grammar family split
+  since the layering began. **306 bindings removed** (a second pass caught one
+  that only became dead once its sibling went), and the whole-pool differential
+  moved **zero of 1,725 cards**, which is what a purely cosmetic change should
+  look like. `tests/engine/test_import_hygiene.py` now asserts it per module,
+  with re-exports resolved through real module paths so the two façades
+  (`statements`, `sentence_clauses`) keep the names other modules pull back out
+  of them, and with the "used" test kept deliberately **textual** so a name that
+  appears only in a string annotation survives.
 
-  Not fixed with the set: it predates HML, touches 37 modules, and a mechanical
-  sweep landing mid-wave is the merge nobody wants. **It wants its own round,
-  ending in a guard** — `test_grammar_layering.py` already walks these modules —
-  because a defect whose failure mode is silence returns the next time anyone
-  splits one. And the round owes the *other* check too: a module split needs a
-  missing-import scan as well as a dead-import one, and only the second is a bug.
-  HML's own `amounts`/`records` split shipped a module using two names it never
-  imported, and passed a smoke import, because a `NameError` in a function body
-  waits for its line to run.
+  The distinction worth keeping: a dead-import sweep asks "what does this module
+  import and no longer use", a missing-import scan asks "what does it use and
+  never import". Only the second is a bug, and it is the **loud** one — a
+  `NameError` the moment its line runs, which the suite finds and a smoke import
+  does not. The silent one is the one that needed a guard, and now has one.
 
-- **`count_spec` defaults an unscoped noun phrase to `owner: "you"`**, which
-  under-counts in `free_for_all`. Márton Stromgald ("for each **blocking**
-  creature other than Márton") and Alpine Houndmaster ("the number of **other
-  attacking creatures**") both ride it and are correct in a two-player duel,
-  where there is one attacker seat and one blocker seat. The fix is a
-  *combat-scoped* count rather than a seat-scoped one — a different piece from
-  `owner: "all"`, because "attacking" is not a board. Found at HML wave 1
-  (2026-09-02) by the group that added the `owner: "all"` reading.
+- **Drained 2026-09-02: a count narrowed to a combat role reads the whole
+  battlefield.** It stood here as `count_spec` defaulting an unscoped noun phrase
+  to `owner: "you"`, with Márton Stromgald and Alpine Houndmaster named as
+  riders. Re-probing narrowed it *and* widened it. CR 508.1a puts every attacking
+  creature on the active player's battlefield, so both attacking counts were
+  already right — but CR 509.1a and CR 802.2 give a multiplayer game several
+  defending players, each declaring their own blockers, so **Márton's blocking
+  half counted one where the rule says two** at a three-seat table. Reproduced
+  before the fix; the differential then named a third card nobody had, Aurochs
+  (ICE).
+
+  One scope decision rather than a special case: a combat role is a property of
+  the *battlefield*, and the seat that asks is not necessarily the seat the
+  objects are on — which also closes the latent case of a defending player's card
+  counting attackers, where `owner: "you"` answers zero. It is what the
+  sentence's **other** reader already did: `buff_creatures_global` takes the same
+  printed noun phrase over every seat, so a seat-scoped count had one clause
+  meaning two sets (idiom 36). Three cards moved, four CR-cited tests in
+  `tests/rules/test_multiplayer_combat.py`, and the duel answer is unchanged.
 
 ### Deliberate refusals, with their reasons
 

@@ -68,21 +68,10 @@ from .effect_ordering import Candidate
 from .models import PlayerState
 from .named_counters import add_counters, counters_on, remove_counters
 from .pt import remove_plus1_counters
-from .shields import (
-    END_OF_COMBAT as SHIELD_END_OF_COMBAT,
-    END_OF_TURN as SHIELD_END_OF_TURN,
-    PREVENT_ALL_BUT,
-    PREVENT_AND_GAIN_LIFE,
-    PREVENT_HALF,
-    PREVENT_FROM_COLOR,
-    PREVENT_FROM_SUBJECT,
-    PREVENT_FROM_TARGETING_SOURCE,
-    PREVENT_NEXT_N,
-    PREVENT_WHOLE,
-    Shield,
-    drop_spent,
-    shields_on,
-)
+from .shields import (END_OF_TURN as SHIELD_END_OF_TURN, PREVENT_ALL_BUT,
+                      PREVENT_AND_GAIN_LIFE, PREVENT_HALF, PREVENT_FROM_COLOR,
+                      PREVENT_FROM_SUBJECT, PREVENT_FROM_TARGETING_SOURCE,
+                      PREVENT_NEXT_N, PREVENT_WHOLE, Shield, drop_spent, shields_on)
 
 # Order bands. Blanket combat shields run first: they are flags rather than
 # charges, so applying one costs the recipient nothing, and letting it go first

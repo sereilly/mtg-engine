@@ -20,18 +20,9 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._common import (
-    _REST_OF_TURN,
-    _amount_payload,
-    _describe_targets,
-    _filter_payload,
-    _is_source,
-    _is_target,
-    _is_you,
-    _names_several_targets,
-    _restrictions_beyond,
-    _targets_payload,
-)
+from ._common import (_REST_OF_TURN, _amount_payload, _describe_targets,
+                      _filter_payload, _is_source, _is_you, _names_several_targets,
+                      _restrictions_beyond)
 
 
 #: The key a Nova Pentacle-shaped redirect writes its opponent's pick under, and

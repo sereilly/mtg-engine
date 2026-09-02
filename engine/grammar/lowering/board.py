@@ -16,41 +16,17 @@ import dataclasses
 
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS,
                              X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
-from ...subject_filters import (
-    TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter, untestable_filter_keys,
-)
+from ...subject_filters import object_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import halved_count_spec
-from ._sacrifices import _SACRIFICE_CARRIED, _forced_sacrifice_filter
-from ._common import (
-    _describe_several_targets,
-    _describe_targets,
-    _filter_payload,
-    _full_mana_payload,
-    _is_enchanted,
-    _is_source,
-    _is_target,
-    _is_you,
-    _names_several_targets,
-    _restrictions_beyond,
-    _targets_only,
-    is_mana_value_x,
-)
-from ._events import (
-    CHOSEN_PLAYER,
-    OTHER_CHOSEN_PERMANENT,
-    _RECORDED_PERMANENTS,
-    _EVENT_SUBJECT_CONTROLLERS,
-    _EVENT_SUBJECT_PLAYERS,
-    EVENT_SUBJECT_CONTROLLER,
-    EVENT_SUBJECT_PLAYER,
-    binds_block_pair,
-    names_attached_permanent,
-    CHOSEN_PERMANENT,
-    _BOUND_OBJECT_DELAYED_EVENTS,
-    _UNTAPPED_PERMANENTS,
-)
+from ._sacrifices import _forced_sacrifice_filter
+from ._common import (_describe_targets, _filter_payload, _full_mana_payload,
+                      _is_enchanted, _is_source, _is_target)
+from ._events import (CHOSEN_PLAYER, OTHER_CHOSEN_PERMANENT, _EVENT_SUBJECT_CONTROLLERS,
+                      _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER,
+                      EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT,
+                      _BOUND_OBJECT_DELAYED_EVENTS)
 
 
 #: Where a chosen attachment host is recorded for the step behind it to read.

@@ -32,8 +32,7 @@ from ...cost_x_definitions import cost_x_is_defined, cost_x_value
 from ...mana_payment import is_mana_ability, mana_cost_from_symbols
 from ...events import emit
 from ...game_types import OracleExecutionContext, OracleStateMachine, SimulationResult, StackItem
-from ...handlers._common import (_card_matches_filter, attached_host,
-                                 permanent_matches_filter)
+from ...handlers._common import _card_matches_filter, attached_host
 from ...oracle import LOYALTY_ANY_TIME_STATIC, OracleInstruction, compile_card_oracle
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
 

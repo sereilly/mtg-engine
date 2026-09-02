@@ -32,7 +32,6 @@ callers outside the package import them from this module
 the table did not move its address.
 """
 
-import dataclasses
 
 from ..oracle_types import OracleInstruction
 from . import ast

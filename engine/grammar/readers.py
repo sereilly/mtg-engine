@@ -14,7 +14,7 @@ caller of `nouns.parse_comparison` are untouched.
 from __future__ import annotations
 
 from . import ast
-from .lexer import NUMBER, SELF
+from .lexer import SELF
 from .stream import TokenStream
 from .vocabulary import singular as _singular
 

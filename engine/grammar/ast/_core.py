@@ -18,7 +18,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Union
 
-from ..vocabulary import TYPE_LINE_SUPERTYPES
 
 # Re-exported, not merely imported: this module is the address every family
 # uses for the shared vocabulary, and the 1,000-line split that moved these

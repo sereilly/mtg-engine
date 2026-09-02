@@ -25,8 +25,7 @@ from ...oracle_types import (CHOSEN_THIS_WAY_OBJECTS, PER_OBJECT_SEAT_RECORDS,
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._common import (_describe_targets, _filter_payload, _is_source,
-                      _is_target, _restrictions_beyond)
+from ._common import _describe_targets, _filter_payload, _is_source, _is_target
 from ._events import CHOSEN_PERMANENT as _ATTACH_HOST_KEY
 
 

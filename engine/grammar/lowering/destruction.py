@@ -15,39 +15,19 @@ than assumed — so this is a family boundary and not a size cut.
 import dataclasses
 
 from ...oracle_types import (CHOSEN_THIS_WAY_OBJECTS, CHOSEN_TARGET_PERMANENTS,
-                             X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
+                             OracleInstruction)
 from ...subject_filters import (
     TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter, untestable_filter_keys,
 )
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import halved_count_spec
-from ._sacrifices import _SACRIFICE_CARRIED, _forced_sacrifice_filter
-from ._common import (
-    describe_independent_target_roles,
-    _describe_several_targets,
-    _describe_targets,
-    _filter_payload,
-    _full_mana_payload,
-    _is_enchanted,
-    _is_source,
-    _is_target,
-    _is_you,
-    _names_several_targets,
-    _restrictions_beyond,
-    _targets_only,
-    is_mana_value_x,
-)
-from ._events import (
-    _RECORDED_PERMANENTS,
-    _EVENT_SUBJECT_PLAYERS,
-    EVENT_SUBJECT_PLAYER,
-    binds_block_pair,
-    names_attached_permanent,
-    CHOSEN_PERMANENT,
-    _BOUND_OBJECT_DELAYED_EVENTS,
-    _UNTAPPED_PERMANENTS,
-)
+from ._common import (describe_independent_target_roles, _describe_several_targets,
+                      _describe_targets, _filter_payload, _full_mana_payload,
+                      _is_source, _names_several_targets, _restrictions_beyond,
+                      is_mana_value_x)
+from ._events import (_RECORDED_PERMANENTS, _EVENT_SUBJECT_PLAYERS,
+                      EVENT_SUBJECT_PLAYER, binds_block_pair, names_attached_permanent,
+                      CHOSEN_PERMANENT, _BOUND_OBJECT_DELAYED_EVENTS)
 
 
 #: Where a chosen attachment host is recorded for the step behind it to read.

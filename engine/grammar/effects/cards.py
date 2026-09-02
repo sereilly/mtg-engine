@@ -12,19 +12,17 @@ off for the same reason. The name is `lowering/mana.py`'s, so the mirror
 re-forms instead of forking.
 """
 
-import dataclasses
 
 from .. import ast
 from ..amounts import accept_fraction_head, accept_rounding, parse_amount, parse_equal_to
 from ..records import accept_as_many_as
 
 from ..errors import GrammarError
-from ..lexer import (MANA, render)
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
-from ..phrases import (_accept_self_reference, _parse_card_alternatives,
-                       _parse_duration, _parse_mana_payment, _parse_zone)
+from ..phrases import (_accept_self_reference, _parse_duration, _parse_mana_payment,
+                       _parse_zone)
 from ..readers import accept_source_reference
 
 

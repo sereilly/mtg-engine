@@ -22,10 +22,8 @@ event froze.
 
 import dataclasses
 
-from ...oracle_types import X_FROM_COUNT, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
 
 
 def _filter_payload(

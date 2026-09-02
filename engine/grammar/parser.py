@@ -53,7 +53,6 @@ from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
 from .control_flow import (_attach_if_that_card_was_returned, _attach_if_you_cant,
                           _attach_if_you_do, _attach_otherwise, _attach_when_you_do)
 from .riders import (_attach_destroyed_this_way, _attach_exchanged_this_way, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_unpaid_penalty, _parse_conditional_instead_rider, _parse_exile_instead_rider, _parse_its_controller_creates_rider, _parse_that_controller_reveals_rider, _parse_who_cant_rider)
-from .phrases import accept_member_state_clause
 from .static_lines import (_looks_static, _parse_leading_static_condition_line,
                            _parse_static_condition_line,
                            _parse_turn_scoped_static_line)

@@ -13,22 +13,13 @@ The parse half stays in `effects/board.py`, which is the arrangement `zones`,
 family without the parse family having to split with it.
 """
 
-import dataclasses
 
 from ...oracle_types import OracleInstruction
 from ...subject_filters import object_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._common import (
-    _describe_several_targets,
-    _describe_targets,
-    _filter_payload,
-    _is_source,
-    _is_target,
-    _names_several_targets,
-    _restrictions_beyond,
-    _targets_only,
-)
+from ._common import (_describe_targets, _filter_payload, _is_source, _is_target,
+                      _restrictions_beyond)
 from ._events import CHOSEN_PERMANENT, CHOSEN_PLAYER, _UNTAPPED_PERMANENTS
 
 

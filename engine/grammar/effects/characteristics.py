@@ -14,7 +14,7 @@ from ..amounts import accept_counters_on_source, accept_fraction_head, accept_li
 from ..records import _parse_for_each_this_way
 
 from ..errors import GrammarError
-from ..lexer import (GToken, PT, PUNCT, QUOTE, SELF, WORD, tokenize)
+from ..lexer import PT, PUNCT, QUOTE, SELF, tokenize
 from ..nouns import parse_object_filter
 from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
@@ -23,10 +23,9 @@ from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS,
                           TYPE_LINE_SUPERTYPES, match_longest,
                           singular as _singular_type)
 
-from ..phrases import (is_pt_counter, _expect_counter_kind,
-                       _parse_can_attack_as_though, _parse_duration,
-                       _parse_for_each, _parse_keywords,
-                       _parse_per_each_objects, parse_pair_ordinal_subject)
+from ..phrases import (_expect_counter_kind, _parse_can_attack_as_though,
+                       _parse_duration, _parse_for_each, _parse_keywords,
+                       _parse_per_each_objects)
 from ..where_x import parse_where_x_definition
 
 

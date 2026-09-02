@@ -9,7 +9,7 @@ from ..handlers._common import permanent_matches_filter
 from ..auras import aura_restriction_active
 from ..auras import aura_enchants
 from ..damage_events import EVENT_LOCK, damage_source_seat, deal_damage, lifelink_life_gained
-from ..events import Event, collect, emit
+from ..events import emit
 from ..land_play_allowance import (
     LandPlayAllowance, land_play_allowance_for, lands_cannot_be_played,
 )

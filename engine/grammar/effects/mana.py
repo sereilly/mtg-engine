@@ -15,7 +15,6 @@ and *when*:
 that reason; nothing outside this family reads it.
 """
 
-import dataclasses
 
 from .. import ast
 from ..amounts import parse_amount

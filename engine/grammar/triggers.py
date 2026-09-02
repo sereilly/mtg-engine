@@ -26,7 +26,7 @@ from dataclasses import replace
 
 from . import ast
 from .errors import GrammarError
-from .lexer import MANA, PT, SELF
+from .lexer import PT, SELF
 from .nouns import parse_object_filter
 from .references import parse_target_spec
 from .phrases import (

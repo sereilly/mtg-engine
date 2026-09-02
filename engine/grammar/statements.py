@@ -14,114 +14,31 @@ import dataclasses
 from . import ast
 from .amounts import parse_equal_to
 from .errors import GrammarError
-from .lexer import (NUMBER, SELF, WORD)
-from .nouns import parse_object_filter
-from .paragraphs import (
-    _parse_random_reveal_ownership_exchange,
-    _parse_reassign_blockers_between_attackers,
-    _parse_exchange_greatest_mana_value,
-    _parse_cast_from_exiled_with,
-    _parse_ownership_exchange_unless_paid,
-    _parse_exile_graveyard_until_leaves,
-    _parse_exile_until_leaves_or_untaps,
-    _parse_name_and_strip,
-    _parse_name_then_random_reveal,
-    _parse_name_then_reveal_top,
-    _parse_transmute_by_sacrifice,
-)
+from .paragraphs import (_parse_reassign_blockers_between_attackers,
+                         _parse_cast_from_exiled_with)
 from .delayed import (_parse_choose_target, _parse_choose_then_gain,
                       _parse_create_delayed_trigger, delay_binds_an_object,
                       fold_flip_stakes, parse_trailing_delay,
                       resolve_that_turn)
-from .references import parse_player_ref, parse_recipient
-from .vocabulary import CARD_TYPES
+from .references import parse_player_ref
 from .stream import TokenStream
 from .conditions import _parse_condition
 from .where_x import parse_where_x_definition
 from .subject_verb import parse_subject_verb
 from .rebinding import rebind_pronoun_to_condition_target
-from .phrases import (
-    _accept_number,
-    _accept_self_reference,
-    parse_bound_subject,
-    _parse_can_attack_as_though,
-    _parse_duration,
-    _parse_mana_payment,
-)
-from .effects import (
-    _accept_life_alternative,
-    _parse_untap_chosen_by_paying,
-    _parse_for_each_destroy_unless_paid,
-    _parse_have_source_deal_damage,
-    _parse_add_mana,
-    _parse_becomes,
-    _parse_cant_attack_or_block,
-    _parse_cast_permission,
-    _parse_change_base_pt,
-    _parse_change_text,
-    _parse_source_of_choice_effect,
-    _parse_damage_redirect,
-    _parse_optional_damage_redirect,
-    _parse_assigns_no_combat_damage,
-    _parse_attacking_doesnt_tap,
-    _parse_bound_targeting_prevention,
-    _parse_damage_dealt_riders,
-    _parse_counter,
-    _parse_create_token,
-    _parse_damage,
-    _parse_destroy,
-    _parse_discard,
-    _parse_draw,
-    _parse_exile_graveyard,
-    _parse_reveal_hand_and_choose,
-    _parse_exile_top_of_library,
-    _parse_put_exiled_with_source,
-    _parse_enchant,
-    _parse_end_the_turn,
-    _parse_extra_turn,
-    _parse_ante,
-    _parse_life_total_becomes,
-    _parse_gain_control,
-    _parse_gains,
-    _parse_choose_number,
-    _parse_count_objects,
-    _parse_flip_coin,
-    _parse_game_is_a_draw,
-    _parse_gets,
-    _parse_has,
-    _parse_look_at_hand,
-    _parse_loses,
-    _parse_mill,
-    _parse_scry,
-    _parse_modal_head,
-    _parse_player_adds_mana,
-    _parse_produces_instead,
-    _parse_tapper_produces_instead,
-    _parse_spend_mana_as_though,
-    _parse_prevent,
-    _parse_double,
-    _parse_switch_pt,
-    _parse_fight,
-    _parse_put_counter,
-    _parse_remove_counter,
-    _parse_remove_from_combat,
-    _parse_choose_blocks_for_defenders,
-    _parse_return,
-    _parse_reveal_top,
-    _parse_sacrifice,
-    _parse_counted_sacrifice,
-    _parse_sacrifice_expansion_permanents,
-    _parse_delayed_self_action,
-    _parse_shuffle_graveyard_into_library,
-    _parse_shuffle_hand_into_library,
-    _parse_shuffle_library,
-    _parse_search_library,
-    _parse_doesnt_untap_next_step,
-    _parse_tap_untap,
-    _parse_attach,
-    _parse_exchange_control,
-    _parse_wins,
-)
+from .phrases import _parse_duration, _parse_mana_payment
+from .effects import (_parse_untap_chosen_by_paying,
+                      _parse_for_each_destroy_unless_paid,
+                      _parse_have_source_deal_damage, _parse_cast_permission,
+                      _parse_optional_damage_redirect, _parse_attacking_doesnt_tap,
+                      _parse_bound_targeting_prevention, _parse_damage_dealt_riders,
+                      _parse_create_token, _parse_reveal_hand_and_choose,
+                      _parse_count_objects, _parse_produces_instead,
+                      _parse_tapper_produces_instead, _parse_spend_mana_as_though,
+                      _parse_choose_blocks_for_defenders, _parse_sacrifice,
+                      _parse_counted_sacrifice, _parse_sacrifice_expansion_permanents,
+                      _parse_delayed_self_action, _parse_shuffle_graveyard_into_library,
+                      _parse_shuffle_hand_into_library, _parse_shuffle_library)
 
 
 # ---------------------------------------------------------------------------

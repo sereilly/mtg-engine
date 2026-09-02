@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Union
 
-from ._core import Amount, Comparison, ObjectFilter, PlayerRef, TargetSpec, Zone
+from ._core import Amount, Comparison, ObjectFilter, PlayerRef, TargetSpec
 from .costs import Cost
 
 @dataclass(frozen=True)

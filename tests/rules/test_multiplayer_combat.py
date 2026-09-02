@@ -435,3 +435,123 @@ def test_802_1_a_single_defender_is_still_a_legal_whole_combat():
     game.declare_attackers(0, [0], attacker_targets={0: 1})
 
     assert game.combat_defending_player_index == 1
+
+
+# ---------------------------------------------------------------------------
+# A count narrowed to a combat role reads the whole battlefield, not one seat
+# ---------------------------------------------------------------------------
+
+
+def _combat_count_board(third_seat_blocks: bool):
+    """A three-seat table mid-combat, with Márton Stromgald blocking.
+
+    CR 802.2 makes *every* opponent of the attacking player a defending player,
+    and CR 509.1a has each of them declare blockers from creatures **they**
+    control — so "each blocking creature" is a set that spans seats, which a
+    two-player game can never show.
+    """
+    from engine.card_loader import load_catalog
+
+    catalog = {card.name: card for card in load_catalog()}
+    marton, bear = catalog["Márton Stromgald"], catalog["Grizzly Bears"]
+
+    def ready(card):
+        permanent = Permanent(card=card)
+        permanent.metadata["summoning_sickness_turn"] = -99
+        return permanent
+
+    source, ally, third, attacker = (ready(c) for c in (marton, bear, bear, bear))
+    game = Game(players=[
+        PlayerState(name="Attacker", battlefield=[attacker]),
+        PlayerState(name="Defender", battlefield=[source, ally]),
+        PlayerState(name="Third", battlefield=[third]),
+    ])
+    game.enforce_mana_costs = False
+    game._settle()
+    attacker.attacking = True
+    source.blocking_attacker_index = 0
+    ally.blocking_attacker_index = 0
+    if third_seat_blocks:
+        third.blocking_attacker_index = 0
+    return game, source, marton
+
+
+def _blocking_count(game, source, marton) -> int:
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers._common import count_from_payload
+    from engine.oracle import compile_card_oracle
+
+    program = compile_card_oracle(marton)
+    trigger = next(
+        t for t in program.triggered_abilities
+        if getattr(t.condition, "kind", "") == "creature_blocks"
+    )
+    context = OracleExecutionContext(
+        caster=game.players[1], target=game.players[0],
+        card=marton, source_permanent=source,
+    )
+    return count_from_payload(
+        game, context, trigger.instruction.payload["x_from_count"]
+    )
+
+
+@pytest.mark.cr("509.1a", "802.2")
+def test_509_1a_a_blocking_count_spans_every_defending_player():
+    """Márton Stromgald counts "each blocking creature other than Márton
+    Stromgald", and at a three-seat table two of them are on other players'
+    battlefields.
+
+    The count used to default to the asking seat, so it read one where the rule
+    says two — and the *other* reader of the same printed phrase
+    (``buff_creatures_global``, which hands the +1/+1 out) already spanned every
+    seat, so one clause meant two different sets.
+    """
+    game, source, marton = _combat_count_board(third_seat_blocks=True)
+    assert _blocking_count(game, source, marton) == 2
+
+
+@pytest.mark.cr("509.1a")
+def test_509_1a_the_two_player_answer_is_unchanged_by_that():
+    """The same count with nobody else blocking. A scope widened to fix
+    multiplayer must leave the duel answering exactly what it did."""
+    game, source, marton = _combat_count_board(third_seat_blocks=False)
+    assert _blocking_count(game, source, marton) == 1
+
+
+@pytest.mark.cr("508.1a")
+def test_508_1a_an_attacking_count_is_not_the_asking_seat_s_board():
+    """The other half of the same rule, and the reason both combat roles scope
+    the same way.
+
+    CR 508.1a puts every attacking creature on the **active** player's
+    battlefield. A card that counts attackers while its controller is *not* the
+    active player therefore has to read a board that is not its own — which the
+    old seat-scoped default answered as zero. Asked of an invented card, because
+    the pool's three cards with the shape are all controlled by the attacker.
+    """
+    from engine.grammar import compile_line
+
+    result = compile_line(
+        "Watcher gets +1/+0 until end of turn for each attacking creature.",
+        card_name="Watcher",
+    )
+    assert result.parsed, result
+    spec = result.instructions[0].payload["x_from_count"]
+    assert spec["owner"] == "all", spec
+    assert spec["filter"]["attacking_only"] is True, spec
+
+
+@pytest.mark.cr("509.1a")
+def test_509_1a_a_count_the_sentence_scopes_itself_keeps_that_scope():
+    """The widening is only for a phrase that names no controller. "Creatures
+    **you control**" still means one seat, or the rule above would have widened
+    every count in the pool."""
+    from engine.grammar import compile_line
+
+    result = compile_line(
+        "Watcher gets +1/+0 until end of turn for each attacking creature you control.",
+        card_name="Watcher",
+    )
+    assert result.parsed, result
+    spec = result.instructions[0].payload["x_from_count"]
+    assert spec["owner"] == "you", spec

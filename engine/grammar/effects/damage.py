@@ -17,7 +17,7 @@ import dataclasses
 from .. import ast
 from ..amounts import parse_amount, parse_equal_to
 from ..errors import GrammarError
-from ..readers import accept_source_reference, accept_source_reference_spec
+from ..readers import accept_source_reference_spec
 from ..references import parse_player_ref, parse_recipient
 from ..lexer import WORD
 from ..stream import TokenStream

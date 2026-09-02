@@ -19,13 +19,12 @@ from __future__ import annotations
 
 import dataclasses
 from .. import ast
-from ..amounts import parse_amount, parse_equal_to
+from ..amounts import parse_amount
 from ..errors import GrammarError
-from ..lexer import (MANA, render)
 from ..nouns import parse_object_filter
-from ..references import parse_player_ref, parse_target_spec
+from ..references import parse_player_ref
 from ..stream import TokenStream
-from ..phrases import _accept_self_reference, _parse_card_alternatives, _parse_zone
+from ..phrases import _parse_card_alternatives, _parse_zone
 
 
 def _parse_reveal_top(stream: TokenStream) -> ast.Statement:

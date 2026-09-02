@@ -16,7 +16,6 @@ still resolves, and the AST package's flat ``__init__`` is untouched.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Union
 
 from ._primitives import Fixed
 from ..vocabulary import TYPE_LINE_SUPERTYPES

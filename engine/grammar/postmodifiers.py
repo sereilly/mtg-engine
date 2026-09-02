@@ -27,16 +27,13 @@ from __future__ import annotations
 from typing import Callable
 
 from . import ast
-from .abilities import _accept_ability_source
 from .amounts import accept_source_relative_comparison, parse_comparison
 from .errors import GrammarError
-from .lexer import NUMBER, PT, PUNCT, SELF, WORD
+from .lexer import PT, SELF
 from .names import accept_original_expansion, parse_card_name
 from .readers import _SELF_NOUNS, accept_source_reference
 from .stream import TokenStream
-from .vocabulary import (ALL_SUBTYPES, CARD_TYPES, COLOR_WORDS, CREATURE_TYPES,
-                         GENERIC_NOUNS as _GENERIC_NOUNS, KEYWORD_INDEX,
-                         LAND_TYPES, NUMBER_WORDS, SUPERTYPES, match_longest,
+from .vocabulary import (CARD_TYPES, CREATURE_TYPES, KEYWORD_INDEX, match_longest,
                          singular as _singular)
 
 # "…attached to that creature" / "…attached to it" — the trailing clause naming

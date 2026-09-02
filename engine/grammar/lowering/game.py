@@ -10,8 +10,7 @@ changes what a permanent is, and all of them change the state a player is in.
 
 from ...oracle_types import (OracleInstruction, X_FROM_COUNT,
                              X_FROM_COUNT_PER_RECIPIENT)
-from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS, card_only_filter
-from ...tokens import default_token_name
+from ...subject_filters import card_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec, halved_count_spec, x_offset_amount

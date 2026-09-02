@@ -13,22 +13,11 @@ Which keywords the engine implements is **not** decided here. That is
 second answer, and CLAUDE.md's lifelink precedent is what it costs.
 """
 
-import dataclasses
-from dataclasses import replace
 
-from ..pt import pt_counter_deltas
-from . import ast
-from .amounts import accept_counters_on_source, parse_amount
-from .records import accept_added_base, accept_damage_dealt_this_turn
 
-from .errors import GrammarError
-from .lexer import (GToken, MANA, NUMBER, PT, PUNCT, QUOTE, WORD, tokenize)
-from .nouns import _STATE_ADJECTIVES, parse_object_filter
-from .references import parse_target_spec
+from .lexer import NUMBER, QUOTE, WORD
 from .stream import TokenStream
-from .vocabulary import (CARD_TYPES, CREATURE_TYPES, KEYWORD_FAMILIES,
-                         KEYWORD_INDEX, NUMBER_WORDS,
-                         NUMERIC_ARGUMENT_KEYWORDS, SUBTYPE_INDEX,
+from .vocabulary import (KEYWORD_FAMILIES, KEYWORD_INDEX, NUMERIC_ARGUMENT_KEYWORDS,
                          match_longest)
 
 

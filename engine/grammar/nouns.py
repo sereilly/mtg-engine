@@ -21,9 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from . import ast
-from .amounts import parse_amount, parse_pt_pair
-from .errors import GrammarError
-from .lexer import PT, SELF, WORD
+from .amounts import parse_pt_pair
+from .lexer import PT
 from .names import parse_card_name
 from .stream import TokenStream
 from .abilities import _accept_ability_noun, _accept_ability_source
@@ -32,17 +31,8 @@ from .amounts import parse_comparison  # re-exported: a comparison bounds an amo
 from .readers import _SELF_NOUNS, accept_source_reference
 from .vocabulary import GENERIC_NOUNS as _GENERIC_NOUNS
 from .vocabulary import singular as _singular
-from .vocabulary import (
-    ALL_SUBTYPES,
-    CARD_TYPES,
-    COLOR_WORDS,
-    CREATURE_TYPES,
-    KEYWORD_INDEX,
-    SUBTYPE_INDEX,
-    SUPERTYPES,
-    TYPE_LINE_SUPERTYPES,
-    match_longest,
-)
+from .vocabulary import (ALL_SUBTYPES, CARD_TYPES, COLOR_WORDS, CREATURE_TYPES,
+                         SUBTYPE_INDEX, SUPERTYPES, TYPE_LINE_SUPERTYPES, match_longest)
 
 # Head nouns that are not card types but name a set of objects. "target" is one
 # of them: Fireball's "among any number of targets" uses it as a bare noun.

@@ -23,18 +23,9 @@ from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS, NUMERIC_ARGUMENT_KEYWORDS
 from ._events import _RECORDED_PERMANENTS, binds_block_pair
-from ._common import (
-    _describe_several_targets,
-    _describe_targets,
-    _filter_payload,
-    _durationless_reason,
-    _restrictions_beyond,
-    _is_enchanted,
-    _is_source,
-    _is_target,
-    _names_several_targets,
-    _targets_payload,
-)
+from ._common import (_describe_several_targets, _describe_targets, _filter_payload,
+                      _durationless_reason, _restrictions_beyond, _is_enchanted,
+                      _is_source, _is_target, _names_several_targets)
 
 _KEYWORD_GRANTS: dict[tuple[str, str], str] = {
     ("flying", "target"): "grant_target_flying_until_eot",

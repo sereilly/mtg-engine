@@ -42,7 +42,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
-from .auras import attach_aura, detach_aura
+from .auras import detach_aura
 from .land_types import end_land_type_change
 from .models import next_permanent_id
 from .oracle_types import OracleInstruction

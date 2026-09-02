@@ -25,7 +25,7 @@ from __future__ import annotations
 from . import ast
 from .amounts import expect_pt, parse_amount
 from .errors import GrammarError
-from .lexer import (MANA, NUMBER, SELF)
+from .lexer import MANA, SELF
 from .nouns import parse_object_filter
 from .readers import accept_source_reference
 from .references import parse_player_ref, parse_recipient

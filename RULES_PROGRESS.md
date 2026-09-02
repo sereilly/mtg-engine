@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**342 / 612 tracked rules covered (55%)** — 1784 tests, 0 unannotated.
+**342 / 612 tracked rules covered (55%)** — 1788 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -615,7 +615,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 508. Declare Attackers Step
 
-- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(24 tests, subrules abcdfgk)*
+- [x] **508.1** First, the active player declares attackers. This turn-based action doesn’t use the stack. To dec... *(25 tests, subrules abcdfgk)*
 - [x] **508.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(2 tests)*
 - [ ] **508.3** Triggered abilities that trigger on attackers being declared may have different trigger conditions.
 - [ ] **508.4** If a creature is put onto the battlefield attacking, its controller chooses which defending playe...
@@ -626,7 +626,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(48 tests, subrules abcghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(51 tests, subrules abcghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(9 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
@@ -954,7 +954,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 802. Attack Multiple Players Option
 
 - [x] **802.1** Some multiplayer games allow the active player to attack multiple other players. If this option i... *(2 tests)*
-- [x] **802.2** As the combat phase starts, the attacking player doesn’t choose an opponent to become the defendi... *(1 tests)*
+- [x] **802.2** As the combat phase starts, the attacking player doesn’t choose an opponent to become the defendi... *(2 tests)*
 - [x] **802.3** As the attacking player declares each attacking creature, they choose a defending player, a plane... *(3 tests, subrules a)*
 - [x] **802.4** If more than one player is being attacked, controls a planeswalker that’s being attacked, or prot... *(2 tests, subrules a)*
 - [x] **802.5** Combat damage is assigned in APNAP order. Other than that, the combat damage step proceeds just a... *(2 tests)*

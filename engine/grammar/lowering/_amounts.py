@@ -571,6 +571,26 @@ def count_spec(
         owner = "all"
     else:
         owner = filt.zone_owner.kind if filt.zone_owner else "you"
+    # "…for each **blocking** creature other than Márton Stromgald." A combat
+    # role is a property of the *battlefield*, not of a controller, and the seat
+    # that asks is not necessarily the seat the objects are on — so a phrase
+    # narrowed to one and scoped to nobody counts every seat, exactly as
+    # `blocking_source` below settles which pile it reads for the same reason.
+    #
+    # Both halves of the rule have a card behind them. CR 509.1a and CR 802.2
+    # give a multiplayer game **several** defending players, each declaring
+    # blockers from creatures they control, so "each blocking creature" spans
+    # seats: at a three-seat table with two blockers beside it, Márton counted
+    # one. And CR 508.1a puts every attacker on the *active* player's
+    # battlefield, which is the one seat a defending player's card counting
+    # attackers would not read — `owner: "you"` answers zero there.
+    #
+    # The `all` reading is what the sentence's other reader already uses:
+    # `buff_creatures_global` takes the same printed noun phrase over every
+    # seat, so leaving the count seat-scoped had one clause meaning two sets.
+    if owner == "you" and not filt.zone_owner and controller is None:
+        if payload.get("blocking_only") or payload.get("attacking_only"):
+            owner = "all"
     spec: dict = {
         "zone": filt.zone,
         "owner": owner,

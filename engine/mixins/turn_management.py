@@ -6,7 +6,6 @@ import random
 from ..auras import aura_additional_mana_on_tap
 from ..delayed_triggers import matching_delayed_triggers
 from ..hand_locks import expire_hand_locks
-from .. import land_mana_swaps
 from ..game_types import OracleExecutionContext, SimulationResult
 from ..oracle import compile_card_oracle
 from ..replacements import apply_replacements

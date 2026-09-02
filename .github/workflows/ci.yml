@@ -78,9 +78,41 @@ jobs:
       # taken here. Two ways to avoid having to take it: read `--durations` on
       # a runner run before assuming the ingest forces it, and remember `-m
       # "not slow"` exists if the batch tests are the growth.
+      # BUDGET 240 -> 400 (2026-09-02, after the HML promotion). The fourth
+      # raise, and taken as a decision rather than as maintenance: asked for
+      # explicitly, with the arithmetic below, because the previous three were
+      # each taken under a red or nearly-red gate and that is how a budget stops
+      # meaning anything.
+      #
+      # The evidence. Four runner readings at 10,821 tests were 172s, 186s, 163s
+      # and 205s — the last of those 85% of the old 240. Homelands then took the
+      # suite to 11,923 tests, +10%, and this gate's own history says growth here
+      # is super-linear (+19% tests once cost +64% runner wall time). Three local
+      # runs on one clean tree measure a very steady 137s / 141s / 138s. The
+      # local->runner multiplier this file has observed ranges 1.3x (110/82 at
+      # 9,110 tests) to about 1.6x (180/115 at 10,821), so the runner now lands
+      # somewhere between ~180s and ~250s: **straddling the old budget**, which
+      # is a gate that fails on runner weather rather than on a step change.
+      #
+      # 400 is ~2x the middle of that projection, which is the headroom this gate
+      # is documented to want, and it is deliberately not another doubling — the
+      # 60 -> 120 -> 240 pattern reads as reflexive escalation, and a budget with
+      # too much slack stops catching the thing it exists for. A step change
+      # (a test that starts a server, an accidental O(cards^2) sweep) is a
+      # multiple, not a 10%, so 400 still catches one while surviving two or
+      # three more sets.
+      #
+      # **BASELINE is deliberately NOT changed, and it is stale.** It is
+      # runner-measured at 10,821 tests, and the only clock this session had was
+      # a local one — mixing a local number into a runner-measured one is exactly
+      # what left both wrong in opposite directions for three sets. So it stays
+      # at 180 as the last honest reading, and the creep warning below (1.5x
+      # BASELINE = 270s) may now fire on a normal run. **If it does, that is
+      # BASELINE being stale rather than the suite creeping**: re-read it from
+      # the step's own output across several runs and update it then.
       - name: Enforce the suite-time budget
         env:
-          BUDGET: 240
+          BUDGET: 400
           BASELINE: 180
         run: |
           START=$(date +%s)

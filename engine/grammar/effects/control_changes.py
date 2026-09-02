@@ -14,22 +14,10 @@ where these two only ever answer "and whose is it now?".
 
 from __future__ import annotations
 
-import dataclasses
 from .. import ast
-from ..amounts import parse_amount
-from ..errors import GrammarError
-from ..nouns import parse_object_filter
-from ..lexer import NUMBER
-from ..readers import accept_source_reference
-from ..references import parse_player_ref, parse_recipient, parse_target_spec
+from ..references import parse_recipient
 from ..stream import TokenStream
-from ..vocabulary import (CARD_TYPES, CREATURE_TYPES, NUMBER_WORDS, SUBTYPE_INDEX, match_longest)
-from ..phrases import (
-    _accept_number, _accept_self_reference, _parse_counted_sacrifice,
-    _parse_mana_payment, _parse_pay_life,
-    _parse_that_object, _parse_zone,
-    parse_counted_subject, parse_pair_ordinal_subject, parse_subject_filter_at,
-)
+from ..phrases import _accept_self_reference, _parse_that_object
 
 
 def _parse_gain_control(
