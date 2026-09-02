@@ -242,6 +242,17 @@ class ModalNode:
 
     choose_count: int
     at_least: bool = False
+    #: Who chooses, when the head names somebody other than the spell's
+    #: controller: "**An opponent** chooses one —" (Fatal Lore, Misfortune,
+    #: Library of Lat-Nam). CR 700.2e — the other player chooses when the
+    #: controller normally would, which is CR 601.2b, as the spell is cast.
+    #:
+    #: A field rather than a second node for ``at_least``'s reason: it is a
+    #: parameter of the same head, and the lowering has to *look* at it. Read as
+    #: the plain head these three cards would let their caster pick the mode
+    #: that suits them, which on Fatal Lore is the difference between drawing
+    #: three cards and handing an opponent a board wipe.
+    chooser: "PlayerRef | None" = None
 
 
 @dataclass(frozen=True)

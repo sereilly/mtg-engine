@@ -1203,6 +1203,29 @@ def _mode_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("opponent_mode_choice")
+def _opponent_mode_choice(ctx: PromptContext, choices: list) -> dict:
+    """"An opponent chooses one -" (CR 700.2e): the modes of a spell **somebody
+    else** cast, offered to the player who has to pick one.
+
+    The labels and nothing else. Its twin above carries each mode's candidates
+    because the seat that picks the mode also picks its target in the same
+    announcement (CR 601.2c); here those are two different players, which the
+    compiler refuses outright - so a mode reaching this prompt never targets and
+    there is nothing to offer beside the label.
+    """
+    choice = choices[0]
+    data = choice.data
+    return {
+        "player_seat": choice.player_index,
+        "card_name": data["card_name"],
+        "modes": [
+            {"index": index, "label": label}
+            for index, label in enumerate(data.get("labels") or [])
+        ],
+    }
+
+
 def _mode_target_view(ctx: PromptContext, candidate: dict) -> dict:
     """One candidate of one mode, as the client picks it."""
     if candidate.get("kind") != "permanent":

@@ -2353,6 +2353,28 @@ def _modal_options(oracle_text: str, card_name: str | None) -> tuple[ModalOption
     return ()
 
 
+def _modal_chooser(oracle_text: str) -> str | None:
+    """Who picks the mode, when the head names somebody other than the spell's
+    controller — "**An opponent** chooses one —" (CR 700.2e).
+
+    Read through the same :func:`_modal_head` the mode list and the bound are,
+    for that pair's reason: three answers taken from three readings of one line
+    are three answers free to disagree about which head they came from.
+
+    None for every other modal card, which is CR 700.2a's ordinary case and the
+    one the cast path already carries.
+    """
+    if "choose" not in oracle_text.lower() or "•" not in oracle_text:
+        return None
+    lines = oracle_text.splitlines()
+    for index, raw in enumerate(lines):
+        head = _modal_head(raw.strip(), grammar_ast.SpellEffectLine)
+        if head is None or not _bullets_after(lines, index):
+            continue
+        return head.chooser.kind if head.chooser is not None else None
+    return None
+
+
 def _modal_at_least(oracle_text: str) -> bool:
     """Whether the head above the bullets is "Choose one **or more** —".
 
@@ -4512,6 +4534,31 @@ def _compile_card_oracle(
                 f"modal mode not implemented: {dead_mode.label!r}",
                 normalized_text,
             )
+        # "An opponent chooses one —" with a mode that **targets**. CR 601.2c
+        # announces targets after CR 601.2b picks the mode, and both are the
+        # caster's steps — but here the mode is somebody else's (CR 700.2e), so
+        # by the time the caster would name a target they do not yet know which
+        # mode they are naming it for. There is no announcement shape for that,
+        # and letting it through would resolve a targeted mode with no target:
+        # Fatal Lore would destroy nothing and log itself resolved. Refused
+        # here, where the card stays visible in the backlog.
+        chooser = _modal_chooser(oracle_text)
+        targeted_mode = next(
+            (
+                m for m in modes
+                if m.instruction is not None
+                and "targets" in (m.instruction.payload or {})
+            ),
+            None,
+        ) if chooser is not None else None
+        if targeted_mode is not None:
+            return OracleProgram(
+                False,
+                "unsupported",
+                "a mode an opponent chooses cannot also name the caster's "
+                f"targets: {targeted_mode.label!r}",
+                normalized_text,
+            )
 
         if not instructions and modes and modes[0].instruction is not None:
             # A modal spell's card-level instruction is its *first* mode's — the
@@ -4721,6 +4768,7 @@ def _compile_card_oracle(
                 triggered_abilities,
                 modes=modes,
                 modes_at_least=_modal_at_least(oracle_text),
+                mode_chooser=chooser,
             )
 
         return OracleProgram(False, "unsupported", "effect not in basic pattern set", normalized_text)

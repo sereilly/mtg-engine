@@ -284,6 +284,49 @@ class SpellCastingMixin:
         self._settle()
         self.clear_priority_window()
         return SimulationResult(queued.card_name, True, queued.effect_kind, "resolved")
+    def _arm_opponent_mode_choice(self, caster_index: int, card, spell_item) -> None:
+        """CR 700.2e: hand the mode choice to a player other than the caster.
+
+        Nothing is armed for an ordinary modal spell — the caster already named
+        its mode as part of the announcement — so this is a no-op for every card
+        but the three that print the head.
+
+        **Which opponent** is the caster's choice when there is more than one
+        (CR 700.2e's second sentence), and this takes the first living one
+        instead of asking. That is a decision the engine does not model yet and
+        it is recorded as such rather than hidden: in a duel, the rule's
+        "if there is more than one" clause never applies and the seat is the
+        only opponent there is.
+        """
+        program = compile_card_oracle(card)
+        if program.mode_chooser is None or not program.modes:
+            return
+        chooser = next(
+            (
+                seat for seat in self.opponents_of(caster_index)
+                if not self.players[seat].lost
+            ),
+            None,
+        )
+        if chooser is None:
+            # CR 700.2e names a player who has to exist; with none left the
+            # spell has nobody to ask and the first printed mode stands, which
+            # is the same stated policy the non-interactive default takes.
+            from ...game_types import ChosenMode
+
+            spell_item.chosen_mode_index = 0
+            spell_item.chosen_modes = (ChosenMode(index=0),)
+            return
+        self.arm_pending_choice(
+            "opponent_mode_choice", chooser,
+            card_name=card.name,
+            labels=[mode.label for mode in program.modes],
+            _item=spell_item,
+        )
+        self.log.append(
+            f"{self.players[chooser].name} chooses a mode for {card.name}"
+        )
+
     def _resolve_chosen_modes(
         self, card, mode_choices: list[dict] | None
     ) -> tuple[tuple, str | None]:
@@ -305,9 +348,22 @@ class SpellCastingMixin:
         """
         from ...game_types import ChosenMode
 
+        program = compile_card_oracle(card)
+        # "**An opponent** chooses one —" (CR 700.2e). The choice is made at the
+        # same moment (CR 601.2b) but by somebody else, so an announcement that
+        # names a mode is not a legal announcement — it is the caster taking the
+        # half of the card that suits them, which on all three cards printing
+        # this head is the opposite of what the card does. Refused rather than
+        # ignored: a dropped mode choice is a client quietly getting a different
+        # spell from the one it asked for.
+        if program.mode_chooser is not None:
+            if mode_choices:
+                return (), (
+                    f"{card.name}: an opponent chooses this spell's mode"
+                )
+            return (), None
         if not mode_choices:
             return (), None
-        program = compile_card_oracle(card)
         if not program.modes:
             return (), f"{card.name} has no modes to choose"
         if len(mode_choices) > 1 and not program.modes_at_least:
@@ -1061,6 +1117,15 @@ class SpellCastingMixin:
             record_cast(self, spell_item)
             self._apply_spell_cast_any_triggers(caster_index, card, from_zone)
             self._apply_cast_triggers(caster_index, card)
+            # "An opponent chooses one —" (CR 700.2e): the other player chooses
+            # "when the spell's controller normally would", which is CR 601.2b.
+            # Armed here rather than earlier because CR 601.2i finishes the
+            # casting first — the spell is on the stack and the cast triggers
+            # are announced, and the prompt holds priority, so nobody acts
+            # between the two. A non-interactive chooser takes the default where
+            # this stands (`default_at_arm`), which is what keeps AI and
+            # headless play from stopping on a decision nobody will make.
+            self._arm_opponent_mode_choice(caster_index, card, spell_item)
             return SimulationResult(card.name, True, classification.effect_kind, "queued")
 
         self._resolve_card(

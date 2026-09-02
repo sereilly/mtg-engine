@@ -814,6 +814,27 @@ def _action_mode_choice_confirm(session, req, seat_type):
             detail="no mode choice is pending for you, or that mode and target are not offered",
         )
 
+@action_handler("opponent_mode_choice_confirm")
+def _action_opponent_mode_choice_confirm(session, req, seat_type):
+    # "An opponent chooses one -" (Fatal Lore, Library of Lat-Nam, Misfortune):
+    # CR 700.2e hands the mode to a player who is not the caster, and CR 601.2b
+    # puts the choice inside the announcement - so this arrives while the spell
+    # is already on the stack and nobody has had priority.
+    #
+    # A mode index and nothing else. The compiler refuses a card whose
+    # opponent-chosen mode also names the caster's targets, because there is no
+    # announcement shape for a target chosen after somebody else picks the mode
+    # - so unlike `mode_choice_confirm` above there is never a target to send.
+    if req.hand_index is None:
+        raise HTTPException(status_code=400, detail="hand_index (mode index) is required")
+    if not session.game.resolve_pending_choice(
+        "opponent_mode_choice", req.seat, mode_index=req.hand_index
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="no opponent mode choice is pending for you, or that mode is not offered",
+        )
+
 @action_handler("loyalty_recipient_confirm")
 def _action_loyalty_recipient_confirm(session, req, seat_type):
     # Liliana's Scrounger: which planeswalker the loyalty counter lands on.

@@ -384,6 +384,16 @@ class OracleProgram:
     # card never said. Default False keeps every "Choose one —" exactly as it
     # was.
     modes_at_least: bool = False
+    # "**An opponent** chooses one —" (Fatal Lore, Library of Lat-Nam,
+    # Misfortune). Who picks the mode, when the head names somebody other than
+    # the spell's controller (CR 700.2e). None is every other modal card, where
+    # the controller picks (CR 700.2a) and the cast carries the choice.
+    #
+    # It has to be on the program because the *cast path* is what reads it: a
+    # caster who could name the mode of one of these three spells would take
+    # the half that suits them, which is the opposite of what all three cards
+    # are printed to do.
+    mode_chooser: str | None = None
 
 
 # Number words, shared with the text-keyed derivation tables that read a count

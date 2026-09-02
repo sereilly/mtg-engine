@@ -233,10 +233,14 @@ def parse_imperative(
     # activation cost, after a trigger condition — all read it through the line
     # layer that already handles those prefixes. It refuses quietly, so every
     # other "choose …" sentence keeps the backlog reason it had.
-    if stream.at_word("choose"):
-        modal = _parse_modal_head(stream)
-        if modal is not None:
-            return modal
+    # Ungated, unlike the productions around it: the head is printed bare
+    # ("Choose one —") **and** with its chooser in front of it ("An opponent
+    # chooses one —", CR 700.2e), so there is no one word to gate on. It refuses
+    # quietly and without consuming, so every other sentence keeps the backlog
+    # reason it had — which is the whole licence for asking it of every line.
+    modal = _parse_modal_head(stream)
+    if modal is not None:
+        return modal
     # Game of Chaos's whole four-sentence paragraph, which *opens* with "Flip a
     # coin." and would otherwise be read as that sentence alone, stranding the
     # three behind it. Tried first for that reason and refuses without
