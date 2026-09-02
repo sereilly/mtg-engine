@@ -222,6 +222,17 @@ class DeclareAttackersStepMixin:
                 self.become_tapped(attacker)
                 self._turn_face_up(attacker)
             attacker.metadata["attacked_this_turn"] = True
+            # The **per-combat** half of the same record, the mirror of the
+            # ``blocked_this_combat`` mark the blockers step writes and
+            # ``end_combat`` sweeps. "…if this creature attacked or blocked
+            # **this combat**" (the Clockwork cycle, Kjeldoran Home Guard) needs
+            # both, and neither of the two records already here answers it: the
+            # turn mark above is still set in a turn's *second* combat phase,
+            # and the ``combat_attackers`` map lets go of a creature removed
+            # from combat (Maze of Ith) that did attack this combat all the
+            # same. CR 506.4 removes a creature from combat; it does not unmake
+            # the declaration.
+            attacker.metadata["attacked_this_combat"] = True
             # The durable half of that record: which seat's turn it attacked
             # on, by that seat's own turn ordinal. `attacked_this_turn` is
             # swept at cleanup, and "it attacked during your last turn" (Giant

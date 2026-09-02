@@ -63,15 +63,27 @@ class TestClockworkBeast:
         assert beast.effective_power == 7
 
     def test_removes_a_counter_at_end_of_combat_if_it_attacked(self, cards):
+        """The attack is **declared**, not stamped.
+
+        This used to set ``attacked_this_turn`` by hand, which is a turn-scoped
+        mark: it is still True in a turn's second combat phase, so the card's
+        printed "this combat" and the record the test asserted were two
+        different windows. The declaration writes ``attacked_this_combat``,
+        which the end-of-combat step sweeps, and the trigger reads that.
+        """
         beast = Permanent(card=cards["Clockwork Beast"])
         game = _game(PlayerState(name="P1"), PlayerState(name="P2"))
         game._put_permanent_onto_battlefield(0, beast, None)
+        beast.metadata["summoning_sickness_turn"] = -99
 
-        beast.metadata["attacked_this_turn"] = True
         game.active_player_index = 0
         game._set_phase_and_step("combat", "declare_attackers")
-        game.combat_defending_player_index = 1
+        assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+        game._set_phase_and_step("combat", "declare_blockers")
+        game.declare_blockers(1, {})
         game.end_combat()
+        while game.stack:
+            game.resolve_top_of_stack()
 
         assert beast.metadata.get("plus_1_0_counters") == 6
         assert beast.effective_power == 6

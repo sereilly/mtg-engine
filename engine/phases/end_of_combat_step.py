@@ -56,6 +56,10 @@ class EndOfCombatStepMixin:
             # `clear_shields` below has for the collection form.
             clear_directional_shields(permanent, END_OF_COMBAT)
             permanent.metadata.pop("blocked_this_combat", None)
+            # Its twin from the declare-attackers step, swept in the same pass
+            # so "this combat" means one window from both ends. A turn's second
+            # combat phase starts with both marks clear.
+            permanent.metadata.pop("attacked_this_combat", None)
         # "…this combat" (Johan). The exemptions are scoped to the combat
         # phase, so they end where every other until-end-of-combat effect above
         # does rather than waiting for cleanup.
@@ -163,26 +167,22 @@ class EndOfCombatStepMixin:
     ) -> bool:
         """CR 509.1a's relation from either end, over **this** combat.
 
-        Two records because the two halves are recorded in two places, and
-        neither is a characteristic of the permanent: the attack is the live
-        ``combat_attackers`` map (an attacker's key is its index on the active
-        player's battlefield, CR 508.1a) and the block is the mark the
-        declare-blockers step writes and ``end_combat`` sweeps.
+        Two marks, one per side, both written at the declaration and both swept
+        by this step — so the window is the combat rather than the turn, and a
+        creature *removed* from combat afterwards (Maze of Ith, CR 506.4) still
+        answers yes, because removal does not unmake the declaration.
 
         This replaced a text probe further down this file that matched Clockwork
         Beast's whole printed line as a string and read ``attacked_this_turn``
         for the attack half. Both were wrong in the widening direction: the line
         compiled as a *static* line, so a second card printing the same sentence
-        got nothing at all (Kjeldoran Home Guard), and a turn with two combat
-        phases made the second one's answer yes for a creature that attacked in
-        the first.
+        got nothing at all (Kjeldoran Home Guard), and the turn mark answers yes
+        in a turn's second combat for a creature that attacked in the first.
         """
-        if (
-            controller_index == self.active_player_index
-            and self.battlefield_index_of(permanent) in self.combat_attackers
-        ):
-            return True
-        return bool(permanent.metadata.get("blocked_this_combat"))
+        return bool(
+            permanent.metadata.get("attacked_this_combat")
+            or permanent.metadata.get("blocked_this_combat")
+        )
 
     def _resolve_end_of_combat_destruction(self) -> None:
         """Destroy creatures marked by a "destroy at end of combat" trigger.

@@ -399,6 +399,8 @@ _COVERED_ELSEWHERE = {
     "attacking_you": "test_attacking_you_is_two_questions_not_one",
     "unblocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
     "blocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
+    "not_attacking": "test_the_nonattacking_nonblocking_pair_names_a_creature_in_neither_role",
+    "not_blocking": "test_the_nonattacking_nonblocking_pair_names_a_creature_in_neither_role",
     "controlled_since_turn_start":
         "test_controlled_since_turn_start_rejects_a_creature_that_just_arrived",
     "tapped_to_pay_for_source_this_turn":
@@ -1165,3 +1167,44 @@ def test_a_controller_controls_phrase_is_gated_by_the_same_key_set():
     assert untestable_filter_keys(invented) == {"controller_controls"}
     assert object_only_filter(plain) is None
 # --- end FEM G5 ---
+
+
+# --- W2G1: combat triggers and restrictions ---
+def test_the_nonattacking_nonblocking_pair_names_a_creature_in_neither_role(pool):
+    """"target **nonattacking, nonblocking** creature" (Unlikely Alliance).
+
+    Their own demonstration rather than rows in ``_REJECTIONS``, for
+    ``untapped_only``'s reason: that table builds a permanent outside combat,
+    which is exactly what these two keys *admit*, so a row there would prove
+    nothing. The rejection has to come out of a real combat.
+
+    Both fields have been ``bool | None`` since the state adjectives were read
+    and only the True half had a payload form, so a card printing the negative
+    emitted the payload of a bare "creature" and the narrowing vanished between
+    the two gates — the same silent drop ``blocked``/``unblocked`` recorded one
+    field over.
+    """
+    attacker = Permanent(card=pool["Grizzly Bears"])
+    blocker = Permanent(card=pool["Grizzly Bears"])
+    idle = Permanent(card=pool["Grizzly Bears"])
+    p1 = PlayerState(name="P1", battlefield=[attacker, idle])
+    p2 = PlayerState(name="P2", battlefield=[blocker])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+
+    assert subject_matches(game, idle, {"not_attacking": True})
+    assert subject_matches(game, idle, {"not_blocking": True})
+    assert not subject_matches(game, attacker, {"not_attacking": True})
+    assert not subject_matches(game, blocker, {"not_blocking": True})
+    # Each key answers its own axis: an attacker is not blocking, and a blocker
+    # is not attacking. Folding them into one would make the card's two printed
+    # words one, and pump the wrong half of the combat.
+    assert subject_matches(game, attacker, {"not_blocking": True})
+    assert subject_matches(game, blocker, {"not_attacking": True})
+# --- end W2G1 ---
