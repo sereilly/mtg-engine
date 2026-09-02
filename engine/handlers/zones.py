@@ -1894,6 +1894,50 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+@effect_handler("exile_bound_card")
+def exile_bound_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"When that creature dies this turn, exile **it**." (Whippoorwill.)
+
+    The object a delayed ability was bound to, after the death that fired it —
+    so what is exiled is a *card in a graveyard*, never a permanent. CR 603.7d
+    makes the ability's source the permanent that created it, which is exactly
+    the reading this handler exists to avoid: routed through ``exile_self``,
+    Whippoorwill exiled itself every time its target died.
+
+    The card is found by name in the owner's graveyard, the two facts the death
+    seam freezes into the trigger's context (CR 608.2h): by resolution the
+    permanent is gone, CR 400.7 makes its card a new object, and a graveyard
+    has no controller to re-derive the seat from. Two copies of one card in a
+    pile are literally one ``CardDefinition``, so which of them is taken is not
+    a question with an answer — and the *last* one is taken, because a death
+    puts the card on top.
+
+    A card that has already left that pile exiles nothing rather than falling
+    back to a scan: CR 608.2's "as much as possible", and a scan would exile
+    whichever look-alike it reached first.
+    """
+    trigger = context.trigger_context or {}
+    seat = trigger.get("event_subject_owner")
+    name = trigger.get("dead_name")
+    if not isinstance(seat, int) or not (0 <= seat < len(game.players)) or not name:
+        game.log.append(f"{context.card.name}: no card was recorded to exile")
+        return True, "resolved"
+    owner = game.players[seat]
+    index = next(
+        (i for i in range(len(owner.graveyard) - 1, -1, -1)
+         if owner.graveyard[i].name == name),
+        None,
+    )
+    if index is None:
+        game.log.append(
+            f"{context.card.name}: {name} is no longer in {owner.name}'s graveyard"
+        )
+        return True, "resolved"
+    owner.exile.append(owner.graveyard.pop(index))
+    game.log.append(f"{context.card.name} exiled {name} from {owner.name}'s graveyard")
+    return True, "resolved"
+
+
 @effect_handler("exile_self")
 def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Exile it." / "Exile this creature." (Archfiend's Vessel.)
@@ -2365,6 +2409,45 @@ def exile_target_graveyard_card(game: Game, instruction: OracleInstruction, cont
     return True, "resolved"
 
 
+@effect_handler("exile_cards_from_graveyard")
+def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…exile up to two target creature cards from defending player's
+    graveyard." (Rysorian Badger.)
+
+    The counted twin of ``exile_target_graveyard_card``, and a *prompt* rather
+    than an announced list of targets: no picker in this engine names two cards
+    in one graveyard, and a triggered ability's targets are chosen at
+    resolution here (see the CR 608.2b entry in ROADMAP.md). The seat that
+    would have announced them picks them instead, out of the same pile, as the
+    ability resolves.
+
+    Whose pile is the seat the *combat* named (CR 506.2), frozen into the
+    trigger's context by the declare-attackers fire site — the same key the
+    defending player's discard reads. A seat nobody recorded is not a pile to
+    exile from: the attacker can have left combat by the time this resolves,
+    and picking some other graveyard would be a card doing what it never said.
+
+    ``exiled_this_way`` is written by the *answer*, not here, which is why the
+    choice spec suspends: "you gain 1 life for each card exiled this way" is a
+    later step of this same resolution and would read a zero otherwise.
+    """
+    owner = str(instruction.payload.get("graveyard_owner") or "")
+    if owner != "defending_player":
+        game.log.append(f"{context.card.name}: no graveyard named")
+        return True, "resolved"
+    seat = (context.trigger_context or {}).get("trigger_defending_player_index")
+    if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+        game.log.append(
+            f"{context.card.name}: no defending player was recorded"
+        )
+        return True, "resolved"
+    caster_index = game.players.index(context.caster)
+    game.arm_graveyard_exile_pick(
+        caster_index, seat, dict(instruction.payload), context
+    )
+    return True, "resolved"
+
+
 @effect_handler("phase_out_target_creature_until_source_leaves")
 def phase_out_target_creature_until_source_leaves(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
@@ -2501,8 +2584,15 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
 
     The same ``recipient`` key ``target_loses_life`` reads: absent means the
     spell's target, "caster" the controller ("Mill four cards."),
-    "each_opponent" every living opponent. Each miller mills their own library,
-    which is why the loop is per victim rather than a shared count.
+    "each_opponent" every living opponent, "damaged_player" the seat a damage
+    trigger's fire site froze ("whenever this creature deals damage to an
+    opponent, **that player** mills a card", Reef Pirates). Each miller mills
+    their own library, which is why the loop is per victim rather than a shared
+    count.
+
+    A ``damaged_player`` with no record mills nobody, never the ability's own
+    controller: that is the seat this effect must not hit, and it is the same
+    rule ``discard_hand`` follows for the same words under the same event.
     """
     amount = resolve_amount(instruction.payload.get("amount", 1) or 1, context.x_value)
     recipient = instruction.payload.get("recipient")
@@ -2513,6 +2603,12 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
             game.players[i]
             for i in game.opponents_of(game.players.index(context.caster))
         ]
+    elif recipient == "damaged_player":
+        seat = (context.trigger_context or {}).get("defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{context.card.name}: no recorded player, no mill")
+            return True, "resolved"
+        victims = [game.players[seat]]
     else:
         victims = [context.target]
     for victim in victims:

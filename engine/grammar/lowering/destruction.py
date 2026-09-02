@@ -784,20 +784,47 @@ def _lower_destroy_each_unless_paid(
     observer seat and no source to compare against, so a narrowing the matcher
     could only answer relative to one of those would be dropped — and a dropped
     narrowing on a sweep takes the board rather than doing less.
+
+    **"…that dealt damage to this creature this turn" is the one exception, and
+    it is an exception because it is not a narrowing of the sweep — it *is* the
+    set.** "When this creature dies, … for each creature that dealt damage to
+    this creature this turn, destroy that creature unless its controller pays 2
+    life." (Giant Albatross.) A relation to the ability's own source, which
+    ``to_payload`` has no key for (``_common.CONDITIONALLY_EMITTED_FIELDS``
+    names it so that every lowering but the one written for it refuses the
+    phrase); it is lifted off the filter here and carried as its own payload
+    key, exactly as Brine Hag's base-P/T rewrite carries the same relation. The
+    handler reads the record the damage seam kept on the victim
+    (``damaged_by_sources_this_turn``) rather than scanning a battlefield, which
+    is the only reading available at all: this trigger fires on a death, so by
+    resolution the source is a card in a graveyard (CR 603.10, idiom 6).
     """
-    described = object_only_filter(_filter_payload(node.filter))
+    filt = node.filter
+    from_damage_record = filt.dealt_damage_to_source_this_turn
+    if from_damage_record:
+        filt = dataclasses.replace(filt, dealt_damage_to_source_this_turn=False)
+    described = object_only_filter(_filter_payload(filt))
     if described is None:
         raise LoweringError(
             "the per-permanent buyout cannot test this restriction", node=node
         )
+    if node.payer not in ("any_player", "controller"):
+        raise LoweringError(
+            f"no buyout is offered to {node.payer!r}", node=node
+        )
+    payload: dict[str, object] = {
+        "filter": dict(described), "life": int(node.life),
+    }
     if node.payer != "any_player":
-        raise LoweringError("only 'any player' may buy a permanent off", node=node)
-    return (
-        OracleInstruction(
-            "destroy_each_unless_life_paid", "",
-            {"filter": dict(described), "life": int(node.life)},
-        ),
-    )
+        # Absent still means "any player", so Cleansing's payload stays
+        # byte-identical and the handler's APNAP round is what an absent key
+        # keeps meaning.
+        payload["payer"] = node.payer
+    if from_damage_record:
+        payload["from_damage_record"] = True
+    if node.no_regen:
+        payload["bypass_regeneration"] = True
+    return (OracleInstruction("destroy_each_unless_life_paid", "", payload),)
 
 
 def _lower_for_each_destroyed(

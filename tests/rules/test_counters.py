@@ -17,7 +17,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
-from engine.named_counters import add_counters, counters_on
+from engine.named_counters import add_counters, counters_on, remove_counters
 
 
 def _mk_creature(name: str, power: int = 2, toughness: int = 2) -> CardDefinition:
@@ -391,3 +391,85 @@ def test_removing_more_pt_counters_than_are_there_takes_only_what_is_there():
     assert counters_on(perm, "+1/+1") == 0
     assert (perm.effective_power, perm.effective_toughness) == (1, 1)
 # --- end W2G3 ---
+
+
+# --- HML W2G4: the placing half of CR 122.1a ---
+@pytest.mark.cr("122.1a", "613.4c")
+def test_placing_a_pt_counter_through_the_named_store_brings_its_pt_with_it():
+    """The mirror of the removal above, and the half that was missing.
+
+    ``named_counters.add_counters`` wrote the record and nothing else, so a
+    "-0/-2" counter placed through it read as placed and left the creature its
+    size — a counter that exists in the store and not in layer 7c. No card in
+    the pool reached it with a P/T kind, which is exactly why it would have
+    gone on being wrong: the first one to do so (Greater Werewolf's
+    "put a -0/-2 counter on each creature blocking or blocked by this
+    creature") would have shrunk nothing while reporting itself resolved.
+
+    The write goes through ``pt.add_pt_counters``, so there is still one
+    implementation of "place a P/T counter" — this is a routing rule, not a
+    second channel.
+    """
+    from engine.named_counters import add_counters as add_named
+
+    perm = Permanent(card=_mk_creature("Blocker", 3, 4))
+    game = Game(players=[PlayerState(name="P1", battlefield=[perm]),
+                         PlayerState(name="P2")])
+    game._sync_control()
+
+    add_named(perm, "-0/-2")
+
+    assert counters_on(perm, "-0/-2") == 1
+    assert (perm.effective_power, perm.effective_toughness) == (3, 2)
+
+
+@pytest.mark.cr("122.1", "122.1a")
+def test_a_counter_with_no_rules_meaning_still_changes_nothing():
+    """The other side of the routing rule, asserted so the widening above
+    cannot quietly start moving P/T for every kind.
+
+    CR 122.1: a counter's kind is its identity, and a "paralyzation" counter is
+    a marker the rules say nothing about — so the same one write that shrinks a
+    creature for "-0/-2" must leave one alone here.
+    """
+    perm = Permanent(card=_mk_creature("Blocker", 3, 4))
+    game = Game(players=[PlayerState(name="P1", battlefield=[perm]),
+                         PlayerState(name="P2")])
+    game._sync_control()
+
+    add_counters(perm, "paralyzation", 2)
+
+    assert counters_on(perm, "paralyzation") == 2
+    assert (perm.effective_power, perm.effective_toughness) == (3, 4)
+@pytest.mark.cr("122.1", "122.1a")
+def test_one_store_answers_for_a_pt_counter_in_both_directions():
+    """"One store, not two" was true of the readers and not of this writer.
+
+    ``counters_on`` and ``remove_counters`` address a CR 122.1a counter through
+    ``pt.pt_counter_key`` — ``-1/-1`` lives under ``minus_counters``, the name
+    CR 704.5q's cancellation sweep and the web card face were written against.
+    ``add_counters`` spelled the key itself and wrote ``-1/-1_counters``, so a
+    counter placed through this store went somewhere no reader looks: the
+    creature kept its size *and* reported none on it.
+
+    Asserted through the public readers rather than by naming the key, which is
+    the point — a test that re-spelled the key would agree with whichever half
+    it copied.
+    """
+    from engine.named_counters import add_counters as add_named
+
+    perm = Permanent(card=_mk_creature("Shrinker", 3, 3))
+    game = Game(players=[PlayerState(name="P1", battlefield=[perm]),
+                         PlayerState(name="P2")])
+    game._sync_control()
+
+    add_named(perm, "-1/-1", 2)
+
+    assert counters_on(perm, "-1/-1") == 2
+    assert (perm.effective_power, perm.effective_toughness) == (1, 1)
+
+    remove_counters(perm, "-1/-1")
+
+    assert counters_on(perm, "-1/-1") == 1
+    assert (perm.effective_power, perm.effective_toughness) == (2, 2)
+# --- end HML W2G4 ---

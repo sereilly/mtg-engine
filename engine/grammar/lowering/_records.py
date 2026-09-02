@@ -119,6 +119,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # marker rather than theirs: a sweep that exiles kills nothing, so "died
     # this way" over it would name an empty set.
     "exile_all_matching": EXILED_THIS_WAY,
+    # "…exile up to two target creature cards from defending player's
+    # graveyard. If you do, you gain 1 life **for each card exiled this way**"
+    # (Rysorian Badger). The same key the sweep above writes, because the
+    # question the back-reference asks is the same one: how many did this step
+    # exile? Written when the prompt is answered, which is why the offer's
+    # ``then`` branch has to wait for it — the choice spec says ``suspends``.
+    "exile_cards_from_graveyard": EXILED_THIS_WAY,
     # CR 705.2: only the player who flipped wins or loses that flip, and both
     # "if you win" and "if you lose" read the one result — so the flip records
     # it and the conditionals after it read the record, rather than each

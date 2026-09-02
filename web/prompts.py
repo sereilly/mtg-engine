@@ -997,6 +997,32 @@ def _choose_cards_in_hand(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("graveyard_exile_pick")
+def _graveyard_exile_pick(ctx: PromptContext, choices: list) -> dict:
+    """Rysorian Badger: which cards in the defending player's graveyard go.
+
+    The whole pile is sent with the positions the printed noun phrase admits,
+    the shape every card picker here takes: the client draws the pile and greys
+    out what the phrase does not name, and the engine re-checks the answer
+    against the same rule. ``count`` is the ceiling — "up to two" out of a pile
+    holding one is one (CR 608.2) — and ``up_to`` is what tells the client an
+    empty answer is a legal one.
+    """
+    choice = choices[0]
+    owner_seat = int(choice.data["owner_index"])
+    owner = ctx.game.players[owner_seat]
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "owner_seat": owner_seat,
+        "owner_name": owner.name,
+        "count": ctx.game._how_many_graveyard_cards(choice),
+        "up_to": bool(choice.data.get("up_to")),
+        "legal_indices": ctx.game.live_graveyard_exile_candidates(choice),
+        "cards": [ctx.serialize_card(card) for card in owner.graveyard],
+    }
+
+
 @prompt_renderer("word_of_command")
 def _word_of_command(ctx: PromptContext, choices: list) -> dict:
     target = ctx.game.players[choices[0].data["target_index"]]

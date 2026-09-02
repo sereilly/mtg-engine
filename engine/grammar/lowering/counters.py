@@ -567,9 +567,17 @@ def _lower_put_counter(
     # candidate answers, and there is no choice to make. The gates are the two
     # its siblings use — a narrowing beyond the card type would be carried and
     # dropped, which would mark a strictly larger set than the card names.
+    #
+    # **The counter's kind is payload here, P/T pair included**: "put a -0/-2
+    # counter on each creature blocking or blocked by this creature" (Greater
+    # Werewolf) is Dread Wight's sentence with a CR 122.1a counter in it, and
+    # nothing about the *subject* changes. The gate used to read
+    # `not is_pt_counter`, which made the pair a different effect and refused
+    # the card; the two placements differ only in what
+    # ``named_counters.add_counters`` does with the word, which is one store's
+    # business rather than the grammar's.
     if (
-        not is_pt_counter(node.counter)
-        and not node.up_to
+        not node.up_to
         and isinstance(node.subject, ast.TargetSpec)
         and not node.subject.targeted
         and node.subject.quantifier in ("all", "each")

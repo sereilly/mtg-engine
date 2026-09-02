@@ -1172,3 +1172,313 @@ def test_the_fiends_paragraph_targets_the_type_it_prints(set_pool):
         "quantifier": "target", "kind": "object",
         "filter": {"type_filter": "artifact"},
     }
+
+
+# --- W2G4: combat memory and counters ---
+
+from engine import Game, PlayerState
+from engine.damage_events import deal_damage
+from engine.models import CardDefinition, Permanent
+from engine.named_counters import counters_on
+
+
+def _g4_creature(
+    name: str, power: int = 2, toughness: int = 2, oracle_text: str = "",
+) -> CardDefinition:
+    """A plain creature to stand on the other side of a block or a damage
+    event. Invented rather than pulled from the pool so the thing under test is
+    the only thing that varies."""
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Test",
+        oracle_text=oracle_text, colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Test",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _g4_ready(*permanents):
+    for permanent in permanents:
+        permanent.metadata["summoning_sickness_turn"] = -99
+    return permanents
+
+
+def _g4_settle(game):
+    while game.stack:
+        game.resolve_top_of_stack()
+    game._settle()
+
+
+def test_reef_pirates_mills_the_player_it_damaged(set_pool):
+    """"Whenever this creature deals damage to an opponent, **that player**
+    mills a card."
+
+    The seat is the one the damage event froze (CR 603.10), not a target: this
+    trigger offers no choice at all, so a mill reading ``context.target`` would
+    have milled whoever the resolution happened to be carrying. The library is
+    given two distinguishable cards so the assertion is about *which* card
+    moved, not merely about a count.
+    """
+    pirates = Permanent(card=set_pool("HML")["Reef Pirates"])
+    _g4_ready(pirates)
+    victim = PlayerState(name="P2")
+    victim.library = [_g4_creature("Top Card"), _g4_creature("Second Card")]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[pirates]), victim,
+    ])
+    game.enforce_mana_costs = False
+    game._settle()
+
+    deal_damage(game, {"recipient": victim, "amount": 2,
+                       "source": pirates, "combat": True})
+    _g4_settle(game)
+
+    assert [card.name for card in victim.graveyard] == ["Top Card"]
+    assert [card.name for card in victim.library] == ["Second Card"]
+    assert game.players[0].graveyard == []
+
+
+def test_reef_pirates_does_not_mill_on_damage_to_a_creature(set_pool):
+    """"...to an **opponent**" is the narrowing, and an unenforced one is a
+    card that fires more often than it says. Nothing is milled when the Pirates
+    hit a blocker instead of a face."""
+    pirates = Permanent(card=set_pool("HML")["Reef Pirates"])
+    blocker = Permanent(card=_g4_creature("Test Wall", toughness=5))
+    _g4_ready(pirates, blocker)
+    victim = PlayerState(name="P2", battlefield=[blocker])
+    victim.library = [_g4_creature("Top Card")]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[pirates]), victim,
+    ])
+    game.enforce_mana_costs = False
+    game._settle()
+
+    deal_damage(game, {"recipient": blocker, "amount": 2,
+                       "source": pirates, "combat": True})
+    _g4_settle(game)
+
+    assert victim.graveyard == []
+    assert len(victim.library) == 1
+
+
+def _g4_end_of_combat_block(set_pool, own_name: str, blocker: CardDefinition):
+    """*own_name* attacking from seat 0 into *blocker* on seat 1, stopped with
+    the block already declared.
+
+    The blocker is given more toughness than the attacker has power wherever it
+    matters: the trigger under test is about the *pairing* the combat recorded,
+    and a blocker that died to damage would take the assertion with it.
+    """
+    mine = Permanent(card=set_pool("HML")[own_name])
+    theirs = Permanent(card=blocker)
+    _g4_ready(mine, theirs)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[mine]),
+        PlayerState(name="P2", battlefield=[theirs]),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()   # declare_blockers
+    assert game.declare_blockers(1, {0: 0})[0]
+    _g4_settle(game)
+    return game, mine, theirs
+
+
+def test_greater_werewolf_shrinks_the_creature_that_blocked_it(set_pool):
+    """"At end of combat, put a **-0/-2 counter** on each creature blocking or
+    blocked by this creature."
+
+    Two halves in one assertion, because a counter that is recorded and does
+    nothing is the failure this card would otherwise have had: CR 122.1a says
+    the counter's *name* is what it does to power and toughness, so the record
+    and the layer-7c write must both be there.
+    """
+    game, _werewolf, blocker = _g4_end_of_combat_block(
+        set_pool, "Greater Werewolf", _g4_creature("Test Bear", 1, 8)
+    )
+
+    game.advance_combat_phase()   # combat damage
+    game.advance_combat_phase()   # end of combat
+    _g4_settle(game)
+
+    assert counters_on(blocker, "-0/-2") == 1
+    assert (blocker.effective_power, blocker.effective_toughness) == (1, 6)
+
+
+def test_greater_werewolf_leaves_an_unengaged_creature_alone(set_pool):
+    """The relation is the whole of the subject. A creature that was on the
+    board but never in *this* creature's pairing takes no counter — a sweep
+    that dropped the relation would take the board."""
+    game, _werewolf, _blocker = _g4_end_of_combat_block(
+        set_pool, "Greater Werewolf", _g4_creature("Test Bear", 1, 8)
+    )
+    bystander = Permanent(card=_g4_creature("Test Ox", 2, 4))
+    _g4_ready(bystander)
+    game.players[1].battlefield.append(bystander)
+    game._settle()
+
+    game.advance_combat_phase()   # combat damage
+    game.advance_combat_phase()   # end of combat
+    _g4_settle(game)
+
+    assert counters_on(bystander, "-0/-2") == 0
+    assert (bystander.effective_power, bystander.effective_toughness) == (2, 4)
+
+
+def _g4_albatross(set_pool):
+    """A Giant Albatross that has just died to a creature's damage, with its
+    dies-trigger's ``{1}{U}`` already paid.
+
+    Seat 0 owns the Albatross; seat 1 owns the killer. The damage is marked
+    through the seam rather than dealt by combat so the record under test —
+    what the victim carried when it left — is the only thing the test is
+    arranging, and the offer is answered by hand rather than left to a headless
+    default: what is under test is the loop behind it, not who would take it.
+    """
+    albatross = Permanent(card=set_pool("HML")["Giant Albatross"])
+    killer = Permanent(card=_g4_creature("Test Killer", 3, 4))
+    _g4_ready(albatross, killer)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[albatross]),
+        PlayerState(name="P2", battlefield=[killer]),
+    ])
+    game.enforce_mana_costs = False
+    game.players[0].mana_pool["U"] = 2
+    game._settle()
+    game._mark_damage_on_permanent(albatross, 3, source=killer, combat=True)
+    game.check_state_based_actions()
+    _g4_settle(game)
+    assert not game.is_on_battlefield(albatross)
+    return game, albatross, killer
+
+
+def test_giant_albatross_destroys_the_creature_that_killed_it(set_pool):
+    """"When this creature dies, you may pay {1}{U}. If you do, for each
+    creature that dealt damage to this creature this turn, destroy that
+    creature unless its controller pays 2 life."
+
+    The set is CR 603.10's last-known information: by the time the trigger
+    resolves the Albatross is a card in a graveyard, so no read of a
+    battlefield could say what damaged it. A headless controller pays a toll it
+    can afford, so the killer's controller is left with a life total that
+    cannot cover 2.
+    """
+    game, _albatross, killer = _g4_albatross(set_pool)
+    game.players[1].life = 1
+
+    assert game.confirm_optional_pay(0, "Giant Albatross", accept=True), game.log
+    _g4_settle(game)
+
+    assert not game.is_on_battlefield(killer)
+    assert game.players[1].life == 1
+
+
+def test_giant_albatross_spares_a_creature_whose_controller_pays(set_pool):
+    """The other arm of the same offer, and the seat that is asked is the one
+    the sentence names: "**its** controller", per member of the loop, never the
+    ability's own controller. Seat 1 pays and seat 0's life total does not
+    move, which is the whole assertion: a buyout charged to the wrong seat is a
+    cost the card never named.
+
+    The toll itself is answered by seat 1's headless default (pay what you can
+    afford), so only the offer at the head of the trigger is answered by hand.
+    """
+    game, _albatross, killer = _g4_albatross(set_pool)
+
+    assert game.confirm_optional_pay(0, "Giant Albatross", accept=True), game.log
+    _g4_settle(game)
+
+    assert game.is_on_battlefield(killer)
+    assert game.players[1].life == 18
+    assert game.players[0].life == 20
+
+
+def test_giant_albatross_leaves_an_uninvolved_creature_alone(set_pool):
+    """A creature that dealt the Albatross no damage is not in the set, and is
+    neither destroyed nor charged."""
+    game, _albatross, _killer = _g4_albatross(set_pool)
+    bystander = Permanent(card=_g4_creature("Test Bystander", 1, 1))
+    _g4_ready(bystander)
+    game.players[1].life = 1
+    game.players[1].battlefield.append(bystander)
+    game._settle()
+
+    assert game.confirm_optional_pay(0, "Giant Albatross", accept=True), game.log
+    _g4_settle(game)
+
+    assert game.is_on_battlefield(bystander)
+
+
+def _g4_badger_attacking(set_pool, defender_graveyard):
+    """Rysorian Badger attacking unblocked into a seat whose graveyard holds
+    *defender_graveyard*, stopped after blockers are declared."""
+    badger = Permanent(card=set_pool("HML")["Rysorian Badger"])
+    _g4_ready(badger)
+    defender = PlayerState(name="P2")
+    defender.graveyard = list(defender_graveyard)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[badger]), defender,
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning_of_combat
+    game.advance_combat_phase()   # declare_attackers
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()   # declare_blockers
+    # CR 509.1h: a creature becomes unblocked as blocks are declared, so the
+    # trigger is announced when this step *ends* rather than when it opens.
+    game.advance_combat_phase()
+    _g4_settle(game)
+    return game, badger, defender
+
+
+def test_rysorian_badger_exiles_two_creature_cards_and_gains_that_much_life(set_pool):
+    """"...you may exile up to two target creature cards from defending
+    player's graveyard. If you do, you gain 1 life **for each card exiled this
+    way** and this creature assigns no combat damage this turn."
+
+    All three consequences at once, because the life gain is what proves the
+    count reached the step behind the pick: a back-reference reading an empty
+    record is a silent zero, which is the failure the producer gate exists to
+    prevent. A headless seat takes the maximum, the stated "up to N" policy.
+    """
+    game, badger, defender = _g4_badger_attacking(set_pool, [
+        _g4_creature("Dead Bear"),
+        _g4_creature("Dead Ox"),
+        _g4_creature("Dead Elk"),
+    ])
+
+    assert game.confirm_optional_pay(0, "Rysorian Badger", accept=True), game.log
+    _g4_settle(game)
+
+    assert len(defender.exile) == 2
+    assert len(defender.graveyard) == 1
+    assert game.players[0].life == 22
+    assert badger.metadata.get("assigns_no_combat_damage_until_eot")
+
+
+def test_rysorian_badger_ignores_a_graveyard_with_no_creature_card(set_pool):
+    """The printed noun phrase narrows what may be exiled, and a dropped
+    narrowing is a card taking cards it never named. A pile of lands offers
+    nothing, so nothing is exiled and no life is gained."""
+    land = CardDefinition(
+        name="Dead Land", mana_cost="", cmc=0.0, type_line="Land",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(), raw={"name": "Dead Land", "type_line": "Land"},
+    )
+    game, _badger, defender = _g4_badger_attacking(set_pool, [land, land])
+
+    assert game.confirm_optional_pay(0, "Rysorian Badger", accept=True), game.log
+    _g4_settle(game)
+
+    assert defender.exile == []
+    assert len(defender.graveyard) == 2
+    assert game.players[0].life == 20
+

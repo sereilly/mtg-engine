@@ -226,7 +226,19 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "lower"]
 # what a card prints beside it, where the rest of `board` destroys, bounces,
 # sacrifices or attaches. The two families share no fragment — `parse_recipient`
 # and `parse_bound_subject` are `references` and `phrases`, one level down.
-EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "control_changes", "prevention", "counters", "tapping"]
+# `attachments` joined the parse side the fourth time `effects/board.py`
+# reached the size guard, reusing the name `lowering/attachments.py` had
+# carried since it left the same family one package over — the mirror
+# re-forming rather than forking, for the fourth time after `prevention`,
+# `counters` and `tapping`. The line is the one the lowering side already drew:
+# an attachment is a **relation between two permanents** (CR 301.5, CR 701.3),
+# and both productions read a pair — the object and the host it goes onto, and
+# the seat that will pick that host against a legality measured across the pair
+# ("a creature that this card could enchant", CR 303.4a). Everything left in
+# `board` destroys, returns or sacrifices one permanent at a time. The two
+# families share no fragment: both halves of an attachment go through
+# `references.parse_recipient`, one layer down.
+EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "control_changes", "prevention", "counters", "tapping", "attachments"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -320,7 +332,7 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # like `zones`, `types`, `destruction` and `counter_removal`: the parse side
 # stays in `effects/game.py`, where a token line is one production over a
 # shared body vocabulary.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "attachments", "types", "destruction", "counter_removal", "tokens", "upkeep"]
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "types", "destruction", "counter_removal", "tokens", "upkeep"]
 # `upkeep` is the fourth lowering-only family and the fourth time the same thing
 # happened: `lowering/damage.py` reached the guard below and shed the
 # pay-or-consequence shapes — the damage a player is *offered the chance not to
@@ -360,10 +372,17 @@ LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", 
 # that sit perfectly well beside the board ones, and the guard that made
 # `tapping` a family on the other two sides fired on the lowerings and then, a
 # set later, on the productions — never on the inventory.
+# `attachments` is the sixth, and the same reason a sixth time: `Attach` and
+# `ChoosePermanent` are two nodes that sit perfectly well beside the board ones
+# — the pair they relate is what the *production* reads and what the *lowering*
+# measures, never a property of the inventory — and the guard that made
+# `attachments` a family on the other two sides fired on the lowerings and
+# then, five sets later, on the productions.
 AST_FAMILIES = [
     family for family in EFFECT_FAMILIES
     if family not in (
         "library", "control_changes", "prevention", "counters", "tapping",
+        "attachments",
     )
 ]
 

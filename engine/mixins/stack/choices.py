@@ -29,7 +29,8 @@ from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...grammar.phrases import BASIC_LAND_WORDS
 from ...land_types import CHOSEN_LAND_TYPES, change_land_type
 from ...models import CardDefinition, Permanent
-from ...oracle_types import DISCARDED_BY_SEAT
+from ...oracle_types import (DISCARDED_BY_SEAT, EXILED_THIS_WAY,
+                             EXILED_THIS_WAY_OBJECTS)
 from ... import land_mana_swaps
 from ...pending_choices import (CHOICE_SPECS, PendingChoice,
                                 optional_pay_options, register_choice,
@@ -3222,6 +3223,126 @@ class PendingChoicesMixin:
         if not self._resolve_choose_cards_in_hand(choice, live[:wanted]):
             self._record_chosen_cards_in_hand(choice, [])
 
+    # -- Exiling cards out of a named player's graveyard ---------------------
+
+    def arm_graveyard_exile_pick(
+        self, player_index: int, owner_index: int, payload: dict, context
+    ) -> None:
+        """Queue "exile up to N <type> cards from <player>'s graveyard".
+
+        The whole payload travels rather than the candidate list, for the reason
+        ``arm_choose_cards_in_hand`` gives: it is the *rule* the candidates came
+        from, and re-running it is what keeps the list offered and the list an
+        answer is checked against from being two lists.
+        """
+        self.arm_pending_choice(
+            "graveyard_exile_pick", player_index,
+            card_name=context.card.name,
+            owner_index=int(owner_index),
+            count=int(payload.get("count", 1)),
+            up_to=bool(payload.get("up_to")),
+            _payload=dict(payload),
+            _context=context,
+        )
+
+    def live_graveyard_exile_candidates(self, choice: PendingChoice) -> list[int]:
+        """The positions in that pile the printed noun phrase admits.
+
+        Through ``graveyard_card_matches``, the one predicate the single-card
+        graveyard exile, its picker and its re-check already share (idiom 9):
+        a second reading here would offer a card the resolution then refuses,
+        or refuse one it would have taken.
+        """
+        from ...handlers._common import graveyard_card_matches
+
+        owner = self.players[int(choice.data["owner_index"])]
+        spec = dict(choice.data.get("_payload") or {})
+        return [
+            index for index, card in enumerate(owner.graveyard)
+            if graveyard_card_matches(spec, card)
+        ]
+
+    def _how_many_graveyard_cards(self, choice: PendingChoice) -> int:
+        """The **ceiling**, not the floor: "up to two" out of a pile holding one
+        is one, and out of a pile holding three is still two (CR 608.2)."""
+        return min(
+            int(choice.data.get("count", 1)),
+            len(self.live_graveyard_exile_candidates(choice)),
+        )
+
+    def confirm_graveyard_exile_pick(
+        self, player_index: int, graveyard_indices
+    ) -> bool:
+        return self.resolve_pending_choice(
+            "graveyard_exile_pick", player_index,
+            graveyard_indices=graveyard_indices,
+        )
+
+    def _record_graveyard_exile(self, choice: PendingChoice, cards: list) -> None:
+        context = choice.data.get("_context")
+        if context is not None:
+            # Both keys the sweep that exiles a board writes, because the
+            # sentences behind this one ask the same two questions: how many,
+            # and which. Written even for an empty pick — an *absent* key is a
+            # back-reference with no producer, which is a different thing from
+            # a producer that took nothing.
+            context.results[EXILED_THIS_WAY_OBJECTS] = list(cards)
+            context.results[EXILED_THIS_WAY] = len(cards)
+        self.discard_pending_choice(choice)
+
+    def _resolve_graveyard_exile_pick(
+        self, choice: PendingChoice, graveyard_indices
+    ) -> bool:
+        """Take the chosen cards out of that pile and into their owner's exile.
+
+        Every pick is validated before anything moves, the shape the two-zone
+        exile search already takes: a single bad entry rejects the whole answer
+        and leaves the prompt queued, so a malformed request cannot exile half
+        a selection. "Up to" is what makes an empty answer legal; a fixed count
+        owes exactly what the pile can supply.
+
+        Highest index first, because a graveyard is a list and taking one
+        renumbers everything behind it — the same reason the counted hand pick
+        re-computes its candidates between picks.
+        """
+        owner = self.players[int(choice.data["owner_index"])]
+        live = set(self.live_graveyard_exile_candidates(choice))
+        wanted = self._how_many_graveyard_cards(choice)
+        picks = list(graveyard_indices or [])
+        if len(picks) != len(set(picks)):
+            return False
+        if len(picks) > wanted or (
+            not choice.data.get("up_to") and len(picks) != wanted
+        ):
+            return False
+        if any(index not in live for index in picks):
+            return False
+        taken = [owner.graveyard[index] for index in picks]
+        for index in sorted(picks, reverse=True):
+            owner.exile.append(owner.graveyard.pop(index))
+        self._record_graveyard_exile(choice, taken)
+        self.log.append(
+            f"{self.players[choice.player_index].name} exiled "
+            + (", ".join(card.name for card in taken) or "nothing")
+            + f" from {owner.name}'s graveyard "
+            f"({choice.data.get('card_name', 'an effect')})"
+        )
+        return True
+
+    def _default_graveyard_exile_pick(self, choice: PendingChoice) -> None:
+        """The stated "up to N" policy: the maximum, in pile order.
+
+        Taking cards out of an opponent's graveyard costs the seat nothing —
+        this is a gift under "take gifts, pay tolls, make no trades" — and pile
+        order is seed-deterministic, which is what AI and headless play need. A
+        seat that should pick cleverly needs a weight in
+        ``engine/ai_valuation.py``, not a branch here.
+        """
+        live = self.live_graveyard_exile_candidates(choice)
+        wanted = self._how_many_graveyard_cards(choice)
+        if not self._resolve_graveyard_exile_pick(choice, live[:wanted]):
+            self._record_graveyard_exile(choice, [])
+
     # -- Kudzu's reattachment ------------------------------------------------
 
     def confirm_kudzu_reattach(self, player_index: int, land_index: int) -> bool:
@@ -5710,6 +5831,29 @@ register_choice(
     # candidates are cards in a hand (CR 400.2, a hidden zone), so rendering them
     # to a seatless viewer would publish the hand. Only the seat that owes the
     # decision is shown it.
+)
+
+register_choice(
+    "graveyard_exile_pick",
+    resolve=lambda game, choice, r: game._resolve_graveyard_exile_pick(
+        choice, r.get("graveyard_indices")
+    ),
+    default=lambda game, choice: game._default_graveyard_exile_pick(choice),
+    action="graveyard_exile_confirm",
+    prompt_key="graveyard_exile_pick",
+    blocked_detail="choose the cards to exile from that graveyard before other actions",
+    blocks_every_seat=True,
+    # "…**If you do**, you gain 1 life for each card exiled this way" is a
+    # later step of the same resolution and reads what this answer records, so
+    # that step must not run before the answer exists.
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish, and
+    # the stated default is taken where the effect stands. That is also what
+    # keeps AI and headless play free of the suspension above.
+    default_at_arm=True,
+    # A graveyard is a public zone (CR 400.2), so a seatless viewer sees the
+    # pile the chooser is looking at — unlike every hand pick in this file.
+    spectator_visible=True,
 )
 
 register_choice(

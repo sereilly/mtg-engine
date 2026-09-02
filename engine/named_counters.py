@@ -119,10 +119,20 @@ def add_counters(permanent, kind: str, count: int = 1) -> int:
     ``Game.place_plus1_counters``: a counter with no rules meaning has nothing
     to modify and nothing to trigger on its own. A card that *does* react to one
     reads the total, which is what Mazemind Tome's state trigger does.
+
+    **A counter with rules meaning brings its P/T with it** (CR 122.1a, layer
+    7c) — the exact symmetry :func:`remove_counters` already states and this
+    half did not have. Written as a store write alone, this function put a
+    "-0/-2" counter's *record* on a creature and left it its size, which is a
+    counter that reads as placed and does nothing; the removal half learned the
+    same lesson from Triskelion and Wiitigo. The P/T write goes through
+    ``pt.add_pt_counters``, so there is still exactly one implementation of
+    "place a P/T counter" and it is the one ``engine/pt.py`` documents.
     """
     if count <= 0:
         return counters_on(permanent, kind)
-    total = counters_on(permanent, kind) + count
+    current = counters_on(permanent, kind)
+    total = current + count
     # "…can't have more than seven dream counters on it." (Rasputin
     # Dreamweaver.) Enforced here, at the one write, rather than at whichever
     # path was putting the counter on: a maximum the entry state honoured and a
@@ -130,7 +140,30 @@ def add_counters(permanent, kind: str, count: int = 1) -> int:
     cap = counter_cap(permanent, kind)
     if cap is not None:
         total = min(total, cap)
-    permanent.metadata[counters_key(kind)] = total
+    from .pt import add_pt_counters, pt_counter_deltas, pt_counter_key
+
+    # ``hasattr`` rather than a type check, and it is not defensive coding: the
+    # other thing this function is handed is an ``ExiledRecord``, which carries
+    # the same ``metadata`` dict on purpose so "how many scream counters are on
+    # it" is one question for a permanent and for an exiled card. A record has
+    # no layer-7c channel to write to — the card it names is in exile, where
+    # nothing in this engine reads a P/T — so it takes the record alone.
+    if pt_counter_deltas(kind) is not None and hasattr(permanent, "power_bonus"):
+        # The cap decides how many actually land, and only that many may move
+        # the P/T: a placement clipped by the cap that still added its full
+        # delta would leave the creature a size its counters do not explain.
+        if total > current:
+            add_pt_counters(permanent, kind, total - current)
+        return total
+    # ``pt_counter_key``, which is what :func:`counters_on` and
+    # :func:`remove_counters` already read. The two spellings agree for every
+    # kind but the three CR 122.1a pairs the engine keeps under established
+    # names, and for those they did not: this line wrote ``"-1/-1_counters"``
+    # while every reader looked in ``"minus_counters"``, so a P/T counter
+    # placed through this store was written where nothing would ever find it.
+    # One key, and the module docstring's "one store, not two" is finally true
+    # of both ends of it.
+    permanent.metadata[pt_counter_key(kind)] = total
     return total
 
 

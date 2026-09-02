@@ -105,6 +105,7 @@ from .lowering import (
     _lower_discard_revealed_unless_pay_life,
     _lower_reveal_hand_and_choose,
     _lower_lose_life,
+    _lower_mill,
     _lower_modal_head,
     _lower_player_gets_counters,
     _lower_put_counter,
@@ -305,6 +306,12 @@ def lower_statement(
 
     if isinstance(statement, ast.Discard):
         return _lower_discard(statement, event)
+
+    if isinstance(statement, ast.Mill):
+        # Here rather than in `by_node.py` since Reef Pirates: "that player
+        # mills a card" names the seat the *firing event* froze, so the
+        # lowering needs the event and the node no longer answers on its own.
+        return _lower_mill(statement, event)
 
     if isinstance(statement, ast.ReturnToZone):
         # `produced` is what makes "…for each card discarded this way" legal:
@@ -654,7 +661,13 @@ def lower_statement(
         # `produced` is the gate on "exile **that token**": the phrase names
         # the token an earlier step of this same effect made, and with no such
         # step there is no id to read.
-        return _lower_exile(statement, produced)
+        #
+        # The **unfiltered** event, for `_lower_destroy`'s reason: which object
+        # a bare "it" names is a fact about the trigger (idiom 20), true of
+        # every clause under it, and Whippoorwill's "exile **the creature**" is
+        # the third sentence of one — so it lowers under a `Sequence` and would
+        # see no event at all through `dispatch_event`.
+        return _lower_exile(statement, produced, event)
 
     if isinstance(statement, ast.Sequence):
         for fuse in (
