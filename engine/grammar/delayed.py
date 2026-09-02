@@ -117,6 +117,21 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     # and not a second spelling of the row above.
     (("at", "the", "beginning", "of", "the", "next", "turn", "'s", "upkeep"),
      "next_turns_upkeep", True, "until_it_triggers", False),
+    # "…at the beginning of **the next cleanup step**" (Thawing Glaciers,
+    # Bounty of the Hunt). Unseated for `next_end_step`'s reason — CR 514 gives
+    # every turn one cleanup step and the ability names the next one there is —
+    # and it waits for that step rather than expiring with the turn, because the
+    # step it names comes *after* the sweep that would expire it (CR 514.2 then
+    # CR 514.3a).
+    #
+    # It **may** bind, exactly as the end-step row above may: the step names no
+    # object, so whether one was chosen is a fact about the sentence behind it.
+    # Thawing Glaciers' "return **this land**" names its own source and binds
+    # nothing; Bounty of the Hunt's "remove a +1/+1 counter from **that
+    # creature**" names the creature the spell chose. `delay_binds_an_object` is
+    # the answer, and the column only the permission.
+    (("at", "the", "beginning", "of", "the", "next", "cleanup", "step"),
+     "next_cleanup_step", True, "until_it_triggers", True),
 )
 
 

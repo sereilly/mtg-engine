@@ -564,6 +564,27 @@ CHOSEN_TARGET_PERMANENTS = "chosen_target_permanents"
 ATTACHED_PERMANENT_CONTROLLER = "attached_permanent_controller"
 
 
+#: The seat "counter target spell" records: the player who controlled the spell
+#: it countered. "**Its controller** may draw up to two cards at the beginning
+#: of the next turn's upkeep" (Arcane Denial) is the sentence that needs it, and
+#: nothing else can answer: by the time the sentence runs, the spell is a card
+#: in a graveyard (CR 701.5a) and a graveyard card has no controller at all
+#: (CR 108.4) — a turn later, when the delayed ability finally fires, not even
+#: the stack remembers there was one.
+#:
+#: Its own record rather than ``PER_OBJECT_SEAT_RECORDS["controller"]`` beside
+#: it, because that one is a ``{permanent_id: seat}`` map read one entry per
+#: iteration of a loop over swept *permanents*. A spell on the stack is not a
+#: permanent and has no id in that space, so a seat written there would be
+#: keyed by nothing and read by nobody.
+#:
+#: Here rather than beside the lowering that gates on it, for
+#: ``ATTACHED_PERMANENT_CONTROLLER``'s reason: the ``stack`` handler writes it,
+#: the ``zones`` handler reads it and ``grammar/lowering/_records._PRODUCES``
+#: declares it, so the three sit at opposite ends of the pipeline.
+COUNTERED_SPELL_CONTROLLER = "countered_spell_controller_seat"
+
+
 PER_OBJECT_SEAT_RECORDS: dict[str, str] = {
     "controller_when_blocked": "blocked_controller_seats",
     # "For each creature exiled this way, **its controller** draws a card."

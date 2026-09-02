@@ -996,18 +996,31 @@ def put_graveyard_cards_on_library_top(
     could carry an ordering — so the controller's choice of order *is* their
     choice of order, and the first card named ends up on top.
     """
-    seat = game.players.index(context.target) if context.target in game.players else None
-    if seat is None:
+    # Whose graveyard, said by the lowering rather than inferred here. "Your
+    # graveyard … your library" (Reinforcements) names the ability's controller
+    # and chooses no player at all, so reading `context.target` for it would
+    # index the *opponent's* graveyard with slots picked out of the caster's —
+    # the wrong pile, silently, with the right number of cards moved.
+    if instruction.payload.get("graveyard_owner") == "you":
+        victim = context.caster
+    elif context.target in game.players:
+        victim = context.target
+    else:
         game.log.append(f"{context.card.name}: no player chosen")
         return True, "resolved"
-    victim = game.players[seat]
     card_type = str(instruction.payload.get("card_type", "artifact"))
 
     def _eligible(card) -> bool:
         return card_type in (getattr(card, "type_line", "") or "").lower()
 
-    # "Any number" prints no maximum, so the cap is the pile itself.
-    picked = _resolve_graveyard_slots(victim, context, len(victim.graveyard), _eligible)
+    # "Any number" prints no maximum, so the cap is the pile itself; "up to
+    # three" prints one, and the description the lowering built carries it.
+    described = instruction.payload.get("targets") or {}
+    limit = (
+        len(victim.graveyard) if described.get("unbounded")
+        else min(int(described.get("count") or 1), len(victim.graveyard))
+    )
+    picked = _resolve_graveyard_slots(victim, context, limit, _eligible)
     if not picked:
         game.log.append(f"{context.card.name}: no card moved out of the graveyard")
         return True, "resolved"
@@ -3262,6 +3275,50 @@ def each_player_draws_up_to_cards(game: Game, instruction: OracleInstruction, co
     return True, "resolved"
 
 
+@effect_handler("draw_up_to_cards")
+def draw_up_to_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"**Its controller** may draw up to two cards …" (Arcane Denial.)
+
+    ``each_player_draws_up_to_cards``'s sibling with one seat instead of a set,
+    through the same ``draw_up_to`` prompt: the printed ceiling *is* the offer,
+    since a player may answer with none, which is why the "may" in front of it
+    collapses into this rather than arming a yes/no of its own
+    (``engine/grammar/lowering/control_flow._referent_seat_optional_draw``).
+
+    The seat comes off the record named in the payload, never off
+    ``context.target``. This sentence is printed inside a delay: it fires a turn
+    after the counter, on somebody else's upkeep, and the spell whose controller
+    it names is a card in a graveyard by then — CR 108.4 gives that card no
+    controller at all. A record nothing wrote is a seat this sentence never
+    named, so nobody draws, which is the same answer ``draw_target_cards`` gives
+    one function up and for the same reason.
+    """
+    record = instruction.payload.get("drawer_seat_record")
+    seat = (context.results or {}).get(record) if record else None
+    if seat is None:
+        # …and the frozen half. A delayed ability's context carries what the
+        # creating effect knew (CR 608.2h), merged into the trigger context by
+        # `create_delayed_trigger`; the live scratchpad of *this* resolution
+        # holds nothing, because the step that wrote the seat ran a turn ago.
+        seat = (context.trigger_context or {}).get(record) if record else None
+    if seat is None:
+        game.log.append(
+            f"{context.card.name}: nothing recorded whose spell that was"
+        )
+        return True, "resolved"
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    drawer = game.players[int(seat)]
+    context.results.setdefault(DREW_BY_SEAT, {})[int(seat)] = 0
+    game.arm_pending_choice(
+        "draw_up_to", int(seat),
+        amount=amount,
+        card_name=context.card.name,
+        _results=context.results,
+    )
+    game.log.append(f"{drawer.name} may draw up to {amount} card(s)")
+    return True, "resolved"
+
+
 @effect_handler("exile_top_of_library")
 def exile_top_of_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Exile the top three cards of your library." (Chandra, Heart of Fire's
@@ -3944,6 +4001,52 @@ def return_spell_or_creature_to_hand(game: Game, instruction: OracleInstruction,
         "Returned creature to hand" if bounced else f"{context.card.name}: nothing was returned"
     )
     return True, "resolved"
+
+
+@effect_handler("shuffle_hand_cards_into_library")
+def shuffle_hand_cards_into_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Shuffle **a card** from your hand into your library." (Lat-Nam's Legacy.)
+
+    The whole-hand shuffle below with a number in front of it, and a different
+    handler for the one reason that matters: a counted subset of a hidden zone
+    is a *decision*. CR 402.1 lets only its owner look at a hand, so nobody else
+    can pick, and the pick has to be asked rather than taken — which is what
+    arming the prompt does and what the sweep below has nothing to do.
+
+    The prompt is ``hand_to_library``, the one Brainstorm already uses, with the
+    shuffle as a flag on it. The two sentences differ by where the cards land
+    and by nothing else: both take a chosen number out of a hand and put them in
+    the library through the two seams (``take_card_from_hand``,
+    ``put_card_into_library``), and a second prompt kind would be a second copy
+    of that, free to forget one of them.
+
+    **Not a discard.** CR 701.9a makes discarding an action abilities watch, and
+    none of that is happening here — the same distinction the handler below the
+    prompt already draws.
+
+    An empty hand moves nothing, and the "if you do" behind this reads the count
+    rather than the answer: CR 608.2 does as much as it can, and with no card to
+    move the sentence did not happen.
+    """
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    player = context.caster
+    actual = min(amount, len(player.hand))
+    # Recorded before the prompt and whatever the answer is, exactly as the
+    # Brainstorm handler records its own count: the number is settled here and
+    # the prompt only decides which cards. "If you do, draw two cards at the
+    # beginning of the next turn's upkeep" is the step that reads it.
+    context.results[HAND_CARDS_TO_LIBRARY] = actual
+    if actual <= 0:
+        game.log.append(f"{player.name} has no card to shuffle away")
+        return True, "resolved"
+    game.arm_pending_choice(
+        "hand_to_library", game.players.index(player),
+        count=actual, shuffle=True,
+    )
+    game.log.append(
+        f"{player.name} must choose {actual} card(s) to shuffle into their library"
+    )
+    return True, "pending_hand_to_library"
 
 
 @effect_handler("shuffle_hand_into_library")

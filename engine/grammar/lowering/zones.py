@@ -40,9 +40,15 @@ def _lower_put_on_library_top(node: ast.PutOnLibraryTop) -> tuple[OracleInstruct
     """"Put target creature on top of its owner's library." (Teferi, Timeless
     Voyager's −3.) One chosen battlefield creature; the owner is resolved by
     the handler (CR 400.3), which is why no player rides the payload."""
+    # Which of the two handlers reads this sentence is decided by the **zone**
+    # the noun phrase names, not by the quantifier. It was decided by "any
+    # number" alone, which is a fact about how many cards move rather than about
+    # where they come from — so "put **up to three** target creature cards from
+    # your graveyard on top of your library" (Reinforcements) fell through to the
+    # battlefield tuck and refused, naming a creature it never mentioned.
     if (
         isinstance(node.target, ast.TargetSpec)
-        and node.target.quantifier == "any_number"
+        and (node.target.filter.zone == "graveyard" or node.target.filter.is_card)
     ):
         return _lower_graveyard_cards_on_library_top(node)
     if not _is_target(node.target):
@@ -108,13 +114,35 @@ def _lower_graveyard_cards_on_library_top(
         raise LoweringError(
             "the graveyard-to-library handler moves chosen cards", node=node
         )
+    # "Any number of" (Drafna's Restoration) and "up to three" (Reinforcements)
+    # are the two ceilings this handler can honour. Any other quantifier names a
+    # different set — "target" is one card and "all" chooses nothing — and the
+    # handler resolves a *list* of chosen slots, so it would either move one card
+    # where the sentence said several or move several where it said one.
+    if subject.quantifier not in ("any_number", "up_to"):
+        raise LoweringError(
+            "the graveyard-to-library handler moves a chosen list of cards",
+            node=node,
+        )
     if not filt.is_card or filt.zone != "graveyard":
         raise LoweringError(
             "the graveyard-to-library handler reads cards in a graveyard", node=node
         )
-    if filt.zone_owner is None or filt.zone_owner.kind != "target_player":
+    # Two seats the sentence can name, and the printed destination has to agree
+    # with the printed source: "target player's graveyard … their library"
+    # (Drafna's Restoration) follows whoever was chosen, "your graveyard … your
+    # library" (Reinforcements) is the ability's controller both times. A
+    # sentence pairing one with the other would move cards between two players'
+    # zones, which is a card nobody has printed and a handler this one is not.
+    owner_kind = filt.zone_owner.kind if filt.zone_owner is not None else None
+    if owner_kind == "target_player" and node.to_owner == "owner":
+        graveyard_owner = "target_player"
+    elif owner_kind == "you" and node.to_owner == "you":
+        graveyard_owner = "you"
+    else:
         raise LoweringError(
-            "the graveyard-to-library handler reads a chosen player's graveyard",
+            "the graveyard-to-library handler reads one player's graveyard into "
+            "that same player's library",
             node=node,
         )
     if len(filt.card_types) != 1:
@@ -140,10 +168,24 @@ def _lower_graveyard_cards_on_library_top(
                 # it are different cards, and the handler reads the order the
                 # targets were named in.
                 "in_any_order": node.in_any_order,
-                # Unbounded rather than a maximum: "any number" prints no
-                # ceiling, so the only cap is how many legal targets there are —
-                # a number the picker knows and this lowering does not.
-                "targets": {"quantifier": "any_number", "kind": "card", "unbounded": True},
+                # Whose graveyard, and therefore whose library. Emitted always
+                # rather than only for the newer reading, because the handler
+                # reading a missing key as "the chosen target player" is exactly
+                # the silent default this pair of seats exists to remove.
+                "graveyard_owner": graveyard_owner,
+                # "Any number" prints no ceiling, so the only cap is how many
+                # legal targets there are — a number the picker knows and this
+                # lowering does not. "Up to three" (Reinforcements) prints one,
+                # and it rides the same description every counted target list
+                # uses.
+                "targets": (
+                    {"quantifier": "any_number", "kind": "card", "unbounded": True}
+                    if subject.quantifier == "any_number"
+                    else {
+                        "quantifier": "up_to", "kind": "card",
+                        "count": int(subject.count or 1),
+                    }
+                ),
             },
         ),
     )
@@ -321,6 +363,31 @@ def _lower_shuffle_hand_into_library(
         raise LoweringError(
             f"no handler shuffles {node.whose.kind!r}'s hand into their library",
             node=node,
+        )
+    if node.count is not None:
+        # "Shuffle **a card** from your hand into your library."
+        # (Lat-Nam's Legacy.) Its own kind rather than a count on the sweep
+        # above, because a counted subset of a hidden zone is a *decision*
+        # (CR 402.1: only its owner may look) where a whole hand is a move. The
+        # handler arms the prompt that asks it; the sweep above has nothing to
+        # ask.
+        if node.then_draw:
+            # "…then draws that many cards" counts what the whole-hand move
+            # took. Behind a printed number the phrase would be that number
+            # said twice, and no card prints the pair — so it refuses rather
+            # than guessing which of the two the sentence meant.
+            raise LoweringError(
+                "a counted shuffle has no 'that many' to draw", node=node
+            )
+        if node.whose.kind != "you":
+            raise LoweringError(
+                "a counted shuffle into a library is the controller's own hand",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "shuffle_hand_cards_into_library", "", {"amount": node.count},
+            ),
         )
     return (
         OracleInstruction(

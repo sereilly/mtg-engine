@@ -25,6 +25,7 @@ from ..nouns import parse_object_filter
 from ..references import parse_player_ref
 from ..stream import TokenStream
 from ..phrases import _parse_card_alternatives, _parse_zone
+from ..vocabulary import NUMBER_WORDS
 
 
 def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
@@ -885,14 +886,43 @@ def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | Non
     """
     mark = stream.mark()
     player = parse_player_ref(stream)
-    if player is None or not stream.accept_word("shuffles", "shuffle"):
+    if player is None:
+        # "**Shuffle** a card from your hand into your library."
+        # (Lat-Nam's Legacy.) The bare imperative, whose subject is the spell's
+        # controller (CR 608.1) — the same implied "you" every other imperative
+        # in this grammar takes, and the reason the reader above is allowed to
+        # find nothing rather than refusing outright.
+        if not stream.at_word("shuffle"):
+            stream.reset(mark)
+            return None
+        player = ast.PlayerRef("you")
+    if not stream.accept_word("shuffles", "shuffle"):
         stream.reset(mark)
         return None
     whose = "your" if player.kind == "you" else "their"
-    # "shuffles **the cards from** their hand" is the current wording and
-    # "shuffles their hand" the older one; they name the same cards, so the
-    # phrase is optional rather than a second production.
-    stream.accept_phrase("the", "cards", "from")
+    # "shuffles **a card from** their hand" — a counted subset rather than the
+    # whole zone, which is a different effect and not a narrowing of one: the
+    # hand's owner picks which cards, and nobody else can see them to pick
+    # (CR 402.1). Read before the whole-hand phrase below, and non-consuming on
+    # refusal, so "the cards from" keeps the reading it has.
+    count: int | None = None
+    counted = stream.mark()
+    if stream.accept_word("a", "an"):
+        count = 1
+    else:
+        word = stream.peek_word()
+        if word in NUMBER_WORDS:
+            stream.advance()
+            count = NUMBER_WORDS[word]
+    if count is not None:
+        if not (stream.accept_word("card", "cards") and stream.accept_word("from")):
+            stream.reset(counted)
+            count = None
+    if count is None:
+        # "shuffles **the cards from** their hand" is the current wording and
+        # "shuffles their hand" the older one; they name the same cards, so the
+        # phrase is optional rather than a second production.
+        stream.accept_phrase("the", "cards", "from")
     if not stream.accept_phrase(whose, "hand", "into", whose, "library"):
         stream.reset(mark)
         return None
@@ -904,7 +934,7 @@ def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | Non
         then_draw = True
     else:
         stream.reset(probe)
-    return ast.ShuffleHandIntoLibrary(player, then_draw=then_draw)
+    return ast.ShuffleHandIntoLibrary(player, then_draw=then_draw, count=count)
 
 
 def _parse_shuffle_library(stream: TokenStream) -> ast.Statement | None:

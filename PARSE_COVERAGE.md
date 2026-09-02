@@ -25,12 +25,8 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**13 unclaimed sentence(s) across 11 supported card(s).**
+**11 unclaimed sentence(s) across 9 supported card(s).**
 
-- **Arcane Denial**
-  - `its controller may draw up to two cards at the beginning of the next turn's upkeep`
-- **Death Spark**
-  - `at the beginning of your upkeep, if this card is in your graveyard with a creature card directly above it, you may pay {1}. if you do, return this card to your hand`
 - **Dystopia**
   - `at the beginning of each player's upkeep, that player sacrifices a green or white permanent of their choice`
 - **Foresight**

@@ -81,6 +81,26 @@ def _lower_condition(
     it, so every other caller leaves it None and the clauses that need one
     refuse there.
     """
+    if isinstance(condition, ast.SelfInGraveyardWithCardsAbove):
+        # CR 113.6b and CR 404.3 in one payload. ``functions_from`` is the same
+        # derived key ``lowering/returns.py`` stamps from a printed "from your
+        # graveyard" (CR 113.6m) and ``engine/events.py``'s graveyard scan
+        # reads — declared here because on these cards the *condition* is the
+        # only place the zone is named at all, and an ability nothing scans for
+        # is one that compiles clean and never fires.
+        #
+        # It rides the condition payload rather than being stamped on the
+        # instruction here: this function returns a condition, and the
+        # instruction it guards is assembled a layer up (``lower.py``), which is
+        # the only place both are in view.
+        return {
+            "kind": "self_in_graveyard_with_cards_above",
+            "card_type": condition.card_type,
+            "count": condition.count,
+            "op": "ge" if condition.at_least else "eq",
+            "directly": condition.directly,
+            "functions_from": "graveyard",
+        }
     if isinstance(condition, ast.CoinFlipResult):
         # A back-reference names its producer or refuses (round 33). Without a
         # flip earlier in the same effect there is nothing to read, and

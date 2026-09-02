@@ -418,6 +418,49 @@ def _lower_return_to_zone(
         return (
             OracleInstruction("return_bound_card_to_owners_hand", "", payload),
         )
+    # "Return **this card** to **your** hand." (Death Spark, Krovikan Horror.)
+    #
+    # The ability's own source with no printed source zone, like the two
+    # readings below and above it, and told from them by whose hand is named.
+    # Puppet Master's "its owner's hand" reaches whichever zone the Aura is
+    # actually in, because an Aura can still be on the battlefield when its
+    # trigger resolves; these two cards can only ever be in a graveyard, because
+    # the ability functions nowhere else — the intervening-if in front of it
+    # ("if this card is in your graveyard …") is CR 113.6b's statement of that,
+    # and ``lower.py`` stamps ``functions_from`` from it onto whatever this
+    # lowers to.
+    #
+    # So the *seat* is the difference that matters and the reason this is
+    # ``return_self_from_graveyard`` rather than the owner's-hand kind beside
+    # it: CR 108.4a gives a card in a graveyard no controller, so "your" is its
+    # owner's seat — the seat the graveyard scan enqueued the trigger under —
+    # which is exactly the seat that handler searches. The owner's-hand handler
+    # searches *every* graveyard and would return an opponent's copy of the same
+    # shared ``CardDefinition``, which is the look-alike bug this codebase keeps
+    # finding, in a list of cards instead of on a battlefield.
+    #
+    # ``functions_from`` is deliberately **not** stamped here: this sentence
+    # names no zone, and inventing one would let a card printing it with no
+    # graveyard condition be scanned for in a zone it never mentioned.
+    if (
+        _is_source(subject)
+        and node.from_zone is None
+        and node.to.name == "hand"
+        and node.to.owner is not None
+        and node.to.owner.kind == "you"
+        and not node.entering_tapped
+    ):
+        assert isinstance(subject, ast.TargetSpec)
+        leftovers = _restrictions_beyond(
+            subject.filter, frozenset({"is_source", "card_types"})
+        )
+        if leftovers:
+            raise LoweringError(
+                f"the self-return does not honour {leftovers[0]!r}", node=node
+            )
+        return (
+            OracleInstruction("return_self_from_graveyard", "", {"to": "hand"}),
+        )
     # "Return **this card** to its owner's hand." (Puppet Master's rider.) The
     # ability's own source, and by the time this resolves the Aura is in its
     # owner's graveyard — CR 704.5m put it there the moment the creature it

@@ -786,6 +786,44 @@ class TurnIsYours:
     negated: bool = False
 
 
+@dataclass(frozen=True)
+class SelfInGraveyardWithCardsAbove:
+    """"if **this card is in your graveyard with a creature card directly above
+    it**" (Death Spark, Krovikan Horror); "…**with three or more creature cards
+    above it**" (Nether Shadow).
+
+    Two things at once, which is why it is one node rather than a zone test and
+    a count test:
+
+    * **Where the ability functions.** CR 113.6b — "an ability that states which
+      zones it functions in functions only from those zones" — and this clause
+      is that statement. The effect behind it prints no source zone of its own
+      ("return this card to your hand"), so this is the *only* place the card
+      says a graveyard is where the ability works at all. The lowering exposes
+      it as ``functions_from``, the same derived key CR 113.6m stamps from a
+      printed "from your graveyard", so the graveyard scan in
+      ``engine/events.py`` needs to know nothing new.
+    * **Where in the graveyard.** A graveyard is an ordered zone (CR 404.3), and
+      "above" means later in that order — put there more recently. "Directly"
+      narrows it to the one card immediately above, which is a different
+      question from a count and not expressible as one: three creature cards
+      above with a land between them satisfies Nether Shadow and not Death
+      Spark.
+
+    ``card_type`` is the printed noun and ``count``/``at_least`` the printed
+    number, so a card printing "two or more land cards above it" is data rather
+    than a second production.
+    """
+
+    card_type: str
+    count: int = 1
+    #: "three **or more**" (Nether Shadow) against the bare "a" (Death Spark).
+    at_least: bool = False
+    #: "**directly** above it": the one card in the slot immediately above,
+    #: rather than any card anywhere above.
+    directly: bool = False
+
+
 Condition = Union[
     EveryOf, CoinFlipResult, Controls, CountedNumber, DestroyedThisWay,
     DestroyedTargetWas,
@@ -799,5 +837,6 @@ Condition = Union[
     DealtDamageThisTurn, SubjectCharacteristicIs, BlockersOfBoundCreature,
     SourceExiledWithCounter, SourceCounterCount, SourceAbilityActivations,
     OnBattlefield,
+    SelfInGraveyardWithCardsAbove,
     TurnIsYours,
 ]

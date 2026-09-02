@@ -56,6 +56,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "sacrifice_expansion_permanents": "destruction",
     "shuffle_graveyard_into_library": "zones",
     "shuffle_hand_into_library": "zones",
+    "shuffle_hand_cards_into_library": "zones",
     # CR 701.16 with nothing moving into the library (Prophecy's third
     # sentence). The same category as the two above: what it touches is a zone.
     "shuffle_library": "zones",
@@ -408,6 +409,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # zone over, and the same category: a card moving between a library and a
     # hand.
     "each_player_draws_up_to_cards": "zones",
+    "draw_up_to_cards": "zones",
     # "Each opponent discards two cards." (Bad Deal) — one pending discard
     # choice per opponent, same flow as the targeted form.
     "each_opponent_discards_cards": "zones",

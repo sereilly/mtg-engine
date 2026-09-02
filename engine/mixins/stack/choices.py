@@ -1637,9 +1637,25 @@ class PendingChoicesMixin:
         for card in reversed(cards):
             if self.take_card_from_hand(player, card):
                 self.put_card_into_library(player, card, position="top")
-        self.log.append(
-            f"{player.name} put {len(cards)} card(s) on top of their library"
-        )
+        # "**Shuffle** a card from your hand into your library."
+        # (Lat-Nam's Legacy.) CR 701.19 makes the shuffle part of the move
+        # rather than a rider on it, so it happens here rather than as a step
+        # after — and where in the library the cards were put stops meaning
+        # anything, which is why the two sentences can share one prompt.
+        #
+        # Through the module-level RNG every other shuffle in this engine uses,
+        # so a seeded run stays reproducible.
+        if choice.data.get("shuffle"):
+            import random
+
+            random.shuffle(player.library)
+            self.log.append(
+                f"{player.name} shuffled {len(cards)} card(s) into their library"
+            )
+        else:
+            self.log.append(
+                f"{player.name} put {len(cards)} card(s) on top of their library"
+            )
         self.discard_pending_choice(choice)
         return True
 

@@ -502,6 +502,15 @@ class PutOnLibraryTop:
     """
     target: Recipient
     in_any_order: bool = False
+    #: Whose library the cards land in, as the card **prints** it: "its owner's"
+    #: / "their" (Teferi, Drafna's Restoration) against "your" (Reinforcements).
+    #:
+    #: Recorded rather than derived from the noun phrase's own zone, because the
+    #: two are separate printed facts and a card is free to move cards out of one
+    #: player's graveyard into another's library. Nothing in the pool does, and
+    #: the lowering refuses the mismatch outright for that reason — but it can
+    #: only refuse it if the parse kept both halves.
+    to_owner: str = "owner"
 
 
 @dataclass(frozen=True)
@@ -674,6 +683,15 @@ class ShuffleHandIntoLibrary:
     """
     whose: PlayerRef
     then_draw: bool = False
+    #: How many cards move, when the sentence names a **number** of them rather
+    #: than the whole zone: "Shuffle **a card** from your hand into your
+    #: library." (Lat-Nam's Legacy.) None is Winds of Change's whole hand.
+    #:
+    #: The difference is a decision, not only a count. A whole hand moves with
+    #: nothing to choose; a counted subset is the hand's owner picking which
+    #: cards, and a hidden zone means nobody else can (CR 402.1). So the two
+    #: readings lower to two handlers, and this field is what tells them apart.
+    count: int | None = None
 
 
 @dataclass(frozen=True)
