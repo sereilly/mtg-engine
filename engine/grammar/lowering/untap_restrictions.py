@@ -404,6 +404,22 @@ def _lower_doesnt_untap_while_source_tapped(
     # The handler reads the chosen target and does nothing when there is none,
     # which is the failing-safe direction — this sentence is only printed after
     # one that chooses.
+    #
+    # "**That creature** doesn't untap…" (Whip Vine) is the third spelling of
+    # that one back-reference: the demonstrative with its noun written out. The
+    # noun is a *restatement* of the choice the sentence before it already made
+    # — the tap named a creature — so it narrows nothing, which is why the card
+    # type is the one honoured field and every other one still refuses. Read as
+    # a narrowing it refused a card whose whole ability the handler already
+    # implements; read as a wildcard it would let "that artifact" hold down a
+    # creature.
+    if isinstance(subject, ast.TargetSpec) and subject.quantifier == "that":
+        if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "a bound object carries no narrowing this lock could honour",
+                node=node,
+            )
+        return (OracleInstruction("restrict_untap_while_source_tapped", "", {}),)
     if not (
         isinstance(subject, ast.TargetSpec)
         # "**It** doesn't untap…" or the card naming itself — both spellings of
