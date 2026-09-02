@@ -1638,6 +1638,16 @@ ENFORCED_ATTACHED_COMBAT_RESTRICTIONS = frozenset({
     # ``can_attack`` and the charge in ``declare_attackers`` share it, so the
     # restriction cannot be checked and then left uncharged.
     "cant_attack_unless_pay",
+    # "Enchanted creature can't block creatures with power equal to or greater
+    # than the enchanted creature's toughness." (Ironclaw Curse.) The mirror of
+    # ``cant_be_blocked_by`` above — that one says what may not block the
+    # creature, this one what the creature may not block — and Ironclaw Orcs
+    # prints the same sentence about itself, so it is the same table asked with
+    # the subject rewritten (idiom 14). Its reader is
+    # ``phases/declare_blockers_step``, which asks this channel and the
+    # blocker's own compiled program in one loop, so the two spellings of the
+    # restriction cannot come to be enforced differently.
+    "cant_block_subject",
 })
 
 #: "Enchanted creature" / "equipped creature" in the subject position, with the

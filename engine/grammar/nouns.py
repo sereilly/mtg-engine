@@ -182,6 +182,9 @@ class _FilterDraft:
     power: ast.Comparison | None = None
     mana_value: ast.Comparison | None = None
     toughness: ast.Comparison | None = None
+    # "…with power equal to or greater than the enchanted creature's toughness"
+    # (Ironclaw Curse) — see ``ast.SourceRelativeComparison``.
+    characteristic_vs_source: "ast.SourceRelativeComparison | None" = None
     other_than_source: bool = False
     is_source: bool = False
     is_enchanted: bool = False
@@ -748,6 +751,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         not_chosen_this_way=d.not_chosen_this_way,
         on_the_battlefield=d.on_the_battlefield,
         dealt_damage_to_source_this_turn=d.dealt_damage_to_source_this_turn,
+        characteristic_vs_source=d.characteristic_vs_source,
     )
 
 

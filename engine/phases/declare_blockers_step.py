@@ -762,8 +762,15 @@ class DeclareBlockersStepMixin:
         # kind, read through the same `subject_matches` the blocked-by
         # restriction above uses — so the layers answer here too: a pumped 2/2
         # has power 4 and a creature laced white is a white creature.
+        # An Aura prints the same restriction about the creature it is attached
+        # to (Ironclaw Curse), so the two channels are unioned here exactly as
+        # they are for the blocked-by restriction above: one sentence, and the
+        # only difference is whose text it is on.
         blocker_program = compile_card_oracle(blocker.effective_card)
-        for restriction in blocker_program.instructions:
+        for restriction in (
+            *blocker_program.instructions,
+            *attached_combat_restrictions(blocker),
+        ):
             if restriction.kind != "cant_block_subject":
                 continue
             for described in restriction.payload.get("blockee_filters") or ():

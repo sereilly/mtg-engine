@@ -404,6 +404,8 @@ _COVERED_ELSEWHERE = {
     "controller_controls":
         "test_controller_controls_asks_about_the_candidate_s_own_seat",
     "banded_with_source": "test_banded_with_source_names_only_the_band",
+    "characteristic_vs_source":
+        "test_a_source_relative_bound_is_read_through_the_layers",
 }
 
 
@@ -747,6 +749,46 @@ def test_banded_with_source_names_only_the_band(pool):
     assert not subject_matches(game, mate, described), (
         "with no source there is no band, and the answer must be no"
     )
+
+
+def test_a_source_relative_bound_is_read_through_the_layers(pool):
+    """"…creatures with power **equal to or greater than the enchanted
+    creature's toughness**" (Ironclaw Curse).
+
+    Its own demonstration rather than a row in ``_REJECTIONS``: the bound is not
+    in the payload at all, so the accepted and rejected creatures are told apart
+    by a number read off a *third* permanent — which is exactly why the pure
+    matcher cannot answer it.
+
+    Both halves are read through CR 613's accessors, and the pump is what
+    proves it: nothing about either printed card changes, and the answer does.
+    """
+    from engine.pt import add_pt_modifier
+
+    source = Permanent(card=pool["Grizzly Bears"])          # 2/2
+    two_power = Permanent(card=pool["Grizzly Bears"])       # power 2
+    one_power = Permanent(card=pool["Scryb Sprites"])       # power 1
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[source]),
+        PlayerState(name="P2", battlefield=[two_power, one_power]),
+    ])
+
+    described = {
+        "characteristic_vs_source": {
+            "characteristic": "power", "op": "ge",
+            "source_characteristic": "toughness",
+        },
+    }
+    assert subject_matches(game, two_power, described, source=source)
+    assert not subject_matches(game, one_power, described, source=source)
+    assert not subject_matches(game, two_power, described), (
+        "with no source there is no bound, and the answer must be no"
+    )
+
+    # The source's toughness falls to 1: the one-power creature is now over the
+    # bound although nothing printed on it changed.
+    add_pt_modifier(source, 0, -1)
+    assert subject_matches(game, one_power, described, source=source)
 
 
 def test_no_key_is_promised_without_a_matcher_behind_it():
