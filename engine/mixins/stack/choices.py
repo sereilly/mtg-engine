@@ -2184,6 +2184,7 @@ class PendingChoicesMixin:
         self, player_index: int, opponent_index: int | None = None,
         mana_color: str | None = None, card_name: str | None = None,
         land_types: "tuple[str, str] | list[str] | None" = None,
+        creature_type: str | None = None,
     ) -> bool:
         """Resolve a pending "as this enters, choose an opponent [and a color]"
         prompt (Black Vise / Jihad), overwriting the provisional defaults
@@ -2191,14 +2192,41 @@ class PendingChoicesMixin:
         return self.resolve_pending_choice(
             "enter_choice", player_index, opponent_index=opponent_index,
             mana_color=mana_color, card_name=card_name, land_types=land_types,
+            creature_type=creature_type,
         )
 
     def _resolve_enter_choice(
         self, choice: PendingChoice, opponent_index: int | None = None,
         mana_color: str | None = None, card_name: str | None = None,
         land_types: "tuple[str, str] | list[str] | None" = None,
+        creature_type: str | None = None,
     ) -> bool:
         player_index = choice.player_index
+        # "…choose **a creature type**." (An-Zerrin Ruins.) A fifth shape of
+        # this one prompt and the fourth that names no seat, so it answers and
+        # returns rather than falling through to the opponent check.
+        #
+        # CR 205.3m: the answer must be a creature type — checked against the
+        # same catalog the picker offers, so the two cannot disagree (idiom 9)
+        # — and anything else is refused rather than repaired, because quietly
+        # keeping the default would tell the player they had chosen something
+        # they had not. An empty answer keeps the default, which is a choice
+        # already recorded rather than none at all.
+        if choice.data.get("needs_creature_type"):
+            from ...grammar.vocabulary import CREATURE_TYPES
+
+            permanent = choice.data["permanent"]
+            if creature_type:
+                word = str(creature_type).strip().lower()
+                if word not in CREATURE_TYPES:
+                    return False
+                if self.is_on_battlefield(permanent):
+                    permanent.metadata["chosen_creature_type"] = word
+                    self.log.append(
+                        f"{choice.data['card_name']}: chose {word}"
+                    )
+            self.discard_pending_choice(choice)
+            return True
         # "…choose **two basic land types**." (Illusionary Terrain.) A fourth
         # shape of this one prompt, and the third that names no seat — so it
         # answers and returns like the two below rather than falling through to
@@ -5795,7 +5823,7 @@ register_choice(
     "enter_choice",
     resolve=lambda game, choice, r: game._resolve_enter_choice(
         choice, r.get("opponent_index"), r.get("mana_color"), r.get("card_name"),
-        r.get("land_types"),
+        r.get("land_types"), r.get("creature_type"),
     ),
     # Black Vise / Jihad stamp their deterministic defaults on the permanent as
     # it enters, so a non-interactive controller has nothing left to apply.

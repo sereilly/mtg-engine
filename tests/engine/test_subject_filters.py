@@ -187,6 +187,41 @@ def test_chosen_color_is_read_off_the_ability_s_source(pool):
     assert not subject_matches(game, bears, {"chosen_color": True})
 
 
+def test_chosen_creature_type_is_read_off_the_ability_s_source(pool):
+    """"Creatures **of the chosen type**" (An-Zerrin Ruins).
+
+    The sibling of the colour above, one characteristic over and relative for
+    the same reason: the type is not in the sentence and not on the permanent
+    being tested -- it was chosen as the *source* entered (CR 614.1c,
+    CR 205.3m) and lives in that permanent's metadata.
+
+    Without a source it must refuse every permanent rather than admit every
+    permanent, which for the card that prints it is the difference between
+    holding one tribe down and holding the whole board down.
+    """
+    bears = Permanent(card=pool["Grizzly Bears"])          # a Bear
+    knight = Permanent(card=pool["White Knight"])          # a Human Knight
+    ruins = Permanent(
+        card=pool["Grizzly Bears"], metadata={"chosen_creature_type": "bear"}
+    )
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[bears, knight, ruins]),
+            PlayerState(name="P2"),
+        ]
+    )
+
+    assert subject_matches(game, bears, {"type_filter": "creature"}), (
+        "the control: the bare noun phrase must match, or the rows below "
+        "prove nothing about the key"
+    )
+    assert subject_matches(game, bears, {"chosen_creature_type": True}, source=ruins)
+    assert not subject_matches(
+        game, knight, {"chosen_creature_type": True}, source=ruins
+    )
+    assert not subject_matches(game, bears, {"chosen_creature_type": True})
+
+
 def test_the_combat_records_are_read_off_the_permanent(pool):
     """"…creatures **that didn't attack this turn**, except for creatures
     **that couldn't attack**." (Season of the Witch.)
@@ -351,6 +386,8 @@ _COVERED_ELSEWHERE = {
     "enchanted_only": "test_enchanted_only_rejects_a_permanent_with_no_aura",
     "attached_to_filter": "test_a_host_phrase_is_asked_of_the_host",
     "chosen_color": "test_chosen_color_is_read_off_the_ability_s_source",
+    "chosen_creature_type":
+        "test_chosen_creature_type_is_read_off_the_ability_s_source",
     "attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "not_attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "could_attack_this_turn": "test_the_combat_records_are_read_off_the_permanent",

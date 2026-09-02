@@ -141,6 +141,13 @@ class ObjectFilter:
     # and is stored on that permanent, so folding it in would need a sentinel
     # colour word every ``color_filter`` reader would then compare against.
     chosen_color: bool = False
+    # "Creatures **of the chosen type**" (An-Zerrin Ruins). The creature type
+    # its source recorded as it entered (CR 614.1c) — the sibling of
+    # ``chosen_color`` above, one characteristic over, and its own field for
+    # that field's reason: which quality was chosen decides what the phrase
+    # narrows by, and one field meaning either would leave the matcher
+    # guessing. Emitted, and answered only by a reader holding the source.
+    chosen_creature_type: bool = False
     # "creatures **that didn't attack this turn**" / "…**that couldn't
     # attack**" (Season of the Witch): two questions about one combat, both
     # answered off the permanent's own per-turn record.
@@ -528,6 +535,8 @@ class ObjectFilter:
             payload["nontoken"] = True
         if self.chosen_color:
             payload["chosen_color"] = True
+        if self.chosen_creature_type:
+            payload["chosen_creature_type"] = True
         if self.attacked_this_turn is True:
             payload["attacked_this_turn"] = True
         elif self.attacked_this_turn is False:

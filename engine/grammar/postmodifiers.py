@@ -249,6 +249,15 @@ def _parse_postmodifiers(
         if stream.accept_phrase("of", "the", "chosen", "color"):
             d.chosen_color = True
             continue
+        # "Creatures **of the chosen type**" (An-Zerrin Ruins). The same
+        # CR 614.1c choice one characteristic over — a creature type recorded
+        # on the source as it entered — so it is its own filter key for the
+        # colour's reason: the pure matcher has no source and refuses the key
+        # outright, and the readers that do hold one resolve it into the
+        # ordinary subtype key before matching.
+        if stream.accept_phrase("of", "the", "chosen", "type"):
+            d.chosen_creature_type = True
+            continue
         # "all untapped creatures **that didn't attack this turn**, **except
         # for creatures that couldn't attack**" (Season of the Witch). Two
         # narrowings of one noun phrase, both about the same combat: the first

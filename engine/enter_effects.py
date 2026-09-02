@@ -145,6 +145,32 @@ def chooses_two_land_types_on_enter(text: str) -> bool:
     return bool(_CHOOSE_TWO_LAND_TYPES_ON_ENTER_RE.search(text or ""))
 
 
+#: "As this enchantment enters, choose **a creature type**." (An-Zerrin Ruins.)
+#: The third quality this sentence can name, beside a colour and a pair of basic
+#: land types — and matched by shape for their reason, so the printed noun is
+#: data: a creature or an artifact printing the same sentence is the same
+#: choice.
+#:
+#: CR 205.3m: the choice is any creature type, not one on a board — which is
+#: what the resolver checks the answer against, and why the picker offers the
+#: whole catalog rather than what happens to be in play.
+_CHOOSE_CREATURE_TYPE_ON_ENTER_RE = re.compile(
+    r"as this [a-z]+ enters, choose a creature type"
+)
+
+
+def chooses_creature_type_on_enter(text: str) -> bool:
+    """Whether *text* asks its controller for a creature type as the permanent
+    enters.
+
+    A substring probe like the colour one above, because the mixin asks it of
+    the card's whole normalized text; :func:`enter_effect_line` asks the
+    whole-line question through this same matcher, so what is performed and
+    what is claimed cannot drift.
+    """
+    return bool(_CHOOSE_CREATURE_TYPE_ON_ENTER_RE.search(text or ""))
+
+
 # "As this enchantment enters, choose a card name." (Runed Halo.) A *name*
 # rather than a quality: nothing on any board constrains it, and the choice is
 # made from the whole card pool — which is why the default below is a name the
@@ -714,6 +740,8 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "chooses a color as it enters"
     if chooses_two_land_types_on_enter(normalized):
         return "chooses two basic land types as it enters"
+    if chooses_creature_type_on_enter(normalized):
+        return "chooses a creature type as it enters"
     if choose_number_on_enter(normalized) is not None:
         return "chooses a number as it enters"
     if sacrifice_any_number_on_enter(normalized) is not None:
@@ -737,6 +765,7 @@ __all__ = [
     "chooses_opponent_on_enter",
     "chooses_color_on_enter",
     "chooses_two_land_types_on_enter",
+    "chooses_creature_type_on_enter",
     "COPY_ARTIFACT_ON_ENTER",
     "COPY_CREATURE_ON_ENTER",
     "ENTERS_TAPPED",

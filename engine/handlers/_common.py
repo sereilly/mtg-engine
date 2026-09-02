@@ -340,6 +340,35 @@ def _resolve_chosen_color(filt: dict, source) -> dict:
     return resolved
 
 
+def _resolve_chosen_creature_type(filt: dict, source) -> dict:
+    """*filt* with a ``chosen_creature_type`` narrowing turned into a subtype key.
+
+    The creature type a card chose as it entered (CR 614.1c, CR 205.3m) is
+    recorded on the permanent, not in the sentence — so "of the chosen type"
+    can only be answered by a reader holding that permanent. The sibling of
+    :func:`_resolve_chosen_color` one characteristic over, and it resolves the
+    same way: into the ordinary key every matcher already reads, which for a
+    creature type is ``subtype_filter`` and so goes through CR 613 layer 4 like
+    any other type question.
+
+    Callers without a source leave the key in place and
+    ``permanent_matches_filter`` refuses every permanent, which is the safe
+    direction: a dropped narrowing would hold the whole board down.
+    """
+    if not filt.get("chosen_creature_type"):
+        return filt
+    word = (
+        getattr(source, "metadata", {}).get("chosen_creature_type")
+        if source else None
+    )
+    if not word:
+        return filt
+    resolved = dict(filt)
+    resolved.pop("chosen_creature_type", None)
+    resolved["subtype_filter"] = word
+    return resolved
+
+
 def evaluate_count(
     game: "Game", owner: "PlayerState", spec: dict, *, exclude=None, source=None
 ) -> int:
@@ -432,6 +461,7 @@ def evaluate_count(
         # refuses the unresolved key outright, so a caller with no source
         # counts nothing rather than counting the whole board.
         filt = _resolve_chosen_color(filt, source)
+        filt = _resolve_chosen_creature_type(filt, source)
         matched = [
             perm for perm in game.controlled_by(seat)
             if perm is not skip and permanent_matches_filter(perm, filt)
@@ -817,6 +847,12 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # into `color_filter` before asking, so the key only survives to here when
     # nobody could answer it.
     if payload.get("chosen_color"):
+        return False
+    # "of the chosen type" (An-Zerrin Ruins) — the same recorded choice one
+    # characteristic over, refused here for the identical reason: the record
+    # lives on the *source*, this function is the pure half, and ignoring the
+    # key would widen "creatures of the chosen type" to every creature.
+    if payload.get("chosen_creature_type"):
         return False
     # "creatures that didn't attack this turn" / "…except for creatures that
     # couldn't attack" (Season of the Witch). Both are per-turn records stamped
