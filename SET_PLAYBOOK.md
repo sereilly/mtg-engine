@@ -376,8 +376,12 @@ is green, the trackers carry its row, and the census is in hand.
    the work they could have halved was already done.
 
    **The third is the picker sweep, moved up from Phase 4 for the same reason.**
-   Ask of every *supported* card whether `targeting.derive_cast_spec` /
-   `derive_activation_spec` offer what the printed line names. It costs nothing
+   `python scripts/picker_sweep.py --set <CODE>` asks of every *supported* card
+   whether `targeting.derive_cast_spec` / `derive_activation_spec` offer what
+   the printed line names — the probes are the ratchet tests' own
+   (`engine/targeting.py`'s `line_names_a_cast_target` / `cast_picker_expected`
+   / `card_names_a_chooser`, one function per question with two readers each),
+   so the script and the shipped-pool ratchets cannot drift. It costs nothing
    and it found Roots on the day of HML's ingest: a supported Aura, no hollow
    line, every sentence claimed, and a cast spec of None — which is the exact
    value the client tests to decide whether to ask for a target, so the app sent

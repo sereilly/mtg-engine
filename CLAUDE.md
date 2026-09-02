@@ -151,6 +151,7 @@ python scripts/support_report.py --set ATQ --hollow-lines   # supported cards ca
 python scripts/support_report.py --set LEG --refusals   # every refused line of every unsupported card with its exact refusal site (the plain census quotes only the first) — the work list backlog rounds are planned from; the rollup counts lines / distinct sentences / cards per site
 python scripts/support_report.py --set HML --fragments   # n-gram census over the refused lines, ranked by how many cards share each fragment — the leverage number below the sentence (--json emits every census as one object)
 python scripts/retrieve_oracle.py "Black Lotus"   # oracle text by name (whole pool)
+python scripts/picker_sweep.py --set <CODE>   # every supported card whose cast/activation picker disagrees with its printed line (the Roots class) — run it over a measured set in Phase 3, when the test ratchets cannot see it
 python scripts/oracle_diff.py snapshot   # record every card's full compiled program (both manifest roles) before a change
 python scripts/oracle_diff.py compare    # every card whose program moved since the snapshot, payloads and all; exit 1 if any did
 python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set implementation tracker); --refresh re-fetches Scryfall data

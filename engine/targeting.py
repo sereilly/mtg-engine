@@ -2258,3 +2258,143 @@ def single_player_target(game, item) -> int | None:
     if chosen is None or chosen.get("kind") != "player":
         return None
     return int(chosen["seat"])
+
+
+#: Every printed way a card hands its caster a choice as it is cast.
+#:
+#: Deliberately *looser* than the target-word probes above, because the two
+#: directions ask opposite questions. "This card targets — does it derive a
+#: prompt?" has to be sure the word means a cast target; "this card derives a
+#: prompt — is there anything on it to choose?" hands the card back to its twin
+#: on any choosing word at all. A card with none of these words that still
+#: derives a picker is asking a question its own text never poses.
+#:
+#: "of your choice" is CR 609.3's choice (Circle of Protection, Reverse
+#: Damage), and "card in a graveyard" / "card from your graveyard" is a card
+#: picked out of a zone (Animate Dead's CR 115.1b enchant line, Experimental
+#: Overload's return) — neither is the word "target" and both are real prompts.
+_CAST_CHOOSER = re.compile(
+    r"\btargets?\b|\bof your choice\b|\bchoose\b|\bchosen\b"
+    r"|card in a graveyard|card from your graveyard"
+)
+
+
+def card_names_a_chooser(card, program) -> bool:
+    """Whether anything about *card* asks its caster to pick something.
+
+    The evidence sources :func:`derive_cast_spec` consults, asked of the *card*
+    rather than of the derivation, plus the printed words above. A card that
+    answers False here has nothing for a cast picker to be about.
+
+    One function with two readers, on purpose: the ratchet in
+    ``tests/engine/test_targeting.py`` (no card derives a prompt its text never
+    asks for) and ``scripts/picker_sweep.py`` (the same sweep runnable over a
+    measured set during Phase 3). A private copy in either would let the
+    script's census and the shipped-pool ratchet drift apart.
+    """
+    from engine.cast_costs import additional_costs
+    from engine.enter_effects import copy_on_enter_type
+
+    if _CAST_CHOOSER.search(_REMINDER_TEXT.sub("", card.oracle_text or "").lower()):
+        return True
+    if card_enchant_subject(card.oracle_text) is not None:
+        return True                                     # CR 115.1b
+    if copy_on_enter_type(program.normalized_text or "") is not None:
+        return True                                     # CR 707.9a
+    return any(
+        _cost_picker_spec(cost) is not None for cost in additional_costs(card)
+    )
+
+
+# A cast line that picks a target as the spell resolves. Reminder text is
+# stripped by callers first: protection's "(… can't be blocked, **targeted**,
+# dealt damage …)" is describing what may not happen to the creature, not
+# something the card chooses. Triggered-ability lines are excluded because
+# their target is chosen when the trigger goes on the stack (CR 603.3d), not as
+# the permanent is cast — Erhnam Djinn's upkeep forestwalk grant is not a
+# cast-time prompt. The optional "until …," in front is a **delayed** triggered
+# ability saying how long it is armed (CR 603.7a) before it says when it fires
+# (Gaze of Pain). Deliberately a *prefix* and not a search: eight shipped cards
+# print a trigger word mid-line after a real cast target (Berserk, Mana Drain,
+# Reincarnation, the three Glyphs, Sacred Boon, Ray of Command), and every one
+# of those lines opens with the cast effect that does the targeting.
+_TRIGGER_PREFIX = re.compile(
+    r"^\s*(?:until [^,]{1,40}, )?(when|whenever|at the beginning)\b"
+)
+_TARGET_WORD = re.compile(r"\btargets?\b")
+
+# Line shapes whose target is not a *cast* target, each excluded for the reason
+# the trigger prefix above is. `legality._cast_lines` cannot drop them: it
+# splits on the activated-ability cost syntax, which none of these has.
+#
+# * A **loyalty ability** ("+1:", "−3:") is activated (CR 606.3), so its target
+#   is chosen when the ability goes on the stack — `derive_activation_spec`
+#   answers for it.
+# * A **modal bullet** is one alternative, and a mode derives its own spec;
+#   the card as a whole names no single target ("Choose one" means exactly
+#   that).
+# * A **static cost tax** that says "spells your opponents cast that **target**
+#   this creature cost more" (Pursued Whale) uses the word about somebody
+#   else's spell.
+# * A **shroud-shaped restriction** ("can't be the target of Aura spells",
+#   Bartel Runeaxe) says what somebody else's spell may not do.
+# * A **static effect keyed on what another object targeted** — Bronze Horse's
+#   "prevent all damage … by spells that target it", Wall of Shadows'
+#   "abilities that can target only Walls".
+_LOYALTY_PREFIX = re.compile(r"^\s*[+−-]?\s*[0-9x]+\s*:", re.I)
+_MODAL_BULLET = re.compile(r"^\s*•")
+_TAXES_TARGETING_SPELLS = re.compile(r"spells .*that target .*cost")
+_CANT_BE_TARGETED = re.compile(r"can't be the target of")
+_OTHERS_TARGETING = re.compile(r"(?:spells|abilities)[^.]*? that (?:can )?target")
+
+
+def line_names_a_cast_target(line: str) -> bool:
+    """Whether *line* names a target the caster chooses as the spell is cast.
+
+    One probe with two readers: the forward ratchet in
+    ``tests/engine/test_targeting.py`` (every card that targets as it is cast
+    derives its own prompt) and ``scripts/picker_sweep.py``, which asks the
+    same question of a measured set during Phase 3. The exclusions above are
+    each a way to make the ratchet pass by looking at less, so the test also
+    asserts the size of the examined set.
+    """
+    if not _TARGET_WORD.search(line):
+        return False
+    return not (
+        _TRIGGER_PREFIX.match(line)
+        or _LOYALTY_PREFIX.match(line)
+        or _MODAL_BULLET.match(line)
+        or _TAXES_TARGETING_SPELLS.search(line)
+        or _CANT_BE_TARGETED.search(line)
+        or _OTHERS_TARGETING.search(line)
+    )
+
+
+def cast_picker_expected(card, program) -> bool:
+    """The forward question the picker sweep asks: should casting this card
+    raise a picker?
+
+    :func:`line_names_a_cast_target` over the cast-relevant lines, plus the
+    three evidence sources that choose without the word "target" — an Aura's
+    enchant subject (CR 115.1b: Roots, the card this instrument exists for,
+    prints no "target" at all), a copy-on-enter phrase (CR 707.9a), and an
+    additional cost with a picker. Strictly stronger than the forward ratchet's
+    own composition, which reads only the printed lines — the enchant half is
+    exactly what let Roots ship uncastable.
+    """
+    from engine.cast_costs import additional_costs
+    from engine.enter_effects import copy_on_enter_type
+    from engine.legality import _cast_lines
+
+    if any(
+        line_names_a_cast_target(_REMINDER_TEXT.sub("", line))
+        for line in _cast_lines(card)
+    ):
+        return True
+    if card_enchant_subject(card.oracle_text) is not None:
+        return True                                     # CR 115.1b
+    if copy_on_enter_type(program.normalized_text or "") is not None:
+        return True                                     # CR 707.9a
+    return any(
+        _cost_picker_spec(cost) is not None for cost in additional_costs(card)
+    )

@@ -26,7 +26,12 @@ import pytest
 
 from engine.card_loader import load_catalog
 from engine.oracle import compile_card_oracle
-from engine.targeting import derive_cast_spec, derive_cast_target
+from engine.targeting import (
+    card_names_a_chooser,
+    derive_cast_spec,
+    derive_cast_target,
+    line_names_a_cast_target,
+)
 
 
 @pytest.fixture(scope="module")
@@ -156,75 +161,13 @@ def test_derives_the_expected_spec(supported_cards, name, expected):
     assert derive_cast_spec(card, compile_card_oracle(card)) == expected
 
 
-# A cast line that picks a target as the spell resolves. Reminder text is
-# stripped first: protection's "(… can't be blocked, **targeted**, dealt damage
-# …)" is describing what may not happen to the creature, not something the card
-# chooses. Triggered-ability lines are excluded because their target is chosen
-# when the trigger goes on the stack (CR 603.3d), not as the permanent is cast —
-# Erhnam Djinn's upkeep forestwalk grant is not a cast-time prompt.
+# The cast-target line probe itself lives in engine/targeting.py as
+# `line_names_a_cast_target`, one probe with two readers: the forward ratchet
+# below and scripts/picker_sweep.py. The exclusion comments moved with it; the
+# coverage ratchet asserting how much the probe examines stays here.
 _REMINDER = re.compile(r"\([^)]*\)")
-# The optional "until …," in front is a **delayed** triggered ability saying how
-# long it is armed (CR 603.7a) before it says when it fires: "Until end of turn,
-# whenever a creature you control attacks and isn't blocked, … to a target
-# creature" (Gaze of Pain). The whole line is still a triggered ability, so the
-# target it names is chosen when the delayed ability triggers (CR 603.3d) and
-# never as the sorcery is cast — the same reason a bare trigger prefix is
-# excluded, one duration clause further left.
-#
-# Deliberately a *prefix* and not a search. Eight shipped cards print a trigger
-# word mid-line after a real cast target — Berserk ("target creature gains
-# trample …. At the beginning of the next end step, destroy that creature"),
-# Mana Drain, Reincarnation, the three Glyphs, Sacred Boon and Ray of Command —
-# and every one of those lines opens with the cast effect that does the
-# targeting. Searching anywhere would excuse all eight from a ratchet they
-# satisfy today.
-_TRIGGER_PREFIX = re.compile(
-    r"^\s*(?:until [^,]{1,40}, )?(when|whenever|at the beginning)\b"
-)
-_TARGET_WORD = re.compile(r"\btargets?\b")
+_names_a_cast_target = line_names_a_cast_target
 
-# Three more line shapes whose target is not a *cast* target, each excluded for
-# the reason the trigger prefix above is. `_cast_lines` cannot drop them: it
-# splits on the activated-ability cost syntax, which none of these three has.
-#
-# * A **loyalty ability** ("+1:", "−3:") is activated (CR 606.3), so its target
-#   is chosen when the ability goes on the stack — `derive_activation_spec`
-#   answers for it, and the guard in test_activation_targeting.py is the one
-#   that holds it. M21 brought the first planeswalkers into the pool and every
-#   one of them landed here.
-# * A **modal bullet** is one alternative, and a mode derives its own spec
-#   (`graveyard_target_spec(..., mode_index=)`); the card as a whole names no
-#   single target, which is exactly what "Choose one" means.
-# * A **static** cost tax that says "spells your opponents cast that **target**
-#   this creature cost more" (Pursued Whale, Terror of the Peaks) uses the word
-#   about somebody else's spell. Nothing about this card is targeted.
-_LOYALTY_PREFIX = re.compile(r"^\s*[+−-]?\s*[0-9x]+\s*:", re.I)
-_MODAL_BULLET = re.compile(r"^\s*•")
-_TAXES_TARGETING_SPELLS = re.compile(r"spells .*that target .*cost")
-# * A **shroud-shaped restriction** ("can't be the target of Aura spells",
-#   Bartel Runeaxe, Tetsuo Umezawa) says what somebody else's spell may not do.
-#   Nothing about it is chosen as this card is cast.
-_CANT_BE_TARGETED = re.compile(r"can't be the target of")
-# * A **static effect keyed on what another object targeted** — Bronze Horse's
-#   "prevent all damage that would be dealt to this creature **by spells that
-#   target it**", Wall of Shadows' "abilities that can target only Walls". The
-#   same use of the word the cost tax above makes, without the cost: it
-#   describes the other spell, and this card chooses nothing.
-_OTHERS_TARGETING = re.compile(r"(?:spells|abilities)[^.]*? that (?:can )?target")
-
-
-def _names_a_cast_target(line: str) -> bool:
-    """Whether *line* names a target the caster chooses as the spell is cast."""
-    if not _TARGET_WORD.search(line):
-        return False
-    return not (
-        _TRIGGER_PREFIX.match(line)
-        or _LOYALTY_PREFIX.match(line)
-        or _MODAL_BULLET.match(line)
-        or _TAXES_TARGETING_SPELLS.search(line)
-        or _CANT_BE_TARGETED.search(line)
-        or _OTHERS_TARGETING.search(line)
-    )
 
 # Cards that name a target the UI has no picker for, with the reason. An entry
 # here is a card the engine resolves without asking, not one whose prompt went
@@ -320,46 +263,10 @@ def test_the_grammar_supplies_evidence_the_legacy_rules_never_recorded(supported
 
 
 # --- FixC: a sweep names a class, not a target ---
-#: Every printed way a card hands its caster a choice as it is cast.
-#:
-#: Deliberately *looser* than :func:`_names_a_cast_target` above, because the
-#: two ratchets ask opposite questions. That one asks "this card targets — does
-#: it derive a prompt?", so it has to be sure the word means a cast target.
-#: This one asks "this card derives a prompt — is there anything on it to
-#: choose?", so any use of a choosing word anywhere is enough to hand the card
-#: back to its twin. A card with none of these words that still derives a
-#: picker is asking a question its own text never poses.
-#:
-#: "of your choice" is CR 609.3's choice (Circle of Protection, Reverse
-#: Damage), and "card in a graveyard" / "card from your graveyard" is a card
-#: picked out of a zone (Animate Dead's CR 115.1b enchant line, Experimental
-#: Overload's return) — neither is the word "target" and both are real prompts.
-_CAST_CHOOSER = re.compile(
-    r"\btargets?\b|\bof your choice\b|\bchoose\b|\bchosen\b"
-    r"|card in a graveyard|card from your graveyard"
-)
-
-
-def _card_names_a_chooser(card, program) -> bool:
-    """Whether anything about *card* asks its caster to pick something.
-
-    The evidence sources ``derive_cast_spec`` consults, asked of the *card*
-    rather than of the derivation, plus the printed words above. A card that
-    answers False here has nothing for a cast picker to be about.
-    """
-    from engine.cast_costs import additional_costs
-    from engine.enter_effects import copy_on_enter_type
-    from engine.targeting import _cost_picker_spec, card_enchant_subject
-
-    if _CAST_CHOOSER.search(_REMINDER.sub("", card.oracle_text or "").lower()):
-        return True
-    if card_enchant_subject(card.oracle_text) is not None:
-        return True                                     # CR 115.1b
-    if copy_on_enter_type(program.normalized_text or "") is not None:
-        return True                                     # CR 707.9a
-    return any(
-        _cost_picker_spec(cost) is not None for cost in additional_costs(card)
-    )
+# The chooser census itself lives in engine/targeting.py as
+# `card_names_a_chooser`, one function with two readers: this ratchet and
+# scripts/picker_sweep.py, which runs the same sweep over a measured set
+# during Phase 3 — a private copy here would let the two drift apart.
 
 
 def test_no_card_derives_a_cast_prompt_its_text_never_asks_for(supported_cards):
@@ -389,7 +296,7 @@ def test_no_card_derives_a_cast_prompt_its_text_never_asks_for(supported_cards):
         spec = derive_cast_spec(card, program)
         if spec is None or spec.get("kind") == "none":
             continue
-        if not _card_names_a_chooser(card, program):
+        if not card_names_a_chooser(card, program):
             gaps.append(f"{card.name}: {spec}")
 
     assert gaps == [], (

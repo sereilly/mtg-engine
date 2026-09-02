@@ -34,6 +34,7 @@ from engine.card_loader import (
 )
 
 import ingest_set  # noqa: E402
+import picker_sweep  # noqa: E402
 import retrieve_oracle  # noqa: E402
 import run_duel  # noqa: E402
 import set_argument  # noqa: E402
@@ -45,6 +46,7 @@ import support_report  # noqa: E402
 # grew a hardcoded path again would simply not appear in a registry it was
 # never added to.
 SCRIPTS_UNDER_TEST = [
+    pytest.param(picker_sweep, [], id="picker_sweep"),
     pytest.param(retrieve_oracle, ["Black Lotus"], id="retrieve_oracle"),
     pytest.param(run_duel, [], id="run_duel"),
     pytest.param(simulate_ai_games, [], id="simulate_ai_games"),
