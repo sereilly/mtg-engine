@@ -139,18 +139,39 @@ def _lower_graveyard_cards_on_library_top(
         graveyard_owner = "target_player"
     elif owner_kind == "you" and node.to_owner == "you":
         graveyard_owner = "you"
+    # "from **an opponent's** graveyard … on top of **their** library"
+    # (Misinformation) and "from **a player's** graveyard … **their** library"
+    # (Lodestone Bauble). Neither chooses a player: the cards are the targets
+    # and the pile is wherever they lie, so the seat is read off the chosen
+    # slots exactly as it is for the chosen-player spelling above — what the
+    # words add is a *restriction on which piles may be chosen from*, which
+    # rides the payload and reaches the picker. The destination still has to
+    # agree with the source for the reason the two seats above do: a sentence
+    # pairing one player's graveyard with another's library is a card nobody
+    # has printed.
+    elif owner_kind == "opponent" and node.to_owner == "owner":
+        graveyard_owner = "an_opponent"
+    elif owner_kind == "owner" and node.to_owner == "owner":
+        graveyard_owner = "any_player"
     else:
         raise LoweringError(
             "the graveyard-to-library handler reads one player's graveyard into "
             "that same player's library",
             node=node,
         )
-    if len(filt.card_types) != 1:
+    if len(filt.card_types) > 1:
         raise LoweringError(
             "the graveyard-to-library handler narrows by one card type", node=node
         )
+    # "up to three target **cards**" (Misinformation) — a head noun with no card
+    # type at all, which is not the absence of a narrowing but a narrowing that
+    # says "any card". The predicate every reader of this instruction shares
+    # already has the key; what it lacked was a lowering willing to emit it, so
+    # a bare "cards" reached "narrows by one card type" and refused.
+    any_card = not filt.card_types
     leftover = _restrictions_beyond(
-        filt, frozenset({"card_types", "is_card", "zone", "zone_owner"})
+        filt,
+        frozenset({"card_types", "is_card", "zone", "zone_owner", "supertypes"}),
     )
     if leftover:
         raise LoweringError(
@@ -161,7 +182,18 @@ def _lower_graveyard_cards_on_library_top(
         OracleInstruction(
             "put_graveyard_cards_on_library_top", "",
             {
-                "card_type": filt.card_types[0],
+                # The narrowing, in the key names ``graveyard_card_matches``
+                # reads — one predicate for the picker, the cast-time re-check
+                # and the handler, which is what stops the three disagreeing
+                # about which cards this line may name.
+                **({"any_card": True} if any_card else {"card_type": filt.card_types[0]}),
+                # "up to four target **basic** land cards" (Lodestone Bauble).
+                # A supertype is read off the printed type line, which for a
+                # card in a graveyard is the whole of what there is (CR 613.1),
+                # so it is testable in that zone for exactly the reason the card
+                # type is — and dropping it would let the Bauble return any
+                # land, which is a strictly better card than the one printed.
+                **({"supertypes": list(filt.supertypes)} if filt.supertypes else {}),
                 # "In any order" is the printed rider, and it is the *only*
                 # thing that says the controller decides the sequence. Recorded
                 # rather than consumed: a card printing it and one not printing

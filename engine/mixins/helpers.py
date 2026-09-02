@@ -1269,6 +1269,18 @@ class GameHelpersMixin:
         if spec.get("own_graveyard_only"):
             return item.caster_index
         seat = item.target_player_index
+        # "from **an opponent's** graveyard" (Misinformation). The pile is not a
+        # target, so an announcement can legitimately arrive with no seat named
+        # — and the caster's own graveyard, the default below, is the one pile
+        # the printed word rules out. In a duel there is exactly one opponent
+        # and the words name it; with more, a seat has to be named, and naming
+        # none reaches the default rather than guessing which opponent.
+        if (
+            seat is None
+            and spec.get("opponent_graveyard_only")
+            and len(self.players) == 2
+        ):
+            return 1 - item.caster_index
         if seat is None or not 0 <= seat < len(self.players):
             # **The caster's own**, not the opposing seat. The opposing default
             # is the *battlefield* convention — a spell naming a permanent and

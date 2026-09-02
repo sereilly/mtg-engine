@@ -77,6 +77,21 @@ PARSE_LAYERS = [
     # until Antiquities' token phrases pushed it past the guard below, and the
     # order is what keeps the split from folding back — the filter parser must
     # never need the quantifier one.
+    # Which zone a noun phrase is scoped to, and whose zone it is ("cards
+    # **from an opponent's graveyard**"). Split out of `postmodifiers` at the
+    # guard below, along the boundary that module's own docstring draws when it
+    # lists what a postmodifier relates an object to: the controller, another
+    # object, **or a zone**. A family rather than a cut, because CR 404.1 makes
+    # both halves one answer — a card is in the graveyard of the player who owns
+    # it, so the pile and the seat are read together or a phrase names the wrong
+    # pile. Below `postmodifiers`, which calls it and is never imported back.
+    #
+    # The name is `lowering/zones.py`'s, and the two are one subject from
+    # opposite ends: that module decides which zone an object **goes to**, this
+    # reads which zone it is **already in**. Different packages, neither
+    # importing the other, so the mirror re-forms rather than colliding — the
+    # one thing `statics` could not do.
+    "zones",
     # The trailing half of a noun phrase. Below `nouns`, which hands it the
     # recursive parser rather than being imported back — "blocking target
     # attacking creature" nests a whole phrase.

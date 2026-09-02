@@ -40,7 +40,8 @@ from .lexer import PT, SELF
 from .names import accept_original_expansion, parse_card_name
 from .readers import _SELF_NOUNS, accept_source_reference
 from .stream import TokenStream
-from .vocabulary import (CARD_TYPES, CREATURE_TYPES, KEYWORD_INDEX, match_longest,
+from .zones import accept_zone_scope
+from .vocabulary import (CARD_TYPES, KEYWORD_INDEX, match_longest,
                          singular as _singular)
 
 # "…attached to that creature" / "…attached to it" — the trailing clause naming
@@ -49,13 +50,6 @@ from .vocabulary import (CARD_TYPES, CREATURE_TYPES, KEYWORD_INDEX, match_longes
 # relation dropped, and a dropped relation on a sweep takes the whole board.
 _ATTACHED_TO_REFERENTS = {("that", "creature"): "target", ("it",): "source"}
 
-
-# Zones a noun phrase can be scoped to ("target creature card **from your
-# graveyard**"). The battlefield is deliberately absent: it is already the
-# default, so consuming "from the battlefield" here would leave no trace that
-# the phrase had been read at all — exactly the silent-drop this parser exists
-# to prevent. A production that needs it should say so explicitly.
-_ZONE_NOUNS = frozenset({"graveyard", "hand", "library", "exile"})
 
 
 def _accept_back_referenced_controller(stream: TokenStream) -> bool:
@@ -131,42 +125,6 @@ def _parse_keyword_list(stream: TokenStream) -> tuple[str, ...]:
     if not keywords:
         raise stream.error("expected a keyword ability")
     return tuple(keywords)
-
-
-def _parse_zone_owner_of(stream: TokenStream) -> "ast.PlayerRef | None":
-    """The player named after "from the <zone> **of** …", or None.
-
-    Its own small reader rather than a call into ``references.parse_player_ref``
-    because that module sits *above* this one — it reads noun phrases, which are
-    built from what this file parses — and the phrases printed in this position
-    are not the ones a recipient clause prints. Widening it means adding a
-    spelling here, and a spelling nothing lists refuses the whole noun phrase
-    rather than silently naming some other player's graveyard.
-
-    "…the graveyard of **the player who controlled that creature the last time
-    it became blocked by that Wall**" (Glyph of Reincarnation) is a seat no read
-    of the board can answer: control is CR 613 layer 2 and moves, and by the
-    time the sentence is read the creature is a card in a graveyard with no
-    controller at all. The block seam freezes the seat as the block happens, and
-    this referent names that record — "the last time" being exactly the
-    overwrite-on-each-block that seam performs. Every word is required, and the
-    noun after "by that" is checked rather than skipped: a dropped word here
-    leaves a phrase naming some other player, and a reanimation out of the wrong
-    graveyard is a different card.
-    """
-    probe = stream.mark()
-    if stream.accept_phrase(
-        "the", "player", "who", "controlled", "that", "creature",
-        "the", "last", "time", "it", "became", "blocked", "by", "that",
-    ):
-        noun = stream.peek_word()
-        if noun is not None and (
-            _singular(noun) in CARD_TYPES or _singular(noun) in CREATURE_TYPES
-        ):
-            stream.advance()
-            return ast.PlayerRef("controller_when_blocked")
-    stream.reset(probe)
-    return None
 
 
 def _parse_postmodifiers(
@@ -530,69 +488,14 @@ def _parse_postmodifiers(
         if stream.accept_phrase("on", "the", "battlefield"):
             d.on_the_battlefield = True
             continue
-        if stream.at_word("from", "in"):
-            # "from your graveyard" / "in a graveyard" — which zone the objects
-            # are in, and whose. Both halves are recorded: a handler that only
-            # searches the caster's own graveyard must be able to refuse
-            # "from a graveyard" rather than search the wrong one.
-            probe = stream.mark()
-            stream.advance()
-            owner: ast.PlayerRef | None = None
-            if stream.accept_word("your"):
-                owner = ast.PlayerRef("you")
-            # "their <zone>", and the spelled-out "that player's <zone>" (Storm
-            # Seeker): one node for both, because `parse_player_ref` already reads
-            # "they" as an alias of "that player", and a second kind here would be
-            # a second answer every count lowering had to learn.
-            elif stream.accept_word("their") or stream.accept_phrase("that", "player", "'s"):
-                owner = ast.PlayerRef("owner")
-            # "from **its owner's** graveyard" (Reincarnation). The same
-            # referent `_parse_zone` already reads on the destination side, and
-            # the same kind: "the owner of the object this sentence is about".
-            # Which object that is depends on the sentence, and is the
-            # lowering's question rather than the noun parser's.
-            elif stream.accept_phrase("its", "owner", "'s"):
-                owner = ast.PlayerRef("owner")
-            # "from **target player's** graveyard" (Drafna's Restoration): a
-            # chosen player rather than a fixed one, and a *second* target on the
-            # same line — the cards are targets too.
-            elif stream.accept_phrase("target", "player", "'s"):
-                owner = ast.PlayerRef("target_player")
-            # "in **target opponent's** graveyard" (Spoils of Evil). The same
-            # chosen seat with CR 115.4's own-seat exclusion, and its own kind
-            # rather than `target_player`, because that exclusion is the whole
-            # difference: read as "target player" the card would let its caster
-            # count their own graveyard.
-            elif stream.accept_phrase("target", "opponent", "'s"):
-                owner = ast.PlayerRef("target_opponent")
-            # "from **defending player's** graveyard" (Rysorian Badger). CR
-            # 506.2's seat, which the *combat* named rather than the sentence:
-            # nothing is chosen, so it is neither of the two target spellings
-            # above, and the lowering admits it only under a trigger whose fire
-            # site froze one (`_events._DEFENDING_PLAYER_EVENTS`).
-            elif stream.accept_phrase("defending", "player", "'s"):
-                owner = ast.PlayerRef("defending_player")
-            else:
-                stream.accept_word("a", "an", "the")
-            noun = stream.peek_word()
-            if noun in _ZONE_NOUNS:
-                stream.advance()
-                # "from **the graveyard of** <player>" (Glyph of
-                # Reincarnation) — the possessive said the other way round.
-                # Tried only when the possessive spellings above found nothing,
-                # so a phrase naming its owner twice cannot quietly keep the
-                # second answer; and the referent has to be one this file
-                # reads, because "the graveyard of" followed by words nothing
-                # claims names a graveyard that cannot be found.
-                if owner is None and stream.accept_word("of"):
-                    owner = _parse_zone_owner_of(stream)
-                    if owner is None:
-                        stream.reset(probe)
-                        break
-                d.zone = noun
-                d.zone_owner = owner
-                continue
-            stream.reset(probe)
+        # "from your graveyard" / "in an opponent's graveyard" — which zone the
+        # objects are in, and whose. Both halves are one answer (CR 404.1), and
+        # they left for `zones` at the size guard; the loop's three outcomes ride
+        # the return value.
+        scoped = accept_zone_scope(stream, d)
+        if scoped is True:
+            continue
+        if scoped is False:
             break
         if stream.at_word("with"):
             probe = stream.mark()

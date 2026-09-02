@@ -1845,6 +1845,13 @@ class LegalityMixin:
         for seat, player in enumerate(self.players):
             if spec.get("own_graveyard_only") and seat != caster_index:
                 continue
+            # "from **an opponent's** graveyard" (Misinformation) — CR 115.4's
+            # own-seat exclusion applied to the *pile* the cards are chosen
+            # from. The mirror of the scope above and offered for the same
+            # reason: a picker that ignored the printed word would let the
+            # caster reach into their own graveyard, which is a different card.
+            if spec.get("opponent_graveyard_only") and seat == caster_index:
+                continue
             for idx, card in enumerate(player.graveyard):
                 if eligible(card):
                     targets.append({"kind": "graveyard", "seat": seat, "index": idx, "name": card.name})

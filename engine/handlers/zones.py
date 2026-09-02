@@ -1008,10 +1008,16 @@ def put_graveyard_cards_on_library_top(
     else:
         game.log.append(f"{context.card.name}: no player chosen")
         return True, "resolved"
-    card_type = str(instruction.payload.get("card_type", "artifact"))
 
     def _eligible(card) -> bool:
-        return card_type in (getattr(card, "type_line", "") or "").lower()
+        # The picker's predicate, not a third spelling of it — the arrangement
+        # `return_creature_from_graveyard_to_hand` one screen down already
+        # makes, and for its reason: the payload and the spec carry the same key
+        # names because one is derived from the other, so there is one answer to
+        # "may this card be chosen?". This arm read `card_type in type_line`,
+        # which is the same answer for the one key it knew and no answer at all
+        # for "any card" (Misinformation) or a supertype (Lodestone Bauble).
+        return graveyard_card_matches(instruction.payload, card)
 
     # "Any number" prints no maximum, so the cap is the pile itself; "up to
     # three" prints one, and the description the lowering built carries it.

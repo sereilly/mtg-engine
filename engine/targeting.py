@@ -1167,10 +1167,18 @@ def _graveyard_to_library_spec(payload: dict) -> dict:
     "any number" prints no ceiling, so the only cap is how many legal targets
     exist, which `cast_target_spec` fills in once it has enumerated them.
     """
-    spec: dict = {
-        "kind": GRAVEYARD_TARGET_KIND,
-        "card_type": payload.get("card_type", "artifact"),
-    }
+    spec: dict = {"kind": GRAVEYARD_TARGET_KIND}
+    # Handed over in the key names ``graveyard_card_matches`` reads, so the
+    # picker and the handler ask one question. "Any card" (Misinformation) and
+    # a supertype (Lodestone Bauble) are narrowings that predicate already
+    # knows; a spec that only ever said ``card_type`` offered the whole pile for
+    # the first and every land for the second.
+    if payload.get("any_card"):
+        spec["any_card"] = True
+    else:
+        spec["card_type"] = payload.get("card_type", "artifact")
+    if payload.get("supertypes"):
+        spec["supertypes"] = list(payload["supertypes"])
     # "From **your** graveyard" (Reinforcements) is one pile, and the picker has
     # to say so: the enumerator walks every graveyard by default, so a picker
     # left unscoped would offer the opponent's creature cards for a spell that
@@ -1178,6 +1186,13 @@ def _graveyard_to_library_spec(payload: dict) -> dict:
     # would then move whatever card happened to sit at that slot.
     if payload.get("graveyard_owner") == "you":
         spec["own_graveyard_only"] = True
+    # "from **an opponent's** graveyard" (Misinformation). CR 115.4's exclusion
+    # with nothing chosen: the pile is not a target, but which piles the *cards*
+    # may be taken from is printed, and left unscoped the picker would offer the
+    # caster their own graveyard — a strictly better card than the one printed,
+    # and the mirror of the mistake `own_graveyard_only` above exists to stop.
+    elif payload.get("graveyard_owner") == "an_opponent":
+        spec["opponent_graveyard_only"] = True
     described = payload.get("targets") or {}
     if described.get("unbounded"):
         spec["unbounded_targets"] = True
