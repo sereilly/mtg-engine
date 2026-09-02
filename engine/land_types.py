@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
-from .continuous import next_timestamp
+from .continuous import Characteristics, next_timestamp
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .models import Permanent
@@ -48,8 +48,9 @@ DERIVED_LAND_TYPES = "derived_land_type_changes"
 
 # Key under which a static source's own timestamp lives (CR 613.7a: a static
 # ability's continuous effect has the timestamp of the object it is on). Stamped
-# once, the first time the static applies, so the derived contribution it
-# rebuilds every refresh keeps a stable place in the order.
+# once, the first time a refresh sees the static on the battlefield, so the
+# derived contribution it rebuilds every refresh keeps a stable place in the
+# order.
 STATIC_SOURCE_TIMESTAMP = "static_land_type_timestamp"
 
 # The source label for Cyclopean Tomb's mire counter. The counter, not the
@@ -171,13 +172,17 @@ def add_derived_land_type(
 
 
 def static_source_timestamp(source: Permanent) -> int:
-    """*source*'s own timestamp, stamped the first time its static applies.
+    """*source*'s own timestamp, stamped the first time a refresh sees it.
 
     CR 613.7a gives a static ability's continuous effect the timestamp of the
     object the ability is on. The engine has no general per-permanent timestamp
     yet, so this stands in for one: stable across refreshes (which is what the
     derived channel needs) and ordered against everything else by when the
-    static first mattered.
+    static first reached a refresh — which, with the continuous-effects refresh
+    running after every action, is when it arrived. It used to be stamped only
+    when the static first *applied* to some land, which let a static that
+    entered earlier but found its first subject later slot in after a
+    younger one.
     """
     stamp = source.metadata.get(STATIC_SOURCE_TIMESTAMP)
     if stamp is None:
@@ -261,7 +266,7 @@ class StaticLandTypeChange:
     """Lands of one type are another type while the source is on the battlefield.
 
     Both types are singular and lowercase, which is the form
-    ``_refresh_static_land_types`` compares against a land's type line.
+    ``_refresh_static_land_types`` compares against a land's computed subtypes.
 
     ``from_type`` is None exactly when ``from_nonbasic`` is set: "**Nonbasic**
     lands are Mountains" (Blood Moon) describes its subjects by a supertype
@@ -483,42 +488,56 @@ def static_supertype_removal_payload(
     return {"from_type": removal.from_type, "supertype": removal.supertype}
 
 
-def static_supertype_removal_applies(payload: dict, permanent) -> bool:
-    """Whether the static removal *payload* describes reaches *permanent*.
+def static_supertype_removal_applies(payload: dict, types: Characteristics) -> bool:
+    """Whether the static removal *payload* describes reaches a permanent that
+    currently presents *types*.
 
-    Through ``has_type``, so an animated land is still a land and a permanent
-    a type change made one is reached — the one reader of the payload's subject
-    half, so the derivation and the refresh cannot disagree.
+    *types* is the CR 613.7 intermediate state
+    (``layer_bridge.types_before_timestamp``): what layer 4 has said so far, at
+    this static's own place in timestamp order. It used to ask
+    ``permanent.has_type`` — layer 4's *finished* answer — while the refresh
+    was still deciding layer 4's inputs, which read the previous pass's result
+    back in as this pass's premise. The card-type-or-subtype reading is
+    ``has_type``'s own, so an animated land is still a land and a permanent an
+    earlier type change reached is judged as what that change made it — the one
+    reader of the payload's subject half, so the derivation and the refresh
+    cannot disagree.
     """
     from_type = str(payload.get("from_type") or "")
-    return bool(from_type) and permanent.has_type(from_type)
+    return bool(from_type) and (
+        from_type in types.card_types or from_type in types.subtypes
+    )
 
 
-def static_land_type_change_applies(payload: dict, permanent) -> bool:
-    """Whether the static change *payload* describes reaches *permanent*.
+def static_land_type_change_applies(payload: dict, types: Characteristics) -> bool:
+    """Whether the static change *payload* describes reaches a permanent that
+    currently presents *types*.
 
     The one reader of what the payload's subject half means, so the derivation
-    and the refresh cannot disagree about which lands a source reaches. The
-    type line it asks is the **effective** one: layer 3 runs before layer 4, so
-    a land Magical Hack has rewritten into a Mountain is one of the "All
-    Mountains" Conversion means, and a supertype a text change removed really
-    is gone.
+    and the refresh cannot disagree about which lands a source reaches. *types*
+    is the CR 613.7 intermediate state
+    (``layer_bridge.types_before_timestamp``): the seed — layer 3 runs before
+    layer 4, so a land Magical Hack has rewritten into a Mountain is one of the
+    "All Mountains" Conversion means — plus every layer-4 effect with an
+    earlier timestamp, so a Mountain that Blood Moon (an earlier static) made
+    is one of them too. This predicate used to read the layer-3 line while the
+    removal one beside it asked layer 4's finished ``has_type``: two answers to
+    "what is this land?", neither of them CR 613.7's, and two layer-4 statics
+    that could not chain.
     """
-    type_line = permanent.effective_card.type_line
-    # "**Basic** lands of …" (Illusionary Terrain). Asked of `has_supertype`,
-    # which computes the word through layer 4 — a nonbasic dual is a Plains and
-    # is not one of the "basic lands" the sentence names.
-    if payload.get("basic_only") and not permanent.has_supertype("basic"):
+    # "**Basic** lands of …" (Illusionary Terrain). Asked of the computed
+    # supertypes — a nonbasic dual is a Plains and is not one of the "basic
+    # lands" the sentence names.
+    if payload.get("basic_only") and "basic" not in types.supertypes:
         return False
     if payload.get("from_nonbasic"):
         # CR 205.4a: "basic" is a supertype, and a land without it is nonbasic.
-        # Asked of ``has_supertype`` rather than by searching the line for the
-        # word, because "Snow Land — Forest" and a card *named* something with
-        # "basic" in it both answer that substring wrongly — and because layer 4
-        # computes the word, so a Blood Moon reads whatever the board says now.
-        return not permanent.has_supertype("basic")
-    from_type = payload.get("from_type") or ""
-    return bool(from_type) and from_type in type_line.lower()
+        # Asked of the computed supertypes rather than by searching the line
+        # for the word, because "Snow Land — Forest" and a card *named*
+        # something with "basic" in it both answer that substring wrongly.
+        return "basic" not in types.supertypes
+    from_type = str(payload.get("from_type") or "")
+    return bool(from_type) and from_type in types.subtypes
 
 
 __all__ = [

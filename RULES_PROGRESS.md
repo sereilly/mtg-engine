@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**342 / 612 tracked rules covered (55%)** — 1788 tests, 0 unannotated.
+**342 / 612 tracked rules covered (55%)** — 1795 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -451,7 +451,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
 - [ ] **305.5** Land subtypes are always a single word and are listed after a long dash. Land subtypes are also c...
 - [ ] **305.6** The basic land types are Plains, Island, Swamp, Mountain, and Forest. If an object uses the words...
-- [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(16 tests)*
+- [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(20 tests)*
 - [ ] **305.8** Any land with the supertype “basic” is a basic land. Any land that doesn’t have this supertype is...
 - [ ] **305.9** If an object is both a land and another card type, it can be played only as a land. It can’t be c...
 
@@ -778,7 +778,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(72 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [ ] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each...
-- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(17 tests, subrules be)*
+- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(26 tests, subrules abe)*
 - [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(8 tests, subrules abc)*
 - [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(6 tests)*
 - [x] **613.10** Some continuous effects affect players rather than objects. For example, an effect might give a p... *(1 tests)*

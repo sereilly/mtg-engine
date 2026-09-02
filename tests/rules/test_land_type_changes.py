@@ -18,7 +18,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
-from engine.land_types import change_land_type
+from engine.land_types import change_land_type, static_source_timestamp
 from engine.models import CardDefinition, Permanent
 
 
@@ -390,3 +390,171 @@ def test_305_7_leaves_a_printed_basic_land_alone(catalog):
     game._settle()
 
     assert p2.life == 19, "an untouched City of Brass still has its trigger"
+
+
+# ---------------------------------------------------------------------------
+# Two board-wide statics at once: CR 613.7 chains them in timestamp order
+# ---------------------------------------------------------------------------
+#
+# Blood Moon ("Nonbasic lands are Mountains") and Conversion ("All Mountains
+# are Plains") are both layer-4 statics, so which lands each reaches depends on
+# what the *earlier* one already did — "An effect with an earlier timestamp is
+# applied before an effect with a later timestamp" (CR 613.7). The refresh used
+# to judge Conversion against the layer-3 type line (which no layer-4 effect
+# can ever reach) while judging Melting against layer 4's finished answer
+# (which is circular while layer 4's inputs are being computed), and stopped at
+# the first static that matched. These pin the chain in both timestamp orders,
+# which is what makes the order observable at all.
+
+
+def _statics_game(statics, lands):
+    p1 = PlayerState(name="P1", battlefield=list(statics))
+    p2 = PlayerState(name="P2", battlefield=list(lands))
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._recompute_continuous_effects()
+    return game
+
+
+@pytest.mark.cr("613.7", "613.7a", "305.7")
+def test_613_7_blood_moon_then_conversion_makes_nonbasic_lands_plains(catalog):
+    """Blood Moon first: the Tundra is already a Mountain by the time
+    Conversion asks "is this a Mountain?", so Conversion reaches it too and
+    the Tundra ends the layer a Plains — each effect applied over the results
+    of those with earlier timestamps (CR 613.7), a static's effect stamped
+    with its own object's arrival (CR 613.7a)."""
+    tundra = Permanent(card=catalog["Tundra"])
+    mountain = Permanent(card=catalog["Mountain"])
+    island = Permanent(card=catalog["Island"])
+    moon = Permanent(card=catalog["Blood Moon"])
+    conversion = Permanent(card=catalog["Conversion"])
+    static_source_timestamp(moon)
+    static_source_timestamp(conversion)
+    game = _statics_game([moon, conversion], [tundra, mountain, island])
+
+    assert tundra.basic_land_types == ("plains",), game.log
+    assert not tundra.has_type("mountain"), (
+        "CR 305.7: Conversion's set replaced the Mountain Blood Moon made"
+    )
+    assert mountain.basic_land_types == ("plains",), (
+        "a printed Mountain is one of Conversion's subjects too"
+    )
+    assert island.basic_land_types == ("island",), (
+        "a basic Island is neither static's subject"
+    )
+
+
+@pytest.mark.cr("613.7", "613.7a")
+def test_613_7_conversion_then_blood_moon_leaves_nonbasic_lands_mountains(catalog):
+    """Conversion first: it is applied while the Tundra is not yet a Mountain,
+    so it reaches only the printed Mountain; Blood Moon then makes the Tundra
+    a Mountain and nothing later says otherwise. That is the timestamp
+    system's answer (CR 613.7), which is what the engine implements.
+
+    Under the full rules CR 613.8 would override it here — applying Blood Moon
+    changes what Conversion applies to, so Conversion is dependent and would
+    wait, making the Tundra a Plains in *both* orders. The dependency system
+    is not implemented in any layer; when it is, this expectation is the one
+    that must flip."""
+    tundra = Permanent(card=catalog["Tundra"])
+    mountain = Permanent(card=catalog["Mountain"])
+    moon = Permanent(card=catalog["Blood Moon"])
+    conversion = Permanent(card=catalog["Conversion"])
+    static_source_timestamp(conversion)
+    static_source_timestamp(moon)
+    game = _statics_game([moon, conversion], [tundra, mountain])
+
+    assert tundra.basic_land_types == ("mountain",), game.log
+    assert mountain.basic_land_types == ("plains",), (
+        "the printed Mountain was a Mountain when Conversion applied"
+    )
+
+
+@pytest.mark.cr("613.7", "613.7a")
+def test_613_7_the_order_comes_from_when_each_static_arrived(catalog):
+    """The same two orders end to end, with nothing pre-stamped: the object
+    that was on the battlefield for the earlier recompute holds the earlier
+    timestamp (CR 613.7a), and a later recompute reuses it rather than
+    re-stamping — so the answer is stable, not last-refresh-wins."""
+    tundra = Permanent(card=catalog["Tundra"])
+    moon = Permanent(card=catalog["Blood Moon"])
+    conversion = Permanent(card=catalog["Conversion"])
+    game = _statics_game([moon], [tundra])
+    assert tundra.basic_land_types == ("mountain",)
+
+    game.players[0].battlefield.append(conversion)
+    game._sync_control()
+    game._recompute_continuous_effects()
+    assert tundra.basic_land_types == ("plains",), game.log
+
+    game._recompute_continuous_effects()
+    assert tundra.basic_land_types == ("plains",), (
+        "a second refresh must not reorder the two statics"
+    )
+
+
+@pytest.mark.cr("613.7", "305.7")
+def test_613_7_chained_statics_apply_in_sequence_not_first_match(catalog):
+    """"All Mountains are Plains" beside a later "All Plains are Islands": the
+    Mountain becomes a Plains and the second static — judged against the state
+    the first left — carries it on to Island. The refresh used to stop at the
+    first matching static, which CR 613.7 never allows: it orders the layer's
+    effects, it does not pick one."""
+    mountain = Permanent(card=catalog["Mountain"])
+    conversion = Permanent(card=catalog["Conversion"])
+    inundation = Permanent(card=_static_card("Inundation", "All Plains are Islands."))
+    static_source_timestamp(conversion)
+    static_source_timestamp(inundation)
+    game = _statics_game([conversion, inundation], [mountain])
+
+    assert mountain.basic_land_types == ("island",), game.log
+
+
+@pytest.mark.cr("613.7", "305.7")
+def test_613_7_a_static_sees_the_type_an_earlier_recorded_change_made(catalog):
+    """The recorded channel is part of the same chain: Phantasmal Terrain's
+    shape makes an Island a Mountain (earlier timestamp), and Conversion —
+    applied later — is judged against that result rather than the printed
+    line, so the Island ends the layer a Plains."""
+    island = Permanent(card=catalog["Island"])
+    change_land_type(island, "mountain", source="test")
+    conversion = Permanent(card=catalog["Conversion"])
+    static_source_timestamp(conversion)
+    game = _statics_game([conversion], [island])
+
+    assert island.basic_land_types == ("plains",), game.log
+
+
+@pytest.mark.cr("613.7")
+def test_613_7_a_later_recorded_change_is_not_seen_by_an_earlier_static(catalog):
+    """The mirror image: Conversion holds the earlier timestamp, so it is
+    applied while the Island is still an Island; the recorded change to
+    Mountain applies after it, and the land stays a Mountain."""
+    island = Permanent(card=catalog["Island"])
+    conversion = Permanent(card=catalog["Conversion"])
+    static_source_timestamp(conversion)
+    change_land_type(island, "mountain", source="test")
+    game = _statics_game([conversion], [island])
+
+    assert island.basic_land_types == ("mountain",), game.log
+
+
+@pytest.mark.cr("305.7")
+def test_305_7_each_static_alone_still_behaves_as_before(catalog):
+    """No regression from the chaining walk: one static alone reaches exactly
+    the lands it always reached, and leaves the rest alone."""
+    tundra = Permanent(card=catalog["Tundra"])
+    mountain = Permanent(card=catalog["Mountain"])
+    game = _statics_game([Permanent(card=catalog["Blood Moon"])], [tundra, mountain])
+    assert tundra.basic_land_types == ("mountain",), game.log
+    assert mountain.basic_land_types == ("mountain",), (
+        "a basic Mountain is not one of Blood Moon's subjects"
+    )
+
+    tundra = Permanent(card=catalog["Tundra"])
+    mountain = Permanent(card=catalog["Mountain"])
+    game = _statics_game([Permanent(card=catalog["Conversion"])], [tundra, mountain])
+    assert mountain.basic_land_types == ("plains",), game.log
+    assert tundra.basic_land_types == ("plains", "island"), (
+        "a land that is not a Mountain is untouched"
+    )

@@ -55,7 +55,11 @@ from ..land_types import (
     static_source_timestamp,
     static_supertype_removal_applies,
 )
-from ..layer_bridge import DERIVED_LOST_SUPERTYPES, QUALIFIED_BUFFS
+from ..layer_bridge import (
+    DERIVED_LOST_SUPERTYPES,
+    QUALIFIED_BUFFS,
+    types_before_timestamp,
+)
 from ..lord_buffs import (
     GRANTED_ACTIVATED_ABILITIES,
     LORD_BUFF_KIND,
@@ -873,6 +877,19 @@ class PermanentStateMixin:
         Conversion leaving can no longer take a Phantasmal Terrain's type with
         it; the two are separate contributions and layer 4 sorts them by
         timestamp.
+
+        **The statics chain in timestamp order (CR 613.7)**, each judged
+        against the state the earlier ones left: with Blood Moon out first, a
+        nonbasic land is a Mountain by the time Conversion asks "is this a
+        Mountain?", so Conversion reaches it too. Each candidate is therefore
+        evaluated against ``layer_bridge.types_before_timestamp`` — the seed
+        plus every layer-4 effect stamped earlier, recorded *and* derived so
+        far — rather than against a finished layer read (the circularity: this
+        refresh computes layer 4's inputs) or against the layer-3 type line
+        (which no earlier layer-4 effect can ever reach). And a static that
+        applies does not stop the walk: 613.7 chains the effects, it does not
+        pick one, so "All Mountains are Plains" beside "All Plains are Islands"
+        turns a Mountain into an Island.
         """
         changes: list[tuple[dict, Permanent]] = []
         # "All lands are no longer snow." (Melting.) CR 205.4a's half of the
@@ -882,50 +899,75 @@ class PermanentStateMixin:
         # .DERIVED_LOST_SUPERTYPES`), because a supertype removal is not a
         # land-type replacement and folding the two would give every Conversion
         # a supertype field it must not set.
-        removals: list[dict] = []
+        removals: list[tuple[dict, Permanent]] = []
         for perm in all_permanents:
             for instr in compile_card_oracle(perm.effective_card).instructions:
                 if instr.kind == "static_land_type_change":
                     changes.append((instr.payload, perm))
                 elif instr.kind == STATIC_SUPERTYPE_REMOVAL_KIND:
-                    removals.append(instr.payload)
+                    removals.append((instr.payload, perm))
+        # Both derived channels are cleared before anything is judged, so no
+        # candidate can read a previous pass's contribution as this pass's
+        # board (CR 611.3b: a static's effect lasts exactly as long as the
+        # rebuild keeps putting it back).
         for perm in all_permanents:
             perm.metadata.pop(DERIVED_LOST_SUPERTYPES, None)
-            words = sorted({
-                str(payload.get("supertype") or "")
-                for payload in removals
-                if static_supertype_removal_applies(payload, perm)
-            } - {""})
-            if words:
-                perm.metadata[DERIVED_LOST_SUPERTYPES] = words
-        for perm in all_permanents:
             clear_derived_land_types(perm)
-            if perm.card.primary_type != "land":
+        if not changes and not removals:
+            return
+        # One ordered walk over every board-wide layer-4 static, type changes
+        # and supertype removals together, because CR 613.7 orders the layer
+        # and not each kind separately.
+        events: list[tuple[int, str, dict, Permanent]] = []
+        for payload, source in changes:
+            # "Basic lands of **the first chosen type** are **the second
+            # chosen type**." (Illusionary Terrain.) The sentence names no
+            # land type at all: both come from the ordered pair its
+            # controller chose as it entered. Resolved once, against the
+            # source, and then read like any other payload — a source that
+            # has not chosen yet resolves to None and contributes nothing,
+            # which is the honest answer rather than a static over every
+            # land or none.
+            resolved = resolve_static_land_type_change(payload, source)
+            if resolved is None:
                 continue
+            events.append(
+                (static_source_timestamp(source), "change", resolved, source)
+            )
+        for payload, source in removals:
+            events.append(
+                (static_source_timestamp(source), "removal", payload, source)
+            )
+        events.sort(key=lambda event: event[0])
+        for perm in all_permanents:
+            is_land = perm.card.primary_type == "land"
+            lost: list[str] = []
             # Which lands a source reaches is `land_types.py`'s question, not
             # this loop's: Conversion names a land type and Blood Moon names a
             # missing supertype, and a second reading of either here would be
-            # the gate/dispatch split this engine keeps finding.
-            for payload, source in changes:
-                # "Basic lands of **the first chosen type** are **the second
-                # chosen type**." (Illusionary Terrain.) The sentence names no
-                # land type at all: both come from the ordered pair its
-                # controller chose as it entered. Resolved once, against the
-                # source, and then read like any other payload — a source that
-                # has not chosen yet resolves to None and contributes nothing,
-                # which is the honest answer rather than a static over every
-                # land or none.
-                payload = resolve_static_land_type_change(payload, source)
-                if payload is None:
-                    continue
-                if static_land_type_change_applies(payload, perm):
+            # the gate/dispatch split this engine keeps finding. What this loop
+            # owns is the order — and the intermediate state each candidate is
+            # judged against, which is everything stamped before it, including
+            # the contributions the walk itself has written so far.
+            for stamp, kind, payload, source in events:
+                if kind == "removal":
+                    word = str(payload.get("supertype") or "")
+                    if not word or word in lost:
+                        continue
+                    if static_supertype_removal_applies(
+                        payload, types_before_timestamp(perm, stamp)
+                    ):
+                        lost.append(word)
+                        perm.metadata[DERIVED_LOST_SUPERTYPES] = sorted(lost)
+                elif is_land and static_land_type_change_applies(
+                    payload, types_before_timestamp(perm, stamp)
+                ):
                     add_derived_land_type(
                         perm,
                         str(payload.get("to_type", "")),
-                        timestamp=static_source_timestamp(source),
+                        timestamp=stamp,
                         label=source.card.name,
                     )
-                    break
 
     def _refresh_aspect_of_wolf(self) -> None:
         """Aspect of Wolf: enchanted creature gets +X/+Y where X/Y are half the

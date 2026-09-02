@@ -947,6 +947,36 @@ def computed_supertypes(perm: Permanent) -> set[str]:
     return state[oid].supertypes
 
 
+def types_before_timestamp(perm: Permanent, timestamp: int) -> Characteristics:
+    """The type characteristics *perm* presents to the layer-4 effect stamped
+    *timestamp* — CR 613.7's intermediate state.
+
+    "An effect with an earlier timestamp is applied before an effect with a
+    later timestamp": within a layer each effect is judged against the seed
+    (layers 1 and 3, via ``seed_characteristics``) plus every effect already
+    applied, and nothing after it. :func:`computed_types` answers what the
+    layer has *finished* saying, which is the wrong question while the layer is
+    still being decided — the refresh that derives the board-wide statics'
+    contributions (``mixins/permanent_state._refresh_static_land_types``) is
+    computing layer 4's inputs, and reading the finished answer there feeds the
+    previous pass's result back in as this pass's premise. Filtering by
+    timestamp is the rule's own shape instead: the channels hold the
+    contributions decided so far, and an effect not yet reached is simply not
+    in the prefix this replays.
+    """
+    oid = id(perm)
+    state: State = {oid: seed_characteristics(perm)}
+    apply_layers(
+        [
+            effect
+            for effect in collect_type_effects(perm, oid)
+            if effect.timestamp < timestamp
+        ],
+        state,
+    )
+    return state[oid]
+
+
 def computed_colors(perm: Permanent) -> set[str]:
     """The colours *perm* currently is, after layer 5."""
     oid = id(perm)
@@ -974,4 +1004,5 @@ def computed_pt(perm: Permanent) -> tuple[int, int]:
 __all__ = [
     "collect_control_effects", "collect_pt_effects", "computed_controller",
     "computed_pt", "computed_supertypes", "seed_characteristics",
+    "types_before_timestamp",
 ]
