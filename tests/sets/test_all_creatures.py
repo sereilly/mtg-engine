@@ -524,3 +524,59 @@ def test_the_drones_snow_variant_keeps_its_supertype(set_pool):
     assert plain.sacrifice_filter == snow.sacrifice_filter == {
         "type_filter": "creature"
     }
+
+
+# --- W2G2 declines, each naming the part it is waiting on -------------------
+#
+# These assert the card is *still* unsupported. That is deliberate: a decline
+# whose missing part later lands should fail loudly here rather than sit
+# unnoticed, and the message says what to do about it.
+
+
+def test_benthic_explorers_declines_on_three_named_parts(set_pool):
+    """"{T}, Untap a tapped land an opponent controls: Add one mana of any type
+    that land could produce." Three parts, and none of them is the noun phrase
+    — "a tapped land an opponent controls" parses and is testable today:
+
+    1. **an activation cost that *untaps* a permanent.** ``grammar/costs.py``
+       has a ``tap`` branch and no ``untap`` one, and ``ActivatedAbilityCost``
+       has no field for it. ``tap_filter``/``tap_count`` is the opposite
+       direction and its payment path taps — reusing it would tap the
+       opponent's land rather than untapping it. Also the first cost in this
+       engine paid with a permanent **an opponent controls**: every existing
+       chosen cost enumerates ``controlled_by(payer)``.
+    2. **a record of which permanent that cost untapped.** "That land" is a
+       back-reference to the payment, and unlike every other cost record the
+       object is *still on the battlefield* — so it is not last-known
+       information, but there is no ``CHOICE_KEYS`` channel carrying it and no
+       producer key for a lowering to gate on.
+    3. **"one mana of any type that land could produce".** ``effects/mana.py``
+       reads "any **color**" (and Fellwar Stone's "that a land an opponent
+       controls could produce", which names a *class* of lands, not one). This
+       prints "any **type**", which includes {C} — CR 106.1b — and names the
+       land part 2 would have recorded. It refuses at ``expected 'color'``.
+    """
+    program = compile_card_oracle(set_pool("ALL")["Benthic Explorers"])
+    assert not program.supported
+
+    from engine.grammar import compile_line
+
+    cost_half = compile_line(
+        "{T}, Untap a tapped land an opponent controls: Add {U}.",
+        card_name="Benthic Explorers",
+    )
+    assert not cost_half.parsed, "part 1: no untap branch in the cost clause"
+
+    effect_half = compile_line(
+        "{T}: Add one mana of any type that land could produce.",
+        card_name="Benthic Explorers",
+    )
+    assert not effect_half.parsed, "part 3: 'any type' is not 'any color'"
+
+    # The noun phrase itself is *not* a blocker, which is what keeps this
+    # decline three parts rather than four.
+    from engine.grammar import subject_filter_payload
+
+    assert subject_filter_payload("a tapped land an opponent controls") == {
+        "type_filter": "land", "tapped_only": True, "controller": "opponent",
+    }

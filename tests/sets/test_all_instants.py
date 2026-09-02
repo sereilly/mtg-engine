@@ -176,14 +176,22 @@ def test_bounty_of_the_hunt_declines_on_two_named_parts(set_pool):
        ``divided_damage.division_refusal``. This card's first line is no longer
        what holds it;
     2. **the loop iterator "for each +1/+1 counter you put on a creature this
-       way"** — a per-placement count, where the recorded-unit reader beside it
-       (``_parse_for_each_this_way``) counts a *placement* and not a counter;
+       way"**. ``records._parse_for_each_this_way`` reads exactly ``for each
+       <one word> <one participle> this way`` against a two-entry table
+       (``card discarded`` / ``card exiled``, plus Sacred Boon's ``damage
+       prevented``). Here the noun is a **PT token** and the participle is a
+       four-word relative clause, so nothing is consumed at all — and there is
+       no record behind it either: the distributed placement writes no
+       "counters placed this way" key for a ``ThatMuch`` to read;
     3. **"remove a +1/+1 counter from that creature"** — the removal's subject
        is the creature this same sentence just chose, and the only
-       counter-removal lowering reads the ability's own source.
+       counter-removal lowering reads the ability's own source. It refuses at
+       *lowering*, not at parse, which is why the sentence looks readable.
 
     The delayed trigger the earlier decline named is **not** a missing part any
-    more: W1G5 landed "at the beginning of the next cleanup step" end to end."""
+    more: W1G5 landed "at the beginning of the next cleanup step" end to end,
+    and the tail alone ("remove … at the beginning of the next cleanup step")
+    parses today and stops only on part 3."""
     program = compile_card_oracle(set_pool("ALL")["Bounty of the Hunt"])
     assert not program.supported
     assert alternative_costs(set_pool("ALL")["Bounty of the Hunt"])
