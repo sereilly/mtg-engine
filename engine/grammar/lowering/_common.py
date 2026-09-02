@@ -101,6 +101,12 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # refusal of a phrase the payload carries perfectly well.
     "subtype_match",
     "colors", "excluded_colors",
+    # "a **black or artifact** creature" (Soldevi Adnate). ``to_payload``
+    # emits it unconditionally and ``permanent_matches_filter`` tests it, so
+    # it is honoured in exactly the sense ``colors`` beside it is — and left
+    # out, every lowering asking ``_restrictions_beyond`` refused a phrase the
+    # payload carries perfectly well.
+    "any_classes",
     "excluded_types", "excluded_subtypes", "with_keywords", "without_keywords",
     "controller", "tapped", "attacking", "blocking", "other_than_source",
     # "a creature **that has been dealt damage this turn**" (Giant Shark).
@@ -186,14 +192,20 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # so every lowering but the destroy sweep written for it refuses the phrase
     # by name instead of sweeping the board.
     "in_combat_with_bound_object": "in_combat_with_bound_object",
-    # "target **instant or Aura** spell" and "…**that targets a permanent you
-    # control**" (Avoid Fate, Ring of Immortals). Neither has a ``to_payload``
-    # form: a cross-axis class union has no field pair that means it, and a
-    # nested "what did that spell target" phrase is a question about a stack
-    # object rather than about a permanent. Listed here so every lowering that
-    # builds a payload from a filter refuses them by name, and the one that
-    # reads them — the counter lowering — carries each as its own key.
-    "any_classes": "any_classes",
+    # "…**that targets a permanent you control**" (Avoid Fate, Ring of
+    # Immortals). No ``to_payload`` form: a nested "what did that spell target"
+    # phrase is a question about a stack object rather than about a permanent.
+    # Listed here so every lowering that builds a payload from a filter refuses
+    # it by name, and the one that reads it — the counter lowering — carries it
+    # as its own key.
+    #
+    # ``any_classes`` used to sit here beside it, on the reading that a
+    # cross-axis union has no field pair that means it. That is still true of
+    # the *pair*, and it is why the union now has a key of its **own**:
+    # ``to_payload`` emits it and ``permanent_matches_filter`` tests it, so it
+    # is a narrowing every lowering can carry rather than one they must all
+    # refuse. Soldevi Adnate's "a black or artifact creature" is the printing
+    # that could not be said any other way.
     "targets_object": "targets_object",
     # "…with a single target" (Reflecting Mirror). CR 115.9a's count of what a
     # stack object chose, which has no ``to_payload`` form for the reason
@@ -342,6 +354,33 @@ def chargeable_card_filter(filt: ast.ObjectFilter) -> dict | None:
 # "target creature". What is left is engine.grammar.behavioural_payload, used by
 # the lowering goldens.
 GRAMMAR_ONLY_PAYLOAD_KEYS = frozenset({"targets"})
+
+
+def divided_target_description(
+    type_filter: str, *, max_targets: int | None = None
+) -> dict[str, object]:
+    """The ``targets`` description a distributed effect carries (CR 601.2d).
+
+    Here rather than in the family that builds it because four readers share
+    the shape and none of them is a lowering: the casting path's announcement
+    gate, ``targeting.py``'s picker, ``divided_damage.divided_description`` and
+    the handler. A second spelling of these keys is a picker that offers what
+    the gate refuses.
+
+    *max_targets* is CR 601.2c's printed ceiling on a variable target count
+    ("among **one or two** target creatures") and is omitted entirely when the
+    card prints "any number of" — an absent key is the unbounded sentence, so a
+    reader written before the bound existed keeps meaning what it meant.
+    """
+    described: dict[str, object] = {
+        "quantifier": "divided",
+        "kind": "divided",
+        "division": "chosen",
+        "filter": {"type_filter": type_filter},
+    }
+    if max_targets is not None:
+        described["max_targets"] = max_targets
+    return described
 
 
 def _describe_targets(

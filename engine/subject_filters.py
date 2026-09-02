@@ -52,6 +52,15 @@ if TYPE_CHECKING:
 TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     "type_filter", "type_filter_all", "subtype_filter", "subtype_filter_all",
     "color_filter", "any_colors",
+    # "a **black or artifact** creature" (Soldevi Adnate). A union across two
+    # axes, which `color_filter`/`type_filter` cannot express because the
+    # matcher ANDs them. Tested by `permanent_matches_filter` off the object
+    # alone — a colour and a type are both computed characteristics — so it
+    # belongs in the delegated half above `nontoken`, and it must be *here*
+    # rather than merely tested: the key set is what a compiler admits a
+    # narrowed line on, and without the word the cost was refused outright and
+    # the card was unsupported.
+    "any_classes",
     "exclude_colors", "exclude_types", "exclude_subtypes",
     "tapped_only", "untapped_only",
     "mana_value", "power", "toughness", "with_plus1_counter",

@@ -68,7 +68,9 @@ def announced_division(entries) -> list[int] | None:
     return [int(amount) for amount in amounts]
 
 
-def division_refusal(total: int, entries, *, division: str) -> str | None:
+def division_refusal(
+    total: int, entries, *, division: str, max_targets: int | None = None,
+) -> str | None:
     """Why *entries*' announced division is illegal, or None (CR 601.2d).
 
     Asked at announcement, beside the target check and before any cost is paid,
@@ -81,9 +83,25 @@ def division_refusal(total: int, entries, *, division: str) -> str | None:
     to be asked (the AI, a test, a scripted duel) falls back to the even split
     — the same shape a ``ChoiceSpec`` gives a non-interactive seat, and the
     behaviour every such caller had before this existed.
+
+    *max_targets* is the printed ceiling on a variable target count — "among
+    **one or two** target creatures" (Contagion), "among **one, two, or
+    three**" (Bounty of the Hunt) — and is checked **before** the division,
+    because it is CR 601.2c rather than CR 601.2d: the number of targets is
+    announced first and a division of a lawful total over three creatures is
+    still an illegal announcement when the card allows two. A seat that
+    announced no shares is checked too, which is why this is not folded in with
+    the amounts below: an even split over too many targets is the same illegal
+    proposal, and the fallback that excuses an absent division must not excuse
+    an over-long list.
     """
     if not entries:
         return None
+    if max_targets is not None and len(entries) > max_targets:
+        return (
+            f"this spell has at most {max_targets} targets "
+            f"({len(entries)} named, CR 601.2c)"
+        )
     amounts = announced_division(entries)
     if amounts is None:
         return None

@@ -30,15 +30,22 @@ def _parse_gain_control(
     creature" (Ghazbán Ogre, whose subject comes first) all begin with the same
     verb and are read elsewhere.
 
-    The duration clause is *required*, and only the shapes a handler implements
-    are admitted: "until end of turn", "for as long as you control this
-    <noun>" (Aladdin, The Wretched), and that clause with "…and this <noun>
-    remains tapped" behind it (Willow Satyr, Rubinia Soulsinger). An untimed
-    "gain control of target creature" is a permanent control change; a
-    differently-conditioned one (Old Man of the Sea's power comparison)
-    reverts on things nothing here watches. Each would be this production's
-    sentence with the ending changed, so each has to fail rather than borrow
-    a linked duration it does not print.
+    Only the shapes a handler implements are admitted: "until end of turn",
+    "for as long as you control this <noun>" (Aladdin, The Wretched), that
+    clause with "…and this <noun> remains tapped" behind it (Willow Satyr,
+    Rubinia Soulsinger), and — since Ritual of the Machine — **no clause at
+    all**, which CR 611.2a makes an indefinite change rather than a missing one.
+    A differently-conditioned one (Old Man of the Sea's power comparison)
+    reverts on things nothing here watches, and is this production's sentence
+    with the ending changed, so it has to fail rather than borrow a linked
+    duration it does not print.
+
+    The untimed reading is deliberately the **fall-through** and not a lookahead
+    for the end of the line: an ending this production does not know stays
+    unconsumed, and the grammar's whole-line rule then refuses the line. So
+    "gain control of target creature until end of combat" is still a loud
+    failure — it is not silently read as forever, which is the direction a
+    control change must never be wrong in.
     """
     mark = stream.mark()
     stream.expect_word("gain")
@@ -70,9 +77,11 @@ def _parse_gain_control(
     if stream.accept_phrase("until", "end", "of", "turn"):
         return ast.GainControl(subject, "until_end_of_turn")
     if not stream.accept_phrase("for", "as", "long", "as"):
-        raise stream.error(
-            "no handler for a control change without a duration the engine ends"
-        )
+        # "Gain control of target nonartifact, nonblack creature." (Ritual of
+        # the Machine.) CR 611.2a: a continuous effect with no stated duration
+        # lasts as long as the game does — which for a layer-2 contribution
+        # means nothing ever drops it, not that nothing records it.
+        return ast.GainControl(subject, "indefinite")
     # "…for as long as **this creature remains on the battlefield**" (Scarwood
     # Bandits). A weaker link than "you control this creature": an opponent who
     # steals the Bandits breaks that one and not this one, so the two are

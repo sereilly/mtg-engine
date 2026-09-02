@@ -25,7 +25,8 @@ from ..where_x import _parse_where_x_is
 from ..phrases import (
     _accept_mana_alternatives,
     _parse_duration, _parse_mana_payment, _parse_opponents_choice,
-    _parse_per_each_objects, _parse_that_object, parse_bound_subject,
+    _parse_per_each_objects, _parse_that_object, accept_or_planeswalker,
+    parse_bound_subject,
 )
 
 
@@ -40,17 +41,12 @@ def _parse_damage_recipient(stream: TokenStream) -> ast.Recipient | None:
     ``parse_player_ref`` so the flag exists only where the damage lowering —
     the one consumer that honours it — can receive it."""
     recipient = parse_recipient(stream)
-    if (
-        isinstance(recipient, ast.PlayerRef)
-        # "target **opponent** or planeswalker" (Eternal Flame) is the same
-        # union with the caster's own seat struck out of it (CR 115.4). Read
-        # from the same two words rather than as a second production, because
-        # the difference is entirely in which seats answer the player half —
-        # a narrowing the recipient already carries.
-        and recipient.kind in ("target_player", "target_opponent")
-        and stream.accept_phrase("or", "planeswalker")
-    ):
-        return ast.PlayerRef(recipient.kind, or_planeswalker=True)
+    # "target player **or planeswalker**" (Chandra's Magmutt). Two words behind
+    # the noun phrase, read by ``phrases`` because prevention prints them too
+    # (Wandering Mage) and the two families may not import each other.
+    widened = accept_or_planeswalker(stream, recipient)
+    if widened is not recipient:
+        return widened
     if (
         isinstance(recipient, ast.PlayerRef)
         and recipient.kind in ("target_player", "target_opponent")

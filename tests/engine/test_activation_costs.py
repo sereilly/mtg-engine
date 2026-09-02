@@ -29,6 +29,52 @@ def pool():
     return load_cards(manifest_set_paths(include_measured=True))
 
 
+def _compare_sacrifice(
+    unpaid, card, ability, cost, charged_filter, *, charged_count, counted,
+):
+    """One parsed sacrifice clause against the field the charger put it in.
+
+    *counted* marks the clause ``sacrifice_count`` belongs to — the first, which
+    is the only one a printed number or an "any number of" tail can attach to.
+    The conjoined second clause (Viscerid Drone's Swamp) is always exactly one
+    permanent, so comparing the shared count against it would report a
+    difference on every card that prints the shape.
+    """
+    if charged_filter is None:
+        unpaid.append(f"{card.name}: {ability.source_line}")
+    # Through the charger's *own* reduction of the grammar's filter, not
+    # against the raw phrase payload: two keys are deliberately not carried
+    # into a charged cost (see `chargeable_sacrifice_payload`), and comparing
+    # against the raw form reports a dropped rider for every phrase that prints
+    # one of them — "any number of creatures **you control**" (Sword of the
+    # Ages) was the first.
+    elif charged_filter != chargeable_sacrifice_payload(cost.filter.to_payload()):
+        # Not "is something charged" but "is *this* charged". The grammar
+        # admits the line on the strength of the whole noun phrase, so a charger
+        # reading a smaller one collects a smaller cost — "a creature with
+        # defender" charged as "a creature" is the dropped-rider bug with the
+        # card still reporting supported.
+        unpaid.append(
+            f"{card.name}: charged {charged_filter} for "
+            f"{cost.filter.to_payload()}"
+        )
+    if not counted:
+        return
+    # …and *how many*. "Sacrifice **two** Goblins" (Goblin Warrens) is the same
+    # filter with a count, and a charger reading one is an ability at half
+    # price. Compared as the grammar spells it: a printed number, or the payer's
+    # choice.
+    wanted_count = (
+        cost.count.value if isinstance(cost.count, ast.Fixed)
+        else "any" if isinstance(cost.count, ast.AnyNumber)
+        else None
+    )
+    if charged_count != wanted_count:
+        unpaid.append(
+            f"{card.name}: charged {charged_count} sacrifice(s) for {wanted_count}"
+        )
+
+
 def test_every_admitted_cost_clause_is_charged(pool):
     unpaid: list[str] = []
     for card in pool:
@@ -49,44 +95,28 @@ def test_every_admitted_cost_clause_is_charged(pool):
             if not isinstance(node, ast.ActivatedAbilityNode):
                 continue
             charged = parse_activated_ability_cost(ability.source_line)
+            # "Sacrifice a creature **and a Swamp**" (Viscerid Drone) parses to
+            # two `SacrificeCost` nodes, and the charger carries them in two
+            # fields. Paired up *before* the loop so the comparison is
+            # positional: asked one at a time against the single
+            # `sacrifice_filter`, the second clause reported the first field as
+            # a dropped rider — a false failure that hides the real one.
+            chosen_sacrifices = [
+                cost for cost in node.costs
+                if isinstance(cost, ast.SacrificeCost) and not cost.filter.is_source
+            ]
+            charged_sacrifices = [
+                charged.sacrifice_filter, charged.sacrifice_also_filter,
+            ][:max(1, len(chosen_sacrifices))]
+            for cost, charged_filter in zip(chosen_sacrifices, charged_sacrifices):
+                _compare_sacrifice(
+                    unpaid, card, ability, cost, charged_filter,
+                    charged_count=charged.sacrifice_count,
+                    counted=cost is chosen_sacrifices[0],
+                )
+            # Every other clause kind, one at a time — a sacrifice has already
+            # been compared above, where the pairing is positional.
             for cost in node.costs:
-                if isinstance(cost, ast.SacrificeCost) and not cost.filter.is_source:
-                    if charged.sacrifice_filter is None:
-                        unpaid.append(f"{card.name}: {ability.source_line}")
-                    # Through the charger's *own* reduction of the grammar's
-                    # filter, not against the raw phrase payload: two keys are
-                    # deliberately not carried into a charged cost (see
-                    # `chargeable_sacrifice_payload`), and comparing against the
-                    # raw form reports a dropped rider for every phrase that
-                    # prints one of them — "any number of creatures **you
-                    # control**" (Sword of the Ages) was the first.
-                    elif charged.sacrifice_filter != chargeable_sacrifice_payload(
-                        cost.filter.to_payload()
-                    ):
-                        # Not "is something charged" but "is *this* charged".
-                        # The grammar admits the line on the strength of the
-                        # whole noun phrase, so a charger reading a smaller one
-                        # collects a smaller cost — "a creature with defender"
-                        # charged as "a creature" is the dropped-rider bug with
-                        # the card still reporting supported.
-                        unpaid.append(
-                            f"{card.name}: charged {charged.sacrifice_filter} for "
-                            f"{cost.filter.to_payload()}"
-                        )
-                    # …and *how many*. "Sacrifice **two** Goblins" (Goblin
-                    # Warrens) is the same filter with a count, and a charger
-                    # reading one is an ability at half price. Compared as the
-                    # grammar spells it: a printed number, or the payer's choice.
-                    wanted_count = (
-                        cost.count.value if isinstance(cost.count, ast.Fixed)
-                        else "any" if isinstance(cost.count, ast.AnyNumber)
-                        else None
-                    )
-                    if charged.sacrifice_count != wanted_count:
-                        unpaid.append(
-                            f"{card.name}: charged {charged.sacrifice_count} "
-                            f"sacrifice(s) for {wanted_count}"
-                        )
                 # "Tap two untapped Spirits you control" (Shacklegeist), "Tap
                 # **an** untapped Merfolk you control" (Vodalian War Machine).
                 # This branch was missing, and the gap it left was not

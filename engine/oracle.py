@@ -1172,6 +1172,29 @@ def _chargeable_sacrifice_filter(phrase: str, *, plural: bool = False) -> dict |
     return chargeable_sacrifice_payload(described)
 
 
+def _chargeable_counter_target(phrase: str) -> dict | None:
+    """The filter payload a "put a counter on <noun phrase>" cost charges, or
+    None when the payment path cannot find the permanent.
+
+    The charging half of ``grammar/costs._is_chargeable_counter_target``, and
+    the two agree by asking the same two functions the sacrifice pair asks —
+    the noun parser for what the phrase names, and the charger's own reduction
+    for whether it can be tested. A phrase one admitted and the other refused
+    would be an ability the grammar let through and nothing charged, which is
+    an ability activated for free.
+
+    The reduction is the *sacrifice* one because the question is identical: the
+    candidates come off the payer's own battlefield and are tested with
+    ``subject_matches``. Only the verb differs, and a verb is not a filter.
+    """
+    from .grammar import subject_filter_payload
+
+    described = subject_filter_payload(phrase)
+    if described is None:
+        return None
+    return chargeable_sacrifice_payload(described)
+
+
 def chargeable_sacrifice_payload(described: dict) -> dict | None:
     """The charger's reading of an already-parsed noun-phrase payload.
 
@@ -1569,6 +1592,25 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         if chosen_sacrifice
         else None
     )
+    # "Sacrifice a creature **and a Swamp**" (Viscerid Drone). One printed verb
+    # naming two different objects, which the delimiter above swallows whole —
+    # and the noun parser then refuses "a creature and a swamp", so the cost was
+    # charged as *none at all*. Split only after the whole phrase has been
+    # tried, so every reading that worked before is byte-identical: a noun
+    # phrase that legitimately contains "and" keeps it.
+    sacrifice_also_filter = None
+    if (
+        sacrifice_filter is None
+        and chosen_sacrifice is not None
+        and " and " in chosen_sacrifice.group(1)
+        and "any number of" not in chosen_sacrifice.group(1)
+    ):
+        first, _, second = chosen_sacrifice.group(1).partition(" and ")
+        first_filter = _chargeable_sacrifice_filter(first.strip())
+        second_filter = _chargeable_sacrifice_filter(second.strip())
+        if first_filter is not None and second_filter is not None:
+            sacrifice_filter = first_filter
+            sacrifice_also_filter = second_filter
     # "Sacrifice this artifact **and any number of creatures you control**"
     # (Sword of the Ages). One printed cost naming two things: the source, read
     # above, and a *set* whose size the payer chooses. The same field carries
@@ -1644,9 +1686,30 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     discard_whole_hand = bool(re.search(r"\bdiscard your hand\b", cost_lower))
     # "Discard this card" (Waker of Waves) - the card itself, from the hand.
     discard_self = bool(re.search(r"\bdiscard this card\b", cost_lower))
-    # "Put a page counter on this artifact" (Mazemind Tome).
-    counter_cost = re.search(r"\bput an? ([a-z]+) counter on this ", cost_lower)
+    # "Put a page counter on this artifact" (Mazemind Tome). The kind runs
+    # ``[a-z]+`` **or** the P/T spelling, for the reason the removal regex below
+    # states in full: a P/T counter is written in symbols (CR 122.1a), and a
+    # cost clause that matches nothing is not a refused ability but a free one.
+    counter_cost = re.search(
+        r"\bput an? ([a-z]+|[+-]\d+/[+-]\d+) counter on this ", cost_lower
+    )
     put_counter = counter_cost.group(1) if counter_cost else None
+    # "Put a **-1/-1** counter on **a creature you control**" (Wandering Mage) —
+    # the same cost aimed somewhere other than the source. The regex only
+    # *delimits* the noun phrase, to the end of its cost segment, exactly as the
+    # sacrifice and discard ones above do; what the phrase names is read by the
+    # noun parser through ``_chargeable_counter_target``, so a phrase it refuses
+    # charges no counter at all rather than charging an unnarrowed one.
+    put_counter_filter = None
+    if put_counter is None:
+        chosen_counter = re.search(
+            r"\bput an? ([a-z]+|[+-]\d+/[+-]\d+) counter on (an? [^,:]+?)\s*(?=,|:|$)",
+            cost_lower,
+        )
+        if chosen_counter is not None:
+            put_counter_filter = _chargeable_counter_target(chosen_counter.group(2))
+            if put_counter_filter is not None:
+                put_counter = chosen_counter.group(1)
     # "Remove a corpse counter from this creature" (Scavenging Ghoul), and the
     # ability Life Matrix grants with its own counter's word. Read out of the
     # phrase rather than listed, for the reason CR 122.1 gives: the kinds are
@@ -1717,6 +1780,8 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         discard_whole_hand=discard_whole_hand,
         discard_self=discard_self,
         put_counter=put_counter,
+        put_counter_filter=put_counter_filter,
+        sacrifice_also_filter=sacrifice_also_filter,
         remove_counter=remove_counter,
         remove_counter_count=remove_counter_count,
         pay_life=_life_payment_cost(cost_lower),

@@ -882,6 +882,85 @@ class AbilityActivationMixin:
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
             tap_cost_permanents = chosen[:ability.cost.tap_count]
 
+        # "{B}, **Put a -1/-1 counter on a creature you control**: …"
+        # (Wandering Mage). The one counter-placing cost that can be *unpayable*
+        # — CR 601.2h, and a payer with no creature has nowhere to put it — so
+        # unlike Mazemind Tome's marker on its own source this is collected here
+        # with the other chosen costs and refuses the activation with nothing
+        # paid. Picked through `cost_permanent_ids`, the same channel the
+        # sacrifice and tap costs above arrive on, and defaulted with
+        # `default_sacrifice_pick` for a seat that names none: a -1/-1 counter
+        # is a shrinking, so "the one you would give up" is the same ranking.
+        counter_cost_permanent = None
+        if ability.cost.put_counter_filter is not None:
+            described = ability.cost.put_counter_filter
+            candidates = [
+                perm
+                for perm in self.controlled_by(controller_index)
+                if subject_matches(
+                    self, perm, described,
+                    observer=controller_index, source=permanent,
+                )
+            ]
+            if not candidates:
+                details = (
+                    f"{permanent.card.name}: no "
+                    f"{filter_head_noun(described)} to put a "
+                    f"{ability.cost.put_counter} counter on"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            named = [
+                found
+                for found in (
+                    self.permanent_by_id(pid) for pid in (cost_permanent_ids or [])
+                )
+                if found is not None and any(c is found for c in candidates)
+            ]
+            counter_cost_permanent = (
+                named[0] if named else self.default_sacrifice_pick(candidates)
+            )
+
+        # "{T}, Sacrifice a creature **and a Swamp**: …" (Viscerid Drone). The
+        # second object a conjoined sacrifice names, collected here rather than
+        # in the branch above because it is a *different* noun phrase with its
+        # own candidate list — and CR 601.2h makes the whole cost unpayable if
+        # either half is, so a board with a creature and no Swamp refuses with
+        # nothing sacrificed.
+        #
+        # The two permanents must be distinct: a creature Swamp (an animated
+        # land) answers both phrases, and letting it pay both would collect one
+        # card for a cost the card prints as two.
+        sacrifice_also_permanent = None
+        if ability.cost.sacrifice_also_filter is not None:
+            described = ability.cost.sacrifice_also_filter
+            candidates = [
+                perm
+                for perm in self.controlled_by(controller_index)
+                if subject_matches(
+                    self, perm, described,
+                    observer=controller_index, source=permanent,
+                )
+                and perm is not sacrifice_cost_permanent
+            ]
+            if not candidates:
+                details = (
+                    f"{permanent.card.name}: no "
+                    f"{filter_head_noun(described)} available to sacrifice"
+                )
+                self.log.append(details)
+                return SimulationResult(permanent.card.name, False, "unsupported", details)
+            named = [
+                found
+                for found in (
+                    self.permanent_by_id(pid) for pid in (cost_permanent_ids or [])
+                )
+                if found is not None and any(c is found for c in candidates)
+            ]
+            sacrifice_also_permanent = (
+                named[-1] if named else self.default_sacrifice_pick(candidates)
+            )
+
         # "**Tap enchanted land**: …" (Earthlore). The host, collected beside
         # the picked tap cost above and paid with it below — one payment moment
         # (CR 601.2h). Nothing is picked: the attachment record is the whole
@@ -1233,11 +1312,29 @@ class AbilityActivationMixin:
         if ability.cost.put_counter:
             from ...named_counters import add_counters
 
-            total = add_counters(permanent, ability.cost.put_counter)
-            self.log.append(
-                f"{permanent.card.name} has {total} "
-                f"{ability.cost.put_counter} counter(s)"
-            )
+            # The chosen permanent when the card named one (Wandering Mage),
+            # and the source otherwise (Mazemind Tome). One payment either way:
+            # what differs is only which permanent it lands on, which is the
+            # whole of `put_counter_filter`.
+            from ...pt import pt_counter_deltas
+
+            recipient = counter_cost_permanent or permanent
+            if pt_counter_deltas(ability.cost.put_counter) is not None:
+                # A P/T counter is CR 122.1a's, and every P/T write in this
+                # engine goes through `engine/pt.py` — `add_counters` keeps the
+                # *named* markers, which have no layer-7 meaning at all.
+                self.place_pt_counters(recipient, ability.cost.put_counter)
+                self.log.append(
+                    f"{recipient.card.name} gets a "
+                    f"{ability.cost.put_counter} counter "
+                    f"({permanent.card.name}'s cost)"
+                )
+            else:
+                total = add_counters(recipient, ability.cost.put_counter)
+                self.log.append(
+                    f"{recipient.card.name} has {total} "
+                    f"{ability.cost.put_counter} counter(s)"
+                )
 
         # "Discard your hand" (Subira). Every card, snapshotted before the loop
         # because `_discard_card` may itself put something into the hand (Library
@@ -1279,6 +1376,16 @@ class AbilityActivationMixin:
         if sacrifice_cost_permanent is not None:
             name = sacrifice_cost_permanent.card.name
             self.sacrifice_permanent(sacrifice_cost_permanent)
+            self.log.append(
+                f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
+            )
+        # …and the second half of a conjoined sacrifice (Viscerid Drone), paid
+        # at the same moment: CR 602.2b puts every cost of an activation at one
+        # point, so a board that changed between the two would not be able to
+        # pay half of it.
+        if sacrifice_also_permanent is not None:
+            name = sacrifice_also_permanent.card.name
+            self.sacrifice_permanent(sacrifice_also_permanent)
             self.log.append(
                 f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
             )
@@ -1905,6 +2012,8 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("discard_whole_hand", "a discard-your-hand cost"),
         ("discard_self", "a discard-this cost"),
         ("put_counter", "a counter cost"),
+        ("put_counter_filter", "a counter cost on a chosen permanent"),
+        ("sacrifice_also_filter", "a conjoined sacrifice cost"),
         ("remove_counter", "a counter-removal cost"),
         ("tap_count", "a tap-other-permanents cost"),
         ("tap_attached", "a tap-the-attached-permanent cost"),

@@ -170,27 +170,41 @@ def test_scars_of_the_veteran_declines_on_its_delayed_trigger(set_pool):
 def test_bounty_of_the_hunt_declines_on_two_named_parts(set_pool):
     """Two parts, both outside this round's subsystem:
 
-    1. **a bounded distributed target count** — "among one, two, or three target
-       creatures" (CR 601.2c's variable number of targets). The grammar reads
-       "among **any number of** target creatures" already
-       (``_parse_distribute_counters``); what is missing is the enumerated form
-       plus something that *enforces* the bound, which needs a ``max_targets``
-       on the divided target description and a check in
-       ``divided_damage.division_refusal``;
-    2. **a delayed triggered ability at the next cleanup step** (CR 603.7,
-       CR 514) that removes what this placement put on — W1G5's mechanism."""
+    1. ~~a bounded distributed target count~~ — **landed in W2G2**: the
+       enumerated "among one, two, or three" form parses into
+       ``TargetSpec.max_count`` and the bound is enforced at announcement in
+       ``divided_damage.division_refusal``. This card's first line is no longer
+       what holds it;
+    2. **the loop iterator "for each +1/+1 counter you put on a creature this
+       way"**. ``records._parse_for_each_this_way`` reads exactly ``for each
+       <one word> <one participle> this way`` against a two-entry table
+       (``card discarded`` / ``card exiled``, plus Sacred Boon's ``damage
+       prevented``). Here the noun is a **PT token** and the participle is a
+       four-word relative clause, so nothing is consumed at all — and there is
+       no record behind it either: the distributed placement writes no
+       "counters placed this way" key for a ``ThatMuch`` to read;
+    3. **"remove a +1/+1 counter from that creature"** — the removal's subject
+       is the creature this same sentence just chose, and the only
+       counter-removal lowering reads the ability's own source. It refuses at
+       *lowering*, not at parse, which is why the sentence looks readable.
+
+    The delayed trigger the earlier decline named is **not** a missing part any
+    more: W1G5 landed "at the beginning of the next cleanup step" end to end,
+    and the tail alone ("remove … at the beginning of the next cleanup step")
+    parses today and stops only on part 3."""
     program = compile_card_oracle(set_pool("ALL")["Bounty of the Hunt"])
     assert not program.supported
     assert alternative_costs(set_pool("ALL")["Bounty of the Hunt"])
 
 
-def test_contagion_declines_on_the_bounded_distributed_target_count(set_pool):
-    """One part, and it is the first of Bounty of the Hunt's two: "Distribute two
-    -2/-1 counters among **one or two** target creatures." No delayed trigger
-    here — the moment the enumerated "among" form parses and its bound is
-    enforced, this card is complete, because its pitch half already is."""
+def test_contagion_no_longer_declines_on_the_bounded_target_count(set_pool):
+    """Was the decline. W2G2 landed the enumerated "among" form and the bound
+    that CR 601.2c fixes at announcement, and this card needed nothing else —
+    its pitch half was already done here. The cast-both-ways assertions are in
+    the W2G2 block below; what this keeps is the pairing the decline named:
+    the alternative cost and the effect are both read, on the same card."""
     program = compile_card_oracle(set_pool("ALL")["Contagion"])
-    assert not program.supported
+    assert program.supported
     assert alternative_costs(set_pool("ALL")["Contagion"])
 
 
@@ -420,3 +434,153 @@ def test_w1g5_lat_nams_legacy_draws_nothing_from_an_empty_hand(set_pool):
 
     assert game.pending_choices == []
     assert game.delayed_triggers == []
+
+
+# --- W2G2: costs ---
+#
+# The bounded distributed target count (CR 601.2c) — the part W1G4 named as
+# unowned and cheapest — plus the cards the other cost work unblocked. Imports
+# are in this block, per the header's parallel-authorship convention.
+
+import pytest
+
+from engine import Game, PlayerState, load_cards
+from engine.card_loader import manifest_set_path
+from engine.divided_damage import division_refusal
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+_W2G2_LEA = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+
+
+def _w2g2_board(hand, mine=(), theirs=()):
+    """A costs-enforced duel with named LEA creatures on each battlefield.
+
+    Alliances is `measured`, so its cards are placed into the game directly
+    rather than decked.
+    """
+    caster = PlayerState(name="A", hand=list(hand))
+    game = Game(players=[caster, PlayerState(name="B")])
+    game.enforce_mana_costs = True
+    for name in mine:
+        caster.battlefield.append(Permanent(card=_W2G2_LEA[name]))
+    for name in theirs:
+        game.players[1].battlefield.append(Permanent(card=_W2G2_LEA[name]))
+    game._settle()
+    return game, caster
+
+
+def test_contagion_pitched_puts_its_counters_on_two_creatures(set_pool):
+    """The whole card, cast the way it is famous for: no lands at all, 1 life
+    and a black card out of hand, and two -2/-1 counters split one and one.
+
+    Both halves are asserted because both were missing until this wave — the
+    pitch was W1G4's and the distribution is this one's, and a card is not
+    "supported" until the sentence *and* the price have been watched running.
+    """
+    contagion = set_pool("ALL")["Contagion"]
+    game, caster = _w2g2_board(
+        [contagion, _W2G2_LEA["Bog Wraith"]], theirs=["Grizzly Bears", "Hill Giant"]
+    )
+    bears, giant = game.players[1].battlefield
+
+    result = game.cast_from_hand(
+        0, "Contagion", alternative_cost=True,
+        divided_targets=[(1, 0, 1), (1, 1, 1)],
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert caster.life == 19, "pay 1 life"
+    assert [c.name for c in caster.exile] == ["Bog Wraith"], "exile a black card"
+    # One counter each, not both on one: 2/2 becomes 0/1 and 3/3 becomes 1/2.
+    # The Bears at 0 power is exactly why the split has to be *read* — a
+    # handler that put both counters on the first target would kill them.
+    assert (bears.effective_power, bears.effective_toughness) == (0, 1)
+    assert (giant.effective_power, giant.effective_toughness) == (1, 2)
+    assert [p.card.name for p in game.controlled_by(1)] == [
+        "Grizzly Bears", "Hill Giant"
+    ]
+
+
+def test_contagion_may_put_both_counters_on_one_creature(set_pool):
+    """"among **one** or two": the lower end of the enumeration is a legal
+    announcement, and the whole distribution then lands on the one target."""
+    contagion = set_pool("ALL")["Contagion"]
+    game, _caster = _w2g2_board(
+        [contagion, _W2G2_LEA["Bog Wraith"]], theirs=["Hill Giant"]
+    )
+    giant = game.players[1].battlefield[0]
+
+    result = game.cast_from_hand(
+        0, "Contagion", alternative_cost=True, divided_targets=[(1, 0, 2)],
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert (giant.effective_power, giant.effective_toughness) == (-1, 1)
+
+
+@pytest.mark.parametrize(
+    "named, why",
+    [
+        (3, "Contagion prints 'one or two' and three is past its ceiling"),
+        (4, "and a longer list is refused by the same ceiling"),
+    ],
+)
+def test_contagion_refuses_more_targets_than_it_prints(set_pool, named, why):
+    """CR 601.2c fixes the number of targets **at announcement**, so this is a
+    refusal with nothing spent rather than an effect that quietly divides three
+    ways. Read off the life total: the alternative cost is paid at CR 601.2h,
+    after the targets are checked, so a refusal that came too late would show up
+    here as a life payment for a spell that was never cast."""
+    contagion = set_pool("ALL")["Contagion"]
+    game, caster = _w2g2_board(
+        [contagion, _W2G2_LEA["Bog Wraith"]],
+        theirs=["Grizzly Bears"] * named,
+    )
+
+    result = game.cast_from_hand(
+        0, "Contagion", alternative_cost=True,
+        divided_targets=[(1, i, 1) for i in range(named)],
+    )
+
+    assert not result.supported, why
+    assert caster.life == 20, "nothing is paid for a refused announcement"
+    assert not caster.exile
+    assert not game.stack
+
+
+def test_the_bound_is_checked_before_the_division_is(set_pool):
+    """The ceiling is CR 601.2c and the shares are CR 601.2d, and the order
+    matters: a seat that announced **no** shares still may not name three
+    targets. Asked of the rule directly, because the even-split fallback that
+    excuses an absent division is exactly what would excuse an over-long list.
+    """
+    over_long = [(0, 0), (0, 1), (0, 2)]
+    assert division_refusal(2, over_long, division="chosen", max_targets=2)
+    assert division_refusal(2, over_long, division="chosen") is None
+    assert division_refusal(
+        2, [(0, 0), (0, 1)], division="chosen", max_targets=2
+    ) is None
+
+
+def test_the_unbounded_spelling_is_not_a_ceiling_of_infinity(set_pool):
+    """"among **any number of** target creatures" (Spoils of War) prints no
+    ceiling at all, and the description must carry no key rather than a large
+    one — an absent key is what every reader written before the bound existed
+    already means."""
+    bounded = compile_card_oracle(set_pool("ALL")["Contagion"])
+    (described,) = [
+        i.payload["targets"] for i in bounded.instructions
+        if isinstance(i.payload.get("targets"), dict)
+    ]
+    assert described["max_targets"] == 2
+
+    from engine.grammar import compile_line
+
+    unbounded = compile_line(
+        "Distribute two -2/-1 counters among any number of target creatures.",
+        card_name="Test",
+    )
+    assert "max_targets" not in unbounded.instructions[0].payload["targets"]

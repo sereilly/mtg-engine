@@ -143,6 +143,12 @@ class GainControl:
     production that let the clause be absent would also let it be *deleted*
     with no change to what was lowered.
 
+    The untimed steal now has a *name* — ``"indefinite"`` (CR 611.2a: an effect
+    with no stated duration lasts until the game ends) — rather than a missing
+    value, and that is the whole of why the field stayed required. ``None``
+    would have been the deleted-clause value the paragraph above warns about;
+    a word the production has to write cannot be produced by dropping a clause.
+
     *tap_when_lost* is the trailing sentence "When you lose control of the
     creature, tap it." (Ray of Command, Magus of the Unseen) — CR 603.7's
     delayed trigger, folded onto the change it watches rather than parsed as a

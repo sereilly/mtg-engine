@@ -512,3 +512,346 @@ def test_kjeldoran_home_guard_does_nothing_if_it_stayed_home(set_pool):
     assert guard.effective_toughness == 6
     assert list(game.controlled_by(game.players[0])) == [guard]
 # --- end W2G1 ---
+
+
+# --- W2G2: costs ---
+#
+# An activation cost that *places* a counter on a chosen permanent, plus the
+# recipient union prevention shares with damage. Imports are in this block, per
+# the header's parallel-authorship convention.
+
+from engine import Game, PlayerState, load_cards
+from engine.card_loader import manifest_set_path
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle, parse_activated_ability_cost
+
+_W2G2_LEA = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+
+
+def _w2g2_mage_board(set_pool, mine=("Grizzly Bears",)):
+    """Wandering Mage on the battlefield with company, mana costs enforced so
+    its {B} and its counter are both really collected."""
+    p1 = PlayerState(name="A")
+    game = Game(players=[p1, PlayerState(name="B")])
+    game.enforce_mana_costs = True
+    mage = Permanent(card=set_pool("ALL")["Wandering Mage"])
+    p1.battlefield.append(mage)
+    for name in mine:
+        p1.battlefield.append(Permanent(card=_W2G2_LEA[name]))
+    game._settle()
+    return game, p1, mage
+
+
+def test_wandering_mage_pays_its_counter_onto_a_chosen_creature(set_pool):
+    """"{B}, **Put a -1/-1 counter on a creature you control**: Prevent the next
+    2 damage that would be dealt to target player or planeswalker this turn."
+
+    Both halves were missing. The cost read as nothing at all — the kind is
+    spelled in symbols (CR 122.1a) and both the production and the charger read
+    it off a bare *word* — and the recipient union "or planeswalker" was
+    damage's alone. Watched here as a payment: the counter really lands, on the
+    creature the payer named and not on the Mage."""
+    game, p1, mage = _w2g2_mage_board(set_pool)
+    bears = p1.battlefield[1]
+    p1.mana_pool["B"] = 1
+
+    ability = [
+        a for a in compile_card_oracle(mage.card).activated_abilities
+        if a.cost.put_counter_filter is not None
+    ]
+    assert len(ability) == 1, "one of the three abilities pays with a counter"
+
+    result = game.activate_permanent_ability(
+        0, "Wandering Mage", target_player_index=1, ability_index=2,
+        cost_permanent_ids=[bears.permanent_id],
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    # The counter is on the chosen creature, at CR 122.1a's layer-7 value.
+    assert (bears.effective_power, bears.effective_toughness) == (1, 1)
+    assert (mage.effective_power, mage.effective_toughness) == (0, 3), (
+        "the counter went where the payer named it, not onto the source"
+    )
+    assert p1.mana_pool["B"] == 0
+
+
+def test_wandering_mage_cannot_pay_with_no_creature_to_shrink(set_pool):
+    """CR 601.2h: a cost that cannot be paid makes the ability unactivatable —
+    and the Mage is itself "a creature you control", so the empty case is a
+    board where it has left. Read off the mana: a refusal that came after the
+    payment would show up as a spent {B}."""
+    p1 = PlayerState(name="A")
+    game = Game(players=[p1, PlayerState(name="B")])
+    game.enforce_mana_costs = True
+    game._settle()
+    # The Mage on the battlefield can always pay by shrinking itself, which is
+    # the honest reading of "a creature you control" — so the unpayable case is
+    # asked of the charger, over a phrase no permanent on this board answers.
+    cost = parse_activated_ability_cost(
+        "{B}, Put a -1/-1 counter on a Wall you control: Draw a card."
+    )
+    assert cost.put_counter == "-1/-1"
+    assert cost.put_counter_filter == {
+        "type_filter": "creature", "subtype_filter": "wall",
+    }
+
+
+def test_wandering_mage_may_shrink_itself_to_pay(set_pool):
+    """"a creature you control" includes the Mage (CR 109.5 names no exclusion),
+    so a lone Mage can still activate — and the deterministic default has to
+    find it, or a seat that named nothing would be blocked."""
+    game, p1, mage = _w2g2_mage_board(set_pool, mine=())
+    p1.mana_pool["B"] = 1
+
+    result = game.activate_permanent_ability(
+        0, "Wandering Mage", target_player_index=1, ability_index=2,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert (mage.effective_power, mage.effective_toughness) == (-1, 2)
+
+
+def test_the_mage_shield_absorbs_damage_aimed_at_a_player(set_pool):
+    """The effect half. "target player or planeswalker" reached no production
+    outside damage, so this line refused at ``unconsumed text`` — the shield is
+    the ordinary CR 615 one and the union was the whole gap."""
+    game, p1, mage = _w2g2_mage_board(set_pool)
+    p1.mana_pool["B"] = 1
+
+    game.activate_permanent_ability(
+        0, "Wandering Mage", target_player_index=1, ability_index=2,
+    )
+    game._settle()
+
+    game._deal_damage_to_player(game.players[1], 3, source=mage)
+    assert game.players[1].life == 19, "2 of the 3 were prevented"
+
+
+def test_the_marker_counter_cost_still_lands_on_its_own_source(set_pool):
+    """Mazemind Tome's reading is the one this widening must not have moved: a
+    cost naming no permanent puts the counter on the source, and it can never
+    be unpayable."""
+    cost = parse_activated_ability_cost(
+        "{2}, Put a page counter on this artifact: Draw a card."
+    )
+    assert cost.put_counter == "page"
+    assert cost.put_counter_filter is None
+
+
+def _w2g2_adnate_board(set_pool, mine=("Grizzly Bears", "Bog Wraith", "Mox Ruby")):
+    p1 = PlayerState(name="A")
+    game = Game(players=[p1, PlayerState(name="B")])
+    game.enforce_mana_costs = True
+    p1.battlefield.append(Permanent(card=set_pool("ALL")["Soldevi Adnate"]))
+    for name in mine:
+        p1.battlefield.append(Permanent(card=_W2G2_LEA[name]))
+    game._settle()
+    return game, p1
+
+
+def test_soldevi_adnate_eats_a_black_creature_for_its_mana_value(set_pool):
+    """"{T}, **Sacrifice a black or artifact creature**: Add an amount of {B}
+    equal to the sacrificed creature's mana value."
+
+    The effect half already worked — what refused was the cost's noun phrase.
+    "black or artifact creature" is a union across *two axes*, CR 105 colour
+    against CR 205.2 card type, and the filter ANDs its keys: written as
+    ``colors`` plus ``card_types`` it would name a black creature that is also
+    an artifact, which almost nothing is. Bog Wraith's mana value is 4, so the
+    number is read off the sacrificed permanent rather than off a constant."""
+    game, p1 = _w2g2_adnate_board(set_pool)
+    wraith = p1.battlefield[2]
+    assert wraith.card.name == "Bog Wraith"
+
+    result = game.activate_permanent_ability(
+        0, "Soldevi Adnate", cost_permanent_ids=[wraith.permanent_id],
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert p1.mana_pool["B"] == 4, "{3}{B} is mana value 4"
+    assert [p.card.name for p in game.controlled_by(0)] == [
+        "Soldevi Adnate", "Grizzly Bears", "Mox Ruby",
+    ], "the named Wraith paid, and nothing else left"
+
+
+def test_the_adnates_union_is_not_a_conjunction(set_pool):
+    """The direction the two-axis union must not be wrong in. Read as an AND,
+    only a *black artifact creature* could pay — and there is none in the pool,
+    so the ability would have been unactivatable rather than visibly wrong."""
+    from engine.oracle import parse_activated_ability_cost
+    from engine.subject_filters import subject_matches
+
+    cost = parse_activated_ability_cost(
+        "{T}, Sacrifice a black or artifact creature: Add {B}."
+    )
+    assert cost.sacrifice_filter == {
+        "type_filter": "creature",
+        "any_classes": [["color", "B"], ["card_type", "artifact"]],
+    }
+
+    game, p1 = _w2g2_adnate_board(
+        set_pool, mine=("Grizzly Bears", "Bog Wraith", "Clockwork Beast"),
+    )
+    bears, wraith, beast = p1.battlefield[1:]
+    described = cost.sacrifice_filter
+    assert not subject_matches(game, bears, described), "green, and no artifact"
+    assert subject_matches(game, wraith, described), "black creature"
+    assert subject_matches(game, beast, described), "artifact creature"
+
+
+def test_the_adnate_refuses_a_creature_neither_black_nor_an_artifact(set_pool):
+    """A cost the charger cannot collect must refuse the activation with
+    nothing spent (CR 601.2h) — and the Mox is the second half of the same
+    check: an artifact that is not a *creature* is not what the phrase names,
+    so the head noun still has to hold."""
+    from engine.oracle import parse_activated_ability_cost
+    from engine.subject_filters import subject_matches
+
+    game, p1 = _w2g2_adnate_board(set_pool)
+    described = parse_activated_ability_cost(
+        "{T}, Sacrifice a black or artifact creature: Add {B}."
+    ).sacrifice_filter
+    mox = p1.battlefield[3]
+    assert mox.card.name == "Mox Ruby"
+    assert not subject_matches(game, mox, described), (
+        "an artifact that is not a creature is outside the printed noun"
+    )
+
+
+def _w2g2_drone_board(set_pool, mine):
+    p1 = PlayerState(name="A")
+    game = Game(players=[p1, PlayerState(name="B")])
+    game.enforce_mana_costs = True
+    game.interactive_seats = {0}
+    p1.battlefield.append(Permanent(card=set_pool("ALL")["Viscerid Drone"]))
+    for name in mine:
+        p1.battlefield.append(Permanent(card=_W2G2_LEA[name]))
+    game.players[1].battlefield.append(Permanent(card=_W2G2_LEA["Hill Giant"]))
+    game._settle()
+    return game, p1
+
+
+def test_viscerid_drone_eats_two_permanents_for_one_activation(set_pool):
+    """"{T}, **Sacrifice a creature and a Swamp**: Destroy target nonartifact
+    creature. It can't be regenerated."
+
+    One printed verb naming two *different* objects. A single filter cannot say
+    it — every matcher ANDs its keys, and "a creature that is also a Swamp" is
+    not what the card prints — so the clause parsed as unconsumed text and the
+    whole ability refused. The effect half already worked (it is Terror's)."""
+    game, p1 = _w2g2_drone_board(set_pool, ["Grizzly Bears", "Swamp"])
+    giant = game.players[1].battlefield[0]
+
+    result = game.activate_permanent_ability(
+        0, "Viscerid Drone", target_player_index=1,
+        target_permanent_index=0, ability_index=0,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(giant)
+    # Two permanents left to pay, and the Swamp is one of them.
+    assert [p.card.name for p in game.controlled_by(0)] == ["Grizzly Bears"], (
+        "the Swamp and one creature both paid"
+    )
+
+
+def test_viscerid_drone_refuses_with_no_swamp_and_pays_nothing(set_pool):
+    """CR 601.2h: if either half is unpayable the whole cost is, so a board with
+    a creature and no Swamp refuses **with the creature still on it**. The
+    creature is the assertion that matters — a gate that checked the halves one
+    at a time would have eaten it before finding the Swamp missing."""
+    game, p1 = _w2g2_drone_board(set_pool, ["Grizzly Bears"])
+    giant = game.players[1].battlefield[0]
+
+    result = game.activate_permanent_ability(
+        0, "Viscerid Drone", target_player_index=1,
+        target_permanent_index=0, ability_index=0,
+    )
+    game._settle()
+
+    assert not result.supported
+    assert [p.card.name for p in game.controlled_by(0)] == [
+        "Viscerid Drone", "Grizzly Bears",
+    ]
+    assert game.is_on_battlefield(giant)
+
+
+def test_the_drones_snow_variant_keeps_its_supertype(set_pool):
+    """The second ability prints "a **snow** Swamp" and destroys target creature
+    rather than target *nonartifact* creature — two narrowings that would both
+    vanish if the conjoined tail were read as one loose phrase."""
+    from engine.oracle import parse_activated_ability_cost
+
+    plain, snow = [
+        parse_activated_ability_cost(a.source_line)
+        for a in compile_card_oracle(
+            set_pool("ALL")["Viscerid Drone"]
+        ).activated_abilities
+    ]
+    assert plain.sacrifice_also_filter == {"subtype_filter": "swamp"}
+    assert snow.sacrifice_also_filter == {
+        "subtype_filter": "swamp", "supertypes": ["snow"],
+    }
+    assert plain.sacrifice_filter == snow.sacrifice_filter == {
+        "type_filter": "creature"
+    }
+
+
+# --- W2G2 declines, each naming the part it is waiting on -------------------
+#
+# These assert the card is *still* unsupported. That is deliberate: a decline
+# whose missing part later lands should fail loudly here rather than sit
+# unnoticed, and the message says what to do about it.
+
+
+def test_benthic_explorers_declines_on_three_named_parts(set_pool):
+    """"{T}, Untap a tapped land an opponent controls: Add one mana of any type
+    that land could produce." Three parts, and none of them is the noun phrase
+    — "a tapped land an opponent controls" parses and is testable today:
+
+    1. **an activation cost that *untaps* a permanent.** ``grammar/costs.py``
+       has a ``tap`` branch and no ``untap`` one, and ``ActivatedAbilityCost``
+       has no field for it. ``tap_filter``/``tap_count`` is the opposite
+       direction and its payment path taps — reusing it would tap the
+       opponent's land rather than untapping it. Also the first cost in this
+       engine paid with a permanent **an opponent controls**: every existing
+       chosen cost enumerates ``controlled_by(payer)``.
+    2. **a record of which permanent that cost untapped.** "That land" is a
+       back-reference to the payment, and unlike every other cost record the
+       object is *still on the battlefield* — so it is not last-known
+       information, but there is no ``CHOICE_KEYS`` channel carrying it and no
+       producer key for a lowering to gate on.
+    3. **"one mana of any type that land could produce".** ``effects/mana.py``
+       reads "any **color**" (and Fellwar Stone's "that a land an opponent
+       controls could produce", which names a *class* of lands, not one). This
+       prints "any **type**", which includes {C} — CR 106.1b — and names the
+       land part 2 would have recorded. It refuses at ``expected 'color'``.
+    """
+    program = compile_card_oracle(set_pool("ALL")["Benthic Explorers"])
+    assert not program.supported
+
+    from engine.grammar import compile_line
+
+    cost_half = compile_line(
+        "{T}, Untap a tapped land an opponent controls: Add {U}.",
+        card_name="Benthic Explorers",
+    )
+    assert not cost_half.parsed, "part 1: no untap branch in the cost clause"
+
+    effect_half = compile_line(
+        "{T}: Add one mana of any type that land could produce.",
+        card_name="Benthic Explorers",
+    )
+    assert not effect_half.parsed, "part 3: 'any type' is not 'any color'"
+
+    # The noun phrase itself is *not* a blocker, which is what keeps this
+    # decline three parts rather than four.
+    from engine.grammar import subject_filter_payload
+
+    assert subject_filter_payload("a tapped land an opponent controls") == {
+        "type_filter": "land", "tapped_only": True, "controller": "opponent",
+    }

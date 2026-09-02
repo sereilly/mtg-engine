@@ -1012,6 +1012,38 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         # is_creature (not the printed line) so animated lands count.
         return perm.is_creature if name == "creature" else perm.has_type(name)
 
+    # "a **black or artifact** creature" (Soldevi Adnate). A union across two
+    # *axes* — CR 105 colour against CR 205.2 card type — which the keys below
+    # cannot express because the engine ANDs them: `colors` plus `card_types`
+    # describes a black creature that is *also* an artifact, which is not what
+    # any of these cards print. Each alternative carries the axis it was read
+    # on, so nothing here has to guess which vocabulary a bare word came from.
+    #
+    # ANDed against the head noun rather than replacing it: the phrase is "a
+    # creature that is black or an artifact", so `card_types` above still has
+    # to hold. The stack half of this key (`handlers/stack._spell_is_one_of
+    # _classes`, "instant or Aura spell") empties `card_types` instead, which
+    # is the same AND with nothing on the left.
+    any_classes = payload.get("any_classes")
+    if any_classes:
+        def _class_holds(entry) -> bool:
+            axis, name = entry[0], entry[1]
+            if axis == "color":
+                # CR 613 layer 5's answer, not the printed one — the same
+                # accessor `color_filter` below is answered with, so a
+                # recoloured permanent cannot match one key and miss the other.
+                return name in permanent_effective_colors(perm)
+            if axis == "card_type":
+                return _has_type(name)
+            if axis == "subtype":
+                return perm.has_type(name)
+            # An axis nothing here reads must refuse rather than be ignored:
+            # a dropped alternative widens the union to everything.
+            return False
+
+        if not any(_class_holds(entry) for entry in any_classes):
+            return False
+
     if type_filter:
         if type_filter == "artifact_or_enchantment":
             if not (perm.has_type("artifact") or perm.has_type("enchantment")):

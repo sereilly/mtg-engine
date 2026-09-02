@@ -293,6 +293,39 @@ class ActivatedAbilityCost:
     #: positional arguments ``parse_activated_ability_cost`` passes are at the
     #: front, so a field inserted among them silently rebinds one of them.
     exile_top_of_library: int = 0
+    #: Wandering Mage: "{B}, **Put a -1/-1 counter on a creature you control**:
+    #: …". Which permanent the ``put_counter`` above goes on, when the card
+    #: names one instead of the source. ``None`` is the source — Mazemind Tome's
+    #: reading and every printing before this one — never "any permanent", for
+    #: ``sacrifice_filter``'s reason: an empty filter would let the payment land
+    #: anywhere.
+    #:
+    #: Beside ``put_counter`` rather than folded into it because they answer
+    #: different questions, and only this one can make the ability *unpayable*:
+    #: CR 601.2h refuses an activation whose cost cannot be paid, and a payer
+    #: with no creature has nowhere to put the counter. The cost that adds a
+    #: marker to the source can never fail; this one can.
+    #:
+    #: After ``exile_top_of_library`` for that field's stated reason: the six
+    #: positional arguments ``parse_activated_ability_cost`` passes are at the
+    #: front, so a field inserted among them silently rebinds one of them.
+    put_counter_filter: dict | None = None
+    #: Viscerid Drone: "{T}, **Sacrifice a creature and a Swamp**: …". The
+    #: *second* object a conjoined sacrifice names. Its own field rather than a
+    #: list widening ``sacrifice_filter``, for that field's own stated reason
+    #: one direction over: the two are different costs — two noun phrases, each
+    #: paid by its own permanent — and every existing reader of
+    #: ``sacrifice_filter`` asks it about one object. A list there would be
+    #: handed to those readers as if it were a filter.
+    #:
+    #: Both must be payable or neither is paid (CR 601.2h), and the two
+    #: permanents must be distinct: one creature Swamp would otherwise pay a
+    #: cost the card prints as two cards.
+    #:
+    #: After ``put_counter_filter`` for that field's stated reason: the six
+    #: positional arguments ``parse_activated_ability_cost`` passes are at the
+    #: front, so a field inserted among them silently rebinds one of them.
+    sacrifice_also_filter: dict | None = None
 
     @property
     def is_loyalty(self) -> bool:

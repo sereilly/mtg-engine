@@ -16,6 +16,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.models import Permanent
+from engine.oracle import parse_activated_ability_cost
 
 _CATALOG = {c.name: c for c in load_catalog()}
 
@@ -241,3 +242,209 @@ def test_a_zero_life_payment_is_not_a_cost_the_parser_admits():
 
     assert not result.parsed
     assert result.failure_reason == "only a fixed, positive life payment is charged"
+
+
+# ---------------------------------------------------------------------------
+# W2G2 — CR 601.2c's *variable* target count, and CR 611.2a's absent duration
+# ---------------------------------------------------------------------------
+
+
+def _w2g2_card(name, type_line, oracle_text, mana_cost="{3}{B}{B}", cmc=5.0):
+    from engine.models import CardDefinition
+
+    raw = {"name": name, "type_line": type_line}
+    if "Creature" in type_line:
+        raw["power"], raw["toughness"] = "1", "1"
+    return CardDefinition(
+        name=name, mana_cost=mana_cost, cmc=cmc, type_line=type_line,
+        oracle_text=oracle_text, colors=("B",), color_identity=("B",),
+        keywords=(), produced_mana=(), raw=raw,
+    )
+
+
+@pytest.mark.cr("601.2c")
+def test_a_printed_enumeration_is_a_ceiling_on_the_target_count():
+    """"If the spell has a variable number of targets, the player announces how
+    many targets they will choose before they announce those targets. ... Once
+    the number of targets the spell has is determined, that number doesn't
+    change."
+
+    A distribution printed "among one or two target creatures" bounds that
+    announcement at two. The ceiling travels on the compiled target description
+    so the announcement gate and the picker read one answer; "among any number
+    of" prints no ceiling and must carry no key, because an absent key is what
+    every reader written before the bound existed already means.
+    """
+    from engine.grammar import compile_line
+
+    bounded = compile_line(
+        "Distribute two -2/-1 counters among one or two target creatures.",
+        card_name="Bounded",
+    )
+    assert bounded.instructions[0].payload["targets"]["max_targets"] == 2
+
+    wider = compile_line(
+        "Distribute three +1/+1 counters among one, two, or three target creatures.",
+        card_name="Wider",
+    )
+    assert wider.instructions[0].payload["targets"]["max_targets"] == 3
+
+    unbounded = compile_line(
+        "Distribute two -2/-1 counters among any number of target creatures.",
+        card_name="Unbounded",
+    )
+    assert "max_targets" not in unbounded.instructions[0].payload["targets"]
+
+
+@pytest.mark.cr("601.2c")
+def test_an_announcement_past_the_printed_ceiling_is_illegal():
+    """The ceiling is checked at announcement, where CR 601.2c puts it, and
+    **before** the division CR 601.2d asks for — so a seat that announced no
+    shares at all still may not name three targets. That ordering is the whole
+    of why it is not folded into the division check: the even-split fallback
+    that legitimately excuses an absent division would otherwise excuse an
+    over-long target list too."""
+    from engine.divided_damage import division_refusal
+
+    three = [(0, 0, 1), (0, 1, 1), (1, 0, 1)]
+    assert division_refusal(2, three, division="chosen", max_targets=2)
+    assert division_refusal(3, three, division="chosen", max_targets=3) is None
+
+    bare = [(0, 0), (0, 1), (1, 0)]
+    assert division_refusal(2, bare, division="chosen", max_targets=2)
+    assert division_refusal(2, bare, division="chosen") is None
+
+
+@pytest.mark.cr("601.2c")
+def test_a_bounded_spell_refuses_the_cast_with_nothing_spent():
+    """CR 601.2c is announcement, and CR 601.2e returns the game to the moment
+    before an illegal proposal — so an over-long list costs the caster nothing.
+    Read off the hand, because the cast path pays at CR 601.2h, after the
+    targets are checked: a refusal that arrived too late would show as a spell
+    that left the hand and did nothing."""
+    from engine.models import Permanent
+
+    spell = _w2g2_card(
+        "Bounded Distribution", "Instant",
+        "Distribute two -2/-1 counters among one or two target creatures.",
+    )
+    game, p1, p2 = _duel()
+    p1.hand.append(spell)
+    for _ in range(3):
+        p2.battlefield.append(Permanent(card=_CATALOG["Grizzly Bears"]))
+    game._settle()
+
+    refused = game.cast_from_hand(
+        0, "Bounded Distribution", divided_targets=[(1, 0, 1), (1, 1, 1), (1, 2, 0)],
+    )
+
+    assert not refused.supported
+    assert [c.name for c in p1.hand] == ["Bounded Distribution"]
+    assert not game.stack
+
+    allowed = game.cast_from_hand(
+        0, "Bounded Distribution", divided_targets=[(1, 0, 1), (1, 1, 1)],
+    )
+    game._settle()
+
+    assert allowed.supported, allowed.details
+    shrunk = [
+        (p.effective_power, p.effective_toughness) for p in game.controlled_by(1)
+    ]
+    assert shrunk.count((0, 1)) == 2, "one counter each, not both on one"
+
+
+@pytest.mark.cr("611.2a")
+def test_a_continuous_effect_with_no_stated_duration_never_ends():
+    """"A continuous effect generated by the resolution of a spell or ability
+    lasts as long as stated by the spell or ability creating it (such as "until
+    end of turn"). **If no duration is stated, it lasts until the end of the
+    game.**"
+
+    A control change is the layer-2 case, and the two spellings must reach
+    different machinery: cleanup drops an ``until_eot`` contribution and has to
+    leave an untimed one alone. So the absent clause is a *reading* rather than
+    a gap, and the compiled program says which one it is."""
+    from engine.control import base_controller, control_changes
+    from engine.grammar import compile_line
+    from engine.models import Permanent
+
+    timed = compile_line("Gain control of target creature until end of turn.")
+    untimed = compile_line("Gain control of target creature.")
+    assert [i.kind for i in timed.instructions] == ["gain_control_until_eot"]
+    assert [i.kind for i in untimed.instructions] == ["gain_control_of_target"]
+
+    spell = _w2g2_card(
+        "Untimed Steal", "Sorcery", "Gain control of target creature.",
+    )
+    game, p1, p2 = _duel()
+    p1.hand.append(spell)
+    stolen = Permanent(card=_CATALOG["Grizzly Bears"])
+    p2.battlefield.append(stolen)
+    game._settle()
+
+    result = game.cast_from_hand(
+        0, "Untimed Steal", target_player_index=1, target_permanent_index=0,
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert game.controller_index_of(stolen) == 0
+    assert [c["until_eot"] for c in control_changes(stolen)] == [False]
+    # CR 613.1: the base controller is untouched, so an effect that *did* end
+    # would revert to the right seat.
+    assert base_controller(stolen) == 1
+
+    game.resolve_cleanup_step(0)
+    game._settle()
+    assert game.controller_index_of(stolen) == 0
+
+
+@pytest.mark.cr("602.2b", "601.2h")
+def test_a_conjoined_cost_is_unpayable_unless_both_halves_are():
+    """CR 602.2b routes an activation through CR 601.2h, which pays the whole
+    cost at one moment — so a cost naming two objects is unpayable unless both
+    can be found, and nothing is spent when one cannot."""
+    from engine.models import Permanent
+
+    line = "{T}, Sacrifice a creature and a Swamp: Draw a card."
+    cost = parse_activated_ability_cost(line)
+    assert cost.sacrifice_filter == {"type_filter": "creature"}
+    assert cost.sacrifice_also_filter == {"subtype_filter": "swamp"}
+
+    game, p1, _p2 = _duel()
+    payer = Permanent(card=_w2g2_card(
+        "Conjoined Payer", "Creature — Test", line, mana_cost="{1}{B}", cmc=2.0,
+    ))
+    p1.battlefield.append(payer)
+    game._settle()
+
+    # A creature (the source itself) and no Swamp: refused, nothing sacrificed.
+    refused = game.activate_permanent_ability(0, "Conjoined Payer")
+
+    assert not refused.supported
+    assert [p.card.name for p in game.controlled_by(0)] == ["Conjoined Payer"]
+    assert not p1.graveyard
+
+
+@pytest.mark.cr("122.1a", "601.2h")
+def test_a_counter_placing_cost_names_its_counter_in_symbols():
+    """CR 122.1a spells a P/T counter as "+X/+Y" and "-X/-Y" — symbols, not a
+    word — so a cost clause read through a bare-word pattern matches nothing at
+    all, which is not a refused ability but a **free** one. Both readers (the
+    production and the charger) go through the counter vocabulary now.
+
+    The chosen-permanent spelling is also the one such cost that can be
+    unpayable (CR 601.2h): a marker on the source can always be placed, and a
+    counter on "a creature you control" cannot when there is no creature."""
+    marker = parse_activated_ability_cost(
+        "{2}, Put a page counter on this artifact: Draw a card."
+    )
+    assert marker.put_counter == "page"
+    assert marker.put_counter_filter is None, "the source, and never unpayable"
+
+    chosen = parse_activated_ability_cost(
+        "{B}, Put a -1/-1 counter on a creature you control: Draw a card."
+    )
+    assert chosen.put_counter == "-1/-1"
+    assert chosen.put_counter_filter == {"type_filter": "creature"}

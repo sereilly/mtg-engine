@@ -3775,14 +3775,31 @@ def test_linked_control_matches_the_rule_it_replaces():
     )]
 
 
+def test_an_untimed_control_change_is_the_indefinite_one():
+    """"Gain control of target artifact." CR 611.2: an effect with no stated
+    duration lasts as long as the game does, so the absent clause is a
+    *reading* rather than a gap — and it reaches a different instruction kind
+    from the until-end-of-turn steal beside it, because that is the one fact
+    the cleanup sweep asks (``change_control(..., until_eot=)``)."""
+    assert _instructions("Gain control of target artifact.", "Test") == [
+        ("gain_control_of_target", {"type_filter": "artifact"}),
+    ]
+
+
 @pytest.mark.parametrize(
     ("line", "why"),
     [
-        ("Gain control of target artifact.",
-         "an untimed steal is a permanent control change, not this one"),
+        ("Gain control of target artifact until end of combat.",
+         "a duration nothing in the engine ends is not the untimed reading"),
+        ("Gain control of target artifact for as long as it is tapped.",
+         "a linked duration the sweep has no record for must fail loudly"),
     ],
 )
-def test_control_changes_without_the_linked_duration_refuse(line, why):
+def test_control_changes_with_an_unimplemented_duration_refuse(line, why):
+    """The untimed reading is the *fall-through*, not a lookahead for the end of
+    the line — so an ending this grammar does not know stays unconsumed and the
+    whole-line rule refuses it. Read as forever, these would be strictly the
+    most dangerous direction a control change can be wrong in."""
     result = compile_line(line, card_name="Test")
 
     assert not result.usable, why

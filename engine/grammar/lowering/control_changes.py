@@ -321,6 +321,26 @@ def _lower_gain_control(
     # own branch further down — there the seat both picks and receives.
     if node.gained_by is not None and not node.offered:
         return _lower_another_seat_gains_control(node, subject)
+    if node.duration == "indefinite":
+        # "Gain control of target nonartifact, nonblack creature." (Ritual of
+        # the Machine.) The same contribution the until-end-of-turn branch
+        # records, with the one thing that decides everything downstream
+        # inverted: cleanup drops a contribution stamped ``until_eot`` and
+        # leaves this one alone (CR 611.2a). That fact is the *kind* rather than
+        # a payload flag, because the handler both kinds share reads it to
+        # decide the lifetime — a payload key would let a lowering that forgot
+        # it record a steal that quietly ends at cleanup.
+        if subject.quantifier != "target":
+            raise LoweringError(
+                "the indefinite control change needs a named target", node=node
+            )
+        described = _filter_payload(subject.filter)
+        if object_only_filter(described) is None:
+            raise LoweringError(
+                "the control change cannot test this restriction", node=node
+            )
+        _describe_targets(described, subject)
+        return (OracleInstruction("gain_control_of_target", "", described),)
     if node.duration == "until_end_of_turn":
         if subject.quantifier in ("that", "it"):
             # "Gain control of **that creature** until end of turn."

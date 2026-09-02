@@ -1819,6 +1819,14 @@ def _from_targets_payload(targets) -> dict | None:
         narrowing = targets.get("filter") or {}
         if narrowing.get("type_filter") == "creature":
             spec["creatures_only"] = True
+        bound = targets.get("max_targets")
+        if isinstance(bound, int):
+            # "…among **one or two** target creatures" (Contagion). A divided
+            # spell is otherwise unbounded, so the picker would offer a third
+            # creature the casting path then refuses (CR 601.2c). Carried as
+            # the same ``max_targets`` key every other picker spec uses rather
+            # than a divided-only spelling — the client already reads it.
+            spec["max_targets"] = bound
         return spec
     if kind == "player":
         spec = {"kind": "player"}

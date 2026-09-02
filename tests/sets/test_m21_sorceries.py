@@ -965,15 +965,19 @@ def test_control_reverts_at_cleanup_without_moving_anything(set_pool):
     assert [p.card.name for p in game.controlled_by(1)] == ["Gale Swooper"]
 
 
-def test_an_untimed_control_change_still_refuses(set_pool):
-    """The duration is required, and required to be one the engine ends. An
-    untimed steal is a permanent control change and reverts under completely
-    different circumstances."""
+def test_an_untimed_control_change_is_read_as_the_indefinite_one(set_pool):
+    """Was a decline: the duration used to be required, and required to be one
+    the engine ends. CR 611.2 says an effect with no stated duration lasts as
+    long as the game does, which is a *lifetime* rather than a missing one — so
+    the sentence reads, and reaches a kind of its own so that the cleanup sweep
+    (which drops an ``until_eot`` contribution) leaves it alone. Ritual of the
+    Machine is the card that paid for it; nothing in M21 moved."""
     from engine.grammar import compile_line
 
     result = compile_line("Gain control of target creature.")
 
-    assert not result.parsed
+    assert result.parsed
+    assert [i.kind for i in result.instructions] == ["gain_control_of_target"]
 
 
 # --- Round 99: a search that finds twice and splits its finds ---------------

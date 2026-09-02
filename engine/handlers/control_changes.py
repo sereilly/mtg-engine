@@ -44,9 +44,11 @@ if TYPE_CHECKING:
 TAP_WHEN_CONTROL_LOST = "tap_when_control_lost"
 
 
-@effect_handler("gain_control_until_eot")
+@effect_handler("gain_control_until_eot", "gain_control_of_target")
 def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """"Gain control of target creature until end of turn." (Traitorous Greed.)
+    """"Gain control of target creature until end of turn." (Traitorous Greed),
+    and the untimed "Gain control of target nonartifact, nonblack creature."
+    (Ritual of the Machine.)
 
     A CR 613 layer-2 *contribution* with a lifetime rather than a move, so
     nothing has to be put back: cleanup drops the contribution and whatever
@@ -58,8 +60,22 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     permanent to belong to — so the card is its source. Two copies in one turn
     collapse to one contribution, which is the right answer: both end at the same
     cleanup.
+
+    **Two kinds, one handler, and the lifetime read off the kind.** CR 611.2a
+    gives an effect with no stated duration no end at all, so the untimed steal
+    is this same contribution with ``until_eot`` false — everything else about
+    it (the CR 608.2b re-check, Guardian Beast's prohibition, the rescope of
+    ``context.target`` for the sentences behind it) is identical, and a second
+    handler would be a second place to fix each. The lifetime is the *kind*
+    rather than a payload key because it is the whole difference between the
+    two sentences: a lowering that forgot a flag would record an indefinite
+    steal that quietly ends at cleanup, where a lowering that names the wrong
+    kind reaches a table that does not have it.
     """
     from ..control import change_control
+
+    until_eot = instruction.kind.endswith("_until_eot")
+    ends = "until end of turn" if until_eot else "for as long as the game lasts"
 
     # "Gain control of **that creature** until end of turn." (Disharmony.)
     # The object was bound by an earlier step of this same resolution and
@@ -84,13 +100,13 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
                     f"{context.card.name}: {bound.card.name} can't change controllers"
                 )
                 continue
-            change_control(bound, seat, source=context.card, until_eot=True)
+            change_control(bound, seat, source=context.card, until_eot=until_eot)
             if instruction.payload.get("tap_when_lost"):
                 bound.metadata[TAP_WHEN_CONTROL_LOST] = True
             took = True
             game.log.append(
                 f"{context.caster.name} gains control of {bound.card.name} "
-                "until end of turn"
+                f"{ends}"
             )
         game._sync_control()
         if took:
@@ -126,7 +142,7 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
         )
         return True, "resolved"
     seat = game.players.index(context.caster)
-    change_control(target, seat, source=context.card, until_eot=True)
+    change_control(target, seat, source=context.card, until_eot=until_eot)
     game._sync_control()
     # The sentences after this one are *about the same creature* ("Untap that
     # creature. It gains haste…"), and it is now on a different battlefield.
@@ -137,7 +153,7 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     # widened: the id still has to name a permanent that seat controls.
     context.target = context.caster
     game.log.append(
-        f"{context.caster.name} gains control of {target.card.name} until end of turn"
+        f"{context.caster.name} gains control of {target.card.name} {ends}"
     )
     return True, "resolved"
 
