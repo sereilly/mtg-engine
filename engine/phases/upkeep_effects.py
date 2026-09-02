@@ -516,18 +516,20 @@ class UpkeepEffectsMixin:
         trig = ctx.trig
         mana = trig.instruction.payload.get("mana", {})
         damage_amt = int(trig.instruction.payload.get("damage", 0))
+        # The pay-or-sacrifice handler's pair, for its reason and one more:
+        # this read the coloured pips off the floating pool alone, spent
+        # nothing else, and honoured a human "pay" without asking whether the
+        # pool could cover it — so the price was unpayable on every AI turn
+        # however many lands stood untapped, and free for a human with an
+        # empty pool.
         if human_choices is not None and permanent.card.name in human_choices:
-            paid = human_choices[permanent.card.name]
-        else:
-            paid = all(
-                controller.mana_pool.get(sym, 0) >= count
-                for sym, count in mana.items()
-                if sym != "generic"
+            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
+                controller, mana
             )
+        else:
+            paid = self.can_pay_upkeep_mana(controller, mana)
         if paid:
-            for sym, count in mana.items():
-                if sym != "generic":
-                    controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
+            self._spend_upkeep_mana(controller, mana)
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
         else:
             self._deal_damage_to_player(
@@ -592,18 +594,15 @@ class UpkeepEffectsMixin:
         permanent = ctx.permanent
         trig = ctx.trig
         mana = trig.instruction.payload.get("mana", {})
+        # The shared pair, for the reason the pay-or-deal-damage handler gives.
         if human_choices is not None and permanent.card.name in human_choices:
-            paid = human_choices[permanent.card.name]
-        else:
-            paid = all(
-                controller.mana_pool.get(sym, 0) >= count
-                for sym, count in mana.items()
-                if sym != "generic"
+            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
+                controller, mana
             )
+        else:
+            paid = self.can_pay_upkeep_mana(controller, mana)
         if paid:
-            for sym, count in mana.items():
-                if sym != "generic":
-                    controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
+            self._spend_upkeep_mana(controller, mana)
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
         else:
             # "tap this creature and sacrifice a land of an opponent's
@@ -640,18 +639,15 @@ class UpkeepEffectsMixin:
         permanent = ctx.permanent
         trig = ctx.trig
         mana = trig.instruction.payload.get("mana", {})
+        # The shared pair, for the reason the pay-or-deal-damage handler gives.
         if human_choices is not None and permanent.card.name in human_choices:
-            paid = human_choices[permanent.card.name]
-        else:
-            paid = all(
-                controller.mana_pool.get(sym, 0) >= count
-                for sym, count in mana.items()
-                if sym != "generic"
+            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_mana(
+                controller, mana
             )
+        else:
+            paid = self.can_pay_upkeep_mana(controller, mana)
         if paid:
-            for sym, count in mana.items():
-                if sym != "generic":
-                    controller.mana_pool[sym] = controller.mana_pool.get(sym, 0) - count
+            self._spend_upkeep_mana(controller, mana)
             self.log.append(f"{controller.name} paid upkeep for {permanent.card.name}")
             return
         named = str(trig.instruction.payload.get("named") or "")

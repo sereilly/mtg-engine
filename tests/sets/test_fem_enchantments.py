@@ -825,8 +825,10 @@ def test_a_chant_fires_on_its_own_controllers_land_too(set_pool):
     # The turn is opened past the upkeep on purpose. The Chant's *other* line -
     # "at the beginning of your upkeep, sacrifice this enchantment unless you
     # pay {G}" - fires before the land drop on its controller's own turn, and
-    # `can_pay_upkeep_mana` covers a coloured pip out of floating mana alone,
-    # so a board with a Forest on it still loses the card under test.
+    # this board has no Forest to pay it with, so an upkeep would lose the
+    # card under test. (It used to lose it *with* a Forest, too:
+    # `can_pay_upkeep_mana` covered a coloured pip from floating mana alone
+    # until tests/rules/test_upkeep_payment.py.)
     game.active_player_index = 0
     game._set_phase_and_step("precombat_main", "main")
 

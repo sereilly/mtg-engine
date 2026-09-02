@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**341 / 612 tracked rules covered (55%)** — 1722 tests, 0 unannotated.
+**341 / 612 tracked rules covered (55%)** — 1730 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -581,7 +581,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 503. Upkeep Step
 
-- [x] **503.1** The upkeep step has no turn-based actions. Once it begins, the active player gets priority. (See ... *(4 tests, subrules a)*
+- [x] **503.1** The upkeep step has no turn-based actions. Once it begins, the active player gets priority. (See ... *(5 tests, subrules a)*
 - [ ] **503.2** If a spell states that it may be cast only “after [a player’s] upkeep step,” and the turn has mul...
 
 ### 504. Draw Step
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(120 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(122 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(6 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -706,7 +706,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(3 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
-- [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(3 tests, subrules bc)*
+- [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(11 tests, subrules abc)*
 - [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(4 tests, subrules a)*
 - [x] **605.5** Abilities that don’t meet the criteria specified in rules 605.1a–b and spells aren’t mana abilities. *(3 tests, subrules ab)*
 
@@ -888,7 +888,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
 - [x] **702.22** Banding *(35 tests, subrules abcdefghjk)*
 - [x] **702.23** Rampage *(6 tests, subrules abc)*
-- [x] **702.24** Cumulative Upkeep *(16 tests, subrules ab)*
+- [x] **702.24** Cumulative Upkeep *(17 tests, subrules ab)*
 - [x] **702.25** Flanking *(3 tests, subrules a)*
 - [x] **702.26** Phasing *(5 tests, subrules ad)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*

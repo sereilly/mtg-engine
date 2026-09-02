@@ -954,6 +954,22 @@ Fixed in the wave:
   turned a parser feature into a one-node fix**, and it is the cheapest
   instrument in this repo for that: 1 of 1,610 programs changes.
 
+Fixed after the wave (2026-09-01):
+
+- **A coloured upkeep cost could not tap lands.** `can_pay_upkeep_mana`
+  covered coloured pips from floating mana alone and let only the generic part
+  tap, so every coloured upkeep in the pool was sacrificed on its first upkeep
+  in AI or headless play with the right lands untapped. Recorded here as ten
+  cards; the census at the fix read **27** — eleven pay-or-sacrifice
+  enchantments, eleven coloured cumulative upkeeps, Island Fish Jasconius'
+  untap toll, and four cards (Demonic Hordes, Force of Nature, Minion of Tevesh
+  Szat, Rohgahh) in three handlers that had never asked the pair at all and
+  honoured a human "pay" against an empty pool for free. The pair now asks
+  `mana_payment.plan_payment` (CR 605.3a), the same question every other
+  offered price asks; `tests/rules/test_upkeep_payment.py` holds it. A count
+  written in prose under-read the class by nearly three to one, which is the
+  decay this file keeps warning about.
+
 Open, each recorded with what it costs rather than scheduled here:
 
 - **A mana ability with a rider uses the stack** (CR 605.3/605.1a).
@@ -961,13 +977,6 @@ Open, each recorded with what it costs rather than scheduled here:
   Priest, Initiates of the Ebon Hand, Barbed Sextant and all six Ice Age
   painlands are pushed and resolved like ordinary abilities — which means their
   mana cannot be produced while a cost is being paid.
-- **A coloured pay-or-sacrifice upkeep cannot tap lands.**
-  `can_pay_upkeep_mana` covers coloured pips from floating mana alone while
-  letting the generic part tap, so **Stasis, Drought, Justice, Conversion, Dance
-  of Many, Sunken City, Glaciers, Breeding Pit** and both FEM Chants are
-  sacrificed on the first upkeep in AI or headless play with the right lands
-  untapped. Every other offered price in the engine taps lands, citing
-  CR 605.3b. Ten cards across six sets.
 - **`land_enters` has one fire site, inside the land-*play* resolution**, so a
   land an effect puts onto the battlefield triggers nothing — Ankh of Mishra
   deals no damage for one. This wave makes the fix nearly free: the row can fall

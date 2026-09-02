@@ -27,6 +27,7 @@ from ..oracle import OracleInstruction, compile_card_oracle
 from ..trigger_utils import iter_triggered_abilities, matching_triggers
 from ..mixins._constants import _UPKEEP_PAY_KINDS
 from ..cumulative_upkeep import upcoming_cost
+from ..mana_payment import plan_payment, untapped_mana_lands
 from ..upkeep_costs import UpkeepCost, cost_from_payload, cost_prompt_fields
 from ..effect_labels import triggered_label
 from ..handlers import EFFECT_HANDLERS
@@ -80,9 +81,18 @@ def upkeep_trigger_seat_matches(game, permanent, cond: str, player_index: int) -
 
 class UpkeepStepMixin(UpkeepEffectsMixin):
     def can_pay_upkeep_mana(self, player, mana: dict[str, int], *, purpose=None) -> bool:
-        """Whether *player* can cover an upkeep cost: colored pips from floating
-        mana, the generic part from what's left plus untapped mana-producing
-        lands (the player gets the chance to tap during upkeep).
+        """Whether *player* can cover an upkeep cost's mana: from the pool and by
+        tapping untapped mana-producing lands, coloured pips included.
+
+        An upkeep payment happens inside the trigger's resolution with no
+        priority window, so the payer may activate mana abilities while paying
+        (CR 605.3a) and the question is ``mana_payment.plan_payment``'s — the
+        one every other offered price in the engine asks. This used to cover
+        the coloured pips from floating mana alone and let only the *generic*
+        part tap, so Stasis, Glaciers, Demonic Hordes, every {U} cumulative
+        upkeep and both FEM Chants were sacrificed on the first upkeep of every
+        AI or headless game with the right lands untapped, and Island Fish
+        Jasconius never untapped at all.
 
         *purpose* is what the cost is for, so "spend this mana only to pay
         cumulative upkeep costs" (Adarkar Unicorn, Snowfall) can be counted:
@@ -90,76 +100,68 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         does not ask cannot see it. Without a purpose only the ordinary pool is
         offered, which is what every caller written before this got.
         """
-        from ..restricted_mana import spendable_restricted_mana
+        return self._upkeep_payment_plan(player, mana, purpose) is not None
 
-        available = self._upkeep_pool(player, purpose)
-        colored = {sym: n for sym, n in mana.items() if sym != "generic" and n > 0}
-        if any(available.get(sym, 0) < n for sym, n in colored.items()):
-            return False
-        generic = int(mana.get("generic", 0) or 0)
-        if generic <= 0:
-            return True
-        floating_left = sum(available.values()) - sum(colored.values())
-        untapped_land_mana = sum(
-            1
-            for perm in self.controlled_by(player)
-            if perm.card.primary_type == "land" and not perm.tapped and perm.effective_produced_mana
+    def _upkeep_payment_plan(self, player, mana: dict[str, int], purpose):
+        """How *player* would pay *mana* now, or None — asked once by the
+        affordability test and once by the spend, so the two cannot disagree
+        about which lands and which units are in play."""
+        return plan_payment(
+            self._upkeep_pool(player, purpose),
+            untapped_mana_lands(self.controlled_by(player)),
+            mana,
+            produces=self._land_payment_colors,
         )
-        return floating_left + untapped_land_mana >= generic
 
     def _upkeep_pool(self, player, purpose) -> dict[str, int]:
         """The mana an upkeep payment may draw on: the pool, plus any restricted
         bucket *purpose* admits (CR 106.6).
 
-        One reader for both halves of the pair below, so what is *offered* and
-        what is *spent* cannot disagree about which buckets are in play — the
-        split that let Energy Flux's generic-only cost be paid by every artifact
-        on the board.
+        One reader for both halves of the pair, so what is *offered* and what
+        is *spent* cannot disagree about which buckets are in play — the split
+        that let Energy Flux's generic-only cost be paid by every artifact on
+        the board. The restricted units go in **first**: ``plan_payment`` pays
+        the generic part from the pool in insertion order, and a restricted
+        unit is lost at the next step boundary either way, so anything else
+        spent ahead of it is thrown away (the casting path's reason).
         """
         from ..restricted_mana import spendable_restricted_mana
 
-        merged = dict(player.mana_pool)
-        for symbol, amount in spendable_restricted_mana(player, purpose).items():
+        merged = dict(spendable_restricted_mana(player, purpose))
+        for symbol, amount in player.mana_pool.items():
             merged[symbol] = merged.get(symbol, 0) + amount
         return merged
 
     def _spend_upkeep_mana(self, player, mana: dict[str, int], *, purpose=None) -> None:
-        """Spend an upkeep cost validated by ``can_pay_upkeep_mana``: colored
-        pips from the pool, then the generic part from floating mana and by
-        tapping untapped mana-producing lands.
+        """Spend an upkeep cost validated by ``can_pay_upkeep_mana``: the plan's
+        floating units out of the pool (restricted bucket first where the
+        purpose admits it) and the plan's lands tapped.
 
-        Restricted mana is spent **first** where the purpose admits it, for the
-        reason the casting path spends it first: its units are lost at the next
-        step boundary either way, so anything else throws them away.
+        Both halves, because a plan is *how* a cost is paid and paying from one
+        without the other would let the same land answer two costs — the
+        sibling ``_spend_payment_plan`` says the same. A plan that cannot be
+        formed here is a caller that skipped the affordability test, and that
+        is raised rather than spent in part: a cost half charged is a free
+        ability, the class Vodalian War Machine's tap costs were.
         """
         from ..restricted_mana import debit_restricted_mana, spendable_restricted_mana
 
+        plan = self._upkeep_payment_plan(player, mana, purpose)
+        if plan is None:
+            raise ValueError(
+                f"{player.name} cannot pay {mana} at upkeep; the caller must ask "
+                "can_pay_upkeep_mana first"
+            )
         restricted = spendable_restricted_mana(player, purpose)
-        for sym, count in mana.items():
-            if sym == "generic" or count <= 0:
-                continue
-            from_restricted = min(count, restricted.get(sym, 0))
+        for symbol, amount in plan.from_pool.items():
+            from_restricted = min(amount, restricted.get(symbol, 0))
             if from_restricted:
-                debit_restricted_mana(player, purpose, sym, from_restricted)
-                restricted[sym] = restricted.get(sym, 0) - from_restricted
-            player.mana_pool[sym] = player.mana_pool.get(sym, 0) - (count - from_restricted)
-        remaining = int(mana.get("generic", 0) or 0)
-        for sym in list(restricted):
-            while remaining > 0 and restricted.get(sym, 0) > 0:
-                debit_restricted_mana(player, purpose, sym, 1)
-                restricted[sym] -= 1
-                remaining -= 1
-        for sym in list(player.mana_pool):
-            while remaining > 0 and player.mana_pool.get(sym, 0) > 0:
-                player.mana_pool[sym] -= 1
-                remaining -= 1
-        if remaining > 0:
-            for perm in self.controlled_by(player):
-                if remaining <= 0:
-                    break
-                if perm.card.primary_type == "land" and not perm.tapped and perm.effective_produced_mana:
-                    self.become_tapped(perm)
-                    remaining -= 1
+                debit_restricted_mana(player, purpose, symbol, from_restricted)
+            player.mana_pool[symbol] = (
+                int(player.mana_pool.get(symbol, 0)) - (amount - from_restricted)
+            )
+        for land in plan.tapped:
+            self.become_tapped(land)
 
     def can_pay_upkeep_cost(self, player, cost, *, purpose=None) -> bool:
         """Whether *player* can pay a whole upkeep cost — CR 702.24a's [cost],
