@@ -149,6 +149,13 @@ PARSE_LAYERS = [
     # `statements`, which hands it `parse_statement` rather than being
     # imported back — a delayed trigger contains a whole statement.
     "delayed",
+    # A sentence that prints no subject — the bare imperative ("Destroy target
+    # creature") and the whole paragraphs that open on a noun phrase no subject
+    # reader may eat. Split out of `subject_verb` at the guard below, along the
+    # boundary that module's own docstring drew: it reads a sentence's opening,
+    # and an opening is one of two shapes. Below `subject_verb`, which asks it
+    # first and is never imported back.
+    "imperatives",
     # The `<subject> <verb> …` opening. Split out of `statements` at the guard
     # below, and under it: `statements` hands it `parse_optional_action` rather
     # than being imported back, the same inversion `delayed` makes.

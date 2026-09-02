@@ -919,6 +919,15 @@ class PendingChoicesMixin:
                 for card in rest:
                     caster.graveyard.append(card)
                 return
+            # "…and **exile the rest**." (Browse.) The cards leave the game
+            # rather than the library, which is why the same ability may be
+            # activated again and again: the pile it looks at is a pile it has
+            # already shortened. No order is asked for — exile is unordered
+            # (CR 406.2 orders no zone but the library and the graveyard).
+            if choice.data.get("rest_destination") == "exile":
+                for card in rest:
+                    caster.exile.append(card)
+                return
             # "…and the rest on **top** of your library in any order."
             # (Diabolic Vision.) The same clause as the bottom one word over,
             # and a different kind of sentence: on the bottom "in any order" is
@@ -969,10 +978,22 @@ class PendingChoicesMixin:
         kept = caster.library[keep_index]
         del caster.library[:top_count]
         _bottom_the_rest([card for i, card in enumerate(looked) if i != keep_index])
+        # Where the *kept* card goes, read the same way the rest's destination
+        # is. "Puts one of them **back on top of their library**" (Ashnod's
+        # Cylix) is this prompt's other printed answer: the card is not drawn,
+        # it is the next card that player draws — a difference nothing else in
+        # the sentence states and nobody can see until the draw step.
+        if choice.data.get("pick_destination") == "library_top":
+            self.put_card_into_library(caster, kept, position="top")
+            self.discard_pending_choice(choice)
+            self.log.append(
+                f"{caster.name} put a card back on top of their library"
+            )
+            return True
         self.put_card_into_hand(caster, kept)
         self.discard_pending_choice(choice)
         self.log.append(
-            f"{caster.name} put {kept.name} into their hand and the rest on the bottom"
+            f"{caster.name} put {kept.name} into their hand and the rest away"
         )
         return True
 

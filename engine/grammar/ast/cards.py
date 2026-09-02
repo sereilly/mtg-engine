@@ -262,6 +262,19 @@ class LookTopPickToHand:
     #: the production for that reason, and carried here so a card that *does*
     #: print it cannot collapse into one that does not.
     all_to_hand_if_cast_elsewhere: bool = False
+    #: Where the *taken* card goes. "Puts one of them **back on top of their
+    #: library**" (Ashnod's Cylix) is this template with one word changed and a
+    #: wholly different card behind it: nothing is drawn, and what the looker
+    #: keeps is the card they draw next. A field for ``rest_destination``'s
+    #: reason — the sentence states it, and a default would be a guess about
+    #: the one thing the card is for.
+    pick_destination: str = "hand"
+    #: Who looks. None is the effect's own controller, which every card in this
+    #: family printed until Ashnod's Cylix — "**Target player** looks at the
+    #: top three cards of **their** library". The looker and the library are
+    #: one seat by construction here (the possessive says "their"), so one
+    #: field answers both; a card that split them would be a different node.
+    looker: "PlayerRef | None" = None
 
 
 @dataclass(frozen=True)

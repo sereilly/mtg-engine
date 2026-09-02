@@ -139,6 +139,63 @@ def _parse_look_pick_tail(
     )
 
 
+def parse_player_looks_at_own_library_top(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.Statement | None":
+    """``<player> looks at the top N cards of their library, puts one of them
+    back on top of their library, then exiles the rest.`` (Ashnod's Cylix.)
+
+    The look-and-pick template with its looker printed, which is the whole of
+    what is new: every other card in the family looks at its own controller's
+    library, so the seat was never a field and "your library" was a literal.
+    Here the pile, the pick and the exile all belong to the *named* player, and
+    the possessive says so three times ("their … their … the rest" of theirs) —
+    so one seat answers all three and a card that split them would be a
+    different node.
+
+    Declines without consuming when the sentence is not this one, so
+    "Look at target player's hand" and Visions' "look at the top five cards of
+    target player's library" keep their own readings and their own refusals.
+
+    Both halves of the destination are required rather than defaulted, for
+    ``rest_destination``'s standing reason: keeping a card on top is not
+    drawing it, and exiling the rest is not bottoming them. A card printing
+    either differently is a different card.
+    """
+    if not isinstance(subject, ast.PlayerRef):
+        return None
+    probe = stream.mark()
+    if not stream.accept_word("looks", "look"):
+        return None
+    if not stream.accept_phrase("at", "the", "top"):
+        stream.reset(probe)
+        return None
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(probe)
+        return None
+    if not stream.accept_phrase("cards", "of", "their", "library"):
+        stream.reset(probe)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "puts", "one", "of", "them", "back", "on", "top", "of", "their", "library",
+    ):
+        stream.reset(probe)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("then", "exiles", "the", "rest"):
+        stream.reset(probe)
+        return None
+    return ast.LookTopPickToHand(
+        count,
+        pick_destination="library_top",
+        rest_destination="exile",
+        looker=subject,
+    )
+
+
 def _parse_look_other_library_tail(
     stream: TokenStream, count, owner: ast.PlayerRef
 ) -> ast.Statement:
@@ -242,7 +299,12 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
         stream.expect_word("library")
         if owner.kind != "you":
             return _parse_look_other_library_tail(stream, count, owner)
-        if not stream.accept_punct("."):
+        # The sentence break, printed either way. See the Truth and Diabolic
+        # Vision start a new sentence; Browse runs the whole ability on as one
+        # ("…of your library, put one of them into your hand, and exile the
+        # rest."). The punctuation is all that differs, and a card is not a
+        # different card for printing a comma.
+        if not (stream.accept_punct(".") or stream.accept_punct(",")):
             raise stream.error("expected the sorting sentence after the look")
         # Garruk's Harbinger's optional, filtered pick shares this position with
         # See the Truth's compulsory one; reading the second sentence is what
@@ -289,7 +351,19 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
         # had just looked at.
         if not (stream.accept_word("them") or stream.accept_phrase("those", "cards")):
             raise stream.error("expected 'them' or 'those cards'")
-        for word in ("into", "your", "hand", "and", "the", "rest", "on"):
+        for word in ("into", "your", "hand"):
+            stream.expect_word(word)
+        # "…, and **exile** the rest." (Browse.) The third destination, beside
+        # the graveyard branch above and the two library ends below, and read
+        # for their reason: where the unchosen cards go is the card's own
+        # statement. Exiling them is what makes Browse a repeatable engine that
+        # eats its own library rather than a re-orderer.
+        exiled_rest = stream.mark()
+        stream.accept_punct(",")
+        if stream.accept_phrase("and", "exile", "the", "rest"):
+            return ast.LookTopPickToHand(count, rest_destination="exile")
+        stream.reset(exiled_rest)
+        for word in ("and", "the", "rest", "on"):
             stream.expect_word(word)
         # Where the rest go is the card's own statement and a real difference:
         # the bottom is out of reach, the top is the next N draws. Read rather
