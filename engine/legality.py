@@ -45,6 +45,7 @@ from .static_bonuses import conditional_static_holds
 from .subject_filters import card_matches_any, subject_matches
 from .modal_triggers import modal_trigger_mode_spec, modal_trigger_modes
 from .targeting import (
+    GRAVEYARD_TARGET_KIND,
     ROLES_TARGET_KIND,
     derive_activation_spec,
     derive_cast_spec,
@@ -312,11 +313,18 @@ _UNFIZZLABLE_TARGET_KINDS = frozenset({
 
 #: Target kinds ``cast_target_refusal`` leaves to the per-kind arms in
 #: ``_validate_cast_targets``. A named index means something different in each
-#: of them — a slot in a graveyard, a position in the stack, a card in hand —
-#: while the enumeration this gate compares against is a battlefield slot, so
-#: comparing the two would refuse legal casts rather than illegal ones.
+#: of them — a position in the stack, a card in hand — while the battlefield
+#: enumeration this gate compares against is a battlefield slot, so comparing
+#: the two would refuse legal casts rather than illegal ones. A **graveyard**
+#: index used to hide here too, and hiding it was the laxity rather than the
+#: safety: the arms key on the *primary* instruction kind, so a spell whose
+#: graveyard targeting sits inside a ``sequence`` (Fungal Rebirth,
+#: Experimental Overload) reached no arm and an announcement naming an
+#: opponent's pile was accepted and silently re-pointed at the caster's own.
+#: The gate now has a graveyard branch of its own, compared against the
+#: ``graveyard``-kind entries the same enumeration emits.
 _UNCHECKED_CAST_TARGET_KINDS = frozenset({
-    "none", "modal", "hand_card", "stack", "graveyard_creature",
+    "none", "modal", "hand_card", "stack",
     "spell_or_permanent",
 })
 
@@ -992,8 +1000,9 @@ class LegalityMixin:
         target_player_index=None, target_permanent_index=None,
         target_permanent_ids=None, from_zone: str = "hand",
     ) -> str | None:
-        """CR 601.2c: a **named** permanent target must be a legal one, checked
-        before any cost is paid. Returns the refusal, or None.
+        """CR 601.2c: a **named** target — a battlefield permanent, or a slot
+        in a graveyard — must be a legal one, checked before any cost is paid.
+        Returns the refusal, or None.
 
         The cast-side twin of :meth:`activation_target_refusal`, and it exists
         for the same reason that one replaced a per-kind if-chain in
@@ -1051,6 +1060,38 @@ class LegalityMixin:
             if isinstance(target_permanent_index, list)
             else ([target_permanent_index] if isinstance(target_permanent_index, int) else [])
         )
+        if spec.get("kind") == GRAVEYARD_TARGET_KIND:
+            # A named graveyard slot, checked against the ``graveyard``-kind
+            # entries the same enumeration offers the picker — the one zone
+            # where the per-kind arms in ``_validate_cast_targets`` cannot be
+            # relied on, because they key on the *primary* instruction kind and
+            # a spell whose graveyard targeting sits inside a ``sequence``
+            # (Fungal Rebirth, Experimental Overload) reaches no arm at all: an
+            # announcement naming an opponent's pile was accepted and
+            # ``graveyard_target_seat`` then silently re-pointed it at the
+            # caster's own. Same seat semantics as the activation twin above —
+            # a bare index carries no seat, so a named seat narrows the
+            # comparison and an unnamed one is legal on any pile the
+            # enumeration offers. Ids are not read here: a card in a graveyard
+            # is not a permanent (CR 115.2) and has no ``permanent_id``.
+            if not indices:
+                # CR 601.2c gates what was *named*; an untargeted cast resolves
+                # its own pick and the "does any legal target exist?" half
+                # stays the per-kind arms' question, as everywhere else here.
+                return None
+            valid = self._enumerate_targets(caster_index, card, spec, for_cast=True)
+            legal_slots = {
+                (t["seat"], t["index"]) for t in valid
+                if t.get("kind") == "graveyard" and t.get("index") is not None
+            }
+            seats = (
+                [target_player_index] if target_player_index is not None
+                else list(range(len(self.players)))
+            )
+            for index in indices:
+                if not any((seat, index) in legal_slots for seat in seats):
+                    return f"no valid target for {card.name}"
+            return None
         if not named_ids and not indices:
             return None
         valid = self._enumerate_targets(caster_index, card, spec, for_cast=True)
@@ -1122,8 +1163,8 @@ class LegalityMixin:
         index that has come to mean a different permanent would answer this
         question about the wrong one.
 
-        Two deliberate exclusions, both because the engine cannot answer
-        "all targets" for them rather than because the rule stops:
+        One deliberate exclusion, because the engine cannot answer
+        "all targets" for it rather than because the rule stops:
 
         * **A spell that can target a player** — "any target", a divided one,
           a player-targeted one. A seat and a *chosen player* reach a stack
@@ -1131,11 +1172,18 @@ class LegalityMixin:
           split between a creature and its controller is indistinguishable from
           one aimed at the creature alone; the creature dying would then read
           as "every target is illegal" when the player is still a legal one.
-        * **A graveyard target.** Two copies of one card in one graveyard are
-          literally one ``CardDefinition`` (see ``GraveyardTarget``), and
-          resolution already answers a vanished target there by clamping to the
-          last surviving copy. Replacing that with a fizzle is a decision about
-          a different rule, not this one.
+
+        **A graveyard target is answered here too, in its answerable half.**
+        The stamp ``_stack_push_object`` recorded (``GraveyardTarget``) is the
+        chosen card's identity, and a stamp ``graveyard_index_of`` can no
+        longer resolve — no copy of that card left in that pile — is a target
+        the data model can establish is *gone*, so it counts as illegal like a
+        departed permanent does. The **ambiguous** half stays out on purpose:
+        two copies of one card in one graveyard are literally one
+        ``CardDefinition``, so while any copy survives the stamp still
+        resolves (clamped to the last surviving copy) and the target is legal
+        — the engine cannot know *which* copy left, and a fizzle there would
+        be a guess dressed as a rule.
         """
         card = item.card
         if item.ability_instruction is not None:
@@ -1189,6 +1237,15 @@ class LegalityMixin:
                     target, card, caster_index=item.caster_index,
                 )
             )
+        stamps = item.target_graveyard_card
+        for stamp in (stamps if isinstance(stamps, list) else [stamps]):
+            if stamp is None:
+                continue
+            # The stamp resolving to no slot means no copy of the chosen card
+            # remains in that graveyard — the unambiguous "gone", per the
+            # docstring above. While a copy survives, `graveyard_index_of`
+            # answers a slot (clamping where it must) and the target is legal.
+            legality.append(self.graveyard_index_of(stamp) is not None)
         if item.target_stack_item is not None:
             # A countered or already-resolved spell has left the zone it was
             # targeted in, which is CR 608.2b's first sentence.
