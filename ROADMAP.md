@@ -839,36 +839,128 @@ three are their own work.
 43 work items: 39 unsupported cards plus the 4 supported ones carrying an
 unimplemented sentence. Wave 1 takes the five families the fragment census
 found; wave 2 takes the remainder and whatever wave 1 declines with its parts
-enumerated.
+enumerated. **The split below is the one that ran**, and it differs from the
+first draft in two ways worth recording: the untap-denial family was kept whole
+in one group rather than split across two, because two groups editing one
+production is a merge conflict scheduled on purpose; and Roots joined wave 2
+after the Phase 4 picker sweep, run early, found it uncastable.
 
-**Wave 1**
+**Wave 1** — W1G1 untap denial ×7 (Reveka, Spectral Bears, Labyrinth Minotaur,
+Joven's Ferrets, An-Zerrin Ruins, Samite Alchemist, Giant Oyster); W1G2 counted
+amounts ×4 (An-Havva Constable, An-Havva Inn, Aysen Crusader, Baki's Curse);
+W1G3 prevention and redirection ×4 (Daughter of Autumn, Hazduhr the Abbot,
+Evaporate, Leeches); W1G4 filtered statics and block triggers ×4 (Serra Aviary,
+Rashka the Slayer, Mammoth Harness, Sea Troll); W1G5 upkeep, counters and forced
+sacrifice ×4 (Trade Caravan, Koskun Falls, Orcish Mine, Funeral March).
 
-- **W1G1 — untap denial, the pronoun subjects** (4): Reveka, Wizard Savant;
-  Spectral Bears; Labyrinth Minotaur; Joven's Ferrets.
-- **W1G2 — untap denial, the board subjects** (3): An-Zerrin Ruins (with "as
-  this enters, choose a creature type"); Giant Oyster; Trade Caravan.
-- **W1G3 — "N plus the number of …" as an amount** (4): An-Havva Constable;
-  An-Havva Inn; Aysen Crusader; Baki's Curse.
-- **W1G4 — prevention and redirection to a named permanent** (4): Daughter of
-  Autumn; Hazduhr the Abbot; Samite Alchemist; Evaporate.
-- **W1G5 — filtered static buffs and block triggers** (4): Serra Aviary;
-  Rashka the Slayer; Mammoth Harness; Sea Troll.
+**Wave 2** — W2G1 sequenced spells ×4 (Forget, Truce, Retribution, Broken
+Visage); W2G2 library search, reveal and tuck ×4 (Merchant Scroll, Memory Lapse,
+Prophecy, Jinx); W2G3 combat restrictions and shroud exceptions ×5 (Ironclaw
+Curse, Joven's Tools, Dwarven Sea Clan, Autumn Willow, Roots); W2G4 combat memory
+and counters ×5 (Giant Albatross, Greater Werewolf, Rysorian Badger, Reef
+Pirates, Giant Oyster); W2G5 cast locks, cost taxes and the tail ×4 (Aether
+Storm, Irini Sengir, Apocalypse Chime, Timmerian Fiends).
 
-**Wave 2**
+### Wave 1 — five worktree groups, 76 → 97
 
-- **W2G1 — spells whose second sentence reads the first** (4): Forget; Leeches;
-  Memory Lapse; Truce.
-- **W2G2 — library reveal, search and cast locks** (4): Merchant Scroll;
-  Prophecy; Jinx; Aether Storm.
-- **W2G3 — combat restrictions** (4): Ironclaw Curse; Joven's Tools; Koskun
-  Falls; Dwarven Sea Clan.
-- **W2G4 — combat memory and counters** (4): Giant Albatross; Greater Werewolf;
-  Rysorian Badger; Reef Pirates.
-- **W2G5 — Auras and the bespoke tail** (4): Funeral March; Orcish Mine; Broken
-  Visage; Retribution.
+Twenty-one cards in one pass, and **zero name-keyed hooks added** across all
+five groups. Every group ran its own whole-pool differential and every group
+reported the ratio the playbook predicts: authorship took roughly as long as
+integration, and integration was almost entirely merges rather than cards.
 
-Left for wave 3 or for whoever finishes early: Apocalypse Chime, Autumn Willow,
-Irini Sengir, Timmerian Fiends.
+| Group | Cards | Landed |
+| --- | --- | ---: |
+| W1G1 untap denial | Reveka, Spectral Bears, Labyrinth Minotaur, Joven's Ferrets, An-Zerrin Ruins, Samite Alchemist, Giant Oyster | 6 of 7 |
+| W1G2 counted amounts | An-Havva Constable, An-Havva Inn, Aysen Crusader, Baki's Curse | 4 |
+| W1G3 prevention and redirection | Daughter of Autumn, Hazduhr the Abbot, Evaporate, Leeches | 4 |
+| W1G4 filtered statics, block triggers | Serra Aviary, Rashka the Slayer, Mammoth Harness, Sea Troll | 4 |
+| W1G5 upkeep, counters, forced sacrifice | Trade Caravan, Koskun Falls, Orcish Mine, Funeral March | 4 |
+
+**The fragment thesis paid.** The seven untap-denial cards cost one group one
+production widening, because three cards in the set already compiled the same
+clause — exactly what the sentence census could not see and the n-gram census
+could. W1G2's pairing held the same way: An-Havva Constable's toughness and
+An-Havva Inn's life gain compile to a **byte-identical `count_spec`**, pinned by
+a test.
+
+**Five shipped cards were silently mis-playing, and no instrument in the repo
+could see any of them.** This is the wave's real yield, and every one was found
+by a group giving a behaviour a game rather than by a gate:
+
+- **Pyroclasm dealt its 2 damage to every Mountain on the table** (and Sorrow's
+  Path to every permanent its controller had). The described-set damage sweep had
+  *two* lowerings — the "all" spelling exiled into `_common.py`, the "each"
+  spelling still inline in `damage.py` — and they had drifted: the inline one
+  checked the head noun and then **stripped it from the payload**, while the
+  handler walks `all_permanents()` and asks only the payload. Nothing failed,
+  because only a creature is buried by lethal damage — but it stamped the
+  "dealt damage this turn" record a printed noun phrase can test, and spent any
+  shield the land carried.
+- **Six permanents release a linked lock a turn early under headless/AI play.**
+  `SELF_MAY_KEEP_TAPPED_PHRASE` only keeps a permanent tapped when a live
+  *control steal* depends on it, so Phyrexian Gremlins can never hold a Mox
+  through a turn cycle, Zelyon Sword's +2/+0 evaporates at its own untap step,
+  and Bottomless Vault never banks a storage counter. Ashnod's Battle Gear,
+  Tawnos's Weaponry, Spirit Shield and Tawnos's Coffin are the same shape.
+  Deliberately not fixed mid-wave — it moves AI-visible behaviour and the AI
+  regressions seed on deterministic play. **Its own round.**
+- **A counter-removal activation cost was charged during the "may I activate?"
+  half.** It was the only cost in that function spent above the gates instead of
+  beside the mana, so an activation refused by CR 602.5 timing, a permission, a
+  per-turn cap, an unpayable secondary cost *or* insufficient mana had already
+  taken the counters off. CR 601.2h asks what a player is *able* to do, and this
+  asked it destructively.
+- **Rashka the Slayer was implemented too widely**, which is the direction that
+  matters. Its +1/+2 effect compiled and fired; the trigger's *narrowing* did
+  not, so the pump arrived on blocking anything at all. Both the census and
+  `parse_coverage.py` reported it as "sentence unimplemented".
+- **Orcish Mine's payoff sentence already parsed and lowered — wrongly.**
+  "Destroy enchanted land and this Aura deals 2 damage to that land's
+  controller" compiled to `recipient: target_player` for a trigger that targets
+  nothing, so it burned whatever seat the resolution context happened to carry.
+
+**Rashka is why the differential instrument had to be rebuilt twice, and that is
+the transferable finding.** Phase 3 tells every group to build a whole-pool map
+of compiled programs ad hoc. Keyed on ability *counts* it misses a trigger
+narrowed from "blocks anything" to "blocks a black creature"; keyed on
+instruction *kinds* it misses a `type_filter` restored to a payload. **Both
+natural abbreviations are blind to precisely the class the instrument exists to
+catch**, because a narrowing changes neither how many of a thing there are nor
+what the thing is called. Two of five groups and the integrator each wrote a
+lossy version independently before noticing. The map has to carry the compiled
+program's full `repr`.
+
+**Every brief was about a third wrong, again, and one was wrong in a new way.**
+W1G1's said "grep for how the engine already stores a chosen creature type —
+several cards do this"; **nothing does**. The engine stores a chosen *colour*
+and an ordered pair of basic land types, and An-Zerrin Ruins is the pool's first
+creature-type choice, so the whole prompt path was new. An inherited estimate
+that is merely *pessimistic* costs a round; one that sends a group looking for
+something absent costs the search as well. Three more corrections in the same
+direction: Trade Caravan's activated ability already parsed **and lowered** in
+full and the only failure was one missing table row; Samite Alchemist needed no
+new `Shield` because the blanket production already read both printed word
+orders; and Leeches' back-reference was already fully built, with the missing
+piece in the *first* sentence — idiom 7 working exactly as designed.
+
+**A fifth layer had to be added to the parse / lowering / no-handler / gate
+taxonomy: `engine/oracle.py`'s trigger-condition table.** There are two trigger
+front ends and only one feeds dispatch — the regex table produces the
+`TriggerCondition` the phase steps read, and the grammar's `TriggerEvent` does
+not. A condition can be read perfectly by the grammar and still fire on the
+wrong event, which is what Rashka did.
+
+**Integration: five merges, five suites, four hazards fired.** The dangerous one
+was a single line in `handlers/_common.py`, where W1G2 had hoisted an iteration
+into a `scanned` variable and W1G1 had inserted a chosen-creature-type
+resolution at the same spot; git offered them as alternatives and **taking
+either side silently drops the other group's card**. Two groups split
+`lowering/damage.py` in the same wave along two different family lines
+(`_sweeps.py` and `upkeep.py`), and their import blocks met: HEAD kept an import
+whose users had moved out, theirs dropped one still used — **neither side was
+right**, and the resolution was counting references in the merged body. The
+per-set test files behaved exactly as the block convention intends: every
+conflict was two appends, resolved by a union script that refuses anything else.
 
 ## Fallen Empires (FEM) — shipped
 
