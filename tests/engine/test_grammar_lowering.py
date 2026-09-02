@@ -2935,11 +2935,24 @@ def test_a_typed_search_carries_the_type_the_picker_tests():
             "the flow opens context.caster's library and no one else's, so this "
             "would search the wrong player's deck",
         ),
+        # The colour *inclusion* this row used to hold ("a black card") is
+        # honoured now — Merchant Scroll's "a blue instant card" needed it, and
+        # `search_filters.search_matches` tests it off the printed mana cost
+        # (CR 202.2), which a card in a library has. The two below are what is
+        # still untestable, and they are the reason that row could not simply be
+        # deleted: an admitted-and-dropped restriction is a tutor for anything.
         (
-            "Search your library for a black card, put that card into your hand, "
-            "then shuffle.",
-            "the picker tests one primary_type and nothing else, so a colour "
-            "restriction would leave the player choosing from their whole library",
+            "Search your library for a nonblack card, put that card into your "
+            "hand, then shuffle.",
+            "the picker tests the colours a card *has*; an excluded colour is "
+            "that question inverted and nothing answers it, so the restriction "
+            "would leave the player choosing from their whole library",
+        ),
+        (
+            "Search your library for a card with flying, put that card into "
+            "your hand, then shuffle.",
+            "a keyword is a computed characteristic and a card in a library has "
+            "none (CR 613.1), so the picker cannot test this at all",
         ),
         (
             "Search your library for a creature, put that card into your hand, "

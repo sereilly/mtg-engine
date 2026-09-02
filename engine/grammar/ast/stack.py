@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from ._core import (
     PlayerRef,
     TargetSpec,
+    Zone,
 )
 from .costs import ManaCost
 
@@ -109,6 +110,24 @@ class CounterSpell:
     # three positional arguments), so a field inserted in the middle silently
     # re-reads an existing caller's argument as this one.
     unless_pays_alternatives: tuple[ManaCost, ...] = ()
+    # "**If that spell is countered this way, put it on top of its owner's
+    # library instead of into that player's graveyard.**" (Memory Lapse;
+    # Remand's destination is the hand.) CR 614.1 — where the countered card
+    # goes replaces CR 701.5a's own destination, so it is a field of the counter
+    # rather than a statement beside it: the condition its printed sentence
+    # states ("countered **this way**") is the event the first sentence causes,
+    # and parsed apart the second sentence would have no countered spell to
+    # name.
+    #
+    # A ``Zone`` *and* a position word rather than one string, because "on top
+    # of" and "on the bottom of" name the same zone and differ only in where in
+    # it the card lands — which is the pair ``Game.put_card_into_library``
+    # takes. Empty position for a zone that has no inside.
+    #
+    # Appended, for the reason ``unless_pays_alternatives`` above states: these
+    # nodes are built positionally as well as by keyword.
+    countered_to: Zone | None = None
+    countered_to_position: str = ""
 
 
 @dataclass(frozen=True)

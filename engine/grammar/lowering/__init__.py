@@ -159,6 +159,18 @@ from .exile import (
     _lower_for_each_exiled,
     _lower_exile_until_leaves_or_untaps,
     _fused_exile_then_controller_life,
+    # The linked-exile half, moved here whole out of `.library` when that
+    # module crossed the thousand-line guard. The same names, so this package's
+    # flat re-export is unchanged and no caller learns where the split fell —
+    # a move that renamed anything would be a rename wearing a move's clothes.
+    _SEARCH_EXILE_HONOURED,
+    _lower_cast_from_exiled_with,
+    _lower_cast_permission,
+    _lower_exile_graveyard_until_leaves,
+    _lower_exile_top_of_library,
+    _lower_put_exiled_with_source,
+    _lower_search_and_exile,
+    _lower_transmute_by_sacrifice,
 )
 from .attachments import (
     _lower_attach,
@@ -222,12 +234,6 @@ from .mana import (
 from .library import (
     _lower_reveal_top,
     _lower_reveal_until,
-    _lower_cast_from_exiled_with,
-    _lower_cast_permission,
-    _lower_exile_graveyard_until_leaves,
-    _lower_transmute_by_sacrifice,
-    _lower_exile_top_of_library,
-    _lower_put_exiled_with_source,
     _lower_look_top_exile_random,
     _lower_look_top_pick,
     _lower_exile_graveyard,
@@ -237,9 +243,7 @@ from .library import (
     _lower_reveal_hand_and_choose,
     _lower_look_at_hand,
     _lower_look_at_library_top,
-    _lower_search_and_exile,
     _lower_search_player_library,
-    _SEARCH_EXILE_HONOURED,
     _SEARCH_HONOURED_FILTER_FIELDS,
     _lower_graveyard_pick_onto_battlefield,
     _lower_search_library,

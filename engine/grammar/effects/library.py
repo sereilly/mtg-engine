@@ -479,8 +479,14 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # the two-name spelling of the same word.
     reveal = bool(stream.accept_word("reveal"))
     if reveal:
-        if not stream.accept_word("them"):
-            stream.expect_word("it")
+        # "reveal it" / "reveal them" / "reveal **that card**" (Merchant
+        # Scroll). The same three spellings the `put` clause twelve lines below
+        # already reads, because both name the same find: the referent is one
+        # fact about this sentence, and a reader admitting fewer spellings here
+        # than there refuses a line whose two halves agree with each other.
+        if not stream.accept_word("it", "them"):
+            stream.expect_word("that")
+            stream.expect_word("card")
         stream.accept_punct(",")
     # ", and put it into your hand" — the conjunction is the graveyard
     # template's punctuation, not a second effect: "put" must follow either way.
