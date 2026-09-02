@@ -646,7 +646,7 @@ def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | Non
         stream.accept_phrase("the", "cards", "from")
     # "…their hand **and graveyard** into their library." (Diminishing
     # Returns.) One shuffle over two piles, read here rather than as a second
-    # sentence: CR 701.19 randomises the library once, and two statements would
+    # sentence: CR 701.24 randomises the library once, and two statements would
     # do it twice with the hand's cards already down among the graveyard's.
     with_graveyard = False
     conjunct = stream.mark()

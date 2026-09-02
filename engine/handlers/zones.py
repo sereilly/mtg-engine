@@ -4075,7 +4075,7 @@ def shuffle_hand_into_library(game: Game, instruction: OracleInstruction, contex
     """Winds of Change: "Each player shuffles the cards from their hand into
     their library, then draws that many cards."
 
-    CR 701.19 — the cards move and the library is shuffled as one action, so
+    CR 701.24 — the cards move and the library is shuffled as one action, so
     the count the draw reads is taken *before* the move and nothing can observe
     a half-moved zone. Each player is one whole shuffle-then-draw: the libraries
     are separate, so no seat's draw can see another's cards whichever order the
@@ -4096,7 +4096,7 @@ def shuffle_hand_into_library(game: Game, instruction: OracleInstruction, contex
     then_draw = bool(instruction.payload.get("then_draw"))
     # "…their hand **and graveyard** into their library." (Diminishing Returns.)
     # The second pile joins the *same* move, which is why it rides this
-    # instruction: CR 701.19 randomises the library once, and a graveyard
+    # instruction: CR 701.24 randomises the library once, and a graveyard
     # shuffle written as a statement after this one would shuffle it twice with
     # the hand's cards already down among the graveyard's.
     with_graveyard = bool(instruction.payload.get("with_graveyard"))

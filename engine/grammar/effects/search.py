@@ -1,10 +1,10 @@
-"""Searching a library (CR 701.19) — every printed shape of the tutor.
+"""Searching a library (CR 701.23) — every printed shape of the tutor.
 
 Split out of ``effects/library.py`` at the thousand-line guard, along the
 boundary that module's own docstring drew when it named its contents "search,
 look-at, and the library's top". The three are different questions asked of the
 same hidden zone: a *look* shows a fixed number of cards off the top and the
-pile is otherwise untouched, where a **search** is CR 701.19's shuffle-ending
+pile is otherwise untouched, where a **search** is CR 701.23's shuffle-ending
 walk of the whole library for a card the sentence describes — the caller reads a
 filter, a destination, a reveal and a shuffle, and none of that vocabulary
 appears anywhere else in the family.
@@ -39,7 +39,7 @@ from ..phrases import _parse_zone
 
 def _parse_search_library(stream: TokenStream) -> ast.Statement:
     """``Search your library for a <object>, put that card into your hand, then
-    shuffle.`` (Demonic Tutor, CR 701.19.)
+    shuffle.`` (Demonic Tutor, CR 701.23.)
 
     Three parts are read rather than skipped, because each one names a
     different effect:
@@ -225,7 +225,7 @@ def _parse_search_other_library(stream: TokenStream) -> ast.Statement:
       search and is still consumed here, because it is about the cards this
       search found: left to the sequence parser it would run before the prompt
       this arms had been answered, and would have nothing to move.
-    * **the shuffle** — CR 701.19d ends a library search with one, so deleting
+    * **the shuffle** — CR 701.24 ends a library search with one, so deleting
       the word refuses the line rather than claiming a search that leaves the
       library ordered.
     """

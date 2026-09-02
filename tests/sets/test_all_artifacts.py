@@ -322,3 +322,138 @@ def test_soldevi_digger_on_an_empty_graveyard_moves_nothing(set_pool):
     assert game.activate_permanent_ability(0, "Soldevi Digger").supported
     game.resolve_top_of_stack()
     assert [card.name for card in game.players[0].library] == ["Deck Card"]
+
+
+# --- W2G4: library and modal ---
+"""Ashnod's Cylix and Lodestone Bauble — two artifacts about somebody else's
+library.
+
+The Cylix is the look-and-pick template with its **looker printed**: every card
+in that family before it looked at its own controller's library, so "your
+library" was a literal and the seat was never a field. Here the pile, the pick
+and the exile all belong to the targeted player, and the kept card goes back on
+*top* rather than into a hand — the difference between a Cylix that mills three
+and one that gives its victim a free tutor.
+
+The Bauble is the graveyard-to-library production reaching a pile nobody chose.
+"A player's graveyard" targets no player at all — the *cards* are the targets —
+so the seat comes off the chosen slots, and the delayed draw a sentence later
+has to find that same seat.
+"""
+
+from engine import Game, PlayerState
+from engine.game_types import CardDefinition, Permanent
+
+
+def _w2g4_art_card(name: str, type_line: str = "Artifact") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line},
+    )
+
+
+def _w2g4_board(set_pool, card_name, *, interactive, p2_library=(), p2_graveyard=()):
+    p1 = PlayerState(name="P1", library=[_w2g4_art_card("Mine")] * 5)
+    p2 = PlayerState(
+        name="P2", library=list(p2_library), graveyard=list(p2_graveyard),
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=set_pool("ALL")[card_name]), None
+    )
+    return game, p1, p2
+
+
+def test_w2g4_cylix_asks_the_targeted_player_not_its_controller(set_pool):
+    """CR 602.2b chose the seat as the ability was activated, and the sentence
+    says *that* player looks. The prompt is theirs — the controller never sees
+    the three cards, which is what the hidden zone (CR 400.2) requires."""
+    game, _p1, p2 = _w2g4_board(
+        set_pool, "Ashnod's Cylix", interactive={0, 1},
+        p2_library=[_w2g4_art_card(f"Theirs {i}") for i in range(4)],
+    )
+
+    assert game.activate_permanent_ability(
+        0, "Ashnod's Cylix", target_player_index=1
+    ).supported
+
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("look_top_pick", 1)
+    ]
+
+
+def test_w2g4_cylix_keeps_one_on_top_and_exiles_the_other_two(set_pool):
+    """"…puts one of them **back on top of their library**, then exiles the
+    rest." The kept card is not drawn — it is the next card that player draws,
+    a difference nobody can see until the draw step."""
+    game, _p1, p2 = _w2g4_board(
+        set_pool, "Ashnod's Cylix", interactive={0, 1},
+        p2_library=[_w2g4_art_card(f"Theirs {i}") for i in range(4)],
+    )
+    assert game.activate_permanent_ability(
+        0, "Ashnod's Cylix", target_player_index=1
+    ).supported
+
+    assert game.confirm_look_top_pick(1, 2)
+    game._settle()
+
+    assert [c.name for c in p2.library] == ["Theirs 2", "Theirs 3"]
+    assert [c.name for c in p2.exile] == ["Theirs 0", "Theirs 1"]
+    assert p2.hand == [], "the kept card goes on top, not into a hand"
+
+
+def test_w2g4_bauble_offers_only_basic_lands_out_of_the_graveyard(set_pool):
+    """"up to four target **basic land** cards". The supertype is read off the
+    printed type line, which for a card in a graveyard is the whole of what
+    there is (CR 613.1) — and dropping it would let the Bauble return any land,
+    a strictly better card than the one printed."""
+    from engine.oracle import compile_card_oracle
+    from engine.targeting import derive_activation_spec
+
+    game, _p1, _p2 = _w2g4_board(
+        set_pool, "Lodestone Bauble", interactive={0},
+        p2_graveyard=[
+            _w2g4_art_card("Mountain", "Basic Land — Mountain"),
+            _w2g4_art_card("Black Lotus"),
+            _w2g4_art_card("Dwarven Ruins", "Land"),
+        ],
+    )
+    bauble = set_pool("ALL")["Lodestone Bauble"]
+    spec = derive_activation_spec(compile_card_oracle(bauble).activated_abilities[0])
+    assert spec is not None
+    assert spec.get("supertypes") == ["basic"]
+
+    offered = game.activation_target_spec(0, 0, 0)["valid_targets"]
+    assert [t["name"] for t in offered] == ["Mountain"]
+
+
+def test_w2g4_bauble_moves_the_cards_and_the_owner_draws_next_upkeep(set_pool):
+    """Two sentences and one seat. The graveyard is not a target, so "that
+    player" in the delayed half names whoever the chosen *cards* belonged to —
+    and the cards go back in the order they were named (CR 601.2c)."""
+    game, _p1, p2 = _w2g4_board(
+        set_pool, "Lodestone Bauble", interactive={0},
+        p2_library=[_w2g4_art_card("Deck")],
+        p2_graveyard=[
+            _w2g4_art_card("Mountain", "Basic Land — Mountain"),
+            _w2g4_art_card("Black Lotus"),
+            _w2g4_art_card("Island", "Basic Land — Island"),
+        ],
+    )
+
+    assert game.activate_permanent_ability(
+        0, "Lodestone Bauble", target_player_index=1,
+        target_permanent_index=[2, 0],
+    ).supported
+    game._settle()
+
+    assert [c.name for c in p2.library] == ["Island", "Mountain", "Deck"]
+    assert [c.name for c in p2.graveyard] == ["Black Lotus"]
+
+    assert [t.event for t in game.delayed_triggers] == ["next_turns_upkeep"]
+    game.resolve_upkeep(1)
+    game._settle()
+    assert [c.name for c in p2.hand] == ["Island"]
