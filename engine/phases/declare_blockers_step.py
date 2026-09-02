@@ -907,6 +907,15 @@ class DeclareBlockersStepMixin:
         ``declare_blockers``, exactly as ``_attack_mana_costs_of`` is on the
         other side: a cost checked by one rule and paid by another is how a
         declaration gets accepted and then left unpaid.
+
+        **Two channels, because either end of the pair may print the cost.**
+        Hipparion prints it on the blocker; Awesome Presence prints it on an
+        Aura on the *attacker* ("…unless defending player pays {3} for each
+        creature they control that's blocking it"), which is the same CR 509.1d
+        cost owed by the same seat. The "for each" needs no multiplier here for
+        Koskun Falls' reason on the attack side: this is asked once per pair and
+        ``_block_declaration_mana_plan`` sums the pairs, so a per-pair {3} is
+        already {3} per blocking creature.
         """
         costs: list[dict[str, int]] = []
         for instruction in compile_card_oracle(blocker.effective_card).instructions:
@@ -917,6 +926,18 @@ class DeclareBlockersStepMixin:
             cost = {
                 symbol: int(amount)
                 for symbol, amount in (instruction.payload.get("mana") or {}).items()
+            }
+            if cost:
+                costs.append(cost)
+        for restriction in (
+            *compile_card_oracle(attacker.effective_card).instructions,
+            *attached_combat_restrictions(attacker),
+        ):
+            if restriction.kind != "cant_be_blocked_unless_pay":
+                continue
+            cost = {
+                symbol: int(amount)
+                for symbol, amount in (restriction.payload.get("mana") or {}).items()
             }
             if cost:
                 costs.append(cost)
