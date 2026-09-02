@@ -2353,6 +2353,26 @@ def _modal_options(oracle_text: str, card_name: str | None) -> tuple[ModalOption
     return ()
 
 
+def modal_head_line(line: str) -> bool:
+    """Whether *line* is a modal head — the sentence a bulleted mode list hangs
+    under (CR 700.2).
+
+    Public because ``scripts/parse_coverage.py`` asks, and it has to ask the
+    same reader this module dispatches on. It used to test the substring
+    ``startswith("choose one")``, which is a second reading of the line and went
+    stale the moment a head printed its chooser: "**An opponent** chooses one —"
+    (CR 700.2e) compiled, carried its modes and reported its own head as text
+    nothing parses.
+
+    Both wrappers, because a head is printed bare on a spell and after a trigger
+    condition, and the claim is about the *sentence* either way.
+    """
+    return (
+        _modal_head(line, grammar_ast.SpellEffectLine) is not None
+        or _modal_head(line, grammar_ast.TriggeredAbilityNode) is not None
+    )
+
+
 def _modal_chooser(oracle_text: str) -> str | None:
     """Who picks the mode, when the head names somebody other than the spell's
     controller — "**An opponent** chooses one —" (CR 700.2e).

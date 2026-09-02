@@ -113,6 +113,7 @@ from engine.oracle import (  # noqa: E402
     _parse_triggered_ability,
     compile_card_oracle,
     expand_ability_lines,
+    modal_head_line,
     normalize_creature_line,
 )
 #: The shipped pool, and the measured sets beside it. Both are analysed; only
@@ -425,7 +426,12 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("cost_modifiers.py", lambda s: bool(cost_modifiers_for(s))),
     ("activation gate (stack/activation)", lambda s: any(g in s for g in _ACTIVATION_GATES)),
     ("mixin text scan", lambda s: _matches_any(s, _MIXIN_TEXT_SCANS)),
-    ("modal machinery", lambda s: s.startswith("choose one")),
+    # Through the compiler's own reader rather than a substring. The head is
+    # printed bare ("Choose one —") and with its chooser in front of it ("An
+    # opponent chooses one —", CR 700.2e), and a `startswith` test claimed the
+    # first spelling only — so the second compiled, carried its modes, and
+    # reported its own head as text nothing parses.
+    ("modal machinery", modal_head_line),
     # Anchored at both ends here and delegating the colour vocabulary to the
     # engine's own reader, so "black **and/or red**" (Soul Burn) is claimed by
     # the same function the payment path enforces rather than by a second

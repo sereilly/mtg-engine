@@ -34,7 +34,7 @@ Held at this rate, supporting the 26,113-card release line would need about **1,
 | HML | 115 | 115 (100.0%) | 0 (0.0%) | 190 | 0 (0.0%) | 0 | 0.0 |
 | 5ED | 434 | 434 (100.0%) | 12 (2.8%) | 631 | 11 (1.7%) | 13 | 3.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| ALL *(measured)* | 144 | 89 (61.8%) | 0 (0.0%) | 159 | 0 (0.0%) | 0 | 0.0 |
+| ALL *(measured)* | 144 | 95 (66.0%) | 0 (0.0%) | 167 | 0 (0.0%) | 0 | 0.0 |
 | **Whole pool (shipped, deduped)** | **1725** | **1725 (100.0%)** | **62 (3.6%)** | **2670** | **58 (2.2%)** | **68** | **3.9** |
 
 *(measured)* — ALL are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
