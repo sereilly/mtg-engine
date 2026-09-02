@@ -155,6 +155,7 @@ python scripts/picker_sweep.py --set <CODE>   # every supported card whose cast/
 python scripts/oracle_diff.py snapshot   # record every card's full compiled program (both manifest roles) before a change
 python scripts/oracle_diff.py compare    # every card whose program moved since the snapshot, payloads and all; exit 1 if any did
 python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set implementation tracker); --refresh re-fetches Scryfall data
+python scripts/check_all.py           # every CI guard check, in ci.yml's order, one summary table (--freshness adds the tracker regenerations + a clean-tree check)
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests
 python scripts/rules_gaps.py          # rank untested CR rules by engine citations + section momentum; also flags stale CR citations in engine/web (advisory, stdout only)
 python scripts/behaviour_classes.py   # regenerate BEHAVIOUR_CLASSES.md (behavioural-equivalence tracker); --check fails on drift, --accept re-snapshots

@@ -306,10 +306,11 @@ bare "Partial".
 **Entry:** a set has been chosen. **Exit:** clean tree, every gate green,
 instruments current.
 
-1. Run the full suite and every `--check` gate, then the tracker
-   regenerations from `.github/workflows/ci.yml`'s freshness step — all must
-   be a no-op on a clean tree. Starting a set on a red or stale HEAD
-   conflates pre-existing drift with the set's own diffs.
+1. Run the full suite, then `python scripts/check_all.py --freshness` —
+   every `--check` gate plus the tracker regenerations, in ci.yml's order
+   (a guard test holds the two lists equal, so the script cannot drift from
+   the workflow). All must be a no-op on a clean tree. Starting a set on a
+   red or stale HEAD conflates pre-existing drift with the set's own diffs.
 2. If the set postdates `data/vocabulary/manifest.json`'s `fetched_at`, run
    `scripts/fetch_vocabulary.py` (network) and commit the vocabulary diff on
    its own. A creature type or keyword the vocabulary has never heard of does
