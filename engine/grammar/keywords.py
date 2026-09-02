@@ -18,12 +18,9 @@ from dataclasses import replace
 
 from ..pt import pt_counter_deltas
 from . import ast
-from .amounts import (
-    accept_added_base,
-    accept_counters_on_source,
-    accept_damage_dealt_this_turn,
-    parse_amount,
-)
+from .amounts import accept_counters_on_source, parse_amount
+from .records import accept_added_base, accept_damage_dealt_this_turn
+
 from .errors import GrammarError
 from .lexer import (GToken, MANA, NUMBER, PT, PUNCT, QUOTE, WORD, tokenize)
 from .nouns import _STATE_ADJECTIVES, parse_object_filter

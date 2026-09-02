@@ -13,10 +13,9 @@ is for.
 """
 
 from . import ast
-from .amounts import (
-    accept_added_base, accept_counters_on_source, accept_damage_dealt_this_turn,
-    accept_exiled_for_cost, accept_sacrificed_for_cost,
-)
+from .amounts import accept_counters_on_source
+from .records import accept_added_base, accept_damage_dealt_this_turn, accept_exiled_for_cost, accept_sacrificed_for_cost
+
 from .lexer import NUMBER
 from .nouns import parse_object_filter
 from .stream import TokenStream

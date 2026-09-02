@@ -178,6 +178,17 @@ class CreateToken:
     # ``toughness`` stay None when this is set, because there is no printed
     # number for them to hold.
     counted_pt: object | None = None
+    # "Create a black Spirit creature token. **Its power is equal to that
+    # creature's power and its toughness is equal to that creature's
+    # toughness.**" (Broken Visage.) The P/T is stated by the sentence *behind*
+    # the token, one amount each, so ``power`` and ``toughness`` stay None —
+    # there is no printed number for them to hold, exactly as with
+    # ``counted_pt`` above.
+    #
+    # A pair rather than one amount, because the card states the two halves
+    # separately: they happen to name the same creature here, and a single
+    # field would make that an assumption rather than a reading.
+    pt_from: tuple[Amount, Amount] | None = None
     #: Printed abilities the token has, each as its own quoted line — "…with
     #: **"This token can't block"** and **"Creatures you control attack each
     #: combat if able."**" (the Pirate Pursued Whale makes). Text rather than

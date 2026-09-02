@@ -22,6 +22,7 @@ from ._common import (
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
     _DEFENDING_PLAYER_EVENTS,
+    _back_reference_payload,
 )
 
 
@@ -394,11 +395,21 @@ def _fused_discard_then_draw(
     )
 
 
-def _lower_draw(node: ast.Draw) -> tuple[OracleInstruction, ...]:
+def _lower_draw(
+    node: ast.Draw,
+    produced: frozenset[str] = frozenset(),
+    event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
     """"You draw" and "target player draws" are different handlers, not one
     handler with a recipient flag: ``draw_controller_cards`` draws for the
     effect's controller, ``draw_target_cards`` for the chosen player. Picking by
-    the drawer keeps each one's existing contract intact."""
+    the drawer keeps each one's existing contract intact.
+
+    *produced* and *event* are what a back-referenced count needs — "draws **as
+    many cards as they discarded this way**" (Forget) — and they are the reason
+    this lowering is dispatched from ``lower.py``'s chain rather than from
+    ``by_node``'s name-only table.
+    """
     # "For each creature exiled this way, **its controller** draws a card."
     # (Martyr's Cry.) A possessive with no target in front of it: whose hand it
     # is, is a fact an earlier step recorded about the loop's object, so it
@@ -407,12 +418,36 @@ def _lower_draw(node: ast.Draw) -> tuple[OracleInstruction, ...]:
     # Without this the pronoun fell into the branch below and drew for
     # ``context.target`` — a seat this sentence never named — which is the
     # silent widening `PER_OBJECT_SEAT_RECORDS` exists to close.
+    if node.up_to:
+        # "…may draw **up to** two cards" (Truce). A ceiling is a *decision* —
+        # how many, answered by the drawing seat — and no draw handler asks one.
+        # The one shape that works is the whole "each player may draw up to N"
+        # sentence, which `control_flow._each_player_optional_draw` collapses
+        # into a prompt before this lowering is ever reached. Everywhere else
+        # the words refuse: read as an amount they would draw the maximum, and a
+        # forced draw is a different card from an offered one — on Truce, the
+        # difference is the whole of what the card does.
+        raise LoweringError(
+            "no draw handler offers a ceiling the drawer chooses under",
+            node=node,
+        )
     drawer_seat = (
         PER_OBJECT_SEAT_RECORDS["controller"]
         if node.player.kind == "controller" else None
     )
     kind = (
         "draw_controller_cards" if node.player.kind == "you" else "draw_target_cards"
+    )
+    # "**Each player** draws a card." (Winter Sky.) A *set* of seats, which the
+    # bare `draw_target_cards` reading cannot express: the handler draws for
+    # `context.target`, one seat, so a card printing "each player" drew for the
+    # opponent alone — the right answer for nobody and, in a duel, half the
+    # card. The same ``recipient`` key `mill_target_player` already reads for
+    # exactly this phrase one zone over, so nothing new is invented: which
+    # seats an effect happens to is one convention across the engine.
+    looped_seats = (
+        node.player.kind
+        if node.player.kind in ("each_player", "each_opponent") else None
     )
     halved = (
         halved_count_spec(node.count, node) if isinstance(node.count, ast.Half) else None
@@ -445,10 +480,22 @@ def _lower_draw(node: ast.Draw) -> tuple[OracleInstruction, ...]:
         payload: dict[str, object] = {
             "amount": "x", X_FROM_COUNT: count_spec(node.count.filter, node),
         }
+    elif isinstance(node.count, ast.ThatMuch):
+        # "Target player discards two cards, then draws **as many cards as they
+        # discarded this way**." (Forget.) The number is one an earlier step of
+        # this same resolution recorded, and where it is read from is decided in
+        # the one place that decides it for every back-reference — which refuses
+        # outright when no step of this effect produces the key, because the
+        # words would otherwise name nothing and draw zero on a card reporting
+        # itself supported.
+        payload: dict[str, object] = {"amount": 0}
+        payload.update(_back_reference_payload(node.count, produced, event))
     else:
         payload = {"amount": _amount_payload(node.count)}
     if drawer_seat is not None:
         payload["drawer_seat"] = drawer_seat
+    if looped_seats is not None:
+        payload["recipient"] = looped_seats
     _describe_targets(payload, node.player)
     return (OracleInstruction(kind, "", payload),)
 
@@ -596,6 +643,65 @@ def _lower_put_iterated_card_on_library(
     return (
         OracleInstruction(
             "put_iterated_card_on_library", "", {"position": node.position}
+        ),
+    )
+
+
+def _lower_for_each_short_of_this_way(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each card less than two a player draws this way,** that player
+    gains 2 life." (Truce.)
+
+    :func:`_lower_for_each_life_lost`'s twin, and a *nested* loop where that one
+    is flat. The sentence names two things at once — "a player" and, inside it,
+    a count — so it lowers to a loop over seats (CR 101.4's turn order) with a
+    counted repetition inside it. The seat loop is what binds "that player", and
+    the inner count is one number per seat, read out of the record the sentence
+    in front of it wrote.
+
+    Two refusals, each a way the words could otherwise mean more than they
+    say:
+
+    * a step of this same effect must record the count. "This way" is a
+      back-reference, and one with no producer names nothing — here it would
+      compute the printed base and hand every player the *maximum* life, which
+      is the card upside down (idiom 7).
+    * the body must lower to something, for :func:`_lower_for_each_chosen`'s
+      reason: an empty loop reports supported and does not run.
+    """
+    record = node.iterator.record
+    if record not in produced:
+        raise LoweringError(
+            f"nothing in this effect records the {record!r} count this loop is "
+            "short of",
+            node=node,
+        )
+    if not inner:
+        raise LoweringError("a per-shortfall loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {
+                # The seats, in turn order, so "that player" names one of them
+                # per iteration — the same binding every multi-seat offer makes.
+                "iterator": {"players": "each_player"},
+                "effect": (
+                    OracleInstruction(
+                        "for_each", "",
+                        {
+                            "iterator": {
+                                "repeat_from_record": {
+                                    "record": record, "base": node.iterator.base,
+                                }
+                            },
+                            "effect": inner,
+                        },
+                    ),
+                ),
+            },
         ),
     )
 

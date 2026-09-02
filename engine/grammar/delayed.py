@@ -767,22 +767,32 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
         # repeats over it, not by one that says "that creature".
         binds = bool(stream.accept_phrase("for", "each", "of", "those"))
     if not binds:
-        # …or the same delayed ability with its delay printed **after** the
-        # effect: "This creature deals 2 damage to that creature **at end of
-        # combat**." (Dwarven Sea Clan.) A fourth answer to the one question,
-        # and it has to be asked of the whole statement parser rather than of
-        # `_parse_create_delayed_trigger` above, because the trailing spelling
-        # is read by ``statements.parse_statement``'s own trailing-delay clause
-        # (Hazezon Tamar's) and not by the openers. Asking the reader that will
-        # really parse this sentence a moment later is also what keeps the two
-        # from disagreeing about whether it binds.
+        # …or one of two more answers, both read off the *parsed* next
+        # sentence rather than off its opening words. Dwarven Sea Clan prints
+        # the delay **after** the effect ("This creature deals 2 damage to that
+        # creature **at end of combat**"), which ``statements.parse_statement``
+        # reads through its own trailing-delay clause (Hazezon Tamar's) and the
+        # openers above do not. Retribution names **one member** of the set this
+        # sentence just chose ("That player chooses and sacrifices **one of
+        # those creatures**"). A loop announces itself in four tokens and
+        # neither of these does, so the probe has to be the statement itself.
+        #
+        # Parsed **once** and asked both questions. Two probes over one sentence
+        # would parse it twice and, worse, the second would start from wherever
+        # the first left the cursor — which is how two independently correct
+        # binder probes become one that reads the wrong sentence.
+        probe = stream.mark()
         try:
             following = parse_statement(stream, top_level=True)
         except GrammarError:
             following = None
-        binds = (
-            isinstance(following, ast.CreateDelayedTrigger)
-            and following.binds_target
+        stream.reset(probe)
+        binds = bool(
+            (
+                isinstance(following, ast.CreateDelayedTrigger)
+                and following.binds_target
+            )
+            or (following is not None and _names_a_chosen_member(following))
         )
     stream.reset(after_filter)
     if not binds:
@@ -921,3 +931,23 @@ def _parse_choose_then_gain(stream: TokenStream) -> "ast.GainKeyword | None":
     return ast.GainKeyword(
         subject, keywords, _parse_duration(stream), choose_one=True
     )
+
+
+def _names_a_chosen_member(node) -> bool:
+    """Whether *node* names one member of a set an earlier sentence chose.
+
+    A walk over the dataclass rather than a check on the top-level statement,
+    for :func:`_names_a_bound_object`'s reason: the reference can be nested
+    inside an offer, a sequence or a toll, and a statement class added later is
+    covered by default instead of silently answering False.
+    """
+    if isinstance(node, ast.TargetSpec) and node.quantifier == "one_of_those":
+        return True
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        return any(
+            _names_a_chosen_member(getattr(node, field.name))
+            for field in dataclasses.fields(node)
+        )
+    if isinstance(node, (tuple, list)):
+        return any(_names_a_chosen_member(item) for item in node)
+    return False

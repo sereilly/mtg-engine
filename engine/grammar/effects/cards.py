@@ -15,8 +15,9 @@ re-forms instead of forking.
 import dataclasses
 
 from .. import ast
-from ..amounts import (accept_fraction_head, accept_rounding, parse_amount,
-                       parse_equal_to)
+from ..amounts import accept_fraction_head, accept_rounding, parse_amount, parse_equal_to
+from ..records import accept_as_many_as
+
 from ..errors import GrammarError
 from ..lexer import (MANA, render)
 from ..nouns import parse_object_filter
@@ -40,6 +41,20 @@ def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
         if counted is not None:
             return ast.Draw(player, counted)
         stream.reset(mark)
+    # "…then draws **as many cards as they discarded this way**" (Forget). The
+    # comparative spelling puts the noun *inside* the quantity, which is why it
+    # is read here with the noun handed to it rather than by `parse_amount`
+    # below — that one is called where the noun has not been reached yet, and
+    # returns before it.
+    as_many = accept_as_many_as(stream, ("card", "cards"), player)
+    if as_many is not None:
+        return ast.Draw(player, as_many)
+    # "Each player may draw **up to** two cards." (Truce.) Read before the
+    # amount and recorded rather than consumed, exactly as `_parse_discard`
+    # below reads the same two words: a ceiling read as an exact count is a
+    # card that forces a draw its controller was offered the choice of
+    # declining — and on this card the declining is the whole point.
+    up_to = bool(stream.accept_phrase("up", "to"))
     count = parse_amount(stream)
     # "draw two **additional** cards" (Sylvan Library). The word says the draw
     # is on top of one the turn already provides; it names no second effect and
@@ -60,10 +75,10 @@ def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
         # Only the plain "a card" spelling composes: "draw two cards for each …"
         # is a product this AST has no node for, and reading it as the
         # multiplier alone would halve the card's effect.
-        if not (isinstance(count, ast.Fixed) and count.value == 1):
+        if not (isinstance(count, ast.Fixed) and count.value == 1) or up_to:
             raise stream.error("a per-each draw multiplies one card")
         return ast.Draw(player, multiplier)
-    return ast.Draw(player, count)
+    return ast.Draw(player, count, up_to=up_to)
 
 
 def _parse_draw_multiplier(stream: TokenStream) -> "ast.Amount | None":

@@ -29,7 +29,7 @@ from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...grammar.phrases import BASIC_LAND_WORDS
 from ...land_types import CHOSEN_LAND_TYPES, change_land_type
 from ...models import CardDefinition, Permanent
-from ...oracle_types import (DISCARDED_BY_SEAT, EXILED_THIS_WAY,
+from ...oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, EXILED_THIS_WAY,
                              EXILED_THIS_WAY_OBJECTS)
 from ... import land_mana_swaps
 from ...pending_choices import (CHOICE_SPECS, PendingChoice,
@@ -1769,6 +1769,68 @@ class PendingChoicesMixin:
         self.discard_pending_choice(choice)
         return True
 
+    # -- "You may draw up to N cards" ----------------------------------------
+
+    def confirm_draw_up_to(self, player_index: int, number: int) -> bool:
+        """Answer "you may draw up to N cards" with how many (Truce)."""
+        return self.resolve_pending_choice(
+            "draw_up_to", player_index, number=number
+        )
+
+    def _resolve_draw_up_to(self, choice: PendingChoice, number) -> bool:
+        """Draw *number* cards for the seat that was offered up to N.
+
+        Out of range is a **rejection**, not a clamp, exactly as it is for
+        ``number_choice``: the prompt names the ceiling the card prints, and
+        repairing an answer silently would let a client ask for four cards off a
+        card that offers two and be told it worked.
+
+        The draw goes through ``_draw_with_replacements`` like every other draw
+        in the engine — a ceiling is not a reason to skip CR 614 — and what is
+        recorded is what was actually drawn, which is what the sentence behind
+        it counts.
+        """
+        try:
+            value = int(number)
+        except (TypeError, ValueError):
+            return False
+        ceiling = int(choice.data.get("amount", 0))
+        if not (0 <= value <= ceiling):
+            return False
+        player = self.players[choice.player_index]
+        drawn = self._draw_with_replacements(player, value) if value else 0
+        if value:
+            self.log.append(f"{player.name} drew {drawn} card(s)")
+        else:
+            self.log.append(f"{player.name} drew no cards")
+        results = choice.data.get("_results")
+        if results is not None:
+            # "**For each card less than two** a player draws this way…"
+            # (Truce.) What was drawn, per seat, under the key the sentence
+            # behind this one reads. Written even for a seat that drew none —
+            # a shortfall is a number for every player, and a seat the record
+            # never mentions has to read as zero rather than as a missing key.
+            by_seat = results.setdefault(DREW_BY_SEAT, {})
+            by_seat[choice.player_index] = drawn
+        self.discard_pending_choice(choice)
+        return True
+
+    def _default_draw_up_to(self, choice: PendingChoice) -> bool:
+        """The stated policy for an "up to N": take the maximum (a free draw is
+        a gift), **capped by the library**.
+
+        The cap is not a valuation, it is the same rule
+        ``default_sacrifice_pick`` states one prompt over — a default never
+        picks the answer that loses the game. CR 704.5b makes drawing from an
+        empty library a loss at the next state-based check, so "take the
+        maximum" over a two-card library is a seat choosing to die for a card
+        it was offered the choice of declining.
+        """
+        player = self.players[choice.player_index]
+        return self._resolve_draw_up_to(
+            choice, min(int(choice.data.get("amount", 0)), len(player.library))
+        )
+
     # -- "Choose a number between N and M" -----------------------------------
 
     def confirm_number_choice(self, player_index: int, number: int) -> bool:
@@ -2519,6 +2581,7 @@ class PendingChoicesMixin:
         context,
         candidates,
         optional: bool = False,
+        remainder_key: str | None = None,
     ) -> PendingChoice | None:
         """Queue "choose one of these permanents" for *player_index*.
 
@@ -2541,6 +2604,12 @@ class PendingChoicesMixin:
             _context=context,
             _candidates=tuple(candidates),
             optional=optional,
+            # "Put a -1/-1 counter on **the other**." (Retribution.) Which
+            # scratchpad key the *unchosen* candidates are recorded under. It
+            # rides the prompt because the answer is what decides them, and the
+            # only place the answer and the offered set are both in hand is
+            # where the answer is recorded.
+            remainder_key=remainder_key,
         )
 
     def live_permanent_choices(self, choice: PendingChoice) -> list:
@@ -2565,7 +2634,25 @@ class PendingChoicesMixin:
         )
 
     def _record_permanent_choice(self, choice: PendingChoice, permanent_id) -> None:
-        choice.data["_context"].results[choice.data["result_key"]] = permanent_id
+        results = choice.data["_context"].results
+        results[choice.data["result_key"]] = permanent_id
+        remainder_key = choice.data.get("remainder_key")
+        if remainder_key is not None:
+            # "That player chooses and sacrifices one of those creatures. Put a
+            # -1/-1 counter on **the other**." (Retribution.) The offered
+            # candidates minus the one taken, by id — resolved here because
+            # this is the only moment both the set and the answer exist, and by
+            # the next step of the resolution one of them is in a graveyard.
+            #
+            # A bare id rather than a list, and refused above one: "the other"
+            # is a phrase about a pair, and a two-member answer to it would be
+            # read by the single-permanent channel as whichever came first.
+            others = [
+                perm.permanent_id
+                for perm in (choice.data.get("_candidates") or ())
+                if perm.permanent_id != permanent_id
+            ]
+            results[str(remainder_key)] = others[0] if len(others) == 1 else None
         self.discard_pending_choice(choice)
 
     def _resolve_permanent_choice(self, choice: PendingChoice, permanent_id) -> bool:
@@ -5625,6 +5712,23 @@ register_choice(
     blocked_detail=None,
     spectator_visible=True,
     hidden_for_ai=False,
+)
+
+register_choice(
+    "draw_up_to",
+    resolve=lambda game, choice, r: game._resolve_draw_up_to(choice, r["number"]),
+    default=lambda game, choice: game._default_draw_up_to(choice),
+    action="draw_up_to_confirm",
+    prompt_key="draw_up_to",
+    blocked_detail="say how many cards you draw before other actions",
+    blocks_every_seat=True,
+    spectator_visible=True,
+    # "Each player may draw up to two cards. **For each card less than two a
+    # player draws this way**, that player gains 2 life." (Truce.) The sentence
+    # behind this one is sized from every seat's answer, so nothing in the
+    # resolution may run until the last of them is given — the same reason the
+    # discard prompt beside it suspends (CR 608.2).
+    suspends=True,
 )
 
 register_choice(

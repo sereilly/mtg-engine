@@ -261,6 +261,12 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # hand for each card discarded this way" (Recall): the answer is the
         # count and the identity the next step of the same sentence works from.
         "discard",
+        # "Each player may draw up to two cards. **For each card less than two
+        # a player draws this way**, that player gains 2 life." (Truce.) The
+        # discard's twin one zone over and for its reason: the sentence behind
+        # it is sized from every seat's answer, so nothing may run until the
+        # last of them is given.
+        "draw_up_to",
         "scry",             # arranges the library a later draw reads
         "search_library",   # removes a card from it and shuffles the rest
         "reorder_library",  # same, by permutation

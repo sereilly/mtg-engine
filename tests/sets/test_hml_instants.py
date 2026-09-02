@@ -180,3 +180,208 @@ def test_jinx_offers_a_land_to_target(set_pool):
     card = set_pool("HML")["Jinx"]
 
     assert _g2_cast_spec(card, _g2_compile(card)) == {"kind": "land"}
+
+
+# --- W2G1: sequenced spells ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.pt import add_pt_modifier
+
+
+def _w2g1_game(*players: PlayerState, interactive=()) -> Game:
+    game = Game(players=list(players))
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game._settle()
+    return game
+
+
+def _w2g1_resolve(game: Game) -> None:
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+
+def _w2g1_visage(set_pool, attacker: Permanent, pump=None):
+    """Seat 0 holds Broken Visage; seat 1 is attacking with *attacker*."""
+    caster = PlayerState(
+        name="P0", hand=[set_pool("HML")["Broken Visage"]],
+        library=[set_pool("LEA")["Plains"]] * 5,
+    )
+    victim = PlayerState(
+        name="P1", battlefield=[attacker],
+        library=[set_pool("LEA")["Plains"]] * 5,
+    )
+    game = _w2g1_game(caster, victim)
+    game.active_player_index = 1
+    attacker.attacking = True
+    game.combat_attackers = {0: 0}
+    if pump is not None:
+        add_pt_modifier(attacker, *pump)
+    game._settle()
+    return game, caster, victim
+
+
+# --- Truce -----------------------------------------------------------------
+
+
+def test_truce_lets_each_seat_take_its_own_number_of_cards(set_pool):
+    """"Each player may draw up to two cards. For each card less than two a
+    player draws this way, that player gains 2 life."
+
+    The shortfall is per seat: the caster takes both cards and gains nothing,
+    the other seat declines both and gains 4. One number for the whole
+    resolution would have handed the same answer to both.
+    """
+    pool = set_pool("HML")
+    lea = set_pool("LEA")
+    caster = PlayerState(name="P0", hand=[pool["Truce"]], library=[lea["Plains"]] * 10)
+    other = PlayerState(name="P1", library=[lea["Plains"]] * 10)
+    game = _w2g1_game(caster, other, interactive=(0, 1))
+
+    result = game.cast_from_hand(0, "Truce")
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert result.supported, result.details
+    assert {(c.kind, c.player_index) for c in game.pending_choices} == {
+        ("draw_up_to", 0), ("draw_up_to", 1),
+    }
+    # No life is gained until the last seat has answered: the sentence behind
+    # the prompt is sized from every seat's number.
+    assert (caster.life, other.life) == (20, 20)
+
+    assert game.confirm_draw_up_to(0, 2)
+    assert game.confirm_draw_up_to(1, 0)
+    game._settle()
+
+    assert (len(caster.hand), len(other.hand)) == (2, 0)
+    assert (caster.life, other.life) == (20, 24)
+
+
+def test_truce_pays_two_life_for_each_card_a_seat_leaves(set_pool):
+    """One card short of two is 2 life, not 4 and not nothing -- the rate is per
+    card and the base is the printed two."""
+    pool = set_pool("HML")
+    lea = set_pool("LEA")
+    caster = PlayerState(name="P0", hand=[pool["Truce"]], library=[lea["Plains"]] * 10)
+    other = PlayerState(name="P1", library=[lea["Plains"]] * 10)
+    game = _w2g1_game(caster, other, interactive=(0, 1))
+
+    game.cast_from_hand(0, "Truce")
+    while game.stack:
+        game.resolve_top_of_stack()
+    assert game.confirm_draw_up_to(0, 1)
+    assert game.confirm_draw_up_to(1, 1)
+    game._settle()
+
+    assert (len(caster.hand), len(other.hand)) == (1, 1)
+    assert (caster.life, other.life) == (22, 22)
+
+
+def test_truce_refuses_a_number_above_the_printed_ceiling(set_pool):
+    """Out of range is a rejection, not a clamp: the prompt names the ceiling
+    the card prints, and repairing an answer silently would let a client draw
+    three cards off a card that offers two and be told it worked."""
+    pool = set_pool("HML")
+    lea = set_pool("LEA")
+    caster = PlayerState(name="P0", hand=[pool["Truce"]], library=[lea["Plains"]] * 10)
+    other = PlayerState(name="P1", library=[lea["Plains"]] * 10)
+    game = _w2g1_game(caster, other, interactive=(0, 1))
+
+    game.cast_from_hand(0, "Truce")
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert game.confirm_draw_up_to(0, 3) is False
+    assert len(caster.hand) == 0
+    assert len(game.pending_choices) == 2
+
+
+def test_truce_headless_seats_take_the_maximum_their_library_allows(set_pool):
+    """The stated policy for an "up to N" is the maximum -- a free draw is a gift
+    -- capped by the library, because a default never picks the answer that
+    loses the game (CR 704.5b). The short seat draws its one card and is paid
+    for the one it could not take."""
+    pool = set_pool("HML")
+    lea = set_pool("LEA")
+    caster = PlayerState(name="P0", hand=[pool["Truce"]], library=[lea["Plains"]] * 10)
+    other = PlayerState(name="P1", library=[lea["Plains"]])
+    game = _w2g1_game(caster, other)
+
+    game.cast_from_hand(0, "Truce")
+    _w2g1_resolve(game)
+
+    assert (len(caster.hand), len(other.hand)) == (2, 1)
+    assert (caster.life, other.life) == (20, 22)
+    assert other.library == []
+
+
+# --- Broken Visage ---------------------------------------------------------
+
+
+def test_broken_visage_makes_a_token_the_size_of_the_creature_it_destroyed(set_pool):
+    """"Create a black Spirit creature token. Its power is equal to that
+    creature's power and its toughness is equal to that creature's toughness."
+
+    The creature is already in a graveyard when the token is built, so the
+    numbers are the ones the destroy froze (CR 608.2h).
+    """
+    attacker = Permanent(card=set_pool("LEA")["Hill Giant"])
+    game, caster, victim = _w2g1_visage(set_pool, attacker)
+
+    result = game.cast_from_hand(
+        0, "Broken Visage", target_permanent_ids=[attacker.permanent_id],
+    )
+    _w2g1_resolve(game)
+
+    assert result.supported, result.details
+    assert [c.name for c in victim.graveyard] == ["Hill Giant"]
+    token = caster.battlefield[0]
+    assert token.card.name == "Spirit Token"
+    assert (token.effective_power, token.effective_toughness) == (3, 3)
+    assert set(token.effective_colors) == {"B"}
+
+
+def test_broken_visage_copies_the_size_the_creature_had_not_the_printed_one(set_pool):
+    """A pumped 5/7 Hill Giant makes a 5/7 Spirit. The frozen numbers are the
+    *effective* ones, which is the whole reason they cannot be read off the
+    card after the destroy."""
+    attacker = Permanent(card=set_pool("LEA")["Hill Giant"])
+    game, caster, victim = _w2g1_visage(set_pool, attacker, pump=(2, 4))
+
+    game.cast_from_hand(
+        0, "Broken Visage", target_permanent_ids=[attacker.permanent_id],
+    )
+    _w2g1_resolve(game)
+
+    token = caster.battlefield[0]
+    assert (token.effective_power, token.effective_toughness) == (5, 7)
+
+
+def test_broken_visage_sacrifices_its_token_at_the_next_end_step(set_pool):
+    """"Sacrifice the token at the beginning of the next end step."
+
+    "The token" is the one this resolution made, not the creature the spell
+    targeted -- which by then is a card in a graveyard, so a delay bound to the
+    target would arm nothing and the sentence would silently do nothing.
+    """
+    attacker = Permanent(card=set_pool("LEA")["Hill Giant"])
+    game, caster, victim = _w2g1_visage(set_pool, attacker)
+
+    game.cast_from_hand(
+        0, "Broken Visage", target_permanent_ids=[attacker.permanent_id],
+    )
+    _w2g1_resolve(game)
+    assert [p.card.name for p in caster.battlefield] == ["Spirit Token"]
+
+    game.resolve_end_step(1)
+    _w2g1_resolve(game)
+
+    # CR 111.7: a token that has left the battlefield ceases to exist, so the
+    # graveyard holds the spell and nothing else.
+    assert caster.battlefield == []
+    assert [c.name for c in caster.graveyard] == ["Broken Visage"]
+

@@ -15,6 +15,7 @@ That is what keeps the direction one-way and the guard able to say so.
 
 import dataclasses
 
+from ..oracle_types import DREW_BY_SEAT
 from . import ast
 from .errors import GrammarError
 from .lexer import (NUMBER, SELF, WORD)
@@ -36,7 +37,7 @@ from .delayed import (_parse_choose_target, _parse_choose_then_gain,
                       parse_trailing_delay,
                       resolve_that_turn)
 from .references import parse_player_ref, parse_recipient
-from .vocabulary import CARD_TYPES
+from .vocabulary import CARD_TYPES, singular as _singular
 from .stream import TokenStream
 from .conditions import _parse_condition
 from .where_x import parse_where_x_definition
@@ -128,6 +129,22 @@ from .effects import (
 # ---------------------------------------------------------------------------
 
 
+#: "for each **card** less than two a player **draws** this way" (Truce) — the
+#: printed noun and verb that name a per-seat record an earlier step of the same
+#: effect wrote, and the scratchpad key it wrote it under. A table for
+#: ``amounts._THIS_WAY_COUNTS``'s reason, and checked as a *pair* for its
+#: reason too: "for each card less than two a player discards this way" is a
+#: sentence about the other record, and reading one for the other computes a
+#: number the card never printed.
+_SHORTFALL_RECORDS: dict[tuple[str, str], str] = {
+    ("card", "draws"): DREW_BY_SEAT,
+}
+
+#: The head nouns those rows can open with, so the reader can decline before it
+#: consumes anything.
+_SHORTFALL_NOUNS = frozenset(noun for noun, _ in _SHORTFALL_RECORDS)
+
+
 def _parse_leading_for_each(
     parse_body,
     stream: TokenStream,
@@ -164,6 +181,26 @@ def _parse_leading_for_each(
             return None
         return ast.EachLifeLost(per=number)
     stream.reset(life_lost)
+    # "**For each card less than two a player draws this way,** that player
+    # gains 2 life." (Truce.) A count that is a *shortfall*, one per seat.
+    # Read beside the count above and before the noun phrase below, which would
+    # take "card" as a quantified object and then fail the line on "less".
+    short = stream.mark()
+    noun = stream.peek_word()
+    if noun is not None and _singular(noun) in _SHORTFALL_NOUNS:
+        stream.advance()
+        base = _accept_number(stream) if stream.accept_phrase("less", "than") else None
+        if base is not None and stream.accept_phrase("a", "player"):
+            verb = stream.peek_word()
+            record = (
+                _SHORTFALL_RECORDS.get((_singular(noun), verb))
+                if verb is not None else None
+            )
+            if record is not None:
+                stream.advance()
+                if stream.accept_phrase("this", "way") and stream.accept_punct(","):
+                    return ast.EachShortOfThisWay(record=record, base=base)
+    stream.reset(short)
     # "**For each player,** this enchantment deals 1 damage to that player …"
     # (Lim-Dûl's Hex.) The players as a set, in the leading printed position.
     # Read before the noun phrase below, which has no reading for a bare

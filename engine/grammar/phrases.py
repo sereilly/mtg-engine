@@ -21,12 +21,9 @@ from dataclasses import replace
 
 from ..pt import pt_counter_deltas
 from . import ast
-from .amounts import (
-    accept_added_base,
-    accept_counters_on_source,
-    accept_damage_dealt_this_turn,
-    parse_amount,
-)
+from .amounts import accept_counters_on_source, parse_amount
+from .records import accept_added_base, accept_damage_dealt_this_turn
+
 from .errors import GrammarError
 from .lexer import (GToken, MANA, NUMBER, PT, PUNCT, QUOTE, WORD, tokenize)
 from .nouns import _STATE_ADJECTIVES, parse_object_filter
@@ -361,8 +358,22 @@ def parse_pair_ordinal_subject(stream: TokenStream) -> "ast.TargetSpec | None":
     if not stream.accept_word("the"):
         return None
     ordinal = _accept_pair_ordinal(stream)
+    if ordinal is None:
+        stream.reset(mark)
+        return None
     noun = stream.peek_word()
-    if ordinal is None or noun is None or noun not in CARD_TYPES:
+    if noun is None or noun not in CARD_TYPES:
+        # "Put a -1/-1 counter on **the other**." (Retribution.) The bare
+        # ordinal, with the noun left to the sentence that named the pair —
+        # which is the only place it could come from, since the pair is a set an
+        # earlier sentence chose rather than anything this phrase describes.
+        #
+        # Admitted only at the end of its clause: "the other" followed by a word
+        # this reader has no noun for is a phrase it has not understood, and
+        # consuming two words of it would be the dropped-rider shape the
+        # full-consumption rule exists to make loud.
+        if stream.exhausted or stream.at_punct(".", ",", ";"):
+            return ast.TargetSpec(ordinal, ast.ObjectFilter())
         stream.reset(mark)
         return None
     stream.advance()

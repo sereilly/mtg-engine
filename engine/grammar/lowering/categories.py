@@ -242,6 +242,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # sacrifice is not a destruction and no replacement may stop it — so it is
     # its own kind with its own handler, in the family that owns the verb.
     "sacrifice_bound_permanent": "destruction",
+    # "That player chooses and sacrifices one of those creatures."
+    # (Retribution.) The sacrifice acting on a permanent a ``choose_permanent``
+    # step recorded, beside the one acting on a permanent a trigger bound.
+    "sacrifice_recorded_permanent": "destruction",
     "destroy_self": "destruction",
     "destroy_all_artifacts_creatures_enchantments": "destruction",
     "delayed_destroy_blocked_or_blocker": "destruction",
@@ -386,6 +390,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "Each player may discard up to three cards." (Mind Bomb.) One prompt
     # per seat, and a discard like every other one in this category.
     "each_player_discards_up_to_cards": "zones",
+    # "Each player may draw up to two cards." (Truce.) The discard's twin one
+    # zone over, and the same category: a card moving between a library and a
+    # hand.
+    "each_player_draws_up_to_cards": "zones",
     # "Each opponent discards two cards." (Bad Deal) — one pending discard
     # choice per opponent, same flow as the targeted form.
     "each_opponent_discards_cards": "zones",

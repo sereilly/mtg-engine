@@ -10,10 +10,9 @@ change a characteristic; where it sits is incidental.
 """
 
 from .. import ast
-from ..amounts import (_parse_for_each_this_way, accept_counters_on_source,
-                       accept_fraction_head, accept_life_gain_cap,
-                       accept_rounding, expect_pt, parse_amount,
-                       parse_equal_to)
+from ..amounts import accept_counters_on_source, accept_fraction_head, accept_life_gain_cap, accept_rounding, expect_pt, parse_amount, parse_equal_to
+from ..records import _parse_for_each_this_way
+
 from ..errors import GrammarError
 from ..lexer import (GToken, PT, PUNCT, QUOTE, SELF, WORD, tokenize)
 from ..nouns import parse_object_filter

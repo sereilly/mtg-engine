@@ -14,7 +14,8 @@ owner.
 
 import dataclasses
 
-from ...oracle_types import X_FROM_COUNT_PER_RECIPIENT, OracleInstruction
+from ...oracle_types import (CHOSEN_TARGET_PERMANENTS,
+                             X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
 from ...subject_filters import (
     TESTABLE_SUBJECT_FILTER_KEYS, object_only_filter, untestable_filter_keys,
 )
@@ -37,6 +38,8 @@ from ._common import (
     is_mana_value_x,
 )
 from ._events import (
+    CHOSEN_PLAYER,
+    OTHER_CHOSEN_PERMANENT,
     _RECORDED_PERMANENTS,
     _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
@@ -219,7 +222,9 @@ def _per_payer_count(node: ast.Sacrifice) -> dict:
 
 
 def _lower_sacrifice(
-    node: ast.Sacrifice, event: str | None = None
+    node: ast.Sacrifice,
+    event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """Only "sacrifice this <permanent>" has a handler.
 
@@ -249,6 +254,9 @@ def _lower_sacrifice(
     # offered the wrong one to give up.
     if names_attached_permanent(node.subject, event):
         return (OracleInstruction("sacrifice_attached_permanent", "", {}),)
+    from_chosen = _lower_sacrifice_one_of_chosen(node, produced)
+    if from_chosen is not None:
+        return from_chosen
     # "When this creature leaves the battlefield this turn, **sacrifice that
     # creature**." (Phantasmal Mount.) The object the creating ability bound
     # (CR 603.7c), carried by id in the trigger's context — the mirror of
@@ -458,3 +466,74 @@ def _lower_exchange_greatest_mana_value(
             )
         )
     return (OracleInstruction("sequence", "", {"steps": tuple(steps)}),)
+
+
+def _lower_sacrifice_one_of_chosen(
+    node: ast.Sacrifice, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...] | None:
+    """"That player chooses and sacrifices **one of those creatures**."
+    (Retribution.)
+
+    Preacher's decomposition again (``destruction._lower_destroy_of_their_choice``
+    states it in full): the pick belongs to a seat that is not the effect's
+    controller, so it is the ordinary ``choose_permanent`` prompt — armed on
+    that seat, answered into the resolution's scratchpad — and the sacrifice
+    behind it acts on the recorded id. What is new is only that the candidates
+    are a set an *earlier sentence* chose rather than a battlefield the prompt
+    scans: a sacrifice offered over the board would let the player give up any
+    creature they own, which is a strictly better card than the one printed.
+
+    Returns None without claiming the sentence unless every part is there, so
+    an ordinary "sacrifices a creature" keeps its own reading:
+
+    * the subject must be one member of the chosen set (``one_of_those``);
+    * the sacrificing player must be the one the first sentence named
+      (``that_player``), and a step of this same effect must have recorded that
+      seat — with no producer "that player" names nobody and the prompt would
+      be armed on the caster, who is exactly the seat the card says must not
+      choose (idiom 7);
+    * that step must also have recorded the set, or there is nothing to offer.
+    """
+    subject = node.subject
+    if not (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "one_of_those"
+        and node.player.kind == "that_player"
+        and node.count is None
+    ):
+        return None
+    if CHOSEN_TARGET_PERMANENTS not in produced or CHOSEN_PLAYER not in produced:
+        raise LoweringError(
+            "\"one of those\" needs an earlier step of this effect that chose "
+            "a set and named its controller",
+            node=node,
+        )
+    described = _filter_payload(subject.filter)
+    if untestable_filter_keys(described):
+        raise LoweringError(
+            "the sacrifice prompt cannot test this restriction", node=node
+        )
+    return (
+        OracleInstruction(
+            "choose_permanent", "",
+            {
+                "result_key": CHOSEN_PERMANENT,
+                # "**That player** chooses": the seat the sentence in front of
+                # this one recorded, not the ability's controller.
+                "chooser": "chosen_player",
+                # …and the candidates are that same sentence's set. Named as a
+                # record rather than copied into a filter, because "those
+                # creatures" is an identity and no filter describes it.
+                "among_record": CHOSEN_TARGET_PERMANENTS,
+                # "Put a -1/-1 counter on **the other**" is the step behind the
+                # sacrifice, and this is where the answer to it exists.
+                "remainder_key": OTHER_CHOSEN_PERMANENT,
+                "filter": described,
+                "prompt": "Choose a creature to sacrifice.",
+            },
+        ),
+        OracleInstruction(
+            "sacrifice_recorded_permanent", "",
+            {"permanents_from": CHOSEN_PERMANENT},
+        ),
+    )

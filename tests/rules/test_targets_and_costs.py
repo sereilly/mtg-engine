@@ -1166,3 +1166,108 @@ def test_601_2c_up_to_one_may_still_be_activated_with_nothing_to_return(set_pool
 
     assert result.supported is True, result.details
 # --- end LeadA ---
+
+
+# --- W2G1: a relation between two targets (HML) ---
+
+
+def _w2g1_seats(*players: PlayerState) -> Game:
+    game = Game(players=list(players))
+    game.enforce_mana_costs = False
+    game._settle()
+    return game
+
+
+@pytest.mark.cr("601.2c")
+def test_601_2c_a_relation_between_two_targets_is_checked_over_the_whole_announcement(
+    set_pool,
+):
+    """"Choose two target creatures **controlled by the same opponent**."
+    (Retribution.)
+
+    CR 601.2c has the player announce a choice for each target, and a printed
+    relation between them is part of what makes the announcement legal. It
+    cannot be a property of any one candidate: each of two creatures controlled
+    by *different* opponents is separately a legal choice, and only the pair is
+    illegal. So the per-candidate enumeration passes both and the announcement
+    is refused over the whole list, before any mana is spent.
+    """
+    lea = set_pool("LEA")
+    mine = _perm(lea["Hill Giant"])
+    theirs = _perm(lea["Grizzly Bears"])
+    third = _perm(lea["Craw Wurm"])
+    game = _w2g1_seats(
+        PlayerState(name="P0", hand=[set_pool("HML")["Retribution"]]),
+        PlayerState(name="P1", battlefield=[mine, theirs]),
+        PlayerState(name="P2", battlefield=[third]),
+    )
+
+    # Two creatures, one opponent: a legal announcement.
+    assert game.cast_target_refusal(
+        0, set_pool("HML")["Retribution"],
+        target_permanent_ids=[mine.permanent_id, theirs.permanent_id],
+    ) is None
+
+    # One from each opponent: each is a legal *target*, and the pair is not.
+    assert game.cast_target_refusal(
+        0, set_pool("HML")["Retribution"],
+        target_permanent_ids=[mine.permanent_id, third.permanent_id],
+    ) is not None
+
+
+@pytest.mark.cr("601.2c")
+def test_601_2c_the_relation_does_not_narrow_what_each_target_may_be(set_pool):
+    """The relation is checked *beside* the per-candidate rule, never instead of
+    it: every creature either opponent controls is still enumerated as a legal
+    target for one instance of the word, which is what keeps the caster free to
+    announce either pair."""
+    lea = set_pool("LEA")
+    first = _perm(lea["Hill Giant"])
+    second = _perm(lea["Grizzly Bears"])
+    game = _w2g1_seats(
+        PlayerState(name="P0", hand=[set_pool("HML")["Retribution"]]),
+        PlayerState(name="P1", battlefield=[first]),
+        PlayerState(name="P2", battlefield=[second]),
+    )
+
+    for named in (first, second):
+        assert game.cast_target_refusal(
+            0, set_pool("HML")["Retribution"], target_permanent_ids=[named.permanent_id],
+        ) is None
+
+
+@pytest.mark.cr("608.2h")
+def test_608_2h_the_last_known_information_a_destroy_records_does_not_depend_on_how_the_target_was_named(
+    set_pool,
+):
+    """Divine Offering: "Destroy target artifact. You gain life equal to **its**
+    mana value."
+
+    CR 608.2h makes the number the destroyed object's last known information,
+    which the destroy freezes before it destroys anything. The gate in front of
+    that record asked whether a target *slot* had been supplied — so a caller
+    naming its target the way this engine asks for, by stable ``permanent_id``
+    alone, skipped the record entirely and the rider gained nothing. The web
+    layer sends both, so the app never showed it.
+
+    Written as a comparison rather than as one assertion, because the two
+    spellings naming the same permanent are the whole content of the rule here.
+    """
+    def _cast(by_id: bool) -> int:
+        artifact = _perm(set_pool("LEG")["Ring of Immortals"])
+        game = _w2g1_seats(
+            PlayerState(name="P0", hand=[set_pool("LEG")["Divine Offering"]]),
+            PlayerState(name="P1", battlefield=[artifact]),
+        )
+        if by_id:
+            game.cast_from_hand(
+                0, "Divine Offering", target_permanent_ids=[artifact.permanent_id],
+            )
+        else:
+            game.cast_from_hand(0, "Divine Offering", target_permanent_index=0)
+        while game.stack:
+            game.resolve_top_of_stack()
+        game._settle()
+        return game.players[0].life
+
+    assert _cast(by_id=False) == _cast(by_id=True) == 25

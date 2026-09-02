@@ -15,7 +15,8 @@ from __future__ import annotations
 import dataclasses
 
 from .. import ast
-from ..amounts import _parse_for_each_this_way, parse_amount
+from ..amounts import parse_amount
+from ..records import _parse_for_each_this_way
 from ..errors import GrammarError
 from ..lexer import GToken, PT, WORD
 from ..nouns import parse_object_filter

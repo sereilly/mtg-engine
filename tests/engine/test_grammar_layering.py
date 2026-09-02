@@ -50,6 +50,16 @@ PARSE_LAYERS = [
     # Small printed readers `nouns` shares *upward* — a comparison, a
     # self-reference. Below it because nothing about them is about a filter.
     "readers",
+    # A quantity read off a *record* of something that already happened — the
+    # parse-side mirror of `lowering/_records.py`, carrying that module's name
+    # for that reason. "The sacrificed creature's toughness" names an event,
+    # not a set of objects, so it shares no vocabulary with the filter parser
+    # above it and sits here, on `readers` alone. Split out of `amounts` when
+    # two waves' additions summed past the size guard below — and the split
+    # *removed* a cycle rather than needing one: the call-time import these
+    # productions carried was there because `nouns` imports `amounts`, which
+    # they are no longer in.
+    "records",
     # An ability on the stack (CR 113.7a) has no card and no type line, so it
     # shares no vocabulary with the filter parser that reads one. Below
     # `nouns`, which returns the moment one of these matches.

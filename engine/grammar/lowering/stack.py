@@ -14,6 +14,7 @@ from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from .conditions import _lower_condition
+from ._events import CREATED_TOKEN
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
     _REST_OF_TURN,
@@ -634,6 +635,12 @@ def _lower_choose_target(node: ast.ChooseTarget) -> tuple[OracleInstruction, ...
         # targets were chosen as the spell was cast (CR 601.2c) — but nothing
         # else in the resolution can say which attacking creatures those were.
         _describe_several_targets(payload, node.subject)
+        if node.subject.same_controller:
+            # "…**controlled by the same opponent**" (Retribution). A relation
+            # between the targets, so it rides the *description* the picker and
+            # the CR 601.2c gate read rather than the filter every matcher
+            # tests one permanent against — no such matcher could answer it.
+            payload["targets"]["same_controller"] = True
         return (OracleInstruction("choose_target_permanents", "", payload),)
     _describe_targets(payload, node.subject)
     if "targets" not in payload:
@@ -675,6 +682,7 @@ def _lower_waive_shroud(node: "ast.WaiveShroud") -> tuple[OracleInstruction, ...
 def _lower_create_delayed_trigger(
     node: ast.CreateDelayedTrigger,
     effect: tuple[OracleInstruction, ...],
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """The ``create_delayed_trigger`` instruction for one printed delay.
 
@@ -723,6 +731,24 @@ def _lower_create_delayed_trigger(
     # token maker wrote, so nothing is resolved as a target.
     if node.watches is not None:
         payload["watches"] = node.watches
+    elif node.binds_target and _delay_is_about_a_created_token(node.effect, produced):
+        # "Create a black Spirit creature token. … **Sacrifice the token** at
+        # the beginning of the next end step." (Broken Visage.)
+        #
+        # "The token" is the one a step of this same resolution just made, and
+        # the arming handler has exactly that record — but only under
+        # ``watches``. Read as an ordinary binding it would resolve the *spell's
+        # target*, which on this card is the creature the first sentence
+        # destroyed: gone by now, so the handler arms **nothing** and the whole
+        # sentence disappears while the card compiles clean. That is the failure
+        # ``delay_binds_an_object`` documents, arriving from the other side —
+        # the effect does name a bound object, and the object is not the target.
+        #
+        # Gated on a token maker actually standing in front of it, exactly as
+        # every other back-reference is: with no producer the words name nothing
+        # and the binding keeps the reading it had.
+        payload["watches"] = "created_token"
+        payload["binds_target"] = False
     # "…when **target creature you control** attacks and isn't blocked, …"
     # (Delif's Cone, Delif's Cube). The opener's own target, described the way
     # every other targeted instruction describes one — so `engine/targeting.py`
@@ -742,3 +768,39 @@ def _lower_create_delayed_trigger(
     if agent:
         payload["agent_filter"] = agent
     return (OracleInstruction("create_delayed_trigger", "", payload),)
+
+
+def _delay_is_about_a_created_token(effect, produced: frozenset[str]) -> bool:
+    """Whether a delay's sentence names a token an earlier step of this same
+    resolution created.
+
+    Both printed spellings, because they are one referent: "that token"
+    (Stangg) carries ``is_created_token`` and "the token" (Dance of Many,
+    Broken Visage) carries ``token_only`` with ``created_with_source`` — the
+    durable stamp a *permanent* leaves on what it made. A spell leaves no such
+    stamp (it is never on the battlefield, so nothing is created "with" it),
+    which is why the resolution record is the only answer on an instant and why
+    this is asked of the effect rather than of the noun phrase's spelling.
+
+    Written as a walk over the dataclass, for ``delay_binds_an_object``'s
+    reason: the reference may be nested inside a sequence or an offer, and a
+    statement class added later is covered by default.
+    """
+    if CREATED_TOKEN not in produced:
+        return False
+    return _names_a_created_token(effect)
+
+
+def _names_a_created_token(node) -> bool:
+    if isinstance(node, ast.TargetSpec):
+        filt = node.filter
+        if filt.is_created_token or (filt.token_only and filt.created_with_source):
+            return True
+    if dataclasses.is_dataclass(node) and not isinstance(node, type):
+        return any(
+            _names_a_created_token(getattr(node, field.name))
+            for field in dataclasses.fields(node)
+        )
+    if isinstance(node, (tuple, list)):
+        return any(_names_a_created_token(item) for item in node)
+    return False

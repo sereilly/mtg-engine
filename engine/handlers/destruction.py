@@ -631,7 +631,21 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
     # Death Mage), and by then the permanent is gone — record it now
     # (CR 608.2h, last-known information).
     chosen_index = context.target_permanent_index
-    if isinstance(chosen_index, int):
+    # **Was a target named at all** — by slot *or* by stable id. The gate used
+    # to ask only about the slot, which is a gate standing in for a question it
+    # does not ask: a caller that names its target the way CLAUDE.md asks for,
+    # by `permanent_id` alone, left `chosen_index` None and skipped this whole
+    # block — so `its_mana_value`, `destroyed_target` and the P/T records were
+    # never written and every rider reading them read a zero. Divine Offering
+    # gained 5 life for an artifact named by slot and **0** for the same
+    # artifact named by id, with nothing failing. The web layer sends both
+    # (`web/actions.py`), which is why the app never showed it — the same
+    # "one caller's spelling enforced, another's silently not" the CR 702.16b
+    # gate in `mixins/stack/casting.py` records about itself.
+    named_id = context.target_permanent_id
+    if isinstance(named_id, list):
+        named_id = next((pid for pid in named_id if isinstance(pid, int)), None)
+    if isinstance(chosen_index, int) or isinstance(named_id, int):
         # Resolved **once**, by id, and the slot re-derived from what came back.
         # This site used to resolve twice: `chosen_permanent` here for the
         # last-known-information records, and the raw index again inside
@@ -679,6 +693,15 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         # leaving the battlefield, which is exactly what last-known
         # information means.
         context.results["destroyed_target"] = victim
+        # "…Its power is equal to **that creature's power** and its toughness is
+        # equal to **that creature's toughness**." (Broken Visage.) Frozen here
+        # for the mana value's reason and one step more urgently: P/T is
+        # *computed* (CR 613), and a card in a graveyard has no computed
+        # characteristics at all — so read after the destroy both numbers would
+        # be the printed ones, or nothing. The effective values, so a pumped or
+        # counter-laden creature is worth what it was worth on the battlefield.
+        context.results["its_power"] = max(0, int(victim.effective_power))
+        context.results["its_toughness"] = max(0, int(victim.effective_toughness))
     destroyed = game._destroy_target_permanent(
         target,
         type_filter=instruction.payload.get("type_filter"),
@@ -1205,4 +1228,35 @@ def destroy_tapped_land_and_reoffer_aura(
     # instead so a new seat kind needs no new argument.
     if any(perm.card.primary_type == "land" for perm in game.controlled_by(controller_index)):
         game.arm_pending_choice("kudzu_reattach", controller_index, aura=aura)
+    return True, "resolved"
+
+
+@effect_handler("sacrifice_recorded_permanent")
+def sacrifice_recorded_permanent(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"That player chooses and sacrifices one of those creatures."
+    (Retribution.)
+
+    The sacrifice half of Preacher's decomposition, one rule over from
+    ``destroy_target_permanent``'s ``permanents_from`` reading: a
+    ``choose_permanent`` step ahead of this one asked the affected seat which,
+    and recorded the answer by id.
+
+    Its own kind rather than the destroy with a flag, for
+    ``sacrifice_bound_permanent``'s reason: CR 701.21a is a sacrifice, so
+    regeneration does not save it, an indestructible permanent still goes, and
+    no "if it would be destroyed" replacement ever sees an event.
+
+    Nothing recorded, or a permanent that has left since, sacrifices nothing —
+    CR 608.2b doing as much as it can rather than a failure.
+    """
+    key = instruction.payload.get("permanents_from")
+    recorded = context.results.get(key) if key is not None else None
+    victim = (
+        game.permanent_by_id(recorded) if isinstance(recorded, int) else None
+    )
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: nothing was chosen to sacrifice")
+        return True, "resolved"
+    game.sacrifice_permanent(victim)
+    game.log.append(f"{context.card.name}: {victim.card.name} was sacrificed")
     return True, "resolved"

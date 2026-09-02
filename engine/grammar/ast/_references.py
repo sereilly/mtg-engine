@@ -728,6 +728,16 @@ class TargetSpec:
     # object that must differ from the sentence's earlier choice — not from the
     # ability's source, which is what the filter's other_than_source says.
     distinct_from_prior: bool = False
+    # "Choose two target creatures **controlled by the same opponent**."
+    # (Retribution.) A relation *between* the targets rather than a property of
+    # any one of them, which is why it is here and not on the filter: no matcher
+    # asked about a single permanent can answer "is this the same seat as the
+    # other target's", and a filter key that could not be tested would be
+    # dropped by the gate that reads them. The filter still carries
+    # ``controller="opponent"`` — that half *is* per-object — so what this adds
+    # is only the "same" (CR 601.2c: an announcement naming two opponents'
+    # creatures is illegal).
+    same_controller: bool = False
     # Whether the word "target" was printed. The quantifier alone cannot say:
     # "up to two target creatures" (Read the Tides — chosen at cast, CR 601.2c)
     # and "up to four lands" (Rewind — chosen on resolution, no targets at all)

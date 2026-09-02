@@ -93,6 +93,24 @@ def choose_target_permanents(game: Game, instruction: OracleInstruction, context
         predicate=lambda perm: permanent_matches_filter(perm, described),
     )
     context.results[CHOSEN_TARGET_PERMANENTS] = chosen
+    if (instruction.payload.get("targets") or {}).get("same_controller"):
+        # "…**controlled by the same opponent**. **That player** chooses and
+        # sacrifices one of those creatures." (Retribution.) The sentence names
+        # a player, and this step is the only one that can say which: the
+        # relation is what makes the answer a single seat, and by the sentence
+        # after it one of the creatures is on its way to a graveyard. Written
+        # under the key every other "the player this effect chose" is written
+        # under (`_chooser_seat`'s ``chosen_player``), so the prompt behind it
+        # needs no reader of its own.
+        seats = {game.controller_index_of(perm) for perm in chosen}
+        if len(seats) == 1:
+            seat = seats.pop()
+            if seat is not None:
+                # The literal every other handler that writes this key spells
+                # (`control_changes`, `damage`); it is declared in
+                # `grammar/lowering/_events.CHOSEN_PLAYER`, which the handler
+                # layer does not import from.
+                context.results["chosen_player"] = seat
     if not chosen:
         game.log.append(f"{context.card.name} had no legal targets")
         return True, "no target"
@@ -985,6 +1003,28 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         counted = max(0, int(context.x_value or 0))
         printed_power = counted if printed_power == "x" else printed_power
         printed_toughness = counted if printed_toughness == "x" else printed_toughness
+    # "Create a black Spirit creature token. **Its power is equal to that
+    # creature's power and its toughness is equal to that creature's
+    # toughness.**" (Broken Visage.) Each half names a scratchpad key an earlier
+    # step of this same resolution wrote — the destroy froze both numbers about
+    # the creature it was aimed at, because by now that creature is a card in a
+    # graveyard with no computed characteristics at all (CR 613.1).
+    #
+    # A key nothing wrote reads as zero, and a 0/0 creature token dies to
+    # CR 704.5a the moment it arrives. That is the honest outcome and not a
+    # silent one: the lowering refuses the sentence unless a step of the effect
+    # declares the record, so the only way to reach it is a target that was
+    # already gone when the spell resolved (CR 608.2b), where nothing should be
+    # created anyway.
+    for key, field in (("power_from", "power"), ("toughness_from", "toughness")):
+        recorded = payload.get(key)
+        if recorded is None:
+            continue
+        value = max(0, int(context.results.get(recorded, 0) or 0))
+        if field == "power":
+            printed_power = value
+        else:
+            printed_toughness = value
     token_card = make_token_card(
         str(payload.get("name", "Token")),
         None if printed_power is None else int(printed_power),

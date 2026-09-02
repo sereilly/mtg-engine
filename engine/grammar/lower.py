@@ -88,6 +88,7 @@ from .lowering import (
     _lower_fight,
     _lower_destroy,
     _lower_discard,
+    _lower_draw,
     _lower_exile,
     _lower_for_each,
     _lower_repeat_process,
@@ -95,6 +96,7 @@ from .lowering import (
     _lower_for_each_exiled,
     _lower_for_each_tapped,
     _lower_for_each_chosen,
+    _lower_for_each_short_of_this_way,
     _lower_choose_permanent,
     _lower_choose_permanents,
     _lower_gain_control,
@@ -215,6 +217,13 @@ def lower_statement(
         return _lower_untap_chosen_by_paying(statement, event)
     if isinstance(statement, ast.RevealHandAndChoose):
         return _lower_reveal_hand_and_choose(statement, event)
+    if isinstance(statement, ast.Draw):
+        # "…then draws **as many cards as they discarded this way**" (Forget).
+        # A back-reference names its producer or refuses, and only `produced`
+        # can say whether a step of this same effect recorded one — which is
+        # why the draw left `by_node`'s name-only table, whose rows take the
+        # node and nothing else.
+        return _lower_draw(statement, produced, event)
     if isinstance(statement, ast.DealDamage):
         return _lower_damage(statement, event, produced)
     if isinstance(statement, ast.Fight):
@@ -269,7 +278,11 @@ def lower_statement(
     if isinstance(statement, ast.NoteManaSpent):
         return _lower_note_mana_spent(statement)
     if isinstance(statement, ast.CreateToken):
-        return _lower_create_token(statement, produced)
+        # ``event`` for the P/T back-reference: "its power is equal to that
+        # creature's power" is read through the one place that decides where a
+        # back-reference comes from, and that place asks whether a trigger
+        # records the number.
+        return _lower_create_token(statement, produced, event)
 
     if isinstance(statement, ast.Conjunction):
         if len(statement.effects) == 2 and all(
@@ -346,7 +359,9 @@ def lower_statement(
         # dict dispatch however deeply it is nested. The same reading
         # ``_lower_destroy`` above takes, and for the same reason: Curse
         # Artifact's sacrifice lowers under a ``May``.
-        return _lower_sacrifice(statement, event)
+        # ``produced`` for the same reason ``_lower_destroy`` takes it: "one of
+        # those creatures" names a set an earlier step of this effect chose.
+        return _lower_sacrifice(statement, event, produced)
     if isinstance(statement, ast.DiscardRevealedUnlessPayLife):
         return _lower_discard_revealed_unless_pay_life(statement, produced)
     if isinstance(statement, ast.LookTopPickToHand):
@@ -584,7 +599,7 @@ def lower_statement(
             # its ``agent`` where the phrase names the pair's *other* half.
             statement.effect, produced, event=statement.event, whole_effect=True,
             event_subject=statement.subject or statement.agent,
-        ))
+        ), produced)
 
     if isinstance(statement, ast.WhereX):
         # The wrapped sentence is lowered *here* so `where_x` can sit a layer
@@ -629,6 +644,14 @@ def lower_statement(
         # "For each **1 life you lost**" (Oath of Lim-Dûl).
         if isinstance(statement.iterator, ast.EachLifeLost):
             return _lower_for_each_life_lost(statement, repeated(), event)
+        # "For each **card less than two a player draws this way**" (Truce) —
+        # the sixth iterator: a per-seat shortfall against a record an earlier
+        # step of this same effect wrote, so it is refused without that
+        # producer exactly as the three "this way" sets are.
+        if isinstance(statement.iterator, ast.EachShortOfThisWay):
+            return _lower_for_each_short_of_this_way(
+                statement, repeated(), produced
+            )
         # "**For each player,** …" (Lim-Dûl's Hex) — a loop over seats, whose
         # iteration binds "that player" the way an object loop binds "it".
         if isinstance(statement.iterator, ast.PlayerRef):

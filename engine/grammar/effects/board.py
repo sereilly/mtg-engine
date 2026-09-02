@@ -26,8 +26,9 @@ should own the other's vocabulary.
 import dataclasses
 
 from .. import ast
-from ..amounts import (_parse_for_each_this_way, accept_fraction_head,
-                       accept_rounding, parse_amount)
+from ..amounts import accept_fraction_head, accept_rounding, parse_amount
+from ..records import _parse_for_each_this_way
+
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..names import accept_original_expansion

@@ -18,6 +18,7 @@ import dataclasses
 
 from . import ast
 from .amounts import parse_amount
+from .errors import GrammarError
 from .lexer import NUMBER, WORD
 from .nouns import (
     _GENERIC_NOUNS,
@@ -210,6 +211,24 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     if stream.accept_phrase("any", "target"):
         return ast.TargetSpec("any_target", targeted=True)
 
+    # "…chooses and sacrifices **one of those creatures**." (Retribution.) One
+    # member of the set an earlier sentence of this same effect named — the
+    # singular selector over `parse_bound_subject`'s plural, and its own
+    # quantifier for that reader's stated reason: a lowering written for the
+    # whole set must fail by name rather than silently receive one member of
+    # it, and the reverse. Which member is a decision made while the effect
+    # resolves (CR 601.2c chose the set, not the pick), so nothing here is
+    # targeted.
+    mark_one_of_those = stream.mark()
+    if stream.accept_phrase("one", "of", "those"):
+        try:
+            bound_filter = parse_object_filter(stream)
+        except GrammarError:
+            bound_filter = None
+        if bound_filter is not None:
+            return ast.TargetSpec("one_of_those", bound_filter)
+        stream.reset(mark_one_of_those)
+
     # "each of up to two target creatures you control" — a distributive wrapper
     # over the noun phrase rather than a quantifier of its own. It names exactly
     # the objects the phrase behind it names and says the effect applies to each
@@ -397,10 +416,26 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         # the referent becomes the restriction rather than in each lowering that
         # would otherwise have to ask the question again.
         filt = dataclasses.replace(filt, is_enchanted=False, enchanted_only=True)
+    # "Choose two target creatures **controlled by the same opponent**."
+    # (Retribution.) Read here rather than in the postmodifier loop because
+    # only half of it is about one object: "an opponent controls" is a filter
+    # key and "the same" is a relation between the targets, which nothing
+    # smaller than the whole reference can carry.
+    #
+    # Only over a *plural* announcement. "The same" names a relation, and a
+    # relation over one object is not one — the words would be consumed and
+    # mean nothing, which is the dropped-rider shape. Refusing without
+    # consuming leaves the line to fail on the phrase itself.
+    same_controller = False
+    if (targeted or quantifier == "up_to") and (count > 1 or exactly_x):
+        if stream.accept_phrase("controlled", "by", "the", "same", "opponent"):
+            filt = dataclasses.replace(filt, controller="opponent")
+            same_controller = True
     return ast.TargetSpec(
         quantifier, filt, count,
         count_from_x=exactly_x,
         distinct_from_prior=distinct_from_prior, targeted=targeted,
+        same_controller=same_controller,
     )
 
 

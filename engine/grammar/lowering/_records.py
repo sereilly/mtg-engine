@@ -26,13 +26,17 @@ from __future__ import annotations
 
 from .. import ast
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
+                             DREW_BY_SEAT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
                              PER_OBJECT_SEAT_RECORDS,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_CAST_DAMAGE,
                       CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       COUNTED_NUMBER, CREATED_TOKEN, DAMAGE_RECIPIENT,
-                      EXILED_THIS_WAY, _PERMANENTS_GIVEN_COUNTERS,
+                      EXILED_THIS_WAY, OTHER_CHOSEN_PERMANENT,
+                      _EVENT_SUBJECT_POWER_RECORD,
+                      _EVENT_SUBJECT_TOUGHNESS_RECORD,
+                      _PERMANENTS_GIVEN_COUNTERS,
                       _REANIMATED_PERMANENTS)
 
 
@@ -56,7 +60,14 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # chosen permanent's id, which is both what the branch tests and what the
     # step behind it acts on — the choice is not a target, so nothing on the
     # board or on the stack records it.
-    "choose_permanent": CHOSEN_PERMANENT,
+    #
+    # …and the **other** member of the set it was offered: "That player chooses
+    # and sacrifices one of those creatures. Put a -1/-1 counter on **the
+    # other**." (Retribution.) The pick is the only step holding both halves,
+    # and by the sentence behind it the chosen one is in a graveyard — so a
+    # read of the board would answer "whichever of the two is still there",
+    # which is the right permanent only when nothing else went wrong.
+    "choose_permanent": (CHOSEN_PERMANENT, OTHER_CHOSEN_PERMANENT),
     # "Count the number of permanents. **If the number** is odd, …" (Chaos
     # Moon.) The count is the whole of what the sentence does, and the only
     # place the two conditions behind it can read that number from — asking the
@@ -151,6 +162,23 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # The per-seat form records the same thing, so a sentence reading "the
     # number of cards they discarded this way" has a producer to name.
     "each_player_discards_up_to_cards": "discarded_count",
+    # "Each player may draw up to two cards. **For each card less than two a
+    # player draws this way**, that player gains 2 life." (Truce.) The draw's
+    # per-seat tally, written as each prompt is answered — the only place it
+    # exists, since how many a seat drew is a decision it has not made when the
+    # instruction returns. Per seat rather than a single number for
+    # ``DISCARDED_BY_SEAT``'s reason: a shortfall is one answer per player, and
+    # one key would let the last seat to answer decide everybody's life gain.
+    "each_player_draws_up_to_cards": DREW_BY_SEAT,
+    # "Target player discards two cards, **then draws as many cards as they
+    # discarded this way**." (Forget.) The chosen-discard prompt is the same
+    # one ``discard_controller_cards`` arms, so it records the same key — what
+    # differs is whose hand it came out of, and the sentence behind it is about
+    # that same seat. Without the row the back-reference has no producer to
+    # name and the draw refuses (idiom 7), which is the honest failure; with it
+    # the count is the one the player actually gave rather than the printed
+    # two, and an empty hand draws none.
+    "discard_target_cards": "discarded_count",
     # "Choose two cards in your hand … **For each of those cards**, …"
     # (Sylvan Library.) The pick records what it chose, which is the only
     # place the next sentence can read that set from: nothing about a hand
@@ -161,7 +189,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # it named, which is the only place the loop behind it can read it from —
     # nothing about a board says which attacking creatures a spell targeted, and
     # by the time the loop runs one of them may have left combat.
-    "choose_target_permanents": CHOSEN_TARGET_PERMANENTS,
+    # Two records, because "controlled by the same opponent" names a *player*
+    # as well as a set: "**That player** chooses and sacrifices one of those
+    # creatures" (Retribution) reads the seat, and this step is the only one
+    # that can supply it — the relation is what makes the answer a single seat,
+    # and the sacrifice behind it is about to empty one of the two slots. The
+    # set is the primary, being what a step of this kind always records.
+    "choose_target_permanents": (CHOSEN_TARGET_PERMANENTS, CHOSEN_PLAYER),
     # "Target player loses all poison counters. Leeches deals **that much**
     # damage to that player." The removal records how many actually came off,
     # which is the only place the sentence behind it can read the number: by
@@ -334,8 +368,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # Every branch of the handler writes it, because this table declares for
     # the *kind*: a branch that skipped it would be a producer the lowering
     # can cite and a record that reads as zero.
+    # …and its power and its toughness, for the same reason and read at the same
+    # moment: "Destroy target nonartifact attacking creature. … Its power is
+    # equal to **that creature's power**" (Broken Visage) is a number about an
+    # object that no longer exists by the time the token is built — CR 613.1
+    # gives a card in a graveyard no computed characteristics at all, so the
+    # numbers are frozen where the object still had them (CR 608.2h, idiom 6).
     "destroy_target_permanent": (
         "its_mana_value", "destroyed_target", "destroyed_this_way",
+        _EVENT_SUBJECT_POWER_RECORD, _EVENT_SUBJECT_TOUGHNESS_RECORD,
     ),
     # "Prevent the next 3 damage … **for each 1 damage prevented this way**."
     # (Sacred Boon.) The shield object itself, because what it prevents is

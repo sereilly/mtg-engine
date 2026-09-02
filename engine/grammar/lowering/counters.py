@@ -30,6 +30,7 @@ from ._common import (
 )
 from ._events import (
     CHOSEN_PERMANENT,
+    OTHER_CHOSEN_PERMANENT,
     EVENT_SUBJECT_CONTROLLER,
     _DAMAGED_PLAYER_EVENTS,
     _EVENT_SUBJECT_OBJECTS,
@@ -395,6 +396,43 @@ def _lower_put_counter(
                 {"counter": node.counter, "count": node.count.value},
             ),
         )
+    # "That player chooses and sacrifices one of those creatures. Put a -1/-1
+    # counter on **the other**." (Retribution.) The member of the chosen pair
+    # the sacrifice did not take, recorded by the pick that took the other one
+    # — the only step holding both halves.
+    #
+    # Read before the block-pair reading of the same printed word, and
+    # producer-gated so the two cannot collide: "the other" under a trigger
+    # that bound a blocking pair still means that pair, because no step of such
+    # an ability records a chosen remainder.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier == "other"
+        and not node.subject.targeted
+        and OTHER_CHOSEN_PERMANENT in produced
+    ):
+        if _restrictions_beyond(node.subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "\"the other\" carries no narrowing the placement could honour",
+                node=node,
+            )
+        if node.up_to or node.then_double or node.cap is not None:
+            raise LoweringError(
+                "a counter on the other half of a chosen pair carries no rider",
+                node=node,
+            )
+        if not isinstance(node.count, ast.Fixed):
+            raise LoweringError(
+                "a counter on the other half of a chosen pair is placed a fixed "
+                "number at a time",
+                node=node,
+            )
+        other_payload: dict[str, object] = {
+            "counter": node.counter, "permanents_from": OTHER_CHOSEN_PERMANENT,
+        }
+        if node.count.value != 1:
+            other_payload["count"] = node.count.value
+        return (OracleInstruction("add_counter_to_target", "", other_payload),)
     # "Return target creature card from your graveyard to the battlefield. Put
     # a +2/+2 counter on **that creature** …" (Soul Exchange.) The bound object
     # is a permanent an earlier step of this effect *created*, not the ability's

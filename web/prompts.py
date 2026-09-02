@@ -848,6 +848,31 @@ def _hand_reveal(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("draw_up_to")
+def _draw_up_to(ctx: PromptContext, choices: list) -> dict:
+    """"Each player may draw up to two cards." (Truce.)
+
+    The answer is a number, so the payload is the range and the library the
+    seat would draw from — the same shape ``number_choice`` below takes, with
+    the ceiling coming from the card and the default from the engine's stated
+    policy for an "up to" (take the maximum, capped by the library so a seat
+    does not choose to deck itself).
+    """
+    choice = choices[0]
+    data = choice.data
+    high = int(data.get("amount", 0))
+    library = len(ctx.game.players[choice.player_index].library)
+    return {
+        "player_seat": choice.player_index,
+        "card_name": data.get("card_name", ""),
+        "minimum": 0,
+        "maximum": high,
+        "options": list(range(0, high + 1)),
+        "default": min(high, library),
+        "library_size": library,
+    }
+
+
 @prompt_renderer("number_choice")
 def _number_choice(ctx: PromptContext, choices: list) -> dict:
     data = choices[0].data

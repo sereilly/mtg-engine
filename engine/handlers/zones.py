@@ -19,7 +19,8 @@ from ._common import (
 )
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
-from ..oracle_types import (DISCARDED_BY_SEAT, EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
+from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT,
+                            EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS,
                             X_FROM_COUNT_PER_RECIPIENT)
 from ..oracle_types import OracleInstruction as _OracleInstruction
@@ -46,6 +47,31 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
     honest answer is to draw nothing rather than to fall back on
     ``context.target``, which is a seat this sentence never mentions.
     """
+    # "**Each player** draws a card." (Winter Sky.) A set of seats, named by the
+    # same ``recipient`` key `mill_target_player` reads for the same phrase one
+    # zone over. Read before the per-object record below, which names one seat
+    # per iteration of a loop this branch is not inside. Each drawer draws from
+    # their own library, which is why it is a loop rather than a shared count.
+    recipient = instruction.payload.get("recipient")
+    if recipient in ("each_player", "each_opponent"):
+        caster_index = game.players.index(context.caster)
+        # CR 101.4's order for "each player", and the caster excluded for "each
+        # opponent". A seat that has left the game draws nothing (CR 800.4a).
+        if recipient == "each_opponent":
+            seats = [s for s in game.opponents_of(caster_index) if not game.players[s].lost]
+        else:
+            total = len(game.players)
+            active = game.active_player_index or 0
+            seats = sorted(
+                (i for i, p in enumerate(game.players) if not p.lost),
+                key=lambda i: ((i - active) % total, i),
+            )
+        count = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+        for seat in seats:
+            drawer = game.players[seat]
+            drawn = game._draw_with_replacements(drawer, count)
+            game.log.append(f"{drawer.name} drew {drawn} cards")
+        return True, "resolved"
     drawer_seat = instruction.payload.get("drawer_seat")
     if drawer_seat is not None:
         seat = context.iteration_seats.get(str(drawer_seat))
@@ -57,7 +83,17 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
         target = game.players[int(seat)]
     else:
         target = context.target
-    count = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    # "…then draws **as many cards as they discarded this way**" (Forget).
+    # ``amount_from`` names a scratchpad key an earlier step of this same
+    # resolution wrote; a key nothing wrote reads as zero, which is what the
+    # sentence says when the step in front of it did nothing (an empty hand
+    # discards no cards, so this draws none).
+    counted_from = instruction.payload.get("amount_from")
+    count = (
+        max(0, int(context.results.get(counted_from, 0) or 0))
+        if counted_from is not None
+        else resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    )
     drawn = game._draw_with_replacements(target, count)
     game.log.append(f"{target.name} drew {drawn} cards")
     return True, "resolved"
@@ -497,6 +533,12 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
     actual = min(
         resolve_amount(instruction.payload.get("amount", 0), context.x_value), len(target.hand)
     )
+    # "…then draws as many cards as they discarded this way" (Forget) reads the
+    # count back out of the scratchpad, so a discard that never happened has to
+    # leave a zero rather than no key at all — a missing key and a zero read the
+    # same to the draw, and writing it is what says the number is this step's
+    # answer rather than an absence.
+    context.results["discarded_count"] = 0
     if actual <= 0:
         game.log.append(f"{target.name} has no cards to discard")
         return True, "resolved"
@@ -508,6 +550,11 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
         "discard", player_index,
         count=actual,
         allow_top_of_library=game._controls_top_of_library_discard(target),
+        # The scratchpad rides the prompt: how many cards actually went is not
+        # known until the seat answers, and `_after_discard_answered` is the one
+        # place both answer paths (a seat's own picks and the non-interactive
+        # default) reach.
+        _results=context.results,
     )
     game.log.append(f"{target.name} must choose {actual} card(s) to discard")
     return True, "pending_discard"
@@ -3168,6 +3215,49 @@ def each_player_discards_up_to_cards(game: Game, instruction: OracleInstruction,
             _results=context.results,
         )
         game.log.append(f"{player.name} may discard up to {actual} card(s)")
+    return True, "resolved"
+
+
+@effect_handler("each_player_draws_up_to_cards")
+def each_player_draws_up_to_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each player may draw up to two cards." (Truce.)
+
+    ``each_player_discards_up_to_cards``'s twin one zone over, and the same
+    arrangement for the same reasons. One ``draw_up_to`` prompt per seat with
+    the printed ceiling, offered in turn order (CR 101.4); the ceiling *is* the
+    offer, since a player may answer with none, which is why the "may" in front
+    of it collapses into this rather than arming a yes/no of its own
+    (``engine/grammar/lowering/control_flow._each_player_optional_draw``).
+
+    Every seat is recorded, including one that draws nothing, because "for each
+    card less than two **a player** draws this way" is a number for every player
+    and a seat the record never mentions has to read as zero rather than as a
+    missing key. The scratchpad rides the prompt, so what is written is what the
+    seat actually chose.
+    """
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    caster_index = game.players.index(context.caster)
+    if instruction.payload.get("actor") == "each_opponent":
+        seats = [s for s in game.opponents_of(caster_index) if not game.players[s].lost]
+    else:
+        # CR 101.4: the active player first, then the rest in turn order.
+        count = len(game.players)
+        active = game.active_player_index or 0
+        seats = sorted(
+            (i for i, p in enumerate(game.players) if not p.lost),
+            key=lambda i: ((i - active) % count, i),
+        )
+    by_seat = context.results.setdefault(DREW_BY_SEAT, {})
+    for seat in seats:
+        player = game.players[seat]
+        by_seat[seat] = 0
+        game.arm_pending_choice(
+            "draw_up_to", seat,
+            amount=amount,
+            card_name=context.card.name,
+            _results=context.results,
+        )
+        game.log.append(f"{player.name} may draw up to {amount} card(s)")
     return True, "resolved"
 
 
