@@ -1215,6 +1215,76 @@ what its intervening-if wants armed, which zone it lands in — and each of this
 round's three new subjects differed in a *different* one. All three are now read
 off the card.
 
+### W2G1 — combat triggers and restrictions. Merged; supported 89 → 97 (8 of 10).
+
+Zero hooks added. Grammar 88.9% → **89.2%** parsed with every shipped set's
+floor rising (HML 92.6 → 93.7, ATQ 90.0 → 90.8).
+
+**A wave-1 decline dissolved on contact, and that is the round's transferable
+finding.** W1G3 declined Awesome Presence naming four parts; **three of them do
+not exist as work.** CR 509.1d–f put the payment *inside* the block declaration,
+before 509.1g makes anything a blocker — so there is no `PendingChoice`, no
+`holds_priority`, and **nothing to roll back**, because an unpayable declaration
+is simply illegal and `declare_blockers` already refuses one with nothing spent.
+`_block_declaration_mana_plan` already implemented the shape for Hipparion, and
+the scaling was free: the plan sums per (blocker, attacker) pair, so a per-pair
+`{3}` *is* "{3} for each creature blocking it". What was actually missing was
+one template row plus a second channel in `_block_mana_costs_of`, which read the
+blocker's program only while this cost is printed on the *attacker*. A decline's
+named parts are a lead to re-probe, not a specification to implement.
+
+**The seventh consecutive brief wrong in the same direction.** Gorilla
+Berserkers' `Trample; rampage 2` was never broken — a keyword line's reader is
+`oracle._is_supported_keyword_line`, and `normalize_creature_line` already
+rewrites `;` to `,`, so the census was reporting the *grammar* refusing a line
+the grammar does not own. And Whip Vine's untap-denial half was not missing
+machinery either: `_holds_a_live_untap_lock` was fine and the gap was the
+**pronoun**, the lock accepting `it` and the card's own name where Whip Vine
+prints "That creature".
+
+**Four shipped cards had their end-of-combat ability executed by a hard-coded
+string probe.** Clockwork Beast, Avian, Steed and Swarm compiled their line as a
+*static* and `end_of_combat_step.py` matched the whole printed sentence to run
+it. Two defects: it bought nothing for the next card printing that sentence
+(Kjeldoran Home Guard, this set), and it read `attacked_this_turn` for the
+attack half — a **turn**-scoped mark, so in a turn's *second* combat phase it
+answered yes for a creature that attacked in the first. Now a real trigger with
+a real intervening-if, verified to identical numbers on attack and on block.
+
+**A negated combat adjective would have dropped its narrowing.**
+`ObjectFilter.attacking` / `.blocking` have been `bool | None` since state
+adjectives were read, and only the `True` half had a payload form — so
+`nonattacking` would have emitted the payload of a bare "creature". No shipped
+card prints one, so nothing was broken; it is the same silent drop already
+recorded one field over on `blocked`/`unblocked`.
+
+**Known and not fixed:** `blocked_this_combat` is swept *before* the priority
+window that resolves the end-of-combat batch. Worked around by freezing the
+answer at the fire site as that file already does for `combat_opponents`, but
+any future end-of-combat trigger asking a board question about this combat hits
+it.
+
+**Declines, as named parts.** *Stromgald Spy* — six, of which the load-bearing
+ones are an AST node for the **causative** `have <player> <verb>` (the grammar
+has no "have X do Y" shape at all), a general `for as long as this creature
+remains on the battlefield` duration in `_parse_duration` (it exists only as a
+bespoke read inside the control-change production), a per-seat "hand is
+revealed" record with the CR 611.2b sweep that ends it, and a
+`web/serialization.py` change without which the effect is invisible and the card
+is hollow. *Sworn Defender* — six, including a `ToughnessOfSubject` amount node
+mirroring the existing `PowerOfSubject`, a `Minus` mirroring `Plus`, and
+`ChangeBasePT` accepting **two different computed quantities**, which parse and
+lowering both refuse by name today. Its handler is the small part.
+
+**Cap pressure is now acute.** `postmodifiers.py` sits at **exactly 1,000** —
+legal, zero headroom — and only because the group rewrote the existing
+`blocking or blocked by` branch to absorb both new readings rather than
+appending. The next group to touch it must split, and the seam is already
+visible: the `if stream.at_word("that")` run (~170 lines, one relative-clause
+family, almost all reading *histories* off records) against the bare
+participial and prepositional modifiers around it. `lowering/counters.py` and
+`subject_verb.py` are both at 998.
+
 ### Wave 1 closed: 62 → 89 of 144, zero hooks added
 
 Five worktree groups, five merges, and the integration cost ran at roughly the
