@@ -486,11 +486,29 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
     whole, and a production that consumed the opening of every "All …" sentence
     would refuse lines other readers claim. Once "is dealt to" has been read the
     sentence is a redirect and nothing else, so from there it raises.
+
+    **Two printed quantities, one production.** "All damage …" moves the whole
+    event; "**The next N** damage …" moves N points and leaves the rest where it
+    was dealt (Daughter of Autumn, Hazduhr the Abbot — CR 615.7's numeric shield
+    read as a redirect). They are one sentence from the quantity onwards, which
+    is why they are one production rather than two that would drift; the number
+    rides :class:`ast.RedirectDamage`'s ``amount``, and ``None`` is "all".
     """
     mark = stream.mark()
+    amount: ast.Amount | None = None
     if not stream.accept_word("all"):
-        stream.reset(mark)
-        return None
+        if not stream.accept_phrase("the", "next"):
+            stream.reset(mark)
+            return None
+        try:
+            amount = parse_amount(stream)
+        except GrammarError:
+            # "The next **time** a source of your choice…" is the shield
+            # sentence `_parse_source_of_choice_effect` reads, and it is tried
+            # ahead of this one — so refusing here without consuming is what
+            # keeps every other "the next …" line with the reader it has.
+            stream.reset(mark)
+            return None
     # "All **combat** damage that would be dealt to you by unblocked creatures
     # this turn is dealt to this creature instead." (Kjeldoran Royal Guard.)
     # Read rather than skipped, for the reason the blanket shield above reads
@@ -521,6 +539,20 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
             return None
     if duration == ast.Duration():
         duration = _parse_duration(stream)
+    # "…that would be dealt **this turn to target white creature you control**"
+    # (Hazduhr the Abbot). The same swap on the recipient end that the two
+    # readings of the duration above are on the source end — Daughter of Autumn
+    # prints the identical sentence with the words the other way round — so the
+    # recipient is read on either side rather than one of the two cards failing
+    # on the order its printing happens to use. Exactly what
+    # ``_parse_prevent_all`` does with its own recipient, and only when the
+    # first reading found none: a line naming a recipient twice is not a
+    # wording this reads.
+    if to is None and stream.accept_word("to"):
+        to = parse_recipient(stream) or parse_bound_subject(stream)
+        if to is None:
+            stream.reset(mark)
+            return None
     if not stream.accept_phrase("is", "dealt", "to"):
         stream.reset(mark)
         return None
@@ -537,6 +569,7 @@ def _parse_damage_redirect(stream: TokenStream) -> "ast.RedirectDamage | None":
         duration=duration,
         chooser=chooser,
         combat_only=combat_only,
+        amount=amount,
     )
 
 

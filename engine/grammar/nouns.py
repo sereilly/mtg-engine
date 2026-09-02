@@ -363,10 +363,25 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # is exactly how Abomination refused.
             d.colors.append(COLOR_WORDS[word])
             stream.advance()
-            while stream.at_word("or") and stream.peek_word(1) in COLOR_WORDS:
-                stream.advance()
-                d.colors.append(COLOR_WORDS[str(stream.peek_word())])
-                stream.advance()
+            while True:
+                # "each **white and/or blue** creature" (Evaporate) — the same
+                # union with the printed conjunction spelled out. The lexer
+                # drops the slash, so it arrives as the two words "and or", and
+                # it means what "or" alone means here: CR 105.2 gives an object
+                # one or more colours, so "white and/or blue" names every object
+                # that is either, which is what ``colors`` already describes.
+                # Read inside this loop rather than as a filter of its own,
+                # because taking "white" alone would end the noun phrase at
+                # "and" — which is exactly how Evaporate refused.
+                joined = stream.mark()
+                stream.accept_word("and")
+                if stream.at_word("or") and stream.peek_word(1) in COLOR_WORDS:
+                    stream.advance()
+                    d.colors.append(COLOR_WORDS[str(stream.peek_word())])
+                    stream.advance()
+                    continue
+                stream.reset(joined)
+                break
             continue
 
         # "attacking **or** blocking creature" (the four Legends pingers),

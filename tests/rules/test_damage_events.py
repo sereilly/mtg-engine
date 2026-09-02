@@ -685,3 +685,75 @@ def test_two_casts_of_one_card_are_two_rows():
     assert damage_dealt_by_cast(game, first) == 4
     assert damage_dealt_by_cast(game, second) == 2
     assert len(ledger(game).entries) == 2
+
+
+# ---------------------------------------------------------------------------
+# W1G3 — a redirect with a *point pool* (CR 614.9 with a number on it)
+#
+# "The next N damage that would be dealt to <recipient> this turn is dealt to
+# <this permanent> instead" (Daughter of Autumn, Hazduhr the Abbot). CR 614.9
+# says who the damage is dealt to; the number says how much of the event that
+# covers, and CR 615.7 is the printed sentence it is borrowed from — the pool
+# is spent point by point and what is left of a larger event is dealt normally.
+#
+# The difference from a `Shield` is the whole reason it lives here: the points
+# are *moved*, so they are still dealt (CR 120.4b) by the same source, and
+# lifelink still gains from them (CR 120.3f).
+# ---------------------------------------------------------------------------
+
+
+def _g3_pool_board(*, pool: int, lifelink: bool = False):
+    """A creature with a counted redirect onto a second creature, and a pinger."""
+    taker = Permanent(card=_mk_creature_card("Taker", 2, 9))
+    protected = Permanent(card=_mk_creature_card("Protected", 1, 9))
+    card = _mk_creature_card("Pinger", 3, 3)
+    if lifelink:
+        card = replace(card, keywords=("lifelink",))
+    pinger = Permanent(card=card)
+    p1 = PlayerState(name="P1", battlefield=[taker, protected])
+    p2 = PlayerState(name="P2", battlefield=[pinger])
+    game = Game(players=[p1, p2])
+    add_redirect(protected, DamageRedirect(new_recipient=taker, amount=pool, uses=None))
+    return game, p1, p2, taker, protected, pinger
+
+
+@pytest.mark.cr("614.9", "615.7", "120.4b")
+def test_a_counted_redirect_moves_its_points_and_deals_the_rest_normally():
+    """The pool covers one point of a three-point event; the other two are dealt
+    to the creature the damage was aimed at. A record with no pool would have
+    taken all three — which is the difference between Daughter of Autumn and a
+    card that reads "all damage"."""
+    game, _p1, _p2, taker, protected, pinger = _g3_pool_board(pool=1)
+
+    game._mark_damage_on_permanent(protected, 3, source=pinger)
+
+    assert taker.damage_marked == 1
+    assert protected.damage_marked == 2
+
+
+@pytest.mark.cr("614.9", "615.7")
+def test_a_counted_redirect_is_spent_by_points_not_by_instances():
+    """Three points cover a 2 and then one point of a 4. A record spent by
+    instances would have moved the whole second event; one spent by points moves
+    what is left of the pool and no more."""
+    game, _p1, _p2, taker, protected, pinger = _g3_pool_board(pool=3)
+
+    game._mark_damage_on_permanent(protected, 2, source=pinger)
+    game._mark_damage_on_permanent(protected, 4, source=pinger)
+
+    assert taker.damage_marked == 3
+    assert protected.damage_marked == 3
+    assert redirects_on(protected) == [], "an emptied pool no longer exists"
+
+
+@pytest.mark.cr("614.9", "120.3f", "702.15b")
+def test_the_points_a_counted_redirect_moves_are_still_dealt():
+    """The half of CR 614.9 a shield would get wrong: the moved points are dealt
+    by the same source, so lifelink gains from them — and from the points that
+    stayed behind as well, because one event was dealt in full."""
+    game, _p1, p2, _taker, protected, pinger = _g3_pool_board(pool=1, lifelink=True)
+    before = p2.life
+
+    game._mark_damage_on_permanent(protected, 3, source=pinger)
+
+    assert p2.life == before + 3

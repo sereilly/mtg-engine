@@ -181,6 +181,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "player_gets_poison_counters": "counters",
     "remove_counter_from_self": "counters",
     "remove_all_counters_from_self": "counters",
+    # A counter on a **player** (CR 122.1f poison) coming off, the mirror of
+    # ``player_gets_poison_counters`` above it. Same category: the store differs
+    # and the question does not.
+    "remove_all_counters_from_target_player": "counters",
     "remove_any_number_of_counters_from_self": "counters",
     "exile_any_number_of_own_tokens": "zones",
     "put_graveyard_cards_on_library_top": "zones",
@@ -321,6 +325,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the damage would be dealt, so it is a different record and a
     # different handler, in the same family.
     "redirect_source_class_damage_until_eot": "damage",
+    # "**The next N** damage that would be dealt to target <noun> this turn"
+    # (Daughter of Autumn, Hazduhr the Abbot). A point pool rather than the
+    # whole event, and a chosen recipient rather than the controller — both
+    # payload differences over one family, so the same category.
+    "redirect_next_damage_to_source_until_eot": "damage",
     "recolor_target_from_text": "recolor",
     # The same layer-5 colour change with a duration and several targets
     # (Dwarven Song and its four siblings). Same category: what differs is how

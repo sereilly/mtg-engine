@@ -25,7 +25,56 @@ from ..phrases import is_pt_counter
 from ...oracle_types import OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ._common import _amount_payload, _is_source
+from ._common import _amount_payload, _describe_targets, _is_source
+
+#: The player counters this engine has a store for. CR 122.1 lets a counter have
+#: any name, and a player carries exactly one kind here
+#: (``PlayerState.poison_counters``, read by the CR 704.5c / 122.1f sweep) — so a
+#: line naming any other refuses saying which store is missing, rather than
+#: compiling onto a handler that would zero a field nobody keeps.
+_PLAYER_COUNTER_KINDS = frozenset({"poison"})
+
+
+def _lower_player_counter_removal(
+    node: ast.RemoveCounter,
+) -> tuple[OracleInstruction, ...]:
+    """``Target player loses all poison counters.`` (Leeches, which also prints
+    the removal the other way round — ``Remove all poison counters from target
+    player`` reaches the same node.)
+
+    A counter on a **player** (CR 122.1f), which is a different store from every
+    removal below: those reach a permanent's ``named_counters``, and a seat's
+    poison lives on ``PlayerState.poison_counters``. So it is its own
+    instruction rather than a subject the handlers below could take — one of
+    them would have looked for a permanent and found a seat.
+
+    Three refusals, each a way the sentence could otherwise mean more than it
+    says: the seat must be one the ability **chose** (nothing enumerates a
+    removal per member of a set), the counter must be one the engine stores, and
+    the count must be "all" — a numbered removal from a player has no handler,
+    and lowering one onto this would empty a pool the card meant to take two
+    off.
+    """
+    player = node.subject
+    if not isinstance(player, ast.PlayerRef) or player.kind not in (
+        "target_player", "target_opponent",
+    ):
+        raise LoweringError(
+            "no handler removes counters from this player", node=node
+        )
+    if node.counter not in _PLAYER_COUNTER_KINDS:
+        raise LoweringError(
+            f"a player has no {node.counter} counters in this engine", node=node
+        )
+    if not isinstance(node.count, ast.AllOf):
+        raise LoweringError(
+            "the only player counter removal takes all of them", node=node
+        )
+    payload: dict[str, object] = {"counter": node.counter}
+    _describe_targets(payload, player)
+    return (
+        OracleInstruction("remove_all_counters_from_target_player", "", payload),
+    )
 
 
 def _lower_remove_counter(
@@ -40,6 +89,14 @@ def _lower_remove_counter(
     one, so anything else refuses rather than compiling onto a handler that
     would quietly do that instead.
     """
+    # "**Target player** loses all poison counters." (Leeches.) A counter on a
+    # seat rather than on an object, so it reaches neither the sweep below nor
+    # any of the permanent removals under it — read first, because every one of
+    # those asks a question about a ``TargetSpec`` and a ``PlayerRef`` would
+    # fall through all of them to the source check at the bottom and refuse
+    # naming the wrong thing.
+    if isinstance(node.subject, ast.PlayerRef):
+        return _lower_player_counter_removal(node)
     # "Remove two loyalty counters from each planeswalker." (Pestilent Haze's
     # second mode.) A sweep, not a choice: every planeswalker on every
     # battlefield loses that many, and CR 704.5i collects the ones that hit

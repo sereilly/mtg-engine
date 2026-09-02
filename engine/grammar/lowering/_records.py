@@ -26,7 +26,8 @@ from __future__ import annotations
 
 from .. import ast
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
-                             HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS,
+                             COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
+                             PER_OBJECT_SEAT_RECORDS,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       COUNTED_NUMBER, CREATED_TOKEN, DAMAGE_RECIPIENT,
@@ -153,6 +154,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # nothing about a board says which attacking creatures a spell targeted, and
     # by the time the loop runs one of them may have left combat.
     "choose_target_permanents": CHOSEN_TARGET_PERMANENTS,
+    # "Target player loses all poison counters. Leeches deals **that much**
+    # damage to that player." The removal records how many actually came off,
+    # which is the only place the sentence behind it can read the number: by
+    # then the store holds zero, so a read of the board would deal none.
+    "remove_all_counters_from_target_player": COUNTERS_REMOVED,
     # "Remove any number of +1/+1 counters … create **that many** … tokens"
     # (Tetravus). The removal records how many it took, under the key the token
     # maker's "that many" already reads.

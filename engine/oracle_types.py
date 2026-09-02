@@ -499,6 +499,19 @@ CHOSEN_THIS_WAY_OBJECTS = "chosen_this_way_objects"
 HAND_CARDS_TO_LIBRARY = "hand_cards_to_library"
 
 
+#: How many counters a "loses all <kind> counters" step actually took off
+#: (Leeches). The ``results`` key the handler writes and the ``produced`` marker
+#: the sentence behind it — "deals **that much** damage to that player" — is
+#: gated on. Here for ``HAND_CARDS_TO_LIBRARY``'s reason, that the two readers
+#: sit at opposite ends of the pipeline: the handler writes it and the lowering
+#: gates on it, so a literal in each is how they come to disagree.
+#:
+#: The number is what was **removed**, not what the card asked for. A player
+#: with two poison counters loses two and takes two, and reading the board
+#: afterwards would read the zero the removal just wrote.
+COUNTERS_REMOVED = "counters_removed"
+
+
 #: "**Choose X target attacking creatures.** For each of those creatures, …"
 #: (Winter's Chill.) The permanents a targeting sentence named, recorded so the
 #: loop behind it has a set to walk: the spell chose them at announcement

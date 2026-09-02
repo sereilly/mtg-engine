@@ -202,6 +202,22 @@ class RedirectDamage:
     #: an unblocked attacker's ping ability and one that does not, so it is read
     #: rather than skipped — exactly as :class:`PreventDamage` reads its own.
     combat_only: bool = False
+    #: "**The next 1 damage** that would be dealt to target white creature this
+    #: turn is dealt to this creature instead." (Daughter of Autumn; Hazduhr the
+    #: Abbot prints ``X``.) A **point pool**, the redirection twin of
+    #: :class:`PreventDamage`'s quantity: CR 615.7 spells out how a numeric
+    #: shield spends — each 1 damage reduces it by 1, and what is left of a
+    #: larger event is dealt normally — and a numeric redirect moves those same
+    #: points instead of removing them.
+    #:
+    #: ``None`` is "**all** damage", which every other printing in the pool is,
+    #: and the distinction is not cosmetic: a record with no pool moves the whole
+    #: event, so a 1-point redirect read as one would move a Fireball's twelve.
+    #: Its own field rather than ``one_shot``'s neighbour for the same reason
+    #: ``Shield.amount`` and ``Shield.uses`` are two fields — CR 615.8's "the
+    #: next **time**" is one whole instance whatever its size, and this is a
+    #: number of points however many instances it takes.
+    amount: Amount | None = None
 
 
 @dataclass(frozen=True)

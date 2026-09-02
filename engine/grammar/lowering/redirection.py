@@ -22,11 +22,13 @@ from .. import ast
 from ..errors import LoweringError
 from ._common import (
     _REST_OF_TURN,
+    _amount_payload,
     _describe_targets,
     _filter_payload,
     _is_source,
     _is_target,
     _is_you,
+    _names_several_targets,
     _restrictions_beyond,
     _targets_payload,
 )
@@ -67,6 +69,15 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
       pointing at nothing, and CR 614.9 makes that a redirect that silently does
       nothing at all.
     """
+    if node.amount is not None:
+        # "**The next N** damage …" — a point pool rather than the whole event.
+        # Read ahead of every branch below rather than beside them, because
+        # each of those was written when there was no number to read: handed a
+        # counted node they would move the *whole* event and report the card
+        # supported, so a redirect one point wide would move a Fireball's
+        # twelve. The counted lowering refuses everything it does not
+        # implement, which keeps the number from being dropped anywhere.
+        return _lower_next_damage_redirect(node)
     if node.optional:
         return _lower_optional_class_redirect(node)
     if node.to is None:
@@ -350,4 +361,80 @@ def _lower_optional_class_redirect(
             "redirect_matching_damage_to_you_until_eot", "",
             {"recipients": described, "optional": True},
         ),
+    )
+
+
+def _lower_next_damage_redirect(
+    node: ast.RedirectDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"The next N damage that would be dealt to target <noun> this turn is
+    dealt to this creature instead." (Daughter of Autumn; Hazduhr the Abbot
+    prints ``X`` for N and puts the duration on the other side of the
+    recipient, which the one production reads either way.)
+
+    CR 615.7's numeric shield with CR 614.9's verb. The points behave exactly as
+    a shield's do — each 1 damage spends 1, and what is left of a larger event
+    lands normally — but they are **moved** rather than removed, so the damage
+    is still dealt in full by the same source and only its recipient changes for
+    the part the pool covers. That difference is why this is a record in
+    ``engine/damage_redirects.py`` rather than a ``Shield``: lifelink
+    (CR 120.3f), "whenever ~ deals damage" and the dealt-damage ledger all see
+    the moved points.
+
+    Every refusal below is a way the sentence could otherwise mean more than it
+    says:
+
+    * the protected recipient must be one **chosen** object. The record hangs
+      off the recipient it watches, and a class or a bare "you" is a different
+      record with a different home (``_lower_optional_class_redirect``).
+    * the class must be one ``subject_matches`` can test, because the target is
+      re-checked at resolution (CR 608.2b) and a narrowing the matcher would
+      drop is a redirect covering strictly more creatures than the card prints.
+    * the damage must move onto the permanent whose ability this is. Nothing
+      here resolves another taker, and a record pointing nowhere is a redirect
+      that silently does nothing at all (CR 614.9).
+    * the duration must be this turn, because that is what the sweeps give it;
+      and a chosen source, a "next time" bound, an opponent's pick and a combat
+      scope all have readings on the blanket redirects above and none here.
+    """
+    if (
+        node.dealt_by is not None
+        or node.from_chosen_source
+        or node.one_shot
+        or node.chooser is not None
+        or node.combat_only
+        or node.optional
+    ):
+        raise LoweringError(
+            "a counted redirect names no source, no bound, no other chooser "
+            "and no combat scope",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
+    if not _is_source(node.new_recipient):
+        raise LoweringError(
+            "a counted redirect moves the damage onto the permanent whose "
+            "ability it is",
+            node=node,
+        )
+    spec = node.to
+    if (
+        not isinstance(spec, ast.TargetSpec)
+        or spec.quantifier != "target"
+        or _names_several_targets(spec)
+    ):
+        raise LoweringError(
+            "no handler arms a counted redirect on this recipient", node=node
+        )
+    described = _filter_payload(spec.filter)
+    untestable = untestable_filter_keys(described)
+    if untestable:
+        raise LoweringError(
+            "a redirect cannot test " + ", ".join(sorted(untestable)), node=node
+        )
+    payload: dict[str, object] = {"amount": _amount_payload(node.amount)}
+    _describe_targets(payload, spec)
+    return (
+        OracleInstruction("redirect_next_damage_to_source_until_eot", "", payload),
     )
