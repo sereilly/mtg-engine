@@ -466,6 +466,12 @@ def main(argv: list[str] | None = None) -> int:
             for entry in unknown:
                 print(f"BAD CITATION: {entry}", file=sys.stderr)
             return 1
+        # Still a read: the report is in hand either way, and comparing it to
+        # the committed file is what lets ci.yml's freshness step stop
+        # re-running this script a second time just to notice staleness.
+        if OUTPUT_PATH.read_text(encoding="utf-8") != report:
+            print(f"FAIL: {OUTPUT_PATH.name} is stale — rerun the script and commit the result", file=sys.stderr)
+            return 1
         return 0
     OUTPUT_PATH.write_text(report, encoding="utf-8")
     print(f"Wrote {OUTPUT_PATH.name}: {len(tests)} tests, "

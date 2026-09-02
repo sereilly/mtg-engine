@@ -63,7 +63,7 @@ def _verified_names() -> set[str]:
     return {name for name, entry in results.items() if entry.get("status") == "pass"}
 
 
-def write_markdown(classes: list[list[str]]) -> None:
+def render_markdown(classes: list[list[str]]) -> str:
     catalog = load_catalog()
     verified = _verified_names()
     covered = sum(1 for names in classes for n in names if n not in verified and any(p in verified for p in names))
@@ -94,7 +94,11 @@ def write_markdown(classes: list[list[str]]) -> None:
         )
         lines.append(f"| {len(names)} | {shown} |")
     lines += ["", "Bold = manually verified; the rest of that row is covered by it.", ""]
-    OUTPUT_PATH.write_text("\n".join(lines), encoding="utf-8")
+    return "\n".join(lines)
+
+
+def write_markdown(classes: list[list[str]]) -> None:
+    OUTPUT_PATH.write_text(render_markdown(classes), encoding="utf-8")
 
 
 def main() -> int:
@@ -126,6 +130,9 @@ def main() -> int:
                 for names in removed:
                     print(f"  - {names}")
             print("\nIf every change is correct: scripts/behaviour_classes.py --accept")
+            return 1
+        if OUTPUT_PATH.read_text(encoding="utf-8") != render_markdown(classes):
+            print(f"FAIL: {OUTPUT_PATH.name} is stale — rerun the script and commit the result")
             return 1
         print(f"OK: {len(classes)} behaviour class(es) unchanged")
         return 0

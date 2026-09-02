@@ -190,22 +190,18 @@ jobs:
 
       # Regenerating the trackers must be a no-op on a clean tree; a diff here
       # means someone changed behavior without refreshing the generated docs.
+      # The five tracker scripts' --check now makes that comparison itself
+      # (2026-09-02): each renders the report from the analysis it already ran
+      # and fails "stale report" on a mismatch, so re-running them here was the
+      # same work twice — parse_coverage's ~15s deletion probe most of all.
+      # This step keeps the two generators that have no --check of their own:
+      # SET_PROGRESS.md renders from the cached set_progress.json (no
+      # network), and CARD_VERIFICATION.md is a projection of
+      # card_verification.json — both joined this step after the M21
+      # promotion showed their staleness cost: the roadmap read "19
+      # untested cards" for a week while the true number was 299.
       - name: Generated trackers are up to date
         run: |
-          python scripts/grammar_coverage.py > /dev/null
-          python scripts/rules_progress.py > /dev/null
-          python scripts/behaviour_classes.py > /dev/null
-          # PARSE_COVERAGE.md was missing here: its --check guards *unclaimed
-          # text*, not report freshness, so a HANDLER_CLAIMS entry could shift
-          # the channel table and leave the committed report stale with every
-          # guard still green.
-          python scripts/parse_coverage.py > /dev/null
-          python scripts/hook_reliance.py > /dev/null
-          # SET_PROGRESS.md renders from the cached set_progress.json (no
-          # network), and CARD_VERIFICATION.md is a projection of
-          # card_verification.json — both joined this step after the M21
-          # promotion showed their staleness cost: the roadmap read "19
-          # untested cards" for a week while the true number was 299.
           python scripts/set_progress.py > /dev/null
           python -c "from web.verification_report import write_verification_markdown as w; w()"
           if ! git diff --quiet; then

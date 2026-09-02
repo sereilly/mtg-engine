@@ -1332,6 +1332,9 @@ def main() -> int:
             print("STALE probe-baseline entries (no longer occur — rerun --accept-probe):")
             for key in stale_probe:
                 print(f"  {key}")
+        if ok and OUTPUT_PATH.read_text(encoding="utf-8") != render_markdown(coverages):
+            ok = False
+            print(f"FAIL: {OUTPUT_PATH.name} is stale — rerun the script and commit the result")
         if measured:
             cards = len({name for name, _ in measured})
             print(

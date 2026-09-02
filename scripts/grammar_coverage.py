@@ -352,6 +352,12 @@ def main() -> int:
             for failure in failures:
                 print(f"  - {failure}")
             return 1
+        rendered = render(
+            per_set, overall, reasons, executed_lines, distinct_texts, measured_codes
+        )
+        if OUTPUT_PATH.read_text(encoding="utf-8") != rendered:
+            print(f"FAIL: {OUTPUT_PATH.name} is stale — rerun the script and commit the result")
+            return 1
         print(
             f"OK: grammar parses {measures['ALL']['parsed_pct']}% of lines, "
             f"executes {measures['ALL']['executed_pct']}%"

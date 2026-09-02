@@ -36,12 +36,9 @@ COMMANDS: list[tuple[str, list[str]]] = [
 
 #: What ``--freshness`` regenerates before asking git whether anything moved —
 #: the trackers whose staleness no ``--check`` sees (ci.yml's freshness step).
+#: The five tracker scripts are absent on purpose: their ``--check`` (run in
+#: COMMANDS above) already fails on a stale report from the analysis in hand.
 FRESHNESS_COMMANDS: list[tuple[str, list[str]]] = [
-    ("Grammar coverage report", ["scripts/grammar_coverage.py"]),
-    ("Rules progress report", ["scripts/rules_progress.py"]),
-    ("Behaviour classes report", ["scripts/behaviour_classes.py"]),
-    ("Parse coverage report", ["scripts/parse_coverage.py"]),
-    ("Hook reliance report", ["scripts/hook_reliance.py"]),
     ("Set progress report", ["scripts/set_progress.py"]),
     (
         "Verification markdown",
