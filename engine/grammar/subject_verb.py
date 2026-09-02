@@ -43,6 +43,7 @@ from .effects import (
     _parse_note_mana_spent,
     _parse_becomes, _parse_cant_attack_or_block, _parse_change_base_pt,
     _parse_no_longer_supertype,
+    _parse_can_be_targeted_as_though,
     _parse_change_target,
     _parse_change_text, _parse_choose_cards_in_hand, _parse_choose_color,
     _parse_choose_number,
@@ -915,6 +916,15 @@ def parse_subject_verb(
             permission = _parse_can_attack_as_though(stream, source_spec)
             if permission is not None:
                 return permission
+            # "<self> can be the target of spells and abilities controlled by
+            # target player as though it didn't have shroud" (Autumn Willow) —
+            # the same "as though" permission (CR 115.4) about a different
+            # restriction, so it is tried beside its twin rather than inside
+            # it: the two share the auxiliary and nothing else, and both refuse
+            # without consuming.
+            waived = _parse_can_be_targeted_as_though(stream, source_spec)
+            if waived is not None:
+                return waived
         if token.text in ("can't", "cannot"):
             return _parse_cant_attack_or_block(stream, source_spec)
         # "Those creatures **don't untap** during their controller's next untap

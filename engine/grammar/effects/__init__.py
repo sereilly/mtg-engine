@@ -128,6 +128,7 @@ from .library import (
     _parse_search_library,
 )
 from .stack import (
+    _parse_can_be_targeted_as_though,
     _parse_change_target,
     _parse_copy_that_spell,
     _parse_copy_this_spell,
@@ -248,6 +249,7 @@ __all__ = [
     "_parse_look_at_hand",
     "_parse_reveal_top",
     "_parse_search_library",
+    "_parse_can_be_targeted_as_though",
     "_parse_change_target",
     "_parse_copy_that_spell",
     "_parse_copy_this_spell",

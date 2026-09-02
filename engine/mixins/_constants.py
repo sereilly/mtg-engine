@@ -6,6 +6,7 @@ from ..combat_permissions import (ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CANT_BLOCK_UNTIL_EOT)
 from ..damage_events import (DAMAGE_DENIES_REGENERATION,
                              DAMAGE_EXILES_INSTEAD)
+from ..target_immunity import SHROUD_WAIVED_FOR_SEATS
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 _EOT_METADATA_KEYS = (
@@ -23,10 +24,20 @@ _EOT_METADATA_KEYS = (
     # the narrowed twin of the flag above, a list of blocker classes rather
     # than a boolean, because the class is payload.
     "cant_be_blocked_by_until_eot",
+    # "…can't be blocked this turn **except by Walls**" (Joven's Tools): the
+    # whitelist twin of the entry above, and its own key because the two say
+    # opposite things about every blocker neither of them names — one record
+    # read as the other would let the whole board through.
+    "cant_be_blocked_except_by_until_eot",
     # "Target creature **can't block** this turn." (Panic.) The other side of
     # the same combat: the two flags above are about being blocked, this one is
     # about blocking.
     CANT_BLOCK_UNTIL_EOT,
+    # "Until end of turn, Autumn Willow can be the target of spells and
+    # abilities controlled by target player as though it didn't have shroud."
+    # The sweep *is* the duration: the waiver is a list of seats on the
+    # permanent and nothing else ends it.
+    SHROUD_WAIVED_FOR_SEATS,
     "must_attack_until_eot",
     "destroy_if_did_not_attack_eot",
     "destroy_if_attacked_eot",

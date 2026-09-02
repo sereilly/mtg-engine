@@ -255,6 +255,7 @@ from .stack import (
     CounterAbility,
     CounterSpell,
     ModalNode,
+    WaiveShroud,
 )
 from .combat import (
     AssignsNoCombatDamage,
@@ -523,6 +524,7 @@ __all__ = [
     "CounterAbility",
     "ChangeTarget",
     "ChooseTarget",
+    "WaiveShroud",
     "CreateDelayedTrigger",
     "CounterSpell",
     "ModalNode",

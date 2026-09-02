@@ -594,6 +594,51 @@ def source_is_in_class(game, source, source_class: str) -> bool:
     return source_has_type(game, source, source_class)
 
 
+#: "…**can be the target** of spells and abilities controlled by target player
+#: as though it didn't have shroud." (Autumn Willow.) CR 702.18 with a hole in
+#: it, and the one entry in this file that is *granted* rather than printed:
+#: everything else here is derived from a card's text on every read, and this is
+#: a decision an activation made, so it is a record with a window.
+#:
+#: A list of **seats**, not a boolean, because the permission is per player:
+#: CR 115.4's "as though" lifts the restriction only for the spells and
+#: abilities that seat controls, and a boolean would open the creature to the
+#: whole table. Swept with the turn by ``mixins/_constants._EOT_METADATA_KEYS``,
+#: which is what makes "until end of turn" true without anything having to
+#: remember to undo it.
+SHROUD_WAIVED_FOR_SEATS = "shroud_waived_for_seats_until_eot"
+
+
+def waive_shroud_for_seat(permanent, seat: int) -> None:
+    """Let *seat*'s spells and abilities target *permanent* this turn although
+    it has shroud (CR 702.18, CR 115.4's "as though")."""
+    record = [int(index) for index in shroud_waived_seats(permanent)]
+    if int(seat) not in record:
+        record.append(int(seat))
+    permanent.metadata[SHROUD_WAIVED_FOR_SEATS] = record
+
+
+def shroud_waived_seats(permanent) -> tuple[int, ...]:
+    """The seats whose spells and abilities may target *permanent* this turn
+    in spite of its shroud."""
+    metadata = getattr(permanent, "metadata", None)
+    if not metadata:
+        return ()
+    return tuple(metadata.get(SHROUD_WAIVED_FOR_SEATS) or ())
+
+
+def shroud_waived_for(permanent, seat: int | None) -> bool:
+    """Whether *seat* is one of them.
+
+    ``None`` — a probe that cannot say whose spell this is — answers **False**,
+    which keeps the shroud on. That is the direction that cannot let a targeting
+    through that the rules forbid, and it is the same answer
+    ``_can_be_targeted`` gives every other seat-relative immunity when the
+    caller names no seat.
+    """
+    return seat is not None and int(seat) in shroud_waived_seats(permanent)
+
+
 __all__ = [
     "ABILITY_SOURCE",
     "ANY_SPELL",
@@ -601,6 +646,7 @@ __all__ = [
     "CLAIM",
     "COLOR_CLASS_PREFIX",
     "SELF_SUBJECT",
+    "SHROUD_WAIVED_FOR_SEATS",
     "SPELL_SOURCE",
     "SourceClassImmunity",
     "ability_source_immunity_classes",
@@ -613,6 +659,9 @@ __all__ = [
     "source_class_immunities",
     "source_is_in_class",
     "spell_is_in_class",
+    "shroud_waived_for",
+    "shroud_waived_seats",
     "spell_target_immunity_classes",
     "target_immunities",
+    "waive_shroud_for_seat",
 ]

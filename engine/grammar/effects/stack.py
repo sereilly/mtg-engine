@@ -486,3 +486,46 @@ def _parse_copy_this_spell(stream: TokenStream) -> ast.Statement | None:
         stream.reset(mark)
         return None
     return ast.CopySpell(ast.PlayerRef("you"), may_choose_new_target=True)
+
+
+def _parse_can_be_targeted_as_though(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.WaiveShroud | None":
+    """``can be the target of spells and abilities controlled by <player> as
+    though it didn't have shroud`` — the permission clause, without its subject.
+
+    Autumn Willow. CR 115.4's "as though" cutting a hole in CR 702.18 for one
+    seat, and the twin of ``phrases._parse_can_attack_as_though`` one rule
+    over: both are permissions that lift a restriction and change nothing else.
+
+    Every word after "can" is required literally, and that is the production
+    rather than a shortcoming of it. The three that could vary do not vary
+    across any card, and each names a different mechanism if it did: "spells
+    and abilities" is both kinds because CR 115.1a and CR 115.1c/d make them
+    separately targeted and a card naming one of them is a narrower effect;
+    and "shroud" is the one keyword whose restriction
+    ``permanent_state._can_be_targeted`` lifts through this record — hexproof
+    is already seat-relative and protection asks about the source's qualities,
+    so neither would be this rule with a word changed. What *does* vary is the
+    player, which is why that is the field.
+
+    Non-consuming on refusal, so every other "can …" sentence keeps the reading
+    it has today.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("can", "be", "the", "target", "of"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("spells", "and", "abilities", "controlled", "by"):
+        stream.reset(mark)
+        return None
+    player = parse_player_ref(stream)
+    if player is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "as", "though", "it", "didn't", "have", "shroud"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.WaiveShroud(player)

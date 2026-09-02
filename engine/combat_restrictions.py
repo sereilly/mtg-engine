@@ -808,6 +808,39 @@ def granted_blocker_filters(permanent) -> tuple[dict, ...]:
     return tuple(metadata.get(GRANTED_BLOCKER_RESTRICTIONS) or ())
 
 
+#: The **whitelist** granted for a turn — "Target creature can't be blocked
+#: this turn except by Walls" (Joven's Tools). Its own record rather than a
+#: polarity flag on the one above, for the reason the two static kinds are two
+#: kinds: "can't be blocked by Walls" lets the rest of the board through and
+#: "except by Walls" lets none of it through, so a record read as the other is
+#: an evasion ability inverted rather than narrowed.
+#:
+#: A list **of lists**: each grant is one restriction (CR 509.1b), and a blocker
+#: must satisfy every one of them separately — folding two grants into one union
+#: would let a creature legal under either through both.
+#: Swept with the turn by ``mixins/_constants._EOT_METADATA_KEYS``.
+GRANTED_BLOCKER_WHITELISTS = "cant_be_blocked_except_by_until_eot"
+
+
+def grant_blocker_whitelist(permanent, allowed: list[dict]) -> None:
+    """Record that only creatures matching one of *allowed* may block
+    *permanent* for the rest of the turn (CR 509.1b)."""
+    record = [list(entry) for entry in granted_blocker_whitelists(permanent)]
+    entry = [dict(described) for described in allowed]
+    if entry not in record:
+        record.append(entry)
+    permanent.metadata[GRANTED_BLOCKER_WHITELISTS] = record
+
+
+def granted_blocker_whitelists(permanent) -> tuple[list[dict], ...]:
+    """Every blocker whitelist *permanent* has been given this turn, each one a
+    union of the classes that single grant admits."""
+    metadata = getattr(permanent, "metadata", None)
+    if not metadata:
+        return ()
+    return tuple(metadata.get(GRANTED_BLOCKER_WHITELISTS) or ())
+
+
 def participation_cap(permanents, kind: str) -> int | None:
     """The cap the battlefield currently puts on how many creatures may *kind*
     (``"attack"`` / ``"block"``) this combat, or None when nothing caps it.

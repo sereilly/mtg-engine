@@ -693,11 +693,27 @@ class DeclareBlockersStepMixin:
         # payload in all three — the difference is only where the record lives.
         from ..combat_restrictions import (
             granted_blocker_filters,
+            granted_blocker_whitelists,
             restriction_condition_holds,
         )
 
         for described in granted_blocker_filters(attacker):
             if subject_matches(self, blocker, described):
+                return False
+
+        # "Target creature can't be blocked this turn **except by Walls**."
+        # (Joven's Tools.) The granted *whitelist*, and its own loop for the
+        # reason the static whitelist below has its own branch: a blocker
+        # matching no member of the union is illegal, where the blacklist above
+        # only rejects the ones that do match.
+        #
+        # Every grant separately, because each is its own restriction
+        # (CR 509.1b): two of them must both be satisfied, and a blocker legal
+        # under either one alone is not legal under both.
+        for allowed in granted_blocker_whitelists(attacker):
+            if not any(
+                subject_matches(self, blocker, described) for described in allowed
+            ):
                 return False
 
         for restriction in (

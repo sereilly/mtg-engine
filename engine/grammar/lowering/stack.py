@@ -16,6 +16,7 @@ from ..errors import LoweringError
 from .conditions import _lower_condition
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS,
+    _REST_OF_TURN,
     _describe_several_targets,
     _describe_targets,
     _filter_payload,
@@ -590,6 +591,37 @@ def _lower_choose_target(node: ast.ChooseTarget) -> tuple[OracleInstruction, ...
     if "targets" not in payload:
         raise LoweringError("this 'choose' names no target", node=node)
     return (OracleInstruction("choose_target_permanent", "", payload),)
+
+
+def _lower_waive_shroud(node: "ast.WaiveShroud") -> tuple[OracleInstruction, ...]:
+    """"Until end of turn, Autumn Willow can be the target of spells and
+    abilities controlled by **target player** as though it didn't have shroud."
+
+    Refuses on two axes, both by name, exactly as ``_lower_attack_as_though``
+    does for the other "as though" permission. The **duration** must be this
+    turn's, because the waiver is a list of seats stamped on the permanent and
+    swept by the cleanup step — a durationless printing would be a static
+    ability nothing here ends. And the **player** must be one the activation
+    chooses: a fixed seat is chosen by nobody (CR 115.1a), so a sentence naming
+    one would arm the waiver for whoever the resolution happened to be carrying.
+    """
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "a durationless shroud exception is a static ability, which "
+            "nothing here would ever end",
+            node=node,
+        )
+    if node.player.kind not in ("target_player", "target_opponent"):
+        raise LoweringError(
+            f"the shroud exception is granted to a chosen player, not to "
+            f"{node.player.kind!r}",
+            node=node,
+        )
+    payload: dict[str, object] = {}
+    _describe_targets(payload, node.player)
+    if "targets" not in payload:
+        raise LoweringError("this shroud exception names no player", node=node)
+    return (OracleInstruction("waive_shroud_for_target_player", "", payload),)
 
 
 def _lower_create_delayed_trigger(

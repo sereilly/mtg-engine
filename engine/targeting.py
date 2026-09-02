@@ -556,6 +556,13 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "drain_target_lands_mana": {"kind": "player"},
     "tap_target_player_lands_and_drain_mana": {"kind": "player"},
     "reorder_target_library_top": {"kind": "player"},
+    # "…can be the target of spells and abilities controlled by **target
+    # player** as though it didn't have shroud" (Autumn Willow). The ability
+    # targets a *player* while the creature carrying it cannot be targeted at
+    # all, which is legal and is the whole card: CR 702.18 stops spells and
+    # abilities from choosing the permanent, and says nothing about what the
+    # permanent's own abilities may choose.
+    "waive_shroud_for_target_player": {"kind": "player"},
     "return_all_owned_artifacts_to_hand": {"kind": "player"},
     # Word of Command looks at *target opponent's* hand: the caster's own seat is
     # not a legal choice (CR 115.4).

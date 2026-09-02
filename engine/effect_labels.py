@@ -55,6 +55,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     "mark_non_wall_target_to_attack": "activated_combat",
     "buff_creatures_global": "activated_pump",
     "grant_cant_be_blocked_by_until_eot": "activated_evasion",
+    "grant_cant_be_blocked_except_by_until_eot": "activated_evasion",
     "grant_half_prevention_shield": "activated_prevent",
     "skip_next_untap": "activated_tapping",
     "swap_controller_land_mana_until_eot": "activated_mana",

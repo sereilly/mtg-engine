@@ -885,3 +885,37 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
         f"{card_name}: {item.card.name} now targets {game.players[seat].name}"
     )
     return True, "resolved"
+
+
+@effect_handler("waive_shroud_for_target_player")
+def waive_shroud_for_target_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Until end of turn, Autumn Willow can be the target of spells and
+    abilities controlled by **target player** as though it didn't have shroud."
+
+    CR 115.4's "as though" cutting a hole in CR 702.18 for one seat. The record
+    is a list of seats on the permanent (``target_immunity``), read by
+    ``_can_be_targeted`` and swept with the turn — the creature still *has*
+    shroud, so every other seat is stopped exactly as before and a lord counting
+    creatures with shroud still counts it.
+
+    The subject is the ability's **own source**, which is the sentence's subject
+    and not a target: the permission is about this permanent, so a resolution
+    that has lost it (the creature left the battlefield in response) waives
+    nothing rather than waiving it for something else.
+    """
+    from ..target_immunity import waive_shroud_for_seat
+
+    source = context.source_permanent
+    if source is None or not game.is_on_battlefield(source):
+        game.log.append(f"{context.card.name}: it has left the battlefield")
+        return True, "resolved"
+    target = context.target
+    if target is None or target not in game.players:
+        game.log.append(f"{context.card.name}: no player to waive shroud for")
+        return True, "resolved"
+    waive_shroud_for_seat(source, game.players.index(target))
+    game.log.append(
+        f"{source.card.name} can be targeted by {target.name}'s spells and "
+        f"abilities this turn"
+    )
+    return True, "resolved"

@@ -154,6 +154,7 @@ from .stack import (
     CounterAbility,
     CounterSpell,
     ModalNode,
+    WaiveShroud,
 )
 from .combat import (
     AssignsNoCombatDamage,
@@ -203,7 +204,7 @@ Effect = Union[
     TapOrUntap, DoesntUntapNextStep, DoesntUntapWhileSourceTapped,
     DoesntUntapWhileCounter, UntapChosenByPaying,
     DelayedSelfAction, Attach, ExchangeControl, ExchangeGreatestManaValue,
-    Regenerate, ReanimateEnchantedCard, ChangeTarget, ChooseTarget, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
+    Regenerate, ReanimateEnchantedCard, ChangeTarget, ChooseTarget, WaiveShroud, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
     RevealTop, RevealUntil, NameAndStrip, NameAndRandomReveal, NameThenRevealTop,
     ChooseCardsInHand, PutIteratedCardOnLibrary,
