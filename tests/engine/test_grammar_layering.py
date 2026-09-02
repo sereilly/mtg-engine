@@ -490,7 +490,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_events", "_amounts", "_sacrifices", "_records", "_sweeps", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_events", "_amounts", "_sacrifices", "_records", "_sweeps", "_bound_returns", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -740,6 +740,17 @@ FAMILY_SHARED = {
     # `damage.py`; the two had drifted, and the inline one was dropping the head
     # noun from the payload it built.
     "_sweeps",
+    # `_bound_returns` split out of `lowering/returns.py` at Alliances'
+    # integration, when three branches each added a reading under the cap and
+    # their sum crossed it. The line is the one `returns.py` already drew: a
+    # return whose object **nothing targets** — the firing event recorded it,
+    # it is the ability's own source, or it is a description the handler sweeps
+    # — against one a player chooses (CR 115). A floor for `_sweeps`' reason
+    # exactly: `returns` is its only reader and a family may not import a
+    # sibling. The two predicates that moved with it are there because both
+    # halves of the split ask them, which is what makes this a floor rather
+    # than a file that happened to be cut in half.
+    "_bound_returns",
 }
 
 
