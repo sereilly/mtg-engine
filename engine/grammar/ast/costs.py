@@ -91,8 +91,21 @@ class PutCounterCost:
     own node and not a negative counter removal: it can never be unpayable, and
     the thing it adds has no rules meaning of its own (CR 122.1) — only the
     card's own state trigger reads it.
+
+    *subject* is what the counter goes on when the card names something other
+    than the source: "Put a **-1/-1** counter on **a creature you control**"
+    (Wandering Mage). ``None`` is the source, which is what every printing
+    before it meant and what the field's absence has to keep meaning.
+
+    That spelling breaks the "never unpayable" reading above and deliberately
+    keeps the node: CR 601.2h makes an activation whose cost cannot be paid no
+    activation at all, and a payer controlling no creature can put the counter
+    nowhere. So the *shape* is one cost and the payability is the subject's
+    business — a second node would be a second place for the counter's kind to
+    be read, and the kind is the only thing the two spellings share.
     """
     kind: str
+    subject: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)

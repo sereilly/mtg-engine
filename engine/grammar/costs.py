@@ -180,6 +180,32 @@ def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
     return chargeable_exile_payload(filt.to_payload()) is not None
 
 
+def _is_chargeable_counter_target(filt: ast.ObjectFilter) -> bool:
+    """Whether the payment path can find the permanent this counter goes on.
+
+    "Put a -1/-1 counter on **a creature you control**" (Wandering Mage). The
+    same two questions ``_is_chargeable_sacrifice`` asks, for the same reason:
+    the payer's candidates are enumerated with ``subject_matches``, so a key it
+    cannot test would be dropped — and a dropped narrowing on *this* cost is a
+    counter landing somewhere the card does not name **and** an ability payable
+    when it should not be.
+
+    The phrase must also pin a card type or a subtype. Without one the cost
+    could be paid by putting the counter on a land, which is no cost at all for
+    a card that means to shrink a creature.
+    """
+    if filt.is_source:
+        return True
+    if not (filt.card_types or filt.subtypes):
+        return False
+    described = filt.to_payload()
+    return not _restrictions_beyond(
+        filt, _PAYLOAD_HONOURED_FILTER_FIELDS
+    ) and object_only_filter(
+        described, carried_separately=frozenset({"controller"})
+    ) is not None
+
+
 def _accept_exile_top_of_library(
     stream: TokenStream,
 ) -> "ast.ExileTopOfLibraryCost | None":
@@ -431,20 +457,46 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             stream.accept_punct(",")
             continue
         if stream.at_word("put"):
-            # "Put a page counter on this artifact" — a cost that adds a marker
-            # rather than spending one, so it is never unpayable and the
-            # affordability check below has nothing to ask of it.
+            # "Put a page counter on this artifact" (Mazemind Tome) — a cost
+            # that adds a marker rather than spending one — and "Put a -1/-1
+            # counter on **a creature you control**" (Wandering Mage), which is
+            # the same cost aimed somewhere else and *can* be unpayable.
             mark = stream.mark()
             stream.advance()
             if stream.accept_word("a", "an"):
-                kind = stream.peek_word()
-                if kind and kind not in ("counter",):
-                    stream.advance()
-                    if stream.accept_word("counter") and stream.accept_word("on"):
-                        if stream.accept_kind(SELF) or stream.accept_phrase("this", "artifact"):
-                            costs.append(ast.PutCounterCost(kind))
-                            stream.accept_punct(",")
-                            continue
+                # The kind through the counter vocabulary rather than off a bare
+                # word: a P/T counter is spelled in symbols (CR 122.1a), so
+                # ``peek_word`` returned None for "-1/-1" and the branch fell
+                # through to "unrecognized activation cost".
+                try:
+                    kind = _expect_counter_kind(stream)
+                except GrammarError:
+                    kind = None
+                if kind is not None and stream.accept_word("counter") and stream.accept_word("on"):
+                    if stream.accept_kind(SELF) or stream.accept_phrase("this", "artifact"):
+                        costs.append(ast.PutCounterCost(kind.text))
+                        stream.accept_punct(",")
+                        continue
+                    # A chosen permanent. Gated by the same key set every other
+                    # chosen cost is gated by: the payment path picks with
+                    # ``subject_matches``, so a phrase it cannot test would let
+                    # the counter land on anything at all — and the *cost* would
+                    # then be payable in cases the card does not allow, which is
+                    # the direction a cost must never be wrong in.
+                    marked = stream.mark()
+                    try:
+                        # The same reader every other chosen cost uses, so the
+                        # quantifier this admits ("a creature", never "two
+                        # creatures" or "target creature") is one answer rather
+                        # than a second opinion about what may pay.
+                        on = _parse_cost_object(stream, "put a counter on")
+                    except GrammarError:
+                        on = None
+                    if on is not None and _is_chargeable_counter_target(on):
+                        costs.append(ast.PutCounterCost(kind.text, subject=on))
+                        stream.accept_punct(",")
+                        continue
+                    stream.reset(marked)
             stream.reset(mark)
         if stream.at_word("remove"):
             costs.append(_parse_counter_removal_cost(stream))

@@ -373,6 +373,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # wherever the object's text uses it, and one of the two modes does not
     # touch colour at all.
     "mark_text_modified": "text_change",
+    "gain_control_of_target": "control",
     "gain_control_until_eot": "control",
     # "Target opponent gains control of this creature." (Chaos Lord.) The same
     # family read from the other end — the permanent hands itself over rather

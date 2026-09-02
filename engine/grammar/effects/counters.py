@@ -22,8 +22,8 @@ from ..lexer import PT
 from ..references import parse_recipient
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES
-from ..phrases import (_expect_counter_kind, _parse_for_each, is_pt_counter,
-                       parse_pair_ordinal_subject)
+from ..phrases import (_accept_number, _expect_counter_kind, _parse_for_each,
+                       is_pt_counter, parse_pair_ordinal_subject)
 
 
 def _parse_put_counter(stream: TokenStream) -> ast.Statement:
@@ -272,19 +272,57 @@ def _parse_distribute_counters(stream: TokenStream) -> ast.PutCounter | None:
     if not stream.accept_word("counter", "counters"):
         stream.reset(mark)
         return None
-    # "among **any number of** target creatures". The quantifier is required:
-    # "among two target creatures" is a fixed count this shape does not carry,
-    # and reading it as unbounded would let the caster name three.
-    if not stream.accept_phrase("among", "any", "number", "of"):
+    # "among **any number of** target creatures" — or the bounded spelling,
+    # "among **one or two**" (Contagion) / "among **one, two, or three**"
+    # (Bounty of the Hunt). One of the two is required: "among two target
+    # creatures" is a fixed count this shape does not carry, and reading
+    # either as unbounded would let Contagion's caster name three.
+    if not stream.accept_word("among"):
         stream.reset(mark)
         return None
+    if stream.accept_phrase("any", "number", "of"):
+        bound = None
+    else:
+        bound = _accept_target_bound(stream)
+        if bound is None:
+            stream.reset(mark)
+            return None
     subject = parse_recipient(stream)
     if not isinstance(subject, ast.TargetSpec):
         stream.reset(mark)
         return None
+    if bound is not None:
+        subject = dataclasses.replace(subject, max_count=bound)
     return ast.PutCounter(
         subject, counter.text, count, distributed=True,
     )
+
+
+def _accept_target_bound(stream: TokenStream) -> int | None:
+    """``one or two`` / ``one, two, or three`` — the ceiling it names.
+
+    CR 601.2c's variable target count, printed as an enumeration rather than as
+    a range. The enumeration must run ``1, 2, … n`` with nothing skipped and
+    nothing repeated: a card printing "one or three" would mean something this
+    returns no room to say, and answering ``3`` for it would let the caster
+    name two. Nothing consumed when the words are not an enumeration, so the
+    caller can reset and refuse the line whole.
+    """
+    mark = stream.mark()
+    numbers: list[int] = []
+    while True:
+        stream.accept_punct(",")
+        stream.accept_word("or")
+        value = _accept_number(stream)
+        if value is None:
+            break
+        numbers.append(value)
+        if not (stream.at_punct(",") or stream.at_word("or")):
+            break
+    if numbers != list(range(1, len(numbers) + 1)) or len(numbers) < 2:
+        stream.reset(mark)
+        return None
+    return numbers[-1]
 
 
 def _parse_remove_counter(stream: TokenStream) -> ast.RemoveCounter | None:

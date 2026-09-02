@@ -818,6 +818,7 @@ class SpellCastingMixin:
                 _divided_total(found[0], resolved_x_value),
                 divided_targets,
                 division=found[1].get("division", EVENLY),
+                max_targets=found[1].get("max_targets"),
             )
             if refusal is not None:
                 self.log.append(f"{card.name}: {refusal}")

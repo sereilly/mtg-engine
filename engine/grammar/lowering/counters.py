@@ -21,6 +21,7 @@ from ._common import (
     _describe_several_targets,
     _describe_targets,
     _filter_payload,
+    divided_target_description,
     _is_enchanted,
     _is_source,
     _is_target,
@@ -105,16 +106,17 @@ def _lower_put_counter(
                 "a distributed placement counts a fixed or variable number",
                 node=node,
             )
+        # "among one or two target creatures" (Contagion). CR 601.2c fixes the
+        # number of targets at announcement, so the printed ceiling travels to
+        # the casting path's gate rather than to the handler: a bound checked
+        # at resolution has already spent the mana.
         return (
             OracleInstruction("add_counter_to_target", "", {
                 "counter": node.counter,
                 "count": placed,
-                "targets": {
-                    "quantifier": "divided",
-                    "kind": "divided",
-                    "division": "chosen",
-                    "filter": {"type_filter": "creature"},
-                },
+                "targets": divided_target_description(
+                    "creature", max_targets=node.subject.max_count,
+                ),
             }),
         )
     # "Put a loyalty counter on Garruk." (Garruk, Unleashed's −2.) The source's

@@ -26,7 +26,8 @@ from ..nouns import parse_object_filter
 from ..readers import accept_source_reference
 from ..stream import TokenStream
 from ..vocabulary import CARD_TYPES, COLOR_WORDS
-from ..phrases import _parse_duration, _parse_opponents_choice, parse_bound_subject
+from ..phrases import (_parse_duration, _parse_opponents_choice,
+                       accept_or_planeswalker, parse_bound_subject)
 
 
 def _parse_prevent(stream: TokenStream) -> ast.PreventDamage:
@@ -59,6 +60,11 @@ def _parse_prevent(stream: TokenStream) -> ast.PreventDamage:
     recipient = parse_recipient(stream)
     if recipient is None:
         raise stream.error("expected something to shield")
+    # "…dealt to target player **or planeswalker** this turn" (Wandering Mage).
+    # CR 115.4's union, read from ``phrases`` because damage prints the same two
+    # words (Chandra's Magmutt) and the two families may not import each other.
+    # Read before the trailing duration, which is where the card prints it.
+    recipient = accept_or_planeswalker(stream, recipient)
     # The trailing spelling. Only one of the two may be printed: a duration on
     # both sides is not a sentence this reads, and taking the second silently
     # would let two windows disagree about how long the shield lasts.

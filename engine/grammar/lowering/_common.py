@@ -344,6 +344,33 @@ def chargeable_card_filter(filt: ast.ObjectFilter) -> dict | None:
 GRAMMAR_ONLY_PAYLOAD_KEYS = frozenset({"targets"})
 
 
+def divided_target_description(
+    type_filter: str, *, max_targets: int | None = None
+) -> dict[str, object]:
+    """The ``targets`` description a distributed effect carries (CR 601.2d).
+
+    Here rather than in the family that builds it because four readers share
+    the shape and none of them is a lowering: the casting path's announcement
+    gate, ``targeting.py``'s picker, ``divided_damage.divided_description`` and
+    the handler. A second spelling of these keys is a picker that offers what
+    the gate refuses.
+
+    *max_targets* is CR 601.2c's printed ceiling on a variable target count
+    ("among **one or two** target creatures") and is omitted entirely when the
+    card prints "any number of" — an absent key is the unbounded sentence, so a
+    reader written before the bound existed keeps meaning what it meant.
+    """
+    described: dict[str, object] = {
+        "quantifier": "divided",
+        "kind": "divided",
+        "division": "chosen",
+        "filter": {"type_filter": type_filter},
+    }
+    if max_targets is not None:
+        described["max_targets"] = max_targets
+    return described
+
+
 def _describe_targets(
     payload: dict[str, object],
     recipient: ast.Recipient,

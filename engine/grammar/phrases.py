@@ -303,6 +303,37 @@ def parse_subject_filter_at(
     return replace(spec.filter, other_than_source=True) if another else spec.filter
 
 
+def accept_or_planeswalker(
+    stream: TokenStream, recipient: "ast.Recipient | None"
+) -> "ast.Recipient | None":
+    """*recipient* with "**or planeswalker**" folded in, if those two words
+    follow it (CR 115.4's redirection union).
+
+    "…deals 2 damage to target player or planeswalker" (Chandra's Magmutt) and
+    "Prevent the next 2 damage that would be dealt to target player or
+    planeswalker this turn" (Wandering Mage) are the same two words behind the
+    same noun phrase, read by two families — damage and prevention — that may
+    not import each other. So the fragment sits here rather than in either of
+    them, which is this package's rule for a phrase two families need.
+
+    Deliberately *not* inside ``parse_player_ref``: the union is honoured only
+    where a lowering knows what to do with it, and a recipient that could carry
+    the flag anywhere would let a production that ignores it drop the
+    planeswalker half silently. Anything but a targeted player ref is returned
+    untouched with the cursor unmoved.
+    """
+    if (
+        isinstance(recipient, ast.PlayerRef)
+        # "target **opponent** or planeswalker" (Eternal Flame) is the same
+        # union with the caster's own seat struck out of it, which is a
+        # narrowing the recipient already carries.
+        and recipient.kind in ("target_player", "target_opponent")
+        and stream.accept_phrase("or", "planeswalker")
+    ):
+        return dataclasses.replace(recipient, or_planeswalker=True)
+    return recipient
+
+
 def _accept_number(stream: TokenStream) -> int | None:
     """A printed number word, consumed. None (nothing consumed) for anything
     else, so the caller can reset and try the next production."""

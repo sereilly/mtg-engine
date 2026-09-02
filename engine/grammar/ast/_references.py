@@ -748,3 +748,12 @@ class TargetSpec:
     # The parser used to consume the word and discard the fact, which is the
     # round-15 finding this field closes.
     targeted: bool = False
+    # "among **one or two** target creatures" (Contagion; Bounty of the Hunt
+    # prints "one, two, or three"). CR 601.2c: a spell with a variable number
+    # of targets has that number announced with the targets, and the printed
+    # enumeration is its *ceiling* — so this is the bound the announcement is
+    # checked against, not a count the game picks. ``None`` is the unbounded
+    # spelling ("among any number of"), which is a different sentence and not
+    # a bound of infinity: only a production that read an enumeration sets
+    # this, and only the lowering written for that production reads it.
+    max_count: int | None = None
