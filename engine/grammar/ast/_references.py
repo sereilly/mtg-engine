@@ -509,6 +509,22 @@ class ObjectFilter:
                 payload["subtype_filter"] = (
                     self.subtypes[0] if len(self.subtypes) == 1 else list(self.subtypes)
                 )
+        if self.any_classes:
+            # "a **black or artifact** creature" (Soldevi Adnate), "target
+            # **instant or Aura** spell" (Avoid Fate). A union across two axes,
+            # emitted whole because the keys above are ANDed by every matcher —
+            # split into `colors` and `card_types` it would describe a black
+            # creature that is *also* an artifact, a set most cards printing
+            # this can never match.
+            #
+            # It had no payload form until `permanent_matches_filter` learned
+            # to test it, and that ordering is the rule rather than an accident:
+            # a key with a payload form and no matcher is a narrowing silently
+            # dropped, which for a union is an effect reaching every object.
+            # The counter lowering one package over still lifts it into its own
+            # key, because a *spell*'s classes are answered by a different
+            # matcher (`handlers/stack._spell_is_one_of_classes`).
+            payload["any_classes"] = [list(entry) for entry in self.any_classes]
         if self.tapped:
             payload["tapped_only"] = True
         # "an **untapped** creature" (Enthralling Hold). ``tapped`` is tri-state

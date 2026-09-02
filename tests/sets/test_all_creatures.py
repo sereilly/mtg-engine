@@ -363,3 +363,84 @@ def test_the_marker_counter_cost_still_lands_on_its_own_source(set_pool):
     )
     assert cost.put_counter == "page"
     assert cost.put_counter_filter is None
+
+
+def _w2g2_adnate_board(set_pool, mine=("Grizzly Bears", "Bog Wraith", "Mox Ruby")):
+    p1 = PlayerState(name="A")
+    game = Game(players=[p1, PlayerState(name="B")])
+    game.enforce_mana_costs = True
+    p1.battlefield.append(Permanent(card=set_pool("ALL")["Soldevi Adnate"]))
+    for name in mine:
+        p1.battlefield.append(Permanent(card=_W2G2_LEA[name]))
+    game._settle()
+    return game, p1
+
+
+def test_soldevi_adnate_eats_a_black_creature_for_its_mana_value(set_pool):
+    """"{T}, **Sacrifice a black or artifact creature**: Add an amount of {B}
+    equal to the sacrificed creature's mana value."
+
+    The effect half already worked — what refused was the cost's noun phrase.
+    "black or artifact creature" is a union across *two axes*, CR 105 colour
+    against CR 205.2 card type, and the filter ANDs its keys: written as
+    ``colors`` plus ``card_types`` it would name a black creature that is also
+    an artifact, which almost nothing is. Bog Wraith's mana value is 4, so the
+    number is read off the sacrificed permanent rather than off a constant."""
+    game, p1 = _w2g2_adnate_board(set_pool)
+    wraith = p1.battlefield[2]
+    assert wraith.card.name == "Bog Wraith"
+
+    result = game.activate_permanent_ability(
+        0, "Soldevi Adnate", cost_permanent_ids=[wraith.permanent_id],
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert p1.mana_pool["B"] == 4, "{3}{B} is mana value 4"
+    assert [p.card.name for p in game.controlled_by(0)] == [
+        "Soldevi Adnate", "Grizzly Bears", "Mox Ruby",
+    ], "the named Wraith paid, and nothing else left"
+
+
+def test_the_adnates_union_is_not_a_conjunction(set_pool):
+    """The direction the two-axis union must not be wrong in. Read as an AND,
+    only a *black artifact creature* could pay — and there is none in the pool,
+    so the ability would have been unactivatable rather than visibly wrong."""
+    from engine.oracle import parse_activated_ability_cost
+    from engine.subject_filters import subject_matches
+
+    cost = parse_activated_ability_cost(
+        "{T}, Sacrifice a black or artifact creature: Add {B}."
+    )
+    assert cost.sacrifice_filter == {
+        "type_filter": "creature",
+        "any_classes": [["color", "B"], ["card_type", "artifact"]],
+    }
+
+    game, p1 = _w2g2_adnate_board(
+        set_pool, mine=("Grizzly Bears", "Bog Wraith", "Clockwork Beast"),
+    )
+    bears, wraith, beast = p1.battlefield[1:]
+    described = cost.sacrifice_filter
+    assert not subject_matches(game, bears, described), "green, and no artifact"
+    assert subject_matches(game, wraith, described), "black creature"
+    assert subject_matches(game, beast, described), "artifact creature"
+
+
+def test_the_adnate_refuses_a_creature_neither_black_nor_an_artifact(set_pool):
+    """A cost the charger cannot collect must refuse the activation with
+    nothing spent (CR 601.2h) — and the Mox is the second half of the same
+    check: an artifact that is not a *creature* is not what the phrase names,
+    so the head noun still has to hold."""
+    from engine.oracle import parse_activated_ability_cost
+    from engine.subject_filters import subject_matches
+
+    game, p1 = _w2g2_adnate_board(set_pool)
+    described = parse_activated_ability_cost(
+        "{T}, Sacrifice a black or artifact creature: Add {B}."
+    ).sacrifice_filter
+    mox = p1.battlefield[3]
+    assert mox.card.name == "Mox Ruby"
+    assert not subject_matches(game, mox, described), (
+        "an artifact that is not a creature is outside the printed noun"
+    )

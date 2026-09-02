@@ -391,6 +391,38 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                     continue
                 stream.reset(joined)
                 break
+            # "a **black or artifact** creature" (Soldevi Adnate, Viscerid
+            # Drone's snow twin one card over). The union straddles two axes —
+            # CR 105 colour against CR 205.2 card type — and the head noun is
+            # still to come, so this is a *conjunct*: a creature that is black
+            # or is an artifact. Collected into `any_classes`, which already
+            # holds exactly this shape one axis over ("instant or Aura spell"),
+            # rather than into `colors` and `card_types`, which the engine ANDs
+            # — that reading describes a black creature that is also an
+            # artifact, a set most of these cards can never match.
+            #
+            # `colors` is cleared as the union takes it over: left in, the AND
+            # would put the colour back as a requirement and the union would
+            # only ever narrow.
+            cross = stream.mark()
+            if stream.at_word("or") and _singular(
+                str(stream.peek_word(1) or "")
+            ) in CARD_TYPES:
+                alternatives: list[tuple[str, str]] = [
+                    ("color", color) for color in d.colors
+                ]
+                while stream.at_word("or") and _singular(
+                    str(stream.peek_word(1) or "")
+                ) in CARD_TYPES:
+                    stream.advance()
+                    alternatives.append(
+                        ("card_type", _singular(str(stream.peek_word())))
+                    )
+                    stream.advance()
+                d.any_classes = tuple(alternatives)
+                d.colors = []
+                continue
+            stream.reset(cross)
             continue
 
         # "attacking **or** blocking creature" (the four Legends pingers),
