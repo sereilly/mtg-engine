@@ -117,6 +117,22 @@ into a new module and left one of their imports in the old header. It fails
 loudly — 132 collection errors — so the fix is cheap; sweep every module you
 moved code out of before running the suite.
 
+**And sweep for the opposite thing too, because a split needs two scans and only
+one of them is documented.** A dead-import sweep asks "what does this module
+import and no longer use"; a missing-import scan asks "what does it use and
+never import". Only the second is a bug, and it does **not** fail at import time
+— a `NameError` in a function body waits for its line to run, so a smoke import
+of the package passes. HML's own `amounts`/`records` split shipped a module using
+two names it never imported and a package import found nothing; a full test run
+did. The dead half is not harmless either, only silent: 310 such imports have
+accumulated across `engine/` from earlier splits, which is a ROADMAP item now.
+
+**Two branches splitting the same module in one wave is a real shape** — both of
+HML's waves produced one. Their import blocks are where they meet, and **neither
+side is necessarily right**: one kept an import whose users had moved out, the
+other dropped one still used. Resolve by counting references in the *merged*
+body, not by taking a side.
+
 **Expect cap breaches that no single branch caused.** The 1,000-line grammar
 guard and the 2,600-line per-set test guard both fired at *integration* seven
 times across Ice Age's four waves, on files where two groups' additions merely
@@ -191,6 +207,18 @@ the file is chosen by the card's printed type and every group has creatures. A
 append-conflict resolved by union, which is mechanical. Without it the
 integrator is reading two unrelated diffs in one hunk.
 
+**The convention works and it has exactly one failure mode.** Every per-set
+conflict across HML's two waves was two appends. One came back as **two conflict
+regions**, because both branches' helper functions happened to end with the same
+two lines (`game.enforce_mana_costs = False` / `return game`) and git matched
+them as common context — a naive union would have spliced one group's helper
+body onto the other's signature. So make the union **refuse anything but a
+single two-append region**, and keep a fallback that reconstructs from the merge
+base: assert both sides start with the base byte for byte, then base +
+ours-tail + theirs-tail. The assertion is the point — a branch that edited the
+shared prefix cannot be reconstructed this way, and that is the case worth
+failing on rather than guessing through.
+
 **Two hazards specific to parallel authorship, both silent.** Git resolves
 "both branches added a function" as *two functions* rather than as a conflict,
 and Python takes the later one — see ROADMAP idiom 25, and run
@@ -218,6 +246,18 @@ whichever set next adds a `permanents_from` producer clears it**, by deciding
 the channel's arity once — most likely always-a-tuple, with the readers that
 want one object asserting they got one — rather than by adding a third local
 normalisation.
+
+**HML added two producers and still did not settle it, so this stays open with
+its scope now measured.** Both new producers matched the reader they fed —
+Joven's Ferrets writes a *list* under a key whose reader iterates, and W2G1's
+sacrifice writes the *scalar* shape — so nothing raised and nothing forced the
+decision. Which is the item's own point restated: it is safe by which cards
+exist, and two more cards existing did not change that. The current spread is
+**17 producer sites** across `lowering/` and **13 reader sites** across
+`handlers/`, with exactly one reader normalising. The next set that adds a
+producer feeding a reader of the *other* shape is the one that pays for it;
+whoever takes it should take it as the arity decision rather than as a bug fix,
+because the bug will present as a single raised exception on a single card.
 
 Drained 2026-08-28: **the verification backlog is accepted as-is.** It sat here
 as the largest standing debt — 708 of 1,162 cards with no recorded in-game
@@ -325,6 +365,25 @@ is green, the trackers carry its row, and the census is in hand.
    pairs became the group split and each cost one production for two cards.
    Left to Phase 4 they would have been promotion-gate findings instead, after
    the work they could have halved was already done.
+
+   **The third is the picker sweep, moved up from Phase 4 for the same reason.**
+   Ask of every *supported* card whether `targeting.derive_cast_spec` /
+   `derive_activation_spec` offer what the printed line names. It costs nothing
+   and it found Roots on the day of HML's ingest: a supported Aura, no hollow
+   line, every sentence claimed, and a cast spec of None — which is the exact
+   value the client tests to decide whether to ask for a target, so the app sent
+   a bare cast and the engine refused it. **A supported card no player could put
+   on the battlefield**, and this is the only instrument in the repo that sees
+   one. Know its scope: it answers for the *cast* and *activation* pickers, so a
+   choice made as a permanent enters, or at resolution inside a triggered
+   ability, is out of scope and reads as a false positive.
+
+   And read a picker finding as *half* the card. Roots' one printed line had two
+   contradictory failures — the spec derivation could not read `Enchant creature
+   without flying`, **and** the attach check took its permissive fallback, so the
+   printed exclusion was enforced by nothing and the Aura could be attached to a
+   flyer. The sweep sees only the first, and one gate hid both: the support claim
+   and the coverage channel each accepted any line starting with "enchant ".
 5. **Ask how many of the set's cards are new to the pool**, before planning any
    round. Every phase after this one is written for a set that brings cards,
    and a reprint set brings printings: 4ED's 378 entries were 368 unique cards
@@ -452,6 +511,18 @@ measured set so per-card tests can land as the cards do. **Exit:**
    local.** Build the map once before the change and once after —
    `{card.name: repr((supported, instructions, activated, triggered))}` over
    `manifest_set_paths(include_measured=True)` — and read every card that moved.
+   **Record the instructions and abilities in full, with their payloads: not
+   their kinds, and not their counts.** Both abbreviations are natural and both
+   are blind to exactly the narrowing class this instrument exists to catch,
+   because a narrowing changes neither how many of a thing there are nor what the
+   thing is called. Keyed on counts it cannot see a trigger narrowed from "blocks
+   anything" to "blocks a black creature"; keyed on kinds it cannot see a
+   `type_filter` restored to a payload. On HML two of five groups and the
+   integrator each wrote a lossy version independently, and each version hid a
+   real defect. The same substitution appears in *tests* — Whippoorwill's own
+   test asserted instruction kinds and passed while the card exiled itself — and
+   the map cannot see a **text-keyed table** at all, so a round that edits one
+   owes a second differential over that table.
    It is a minute's work over 1,600 cards and it is the cheapest instrument in
    this repo, because it answers the question every other one only approximates:
    *what else did this touch?* Three of Fallen Empires' five groups ran it
@@ -476,6 +547,23 @@ measured set so per-card tests can land as the cards do. **Exit:**
    the reverse once (a gap reported as one piece was two, in two layers).
    Treat an inherited estimate as a lead, and ask the next reader to correct
    it rather than to trust it.
+
+   **The taxonomy has a fifth entry: `engine/oracle.py`'s trigger-condition
+   table.** There are two trigger front ends and only one feeds dispatch — that
+   regex table produces the `TriggerCondition` the phase steps read, and the
+   grammar's `TriggerEvent` does not. A condition can be read perfectly by the
+   grammar and still fire on the wrong event, which is what Rashka the Slayer
+   did: its effect compiled and fired, its *narrowing* did not, and both the
+   census and `parse_coverage.py` reported the sentence as unimplemented when it
+   was implemented **too widely**.
+
+   **And a refusal site can be manufactured by probe order.** Giant Oyster
+   refused at `expected 'gain'` for two whole waves on a sentence that is a
+   control change in nobody's reading, because the fronted-duration parser hands
+   its tail to `_parse_gain_control`, which opens with `expect_word("gain")` and
+   **raises** — replacing the real production's refusal with one from a
+   production that was never a candidate. When a refusal names a verb the
+   sentence does not contain, suspect the probe above it before the card.
 
    **A refusal can expire without anything failing.** A gate that declines for
    a reason that later stops being true keeps declining, silently and in the
@@ -506,7 +594,18 @@ measured set so per-card tests can land as the cards do. **Exit:**
    (conventions and the split-by-type rule: `tests/sets/README.md`). A new
    set needs zero `tests/conftest.py` changes; the fixture factory covers any
    manifest set, and the convention guard holds it to that.
-3. Between rounds: the supported count from `support_report.py --set <CODE>`
+3. **"Give the behaviour a game" cannot be done in the app during this phase,
+   and every group rediscovers that.** `web/runtime.CARD_PATHS` is built from
+   `manifest_set_paths()` — shipped-only by design — and the Debug Menu reads the
+   same catalog, so no path in the running app can put a *measured* set's card on
+   a board. The Rock Hydra test, which this repo names as the only way to tell a
+   working registry from one that claims a line and does less, therefore runs
+   headless until promotion: drive a `Game` directly through the steps and read
+   the log at each one, and use `run_ai_simulation(..., required_cards=[...])`,
+   whose `required=` pin exists for exactly this. Brief it, or each group spends
+   the discovery.
+
+4. Between rounds: the supported count from `support_report.py --set <CODE>`
    must have risen; regenerate the trackers; run any `--accept` only after
    reading the diff it blesses. **And the exit is two numbers, not one**:
    `--hollow-lines` must also reach zero — **check it every round, not at the
@@ -517,7 +616,7 @@ measured set so per-card tests can land as the cards do. **Exit:**
    print — Antiquities did, for thirty rounds. Take the split a grammar size
    guard asks for when it fires, too: the family boundary is easiest to see
    while the work that crossed the line is still in hand.
-4. Append the round's narrative to the set's ROADMAP.md entry as you go —
+5. Append the round's narrative to the set's ROADMAP.md entry as you go —
    what the round bought, what it cost, what it exposed. Numbers live there,
    not here.
 
@@ -548,6 +647,16 @@ reporting supported. The report's own footer states the test — give the
 behaviour a game and watch it happen — and it is the only way to tell the three
 apart.
 
+**A reader of a card's lines that does not start from `expand_ability_lines`
+is reading a different card**, and the promotion gate is where that collects.
+CLAUDE.md names three such readers; HML found a fourth nobody had listed —
+`tests/rules/test_aura_support.py` split raw `oracle_text`, so Orcish Mine's
+conjoined trigger, which that rewrite splits into the two triggers the claim
+table implements, reported as implemented by nothing. The card worked. **When a
+round adds a rewrite to `expand_ability_lines`, grep for every reader of a
+card's lines before the rehearsal** — a new rewrite is exactly what turns a
+long-green guard red on a card that is fine.
+
 **Read the guards themselves as suspects.** Four second-copies-of-one-fact came
 out of this rehearsal and three were *inside* guards written to catch exactly
 that, each inventing a disagreement it then reported. A guard that re-spells
@@ -576,8 +685,12 @@ when the truth was "there is nothing to watch". Assert the invariant —
 `CARD_PATHS` is built over both manifest roles — which is checkable whatever
 the roles contain, and let the per-card assertions range over an empty set.
 
-**Sweep what the target pickers *offer*, not just what the compiler accepts.**
-This is a Phase 4 step with no guard behind it and it found three defects Ice
+**Sweep what the target pickers *offer*, not just what the compiler accepts** —
+**and run it at Phase 1, where it is a work-list entry rather than a
+promotion-gate finding** (Phase 1 step 4 now says so; HML moved it and it paid
+on the day of the ingest). Re-run it here anyway, because promotion is what puts
+the set in front of the client.
+This step has no guard behind it and it found three defects Ice
 Age's every other instrument was blind to, because all three cards compile
 supported, carry no hollow line and claim every printed sentence. Two shipped
 Auras were **uncastable in the app** — their `Enchant <noun>` clauses derived
@@ -1061,3 +1174,55 @@ single branch.
 *The numbers:* grammar 88.0% parsed / 56.1% executed (FEM itself 99.0%); ten
 defects fixed in already-supported cards, two of them free abilities and one
 five sets old; behaviour classes 57 → 62; suite 10,934 → 11,176 tests.
+
+**HML — 2026-09-02 (Phases 0–6 complete; 76 → 115/115, promoted at index 11).**
+Two waves of five worktree groups plus one follow-up, **zero name-keyed hooks
+across all 39 cards**, so reliance fell 3.9% → 3.6% while the pool grew 1,610 →
+1,725. Six phase edits, all in place.
+
+*Phase 1 gained two instruments and both paid on the day of the ingest.* The
+**fragment census** — an n-gram over the refused lines — is now step 4 beside the
+sentence one, because the refusal rollup measured 1.00 lines per distinct
+sentence for the fourth set running and was wrong: ten HML cards print an
+untap-denial clause and three already compiled, so seven cards cost one group one
+*subject widening*. It named every wave-1 group boundary; the sentence census
+named none. And the **picker sweep moved up from Phase 4**, where it found Roots
+— a supported Aura, no hollow line, every sentence claimed, and no cast spec, so
+no player could put it on the battlefield. Phase 4 keeps its own copy and now
+says why running it earlier is cheaper.
+
+*Phase 3 gained three rules.* The whole-pool differential must record
+instructions and abilities **in full with their payloads**, because keying on
+counts hides a narrowed trigger and keying on kinds hides a narrowed payload —
+two of five groups and the integrator each shipped a lossy version, and each
+hid a real defect. The failure taxonomy gained a **fifth layer**,
+`engine/oracle.py`'s trigger-condition table, which is the only trigger front
+end that feeds dispatch. And a new step 3 says **the Rock Hydra test cannot be
+run in the app while a set is `measured`** — `CARD_PATHS` is shipped-only, so
+"give the behaviour a game" means headless plus
+`run_ai_simulation(required_cards=…)` until promotion.
+
+*Phase 4 gained the rule the rehearsal collected on:* **a reader of a card's
+lines that does not start from `expand_ability_lines` is reading a different
+card.** CLAUDE.md names three; this found a fourth, and Orcish Mine's conjoined
+trigger reported as implemented by nothing while working perfectly.
+
+*The execution model gained two merge hazards.* The per-set block convention has
+**exactly one failure mode** — two branches whose helpers end with the same lines
+split one append into two conflict regions, and a naive union splices one helper
+onto the other's signature; refuse anything but a single region and reconstruct
+from the merge base with "both sides are pure appends" asserted. And a module
+split needs **two scans, not one**: the documented dead-import sweep, and a
+missing-import scan, which is the half that is actually a bug and the half that
+does not fail at import time.
+
+*Known gaps:* `permanents_from` stays open with its scope measured (17 producers,
+13 readers, one normalising) — HML added two producers and both happened to match
+their reader, which is the item's own point restated. Nothing was drained.
+
+*The numbers:* grammar 88.0% → 88.3% parsed and 56.1% → 56.5% executed with every
+existing set's floor rising; hook reliance 3.9% → 3.6%, entries/100 4.2 → 3.9;
+behaviour classes 62 → 69; suite 11,176 → 11,667 tests. **Nine already-supported
+cards were found mis-playing**, every one invisible to the census, to
+`--hollow-lines` and to `parse_coverage.py`, because all three ask whether a line
+produced *something* and each of these produced the wrong thing.
