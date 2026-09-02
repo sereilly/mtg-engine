@@ -108,6 +108,10 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # declare-blockers step, so it is answerable from the object alone exactly
     # as ``attacking_only`` is.
     "blocking_only",
+    # "target **nonattacking, nonblocking** creature" (Unlikely Alliance). The
+    # two above read the other way, answerable from the object for the same
+    # reason and through the same accessors.
+    "not_attacking", "not_blocking",
     # "damage dealt to you by **unblocked** creatures" (Kjeldoran Royal Guard),
     # "target **blocked** creature" (General Jarkeld). CR 509.1h makes both a
     # state of the attacking permanent, recorded on it by the declare-blockers

@@ -13,7 +13,6 @@ from ..delayed_triggers import (expire_combat_delayed_triggers,
 from ..keywords import clear_granted_ability_lines, clear_granted_keywords
 from ..models import Permanent
 from ..pt import remove_temporary_pt
-from ..oracle import compile_card_oracle
 from ..damage_redirects import clear_redirects
 from ..prevention import clear_directional_shields
 from ..shields import END_OF_COMBAT, clear_shields
@@ -115,6 +114,22 @@ class EndOfCombatStepMixin:
             # what the handlers already expect.
             trigger_context = {
                 "combat_opponents": self.creatures_in_combat_with(permanent),
+                # "…**if this creature attacked or blocked this combat**" (the
+                # four Clockwork creatures, Kjeldoran Home Guard). Frozen for
+                # the reason the relation above it is, and one step sharper:
+                # ``end_combat`` pops ``blocked_this_combat`` before the
+                # priority window that resolves this batch, so CR 603.4's
+                # second check would find the block gone and the ability would
+                # do nothing on every blocker.
+                #
+                # "This combat" rather than "this turn": the attack half is
+                # read off the live ``combat_attackers`` map, so a creature
+                # that attacked in an *earlier* combat phase this turn does not
+                # answer yes here — which the ``attacked_this_turn`` mark the
+                # hard-coded probe read could not tell apart.
+                "attacked_or_blocked_this_combat": self._attacked_or_blocked_this_combat(
+                    controller_index, permanent
+                ),
             }
             if trig.instruction is not None and trig.instruction.kind == "steal_blockers_of_source":
                 # "all creatures blocking this creature" — CR 611.2c fixes the
@@ -141,30 +156,33 @@ class EndOfCombatStepMixin:
             )
         self._enqueue_triggered_batch(events)
 
-        clockwork_line = (
-            "at end of combat, if this creature attacked or blocked this combat, "
-            "remove a +1/+0 counter from it"
-        )
-        for permanent in self.all_permanents():
-            program = compile_card_oracle(permanent.effective_card)
-            if not any(clockwork_line == line for line in program.static_lines):
-                continue
-            attacked_or_blocked = permanent.metadata.get(
-                "attacked_this_turn"
-            ) or permanent.metadata.get("blocked_this_combat")
-            if not attacked_or_blocked:
-                continue
-            counters = int(permanent.metadata.get("plus_1_0_counters", 0))
-            if counters <= 0:
-                continue
-            permanent.metadata["plus_1_0_counters"] = counters - 1
-            permanent.power_bonus -= 1
-            self.log.append(
-                f"{permanent.card.name} removes a +1/+0 counter at end of combat "
-                f"({counters - 1} remaining)"
-            )
-
         self._resolve_end_of_combat_destruction()
+
+    def _attacked_or_blocked_this_combat(
+        self, controller_index: int, permanent: Permanent
+    ) -> bool:
+        """CR 509.1a's relation from either end, over **this** combat.
+
+        Two records because the two halves are recorded in two places, and
+        neither is a characteristic of the permanent: the attack is the live
+        ``combat_attackers`` map (an attacker's key is its index on the active
+        player's battlefield, CR 508.1a) and the block is the mark the
+        declare-blockers step writes and ``end_combat`` sweeps.
+
+        This replaced a text probe further down this file that matched Clockwork
+        Beast's whole printed line as a string and read ``attacked_this_turn``
+        for the attack half. Both were wrong in the widening direction: the line
+        compiled as a *static* line, so a second card printing the same sentence
+        got nothing at all (Kjeldoran Home Guard), and a turn with two combat
+        phases made the second one's answer yes for a creature that attacked in
+        the first.
+        """
+        if (
+            controller_index == self.active_player_index
+            and self.battlefield_index_of(permanent) in self.combat_attackers
+        ):
+            return True
+        return bool(permanent.metadata.get("blocked_this_combat"))
 
     def _resolve_end_of_combat_destruction(self) -> None:
         """Destroy creatures marked by a "destroy at end of combat" trigger.

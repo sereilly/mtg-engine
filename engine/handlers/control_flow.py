@@ -668,6 +668,24 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         seat = game.players.index(context.caster)
         return int(game.permanents_to_hand_this_turn.get(seat, 0)) > 0
 
+    if kind == "attacked_or_blocked_this_combat":
+        # "…if this creature attacked or blocked this combat" (the Clockwork
+        # cycle, Kjeldoran Home Guard). **Read off the trigger's context, never
+        # the board.** The end-of-combat step announces this batch and then
+        # sweeps the combat record before the priority window that resolves it,
+        # so by CR 603.4's second check "blocked this combat" is already gone
+        # — a board read here would answer False for every blocker and the
+        # ability would do nothing on exactly half the cards that print it.
+        # The fire site freezes the answer (CR 603.10), which is the same
+        # discipline it already takes with ``combat_opponents``.
+        #
+        # A missing key means this condition was asked under some other trigger,
+        # where nothing froze an answer: False, which is the direction that does
+        # nothing rather than the one that acts on a guess.
+        return bool(
+            (context.trigger_context or {}).get("attacked_or_blocked_this_combat")
+        )
+
     if kind == "in_a_block_since_your_last_upkeep":
         # "…if it has blocked or been blocked since your last upkeep" (Wiitigo).
         # A window that outlives every per-turn combat record, so the
