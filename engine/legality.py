@@ -1486,6 +1486,14 @@ class LegalityMixin:
             # "target creature" — the same payload filter the handler tests at
             # resolution, asked here so the picker offers exactly what the
             # resolution will accept.
+            #
+            # **Seasinger's "whose controller controls an Island" is dropped
+            # here**, and swapping this to ``subject_matches`` is not the fix:
+            # this same arm serves Orcish Squatters' "target land **defending
+            # player** controls", a seat that belongs to the combat rather than
+            # to the permanent, and ``subject_matches`` refuses that key
+            # outright — so the swap trades a widened picker for an empty one.
+            # The two phrases want different readers; see the W1G2 report.
             return permanent_matches_filter(perm, instruction.payload)
         if instruction.kind == "grant_regeneration_to_target_creature":
             # Elephant Graveyard's "target Elephant" — the same subtype filter
@@ -1502,7 +1510,22 @@ class LegalityMixin:
         if instruction.kind == "tap_target_permanent":
             # Ali Baba's "target Wall" (and any other parsed tap-target filter);
             # Icy Manipulator's payload is empty, so everything passes.
-            return permanent_matches_filter(perm, instruction.payload)
+            #
+            # Through ``subject_matches``, **not** the pure matcher. Three of
+            # the keys this family's payloads carry are questions only the game
+            # can answer — a keyword is layer 6, "you don't control" is a seat,
+            # "that's attacking you" is a combat record — and the pure matcher
+            # ignores every one of them rather than refusing. Ignored, the
+            # printed narrowing is enforced by nobody: Flood tapped a flier,
+            # Ice Floe tapped a creature attacking somebody else, Shacklegeist
+            # tapped its own controller's creature, and Storm Elemental named
+            # a ground creature. All four paid the cost, resolved, and tapped
+            # nothing, because the *handler* still reads the filter — which is
+            # the shape that makes this silent.
+            return subject_matches(
+                self, perm, instruction.payload,
+                observer=controller_index, source=source_permanent,
+            )
         if instruction.kind == "attach_source_to_target":
             # An equip ability (CR 702.6a). The picker's own_only flag has
             # already kept it to the activator's creatures; what is left is the

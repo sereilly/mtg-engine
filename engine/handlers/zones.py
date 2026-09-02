@@ -11,6 +11,7 @@ from ..models import Permanent
 from ._common import (
     _card_matches_filter,
     evaluate_count,
+    frozen_that_player_seat,
     graveyard_card_matches,
     permanent_matches_filter,
     resolve_amount,
@@ -3307,6 +3308,43 @@ def exile_top_of_library(game: Game, instruction: OracleInstruction, context: Or
     return True, "resolved"
 
 
+@effect_handler("exile_entire_library")
+def exile_entire_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"That player exiles all cards from their library." (Thought Lash, when
+    its cumulative upkeep goes unpaid.)
+
+    The whole zone, in order, so a later effect that could look at the pile
+    sees what was on top. It does **not** end the game by itself: CR 704.5b
+    makes a player lose only when they would draw from an empty library, which
+    is the next draw step — so this leaves the seat alive with nothing to draw,
+    exactly as the card reads.
+
+    A seat the trigger did not freeze is a card acting on the wrong player, so
+    an unresolvable recipient does nothing rather than falling back to the
+    resolving seat: emptying the wrong library is the game, not a smaller
+    effect.
+    """
+    recipient = str(instruction.payload.get("recipient", "caster"))
+    if recipient == "caster":
+        victim = context.caster
+    else:
+        seat = frozen_that_player_seat(game, context)
+        if seat is None:
+            game.log.append(
+                f"{context.card.name}: no player was named to empty a library"
+            )
+            return True, "resolved"
+        victim = game.players[seat]
+    emptied = list(victim.library)
+    victim.library.clear()
+    victim.exile.extend(emptied)
+    game.log.append(
+        f"{victim.name} exiled their whole library "
+        f"({len(emptied)} card(s)) to {context.card.name}"
+    )
+    return True, "resolved"
+
+
 @effect_handler("put_exiled_with_source")
 def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Put all cards exiled with this artifact into their owner's hand."
@@ -3853,6 +3891,33 @@ def put_graveyard_card_on_library_bottom(game: Game, instruction: OracleInstruct
     card = caster.graveyard.pop(idx)
     game.put_card_into_library(caster, card)
     game.log.append(f"{context.card.name}: {card.name} put on the bottom of {caster.name}'s library")
+    return True, "resolved"
+
+
+@effect_handler("put_top_of_graveyard_on_library_bottom")
+def put_top_of_graveyard_on_library_bottom(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Put the top card of your graveyard on the bottom of your library."
+    (Soldevi Digger.)
+
+    The *top* of a graveyard is the card most recently put there (CR 404.1: a
+    graveyard is an ordered pile), which in this engine is the last element —
+    every path into a graveyard appends. So it is ``pop()``, not the ``pop(0)``
+    its targeted neighbour above falls back to: that one is a stale-choice
+    default for a card somebody chose, and this one is the printed position.
+
+    An empty graveyard moves nothing. CR 608.2's "as much as possible" — the
+    ability still resolves, and the cost was paid at activation either way.
+    """
+    caster = context.caster
+    if not caster.graveyard:
+        game.log.append(f"{context.card.name}: no card in the graveyard to bottom")
+        return True, "resolved"
+    card = caster.graveyard.pop()
+    game.put_card_into_library(caster, card)
+    game.log.append(
+        f"{context.card.name}: {card.name} put on the bottom of "
+        f"{caster.name}'s library"
+    )
     return True, "resolved"
 
 

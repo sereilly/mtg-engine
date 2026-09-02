@@ -188,6 +188,12 @@ BOUND_CARD_EVENTS = frozenset({
 #: (non-registry) upkeep path admits — see `_ORDINARY_UPKEEP_SEATS`.
 _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     "upkeep_each",
+    # "When a player doesn't pay this enchantment's cumulative upkeep,
+    # **that player** exiles all cards from their library." (Thought Lash.)
+    # Nothing on a board records who declined to pay, so the seat exists only
+    # on the event the upkeep handler announces — which is the whole reason
+    # this table is the gate rather than a fall-back to the controller.
+    "cumulative_upkeep_unpaid",
     # "At the beginning of each player's end step, … **that player** …"
     # (Monsoon.) The upkeep row's twin one step of the turn later, and admitted
     # for the same reason: the seat varies per firing and the end-step

@@ -180,6 +180,55 @@ def _is_chargeable_exile(filt: ast.ObjectFilter) -> bool:
     return chargeable_exile_payload(filt.to_payload()) is not None
 
 
+def _accept_exile_top_of_library(
+    stream: TokenStream,
+) -> "ast.ExileTopOfLibraryCost | None":
+    """``the top [N] card[s] of your library`` after a cost's "Exile" — or None
+    with the cursor unmoved.
+
+    The cost twin of ``effects/library._parse_exile_top_of_library``, and a
+    separate reader for the reason the whole of this module is separate: an
+    effect's exile is lowered onto a handler and a cost's is charged by
+    ``engine/oracle.py``'s reader, which has to admit exactly what this admits.
+    Every word of "of your library" is expected, exactly as the effect side
+    expects them — "the top card of target player's library" is somebody else's
+    card and a cost this charger has no payment path for.
+
+    Tried before :func:`_parse_cost_object`, which reads a noun phrase: "the top
+    card" is not one, so the object reader refuses the line ("expected what to
+    exile as a cost") wherever this one is not consulted first.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("the", "top"):
+        stream.reset(mark)
+        return None
+    if stream.accept_word("card"):
+        count: ast.Amount = ast.Fixed(1)
+    else:
+        try:
+            count = parse_amount(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        if not stream.accept_word("cards"):
+            stream.reset(mark)
+            return None
+    for word in ("of", "your", "library"):
+        if not stream.accept_word(word):
+            stream.reset(mark)
+            return None
+    # Only a printed number is charged. ``ActivatedAbilityCost`` carries this
+    # cost as an ``int`` because CR 118.3's "the necessary resources" has to be
+    # counted against the library *before* the ability is activated, and an X or
+    # a board-derived amount is not known then — a variable count admitted here
+    # would be read as some other number by the charger, and a cost read as the
+    # wrong number is one nobody pays in full.
+    if not isinstance(count, ast.Fixed) or count.value <= 0:
+        stream.reset(mark)
+        return None
+    return ast.ExileTopOfLibraryCost(count)
+
+
 def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
     """``Remove a <kind> counter from this <permanent>`` (Scavenging Ghoul).
 
@@ -269,6 +318,15 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             stream.accept_punct(",")
             continue
         if stream.accept_word("exile"):
+            # "Exile **the top card of your library**" (Royal Herbalist). Read
+            # first because it is the one exile cost whose tail is *not* a noun
+            # phrase: the cards are named by position, so the object reader
+            # below refuses it outright.
+            from_library = _accept_exile_top_of_library(stream)
+            if from_library is not None:
+                costs.append(from_library)
+                stream.accept_punct(",")
+                continue
             # ``ExileSelf`` names no object, so the source gets its own entry:
             # nothing is chosen, nothing can make the ability unpayable, and
             # there is no record of what was eaten.

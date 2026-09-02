@@ -320,6 +320,21 @@ _NUMBER_WORDS = {
 }
 
 
+@event_filter("cumulative_upkeep_unpaid")
+def _own_cumulative_upkeep_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"When a player doesn't pay **this enchantment's** cumulative upkeep, …"
+    (Thought Lash.)
+
+    The printed possessive is the whole of the narrowing: the ability watches
+    its *own* upkeep, not any unpaid one. Without this a second permanent with
+    the same trigger would fire off the first one's non-payment — two
+    libraries emptied for one missed payment.
+    """
+    return event.subject is permanent
+
+
 @event_filter("opponent_attackers_declared")
 def _opponent_attack_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event

@@ -363,6 +363,28 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         stream.accept_word("a", "an")
         return ast.ItWas(parse_object_filter(stream))
 
+    # "Exile the top card of your library. **If that card is a land card**, …"
+    # (Chaos Harlequin.) The same back-reference with the pronoun's noun spelled
+    # out, exactly as "that <noun> was …" further down spells out the destroy's
+    # — so it is the same node rather than a second one: which object it names is
+    # still the lowering's question, and the lowering still refuses unless a step
+    # in front of it exiled something.
+    #
+    # **Present tense, and only present tense.** The card is in exile, a zone it
+    # has not left again, so "is" is what the card prints and no printed type
+    # changed on the way there. The past-tense spelling is left to
+    # ``DestroyedTargetWas`` below, whose production reads "that <noun> was" for
+    # any noun: taking "that card was" here would steal that clause from it for
+    # a sentence no card in the pool prints.
+    that_card = stream.mark()
+    if stream.accept_phrase("that", "card", "is"):
+        stream.accept_word("a", "an")
+        try:
+            return ast.ItWas(parse_object_filter(stream))
+        except GrammarError:
+            pass
+    stream.reset(that_card)
+
     # "if **the discarded card** was a land card" (Land's Edge). The same
     # past-tense back-reference as the clause above, naming its producer in
     # words instead of with a pronoun — which is why it is a separate node: the
@@ -382,10 +404,16 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # the verb changed — and the noun after it is read and dropped the way
     # "that <noun> was …" drops its repeated noun: it names the object the cost
     # ate, which the channel already says.
+    #
+    # Both tenses. "…**if the exiled card is a snow land**" (Storm Elemental) is
+    # the same question about the same record: the card is sitting in exile, so
+    # what it *is* and what it *was* are one printed type line — and a second
+    # node for the second tense would be two readers of one channel, which is
+    # the drift this production was written as one branch to avoid.
     cost_mark = stream.mark()
     if stream.accept_word("the"):
         verb = stream.peek_word()
-        if verb in ("sacrificed", "exiled") and stream.peek_word(2) == "was":
+        if verb in ("sacrificed", "exiled") and stream.peek_word(2) in ("was", "is"):
             stream.advance(3)
             stream.accept_word("a", "an")
             try:

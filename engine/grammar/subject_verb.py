@@ -60,6 +60,7 @@ from .effects import (
     _parse_end_the_turn, _parse_exchange_control, _parse_exile_graveyard,
     _parse_further_subjects,
     _parse_coin_flip_stakes_loop,
+    _parse_exile_entire_library,
     _parse_exile_top_of_library, _parse_extra_turn, _parse_fight, _parse_flip_coin,
     _parse_gain_control, _parse_gains, _parse_game_is_a_draw, _parse_gets,
     _parse_exchange_life_totals,
@@ -705,6 +706,14 @@ def parse_subject_verb(
             return _parse_discard(stream, source_spec)
         if token.text in ("mills", "mill") and isinstance(source_spec, ast.PlayerRef):
             return _parse_mill(stream, source_spec)
+        # "**That player** exiles all cards from their library." (Thought
+        # Lash.) The only player-subject sentence in the exile family;
+        # declines without consuming, so every other printed exile keeps the
+        # bare-imperative reading below.
+        if token.text in ("exiles", "exile") and isinstance(source_spec, ast.PlayerRef):
+            emptied = _parse_exile_entire_library(stream, source_spec)
+            if emptied is not None:
+                return emptied
         # "…and **you tap** that creature." (Mind Whip.) Tapping has no actor in
         # the rules — CR 701.20a turns a permanent sideways and says nothing
         # about who does it — so the printed subject is read and then dropped

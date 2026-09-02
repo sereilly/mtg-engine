@@ -187,6 +187,23 @@ class UpkeepEffectsMixin:
                 f"({cost.describe()}) for {permanent.card.name}"
             )
         else:
+            # "When a player doesn't pay this enchantment's cumulative upkeep,
+            # that player exiles all cards from their library." (Thought Lash.)
+            # CR 702.24a's non-payment is decided here and nowhere else, so this
+            # is the trigger's one fire site — announced **before** the
+            # sacrifice, because a permanent already in a graveyard is not one
+            # `iter_triggered_abilities` scans, and CR 603.3 wants the ability on
+            # the stack over the sacrifice either way.
+            #
+            # The seat is frozen on the event: nothing on a board records who
+            # declined to pay, and "that player" behind it names exactly them.
+            from ..events import emit
+
+            emit(
+                self, "cumulative_upkeep_unpaid",
+                subject=permanent,
+                event_subject_player=self.seat_index(controller),
+            )
             self.sacrifice_permanent(permanent)
             self.log.append(
                 f"{controller.name} sacrificed {permanent.card.name} to cumulative upkeep"

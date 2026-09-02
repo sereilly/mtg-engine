@@ -538,11 +538,18 @@ def _lower_put_counter(
     # "Put **X +0/+1** counters on this creature." (Necropolis.) The source's
     # own twin of the targeted branch above, and payload for the same reasons:
     # which CR 122.1a pair the counter names, and how many of it, are the whole
-    # of what differs. A printed +1/+1 keeps the branch below it byte for byte,
-    # so nothing written before this changes shape.
+    # of what differs.
+    #
+    # The ``+1/+1`` exclusion was written so that every payload below stayed byte
+    # for byte identical, and it cost Phyrexian Devourer ("Put **X +1/+1**
+    # counters on this creature, where X is the exiled card's mana value") — the
+    # one counter kind the pool prints most was the one kind no variable count
+    # could be placed of. So the exclusion now holds only for a count this
+    # branch is not the reader of: a printed ``+1/+1`` keeps its own payload
+    # shape below unless the count is a variable, which nothing below reads.
     if (
         is_pt_counter(node.counter)
-        and node.counter != "+1/+1"
+        and (node.counter != "+1/+1" or isinstance(node.count, ast.Var))
         and not node.up_to
         and _is_source(node.subject)
     ):
@@ -555,7 +562,13 @@ def _lower_put_counter(
                 "a counter on the source is placed a fixed or variable number "
                 "at a time", node=node,
             )
-        payload: dict[str, object] = {"counter": node.counter}
+        # The legacy pair for ``+1/+1``, which ``add_counter_to_self`` reads as
+        # the CR 614 placement path (`place_plus1_counters`) and every payload
+        # written before Necropolis carries.
+        payload: dict[str, object] = (
+            {"power": 1, "toughness": 1} if node.counter == "+1/+1"
+            else {"counter": node.counter}
+        )
         if placed_on_self != 1:
             payload["count"] = placed_on_self
         return (OracleInstruction("add_counter_to_self", "", payload),)

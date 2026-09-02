@@ -513,6 +513,22 @@ class PutOnLibraryBottom:
 
 
 @dataclass(frozen=True)
+class PutGraveyardTopOnLibraryBottom:
+    """``Put the top card of your graveyard on the bottom of your library.``
+    (Soldevi Digger.)
+
+    :class:`PutOnLibraryBottom` with the card named by **position** instead of
+    chosen, which is why it is its own node and carries no target at all: a
+    graveyard is an ordered pile (CR 404.1), "the top card" is the one most
+    recently put there, and nothing about it is described — no filter to test,
+    no candidate list to offer, and no target for a picker to ask for. Folding
+    it onto that node as a flag would leave every reader of ``target`` holding a
+    field that means nothing here, and the activation picker offering a choice
+    the card never printed.
+    """
+
+
+@dataclass(frozen=True)
 class PutOntoBattlefield:
     """"Put up to seven permanent cards from your hand onto the battlefield."
     (Ugin, the Spirit Dragon) / "Put target creature card from a graveyard

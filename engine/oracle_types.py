@@ -275,6 +275,24 @@ class ActivatedAbilityCost:
     #: positional arguments ``parse_activated_ability_cost`` passes are at the
     #: front, so a field inserted among them silently rebinds one of them.
     mana_from_attached: bool = False
+    #: Royal Herbalist: "{2}, **Exile the top card of your library**: You gain 1
+    #: life." How many cards off the top the activation eats — 0 is the honest
+    #: "no such cost", since exiling zero cards is no payment at all.
+    #:
+    #: An ``int`` rather than a filter beside ``exile_filter``, because nothing
+    #: is chosen and nothing is tested: the cards are named by *position*, so
+    #: there is no picker to offer from and no characteristic to match. And a
+    #: separate field rather than a widening of ``exile_zone``, because that one
+    #: says which pile a *chosen* object comes out of and every reader of it
+    #: enumerates candidates — a library has none to enumerate.
+    #:
+    #: CR 118.3 makes it unpayable with too few cards, which is what stops this
+    #: being a cost that silently costs nothing on an empty library.
+    #:
+    #: After ``mana_from_attached`` for that field's stated reason: the six
+    #: positional arguments ``parse_activated_ability_cost`` passes are at the
+    #: front, so a field inserted among them silently rebinds one of them.
+    exile_top_of_library: int = 0
 
     @property
     def is_loyalty(self) -> bool:

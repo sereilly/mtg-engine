@@ -107,6 +107,7 @@ from .lowering import (
     _lower_reveal_hand_and_choose,
     _lower_lose_life,
     _lower_mill,
+    _lower_exile_entire_library,
     _lower_modal_head,
     _lower_player_gets_counters,
     _lower_put_counter,
@@ -318,6 +319,13 @@ def lower_statement(
 
     if isinstance(statement, ast.Discard):
         return _lower_discard(statement, event)
+
+    if isinstance(statement, ast.ExileEntireLibrary):
+        # Here rather than in `by_node.py` for the reason the mill below is:
+        # "that player exiles all cards from their library" (Thought Lash) names
+        # the seat the *firing event* froze, so the node cannot answer on its
+        # own.
+        return _lower_exile_entire_library(statement, event)
 
     if isinstance(statement, ast.Mill):
         # Here rather than in `by_node.py` since Reef Pirates: "that player

@@ -168,6 +168,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     # Moving a card out of a graveyard. Three destinations, one bucket: what the
     # ability is for is that the graveyard stops holding it.
     "put_graveyard_card_on_library_bottom": "activated_recursion",
+    "put_top_of_graveyard_on_library_bottom": "activated_recursion",
     "reanimate_creature": "activated_recursion",
     "exile_target_graveyard": "activated_recursion",
     # "Until end of turn, you may cast …" (Idol of Endurance). Not any of the
@@ -485,6 +486,9 @@ TRIGGERED_LABELS: dict[str, str] = {
     "draw_then_discard_self": "triggered_draw",
     "exile_graveyard_until_leaves": "triggered_exile",
     "exile_self": "triggered_exile",
+    # Thought Lash's unpaid cumulative upkeep, beside `exile_self`: the
+    # ability's point is that cards go to exile, whichever pile they leave.
+    "exile_entire_library": "triggered_exile",
     # "…the game is a draw." (Divine Intervention, at Legends' promotion.) Its
     # own bucket rather than a life one: the ability ends the game, and the
     # report reading it as `spell_pattern` would have said the card does

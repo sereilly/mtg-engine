@@ -21,7 +21,8 @@ from ...oracle_types import OracleInstruction
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, card_only_filter
 from .. import ast
 from ..errors import LoweringError
-from ._events import CREATED_TOKEN, EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
+from ._events import (CREATED_TOKEN, EVENT_SUBJECT_PLAYER, EXILED_THIS_WAY,
+                      EXILED_THIS_WAY_OBJECTS, _EVENT_SUBJECT_PLAYERS)
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _amount_payload, _describe_several_targets,
     _describe_targets, _filter_payload, _is_created_token, _is_source,
@@ -583,6 +584,40 @@ def _lower_exile_cost_sacrifices(
 # graph already fell apart — nothing left in `library` calls anything below
 # and nothing below calls anything left there, which is what the family rule
 # requires of two families in one package.
+
+def _lower_exile_entire_library(
+    node: ast.ExileEntireLibrary, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
+    """"That player exiles all cards from their library." (Thought Lash.)
+
+    Whose library rides the ``recipient`` key the mill and the life loss
+    already use — one convention for "who does this happen to" rather than a
+    second per family.
+
+    "That player" is the seat the *firing event* named, frozen into the
+    trigger's context by the fire site (CR 603.10), so it is admitted only
+    under an event that freezes one. Read as the resolving player instead, a
+    card naming somebody else would empty its own controller's library — and
+    for this effect that is the game, not a smaller effect.
+    """
+    kind = node.player.kind
+    if kind == "you":
+        recipient = "caster"
+    elif kind == "that_player":
+        if event not in _EVENT_SUBJECT_PLAYERS:
+            raise LoweringError(
+                "no event named {!r} freezes the seat 'that player' names".format(event),
+                node=node,
+            )
+        recipient = EVENT_SUBJECT_PLAYER
+    else:
+        raise LoweringError(
+            f"no handler empties the library of {kind!r}", node=node
+        )
+    return (
+        OracleInstruction("exile_entire_library", "", {"recipient": recipient}),
+    )
+
 
 def _lower_exile_top_of_library(node: ast.ExileTopOfLibrary) -> tuple[OracleInstruction, ...]:
     """"Exile the top three cards of your library." (Chandra, Heart of Fire's

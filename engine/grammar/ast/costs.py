@@ -195,6 +195,32 @@ class ExileCost:
 
 
 @dataclass(frozen=True)
+class ExileTopOfLibraryCost:
+    """"Exile the top card of your library" in front of a colon (Royal
+    Herbalist, Phyrexian Devourer, Whirling Catapult, Storm Elemental,
+    Seasoned Tactician, Thought Lash).
+
+    CR 118.3 admits it like any other cost, and CR 118.1 makes the payment the
+    printed action — so an ability whose library holds fewer than *count* cards
+    cannot be activated at all rather than exiling what is there.
+
+    Its own node rather than an :class:`ExileCost` whose filter names the top of
+    a library, for the reason :class:`ExileSelf` is not one either: **nothing is
+    chosen**. The payer picks no object, no filter is tested, and the cards are
+    named by position rather than by characteristic — so an :class:`ObjectFilter`
+    would have to carry a fact ("the top *count* of them") it is asked one card
+    at a time and cannot express, and the charger would enumerate a zone that
+    holds no permanents.
+
+    What it ate is still recorded (``exiled_for_cost`` / ``exiled_set_for_cost``),
+    because "the exiled card's mana value" (Phyrexian Devourer) and "if the
+    exiled card is a snow land" (Storm Elemental) are asked at resolution, when
+    the cards are already in exile (CR 608.2h).
+    """
+    count: Amount = field(default_factory=lambda: Fixed(1))
+
+
+@dataclass(frozen=True)
 class RemoveCounterCost:
     counter: str = "+1/+1"
     count: Amount = field(default_factory=lambda: Fixed(1))
@@ -202,5 +228,5 @@ class RemoveCounterCost:
 
 Cost = Union[
     ManaCost, TapSelf, SacrificeCost, DiscardCost, PayLifeCost, ExileSelf,
-    ExileCost, RemoveCounterCost, PayAttachedManaCost
+    ExileCost, ExileTopOfLibraryCost, RemoveCounterCost, PayAttachedManaCost
 ]

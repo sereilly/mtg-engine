@@ -60,6 +60,23 @@ def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleIn
     return (OracleInstruction("put_graveyard_card_on_library_bottom", "", {}),)
 
 
+def _lower_put_graveyard_top_on_library_bottom(
+    node: ast.PutGraveyardTopOnLibraryBottom,
+) -> tuple[OracleInstruction, ...]:
+    """"Put the top card of your graveyard on the bottom of your library."
+    (Soldevi Digger.)
+
+    Its own kind rather than a payload flag on the bottoming above it: that one
+    is a *target*, and `engine/targeting.py` maps a kind to a picker — a flag
+    could not stop the picker asking for a graveyard card this sentence never
+    lets anyone choose. No payload at all, because the node carries none: the
+    zone, whose it is and which card are all fixed by the printed words.
+    """
+    return (
+        OracleInstruction("put_top_of_graveyard_on_library_bottom", "", {}),
+    )
+
+
 def _lower_regenerate(node: ast.Regenerate) -> tuple[OracleInstruction, ...]:
     """"Regenerate target creature" / "Regenerate this creature" (CR 701.19).
 

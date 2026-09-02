@@ -743,6 +743,34 @@ def _parse_counted_search(
     )
 
 
+def _parse_exile_entire_library(
+    stream: TokenStream, player: "ast.PlayerRef"
+) -> "ast.ExileEntireLibrary | None":
+    """``exiles all cards from their library`` (Thought Lash) — the verb and
+    everything after it, with the subject already read by the caller.
+
+    Returns None with the cursor unmoved for anything else, so the ordinary
+    exile productions keep their own sentences and their own errors.
+
+    The possessive has to **agree with the subject**: "your" for the resolving
+    player and "their" for anybody else. Reading either for either would let
+    "that player exiles all cards from your library" through, which is two
+    different libraries in one sentence and no card in Magic.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("exiles", "exile"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("all", "cards", "from"):
+        stream.reset(mark)
+        return None
+    possessive = "your" if player.kind == "you" else "their"
+    if not (stream.accept_word(possessive) and stream.accept_word("library")):
+        stream.reset(mark)
+        return None
+    return ast.ExileEntireLibrary(player)
+
+
 def _parse_exile_top_of_library(stream: TokenStream) -> ast.Statement | None:
     """``Exile the top three cards of your library.`` (Chandra, Heart of
     Fire's +1.) Returns None rather than raising when the sentence is an

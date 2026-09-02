@@ -189,6 +189,13 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             candidates = self._sacrifice_candidate_indices(player, cost.sacrifice)
             if len(candidates) < cost.sacrifices:
                 return False
+        # "Cumulative upkeep—Exile the top card of your library." (Thought
+        # Lash.) CR 118.3 again: a library holding fewer cards than the cost
+        # names cannot pay it *fully*, so it pays none of it — which for a
+        # cumulative upkeep is the permanent being sacrificed rather than a
+        # shorter exile.
+        if cost.exile_top_of_library > len(player.library):
+            return False
         return True
 
     def pay_upkeep_cost(self, player, cost, *, reason: str, purpose=None) -> None:
@@ -212,6 +219,20 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 cost.sacrifices,
                 filter=cost.sacrifice,
                 reason=reason,
+            )
+        if cost.exile_top_of_library:
+            # Nothing is chosen and nothing is prompted for: the cards are named
+            # by position, so this is the whole payment. Sufficiency was checked
+            # above, exactly as the life payment's was.
+            taken = [
+                player.library.pop(0)
+                for _ in range(cost.exile_top_of_library)
+            ]
+            player.exile.extend(taken)
+            self.log.append(
+                f"{player.name} exiled "
+                + ", ".join(card.name for card in taken)
+                + f" from the top of their library for {reason}"
             )
 
     def get_upkeep_pay_triggers(self, player_index: int) -> list[dict]:

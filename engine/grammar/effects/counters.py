@@ -47,6 +47,19 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
     # production's reason — teaching the shared noun parser the words would hand
     # them to every line that prints them. The lowering checks a binder exists.
     moved: "ast.Recipient | None"
+    # "Put **the top card of your graveyard** on the bottom of your library."
+    # (Soldevi Digger.) Read here, before the recipient parser, because the
+    # phrase is not a noun phrase at all: the card is named by its *position* in
+    # an ordered pile (CR 404.1), so `parse_recipient` refuses it on the number
+    # it expects after "the top". The destination is still read below by the
+    # branch every other "put … on …" sentence uses.
+    top_of_graveyard = stream.mark()
+    if stream.accept_phrase("the", "top", "card", "of", "your", "graveyard"):
+        if stream.accept_phrase(
+            "on", "the", "bottom", "of", "your", "library"
+        ):
+            return ast.PutGraveyardTopOnLibraryBottom()
+    stream.reset(top_of_graveyard)
     if stream.accept_phrase("that", "card"):
         moved = ast.TargetSpec("that", ast.ObjectFilter(is_card=True))
     else:

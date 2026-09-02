@@ -53,6 +53,14 @@ class UpkeepCost:
     life: int = 0
     sacrifice: dict | None = None
     sacrifices: int = 0
+    #: "Cumulative upkeep—**Exile the top card of your library**." (Thought
+    #: Lash.) How many cards off the top the payment eats; 0 is "no such cost".
+    #: The activation cost of the same printed words is
+    #: ``ActivatedAbilityCost.exile_top_of_library`` and is an int for the same
+    #: reason: nothing is chosen and nothing is tested, so there is no filter
+    #: and no picker — only a count, and CR 118.3 makes a library holding fewer
+    #: cards unable to pay it.
+    exile_top_of_library: int = 0
 
     def _paid_terms(self) -> list[str]:
         """The parts of the cost a player *pays*, as printed: "{1}{B}", "3
@@ -75,11 +83,28 @@ class UpkeepCost:
             return f"sacrifice a {noun}"
         return f"sacrifice {self.sacrifices} {noun}s"
 
+    def _library_exile_term(self) -> str:
+        """"exile the top card of your library" — beside the sacrifice above and
+        for its reason: a card taken off a library is a thing the payer *does*,
+        not a thing they hand over, so "Pay exile the top card" is not a
+        sentence."""
+        if not self.exile_top_of_library:
+            return ""
+        if self.exile_top_of_library == 1:
+            return "exile the top card of your library"
+        return (
+            f"exile the top {self.exile_top_of_library} cards of your library"
+        )
+
+    def _action_terms(self) -> list[str]:
+        return [
+            term for term in (self._sacrifice_term(), self._library_exile_term())
+            if term
+        ]
+
     def describe(self) -> str:
         """The cost as a player reads it, for a "Cost:" line and a log line."""
-        parts = self._paid_terms()
-        if self._sacrifice_term():
-            parts.append(self._sacrifice_term())
+        parts = self._paid_terms() + self._action_terms()
         return " and ".join(parts) or mana_cost_label({})
 
     def pay_label(self) -> str:
@@ -94,8 +119,7 @@ class UpkeepCost:
         paid = self._paid_terms()
         if paid:
             parts.append("Pay " + " and ".join(paid))
-        if self._sacrifice_term():
-            parts.append(self._sacrifice_term())
+        parts.extend(self._action_terms())
         label = " and ".join(parts) or f"Pay {mana_cost_label({})}"
         return label[0].upper() + label[1:]
 
@@ -113,6 +137,8 @@ class UpkeepCost:
         if self.sacrifices:
             out["sacrifice"] = dict(self.sacrifice or {})
             out["sacrifices"] = self.sacrifices
+        if self.exile_top_of_library:
+            out["exile_top_of_library"] = self.exile_top_of_library
         return out
 
 
@@ -129,6 +155,7 @@ def cost_from_payload(payload: dict) -> UpkeepCost:
         life=int(payload.get("life") or 0),
         sacrifice=payload.get("sacrifice"),
         sacrifices=int(payload.get("sacrifices") or 0),
+        exile_top_of_library=int(payload.get("exile_top_of_library") or 0),
     )
 
 
@@ -161,6 +188,15 @@ _LIFE_TERM = re.compile(r"^(\d+) life$")
 #: "sacrifice a land" — CR 702.24a's other Ice Age shape.
 _SACRIFICE_PHRASE = re.compile(r"^sacrifice (?P<phrase>.+)$")
 
+#: "exile the top card of your library" — CR 702.24a's Alliances shape (Thought
+#: Lash). The count is delimited here and read by the number table, so a card
+#: printing any other number is the same cost with different data. Read against
+#: the same words `grammar/costs._accept_exile_top_of_library` admits, because
+#: an upkeep and an activation printing one phrase must charge one thing.
+_LIBRARY_EXILE_PHRASE = re.compile(
+    r"^exile the top (?:(?P<count>\w+) cards|card) of your library$"
+)
+
 
 def upkeep_cost_from_phrase(phrase: str) -> UpkeepCost | None:
     """The cost a printed cost phrase names, or None when this engine cannot
@@ -173,6 +209,15 @@ def upkeep_cost_from_phrase(phrase: str) -> UpkeepCost | None:
     text = phrase.strip().rstrip(".").strip()
     if not text:
         return None
+    library_exile = _LIBRARY_EXILE_PHRASE.match(text)
+    if library_exile is not None:
+        word = library_exile.group("count")
+        if word is None:
+            return UpkeepCost(exile_top_of_library=1)
+        from .oracle_types import _NUMBER_WORDS
+
+        count = int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
+        return UpkeepCost(exile_top_of_library=count) if count >= 2 else None
     sacrifice = _SACRIFICE_PHRASE.match(text)
     if sacrifice is not None:
         described = _sacrifice_filter(sacrifice.group("phrase"))

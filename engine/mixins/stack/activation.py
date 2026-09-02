@@ -684,6 +684,24 @@ class AbilityActivationMixin:
                     if card is not named:
                         discard_cost_cards.append(card)
 
+        # "Exile the top card of your library" (Royal Herbalist), "…the top four
+        # cards…" (Seasoned Tactician). CR 118.3: a player cannot pay a cost
+        # without the resources to pay it **fully**, so a library holding fewer
+        # cards than the printed count pays nothing at all and CR 602.5c makes
+        # the ability unactivatable rather than free. Checked here with the
+        # other costs and paid below with them, so a refusal further down does
+        # not leave a library already shorter.
+        if ability.cost.exile_top_of_library > len(controller.library):
+            details = (
+                f"{permanent.card.name}: {controller.name} has "
+                f"{len(controller.library)} card(s) left and its cost exiles "
+                f"{ability.cost.exile_top_of_library}"
+            )
+            self.log.append(details)
+            return SimulationResult(
+                permanent.card.name, False, "unsupported", details
+            )
+
         # "Discard your hand" (Subira). Never unpayable — discarding nothing is
         # discarding your hand — so there is no check beside the others above,
         # only the payment below.
@@ -1277,6 +1295,32 @@ class AbilityActivationMixin:
                 f"{controller.name} sacrificed {name} to activate {permanent.card.name}"
             )
 
+        # "Exile the top card of your library" — paid here with the rest
+        # (CR 602.2b puts every cost at one moment), and the cards recorded on
+        # the two channels every other exile cost already writes: the resolution
+        # asks "the exiled card's mana value" (Phyrexian Devourer) and "if the
+        # exiled card is a snow land" (Storm Elemental) when the cards are
+        # already in exile, so the record is the only sound answer (CR 608.2h).
+        #
+        # ``exiled_for_cost`` is the single-object channel every existing reader
+        # asks and takes the *first* card off the top, with the whole payment
+        # beside it under ``exiled_set_for_cost`` — the same pairing the chosen
+        # exile above keeps, rather than a third shape for one channel.
+        if ability.cost.exile_top_of_library:
+            from_library = [
+                controller.library.pop(0)
+                for _ in range(ability.cost.exile_top_of_library)
+            ]
+            controller.exile.extend(from_library)
+            exiled_set_for_cost = [*exiled_set_for_cost, *from_library]
+            if exiled_for_cost is None:
+                exiled_for_cost = from_library[0]
+            self.log.append(
+                f"{controller.name} exiled "
+                + ", ".join(card.name for card in from_library)
+                + f" from the top of their library to activate {permanent.card.name}"
+            )
+
         # Ring of Ma'rûf: "Exile this artifact" is part of the cost, so the
         # permanent leaves before the ability goes on the stack — and the ability
         # still resolves from exile (CR 603.6 / 608.2: the source leaving doesn't
@@ -1863,6 +1907,9 @@ def _graveyard_cost_refusal(cost) -> str | None:
         ("put_counter", "a counter cost"),
         ("remove_counter", "a counter-removal cost"),
         ("tap_count", "a tap-other-permanents cost"),
+        ("tap_attached", "a tap-the-attached-permanent cost"),
+        ("mana_from_attached", "a cost read off an attached permanent"),
+        ("exile_top_of_library", "a library-exile cost"),
         ("pay_life", "a life cost"),
         ("loyalty", "a loyalty cost"),
         ("loyalty_x_sign", "a loyalty cost"),

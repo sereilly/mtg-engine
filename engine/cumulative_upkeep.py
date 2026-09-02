@@ -151,6 +151,11 @@ def scaled_cost(instruction, counters: int) -> UpkeepCost:
         life=printed.life * counters,
         sacrifice=printed.sacrifice,
         sacrifices=printed.sacrifices * counters,
+        # "…for each age counter on it" is about the whole cost, so Thought
+        # Lash's third upkeep exiles three cards. Scaled beside the sacrifice
+        # count for exactly that reason, and listing it here is what stops the
+        # escalation being silently dropped for this half of the cost.
+        exile_top_of_library=printed.exile_top_of_library * counters,
     )
 
 

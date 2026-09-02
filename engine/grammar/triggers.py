@@ -26,8 +26,9 @@ from dataclasses import replace
 
 from . import ast
 from .errors import GrammarError
-from .lexer import PT, SELF
+from .lexer import NUMBER, PT, SELF
 from .nouns import parse_object_filter
+from .readers import accept_source_reference
 from .references import parse_target_spec
 from .phrases import (
     _accept_number,
@@ -285,6 +286,41 @@ def _parse_state_trigger_event(
     invisible while one production followed the phrase and is what kept Mana
     Vortex's reading below from being reached at all.
     """
+    # "When **this creature's power is 7 or greater**, sacrifice it."
+    # (Phyrexian Devourer.) CR 603.8 read off a characteristic rather than off a
+    # census, and here rather than in a branch of its own because the *word* is
+    # the only thing this family shares — the caller passes it in, so both
+    # printings are one production.
+    #
+    # The threshold is consumed and dropped, exactly as the counter branch below
+    # drops its own: `engine/oracle.py`'s table is the front end that supplies
+    # the condition (and its payload) to the dispatcher, and this one supplies
+    # the effect. A number carried here would be a second copy of it.
+    # "When **a player doesn't pay this enchantment's cumulative upkeep**, …"
+    # (Thought Lash.) Read on this front end as well as in `engine/oracle.py`'s
+    # table, for the reason stated above: both see the whole line, and a
+    # condition only one of them reads leaves the other refusing the effect.
+    unpaid_mark = stream.mark()
+    if stream.accept_phrase("a", "player", "doesn't", "pay", "this"):
+        stream.accept_word(
+            "artifact", "creature", "enchantment", "permanent", "land",
+        )
+        if stream.accept_phrase("'s", "cumulative", "upkeep"):
+            return ast.TriggerEvent("cumulative_upkeep_unpaid", word)
+    stream.reset(unpaid_mark)
+
+    power_mark = stream.mark()
+    if accept_source_reference(stream) and stream.accept_phrase("'s", "power", "is"):
+        # Both spellings of the threshold. The lexer gives a printed digit its
+        # own token kind, so a word-table test alone reads "four" and refuses
+        # "7" — which is the only spelling the one card printing this sentence
+        # uses.
+        if stream.at_kind(NUMBER) or stream.peek_word() in NUMBER_WORDS:
+            stream.advance()
+            if stream.accept_phrase("or", "greater"):
+                return ast.TriggerEvent("source_power_at_least", word)
+    stream.reset(power_mark)
+
     state_mark = stream.mark()
     if stream.accept_phrase("there", "are"):
         # "When there are **no lands on the battlefield**, sacrifice this
