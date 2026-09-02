@@ -30,7 +30,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | HML | 115 | 189 | 92.6% | 92.6% | 64.0% | 93 |
 | 5ED | 434 | 631 | 92.7% | 92.4% | 60.1% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 66.5% | 61.8% | 44.2% | 84 |
+| ALL *(measured)* | 144 | 251 | 68.1% | 64.9% | 47.4% | 91 |
 | **All (shipped)** | **3439** | **5016** | **88.9%** | **87.9%** | **56.9%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -44,8 +44,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 273 | 123 | expected a subject |  |
-| 140 | 59 | unrecognized effect verb |  |
-| 77 | 40 | unconsumed text |  |
+| 137 | 56 | unrecognized effect verb |  |
+| 76 | 39 | unconsumed text |  |
 | 39 | 39 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -55,10 +55,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 7 | 1 | no lowering for RawEffect |  |
 | 7 | 2 | expected who takes the redirected damage |  |
 | 6 | 1 | no handler for this battlefield entry |  |
-| 6 | 3 | expected a destination zone after 'return' |  |
 | 5 | 1 | expected 'card' |  |
 | 5 | 1 | back-reference to 'its_toughness' with no producer in this effect |  |
 | 5 | 2 | the sacrifice prompt cannot test this restriction |  |
+| 5 | 2 | expected a destination zone after 'return' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 3 | expected 'a' |  |
 | 4 | 1 | expected 'that' |  |
@@ -1214,6 +1214,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Attach target Aura attached to a creature or land to another permanent of that type.`
 - **Enduring Renewal**
   - `Whenever a creature is put into your graveyard from the battlefield, return it to your hand.`
+- **Energy Arc**
+  - `Untap any number of target creatures. Prevent all combat damage that would be dealt to and dealt by those creatures this turn.`
 - **Energy Tap**
   - `Tap target untapped creature you control. If you do, add an amount of {C} equal to that creature's mana value.`
   - `Tap target untapped creature you control. If you do, add an amount of {C} equal to that creature's mana value.`
@@ -1247,6 +1249,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Starting with you, each player may put a permanent card from their hand onto the battlefield. Repeat this process until no one puts a card onto the battlefield.`
 - **Evaporate**
   - `Evaporate deals 1 damage to each white and/or blue creature.`
+- **Exile**
+  - `Exile target nonwhite attacking creature. You gain life equal to its toughness.`
 - **Exorcist**
   - `{1}{W}, {T}: Destroy target black creature.`
 - **Experimental Overload**
@@ -1369,6 +1373,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}{U}: Tap target creature without flying.`
 - **Flooded Woodlands**
   - `Green creatures can't attack unless their controller sacrifices a land of their choice for each green creature they control that's attacking. (This cost is paid as attackers are declared.)`
+- **Floodwater Dam**
+  - `{X}{X}{1}, {T}: Tap X target lands.`
 - **Floral Spuzzem**
   - `Whenever this creature attacks and isn't blocked, you may destroy target artifact defending player controls. If you do, this creature assigns no combat damage this turn.`
 - **Flying Carpet**
@@ -1492,6 +1498,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Flip a coin. If you win the flip, you gain 1 life and target opponent loses 1 life, and you decide whether to flip again. If you lose the flip, you lose 1 life and that opponent gains 1 life, and that player decides whether to flip again. Double the life stakes with each flip.`
 - **Gangrenous Zombies**
   - `{T}, Sacrifice this creature: This creature deals 1 damage to each creature and each player. If you control a snow Swamp, this creature deals 2 damage to each creature and each player instead.`
+- **Gargantuan Gorilla**
+  - `{T}: This creature deals damage equal to its power to another target creature. That creature deals damage equal to its power to this creature.`
 - **Garruk's Harbinger**
   - `Whenever this creature deals combat damage to a player or planeswalker, look at that many cards from the top of your library. You may reveal a creature card or Garruk planeswalker card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.`
 - **Garruk's Uprising**
@@ -1699,6 +1707,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When a spell or ability an opponent controls causes you to discard this card, it deals 4 damage to any target.`
 - **Gwendlyn Di Corci**
   - `{T}: Target player discards a card at random. Activate only during your turn.`
+- **Hail Storm**
+  - `Hail Storm deals 2 damage to each attacking creature and 1 damage to you and each creature you control.`
 - **Halfdane**
   - `At the beginning of your upkeep, change Halfdane's base power and toughness to the power and toughness of target creature other than Halfdane until the end of your next upkeep.`
 - **Hallowed Ground**
@@ -2865,6 +2875,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Phantasmal Mount**
   - `{T}: Target creature you control with toughness 2 or less gets +1/+1 and gains flying until end of turn. When this creature leaves the battlefield this turn, sacrifice that creature. When the creature leaves the battlefield this turn, sacrifice this creature.`
 - **Phelddagrif**
+  - `{G}: Phelddagrif gains trample until end of turn. Target opponent creates a 1/1 green Hippo creature token.`
   - `{W}: Phelddagrif gains flying until end of turn. Target opponent gains 2 life.`
   - `{U}: Return Phelddagrif to its owner's hand. Target opponent may draw a card.`
 - **Phyrexian Boon**
@@ -3312,6 +3323,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return up to two target creature cards from your graveyard to your hand.`
 - **Savaen Elves**
   - `{G}{G}, {T}: Destroy target Aura attached to a land.`
+- **Scarab of the Unseen**
+  - `{T}, Sacrifice this artifact: Return all Auras attached to target permanent you own to their owners' hands. Draw a card at the beginning of the next turn's upkeep.`
 - **Scarecrow**
   - `{6}, {T}: Prevent all damage that would be dealt to you this turn by creatures with flying.`
 - **Scarwood Bandits**
@@ -3660,6 +3673,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {U}.`
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {U}.`
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {U}.`
+- **Stench of Decay**
+  - `Nonartifact creatures get -1/-1 until end of turn.`
 - **Stench of Evil**
   - `Destroy all Plains. For each land destroyed this way, Stench of Evil deals 1 damage to that land's controller unless they pay {2}.`
 - **Stone Rain**
