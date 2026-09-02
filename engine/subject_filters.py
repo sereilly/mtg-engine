@@ -58,7 +58,8 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     "nontoken", "named", "supertypes",
     # "…with **a name originally printed in the Homelands expansion**"
     # (Apocalypse Chime). A fact about the card, read off
-    # ``original_printing`` -- so the pure matcher answers it exactly as it
+    # ``original_printing`` (off ``effective_card``, since CR 206.3 states the
+    # set as a list of names) -- so the pure matcher answers it exactly as it
     # answers ``named``, and the phrase composes with any verb instead of
     # buying one production its one card.
     "original_expansion",

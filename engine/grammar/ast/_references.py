@@ -105,11 +105,12 @@ class ObjectFilter:
     named: str | None = None
     #: "…**with a name originally printed in the Homelands expansion**"
     #: (Apocalypse Chime, Golgothian Sylex). The set *code* the printed
-    #: expansion name resolved to, read off ``CardDefinition.original_printing``
-    #: -- ``printings[0]``, the first set the card appeared in, which is the
+    #: expansion name resolved to, read off ``original_printing`` --
+    #: ``printings[0]``, the first set the card appeared in, which is the
     #: whole content of the word "originally": nineteen Antiquities cards were
     #: reprinted in Revised and the set a copy happened to be loaded from would
-    #: miss every one of them.
+    #: miss every one of them. Asked of the permanent's ``effective_card``,
+    #: because CR 206.3 states each of these cards as a list of **names**.
     #:
     #: A restriction on the *card*, like ``named`` above it, rather than on
     #: anything a board can answer -- so it is testable by the pure matcher and
