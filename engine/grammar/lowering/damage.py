@@ -52,11 +52,11 @@ from ._common import (
 from ._events import (
     _chosen_cast_amount,
     _EVENT_SUBJECT_CONTROLLERS,
-    _EVENT_SUBJECT_CONTROLLERS,
     _BOUND_OBJECT_DELAYED_EVENTS,
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_CONTROLLER,
     EVENT_SUBJECT_PLAYER,
+    LOOP_BOUND_PLAYER,
     _back_reference_payload,
     _DAMAGED_PERMANENTS,
     _RECORDED_PERMANENTS,
@@ -616,7 +616,18 @@ def _lower_damage_shape(
         # "…to target player **or planeswalker**" (Chandra's Magmutt) is exactly
         # the clause that may name either, so it keeps the inference: there the
         # permanent index is the choice rather than a leftover.
-        if recipient.kind == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
+        if recipient.kind == "that_player" and LOOP_BOUND_PLAYER in produced:
+            # "For each player, this enchantment deals 1 damage to **that
+            # player** unless they pay {B} or {3}." (Lim-Dûl's Hex.) The loop
+            # rebinds the resolution's target to the seat each iteration is on
+            # (`handlers/control_flow.for_each`), so the pronoun reads the
+            # target slot — deliberately the same payload spelling a chosen
+            # player gets, because the handler's read is the same. First among
+            # these branches because the loop is the pronoun's *innermost*
+            # binder: inside it the words name the iteration's seat even when
+            # the enclosing trigger froze one of its own.
+            payload["recipient"] = "target_player"
+        elif recipient.kind == "that_player" and event in _EVENT_SUBJECT_PLAYERS:
             # "…deals 1 damage to **that player**" under a trigger whose
             # subject *is* a seat (Underworld Dreams' draw). Nothing chose it
             # and no object stands between the event and the player, so the
@@ -653,6 +664,22 @@ def _lower_damage_shape(
             # was carrying: Psychic Venom's bug, in a sentence that had already
             # named the player it meant.
             payload["recipient"] = ATTACHED_PERMANENT_CONTROLLER
+        elif recipient.kind == "that_player" and event is not None:
+            # `_events.py`'s own contract: an event either froze a seat or it
+            # did not, and a condition absent from both tables refuses the
+            # line rather than guessing. This used to fall through to
+            # `target_player` — a *choice* the card never offers, resolved
+            # against whatever the resolution context happened to carry — and
+            # every card that reached it was right only by a fire-site
+            # accident (Ankh of Mishra's hand-built victim instruction, the
+            # upkeep registry's own seat). The same sentence the upkeep
+            # family's pay-or-else prompt already refuses with, one family
+            # over.
+            raise LoweringError(
+                f"no event named {event!r} freezes the seat \"that player\" "
+                "names",
+                node=node,
+            )
         elif not recipient.or_planeswalker:
             payload["recipient"] = "target_player"
     elif isinstance(recipient, ast.PlayerRef):

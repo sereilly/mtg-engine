@@ -109,6 +109,20 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     # graveyard, an exile or a hand, and under a control-change effect that
     # seat was never its owner.
     "attached_creature_leaves_battlefield",
+    # Ankh of Mishra — the entering land's, frozen by `_process_land_enters`
+    # (mixins/effects.py). The unnarrowed sibling of `matching_permanent_enters`
+    # two rows up, admitted for its reason: "that land's controller" is the seat
+    # the land entered under, whatever put it there. Absent from this table the
+    # phrase fell through to `target_player` — a choice the card never offers —
+    # and the fire site papered over it by swapping in a hand-built instruction
+    # carrying its own victim, so the compiled program was never what ran.
+    "land_enters",
+    # Dingus Egg — the dead land's, from `_process_land_dies`, which freezes
+    # the seat while announcing the death. It cannot be re-derived at
+    # resolution: by then the land is a card in a graveyard (CR 400.7), and
+    # under a control-change effect that seat was never its owner. The same
+    # fire-site accident as the row above, and retired with it.
+    "land_dies",
 })
 
 
@@ -200,6 +214,27 @@ _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     # the phrase would mean the controller, which is the same answer — so one
     # entry covers every row of the kind.
     "attackers_declared",
+    # "Whenever a player taps a land for mana, this enchantment deals 1 damage
+    # to **that player**" (Manabarbs). The condition names the tapping seat and
+    # nothing chose it. This event's trigger resolves *inline* at the
+    # tap-for-mana seam in `mixins/turn_management.py` (CR 605.4a keeps its
+    # triggered-mana siblings off the stack, and the damage rides the same
+    # moment) — so the fire site is still holding the seat when it executes
+    # the instruction, which is the freeze.
+    "land_tapped_for_mana",
+    # "At the beginning of the upkeep of enchanted <noun>'s controller, …
+    # **that player** …" (the punishment Auras: Cursed Land, Feedback,
+    # Maddening Wind, Mind Whip, Wanderlust, Warp Artifact, Curse Artifact).
+    # The seat varies with the attachment, and the ordinary upkeep loop
+    # (`phases/upkeep_step.py`) freezes whose upkeep the firing is as it
+    # enqueues the trigger — after checking, through
+    # `upkeep_trigger_seat_matches`, that it is the host's controller's.
+    "upkeep_enchanted_controller",
+    # "At the beginning of the chosen player's upkeep, this enchantment deals
+    # 1 damage to **that player**" (Takklemaggot's granted line). The same
+    # loop and the same stamp, gated the same way: the seat is whichever
+    # player the returning enchantment was told to watch.
+    "upkeep_chosen",
 })
 
 #: Delayed-trigger events (CR 603.7) whose fire site freezes the **owner** of
@@ -273,6 +308,17 @@ EVENT_SUBJECT_OWNER = "event_subject_owner"
 #: it and `evaluate_condition` reads it — three copies of a string is how they
 #: come apart.
 EVENT_SUBJECT_PLAYER = "event_subject_player"
+
+#: The marker `lower.py` adds to *produced* while lowering the body of a
+#: "for each player" loop: inside it, "that player" is the seat the iteration
+#: is on — `handlers/control_flow.for_each` rebinds the resolution's target to
+#: each seat in turn — and not anything a trigger's fire site froze. A marker
+#: rather than a scratchpad key: nothing is recorded under it, it only says
+#: the loop is the pronoun's binder. It is what lets Lim-Dûl's Hex's damage,
+#: written under "at the beginning of your upkeep", lower to the target-slot
+#: reading while the same words under a bare trigger refuse — the loop is the
+#: innermost binder, so it is checked before the event tables above.
+LOOP_BOUND_PLAYER = "loop_bound_player"
 
 #: And the seat that *controlled* what the event was about, from
 #: `_EVENT_SUBJECT_CONTROLLERS` above. A constant for `EVENT_SUBJECT_PLAYER`'s

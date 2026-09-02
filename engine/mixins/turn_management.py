@@ -540,6 +540,13 @@ class TurnManagementMixin:
                     trig.instruction, player_index, land, mana_symbol, perm
                 )
                 continue
+            # The compiled payload names its victim ``event_subject_player`` —
+            # `land_tapped_for_mana` is in `_EVENT_SUBJECT_PLAYERS` on the
+            # strength of this site — and the seat the event is about is
+            # ``player``, the one tapping. This inline resolution *is* the fire
+            # site, still holding that seat, so it executes the instruction
+            # against the seat it froze rather than reading it back out of a
+            # context it never built.
             amount = int(trig.instruction.payload.get("amount", 1))
             self._deal_damage_to_player(
                 player, amount, source=perm,

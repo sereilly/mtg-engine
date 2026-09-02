@@ -1102,6 +1102,26 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     actor = instruction.payload.get("actor", "you")
     seats = _offered_seats(game, actor, context)
 
+    if not seats and actor in ("event_subject_player", "event_subject_controller"):
+        # The event froze a seat and that player has since left the game.
+        # CR 800.4f: a cost a departed player would pay or choose to pay **is
+        # not paid** — so the offer is never made and its decline branch still
+        # applies, exactly as an unaffordable offer's does below ("destroy
+        # that land unless that player pays {1} or 1 life", Erosion, with the
+        # payer already gone). Only the lost seat takes this branch: a seat
+        # nobody *recorded* is a phrase that named nobody, and no consequence
+        # of an offer that was never printed for anyone applies.
+        seat = (context.trigger_context or {}).get(actor)
+        if (
+            isinstance(seat, int)
+            and 0 <= seat < len(game.players)
+            and game.players[seat].lost
+        ):
+            on_decline = _steps(instruction, "otherwise")
+            if on_decline:
+                _run(game, on_decline, context)
+            return True, "resolved"
+
     def offer(player_index: int) -> None:
         _offer_to_seat(
             game, instruction, context, player_index, rebind=actor in _EACH_ACTORS

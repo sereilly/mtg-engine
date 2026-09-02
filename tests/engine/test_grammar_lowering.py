@@ -1852,13 +1852,18 @@ def test_aura_upkeep_damage_lowers_to_the_dispatched_pair(card, line):
 
     ``recipient`` joined the payload with Detonate (round 23): a damage clause
     that names a player now says so, instead of the handler inferring it from
-    the absence of a permanent index. Inert here — this pair's dispatcher works
-    out the enchanted permanent's controller itself and reads only the amount —
-    but recorded in the golden rather than filtered out of it, because a golden
-    that hides a key is a golden that would not notice the key changing.
+    the absence of a permanent index. It names the **frozen seat**
+    (``event_subject_player``, the player whose upkeep the firing is —
+    `_EVENT_SUBJECT_PLAYERS` lists the condition), not ``target_player``: the
+    card targets nobody, and the old spelling was the fall-through the tables'
+    own docstring forbids — right only because this pair's dispatcher works
+    out the enchanted permanent's controller itself and reads only the amount.
+    Still recorded in the golden rather than filtered out of it, because a
+    golden that hides a key is a golden that would not notice the key
+    changing.
     """
     assert _instructions(line, card) == [
-        ("deal_damage", {"amount": 1, "recipient": "target_player"})
+        ("deal_damage", {"amount": 1, "recipient": "event_subject_player"})
     ]
 
 
@@ -1883,8 +1888,99 @@ def test_enchanted_land_upkeep_is_dispatched_like_its_peers():
 
     assert result.parsed
     assert [(i.kind, dict(i.payload)) for i in result.instructions] == [
-        ("deal_damage", {"amount": 1, "recipient": "target_player"})
+        ("deal_damage", {"amount": 1, "recipient": "event_subject_player"})
     ]
+
+
+def test_a_that_player_damage_refuses_under_an_event_that_froze_no_seat():
+    """The contract `_events.py` states in its own docstring: an event either
+    froze a seat or it did not, and a condition absent from both seat tables
+    refuses the line instead of guessing.
+
+    The damage family's last branch used to break it — "that player" under an
+    unlisted condition fell through to ``recipient: target_player``, a *choice*
+    the card never offers, resolved against whatever the resolution context
+    happened to carry. Every card that reached it was right only by a
+    fire-site accident (Ankh of Mishra's hand-built victim instruction, the
+    upkeep registry's own seat), which is exactly the silent wrong-player
+    failure the tables exist to forbid.
+
+    "Whenever this creature attacks" records which seat is *defending*
+    (`_DEFENDING_PLAYER_EVENTS`), not which seat "that player" would name — so
+    the sentence names nobody and must refuse, loudly, naming the event.
+    """
+    result = compile_line(
+        "Whenever this creature attacks, this creature deals 1 damage to "
+        "that player.",
+        card_name="Test",
+    )
+
+    assert not result.usable
+    assert "creature_attacks" in (result.failure_reason or "")
+    assert "that player" in (result.failure_reason or "")
+
+
+@pytest.mark.parametrize(
+    "card, line",
+    [
+        (
+            "Ankh of Mishra",
+            "Whenever a land enters, this artifact deals 2 damage to that "
+            "land's controller.",
+        ),
+        (
+            "Dingus Egg",
+            "Whenever a land is put into a graveyard from the battlefield, "
+            "this artifact deals 2 damage to that land's controller.",
+        ),
+    ],
+)
+def test_land_trigger_damage_reads_the_seat_the_fire_site_froze(card, line):
+    """"That land's controller" is the seat the event was about, never a
+    target: `land_enters` and `land_dies` are in `_EVENT_SUBJECT_CONTROLLERS`,
+    and their fire sites (`_process_land_enters` / `_process_land_dies`) stamp
+    ``event_subject_controller`` while enqueuing the compiled instruction.
+
+    These two used to lower to ``recipient: target_player`` and be corrected
+    at fire time by a synthetic ``deal_damage_to_player`` carrying its own
+    victim — so the compiled program was never what ran, and no instrument
+    could see the fall-through behind it.
+    """
+    assert _instructions(line, card) == [
+        ("deal_damage", {"amount": 2, "recipient": "event_subject_controller"})
+    ]
+
+
+def test_a_that_player_damage_inside_a_per_player_loop_reads_the_loop_seat():
+    """"For each player, this enchantment deals 1 damage to **that player**
+    unless they pay {B} or {3}." (Lim-Dûl's Hex.)
+
+    The loop is the pronoun's innermost binder: `handlers/control_flow.for_each`
+    rebinds the resolution's target to the seat each iteration is on, so the
+    damage keeps the target-slot spelling — deliberately, via the
+    `LOOP_BOUND_PLAYER` marker `lower.py` adds while lowering the body — where
+    the same words under the bare `upkeep_self` trigger refuse (the condition
+    is deliberately absent from `_EVENT_SUBJECT_PLAYERS`: "your upkeep" has
+    one seat and it is spelled "you").
+    """
+    result = compile_line(
+        "At the beginning of your upkeep, for each player, this enchantment "
+        "deals 1 damage to that player unless they pay {B} or {3}.",
+        card_name="Lim-Dûl's Hex",
+    )
+
+    assert result.usable
+    [(kind, payload)] = [
+        (i.kind, behavioural_payload(i.payload)) for i in result.instructions
+    ]
+    assert kind == "for_each"
+    assert payload["iterator"] == {"players": "each_player"}
+    [may] = payload["effect"]
+    assert may.payload["actor"] == "that_player"
+    [damage] = may.payload["otherwise"]
+    assert (damage.kind, damage.payload["recipient"]) == (
+        "deal_damage", "target_player",
+    )
 
 
 def test_power_leaks_three_sentences_lower_to_one_reduced_damage():

@@ -648,11 +648,19 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
 
 @effect_handler("deal_damage_to_player")
 def deal_damage_to_player(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """A triggered ability that deals a fixed amount of damage to a player, resolving
-    off the stack. Used by triggers that previously dealt damage inline at fire time:
-    Dingus Egg (land dies), the land-enters 2-damage trigger, and Aura death damage.
-    The victim and amount are carried in ``trigger_context`` so a synthetic instruction
-    (no parsed payload) is enough."""
+    """A triggered ability that deals a fixed amount of damage to a player,
+    resolving off the stack, with victim and amount carried in
+    ``trigger_context`` so a synthetic instruction (no parsed payload) is
+    enough.
+
+    Two fire sites build one: the Aura death-damage dispatcher in
+    ``mixins/effects.py`` (the amount is the dead creature's toughness, a
+    number no compiled payload carries) and the upkeep registry's
+    ``_enqueue_upkeep_damage``, whose pay-or-consequence handlers compute the
+    amount interactively. The land-enters and land-dies triggers used to be
+    routed here too, replacing Ankh of Mishra's and Dingus Egg's compiled
+    instructions outright — they now execute those instructions against the
+    seat their fire sites freeze (``event_subject_controller``)."""
     tctx = context.trigger_context or {}
     victim_idx = tctx.get("victim_player_index")
     amount = int(tctx.get("amount", 0))
