@@ -13,7 +13,7 @@ from ...tokens import PREDEFINED_TOKENS
 from .. import ast
 from ..amounts import expect_pt, parse_amount
 from ..errors import GrammarError
-from ..lexer import (PT, QUOTE, SELF, WORD)
+from ..lexer import (PT, PUNCT, QUOTE, SELF, WORD)
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..phrases import _parse_for_each
@@ -647,6 +647,8 @@ def _finish_create_token(
     else:
         stream.reset(mark_tail)
 
+    granted_lines += _parse_token_trigger_sentences(stream)
+
     return ast.CreateToken(
         count=count,
         power=power.value if power is not None else None,
@@ -662,6 +664,66 @@ def _finish_create_token(
         tapped=tapped,
         attacking=attacking,
     )
+
+
+def _parse_token_trigger_sentences(stream: TokenStream) -> tuple[str, ...]:
+    """Triggered abilities of the token printed as *unquoted* sentences after it.
+
+    "Create a 1/1 green Splinter creature token. It has flying and "Cumulative
+    upkeep {G}." **When it leaves the battlefield, it deals 1 damage to you and
+    each creature you control.**" (Splintering Wind.)
+
+    The same information ``_parse_token_quoted_lines`` reads, printed without
+    the quotation marks — Magic writes a token's ability either way, and the
+    difference is typography rather than rules. So it lands in the same field
+    and is gated by the same ``token_line_supported`` check in the lowering.
+
+    **The pronoun is rewritten, and that is the whole content of this
+    production.** "When **it** leaves the battlefield" is a sentence about the
+    token, but the string handed to the compiler becomes the *token's own* text,
+    where the same referent is spelled "this creature" — the bare "it" would
+    read as the ability's source and mean the same thing here only by accident.
+    Rewriting the trigger's subject and nothing else is deliberate: every later
+    "it" in the sentence is already the token's own self-reference on a card
+    whose text this is.
+
+    Slicing the printed span rather than re-rendering the parsed tokens, for
+    :func:`_parse_token_quoted_lines`'s reason: the compiler must read the words
+    the card prints.
+
+    Returns an empty tuple and consumes nothing when no such sentence follows,
+    so every token spec that parsed before this existed parses identically.
+    """
+    lines: list[str] = []
+    while True:
+        mark = stream.mark()
+        # The full stop is *optional* because the preceding tail may already
+        # have eaten it: the "It has …" run above closes itself with one, and
+        # a bare token spec does not. Requiring it here made this production
+        # unreachable on exactly the card it was written for.
+        stream.accept_punct(".")
+        trigger = stream.peek_word()
+        if trigger not in ("when", "whenever"):
+            stream.reset(mark)
+            break
+        stream.advance()
+        # Only the singular pronoun. "They" over several tokens is a sentence no
+        # card in the pool prints here, and admitting it would make one line the
+        # text of every token the effect created without anything having said so.
+        if not stream.accept_word("it"):
+            stream.reset(mark)
+            break
+        rest_open = stream.pos
+        while not stream.exhausted and not (
+            stream.at_kind(PUNCT) and stream.peek().text == "."
+        ):
+            stream.advance()
+        rest = stream.text_between(rest_open, stream.pos)
+        if not rest:
+            stream.reset(mark)
+            break
+        lines.append(f"{trigger.capitalize()} this creature {rest}.")
+    return tuple(lines)
 
 
 def _parse_enchant(stream: TokenStream) -> ast.Statement:

@@ -156,6 +156,12 @@ def scaled_cost(instruction, counters: int) -> UpkeepCost:
         # count for exactly that reason, and listing it here is what stops the
         # escalation being silently dropped for this half of the cost.
         exile_top_of_library=printed.exile_top_of_library * counters,
+        # "Have an opponent create a 1/1 red Survivor creature token" for each
+        # age counter (Varchild's War-Riders) — the count escalates and the
+        # token does not, which is what CR 702.24a's "for each age counter"
+        # means over a cost whose content is an action.
+        opponent_token=printed.opponent_token,
+        opponent_tokens=printed.opponent_tokens * counters,
     )
 
 

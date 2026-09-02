@@ -59,6 +59,22 @@ _SELF_REGENERATION = re.compile(
 #: things that raise it cannot disagree about the spelling.
 CANT_BE_REGENERATED = "cant_be_regenerated_this_turn"
 
+#: How many times this permanent has regenerated this turn.
+#:
+#: "At the beginning of each end step, **if this creature regenerated this
+#: turn**, create a 0/1 blue Starfish creature token **for each time it
+#: regenerated this turn**." (Spiny Starfish.) A count rather than a flag,
+#: because the card asks for both readings of the same record and a boolean
+#: would answer the second one "1" however many shields were spent.
+#:
+#: Written in :func:`_apply` and nowhere else — that function is already the one
+#: place a regeneration happens, static form and shield alike, so a count kept
+#: at the two destruction paths would be the split this module was written to
+#: remove. Swept with the turn by ``mixins/_constants._EOT_METADATA_KEYS``,
+#: which runs at cleanup (CR 514.2) and therefore *after* the end step that
+#: reads it.
+REGENERATED_THIS_TURN = "regenerated_this_turn"
+
 #: "Creatures dealt damage by this creature this turn can't be regenerated this
 #: turn." (Bone Shaman grants it; Runesword's *targeted* wording is the same
 #: rule stated as a one-shot.) CR 701.19c seen from the dealer's end: it is a
@@ -171,11 +187,15 @@ def _apply(game: "Game", permanent: "Permanent", message: str) -> None:
     game.become_tapped(permanent)
     permanent.damage_marked = 0
     permanent.metadata.pop("received_deathtouch", None)
+    permanent.metadata[REGENERATED_THIS_TURN] = (
+        int(permanent.metadata.get(REGENERATED_THIS_TURN, 0)) + 1
+    )
     game.log.append(message)
 
 
 __all__ = [
     "CANT_BE_REGENERATED",
+    "REGENERATED_THIS_TURN",
     "cant_be_regenerated",
     "regeneration_replaces_destruction",
     "regenerates_itself",

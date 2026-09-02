@@ -61,6 +61,19 @@ class UpkeepCost:
     #: and no picker — only a count, and CR 118.3 makes a library holding fewer
     #: cards unable to pay it.
     exile_top_of_library: int = 0
+    #: "Cumulative upkeep—**Have an opponent create a 1/1 red Survivor creature
+    #: token**." (Varchild's War-Riders.) CR 702.24a's licence taken as far as
+    #: it goes: a cost whose payer spends *nothing at all* and whose whole
+    #: content is something an opponent does. It is a cost anyway — declining it
+    #: still sacrifices the permanent — and the payload is the ``create_token``
+    #: instruction the grammar lowers the printed sentence to, so the token this
+    #: pays with is built by the one token maker in the engine rather than by a
+    #: second reading of "1/1 red Survivor creature token".
+    #:
+    #: Paired with a count for the reason ``sacrifice``/``sacrifices`` are: the
+    #: escalation multiplies how many, never what each one is.
+    opponent_token: dict | None = None
+    opponent_tokens: int = 0
 
     def _paid_terms(self) -> list[str]:
         """The parts of the cost a player *pays*, as printed: "{1}{B}", "3
@@ -96,9 +109,25 @@ class UpkeepCost:
             f"exile the top {self.exile_top_of_library} cards of your library"
         )
 
+    def _opponent_token_term(self) -> str:
+        """"have an opponent create a 1/1 red Survivor creature token" — beside
+        the two above and for their reason: nothing is handed over, so it can
+        only be written as the thing the payer causes to happen."""
+        if not self.opponent_tokens:
+            return ""
+        name = str((self.opponent_token or {}).get("name") or "token")
+        if self.opponent_tokens == 1:
+            return f"have an opponent create a {name}"
+        return f"have an opponent create {self.opponent_tokens} {name}s"
+
     def _action_terms(self) -> list[str]:
         return [
-            term for term in (self._sacrifice_term(), self._library_exile_term())
+            term
+            for term in (
+                self._sacrifice_term(),
+                self._library_exile_term(),
+                self._opponent_token_term(),
+            )
             if term
         ]
 
@@ -139,6 +168,9 @@ class UpkeepCost:
             out["sacrifices"] = self.sacrifices
         if self.exile_top_of_library:
             out["exile_top_of_library"] = self.exile_top_of_library
+        if self.opponent_tokens:
+            out["opponent_token"] = dict(self.opponent_token or {})
+            out["opponent_tokens"] = self.opponent_tokens
         return out
 
 
@@ -156,6 +188,8 @@ def cost_from_payload(payload: dict) -> UpkeepCost:
         sacrifice=payload.get("sacrifice"),
         sacrifices=int(payload.get("sacrifices") or 0),
         exile_top_of_library=int(payload.get("exile_top_of_library") or 0),
+        opponent_token=payload.get("opponent_token"),
+        opponent_tokens=int(payload.get("opponent_tokens") or 0),
     )
 
 
@@ -198,6 +232,45 @@ _LIBRARY_EXILE_PHRASE = re.compile(
 )
 
 
+#: "have an opponent create a 1/1 red Survivor creature token" — CR 702.24a's
+#: Alliances shape (Varchild's War-Riders). The clause after the wrapper is an
+#: ordinary printed effect sentence and is read by **the grammar**, never by a
+#: pattern here: "1/1 red Survivor creature token" already has one reader in
+#: this engine, and a second one would be free to disagree with it about what a
+#: Survivor is.
+_OPPONENT_ACTION_PHRASE = re.compile(r"^have an opponent (?P<clause>.+)$")
+
+
+def _opponent_token_cost(clause: str) -> UpkeepCost | None:
+    """The cost "have an opponent <clause>" names, or None.
+
+    Only a token creation today, and the narrowing is deliberate: what the
+    payment does is *execute the lowered instruction*, so a clause lowering to
+    anything the payment path has not been shown to be safe for — a draw, a
+    sacrifice, a search — would be run against an opponent's seat by a function
+    that never considered it. A wider clause refuses here and costs its card
+    support, which is the loud direction.
+    """
+    from .grammar import compile_line
+
+    compiled = compile_line(clause[0].upper() + clause[1:] + ".")
+    if not compiled.usable or len(compiled.instructions) != 1:
+        return None
+    instruction = compiled.instructions[0]
+    if instruction.kind != "create_token":
+        return None
+    payload = dict(instruction.payload)
+    # The count is the cost's, because it is what escalates. A payload naming
+    # its own recipient or reading its count off the board is a sentence this
+    # wrapper cannot re-aim, so it refuses rather than paying something else.
+    count = payload.pop("count", 1)
+    if not isinstance(count, int) or count < 1:
+        return None
+    if payload.keys() & {"recipient", "recipient_players", "power_from", "toughness_from"}:
+        return None
+    return UpkeepCost(opponent_token=payload, opponent_tokens=count)
+
+
 def upkeep_cost_from_phrase(phrase: str) -> UpkeepCost | None:
     """The cost a printed cost phrase names, or None when this engine cannot
     collect all of it.
@@ -209,6 +282,9 @@ def upkeep_cost_from_phrase(phrase: str) -> UpkeepCost | None:
     text = phrase.strip().rstrip(".").strip()
     if not text:
         return None
+    opponent_action = _OPPONENT_ACTION_PHRASE.match(text)
+    if opponent_action is not None:
+        return _opponent_token_cost(opponent_action.group("clause"))
     library_exile = _LIBRARY_EXILE_PHRASE.match(text)
     if library_exile is not None:
         word = library_exile.group("count")

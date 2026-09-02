@@ -379,9 +379,21 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # it, because the card it asks about has already left the zone the effect
     # took it from (CR 608.2h). Which object "it" names is lowering's question,
     # not the parser's — the parser cannot see the sentence in front of it.
+    #
+    # Guarded and reset, because "it was" is **not** unambiguous: "if it **was
+    # blocked this turn**" (Fyndhorn Druid) opens with the same two words and is
+    # a question about a combat record, not about a card that left a zone. This
+    # branch used to consume the pronoun unconditionally and let the noun parser
+    # raise, so that clause failed as "expected a subject" — a refusal naming
+    # the wrong layer — and no later production could ever see it.
+    it_was_mark = stream.mark()
     if stream.accept_phrase("it", "was"):
         stream.accept_word("a", "an")
-        return ast.ItWas(parse_object_filter(stream))
+        try:
+            return ast.ItWas(parse_object_filter(stream))
+        except GrammarError:
+            pass
+    stream.reset(it_was_mark)
 
     # "Exile the top card of your library. **If that card is a land card**, …"
     # (Chaos Harlequin.) The same back-reference with the pronoun's noun spelled
@@ -802,6 +814,19 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             return ast.IsState(subject, "attacked_this_turn", negated=True)
         if stream.accept_phrase("attacked", "this", "turn"):
             return ast.IsState(subject, "attacked_this_turn")
+        # "…**was blocked this turn**" (Fyndhorn Druid). CR 509.1a's relation
+        # from the attacker's end, over the whole turn rather than the current
+        # combat — which is why it is not the present-tense "it's blocked" the
+        # table above would give: the creature this asks about is usually dead
+        # by the time the question is asked, and a creature blocked in the first
+        # combat is still one in the second main phase.
+        if stream.accept_phrase("was", "blocked", "this", "turn"):
+            return ast.IsState(subject, "was_blocked_this_turn")
+        # "…**regenerated this turn**" (Spiny Starfish). A record of the turn
+        # like the two above, kept by ``engine/regeneration._apply`` — the one
+        # place a regeneration happens — and read here as its presence half.
+        if stream.accept_phrase("regenerated", "this", "turn"):
+            return ast.IsState(subject, "regenerated_this_turn")
     stream.reset(state_mark)
 
     raise stream.error("unrecognized condition")

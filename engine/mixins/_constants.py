@@ -115,6 +115,11 @@ _EOT_METADATA_KEYS = (
     # (Glyph of Reincarnation). Swept with the ids it keys, or a later turn's
     # sentence would read a seat from a block that is no longer in the window.
     "blocked_attacker_controllers_this_turn",
+    # How many times a permanent regenerated this turn (Spiny Starfish), written
+    # by ``engine/regeneration._apply``. Swept here rather than by a turn stamp
+    # for the same reason its neighbours are: the window the card prints is one
+    # turn, and the sweep is the only thing that says so.
+    "regenerated_this_turn",
 )
 
 _TURN_PHASES: tuple[str, ...] = (

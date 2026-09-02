@@ -121,17 +121,35 @@ def _parse_leading_static_condition_line(
     — so which half of the line the condition was printed on cannot change what
     the ability means.
 
-    **Restricted to the counter-count condition**, and the restriction is the
-    ordering rule rather than a convenience. ``engine/static_bonuses.py`` reads
-    this exact word order ("As long as you control a Swamp, this creature gets
-    +1/+1") as a derivation table, which the grammar reaches only where every
-    production refuses the line *in full* (``engine/grammar/derived.py``). A
-    production that read every leading condition would parse those sentences
-    and then refuse them in lowering — parsed-but-unlowered is still parsed —
-    and take the table's lines away. The counter count is the one condition
-    that table cannot read at all: it has no row for it, and its effect side is
-    anchored on the literal subject "this creature ", which "it gets -1/-1"
-    is not.
+    ``As long as <state of the source>, <anthem>.`` ("As long as this creature
+    is untapped, green creatures you control get +1/+1." — Juniper Order
+    Advocate.) The same node with a different condition and a *set* in place of
+    the single subject, so which half of the line the condition was printed on
+    still cannot change what the ability means.
+
+    **Restricted to two shapes**, and the restriction is the ordering rule
+    rather than a convenience. ``engine/static_bonuses.py`` reads this exact
+    word order ("As long as you control a Swamp, this creature gets +1/+1") as a
+    derivation table, which the grammar reaches only where every production
+    refuses the line *in full* (``engine/grammar/derived.py``). A production
+    that read every leading condition would parse those sentences and then
+    refuse them in lowering — parsed-but-unlowered is still parsed — and take
+    the table's lines away. So each admitted shape has to be one that table
+    cannot read at all:
+
+    - the **counter count**, which it has no row for, and whose effect side
+      ("it gets -1/-1") is not the literal subject "this creature " its own
+      pattern is anchored on;
+    - any condition over a **distributive** subject, which that table cannot
+      read for the same anchoring reason from the other end — its effect half
+      *is* "this creature ", so "green creatures you control get +1/+1" is a
+      sentence it declines whatever the condition says. That is also the one
+      shape ``lord_buffs`` exists for, and the trailing word order of it
+      already lowers through :func:`statics._lower_static_ability`'s
+      conditional branch.
+
+    A condition the anthem lowering cannot evaluate still refuses — there, by
+    name — and the line falls back to the ordinary path with nothing consumed.
     """
     mark = stream.mark()
     if not stream.accept_phrase("as", "long", "as"):
@@ -139,9 +157,6 @@ def _parse_leading_static_condition_line(
     try:
         condition = _parse_condition(stream)
     except GrammarError:
-        stream.reset(mark)
-        return None
-    if not isinstance(condition, ast.SourceCounterCount):
         stream.reset(mark)
         return None
     if not stream.accept_punct(","):
@@ -154,6 +169,11 @@ def _parse_leading_static_condition_line(
         return None
     stream.accept_punct(".")
     if not stream.exhausted or not _looks_static(statement):
+        stream.reset(mark)
+        return None
+    if not isinstance(condition, ast.SourceCounterCount) and (
+        _distributive_subject(statement) is None
+    ):
         stream.reset(mark)
         return None
     return ast.StaticAbilityNode(statement, condition)

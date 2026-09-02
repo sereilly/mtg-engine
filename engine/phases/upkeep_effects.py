@@ -180,7 +180,8 @@ class UpkeepEffectsMixin:
             paid = self.can_pay_upkeep_cost(controller, cost, purpose=purpose)
         if paid:
             self.pay_upkeep_cost(
-                controller, cost, reason=permanent.card.name, purpose=purpose
+                controller, cost, reason=permanent.card.name, purpose=purpose,
+                source=permanent,
             )
             self.log.append(
                 f"{controller.name} paid cumulative upkeep "
