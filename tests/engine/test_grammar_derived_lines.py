@@ -194,6 +194,17 @@ def test_combat_restrictions_match_the_derivation_table_exactly():
         # `can_attack` and the grammar has no production, so the line fails the
         # parser — the same shape and the same reason as the two above.
         "creatures_that_attacked_last_turn_cant_attack",
+        # Koskun Falls: "Creatures can't attack you unless their controller
+        # pays {2} **for each creature they control that's attacking you**."
+        # A per-attacker scaling toll, so the cost is not knowable until the
+        # whole declaration is: the table implements it in
+        # `declare_attackers_step`, where the seat and the attacker list are
+        # both in hand, and the grammar has no production — so the line
+        # fails the parser and the table is its only implementer. Listed at
+        # HML's promotion for the reason the row above gives: the guard
+        # reads the *shipped* pool, so a measured set's new kind arrives
+        # here the day it ships.
+        "creatures_cant_attack_you_unless_pay",
     }
 
     compared = 0

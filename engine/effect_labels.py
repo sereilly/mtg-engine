@@ -40,6 +40,17 @@ from __future__ import annotations
 # Instruction kind -> label, for an ability the grammar reads in the **activated**
 # position (the clause right of an ability's colon).
 ACTIVATED_LABELS: dict[str, str] = {
+    # --- Homelands ------------------------------------------------------
+    # An enchantment any player may destroy by paying life (Aether Storm),
+    # the expansion sweep Golgothian Sylex already had a production for
+    # (Apocalypse Chime), the shroud waiver Autumn Willow grants one seat,
+    # and Torture's counters onto the creature it enchants. Labels rather
+    # than dispatch: this is the vocabulary `SimulationResult`, the support
+    # report's buckets and the web layer's `is_triggered` prefix read.
+    "destroy_self": "activated_destroy",
+    "destroy_all_matching": "activated_destroy",
+    "waive_shroud_for_target_player": "activated_targeting",
+    "add_pt_counters_to_attached": "activated_counters",
     # --- The Dark ---
     # Declared rather than defaulted, for the reason the whole table exists: the
     # category default would bucket each of these by the *grammar family* its
@@ -370,6 +381,16 @@ ACTIVATED_LABELS: dict[str, str] = {
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
 # position (the clause after a trigger condition).
 TRIGGERED_LABELS: dict[str, str] = {
+    # --- Homelands ------------------------------------------------------
+    # Two untap denials whose trigger is a combat moment rather than an
+    # upkeep (Labyrinth Minotaur blocks, Spectral Bears attacks), the
+    # block-pair counter Greater Werewolf places at end of combat, and the
+    # first strike Mammoth Harness hands the *other* creature in a block.
+    # `skip_next_untap` is a tap-family effect and the keyword grant a pump
+    # one, matching the spellings the two families already use above.
+    "skip_next_untap": "triggered_tap",
+    "add_named_counter_to_creatures_in_combat_with_source": "triggered_counter",
+    "grant_keyword_to_block_pair": "triggered_pump",
     # Mishra's War Machine / Minion of Leshrac. The bucket the card hook
     # carried before the grammar read the template, kept across the retirement
     # so the support report does not silently re-bucket a shipped card — which

@@ -20,7 +20,8 @@ import pytest
 from engine.auras import aura_effect_claim, unclaimed_aura_lines
 from engine.card_loader import load_catalog
 from engine.models import CardDefinition
-from engine.oracle import compile_card_oracle, normalize_creature_line
+from engine.oracle import (compile_card_oracle, expand_ability_lines,
+                          normalize_creature_line)
 
 
 def _aura(text: str, name: str = "Probe Aura") -> CardDefinition:
@@ -83,7 +84,18 @@ def test_303_4_every_aura_in_the_pool_has_all_its_effect_lines_claimed():
     for card in load_catalog():
         if "aura" not in card.type_line.lower():
             continue
-        lines = [normalize_creature_line(l) for l in card.oracle_text.split("\n")]
+        # **From `expand_ability_lines`, not from the printed text.** That
+        # function is where a keyword or a conjoined trigger is rewritten
+        # into the lines every other reader is held to, and CLAUDE.md says
+        # every reader of a card's lines must start there or it is reading
+        # a different card. This one did not, and HML collected on it at the
+        # promotion gate: Orcish Mine prints "At the beginning of your
+        # upkeep **and** whenever enchanted land becomes tapped, remove an
+        # ore counter", which the rewrite splits into the two triggers the
+        # claim table implements — so the card works and this guard reported
+        # its printed line as implemented by nothing.
+        expanded = expand_ability_lines(card.oracle_text)
+        lines = [normalize_creature_line(l) for l in expanded.split("\n")]
         for line in unclaimed_aura_lines(lines, card.name):
             unclaimed.append((card.name, line))
     assert not unclaimed, "Aura effect lines nothing implements:\n" + "\n".join(

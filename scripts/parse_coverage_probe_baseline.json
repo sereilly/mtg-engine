@@ -23,6 +23,13 @@
   ]
  },
  {
+  "card": "Anaba Ancestor",
+  "clause": "another target minotaur creature gets +1/+1 until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Anarchy",
   "clause": "destroy all white permanents",
   "ignored": [
@@ -34,6 +41,13 @@
   "clause": "put a +1/+1 counter on target bird, cat, dog, goat, ox, or snake",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Apocalypse Chime",
+  "clause": "destroy all nontoken permanents with a name originally printed in the homelands expansion. they can't be regenerated",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -55,6 +69,13 @@
   "clause": "choose a player who cast one or more sorcery spells this turn. backdraft deals damage to that player equal to half the damage dealt by one of those sorcery spells this turn, rounded down",
   "ignored": [
    "down"
+  ]
+ },
+ {
+  "card": "Baki's Curse",
+  "clause": "baki's curse deals 2 damage to each creature for each aura attached to that creature",
+  "ignored": [
+   "baki's"
   ]
  },
  {
@@ -157,6 +178,13 @@
   ]
  },
  {
+  "card": "Didgeridoo",
+  "clause": "you may put a minotaur permanent card from your hand onto the battlefield",
+  "ignored": [
+   "permanent"
+  ]
+ },
+ {
   "card": "Drain Life",
   "clause": "drain life deals x damage to any target. you gain life equal to the damage dealt, but not more life than the player's life total before the damage was dealt, the planeswalker's loyalty before the damage was dealt, or the creature's toughness",
   "ignored": [
@@ -179,6 +207,20 @@
   ]
  },
  {
+  "card": "Drudge Spell",
+  "clause": "destroy all skeleton tokens. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Dry Spell",
+  "clause": "dry spell deals 1 damage to each creature and each player",
+  "ignored": [
+   "dry"
+  ]
+ },
+ {
   "card": "Dwarven Catapult",
   "clause": "dwarven catapult deals x damage divided evenly, rounded down, among all creatures target opponent controls",
   "ignored": [
@@ -195,6 +237,13 @@
  {
   "card": "Dwarven Lieutenant",
   "clause": "target dwarf creature gets +1/+0 until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Dwarven Pony",
+  "clause": "target dwarf creature gains mountainwalk until end of turn",
   "ignored": [
    "creature"
   ]
@@ -242,11 +291,26 @@
   ]
  },
  {
+  "card": "Evaporate",
+  "clause": "evaporate deals 1 damage to each white and/or blue creature",
+  "ignored": [
+   "each",
+   "and/or"
+  ]
+ },
+ {
   "card": "Experimental Overload",
   "clause": "create an x/x blue and red weird creature token, where x is the number of instant and sorcery cards in your graveyard. then you may return an instant or sorcery card from your graveyard to your hand. exile experimental overload",
   "ignored": [
    "cards",
    "or"
+  ]
+ },
+ {
+  "card": "Faerie Noble",
+  "clause": "other faerie creatures you control get +1/+0 until end of turn",
+  "ignored": [
+   "creatures"
   ]
  },
  {
@@ -321,6 +385,13 @@
   ]
  },
  {
+  "card": "Giant Albatross",
+  "clause": "you may pay {1}{u}. if you do, for each creature that dealt damage to this creature this turn, destroy that creature unless its controller pays 2 life. a creature destroyed this way can't be regenerated",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Glyph of Doom",
   "clause": "choose target wall creature. at this turn's next end of combat, destroy all creatures that were blocked by that creature this turn",
   "ignored": [
@@ -371,10 +442,25 @@
   ]
  },
  {
+  "card": "Greater Werewolf",
+  "clause": "put a -0/-2 counter on each creature blocking or blocked by this creature",
+  "ignored": [
+   "each",
+   "creature"
+  ]
+ },
+ {
   "card": "Hazezon Tamar",
   "clause": "exile all sand warriors",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Heart Wolf",
+  "clause": "target dwarf creature gets +2/+0 and gains first strike until end of turn. when that creature leaves the battlefield this turn, sacrifice this creature",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -455,6 +541,14 @@
   ]
  },
  {
+  "card": "Joven's Ferrets",
+  "clause": "tap all creatures that blocked this creature this turn. they don't untap during their controller's next untap step",
+  "ignored": [
+   "all",
+   "creature"
+  ]
+ },
+ {
   "card": "Kjeldoran Frostbeast",
   "clause": "destroy all creatures blocking or blocked by this creature",
   "ignored": [
@@ -481,6 +575,13 @@
   "clause": "target opponent loses 2 life for each creature card in their graveyard",
   "ignored": [
    "card"
+  ]
+ },
+ {
+  "card": "Mammoth Harness",
+  "clause": "the other creature gains first strike until end of turn",
+  "ignored": [
+   "other"
   ]
  },
  {
@@ -630,6 +731,13 @@
   ]
  },
  {
+  "card": "Rysorian Badger",
+  "clause": "you may exile up to two target creature cards from defending player's graveyard. if you do, you gain 1 life for each card exiled this way and this creature assigns no combat damage this turn",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
   "card": "Sacred Boon",
   "clause": "prevent the next 3 damage that would be dealt to target creature this turn. at the beginning of the next end step, put a +0/+1 counter on that creature for each 1 damage prevented this way",
   "ignored": [
@@ -651,10 +759,24 @@
   ]
  },
  {
+  "card": "Sengir Autocrat",
+  "clause": "exile all serf tokens",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Sentinel",
   "clause": "change this creature's base toughness to 1 plus the power of target creature blocking or blocked by this creature",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Serrated Arrows",
+  "clause": "if there are no arrowhead counters on this artifact, sacrifice it",
+  "ignored": [
+   "artifact,"
   ]
  },
  {
@@ -698,6 +820,13 @@
   "clause": "add {b} for each creature card in your graveyard",
   "ignored": [
    "card"
+  ]
+ },
+ {
+  "card": "Soraya the Falconer",
+  "clause": "target bird creature gains banding until end of turn",
+  "ignored": [
+   "creature"
   ]
  },
  {
@@ -905,6 +1034,13 @@
   "clause": "all creatures lose flying until end of turn",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Willow Priestess",
+  "clause": "you may put a faerie permanent card from your hand onto the battlefield",
+  "ignored": [
+   "permanent"
   ]
  },
  {

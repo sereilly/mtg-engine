@@ -8,6 +8,7 @@
     "Crimson Kobolds",
     "Crookshank Kobolds",
     "Durkwood Boars",
+    "Dwarven Trader",
     "Earth Elemental",
     "Fire Elemental",
     "Garruk's Gorehorn",
@@ -56,7 +57,8 @@
     "Flying Men",
     "Phantom Monster",
     "Roc of Kher Ridges",
-    "Scryb Sprites"
+    "Scryb Sprites",
+    "Willow Faerie"
   ],
   [
     "Elvish Archers",
@@ -131,6 +133,13 @@
     "Wooden Sphere"
   ],
   [
+    "Divine Transformation",
+    "Feast of the Unicorn",
+    "Giant Strength",
+    "Holy Strength",
+    "Unholy Strength"
+  ],
+  [
     "Dwarven Song",
     "Heaven's Gate",
     "Sea Kings' Blessing",
@@ -151,15 +160,14 @@
     "Thoughtlace"
   ],
   [
-    "Divine Transformation",
-    "Giant Strength",
-    "Holy Strength",
-    "Unholy Strength"
-  ],
-  [
     "Darkness",
     "Fog",
     "Holy Day"
+  ],
+  [
+    "Death Speakers",
+    "Ihsan's Shade",
+    "Repentant Blacksmith"
   ],
   [
     "Devouring Deep",
@@ -182,12 +190,24 @@
     "Zelyon Sword"
   ],
   [
+    "Abbey Gargoyles",
+    "Sea Sprite"
+  ],
+  [
     "Adarkar Sentinel",
     "Dragon Engine"
   ],
   [
     "Aladdin's Ring",
     "Rod of Ruin"
+  ],
+  [
+    "Aliban's Tower",
+    "Righteousness"
+  ],
+  [
+    "Anaba Bodyguard",
+    "Tundra Wolves"
   ],
   [
     "Armor of Faith",
@@ -226,8 +246,16 @@
     "Counterspell"
   ],
   [
+    "Carapace",
+    "Thrull Retainer"
+  ],
+  [
     "Cat Warriors",
     "Shanodin Dryads"
+  ],
+  [
+    "Cemetery Gate",
+    "Wall of Light"
   ],
   [
     "Clay Statue",
@@ -272,6 +300,10 @@
   [
     "Goblin Mutant",
     "Orgg"
+  ],
+  [
+    "Grasp of Darkness",
+    "Shrink"
   ],
   [
     "Hell Swarm",

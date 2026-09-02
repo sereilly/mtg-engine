@@ -10,14 +10,16 @@ JSON per set, registered in `cards/manifest.json` (the single source of truth
 for which sets ship): Limited Edition Alpha (290 cards), Limited Edition Beta
 (292), Unlimited Edition (292 — same list as Beta), Arabian Nights (78),
 Antiquities (85), Revised Edition (296), Legends (310), The Dark (119),
-Fallen Empires (102), Fourth Edition (368), Ice Age (373) and Core Set 2021
-(285), 1,610 unique cards, all classified as supported. **Twelve sets, and
-their sizes are the whole spread**: 4ED is a pure reprint set, every one of its
-cards already in the pool, so it is the one set that ships without implementing
-a card; Ice Age is the largest ever ingested and brought **346 new cards**, more
-than any set since Alpha; and Fallen Empires is the smallest work set yet, 102
-cards of which every single one was new. Which is why the per-set totals sum to
-far more than 1,610 — they are printings. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
+Fallen Empires (102), Fourth Edition (368), Ice Age (373), Homelands (115) and
+Core Set 2021 (285), 1,725 unique cards, all classified as supported.
+**Thirteen sets, and their sizes are the whole spread**: 4ED is a pure reprint
+set, every one of its cards already in the pool, so it is the one set that ships
+without implementing a card; Ice Age is the largest ever ingested and brought
+**346 new cards**, more than any set since Alpha; and Fallen Empires is the
+smallest work set yet, 102 cards of which every single one was new. Homelands
+is the second set after FEM to bring nothing but new cards — 115 of 115, with
+zero overlap with the 1,610 already here. Which is why the per-set totals sum to
+far more than 1,725 — they are printings. `scripts/support_report.py` reports on the whole manifest pool, not one set. Card files hold only the fields
 the engine and web layer read; `scripts/ingest_set.py` produces them. The
 engine is **registry-based**: card support grows by adding small isolated
 entries, never by editing core control flow.
@@ -30,8 +32,8 @@ can be read *before* the work of supporting it is done: the coverage instruments
 load it (`manifest_set_paths(include_measured=True)`), `load_catalog` does not,
 and no player can put one of its cards in a deck. **It is empty today** — M21
 went in under it at 58% supported, Antiquities at 56.5%, Legends at 32.9%, The
-Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3% and Fallen Empires at
-67.6%, and all seven were promoted to `sets`
+Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
+67.6% and Homelands at 66.1%, and all eight were promoted to `sets`
 once every card was, which is the role working as designed rather than a role
 nobody uses. 4ED is the degenerate case that shows what the role is *for*
 rather than an exception to it: it entered `measured` fully supported and left
@@ -836,11 +838,11 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (472 of the 1,610 catalog cards passing — 385
-checked in-game and 87 auto-passed — with 19 more reported `equivalent`; the
-rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age and Fallen
-Empires, all six promoted before their in-game pass — have no recorded result
-yet, which
+manually validated in-game (488 of the 1,725 catalog cards passing — 390
+checked in-game and 98 auto-passed — with 21 more reported `equivalent`; the
+rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
+Empires and Homelands, all seven promoted before their in-game pass — have no
+recorded result yet, which
 SET_PLAYBOOK.md Phase 5 owns and deliberately does not gate promotion on; the
 summary at the top of the markdown is the current number). Fourth Edition is
 the one promotion that did not add to that backlog, because it added no card to
