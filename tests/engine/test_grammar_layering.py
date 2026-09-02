@@ -360,7 +360,20 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # split. Asymmetric like `zones`, `types`, `destruction` and `counter_removal`:
 # the parse side stays in `effects/tapping.py`, where "tap it" and "it doesn't
 # untap" are printed in one sentence on Frost Breath, Telekinesis and Mind Whip.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "types", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions"]
+LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "types", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops"]
+# `loops` is the fifth lowering-only family and it split off `control_flow.py`
+# when that module reached the guard below. The line is the one that module's
+# own docstring already drew: `control_flow` is named after the *composers* —
+# `sequence`, `may`, `one_of` — which decide whether and in what order a
+# sentence runs, while a loop decides how many times, and what it iterates is a
+# **set**: seats in turn order (CR 101.4), permanents the board holds as the
+# ability resolves (CR 611.2c), or a number an earlier step recorded. One
+# question with one answer, which is why the three lowerings there produce one
+# `for_each` instruction with three iterator payloads. Nothing in `loops` reads
+# an offer and nothing left in `control_flow` reads a set, so neither imports
+# the other. `effects/` and `ast/` have no `loops` for `upkeep`'s reason: the
+# guard fired on the lowerings, and `ForEach` is one node that sits perfectly
+# well beside the other statement nodes.
 # `upkeep` is the fourth lowering-only family and the fourth time the same thing
 # happened: `lowering/damage.py` reached the guard below and shed the
 # pay-or-consequence shapes — the damage a player is *offered the chance not to

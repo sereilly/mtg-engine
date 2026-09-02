@@ -694,3 +694,72 @@ def test_only_the_ending_permanents_own_abilities_end():
     game.resolve_draw_step(0)
     game._settle()
     assert p1.life == 21
+
+
+# --- W1G5: the cleanup step's own delayed event ---
+
+
+@pytest.mark.cr("603.7", "514.3a")
+def test_an_ability_can_wait_for_the_next_cleanup_step():
+    """CR 514.3a names this ability shape in the rule itself: the cleanup step's
+    exception to "no player receives priority" exists *because* a trigger can be
+    waiting for it ("including those that trigger 'at the beginning of the next
+    cleanup step'")."""
+    game, p1, _p2, _watched = _board()
+    game.delayed_triggers.append(DelayedTrigger(
+        controller_index=0, event="next_cleanup_step",
+        instruction=_gain_life(3), card=_SOURCE,
+        duration="until_it_triggers",
+    ))
+
+    game.resolve_cleanup_step(0)
+
+    assert p1.life == 23
+    assert game.delayed_triggers == []
+
+
+@pytest.mark.cr("514.2", "514.3a", "603.7b")
+def test_the_cleanup_delay_survives_the_sweep_that_runs_in_the_same_step():
+    """CR 514.2 ends "this turn" effects and CR 514.3a looks for triggers
+    *after* that, so the two happen in one step in that order.
+
+    An entry that named this step must not be swept by the sweep that runs
+    before it, and one scoped to "this turn" must not be woken by an
+    announcement that comes after: those are the two halves of the same
+    ordering, and getting either wrong is silent — a delayed ability that never
+    fires looks exactly like one that was never created."""
+    game, p1, _p2, watched = _board()
+    game.delayed_triggers.append(DelayedTrigger(
+        controller_index=0, event="next_cleanup_step",
+        instruction=_gain_life(3), card=_SOURCE,
+        duration="until_it_triggers",
+    ))
+    game.delayed_triggers.append(DelayedTrigger(
+        controller_index=0, event="bound_permanent_dies",
+        instruction=_gain_life(7), card=_SOURCE,
+        bound_permanent_id=watched.permanent_id, duration="end_of_turn",
+    ))
+
+    game.resolve_cleanup_step(0)
+
+    assert p1.life == 23
+    assert game.delayed_triggers == []
+
+
+@pytest.mark.cr("514.3a")
+def test_the_cleanup_delay_is_unseated():
+    """CR 514 gives every turn a cleanup step, and "the next cleanup step" is
+    whichever comes next — not one of the ability's controller's. Announced
+    unseated for `next_end_step`'s reason and told apart from
+    `controllers_next_upkeep` by exactly that."""
+    game, p1, _p2, _watched = _board()
+    game.delayed_triggers.append(DelayedTrigger(
+        controller_index=0, event="next_cleanup_step",
+        instruction=_gain_life(3), card=_SOURCE,
+        duration="until_it_triggers",
+    ))
+
+    game.active_player_index = 1
+    game.resolve_cleanup_step(1)
+
+    assert p1.life == 23

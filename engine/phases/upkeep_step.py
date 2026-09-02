@@ -919,6 +919,52 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                     },
                 })
 
+        # …and of a card that is in a **graveyard** (CR 113.6b). "At the
+        # beginning of your upkeep, if this card is in your graveyard with a
+        # creature card directly above it, you may pay {1}." (Death Spark.)
+        #
+        # The exile scan's twin one zone over, and beside it rather than folded
+        # into it for that scan's reason: neither zone's objects are permanents,
+        # so ``permanents_with_controller()`` cannot reach them, and what the
+        # three scans share is the event rather than the walk. The end step has
+        # had this scan since Silversmote Ghoul; the upkeep had none at all, so
+        # a graveyard-functioning upkeep trigger compiled clean and was
+        # announced by nothing — the failure ``engine/events.py`` exists to
+        # describe, one step over from where it was fixed.
+        #
+        # Scoped to this upkeep's own player, which is what "your" means for a
+        # card nobody controls (CR 108.4a: the controller of a card that has none
+        # is its owner). The intervening-if **is** pre-checked, as the end step's
+        # graveyard scan pre-checks it and for CR 603.4's reason: the condition
+        # is what says the ability functions at all, and a trigger that went on
+        # the stack from a graveyard position it never had would be announced to
+        # every player before being silently removed.
+        # Imported here rather than at module scope, exactly as the end step's
+        # copy of this scan is: ``handlers.control_flow`` dispatches back
+        # through ``EFFECT_HANDLERS``, so a module-level import closes the cycle.
+        from ..events import graveyard_trigger_events
+        from ..game_types import OracleExecutionContext
+        from ..handlers.control_flow import evaluate_condition
+
+        for grave_event in graveyard_trigger_events(
+            self, "upkeep_self", [self.players[player_index]]
+        ):
+            grave_gate = (grave_event["instruction"].payload or {}).get(
+                "intervening_if"
+            )
+            if grave_gate is not None and not evaluate_condition(
+                self,
+                OracleExecutionContext(
+                    caster=self.players[player_index],
+                    target=self.players[player_index],
+                    card=grave_event["card"],
+                ),
+                grave_gate,
+            ):
+                continue
+            grave_event["trigger_context"] = {"event_subject_player": player_index}
+            upkeep_events.append(grave_event)
+
         # Handle enchant-land auras with optional upkeep life gain (e.g. Farmstead)
         for permanent in self.all_permanents():
             if permanent.card.primary_type != "enchantment":

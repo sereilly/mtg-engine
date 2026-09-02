@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**342 / 612 tracked rules covered (55%)** — 1809 tests, 0 unannotated.
+**345 / 612 tracked rules covered (56%)** — 1815 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [105. Colors](#105-colors) | 2/5 | 40% |
 | [106. Mana](#106-mana) | 5/13 | 38% |
 | [107. Numbers and Symbols](#107-numbers-and-symbols) | 5/18 | 27% |
-| [108. Cards](#108-cards) | 1/6 | 16% |
+| [108. Cards](#108-cards) | 2/6 | 33% |
 | [109. Objects](#109-objects) | 1/5 | 20% |
 | [110. Permanents](#110-permanents) | 0/5 | 0% |
 | [111. Tokens](#111-tokens) | 5/13 | 38% |
@@ -46,11 +46,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [305. Lands](#305-lands) | 3/9 | 33% |
 | [306. Planeswalkers](#306-planeswalkers) | 9/9 | 100% |
 | [307. Sorceries](#307-sorceries) | 1/5 | 20% |
-| [400. General](#400-general) | 5/12 | 41% |
+| [400. General](#400-general) | 6/12 | 50% |
 | [401. Library](#401-library) | 4/7 | 57% |
 | [402. Hand](#402-hand) | 3/3 | 100% |
 | [403. Battlefield](#403-battlefield) | 3/5 | 60% |
-| [404. Graveyard](#404-graveyard) | 1/3 | 33% |
+| [404. Graveyard](#404-graveyard) | 2/3 | 66% |
 | [405. Stack](#405-stack) | 6/6 | 100% |
 | [406. Exile](#406-exile) | 2/8 | 25% |
 | [407. Ante](#407-ante) | 4/4 | 100% |
@@ -194,7 +194,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **108.1** Use the Oracle card reference when determining a card’s wording. A card’s Oracle text can be foun...
 - [ ] **108.2** When a rule or text on a card refers to a “card,” it means only a Magic card or an object represe...
 - [x] **108.3** The owner of a card in the game is the player who started the game with it in their deck. If a ca... *(8 tests)*
-- [ ] **108.4** A card doesn’t have a controller unless that card represents a permanent or spell; in those cases...
+- [x] **108.4** A card doesn’t have a controller unless that card represents a permanent or spell; in those cases... *(1 tests, subrules a)*
 - [ ] **108.5** Nontraditional Magic cards can’t start the game in any zone other than the command zone (see rule...
 - [ ] **108.6** For more information about cards, see section 2, “Parts of a Card.”
 
@@ -244,7 +244,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **113.3** There are four general categories of abilities:
 - [ ] **113.4** Some activated abilities and some triggered abilities are mana abilities. Mana abilities follow s...
 - [ ] **113.5** Some activated abilities are loyalty abilities. Loyalty abilities follow special rules: A player ...
-- [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(5 tests, subrules m)*
+- [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(6 tests, subrules bm)*
 - [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(4 tests, subrules a)*
 - [ ] **113.8** The controller of an activated ability on the stack is the player who activated it. The controlle...
 - [ ] **113.9** Activated and triggered abilities on the stack aren’t spells, and therefore can’t be countered by...
@@ -480,7 +480,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha... *(4 tests)*
 - [x] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that... *(4 tests)*
 - [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(6 tests)*
-- [ ] **400.4** Cards with certain card types can’t enter certain zones.
+- [x] **400.4** Cards with certain card types can’t enter certain zones. *(1 tests)*
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(1 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
 - [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(10 tests)*
@@ -518,7 +518,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **404.1** A player’s graveyard is their discard pile. Any object that’s countered, discarded, destroyed, or... *(4 tests)*
 - [ ] **404.2** Each graveyard is kept in a single face-up pile. A player can examine the cards in any graveyard ...
-- [ ] **404.3** If an effect or rule puts two or more cards into the same graveyard at the same time, the owner o...
+- [x] **404.3** If an effect or rule puts two or more cards into the same graveyard at the same time, the owner o... *(2 tests)*
 
 ### 405. Stack
 
@@ -656,13 +656,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 514. Cleanup Step
 
 - [x] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev... *(6 tests)*
-- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(4 tests)*
-- [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(1 tests)*
+- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(5 tests)*
+- [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(4 tests, subrules a)*
 
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(133 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(134 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(10 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -685,7 +685,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(4 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(6 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(2 tests, subrules c)*
-- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(26 tests, subrules bcde)*
+- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(28 tests, subrules bcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(3 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
 - [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(5 tests, subrules a)*

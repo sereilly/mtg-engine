@@ -159,6 +159,25 @@ DELAYED_EVENTS: dict[str, str] = {
     # cantrip that drew a turn late would be the wrong card. So it is announced
     # unseated, exactly as `next_end_step` is and for the same reason.
     "next_turns_upkeep": "the upkeep step",
+    # "…at the beginning of **the next cleanup step**" (Thawing Glaciers,
+    # Bounty of the Hunt). CR 514.3a names this ability shape in the rule
+    # itself — the cleanup step's own exception to "no player receives
+    # priority" exists *because* a trigger can be waiting for it.
+    #
+    # Unseated, like `next_end_step` and `next_turns_upkeep` and for their
+    # reason: CR 514 gives every turn a cleanup step and the ability names the
+    # next one there is, whoever's turn it falls in. The two cards printing it
+    # both arm during a turn they mean to end — a land that returns to hand
+    # this turn and counters that come off this turn — and a seated reading
+    # would hold Thawing Glaciers on the board through an opponent's whole
+    # turn.
+    #
+    # Announced **after** CR 514.2's sweeps rather than at the step's entry,
+    # which is the rule's own order: 514.1 discards, 514.2 ends the turn's
+    # effects, and only then does 514.3a look for triggers. An entry armed
+    # "this turn" is therefore already gone by the time this fires, which is
+    # correct — it never named this step.
+    "next_cleanup_step": "the cleanup step",
     # "Until end of turn, whenever **you cast a black spell**, put a +1/+1
     # counter on this creature." (Mountain Titan.) The one event in this table
     # whose subject is a **card** rather than a permanent — a spell on the stack

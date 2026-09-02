@@ -402,6 +402,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # zone over, and the same category: a card moving between a library and a
     # hand.
     "each_player_draws_up_to_cards": "zones",
+    "draw_up_to_cards": "zones",
     # "Each opponent discards two cards." (Bad Deal) — one pending discard
     # choice per opponent, same flow as the targeted form.
     "each_opponent_discards_cards": "zones",

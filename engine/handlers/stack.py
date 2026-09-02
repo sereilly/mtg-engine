@@ -6,6 +6,7 @@ from ..card_hooks import ON_SPELL_COUNTERED
 from ..divided_damage import DIVIDED_TARGETS, divided_entry
 from ..game_types import StackItem
 from ..mana_payment import mana_cost_label, total_pips
+from ..oracle_types import COUNTERED_SPELL_CONTROLLER
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -536,6 +537,13 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         from ..targeting import stack_object_mana_value
 
         context.results["countered_spell_mana_value"] = stack_object_mana_value(countered)
+        # "**Its controller** may draw up to two cards at the beginning of the
+        # next turn's upkeep." (Arcane Denial.) The other thing about the
+        # countered spell that only the counter can write down, and for the
+        # mana value's reason one line up: CR 108.4 gives a card in a graveyard
+        # no controller, and by the time the delayed ability fires — a turn
+        # later, on a different player's upkeep — the stack item is long gone.
+        context.results[COUNTERED_SPELL_CONTROLLER] = countered.caster_index
         destination = instruction.payload.get("countered_destination")
         if countered.is_copy:
             # 704.5e: a countered copy of a spell ceases to exist instead of

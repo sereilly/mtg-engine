@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from .. import ast
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
-                             DREW_BY_SEAT,
+                             COUNTERED_SPELL_CONTROLLER, DREW_BY_SEAT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
                              PER_OBJECT_SEAT_RECORDS,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
@@ -92,7 +92,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # value." (Mana Drain.) The countered spell's mana value — the one thing
     # about it that survives the counter, and only because the counter wrote it
     # down.
-    "counter_top_stack_spell": "countered_spell_mana_value",
+    # …and **whose** spell it was: "Its controller may draw up to two cards at
+    # the beginning of the next turn's upkeep." (Arcane Denial.) Two records for
+    # one step, because the sentence behind a counter can ask two different
+    # questions about the spell that is no longer there — how big it was, and
+    # who cast it. The mana value stays primary: it is the one an "if you do"
+    # would test, and it has been the primary since Mana Drain.
+    "counter_top_stack_spell": (
+        "countered_spell_mana_value", COUNTERED_SPELL_CONTROLLER,
+    ),
     # "Destroy all nonblack creatures. … where X is the number of creatures
     # that **died this way**." (Hellfire.) A sweep records how many permanents
     # it actually destroyed, which is the only place a later clause can read

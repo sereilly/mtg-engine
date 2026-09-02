@@ -65,6 +65,17 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
         ):
             in_any_order = bool(stream.accept_phrase("in", "any", "order"))
             return ast.PutOnLibraryTop(moved, in_any_order=in_any_order)
+        # "…on top of **your** library" (Reinforcements). The third spelling of
+        # the same destination, and the one that names a *fixed* seat rather
+        # than following the cards: "their" above means whoever the sentence
+        # already chose, and this means the ability's controller however the
+        # cards were picked. Carried as the printed word so the lowering can
+        # refuse a sentence whose two halves name different players.
+        if stream.accept_phrase("on", "top", "of", "your", "library"):
+            in_any_order = bool(stream.accept_phrase("in", "any", "order"))
+            return ast.PutOnLibraryTop(
+                moved, in_any_order=in_any_order, to_owner="you",
+            )
         # "Put target card from your graveyard on the bottom of your library."
         # (Epitaph Golem.) The zone the card leaves rides the noun phrase, as
         # in every return; the destination decides the node.

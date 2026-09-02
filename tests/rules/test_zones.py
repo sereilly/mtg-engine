@@ -808,3 +808,77 @@ def test_401_4_a_single_card_going_back_on_top_is_no_arrangement_at_all():
 
     assert game.pending_choices == []
     assert [c.name for c in game.players[0].library] == ["B", "C"]
+
+
+# ---------------------------------------------------------------------------
+# CR 404.3 — a graveyard is an ordered zone, and a card can read that order
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("404.3", "400.4")
+def test_404_3_above_in_a_graveyard_means_later_in_the_pile():
+    """A graveyard is ordered — CR 404.3 lets its owner arrange what goes in at
+    once, and CR 400.4 puts a card on top — so "above" is a real relation three
+    cards in the pool ask about (Death Spark, Krovikan Horror, Nether Shadow).
+
+    One reader answers it (``engine/graveyard_order.py``), because the fire site
+    and the intervening-if both ask and a second copy of the arithmetic is how
+    "above" comes to mean two things."""
+    from engine.graveyard_order import cards_above, satisfies_above
+
+    bottom = _mk_card("Bottom", "Instant")
+    beast = _mk_card("Beast", "Creature — Beast")
+    waste = _mk_card("Waste", "Land")
+    pile = [bottom, beast, waste]
+
+    assert [c.name for c in cards_above(pile, 0)] == ["Beast", "Waste"]
+    assert cards_above(pile, 2) == []
+    directly = {"card_type": "creature", "count": 1, "op": "eq", "directly": True}
+    assert satisfies_above(pile, 0, directly)
+    # …and the same pile read the other way round is not the same question.
+    assert not satisfies_above([bottom, waste, beast], 0, directly)
+    counted = {"card_type": "creature", "count": 1, "op": "ge", "directly": False}
+    assert satisfies_above([bottom, waste, beast], 0, counted)
+
+
+@pytest.mark.cr("404.3", "601.2c")
+def test_404_3_two_copies_of_one_card_are_two_positions():
+    """A graveyard holds ``CardDefinition`` objects and the loader dedupes by
+    ``oracle_id``, so two copies of one card in one pile are the **same Python
+    object**. Only the position tells them apart, which is why the reader
+    answers with indices rather than with the card."""
+    from engine.graveyard_order import positions_satisfying
+
+    spark = _mk_card("Spark", "Instant")
+    beast = _mk_card("Beast", "Creature — Beast")
+    pile = [spark, beast, spark]
+    directly = {"card_type": "creature", "count": 1, "op": "eq", "directly": True}
+
+    assert positions_satisfying(pile, spark, directly) == [0]
+    assert positions_satisfying(pile, beast, directly) == []
+
+
+@pytest.mark.cr("113.6b", "108.4a")
+def test_113_6b_an_ability_saying_where_it_functions_functions_only_there():
+    """"An ability that states which zones it functions in functions only from
+    those zones."
+
+    Death Spark and Krovikan Horror say it in an *intervening-if* ("if this card
+    is in your graveyard with …") rather than in the effect, which prints no
+    source zone at all — so the claim is carried off the condition onto the
+    instruction, under the same ``functions_from`` key CR 113.6m's printed "from
+    your graveyard" stamps. One key, because the graveyard scan asks one
+    question and two spellings would be two answers."""
+    from engine.card_loader import load_cards, manifest_set_path
+    from engine.oracle import compile_card_oracle
+
+    pool = {
+        card.name: card
+        for card in load_cards(manifest_set_path("ALL", include_measured=True))
+    }
+    for name in ("Death Spark", "Krovikan Horror"):
+        trig = compile_card_oracle(pool[name]).triggered_abilities[0]
+        assert trig.supported, name
+        assert trig.instruction.payload["functions_from"] == "graveyard", name
+        gate = trig.instruction.payload["intervening_if"]
+        assert gate["kind"] == "self_in_graveyard_with_cards_above", name

@@ -995,18 +995,31 @@ def put_graveyard_cards_on_library_top(
     could carry an ordering — so the controller's choice of order *is* their
     choice of order, and the first card named ends up on top.
     """
-    seat = game.players.index(context.target) if context.target in game.players else None
-    if seat is None:
+    # Whose graveyard, said by the lowering rather than inferred here. "Your
+    # graveyard … your library" (Reinforcements) names the ability's controller
+    # and chooses no player at all, so reading `context.target` for it would
+    # index the *opponent's* graveyard with slots picked out of the caster's —
+    # the wrong pile, silently, with the right number of cards moved.
+    if instruction.payload.get("graveyard_owner") == "you":
+        victim = context.caster
+    elif context.target in game.players:
+        victim = context.target
+    else:
         game.log.append(f"{context.card.name}: no player chosen")
         return True, "resolved"
-    victim = game.players[seat]
     card_type = str(instruction.payload.get("card_type", "artifact"))
 
     def _eligible(card) -> bool:
         return card_type in (getattr(card, "type_line", "") or "").lower()
 
-    # "Any number" prints no maximum, so the cap is the pile itself.
-    picked = _resolve_graveyard_slots(victim, context, len(victim.graveyard), _eligible)
+    # "Any number" prints no maximum, so the cap is the pile itself; "up to
+    # three" prints one, and the description the lowering built carries it.
+    described = instruction.payload.get("targets") or {}
+    limit = (
+        len(victim.graveyard) if described.get("unbounded")
+        else min(int(described.get("count") or 1), len(victim.graveyard))
+    )
+    picked = _resolve_graveyard_slots(victim, context, limit, _eligible)
     if not picked:
         game.log.append(f"{context.card.name}: no card moved out of the graveyard")
         return True, "resolved"
@@ -3258,6 +3271,50 @@ def each_player_draws_up_to_cards(game: Game, instruction: OracleInstruction, co
             _results=context.results,
         )
         game.log.append(f"{player.name} may draw up to {amount} card(s)")
+    return True, "resolved"
+
+
+@effect_handler("draw_up_to_cards")
+def draw_up_to_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"**Its controller** may draw up to two cards …" (Arcane Denial.)
+
+    ``each_player_draws_up_to_cards``'s sibling with one seat instead of a set,
+    through the same ``draw_up_to`` prompt: the printed ceiling *is* the offer,
+    since a player may answer with none, which is why the "may" in front of it
+    collapses into this rather than arming a yes/no of its own
+    (``engine/grammar/lowering/control_flow._referent_seat_optional_draw``).
+
+    The seat comes off the record named in the payload, never off
+    ``context.target``. This sentence is printed inside a delay: it fires a turn
+    after the counter, on somebody else's upkeep, and the spell whose controller
+    it names is a card in a graveyard by then — CR 108.4 gives that card no
+    controller at all. A record nothing wrote is a seat this sentence never
+    named, so nobody draws, which is the same answer ``draw_target_cards`` gives
+    one function up and for the same reason.
+    """
+    record = instruction.payload.get("drawer_seat_record")
+    seat = (context.results or {}).get(record) if record else None
+    if seat is None:
+        # …and the frozen half. A delayed ability's context carries what the
+        # creating effect knew (CR 608.2h), merged into the trigger context by
+        # `create_delayed_trigger`; the live scratchpad of *this* resolution
+        # holds nothing, because the step that wrote the seat ran a turn ago.
+        seat = (context.trigger_context or {}).get(record) if record else None
+    if seat is None:
+        game.log.append(
+            f"{context.card.name}: nothing recorded whose spell that was"
+        )
+        return True, "resolved"
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    drawer = game.players[int(seat)]
+    context.results.setdefault(DREW_BY_SEAT, {})[int(seat)] = 0
+    game.arm_pending_choice(
+        "draw_up_to", int(seat),
+        amount=amount,
+        card_name=context.card.name,
+        _results=context.results,
+    )
+    game.log.append(f"{drawer.name} may draw up to {amount} card(s)")
     return True, "resolved"
 
 

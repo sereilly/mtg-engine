@@ -16,7 +16,7 @@ callers is only which parser they already hold.
 
 from __future__ import annotations
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import COUNTERED_SPELL_CONTROLLER, OracleInstruction
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -229,120 +229,6 @@ def _lower_unless_player_pays(
 _SEAT_SET_ACTORS = frozenset({"each_player", "each_opponent", "defending_player"})
 
 
-def _lower_for_each_player(
-    node: ast.ForEach,
-    inner: tuple[OracleInstruction, ...],
-) -> tuple[OracleInstruction, ...]:
-    """"**For each player,** this enchantment deals 1 damage to that player
-    unless they pay {B} or {3}." (Lim-Dûl's Hex.)
-
-    A loop over *seats* rather than over objects. The same ``for_each`` the
-    object loops lower onto, with the seat set as the iterator — and the
-    handler binds each seat as "that player" while its iteration runs, which is
-    what the printed back-reference means and the only way one sentence can
-    name a different player each time round.
-
-    Refused for any other player reference: "for each opponent" is a real set
-    and lowers here too, but a reference naming *one* seat is not a loop at all
-    and would repeat the sentence once against a seat nobody chose.
-    """
-    if node.iterator.kind not in _LOOPED_SEAT_SETS:
-        raise LoweringError(
-            f"no loop repeats an effect over the {node.iterator.kind}", node=node
-        )
-    if not inner:
-        raise LoweringError("a per-player loop with no effect in it", node=node)
-    return (
-        OracleInstruction(
-            "for_each", "",
-            {"iterator": {"players": node.iterator.kind}, "effect": inner},
-        ),
-    )
-
-
-#: The player references that name a *set* of seats a loop can walk. The same
-#: two ``handlers/control_flow._offered_seats`` enumerates, and deliberately no
-#: more: a reference naming one seat is not a loop.
-_LOOPED_SEAT_SETS = frozenset({"each_player", "each_opponent"})
-
-
-def _lower_for_each_matching(
-    node: ast.ForEach,
-    inner: tuple[OracleInstruction, ...],
-) -> tuple[OracleInstruction, ...]:
-    """"**For each attacking creature without flying,** its controller may pay
-    {1}." (Tidal Flats.) "**For each attacking red creature,** prevent all
-    combat damage that would be dealt by that creature this turn unless its
-    controller pays {2}{R}." (Heroism.)
-
-    A loop over what the **board** holds when the ability resolves — the fourth
-    kind of iterator beside the recorded sets, the count and the seats, and the
-    one the handler has always had a branch for and nothing could reach.
-
-    The filter is the whole iterator payload, which is what the handler matches
-    each permanent against; every key in it therefore has to be one
-    ``subject_matches`` answers, or the loop would run over a strictly larger
-    set than the phrase names — "creature **without flying**" is a layer-6
-    question (CR 613.1f), and a loop that dropped it would offer Tidal Flats'
-    toll to every attacker including the fliers it is printed to let through.
-    """
-    described = _filter_payload(node.iterator)
-    if untestable_filter_keys(described):
-        raise LoweringError(
-            "the loop cannot test this restriction", node=node
-        )
-    if not inner:
-        raise LoweringError("a per-object loop with no effect in it", node=node)
-    return (
-        OracleInstruction("for_each", "", {"iterator": described, "effect": inner}),
-    )
-
-
-def _lower_for_each_life_lost(
-    node: ast.ForEach,
-    inner: tuple[OracleInstruction, ...],
-    event: str | None,
-) -> tuple[OracleInstruction, ...]:
-    """"**For each 1 life you lost,** sacrifice a permanent other than this
-    enchantment unless you discard a card." (Oath of Lim-Dûl.)
-
-    A loop whose iterator is a *number*, not a set — so the same ``for_each``
-    the three "this way" sets lower onto, with the count coming off the firing
-    event's frozen context instead of off the resolution scratchpad.
-
-    Three refusals, each a way the sentence could otherwise mean more than it
-    says:
-
-    * the event must be one that freezes a life loss. Under any other trigger
-      the phrase names a number nobody recorded, and an unwritten quantity
-      reads as zero — a loop that runs no times on a card reporting supported.
-    * the unit must be the printed 1. "For each **2** life you lost" is half as
-      many repetitions, and the handler divides by nothing.
-    * the body must lower to something, for ``_lower_for_each_chosen``'s
-      reason: an empty loop is a sentence that reports supported and does not
-      run.
-    """
-    if event != "you_lose_life":
-        raise LoweringError(
-            f"no event named {event!r} records the life this loop counts",
-            node=node,
-        )
-    if node.iterator.per != 1:
-        raise LoweringError(
-            "this loop repeats once per 1 life lost, not per "
-            f"{node.iterator.per}",
-            node=node,
-        )
-    if not inner:
-        raise LoweringError("a per-life loop with no effect in it", node=node)
-    return (
-        OracleInstruction(
-            "for_each", "",
-            {"iterator": {"repeat_from_trigger": "life_lost"}, "effect": inner},
-        ),
-    )
-
-
 def _lower_may(
     node: ast.May, produced: frozenset[str], event: str | None = None,
     event_subject: object | None = None,
@@ -378,6 +264,12 @@ def _lower_may(
         collapsed = collapse(node)
         if collapsed is not None:
             return collapsed
+    # The one collapse that needs what came before it: "its controller" names a
+    # seat only a previous step recorded, so it is asked with *produced* in hand
+    # rather than of the node alone.
+    collapsed = _referent_seat_optional_draw(node, produced)
+    if collapsed is not None:
+        return collapsed
     # **An offer made to a set of seats rebinds what "that player" means.**
     # ``handlers/control_flow._offer_to_seat`` replaces ``context.target`` with
     # the offered seat for exactly these actors, so inside the offer the words
@@ -691,6 +583,58 @@ def _each_player_optional_draw(
         OracleInstruction(
             "each_player_draws_up_to_cards", "",
             {"actor": node.actor.kind, "amount": action.count.value},
+        ),
+    )
+
+
+def _referent_seat_optional_draw(
+    node: ast.May, produced: frozenset[str],
+) -> tuple[OracleInstruction, ...] | None:
+    """"**Its controller** may draw up to two cards …" (Arcane Denial.)
+
+    :func:`_each_player_optional_draw`'s sibling with **one** seat instead of a
+    set, and the same collapse for the same two reasons: "up to two" already
+    lets the seat draw none, so the offer in front of it adds no answer the
+    ``draw_up_to`` prompt does not have, and the prompt suspends the resolution
+    (CR 608.2e) where a plain offer does not.
+
+    "Its controller" is the countered spell's, and it is read off the record the
+    counter wrote rather than off the board — which is the whole reason this is
+    gated on *produced*. CR 108.4 gives a card in a graveyard no controller at
+    all, and this sentence is printed inside a delay: by the time it runs, a
+    turn has passed and the spell is a card nobody controls. With no counter in
+    front of it the words name a seat nothing recorded, so the sentence keeps
+    the refusal it has today rather than drawing for whoever happens to be
+    ``context.target``.
+
+    Deliberately narrow, exactly as its three siblings are: an offer with a
+    cost, an if-you-do or an otherwise is a second decision the prompt cannot
+    carry.
+    """
+    action = node.action
+    if (
+        node.cost is not None
+        or node.then is not None
+        or node.otherwise is not None
+        or node.reflexive is not None
+        or node.starting_with is not None
+        or not isinstance(node.actor, ast.PlayerRef)
+        or node.actor.kind != "controller"
+        or COUNTERED_SPELL_CONTROLLER not in produced
+        or not isinstance(action, ast.Draw)
+        or not isinstance(action.player, ast.PlayerRef)
+        or action.player.kind != "you"
+        or not action.up_to
+        or not isinstance(action.count, ast.Fixed)
+    ):
+        return None
+    return (
+        OracleInstruction(
+            "draw_up_to_cards", "",
+            {
+                "amount": action.count.value,
+                "drawer_seat_record": COUNTERED_SPELL_CONTROLLER,
+            },
         ),
     )
 

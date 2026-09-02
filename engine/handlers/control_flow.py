@@ -124,6 +124,30 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             evaluate_condition(game, context, part) for part in parts
         )
 
+    if kind == "self_in_graveyard_with_cards_above":
+        # "…if **this card is in your graveyard with a creature card directly
+        # above it**" (Death Spark, Krovikan Horror). CR 404.3's order, read
+        # through the one module that knows what "above" means.
+        #
+        # "Your" graveyard is the ability's controller's, and for a card in a
+        # graveyard CR 108.4a makes that its owner — which is the seat the
+        # graveyard scan enqueued the trigger under, so ``context.caster`` is
+        # already the right player and no second reading of ownership is needed.
+        #
+        # Asked as "is there *a* position that qualifies" rather than about one
+        # remembered index: this is CR 603.4's re-check as the ability resolves,
+        # and by then something may have been put on the graveyard. Two copies
+        # of the card are the same object, so an index frozen at fire time is
+        # not an identity either (the same reason the fire site carries indices
+        # instead of cards).
+        from ..graveyard_order import positions_satisfying
+
+        if context.caster is None or context.card is None:
+            return False
+        return bool(
+            positions_satisfying(context.caster.graveyard, context.card, payload)
+        )
+
     if kind == "destroyed_target_was":
         # "Destroy target land. **If that land was a snow land**, …" (Icequake,
         # Thermokarst.) The permanent the destroy in front of this chose,

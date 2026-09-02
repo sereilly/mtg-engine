@@ -41,10 +41,12 @@ from .lowering._events import CHOSEN_PLAYER, LOOP_BOUND_PLAYER
 from .lowering.where_x import lower_where_x
 from .statics import _lower_static_ability
 from .lowering.control_flow import (
+    _lower_may, _lower_one_of, _lower_steps, _lower_unless_player_pays,
+)
+from .lowering.loops import (
     _lower_for_each_life_lost,
     _lower_for_each_matching,
     _lower_for_each_player,
-    _lower_may, _lower_one_of, _lower_steps, _lower_unless_player_pays,
 )
 from .lowering import (
     _targets_payload,
@@ -843,10 +845,24 @@ def lower_ability(node: ast.AbilityNode) -> tuple[OracleInstruction, ...]:
             condition = _lower_condition(
                 node.intervening_if, event=node.event.kind
             )
+            # CR 113.6b: "an ability that states which zones it functions in
+            # functions only from those zones". Some conditions *are* that
+            # statement — "if this card is in your graveyard with a creature
+            # card directly above it" (Death Spark, Krovikan Horror) — and the
+            # effect behind them names no source zone of its own, so this is the
+            # one place the claim can be carried onto the instruction.
+            #
+            # The key is the same one CR 113.6m's printed "from your graveyard"
+            # stamps in ``lowering/returns.py``, deliberately: the graveyard scan
+            # in ``engine/events.py`` asks one question of one key, and a second
+            # spelling would be an ability that functions from a graveyard by
+            # one reader's reckoning and not the other's.
+            zone = condition.get("functions_from")
+            extra = {"functions_from": zone} if zone else {}
             instructions = tuple(
                 OracleInstruction(
                     instruction.kind, instruction.value,
-                    {**instruction.payload, "intervening_if": condition},
+                    {**instruction.payload, "intervening_if": condition, **extra},
                 )
                 for instruction in instructions
             )

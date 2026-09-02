@@ -502,6 +502,15 @@ class PutOnLibraryTop:
     """
     target: Recipient
     in_any_order: bool = False
+    #: Whose library the cards land in, as the card **prints** it: "its owner's"
+    #: / "their" (Teferi, Drafna's Restoration) against "your" (Reinforcements).
+    #:
+    #: Recorded rather than derived from the noun phrase's own zone, because the
+    #: two are separate printed facts and a card is free to move cards out of one
+    #: player's graveyard into another's library. Nothing in the pool does, and
+    #: the lowering refuses the mismatch outright for that reason — but it can
+    #: only refuse it if the parse kept both halves.
+    to_owner: str = "owner"
 
 
 @dataclass(frozen=True)

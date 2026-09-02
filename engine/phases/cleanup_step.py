@@ -8,7 +8,7 @@ P/T buffs, damage prevention pools, and the EOT metadata flags. Creatures exiled
 "until end of turn" return here (CR 610.3). No player normally receives priority.
 """
 
-from ..delayed_triggers import expire_delayed_triggers
+from ..delayed_triggers import expire_delayed_triggers, fire_delayed_triggers
 from ..cast_permissions import expire_end_of_turn as expire_end_of_turn_permissions
 from ..hand_size import maximum_hand_size
 from ..models import Permanent
@@ -203,5 +203,33 @@ class CleanupStepMixin:
                 self._put_permanent_onto_battlefield(owner_idx, new_perm, None)
                 self.log.append(f"{card_def.name} returned from exile to {owner.name}'s battlefield")
         self._reset_combat_state(clear_damage_marked=False)
+        # CR 514.3a: "…the game checks to see if … any triggered abilities are
+        # waiting to be put onto the stack (**including those that trigger 'at
+        # the beginning of the next cleanup step'**). If so, … those triggered
+        # abilities are put on the stack, then the active player gets priority."
+        #
+        # Announced here, at the *end* of the step's body, because that is the
+        # rule's own order: 514.1's discard and 514.2's sweeps are turn-based
+        # actions that happen first, and one of those sweeps is
+        # `expire_delayed_triggers` above. A "this turn" ability is therefore
+        # already gone when this runs, which is right — it never named this
+        # step — while a `next_cleanup_step` entry carries
+        # ``until_it_triggers`` and survives to be announced.
+        #
+        # The stack is then drained where it stands. No priority window opens
+        # in this engine's cleanup, so an ability merely enqueued would sit
+        # unresolved until the *next* turn's first window: Thawing Glaciers
+        # would come back to hand a turn late, on an opponent's upkeep. That is
+        # the CR 514.3a window collapsed to its outcome — nobody in this engine
+        # holds priority during cleanup to respond in it — and it runs only
+        # when something actually fired, so every other turn's cleanup is
+        # untouched.
+        #
+        # CR 514.3a's "another cleanup step begins" is deliberately not
+        # modelled: the second pass exists to re-check hand size and
+        # state-based actions after the triggers resolved, and no card in the
+        # pool can raise a hand over its maximum from a cleanup trigger.
+        if fire_delayed_triggers(self, "next_cleanup_step"):
+            self._settle()
         self._on_step_or_phase_end(phase, step)
         return cleanup_completed

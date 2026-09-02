@@ -29,7 +29,7 @@ from .references import parse_player_ref, parse_target_spec
 from .phrases import (_accept_self_reference, _parse_duration,
                       _parse_keywords, parse_bound_subject)
 from .stream import TokenStream
-from .vocabulary import COLOR_WORDS, NUMBER_WORDS
+from .vocabulary import CARD_TYPES, COLOR_WORDS, NUMBER_WORDS
 
 
 #: What every state condition below is asked *about*: the ability's own source.
@@ -101,6 +101,17 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     falls back rather than silently losing the condition — the legacy compiler
     dropped intervening-ifs entirely, making conditional triggers always fire."""
     mark = stream.mark()
+
+    # "**this card is in your graveyard with a creature card directly above
+    # it**" (Death Spark, Krovikan Horror) / "…**with three or more creature
+    # cards above it**" (Nether Shadow). Read first because the opener is three
+    # printed words no other condition here begins with, and because it is the
+    # one clause whose answer is *where the ability functions* rather than what
+    # the board looks like (CR 113.6b).
+    grave = _parse_self_in_graveyard_above(stream)
+    if grave is not None:
+        return grave
+    stream.reset(mark)
 
     # "you win the flip" / "you lose the flip" (CR 705.2). Read before the
     # player reference below, which would consume the "you" and then reset — and
@@ -757,6 +768,53 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     stream.reset(state_mark)
 
     raise stream.error("unrecognized condition")
+
+
+
+def _parse_self_in_graveyard_above(
+    stream: TokenStream,
+) -> "ast.SelfInGraveyardWithCardsAbove | None":
+    """``this card is in your graveyard with <N> <type> card(s) [directly] above
+    it``, or None without consuming when the sentence is something else.
+
+    Non-consuming on refusal, like every other tried-first production in this
+    package: a clause that read "this card is in your graveyard" and then failed
+    on the words after it would take the whole line's refusal site with it.
+
+    "Above" is CR 404.3's order — a graveyard is an ordered zone and a card put
+    there later sits on top — so the count and the "directly" are both about
+    *positions*, which is why they are separate fields rather than one number.
+    """
+    if not stream.accept_phrase("this", "card", "is", "in", "your", "graveyard"):
+        return None
+    if not stream.accept_word("with"):
+        raise stream.error("expected 'with' after the graveyard clause")
+    at_least = False
+    if stream.accept_word("a", "an"):
+        count = 1
+    else:
+        word = stream.peek_word()
+        if word not in NUMBER_WORDS:
+            raise stream.error("expected a number of cards above it")
+        stream.advance()
+        count = NUMBER_WORDS[word]
+        # "three **or more**". Without it the clause is an exact count, which is
+        # a different question and one no card in the pool prints — so it is
+        # read rather than assumed, and the lowering carries whichever was
+        # printed.
+        at_least = bool(stream.accept_phrase("or", "more"))
+    card_type = stream.peek_word()
+    if card_type not in CARD_TYPES:
+        raise stream.error("expected a card type above it")
+    stream.advance()
+    if not stream.accept_word("card", "cards"):
+        raise stream.error("expected 'card' or 'cards' above it")
+    directly = bool(stream.accept_word("directly"))
+    if not stream.accept_phrase("above", "it"):
+        raise stream.error("expected 'above it'")
+    return ast.SelfInGraveyardWithCardsAbove(
+        card_type=card_type, count=count, at_least=at_least, directly=directly,
+    )
 
 
 def _parse_blockers_of_bound_creature(

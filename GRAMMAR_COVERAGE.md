@@ -16,22 +16,22 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Set | Cards | Lines | Parsed | Lowered | Executed | Cards executing |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LEA | 290 | 388 | 84.5% | 83.0% | 46.6% | 165 |
-| LEB | 292 | 389 | 84.6% | 83.0% | 46.8% | 166 |
-| 2ED | 292 | 389 | 84.6% | 83.0% | 46.8% | 166 |
+| LEA | 290 | 388 | 84.8% | 83.0% | 46.6% | 165 |
+| LEB | 292 | 389 | 84.8% | 83.0% | 46.8% | 166 |
+| 2ED | 292 | 389 | 84.8% | 83.0% | 46.8% | 166 |
 | ARN | 78 | 108 | 76.9% | 73.1% | 50.9% | 46 |
 | ATQ | 85 | 120 | 90.0% | 90.0% | 62.5% | 68 |
-| 3ED | 296 | 389 | 86.9% | 84.8% | 49.4% | 173 |
+| 3ED | 296 | 389 | 87.1% | 84.8% | 49.4% | 173 |
 | LEG | 310 | 431 | 89.1% | 87.9% | 58.7% | 217 |
 | DRK | 119 | 167 | 96.4% | 96.4% | 73.7% | 101 |
 | FEM | 102 | 191 | 99.0% | 99.0% | 75.9% | 99 |
-| 4ED | 368 | 520 | 90.6% | 90.0% | 53.8% | 246 |
+| 4ED | 368 | 520 | 90.8% | 90.0% | 53.8% | 246 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
 | HML | 115 | 189 | 92.6% | 92.6% | 64.0% | 93 |
-| 5ED | 434 | 631 | 92.6% | 92.4% | 60.1% | 316 |
+| 5ED | 434 | 631 | 92.7% | 92.4% | 60.1% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 54.2% | 48.2% | 33.5% | 66 |
-| **All (shipped)** | **3439** | **5016** | **88.8%** | **87.9%** | **56.9%** | **2394** |
+| ALL *(measured)* | 144 | 251 | 55.8% | 50.2% | 35.5% | 68 |
+| **All (shipped)** | **3439** | **5016** | **88.9%** | **87.9%** | **56.9%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
 
@@ -43,9 +43,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 295 | 140 | expected a subject |  |
+| 287 | 137 | expected a subject |  |
 | 142 | 61 | unrecognized effect verb |  |
-| 80 | 43 | unconsumed text |  |
+| 79 | 42 | unconsumed text |  |
 | 39 | 39 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -55,6 +55,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 7 | 1 | no lowering for RawEffect |  |
 | 7 | 2 | expected who takes the redirected damage |  |
 | 7 | 7 | expected what to exile as a cost |  |
+| 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 3 | expected a destination zone after 'return' |  |
 | 5 | 1 | expected 'card' |  |
 | 5 | 1 | back-reference to 'its_toughness' with no producer in this effect |  |
@@ -65,7 +66,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 2 | expected a colour or a creature body after 'becomes' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
-| 3 | 3 | expected 'counter or counters' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | unrecognized "can't be" restriction |  |
 
@@ -210,6 +210,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Each untapped creature you control gets +0/+2 as long as it's not attacking.`
   - `{W}: Arcades Sabboth gets +0/+1 until end of turn.`
 - **Arcane Denial**
+  - `Counter target spell. Its controller may draw up to two cards at the beginning of the next turn's upkeep.`
   - `You draw a card at the beginning of the next turn's upkeep.`
 - **Archfiend's Vessel**
   - `When this creature enters, if it entered from your graveyard or you cast it from your graveyard, exile it. If you do, create a 5/5 black Demon creature token with flying.`
@@ -908,6 +909,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, target creature gets +2/+0 until end of turn.`
 - **Death Spark**
   - `Death Spark deals 1 damage to any target.`
+  - `At the beginning of your upkeep, if this card is in your graveyard with a creature card directly above it, you may pay {1}. If you do, return this card to your hand.`
 - **Death Ward**
   - `Regenerate target creature.`
   - `Regenerate target creature.`
@@ -2193,6 +2195,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this Aura enters, draw a card at the beginning of the next turn's upkeep.`
   - `When this Aura enters, draw a card at the beginning of the next turn's upkeep.`
 - **Krovikan Horror**
+  - `At the beginning of the end step, if this card is in your graveyard with a creature card directly above it, you may return this card to your hand.`
   - `{1}, Sacrifice a creature: This creature deals 1 damage to any target.`
 - **Krovikan Plague**
   - `When this Aura enters, draw a card at the beginning of the next turn's upkeep.`
@@ -3107,6 +3110,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return target card from your graveyard to your hand.`
 - **Reincarnation**
   - `Choose target creature. When that creature dies this turn, return a creature card from its owner's graveyard to the battlefield under the control of that creature's owner.`
+- **Reinforcements**
+  - `Put up to three target creature cards from your graveyard on top of your library.`
 - **Relic Barrier**
   - `{T}: Tap target artifact.`
 - **Relic Bind**
@@ -3809,6 +3814,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, put a spore counter on this creature.`
   - `Remove three spore counters from this creature: Create a 1/1 green Saproling creature token.`
   - `Sacrifice a Saproling: This creature gets +1/+2 until end of turn.`
+- **Thawing Glaciers**
+  - `{1}, {T}: Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle. Return this land to its owner's hand at the beginning of the next cleanup step.`
 - **The Abyss**
   - `At the beginning of each player's upkeep, destroy target nonartifact creature that player controls of their choice. It can't be regenerated.`
 - **The Brute**

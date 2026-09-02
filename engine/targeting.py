@@ -1151,11 +1151,23 @@ def _graveyard_to_library_spec(payload: dict) -> dict:
     "any number" prints no ceiling, so the only cap is how many legal targets
     exist, which `cast_target_spec` fills in once it has enumerated them.
     """
-    return {
+    spec: dict = {
         "kind": GRAVEYARD_TARGET_KIND,
         "card_type": payload.get("card_type", "artifact"),
-        "unbounded_targets": True,
     }
+    # "From **your** graveyard" (Reinforcements) is one pile, and the picker has
+    # to say so: the enumerator walks every graveyard by default, so a picker
+    # left unscoped would offer the opponent's creature cards for a spell that
+    # cannot touch them — and the handler, which indexes the caster's pile,
+    # would then move whatever card happened to sit at that slot.
+    if payload.get("graveyard_owner") == "you":
+        spec["own_graveyard_only"] = True
+    described = payload.get("targets") or {}
+    if described.get("unbounded"):
+        spec["unbounded_targets"] = True
+    else:
+        spec["count"] = int(described.get("count") or 1)
+    return spec
 
 
 def _retarget_spec(payload: dict) -> dict:
