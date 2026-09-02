@@ -656,7 +656,15 @@ def parse_subject_verb(
     if token.kind == WORD:
         source_target = source_spec if isinstance(source_spec, ast.TargetSpec) else None
         if token.text in ("deals", "deal"):
-            return _parse_damage(stream, source_target)
+            # "{T}: This creature deals 2 damage to any target **and doesn't
+            # untap during your next untap step**." (Reveka, Wizard Savant.)
+            # The same tail the two pump verbs below already carry, on the
+            # third verb that prints it: one noun phrase printed once, two
+            # things said about it. Left unread the clause is unconsumed text
+            # and takes the whole line down, which is what it did.
+            return _with_untap_conjunct(
+                stream, _parse_damage(stream, source_target), source_target
+            )
         if token.text in ("fights", "fight"):
             return _parse_fight(stream, source_spec)
         if token.text in ("gets", "get"):

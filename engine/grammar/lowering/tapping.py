@@ -35,7 +35,8 @@ from ._common import (
     _targets_payload,
 )
 from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
-                      EVENT_SUBJECT_PLAYER, names_attached_permanent)
+                      EVENT_SUBJECT_PLAYER, binds_block_pair,
+                      names_attached_permanent)
 
 #: The scratchpad key a tap records what it chose under, so a later sentence
 #: ("**it** doesn't untap…") can name the same permanents.
@@ -427,6 +428,8 @@ def _lower_untap_chosen_by_paying(
 def _lower_untap_restriction(
     node: "ast.DoesntUntapNextStep | ast.DoesntUntapWhileCounter",
     produced: frozenset[str],
+    event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """The family entry point: one printed sentence saying a permanent will not
     untap, in either of the two shapes whose subject an earlier step chose.
@@ -438,7 +441,7 @@ def _lower_untap_restriction(
     """
     if isinstance(node, ast.DoesntUntapWhileCounter):
         return _lower_doesnt_untap_while_counter(node, produced)
-    return _lower_doesnt_untap_next_step(node, produced)
+    return _lower_doesnt_untap_next_step(node, produced, event, event_subject)
 
 
 def _lower_doesnt_untap_while_counter(
@@ -496,7 +499,10 @@ def _lower_doesnt_untap_while_counter(
 
 
 def _lower_doesnt_untap_next_step(
-    node: ast.DoesntUntapNextStep, produced: frozenset[str]
+    node: ast.DoesntUntapNextStep,
+    produced: frozenset[str],
+    event: str | None = None,
+    event_subject: object | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"Those creatures don't untap during their controller's next untap step."
     (Frost Breath.)
@@ -566,7 +572,27 @@ def _lower_doesnt_untap_next_step(
         and subject.quantifier in ("all", "each")
         and not subject.targeted
     )
+    # "Whenever this creature blocks a creature, **that creature** doesn't
+    # untap during its controller's next untap step." (Labyrinth Minotaur.) A
+    # fifth referent, and the one no sentence in the line names: the creature
+    # is the *trigger's* — CR 509.1a's other side of the block — so it is
+    # neither chosen here nor recorded by an earlier step, and the printed
+    # "that" is what tells it from the bound plural above.
+    #
+    # ``binds_block_pair`` rather than the kind alone, for the reason that
+    # function exists: CR 509.3c/509.3d make a bare "becomes blocked" firing
+    # name several creatures and a narrowed one name exactly the creature that
+    # admitted it, and the two spellings share a kind. A bare firing here would
+    # hold down whichever blocker happened to be first.
+    bound_pair = (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "that"
+        and not subject.targeted
+        and binds_block_pair(event, event_subject)
+    )
     if not bare_pronoun and not chosen and not own_source and not swept and (
+        not bound_pair
+    ) and (
         not isinstance(subject, ast.TargetSpec) or subject.quantifier != "those"
     ):
         raise LoweringError(
@@ -624,11 +650,49 @@ def _lower_doesnt_untap_next_step(
         }
         _describe_targets(payload, subject)
         return (OracleInstruction("skip_next_untap", "", payload),)
+    if bound_pair:
+        # The trigger already required the noun, so the phrase restates what
+        # was bound rather than choosing again — but a narrowing beyond the
+        # card type would be carried and never read, which is this family's
+        # standing refusal. The handler reads the pair through
+        # ``block_pair_permanents``, the one reader of both fire sites.
+        if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "the creature a block trigger bound carries no narrowing the "
+                "marker could honour", node=node,
+            )
+        return (
+            OracleInstruction(
+                "skip_next_untap", "",
+                {"subject": "block_pair", "untap_steps": node.count, **seated},
+            ),
+        )
     if not bare_pronoun and _restrictions_beyond(subject.filter, frozenset({"card_types"})):
         raise LoweringError(
             "a bound plural carries no narrowing the marker could honour", node=node
         )
     if _TAPPED_PERMANENTS not in produced:
+        # "Whenever this creature attacks, … **it** doesn't untap during your
+        # next untap step." (Spectral Bears.) Idiom 20: a pronoun names the
+        # object the sentence already named, and under a trigger that object is
+        # whatever the condition was about. The parse side has already pointed
+        # the word at it where the condition named something *other* than the
+        # source (``rebinding.rebind_pronoun_to_event_subject`` swaps the
+        # pronoun's filter and this branch never sees it), so a bare pronoun
+        # that survives into a trigger's effect names the source and nothing
+        # else — there is nothing left for the word to mean.
+        #
+        # Only under a trigger. With no event the sentence is a spell's or an
+        # activated ability's, where "it" is Frost Breath's back-reference to
+        # what the sentence in front of it tapped and a missing producer is a
+        # marker that would land on nothing.
+        if bare_pronoun and event is not None:
+            return (
+                OracleInstruction(
+                    "skip_next_untap", "",
+                    {"subject": "source", "untap_steps": node.count, **seated},
+                ),
+            )
         raise LoweringError(
             f"back-reference to {_TAPPED_PERMANENTS!r} with no producer in this effect",
             node=node,

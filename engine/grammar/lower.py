@@ -247,7 +247,14 @@ def lower_statement(
     if isinstance(statement, ast.GainAbilityText):
         return _lower_gain_ability_text(statement, produced)
     if isinstance(statement, (ast.DoesntUntapNextStep, ast.DoesntUntapWhileCounter)):
-        return _lower_untap_restriction(statement, produced)
+        # The **unfiltered** event, for `_lower_destroy`'s reason one branch
+        # up: whose creature "that creature" names is a fact about the trigger
+        # (CR 509.3c/509.3d), true of every clause under it, and Labyrinth
+        # Minotaur's restriction is the whole of its trigger's effect while
+        # Joven's Ferrets' is the second sentence of one.
+        return _lower_untap_restriction(
+            statement, produced, event, event_subject
+        )
     if isinstance(statement, (ast.Tap, ast.Untap)):
         # The **unfiltered** event, for the same reason `_lower_destroy` takes
         # one: whether a repeated "that <noun>" names the permanent the source

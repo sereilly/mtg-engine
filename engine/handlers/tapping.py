@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from ..oracle_types import X_FROM_COUNT
 from ._common import (
+    block_pair_permanents,
     frozen_that_player_seat,
     permanent_matches_filter,
     resolve_amount,
@@ -606,7 +607,20 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
     none — and is not an error.
     """
     key = instruction.payload.get("permanents_from")
-    if instruction.payload.get("subject") == "source":
+    if instruction.payload.get("subject") == "block_pair":
+        # "Whenever this creature blocks a creature, **that creature** doesn't
+        # untap during its controller's next untap step." (Labyrinth Minotaur.)
+        # The creature is the trigger's, not the sentence's — CR 509.1a's other
+        # side of the block — so it comes from the one reader of both fire
+        # sites rather than from the stack item's target. Reading the target on
+        # the *blocks* half would mark the Minotaur itself, which is the bug
+        # ``block_pair_permanents`` exists to stop.
+        recorded = tuple(
+            permanent.permanent_id
+            for permanent in block_pair_permanents(game, context)
+            if permanent is not None
+        )
+    elif instruction.payload.get("subject") == "source":
         # "**This creature** … doesn't untap during your next untap step." The
         # sentence names the ability's own permanent, so nothing is chosen and
         # nothing is looked up; a source already gone is marked by nothing,
