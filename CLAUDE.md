@@ -163,7 +163,7 @@ python scripts/parse_coverage.py      # regenerate PARSE_COVERAGE.md (oracle-tex
 python scripts/grammar_coverage.py    # regenerate GRAMMAR_COVERAGE.md (how much of the pool the parser reads); --check fails on regression, --accept re-snapshots floors; --set <CODE> prints that set's row (stdout only)
 python scripts/hook_reliance.py       # regenerate HOOK_RELIANCE.md (how much of the pool is supported by its *name*); --check fails on a rise, --accept re-snapshots ceilings; --set <CODE> prints that set's row + its hooked cards (stdout only)
 python scripts/fetch_vocabulary.py    # re-fetch data/vocabulary/*.json from Scryfall (run when a new set adds creature/land types); --check only confirms the catalogs are present (CI)
-python scripts/ingest_set.py 3ED --fetch   # add a new set: download from Scryfall into the engine's card format
+python scripts/ingest_set.py 3ED --fetch --register   # add a new set: download from Scryfall into the engine's card format and insert its `measured` manifest entry (release-ordered); promotion to `sets` stays a reviewed hand move
 python scripts/ingest_set.py --all --check # report card-file sizes without writing
 ```
 

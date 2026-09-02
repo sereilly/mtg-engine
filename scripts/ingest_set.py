@@ -46,7 +46,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from engine.card_loader import manifest_measured_sets, manifest_sets  # noqa: E402
+from engine.card_loader import (  # noqa: E402
+    manifest_measured_sets,
+    manifest_sets,
+    register_measured_set,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CARDS_DIR = REPO_ROOT / "cards"
@@ -214,6 +218,14 @@ def main() -> int:
     parser.add_argument(
         "--check", action="store_true", help="report sizes without writing"
     )
+    parser.add_argument(
+        "--register", action="store_true",
+        help=(
+            "after ingesting, add the set to the manifest's `measured` role "
+            "(release-ordered; fetches name and date from Scryfall). "
+            "Promotion to `sets` stays a reviewed hand move."
+        ),
+    )
     args = parser.parse_args()
 
     if args.all:
@@ -224,10 +236,44 @@ def main() -> int:
         parser.error("give a set code or --all")
         return 2
 
+    if args.register and args.all:
+        parser.error("--register registers one new set; it has no meaning with --all")
+    if args.register and args.check:
+        parser.error("--check writes nothing; drop it to --register")
+
     status = 0
     for code in codes:
         status |= ingest(code, fetch=args.fetch, check=args.check)
+
+    if args.register and status == 0:
+        status |= register(codes[0])
     return status
+
+
+def register(code: str) -> int:
+    """One manifest entry under ``measured``, from Scryfall's set metadata.
+
+    The write itself is ``card_loader.register_measured_set`` — the manifest
+    has one parser, and this script only assembles the entry.
+    """
+    meta = _get_json(f"{SCRYFALL_API}/sets/{code.lower()}")
+    entry = {
+        "code": code.upper(),
+        "name": meta["name"],
+        "released": meta["released_at"],
+        "file": _set_path(code).name,
+    }
+    try:
+        register_measured_set(entry)
+    except ValueError as error:
+        print(f"FAIL: {error}")
+        return 1
+    print(f"  registered under measured: {json.dumps(entry)}")
+    print(
+        "  next: SET_PLAYBOOK.md Phase 1 (suite, census); promotion to `sets` "
+        "is Phase 4's reviewed hand move at the printing-ordered index"
+    )
+    return 0
 
 
 if __name__ == "__main__":

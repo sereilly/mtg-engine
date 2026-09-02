@@ -323,10 +323,13 @@ instruments current.
 **Entry:** Phase 0 exit. **Exit:** the set sits under `measured`, the suite
 is green, the trackers carry its row, and the census is in hand.
 
-1. `python scripts/ingest_set.py <CODE> --fetch`, then append one entry under
-   `measured` in `cards/manifest.json`. That is the whole registration — the
-   web app, the fixtures and the coverage scripts all read the manifest
-   (`tests/sets/README.md`, "Adding a set").
+1. `python scripts/ingest_set.py <CODE> --fetch --register`. That is the
+   whole registration: the card file is written and the `measured` entry is
+   inserted release-ordered (`card_loader.register_measured_set` — the
+   manifest has one parser, and the write lives beside it). The web app, the
+   fixtures and the coverage scripts all read the manifest
+   (`tests/sets/README.md`, "Adding a set"). Promotion to `sets` stays
+   Phase 4's reviewed hand move.
 2. Run the full suite and **treat what fires as yield, not noise**. A new
    set's text reaches code the old pool never executed; the M21 ingest
    surfaced a never-run import that was 66 failures waiting. These are engine

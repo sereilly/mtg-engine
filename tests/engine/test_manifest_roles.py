@@ -146,3 +146,77 @@ def test_the_shipped_sets_are_in_printing_order():
         "CardDefinition.original_printing wrong for every card it shares with "
         "a set already present."
     )
+
+
+# ---------------------------------------------------------------------------
+# register_measured_set — the one sanctioned write of the manifest
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def manifest_copy(tmp_path):
+    import shutil
+
+    copy = tmp_path / "manifest_copy.json"
+    shutil.copy(MANIFEST_PATH, copy)
+    return copy
+
+
+def _entry(code, released):
+    return {
+        "code": code,
+        "name": f"Test Set {code}",
+        "released": released,
+        "file": f"{code}_cards.json",
+    }
+
+
+def test_registration_inserts_in_release_order(manifest_copy):
+    """`measured` carries release dates like `sets` does, and the printing
+    order is load-bearing there — a helper that appended would hand Phase 4's
+    promotion an entry already out of order."""
+    from engine.card_loader import register_measured_set
+
+    register_measured_set(_entry("ZZB", "1996-06-01"), manifest_path=manifest_copy)
+    register_measured_set(_entry("ZZA", "1995-01-01"), manifest_path=manifest_copy)
+    register_measured_set(_entry("ZZC", "1997-01-01"), manifest_path=manifest_copy)
+    codes = [e["code"] for e in manifest_measured_sets(manifest_copy)]
+    assert codes == ["ZZA", "ZZB", "ZZC"]
+
+
+def test_registration_refuses_a_code_in_either_role(manifest_copy):
+    """A set holds one role at a time. Re-registering a measured set is a
+    plain duplicate; registering a *shipped* one would quietly demote it."""
+    from engine.card_loader import register_measured_set
+
+    register_measured_set(_entry("ZZZ", "1996-01-01"), manifest_path=manifest_copy)
+    with pytest.raises(ValueError, match="already registered"):
+        register_measured_set(_entry("ZZZ", "1996-01-01"), manifest_path=manifest_copy)
+    shipped = manifest_sets(manifest_copy)[0]["code"]
+    with pytest.raises(ValueError, match="already registered"):
+        register_measured_set(_entry(shipped, "1993-08-05"), manifest_path=manifest_copy)
+
+
+def test_registration_preserves_everything_else_byte_for_byte(manifest_copy):
+    """The write is json.dumps of the manifest it read, so the descriptions,
+    the shipped list and the key order must survive untouched — undoing the
+    insertion must reproduce the original file exactly."""
+    import json
+
+    from engine.card_loader import register_measured_set
+
+    before = manifest_copy.read_text(encoding="utf-8")
+    register_measured_set(_entry("ZZZ", "1996-01-01"), manifest_path=manifest_copy)
+    manifest = json.loads(manifest_copy.read_text(encoding="utf-8"))
+    assert list(manifest) == ["description", "sets", "measured_description", "measured"]
+    manifest["measured"] = [
+        e for e in manifest["measured"] if e["code"] != "ZZZ"
+    ]
+    assert json.dumps(manifest, indent=2, ensure_ascii=False) + chr(10) == before
+
+
+def test_registration_requires_the_entry_shape(manifest_copy):
+    from engine.card_loader import register_measured_set
+
+    with pytest.raises(ValueError, match="missing"):
+        register_measured_set({"code": "ZZZ"}, manifest_path=manifest_copy)

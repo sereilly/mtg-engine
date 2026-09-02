@@ -238,6 +238,51 @@ def manifest_measured_sets(manifest_path: str | Path = MANIFEST_PATH) -> list[di
     return list(manifest.get("measured", ()))
 
 
+def register_measured_set(
+    entry: dict, manifest_path: str | Path = MANIFEST_PATH
+) -> None:
+    """Add *entry* to the manifest's ``measured`` role, ordered by release.
+
+    The write lives beside the readers on purpose: this module is the one
+    parser of the registry, and a script composing its own JSON edit would be
+    the same second copy a spelled-out filename is. ``scripts/ingest_set.py
+    --register`` is the caller; before it, the registration step was a hand
+    edit of ``cards/manifest.json``.
+
+    Only the ``measured`` role is written. Promotion to ``sets`` stays a
+    reviewed hand move at the printing-ordered index — it is the claim that
+    every card in the set is supported, and two guards check that claim.
+    """
+    required = ("code", "name", "released", "file")
+    missing = [key for key in required if key not in entry]
+    if missing:
+        raise ValueError(f"manifest entry is missing {missing}")
+    path = Path(manifest_path)
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    taken = {e["code"] for e in manifest["sets"]} | {
+        e["code"] for e in manifest["measured"]
+    }
+    if entry["code"] in taken:
+        raise ValueError(
+            f"{entry['code']} is already registered in the manifest — a set "
+            "holds one role at a time, and promotion is a reviewed hand move"
+        )
+    measured = manifest["measured"]
+    index = next(
+        (
+            i
+            for i, existing in enumerate(measured)
+            if existing["released"] > entry["released"]
+        ),
+        len(measured),
+    )
+    measured.insert(index, {key: entry[key] for key in required})
+    path.write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
 def manifest_measured_codes(manifest_path: str | Path = MANIFEST_PATH) -> list[str]:
     """Every set code ingested for measurement but not shipped."""
     return [entry["code"] for entry in manifest_measured_sets(manifest_path)]
