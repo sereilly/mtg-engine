@@ -762,3 +762,75 @@ def test_each_player_is_offered_the_ante_in_turn_order(set_pool):
     assert game.cast_from_hand(0, "Rebirth").supported
 
     assert [e["player_index"] for e in game.pending_optional_pays] == [1, 2, 0]
+
+
+# ---------------------------------------------------------------------------
+# W2G5 — CR 407.4 through an offer made to a *target's owner*
+#
+# The third shape the one ante instruction is asked in. Demonic Attorney sweeps
+# every seat, Rebirth offers each seat its own decision, and Timmerian Fiends
+# offers exactly one seat — the one that **owns** the artifact it named. All
+# three share `ante_top_card`, so the rule that a card is anted off its owner's
+# own library is asserted on each rather than on whichever had a handler.
+# ---------------------------------------------------------------------------
+
+
+def _w2g5_fiends_board(set_pool, *, ante: bool = True):
+    game = _ante_game(players=2)
+    game.playing_for_ante = ante
+    fiends = Permanent(card=set_pool("HML")["Timmerian Fiends"])
+    lotus = Permanent(card=_C["Black Lotus"])
+    game.players[0].battlefield = [fiends]
+    game.players[1].battlefield = [lotus]
+    return game, lotus
+
+
+def _w2g5_shake_down(game):
+    return game.activate_permanent_ability(
+        0, "Timmerian Fiends", target_player_index=1, target_permanent_index=0
+    )
+
+
+@pytest.mark.cr("407.4")
+def test_407_4_a_targets_owner_antes_off_their_own_library(set_pool):
+    """"The owner of target artifact may ante the top card of **their**
+    library." The seat that owes the decision is not the caster and was not
+    chosen as a target — it is derived from the artifact (CR 108.3)."""
+    game, _lotus = _w2g5_fiends_board(set_pool)
+    top = game.players[1].library[0].name
+
+    assert _w2g5_shake_down(game).supported
+    assert game.confirm_optional_pay(1, card_name="Timmerian Fiends", accept=True)
+
+    assert [card.name for card in game.players[1].ante] == [top]
+    assert game.players[0].ante == []
+
+
+@pytest.mark.cr("108.3", "407.4")
+def test_108_3_declining_the_ante_exchanges_ownership_permanently(set_pool):
+    """"Ownership … doesn't change" — except where CR 407's cards say it does.
+    This engine's ownership is which player's zone a card sits in, so the two
+    printed graveyard moves are the exchange, and both must land."""
+    game, lotus = _w2g5_fiends_board(set_pool)
+
+    assert _w2g5_shake_down(game).supported
+    assert game.confirm_optional_pay(1, card_name="Timmerian Fiends", accept=False)
+    game._settle()
+
+    assert lotus not in list(game.all_permanents())
+    assert [card.name for card in game.players[0].graveyard] == ["Black Lotus"]
+    assert [card.name for card in game.players[1].graveyard] == ["Timmerian Fiends"]
+
+
+@pytest.mark.cr("407.1", "108.3")
+def test_407_1_no_ownership_changes_outside_the_ante_variant(set_pool):
+    """CR 407.1 makes the variant opt-in, so the exception CR 108.3 grants it is
+    not available in an ordinary duel. The ability resolves and does nothing."""
+    game, lotus = _w2g5_fiends_board(set_pool, ante=False)
+
+    assert _w2g5_shake_down(game).supported
+    game._settle()
+
+    assert not game.pending_choices_of("optional_pay", 1)
+    assert lotus in list(game.all_permanents())
+    assert game.players[1].graveyard == []

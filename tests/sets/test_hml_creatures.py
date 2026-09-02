@@ -915,3 +915,260 @@ def test_trade_caravan_is_refused_outside_an_upkeep_step(set_pool):
     assert not result.supported
     assert land.tapped
 
+
+
+# --- W2G5: cast locks, cost taxes and the tail ---
+
+from engine import Game, PlayerState
+from engine.control import change_control
+from engine.cost_modifiers import spell_cost_tax
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+# ---------------------------------------------------------------------------
+# Irini Sengir — one sentence, two printed subjects (CR 601.2f)
+# ---------------------------------------------------------------------------
+
+
+def _w2g5_sengir_board(set_pool):
+    sengir = Permanent(card=set_pool("HML")["Irini Sengir"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[sengir]), PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    return game
+
+
+def test_irini_sengir_taxes_both_of_the_subjects_it_prints(
+    set_pool, catalog_by_name
+):
+    """"Green enchantment spells **and** white enchantment spells cost {2} more
+    to cast."
+
+    Idiom 38: a restriction printed as one sentence is a conjunction and each
+    conjunct has to be read. Before this the pattern matched from the *second*
+    subject onwards — the card was unsupported, and had it been admitted it
+    would have taxed white enchantments and let every green one through.
+    """
+    game = _w2g5_sengir_board(set_pool)
+
+    assert spell_cost_tax(game, 1, catalog_by_name["Lifeforce"])[0] == 2, "green"
+    assert spell_cost_tax(game, 1, catalog_by_name["Castle"])[0] == 2, "white"
+
+
+def test_irini_sengir_taxes_a_spell_in_both_subjects_only_once(
+    set_pool, catalog_by_name
+):
+    """Reclamation is a green **and** white enchantment. CR 601.2f applies each
+    cost increase once, and this is one static ability describing one set of
+    spells with two phrases — so two conjuncts must not become two modifiers.
+    """
+    game = _w2g5_sengir_board(set_pool)
+
+    assert spell_cost_tax(game, 1, catalog_by_name["Reclamation"])[0] == 2
+
+
+def test_irini_sengir_leaves_the_spells_it_does_not_name_alone(
+    set_pool, catalog_by_name
+):
+    """Both halves of each conjunct still narrow: the colour and the type."""
+    game = _w2g5_sengir_board(set_pool)
+
+    assert spell_cost_tax(game, 1, catalog_by_name["Flight"])[0] == 0, "blue enchantment"
+    assert spell_cost_tax(game, 1, catalog_by_name["Craw Wurm"])[0] == 0, "green creature"
+
+
+def test_irini_sengirs_line_is_claimed_by_the_table_that_charges_it(set_pool):
+    """A clause claimed by a pattern that then produces no modifier is a card
+    reporting supported with its sentence dropped, so the claim and the charge
+    are one reader."""
+    from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for
+
+    sengir = set_pool("HML")["Irini Sengir"]
+    assert compile_card_oracle(sengir).supported
+
+    line = "Green enchantment spells and white enchantment spells cost {2} more to cast."
+    assert cost_modifier_claims_line(line)
+    (modifier,) = cost_modifiers_for(line.lower().rstrip("."))
+    assert modifier.colour == "G" and modifier.card_types == ("enchantment",)
+    assert modifier.alternative_subjects == (("W", ("enchantment",)),)
+
+
+def test_the_conjunction_split_leaves_a_printed_type_list_alone(catalog_by_name):
+    """Mana Matrix prints "Instant and enchantment spells" — one subject whose
+    *type list* uses the same word. Splitting on every "and" would tear it in
+    half and leave "instant" reading as nothing, which is why the split is
+    guarded on the word the subject ends with.
+    """
+    from engine.cost_modifiers import cost_modifiers_for
+
+    (modifier,) = cost_modifiers_for(
+        catalog_by_name["Mana Matrix"].oracle_text.lower()
+    )
+
+    assert modifier.card_types == ("instant", "enchantment")
+    assert modifier.alternative_subjects == ()
+
+
+# ---------------------------------------------------------------------------
+# Timmerian Fiends — CR 407's ownership exchange, offered to the owner
+# ---------------------------------------------------------------------------
+
+
+def _w2g5_fiends_board(
+    set_pool, catalog_by_name, *, ante: bool = True, victim_library: int = 3
+):
+    """P1's Fiends, P2's Black Lotus, and a library each.
+
+    P2's library is what the offer is paid out of, so its size is a parameter:
+    the empty case is the one where the offer cannot be made at all.
+    """
+    filler = catalog_by_name["Grizzly Bears"]
+    fiends = Permanent(card=set_pool("HML")["Timmerian Fiends"])
+    lotus = Permanent(card=catalog_by_name["Black Lotus"])
+    p1 = PlayerState(name="P1", battlefield=[fiends], library=[filler] * 3)
+    p2 = PlayerState(
+        name="P2",
+        battlefield=[lotus],
+        library=[catalog_by_name["Hill Giant"]] * victim_library,
+    )
+    game = Game(players=[p1, p2], playing_for_ante=ante)
+    game.enforce_mana_costs = False
+    return game, p1, p2, lotus
+
+
+def _w2g5_shake_down(game):
+    return game.activate_permanent_ability(
+        0, "Timmerian Fiends", target_player_index=1, target_permanent_index=0
+    )
+
+
+def test_timmerian_fiends_asks_the_artifacts_owner(set_pool, catalog_by_name):
+    """"**The owner of** target artifact may ante…" — the seat that owes the
+    decision is the one about to lose the artifact, not the activator."""
+    game, _p1, _p2, _lotus = _w2g5_fiends_board(set_pool, catalog_by_name)
+
+    result = _w2g5_shake_down(game)
+
+    assert result.supported, result.details
+    assert len(game.pending_choices_of("optional_pay", 1)) == 1
+    assert not game.pending_choices_of("optional_pay", 0)
+
+
+def test_timmerian_fiends_asks_the_owner_and_not_the_controller(
+    set_pool, catalog_by_name
+):
+    """CR 108.3 against CR 613 layer 2. With the Lotus stolen, its controller is
+    the activator and its **owner** is still P2 — and the card says owner, so
+    reading control here would make the activator offer the ante to themselves.
+    """
+    game, _p1, _p2, lotus = _w2g5_fiends_board(set_pool, catalog_by_name)
+    change_control(lotus, 0, source="test")
+    game._sync_control()
+    assert game.controller_index_of(lotus) == 0
+
+    # Named on the battlefield it is now projected onto — the activator's, by
+    # its stable id. That is the whole arrangement the test is about: the
+    # activator points at a permanent *they* control and the ante is still owed
+    # by somebody else.
+    result = game.activate_permanent_ability(
+        0, "Timmerian Fiends", target_player_index=0,
+        target_permanent_ids=[lotus.permanent_id],
+    )
+
+    assert result.supported, result.details
+    assert len(game.pending_choices_of("optional_pay", 1)) == 1
+    assert not game.pending_choices_of("optional_pay", 0)
+
+
+def test_anteing_keeps_the_artifact_where_it_is(set_pool, catalog_by_name):
+    """CR 407.4: the card is anted by the player who owns it, off their own
+    library — and paying buys the artifact back out of the exchange."""
+    game, p1, p2, lotus = _w2g5_fiends_board(set_pool, catalog_by_name)
+    top = p2.library[0]
+    _w2g5_shake_down(game)
+
+    game.confirm_optional_pay(1, card_name="Timmerian Fiends", accept=True)
+    game._settle()
+
+    assert [card.name for card in p2.ante] == [top.name]
+    assert p1.ante == []
+    assert lotus in list(game.all_permanents())
+    # The Fiends was sacrificed to pay the cost and stays in its owner's
+    # graveyard: nothing was exchanged.
+    assert [card.name for card in p1.graveyard] == ["Timmerian Fiends"]
+    assert p2.graveyard == []
+
+
+def test_declining_exchanges_ownership_of_both_cards(set_pool, catalog_by_name):
+    """"Exchange ownership of that artifact and this creature… This change in
+    ownership is permanent." (CR 108.3's ante exception, CR 407.)
+
+    Ownership in this engine is which player's zone a card sits in, so the two
+    printed graveyard moves *are* the exchange.
+    """
+    game, p1, p2, lotus = _w2g5_fiends_board(set_pool, catalog_by_name)
+    _w2g5_shake_down(game)
+
+    game.confirm_optional_pay(1, card_name="Timmerian Fiends", accept=False)
+    game._settle()
+
+    assert p2.ante == []
+    assert lotus not in list(game.all_permanents())
+    assert [card.name for card in p1.graveyard] == ["Black Lotus"]
+    assert [card.name for card in p2.graveyard] == ["Timmerian Fiends"]
+
+
+def test_an_owner_with_no_library_cannot_ante_so_the_exchange_stands(
+    set_pool, catalog_by_name
+):
+    """"…may ante the top card of their library. **If that player doesn't**, …"
+
+    An offer nobody can take is never made and its decline branch applies —
+    ``handlers/control_flow``'s own rule, asked through the same predicate so
+    the two paths cannot come to disagree about what is takeable.
+    """
+    game, p1, p2, lotus = _w2g5_fiends_board(
+        set_pool, catalog_by_name, victim_library=0
+    )
+
+    _w2g5_shake_down(game)
+    game._settle()
+
+    assert not game.pending_choices_of("optional_pay", 1)
+    assert [card.name for card in p1.graveyard] == ["Black Lotus"]
+    assert [card.name for card in p2.graveyard] == ["Timmerian Fiends"]
+
+
+def test_timmerian_fiends_is_inert_outside_a_game_played_for_ante(
+    set_pool, catalog_by_name
+):
+    """CR 108.3 fixes ownership for the whole game and CR 407 is the only
+    exception; CR 407.1 makes that variant opt-in. Same gate Tempest Efreet has.
+    """
+    game, p1, p2, lotus = _w2g5_fiends_board(
+        set_pool, catalog_by_name, ante=False
+    )
+
+    _w2g5_shake_down(game)
+    game._settle()
+
+    assert not game.pending_choices_of("optional_pay", 1)
+    assert lotus in list(game.all_permanents())
+    assert p2.graveyard == []
+
+
+def test_the_fiends_paragraph_targets_the_type_it_prints(set_pool):
+    """The printed card type is payload, so the picker, CR 602.2b's legality
+    gate and the handler all ask one question — and a card printing the same
+    paragraph about a creature would need no code."""
+    program = compile_card_oracle(set_pool("HML")["Timmerian Fiends"])
+    (ability,) = program.activated_abilities
+
+    assert ability.instruction.kind == "ante_or_exchange_ownership"
+    assert ability.instruction.payload["type_word"] == "artifact"
+    assert ability.instruction.payload["targets"] == {
+        "quantifier": "target", "kind": "object",
+        "filter": {"type_filter": "artifact"},
+    }

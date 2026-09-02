@@ -502,3 +502,107 @@ def test_funeral_march_makes_the_hosts_controller_sacrifice(set_pool):
     assert not any(perm is spare for perm in p2.battlefield)
     assert p1.battlefield == []
 
+
+
+# --- W2G5: cast locks, cost taxes and the tail ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g5_storm_board(set_pool, catalog_by_name):
+    """An Aether Storm on P2's side, with P1 and P2 each holding a creature.
+
+    The enchantment's own controller matters: "Creature spells can't be cast."
+    names nobody, so CR 601.3 stops **every** player, including the seat that
+    played it. A ban that spared its controller would be a strictly better card
+    than the one printed.
+    """
+    storm = Permanent(card=set_pool("HML")["Aether Storm"])
+    p1 = PlayerState(
+        name="P1",
+        hand=[catalog_by_name["Grizzly Bears"], catalog_by_name["Disenchant"]],
+    )
+    p2 = PlayerState(
+        name="P2", battlefield=[storm], hand=[catalog_by_name["Hill Giant"]],
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, storm
+
+
+def test_aether_storms_ban_is_claimed_by_the_table_that_enforces_it(set_pool):
+    """The card was already "supported" on its second line alone, so its count
+    does not move — what moves is that the first line is now read by something.
+
+    Asserted through the reader ``mixins/stack/casting.py`` asks, not through a
+    literal: a claim that does not go through the enforcing code is exactly the
+    drift ``engine/grammar/registries.py`` exists to prevent.
+    """
+    from engine.cast_restrictions import global_cast_ban_line
+    from engine.grammar.registries import registry_for_line
+
+    storm = set_pool("HML")["Aether Storm"]
+    assert compile_card_oracle(storm).supported
+
+    assert global_cast_ban_line("Creature spells can't be cast.") == "creature"
+    assert registry_for_line("Creature spells can't be cast.") == "cast_restrictions"
+    # The card type is payload, so a card printing the same sentence about
+    # another type needs no second row.
+    assert global_cast_ban_line("Artifact spells can't be cast.") == "artifact"
+    # …and a sentence naming a seat is the *other* table's (Brand of Ill Omen),
+    # which is why the two are not one reader: what differs is the scope.
+    assert global_cast_ban_line(
+        "Enchanted creature's controller can't cast creature spells."
+    ) is None
+
+
+def test_aether_storm_stops_both_players_casting_creatures(
+    set_pool, catalog_by_name
+):
+    """A printed prohibition is only done when something refuses the cast, so
+    this asserts the cast (CR 601.3) rather than the derivation."""
+    game, _ = _w2g5_storm_board(set_pool, catalog_by_name)
+
+    refused = game.cast_from_hand(0, "Grizzly Bears")
+    assert not refused.supported
+    assert "Aether Storm" in refused.details
+
+    its_own_controller = game.cast_from_hand(1, "Hill Giant")
+    assert not its_own_controller.supported, (
+        "the sentence names no seat, so it binds the seat that played it"
+    )
+
+
+def test_aether_storm_leaves_every_other_spell_alone(set_pool, catalog_by_name):
+    game, _ = _w2g5_storm_board(set_pool, catalog_by_name)
+
+    assert game.cast_from_hand(0, "Disenchant").supported
+
+
+def test_aether_storm_stops_an_artifact_creature(set_pool, catalog_by_name):
+    """CR 205.2: a card has **every** type its line names, so an Ornithopter is
+    a creature spell. ``primary_type`` picks one type off a list and would have
+    let this one through — the reading ``search_filters.card_has_type`` exists
+    to stop being made a fourth time."""
+    game, _ = _w2g5_storm_board(set_pool, catalog_by_name)
+    game.players[0].hand.append(catalog_by_name["Ornithopter"])
+
+    refused = game.cast_from_hand(0, "Ornithopter")
+
+    assert not refused.supported
+    assert "Aether Storm" in refused.details
+
+
+def test_aether_storms_ban_ends_with_the_enchantment(set_pool, catalog_by_name):
+    """The ban is read off the board on every cast rather than recorded, so
+    buying the enchantment out with its own ability lifts it with nothing to
+    clean up."""
+    game, storm = _w2g5_storm_board(set_pool, catalog_by_name)
+
+    game.activate_permanent_ability(1, "Aether Storm")
+    game._settle()
+
+    assert storm not in list(game.all_permanents())
+    assert game.cast_from_hand(0, "Grizzly Bears").supported
