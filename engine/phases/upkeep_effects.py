@@ -878,6 +878,80 @@ class UpkeepEffectsMixin:
             self.sacrifice_permanent(permanent)
             self.log.append(f"{controller.name} sacrificed {permanent.card.name} on upkeep")
 
+    @upkeep_effect("upkeep_self", "upkeep_counter_toll_or_cede_control")
+    def _on__upkeep_self__upkeep_counter_toll_or_cede_control(
+        self, ctx: UpkeepContext
+    ) -> None:
+        """Rogue Skycaptain: "Put a wage counter on this creature. You may pay
+        {2} for each wage counter on it. If you don't, remove all wage counters
+        from this creature and an opponent gains control of it."
+
+        CR 702.24a's ability with a different consequence, so everything up to
+        the decision is the cumulative-upkeep handler's: the counter goes on
+        first and unconditionally, and ``scaled_cost`` is handed the new total
+        rather than being left to look one up. Partial payment is not allowed
+        (CR 118.3), which ``can_pay_upkeep_cost`` already answers about the
+        whole escalated cost.
+
+        Both halves of the decline happen, and in the order the card prints
+        them. Removing the counters first is not cosmetic: it is what stops the
+        new controller inheriting an escalation they never grew, which is the
+        whole reason the card says it.
+
+        "An opponent" is the controller's choice; with one living opponent there
+        is nothing to choose, and in a larger game this takes the first living
+        opponent in seat order after them — the same simplification the Rohgahh
+        handler above names, and honest for the same reason.
+
+        The control change is a CR 613 layer-2 contribution keyed on this
+        permanent with no revert condition: the card prints no duration, so
+        nothing ends it — not even the Skycaptain leaving and returning, which
+        CR 400.7 makes a new object with no contribution at all.
+        """
+        from ..cumulative_upkeep import scaled_cost
+        from ..named_counters import add_counters, remove_counters
+
+        controller = ctx.controller
+        permanent = ctx.permanent
+        counter = str(ctx.trig.instruction.payload.get("per_counter") or "")
+        total = add_counters(permanent, counter, 1)
+        self.log.append(
+            f"{permanent.card.name} gains a {counter} counter ({total} total)"
+        )
+        cost = scaled_cost(ctx.trig.instruction, total)
+        human_choices = ctx.human_choices
+        if human_choices is not None and permanent.card.name in human_choices:
+            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_cost(
+                controller, cost
+            )
+        else:
+            paid = self.can_pay_upkeep_cost(controller, cost)
+        if paid:
+            self.pay_upkeep_cost(
+                controller, cost, reason=permanent.card.name, source=permanent
+            )
+            self.log.append(
+                f"{controller.name} paid {cost.describe()} for {permanent.card.name}"
+            )
+            return
+        remove_counters(permanent, counter, total)
+        seat = ctx.player_index
+        new_seat = next(
+            (
+                index
+                for offset in range(1, len(self.players))
+                for index in [(seat + offset) % len(self.players)]
+                if not self.players[index].lost
+            ),
+            None,
+        )
+        if new_seat is None:
+            return
+        self.take_control(permanent, new_seat, source=permanent)
+        self.log.append(
+            f"{self.players[new_seat].name} gains control of {permanent.card.name}"
+        )
+
     @upkeep_effect("upkeep_self", "upkeep_pay_or_destroy_self")
     def _on__upkeep_self__upkeep_pay_or_destroy_self(self, ctx: UpkeepContext) -> None:
         """Cosmic Horror: "destroy this creature unless you pay {3}{B}{B}{B}.

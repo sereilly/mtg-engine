@@ -164,6 +164,10 @@ _UPKEEP_PAY_KINDS = {
     # Rohgahh of Kher Keep: pay {R}{R}{R} or tap Rohgahh and every creature
     # named Kobolds of Kher Keep, then an opponent gains control of them all.
     "upkeep_pay_or_cede_named_creatures",
+    # Rogue Skycaptain: an escalating {2} per wage counter, or the counters come
+    # off and an opponent takes the creature. CR 702.24a's ability with a
+    # different decline, on the same `per_counter` payload key.
+    "upkeep_counter_toll_or_cede_control",
     # Optional pays with no decline consequence — pay to untap (Mana Vault /
     # Basalt Monolith untap themselves; Paralyze untaps the enchanted creature)
     # or pay for life (Farmstead's granted enchant-land upkeep ability).

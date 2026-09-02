@@ -145,6 +145,7 @@ from .damage import (
     RedirectDamage,
     DamageCantBePreventedOrRedirected,
     DamageReducedByPaidMana,
+    UpkeepCounterToll,
     UpkeepDamageUnlessCost,
 )
 from .characteristics import (
@@ -431,6 +432,7 @@ __all__ = [
     "DamageThoseDamagedThisGame",
     "DealDamage",
     "DamageUnlessPay",
+    "UpkeepCounterToll",
     "UpkeepDamageUnlessCost",
     "Fight",
     "PreventDamage",

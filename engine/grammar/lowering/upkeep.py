@@ -244,3 +244,47 @@ def _lower_upkeep_damage_unless_cost(
     if node.sacrifice.other_than_source:
         payload["exclude_self"] = True
     return (OracleInstruction("upkeep_damage_unless_cost", "", payload),)
+
+
+#: What "if you don't" does, as an instruction kind. The sacrifice arm *is*
+#: cumulative upkeep — CR 702.24a's own consequence — so it lands on the kind
+#: the keyword already produces and is run by the handler that already
+#: implements the rule; only the counter word differs, and that is payload
+#: there too. The cede arm is its own kind because nothing else does it.
+_TOLL_CONSEQUENCE_KINDS = {
+    "sacrifice": "cumulative_upkeep",
+    "cede_control": "upkeep_counter_toll_or_cede_control",
+}
+
+
+def _lower_upkeep_counter_toll(
+    node: ast.UpkeepCounterToll,
+) -> tuple[OracleInstruction, ...]:
+    """CR 702.24a's ability printed longhand (Phantasmal Sphere, Rogue
+    Skycaptain).
+
+    The escalation rides ``per_counter``, the same payload key the keyword form
+    carries, so ``cumulative_upkeep.scaled_cost`` is what reads it in both
+    cases — one arithmetic, asked by the prompt that quotes the cost and by the
+    handler that charges it, which is what keeps what a player is shown and what
+    they are charged from disagreeing.
+
+    The cost is written through ``UpkeepCost.payload`` rather than assembled
+    here, so an upkeep obligation from this production and one from the keyword
+    are read back by the same function (``upkeep_costs.cost_from_payload``) —
+    a payload spelled by hand here is how a cost that grows a second component
+    later gets dropped on one of the two paths.
+    """
+    from ...upkeep_costs import UpkeepCost
+
+    kind = _TOLL_CONSEQUENCE_KINDS.get(node.consequence)
+    if kind is None:
+        raise LoweringError(
+            f"no upkeep handler declines this toll with {node.consequence!r}",
+            node=node,
+        )
+    if not node.cost:
+        raise LoweringError("an upkeep toll charges something", node=node)
+    payload = UpkeepCost(mana=dict(node.cost)).payload()
+    payload["per_counter"] = node.counter
+    return (OracleInstruction(kind, "", payload),)

@@ -348,3 +348,41 @@ class UpkeepDamageUnlessCost:
     sacrifice: "ObjectFilter | None" = None
     #: "If it deals damage to you this way, **tap it**."
     taps_source: bool = False
+
+
+@dataclass(frozen=True)
+class UpkeepCounterToll:
+    """CR 702.24a's ability written out, with its counter and its consequence
+    as parameters.
+
+    ``Put a +1/+1 counter on this creature, then sacrifice this creature unless
+    you pay {1} for each +1/+1 counter on it.`` (Phantasmal Sphere.)
+    ``Put a wage counter on this creature. You may pay {2} for each wage counter
+    on it. If you don't, remove all wage counters from this creature and an
+    opponent gains control of it.`` (Rogue Skycaptain.)
+
+    **One node for two printed spellings**, because CR 118.12a says they are one
+    sentence: "[do something] unless [a player does something else]" means "[a
+    player may do something else]. If they don't, [do something]." A node per
+    spelling would be two readings of one rule, free to disagree about the
+    escalation — which is the whole content of the paragraph.
+
+    And one node for two *consequences*, for the reason every other parameter in
+    this grammar is payload: the counter word, the cost and what happens when
+    the cost is declined are what the printings vary, and the frame around them
+    is the keyword's own definition. The keyword form itself is not read here —
+    ``engine/cumulative_upkeep.py`` rewrites "Cumulative upkeep [cost]" before a
+    line is classified, and this is the longhand a card prints instead.
+
+    Sitting in the damage family's module beside :class:`UpkeepDamageUnlessCost`
+    for the reason that one gives: the upkeep paragraph productions are one
+    family and their nodes live where the first of them did.
+    """
+
+    #: The counter word CR 702.24a calls "age": "+1/+1", "wage", "wind".
+    counter: str
+    #: What the payment costs *per counter*, as printed mana symbols.
+    cost: dict
+    #: What happens when it is declined — "sacrifice" (CR 702.24a's own) or
+    #: "cede_control" (Rogue Skycaptain's, which also clears the counters).
+    consequence: str = "sacrifice"

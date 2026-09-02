@@ -90,6 +90,7 @@ from .damage import (
 )
 from .upkeep import (
     _lower_damage_reduced_by_paid_mana,
+    _lower_upkeep_counter_toll,
     _lower_upkeep_damage_unless_cost,
     _lower_damage_unless_pay,
 )
@@ -350,6 +351,7 @@ __all__ = [
     "_lower_damage_unless_pay",
     "_lower_damage",
     "_lower_damage_reduced_by_paid_mana",
+    "_lower_upkeep_counter_toll",
     "_lower_upkeep_damage_unless_cost",
     "_lower_damage_dealt_riders",
     "_lower_damage_conjunction",

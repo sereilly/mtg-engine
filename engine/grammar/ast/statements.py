@@ -44,6 +44,7 @@ from .damage import (
     DealDamage,
     PreventDamage,
     RedirectDamage,
+    UpkeepCounterToll,
     UpkeepDamageUnlessCost,
 )
 from .characteristics import (
@@ -218,6 +219,7 @@ Effect = Union[
     PhaseOut,
     AddManaForTappedLand, NoteManaSpent, ProducesManaInstead, SpendManaAsThough, PreventDamage,
     RedirectDamage, DamageCantBePreventedOrRedirected, DamageReducedByPaidMana,
+    UpkeepCounterToll,
     UpkeepDamageUnlessCost,
     ExileBoundCard, PutExiledCardIntoHand, RepeatedGraveyardPick, NameThenConsult,
     SearchLibrary, SearchPlayerLibrary, SearchAndExile, TransmuteBySacrifice,

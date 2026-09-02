@@ -388,6 +388,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The controller-chosen sacrifice (Dire Fleet Warmonger's optional cost).
     "sacrifice_matching_permanent": "zones",
     "sacrifice_attached_permanent": "zones",
+    # Rogue Skycaptain's decline: clear the counters and hand the permanent
+    # over. Cumulative upkeep's own decline is a sacrifice and stays on the
+    # `cumulative_upkeep` kind, so this is the family's second consequence
+    # rather than a second reading of the paragraph.
+    "upkeep_counter_toll_or_cede_control": "upkeep",
     "upkeep_pay_or_sacrifice_enchantment": "upkeep",
     "upkeep_pay_or_sacrifice_self": "upkeep",
     # The destroy twin (Cosmic Horror). Same family: it is the upkeep's
