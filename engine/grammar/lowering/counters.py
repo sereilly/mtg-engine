@@ -106,10 +106,9 @@ def _lower_put_counter(
                 "a distributed placement counts a fixed or variable number",
                 node=node,
             )
-        # "among one or two target creatures" (Contagion). CR 601.2c fixes the
-        # number of targets at announcement, so the printed ceiling travels to
-        # the casting path's gate rather than to the handler: a bound checked
-        # at resolution has already spent the mana.
+        # "among one or two target creatures" (Contagion) — CR 601.2c's ceiling,
+        # shaped by `divided_target_description`, which is where the four
+        # readers of these keys and the reason they share them are recorded.
         return (
             OracleInstruction("add_counter_to_target", "", {
                 "counter": node.counter,
