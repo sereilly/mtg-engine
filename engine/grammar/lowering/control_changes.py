@@ -326,7 +326,7 @@ def _lower_gain_control(
         # the Machine.) The same contribution the until-end-of-turn branch
         # records, with the one thing that decides everything downstream
         # inverted: cleanup drops a contribution stamped ``until_eot`` and
-        # leaves this one alone (CR 611.2). That fact is the *kind* rather than
+        # leaves this one alone (CR 611.2a). That fact is the *kind* rather than
         # a payload flag, because the handler both kinds share reads it to
         # decide the lifetime — a payload key would let a lowering that forgot
         # it record a steal that quietly ends at cleanup.

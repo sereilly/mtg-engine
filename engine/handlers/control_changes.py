@@ -61,7 +61,7 @@ def gain_control_until_eot(game: Game, instruction: OracleInstruction, context: 
     collapse to one contribution, which is the right answer: both end at the same
     cleanup.
 
-    **Two kinds, one handler, and the lifetime read off the kind.** CR 611.2
+    **Two kinds, one handler, and the lifetime read off the kind.** CR 611.2a
     gives an effect with no stated duration no end at all, so the untimed steal
     is this same contribution with ``until_eot`` false — everything else about
     it (the CR 608.2b re-check, Guardian Beast's prohibition, the rescope of

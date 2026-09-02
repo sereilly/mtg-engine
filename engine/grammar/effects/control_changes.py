@@ -34,7 +34,7 @@ def _parse_gain_control(
     "for as long as you control this <noun>" (Aladdin, The Wretched), that
     clause with "…and this <noun> remains tapped" behind it (Willow Satyr,
     Rubinia Soulsinger), and — since Ritual of the Machine — **no clause at
-    all**, which CR 611.2 makes an indefinite change rather than a missing one.
+    all**, which CR 611.2a makes an indefinite change rather than a missing one.
     A differently-conditioned one (Old Man of the Sea's power comparison)
     reverts on things nothing here watches, and is this production's sentence
     with the ending changed, so it has to fail rather than borrow a linked
@@ -78,7 +78,7 @@ def _parse_gain_control(
         return ast.GainControl(subject, "until_end_of_turn")
     if not stream.accept_phrase("for", "as", "long", "as"):
         # "Gain control of target nonartifact, nonblack creature." (Ritual of
-        # the Machine.) CR 611.2: a continuous effect with no stated duration
+        # the Machine.) CR 611.2a: a continuous effect with no stated duration
         # lasts as long as the game does — which for a layer-2 contribution
         # means nothing ever drops it, not that nothing records it.
         return ast.GainControl(subject, "indefinite")

@@ -143,7 +143,7 @@ class GainControl:
     production that let the clause be absent would also let it be *deleted*
     with no change to what was lowered.
 
-    The untimed steal now has a *name* — ``"indefinite"`` (CR 611.2: an effect
+    The untimed steal now has a *name* — ``"indefinite"`` (CR 611.2a: an effect
     with no stated duration lasts until the game ends) — rather than a missing
     value, and that is the whole of why the field stayed required. ``None``
     would have been the deleted-clause value the paragraph above warns about;
