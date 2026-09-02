@@ -110,9 +110,17 @@ def test_it_declines_a_card_a_lockout_bans(catalog_by_name):
     assert not _proposes(game, "Brass Man")
 
 
-@pytest.mark.parametrize("code", ("LEA", "ARN", "ATQ", "3ED", "LEG", "DRK", "4ED", "M21"))
+from engine.card_loader import manifest_set_codes
+
+
+@pytest.mark.parametrize("code", manifest_set_codes())
 def test_a_batch_over_every_set_proposes_no_refused_cast(code, set_cards):
     """The end-to-end statement, and the one that would catch a fifth shape.
+
+    Parametrized over the manifest rather than a spelled-out tuple: the old
+    list named 8 of 13 shipped codes — LEB, 2ED, FEM, ICE and HML were never
+    batch-checked, which is the same stale-second-copy failure the set-argument
+    convention exists for, one layer up.
 
     ``refused_casts`` counts casts the engine declined for a rules reason; the
     AI should never produce one, because it can ask every gate the cast path

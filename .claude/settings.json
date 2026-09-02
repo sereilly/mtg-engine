@@ -1,9 +1,32 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_failed_cards_regressions_batch9.py tests/test_batch9_ui_api.py -q)",
-      "Bash(./.venv/Scripts/python.exe -m pytest -q -k \"soul_net or sengir or SoulNet or Sengir or soul net\")",
-      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest tests/test_combat_phase.py -q)"
+      "Bash(./.venv/Scripts/python.exe -m pytest:*)",
+      "PowerShell(.\\.venv\\Scripts\\python.exe -m pytest:*)",
+      "Bash(./.venv/Scripts/python.exe scripts/support_report.py:*)",
+      "Bash(./.venv/Scripts/python.exe scripts/retrieve_oracle.py:*)",
+      "Bash(./.venv/Scripts/python.exe scripts/grammar_coverage.py:*)",
+      "Bash(./.venv/Scripts/python.exe scripts/hook_reliance.py:*)",
+      "Bash(./.venv/Scripts/python.exe scripts/parse_coverage.py:*)",
+      "Bash(./.venv/Scripts/python.exe scripts/behaviour_classes.py:*)",
+      "Bash(./.venv/Scripts/python.exe scripts/rules_progress.py:*)",
+      "Bash(./.venv/Scripts/python.exe scripts/rules_gaps.py:*)",
+      "Bash(./.venv/Scripts/python.exe scripts/set_progress.py:*)",
+      "Bash(./.venv/Scripts/python.exe scripts/oracle_diff.py:*)",
+      "Bash(./.venv/Scripts/python.exe scripts/picker_sweep.py:*)",
+      "Bash(./.venv/Scripts/python.exe scripts/check_all.py:*)",
+      "PowerShell(.\\.venv\\Scripts\\python.exe scripts/support_report.py:*)",
+      "PowerShell(.\\.venv\\Scripts\\python.exe scripts/retrieve_oracle.py:*)",
+      "PowerShell(.\\.venv\\Scripts\\python.exe scripts/grammar_coverage.py:*)",
+      "PowerShell(.\\.venv\\Scripts\\python.exe scripts/hook_reliance.py:*)",
+      "PowerShell(.\\.venv\\Scripts\\python.exe scripts/parse_coverage.py:*)",
+      "PowerShell(.\\.venv\\Scripts\\python.exe scripts/behaviour_classes.py:*)",
+      "PowerShell(.\\.venv\\Scripts\\python.exe scripts/rules_progress.py:*)",
+      "PowerShell(.\\.venv\\Scripts\\python.exe scripts/rules_gaps.py:*)",
+      "PowerShell(.\\.venv\\Scripts\\python.exe scripts/set_progress.py:*)",
+      "PowerShell(.\\.venv\\Scripts\\python.exe scripts/oracle_diff.py:*)",
+      "PowerShell(.\\.venv\\Scripts\\python.exe scripts/picker_sweep.py:*)",
+      "PowerShell(.\\.venv\\Scripts\\python.exe scripts/check_all.py:*)"
     ]
   }
 }
