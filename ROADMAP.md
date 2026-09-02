@@ -1285,6 +1285,142 @@ family, almost all reading *histories* off records) against the bare
 participial and prepositional modifiers around it. `lowering/counters.py` and
 `subject_verb.py` are both at 998.
 
+### W2G2 — costs. Merged; 97 → 102.
+
+Five cards (Contagion, Ritual of the Machine, Wandering Mage, Soldevi Adnate,
+Viscerid Drone), zero hooks. ALL's grammar row 66.5% → 68.9% parsed.
+
+**Traitorous Greed (M21, shipped) could be cast naming a land.** "Gain control
+of target **creature** until end of turn" — the announcement was legal, the
+spell resolved, found nothing, and the caster lost a card to a cast CR 601.2c
+forbids. `_validate_cast_targets` is a per-kind chain with **no control-change
+arm**, and `derive_cast_spec` reduces those kinds to a bare `{"kind":
+"creature"}` picker carrying no printed narrowing. Nothing looked wrong because
+Greed's only narrowing *is* its head noun; it took the first card in the pool to
+print a real one (Ritual of the Machine's "nonartifact, nonblack") to expose it.
+
+**A cost regex that read a word where the card prints a token.** Wandering
+Mage's `-1/-1` is a **PT token**, and both readers — the production and the
+charger — read the counter kind off a bare word, so the clause matched nothing.
+For a charger that is a **free ability**, not a refused one. A second latent
+free-ability hole closed beside it: the self-targeting counter-cost regex was
+`[a-z]+` only.
+
+**The disjunction correction that matters for later sets.** W1G4's
+shared-head reading was *one axis* (`a red or green card`, the `any_colors`
+union). `black or artifact creature` straddles **two** — CR 105 colour × CR
+205.2 card type — and `any_classes` had no payload form and no matcher at all,
+being explicitly listed as a narrowing every lowering must refuse.
+
+The group handed `lowering/counters.py` back at **998**, the size it was lent
+at, by moving the divided-target description into `_common` rather than
+appending — "a 999 with four sibling branches still to merge is precisely the
+cap breach the playbook records as caused by no single branch".
+
+### W2G4 — library and modal. Merged; 102 → 108.
+
+Six cards (Browse, Ashnod's Cylix, Diminishing Returns, Misinformation,
+Lodestone Bauble, Library of Lat-Nam), zero hooks, and **three cap splits taken
+in-branch**: `imperatives` out of `subject_verb`, `effects/search` out of
+`effects/library`, `zones` out of `postmodifiers`. `search` is the first
+**parse-only** family — a tutor lowers to one instruction however elaborately it
+is printed — and is subtracted from `LOWERING_FAMILIES` and `AST_FAMILIES` with
+the reason recorded.
+
+**Winds of Change (LEG/4ED/5ED, shipped) lost a commander to the library.**
+Under the Commander variant it shuffled a commander out of a hand *into the
+library* instead of the command zone: `shuffle_hand_into_library` moved the whole
+hand with `player.library.extend(player.hand)`, so `Game.put_card_into_library`
+— and therefore CR 903.9b — was never asked. Nothing crashed and nothing was
+missing; the commander was simply gone for the rest of the game. This is exactly
+why CLAUDE.md requires those two seams: the rule has no single fire site.
+
+**CR 700.2e is the sentence the brief should have named.** It is the one that
+says *when* the other player chooses a mode — "when the spell or ability's
+controller normally would", i.e. inside CR 601.2b as the spell is cast.
+Reasoning from 601.2b alone puts the choice on the caster; deferring it to
+resolution makes a different card again.
+
+**`parse_coverage.py`'s "modal machinery" claim was a substring**
+(`startswith("choose one")`) — a second reading of a line the compiler already
+reads, and it went stale the moment a head printed its chooser: Library of
+Lat-Nam compiled, carried its modes, and reported its own head as text nothing
+parses. Now routed through the compiler's own reader, `oracle.modal_head_line`.
+
+**Four of W1G5's named parts were already done or misdiagnosed** — including
+"the seat, the hard one", which has been on the wire since Drafna's Restoration.
+The real gap was **scope**: `own_graveyard_only` had no opponent-side twin, so
+an unscoped picker would have offered Misinformation's caster their own
+graveyard. Second wave-1 decline in two rounds to shrink on contact.
+
+**Stale CR citations are wider than what was fixed.** CR 701.19 is *Regenerate*;
+Search is 701.23 and Shuffle is 701.24. Six were corrected; roughly a dozen
+remain in `engine/`. `rules_gaps.py` cannot flag them — the numbers exist, they
+are just the wrong rule.
+
+### W2G5 — damage, prevention and zones. Merged; 108 → 115.
+
+Seven of thirteen landed (Hail Storm, Stench of Decay, Exile, Phelddagrif,
+Energy Arc, Floodwater Dam, Scarab of the Unseen), six declined with parts
+named, zero hooks.
+
+**A card whose name is an effect verb had its own verb eaten.** The lexer
+collapsed *Exile*'s printed verb to a SELF token, so the card parsed as a
+subject with no verb and refused naming a word it does not print. The fix
+mirrors the `_in_type_position` rule already beside it and requires **two**
+conditions, because a pool scan finds four cards whose name is followed by a
+noun-phrase opener and three are genuine self-references. The differential is
+the whole safety argument: a lexer change touches every card in the pool and
+**moved exactly one**.
+
+**A draw that dealt damage.** The inline land-tap fire site's Manabarbs arm was
+the loop's `else`, so any unrecognized instruction kind was read for an `amount`
+and dealt as damage, **defaulting to 1** — "Whenever a Mountain is tapped for
+mana, that player draws a card", a sentence the grammar has lowered all along in
+the passive voice, dealt a point of damage. Pre-existing; the round widened the
+exposure and then named the kind.
+
+**A shipped handler with two caller shapes.** `return_all_matching` read
+`context.target_permanent_id` raw, but a *spell* records one id where an
+*activated ability* records the announced list — Word of Undoing is a spell and
+never saw it.
+
+Recorded as a negative: **"one or more target" has no enforced floor.** There is
+no `min_targets` anywhere in the engine, so Heaven's Gate and its four colour
+siblings may already be castable naming nothing. Inherited, not introduced.
+
+Seven of thirteen scoping claims were wrong, and again in one direction:
+Scarab's "plural owners" part did not exist (`return_all_matching` already reads
+`owner_index_of` per permanent), Phelddagrif was **one** broken line rather than
+three — a round that "fixed three" would have changed two working programs —
+and Floodwater Dam's refusal was not about X at all but a `card_types` demand
+its own untap twin does not make.
+
+### Wave 2 integration: two branches split one module, and both moved the same function
+
+`postmodifiers.py` was split **twice in one wave** — W2G4 extracting `zones`,
+W2G5 extracting `readers` — and **both moved `_parse_zone_owner_of`**. One
+function, two homes, and `test_no_module_defines_the_same_name_twice` cannot see
+it because it looks for a repeated name *within* a module. `zones` keeps it:
+that module's own docstring makes the argument, since CR 404.1 means a card is
+in the graveyard of the player who owns it, so the pile and the seat are one
+answer read together.
+
+The same merge carried idiom 26 in its purest form: W2G4 **moved** the
+token-recipient block into `imperatives.py` while W2G5 **rewrote it in place**
+in `subject_verb.py`, so the conflict presented as "ours: nothing, theirs: the
+whole function". Taking either side loses a group's work; the resolution is to
+take the *structure* from the mover and re-apply the *change* in the file it
+moved to.
+
+And the per-set convention hit its documented failure mode: one file came back
+as **two** conflict regions rather than one. Reconstructing from the merge base
+with an explicit assertion is what makes that safe — and the assertion **fired
+once**, correctly, when W2G2 had edited a W1G4 decline docstring in place to
+record that its named part had landed. That is the convention working, not
+breaking: the strict "both sides are pure appends" rule inverts to "the incoming
+side must be", and the file is resolved on that instead.
+
 ### Wave 1 closed: 62 → 89 of 144, zero hooks added
 
 Five worktree groups, five merges, and the integration cost ran at roughly the
