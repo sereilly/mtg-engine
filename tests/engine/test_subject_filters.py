@@ -403,6 +403,8 @@ _COVERED_ELSEWHERE = {
         "test_controlled_since_turn_start_rejects_a_creature_that_just_arrived",
     "tapped_to_pay_for_source_this_turn":
         "test_tapped_to_pay_names_only_what_paid_for_this_source",
+    "other_than_attached_host":
+        "test_other_than_attached_host_excludes_one_permanent_by_identity",
     "controller_controls":
         "test_controller_controls_asks_about_the_candidate_s_own_seat",
     "banded_with_source": "test_banded_with_source_names_only_the_band",
@@ -692,6 +694,45 @@ def test_tapped_to_pay_names_only_what_paid_for_this_source(pool):
     assert not subject_matches(game, paid_for_someone_else, described, source=source)
     assert not subject_matches(game, just_tapped, described, source=source)
     assert not subject_matches(game, paid_for_me, described)
+
+
+def test_other_than_attached_host_excludes_one_permanent_by_identity(pool):
+    """"target creature **other than enchanted creature**" (Kjeldoran Pride),
+    and the same referent under Veteran's Voice's "other than the creature
+    tapped this way".
+
+    An exclusion, so it is demonstrated by what it *keeps* as much as by what it
+    drops: a filter rejecting everything would pass a one-sided check, and so
+    would one rejecting nothing on a board of a single creature.
+
+    Its own demonstration rather than a row in ``_REJECTIONS``, because that
+    table asks each key to reject with no source in hand — and with no source
+    this excludes nothing, which is the correct answer for an exclusion and the
+    wrong shape for that table. Excluding on a missing source is the direction
+    that would silently *narrow* a set the caller could not describe.
+
+    Identity is the point: a look-alike on the same battlefield is a different
+    permanent and stays a legal target. ``other_than_source`` could not have
+    said any of this — the source is the Aura, and no creature is ever it, so
+    that key would have excluded nothing at all.
+    """
+    from engine.auras import attach_aura
+
+    host = Permanent(card=pool["Grizzly Bears"])
+    look_alike = Permanent(card=pool["Grizzly Bears"])
+    aura = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[host, look_alike, aura]),
+        PlayerState(name="P2"),
+    ])
+    attach_aura(aura, host)
+
+    described = {"other_than_attached_host": True}
+    assert not subject_matches(game, host, described, source=aura)
+    assert subject_matches(game, look_alike, described, source=aura)
+    # A source attached to nothing excludes nothing.
+    assert subject_matches(game, host, described, source=look_alike)
+    assert subject_matches(game, host, described)
 
 
 def test_attacking_you_is_two_questions_not_one(pool):

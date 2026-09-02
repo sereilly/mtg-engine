@@ -1284,11 +1284,29 @@ class PermanentStateMixin:
                     continue
                 cs_power = int(cs.payload.get("power", 0))
                 cs_toughness = int(cs.payload.get("toughness", 0))
-                if not (cs_power or cs_toughness):
+                # "…gets +2/+1 as long as it's black. **Otherwise**, it gets
+                # -1/-2." (Phyrexian Boon.) The complement arm, on the same
+                # instruction as the arm it complements — so the criteria are
+                # evaluated **once** and the answer selects which delta applies,
+                # rather than two instructions asking two questions that can
+                # both come back true.
+                #
+                # Read before the "no delta" skip below, because an arm that is
+                # 0/0 while its complement is not is still a live effect: the
+                # skip is for a keyword-only conditional static, which has no
+                # delta on either side.
+                other_power = int(cs.payload.get("otherwise_power", 0))
+                other_toughness = int(cs.payload.get("otherwise_toughness", 0))
+                if not (cs_power or cs_toughness or other_power or other_toughness):
                     continue
                 holds = conditional_static_holds(
                     self, seat, permanent, cs.payload.get("condition") or {}
                 )
+                if not holds and (other_power or other_toughness):
+                    # The other arm is not "the absence of this one": it is a
+                    # contribution in its own right, applied by the same channel
+                    # and cleared by the same rebuild.
+                    cs_power, cs_toughness, holds = other_power, other_toughness, True
                 # "**Enchanted** creature gets +2/+2 as long as an opponent
                 # controls a black permanent" (Ice Age's five Scarabs). The
                 # sentence an Aura prints about its host, on the same

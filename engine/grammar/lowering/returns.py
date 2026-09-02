@@ -342,6 +342,50 @@ def _lower_return_to_zone(
                 "records none",
                 node=node,
             )
+        # "When enchanted creature dies, **return that card to the battlefield
+        # under your control**." (False Demise.) The same move Seraph and
+        # Krovikan Vampire print as "put that card onto the battlefield under
+        # your control", and CR 400.1 knows only the zone change — "return to"
+        # and "put onto" are one event, so they lower to the one instruction
+        # rather than to a second handler doing the same move from the same
+        # record.
+        #
+        # The verb is what sends the two spellings down different lowering
+        # families (``zones`` reads "put onto"), which is why this is the
+        # branch and not a row of a word table: the destination is the whole
+        # difference, and it is read here.
+        if node.to.name == "battlefield":
+            if node.under_control_of is None or node.under_control_of.kind != "you":
+                # The handler puts it under the *ability controller's* control
+                # and says so. Any other seat would be a card the engine hands
+                # to the wrong player, silently.
+                raise LoweringError(
+                    "the bound-card reanimation only puts it under your control",
+                    node=node,
+                )
+            unread = [
+                name for name in (
+                    "entering_tapped", "exile_on_leave", "also_stack",
+                    "attached_to", "actor", "repetitions",
+                    "losing_subtypes", "losing_abilities", "gaining_abilities",
+                )
+                if getattr(node, name, None)
+            ]
+            if unread or node.from_zone is not None:
+                # ``reanimate_bound_card`` reads none of these. A rider lowered
+                # into a payload the handler ignores is a card that reports
+                # supported and comes back without the half the sentence spent
+                # its words on.
+                raise LoweringError(
+                    "the bound-card reanimation honours no further rider",
+                    node=node,
+                )
+            if _restrictions_beyond(subject.filter, frozenset({"is_card", "zone"})):
+                raise LoweringError(
+                    "the bound-card reanimation honours no further narrowing",
+                    node=node,
+                )
+            return (OracleInstruction("reanimate_bound_card", "", {}),)
         if node.to.name != "hand" or node.to.owner is None:
             raise LoweringError(
                 "the bound card returns to a hand alone", node=node

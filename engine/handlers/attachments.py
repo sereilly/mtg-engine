@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..equipment import attach_equipment, equip_refusal
+from ..equipment import attach_equipment, attachment_refusal
 from ..oracle_types import OracleInstruction
 from .registry import effect_handler
 
@@ -64,7 +64,12 @@ def attach_source_to_target(
     def legal(candidate) -> bool:
         return (
             subject_matches(game, candidate, described, observer=caster_index, source=equipment)
-            and equip_refusal(game, equipment, candidate) is None
+            # CR 701.3 asked of whichever kind of Attachment this is — an
+            # Aura's legality is its enchant clause, not CR 301.5's. See
+            # ``equipment.attachment_refusal``; asking the Equipment half of it
+            # for an Aura refused every host, so the ability resolved and moved
+            # nothing.
+            and attachment_refusal(game, equipment, candidate) is None
         )
 
     target_id = context.target_permanent_id

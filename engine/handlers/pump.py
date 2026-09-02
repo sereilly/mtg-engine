@@ -1507,6 +1507,37 @@ def grant_self_keyword_until_eot(game: Game, instruction: OracleInstruction, con
     return True, "resolved"
 
 
+@effect_handler("grant_enchanted_keyword_until_eot")
+def grant_enchanted_keyword_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…**it** gains trample until end of turn", where "it" is the enchanted
+    creature (Bestial Fury).
+
+    ``grant_self_keyword_until_eot``'s subject read off the attachment record
+    instead of off the ability's own source — the keyword twin of
+    ``pump_enchanted_creature``, and one printed sentence produces both.
+
+    The host comes from ``attached_host`` rather than a raw
+    ``metadata["attached_to"]`` read, so a resolution that has already removed
+    the Aura still knows whose creature it was (CR 603.10) — the same fallback
+    Cocoon needs one family over.
+    """
+    from ._common import attached_host
+
+    card = context.card
+    enchanted = attached_host(game, context.source_permanent)
+    if enchanted is None:
+        return False, "aura not attached to a creature"
+    keywords = tuple(instruction.payload.get("keywords") or ())
+    lifetime = grant_lifetime(game, instruction, context)
+    for keyword in keywords:
+        _grant_one_keyword(game, enchanted, keyword, context, lifetime)
+    game.log.append(
+        f"{card.name}: {enchanted.card.name} gains {' and '.join(keywords)}"
+        + DURATION_WORDS.get(lifetime["duration"], "")
+    )
+    return True, "resolved"
+
+
 @effect_handler("set_base_pt_target_until_eot")
 def set_base_pt_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Sorceress Queen ("has base power and toughness 0/2") / Singing Tree

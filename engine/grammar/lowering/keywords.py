@@ -326,6 +326,32 @@ def _lower_gain_keyword(
                 {"keywords": tuple(node.keywords), "duration": duration},
             ),
         )
+    # "…**it** gains trample until end of turn", where the trigger's subject was
+    # the enchanted creature (Bestial Fury). The keyword half of the same
+    # rebinding ``pump_enchanted_creature`` already carries one family over: the
+    # pronoun points at the Aura's host, not at the Aura, and an Aura that gave
+    # *itself* trample is a card doing nothing at all.
+    #
+    # Checked before the source/target split below, because the rebound subject
+    # is neither: it is a `TargetSpec` the reader never picks, resolved at
+    # resolution off the attachment record.
+    if _is_enchanted(node.subject):
+        if _restrictions_beyond(
+            node.subject.filter, frozenset({"card_types", "is_enchanted"})
+        ):
+            raise LoweringError(
+                "the attached keyword grant reads the permanent its Aura is "
+                "attached to and nothing narrower",
+                node=node,
+            )
+        for keyword in node.keywords:
+            _check_grantable(keyword, node)
+        return (
+            OracleInstruction(
+                "grant_enchanted_keyword_until_eot", "",
+                {"keywords": tuple(node.keywords), "duration": duration},
+            ),
+        )
     scope = "self" if _is_source(node.subject) else ("target" if _is_target(node.subject) else None)
     if scope is None:
         raise LoweringError("unsupported keyword-grant subject", node=node)

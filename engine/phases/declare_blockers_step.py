@@ -1564,7 +1564,21 @@ class DeclareBlockersStepMixin:
             ] + [
                 (attachment, aura_seat, trig)
                 for aura_seat, attachment, trig in attached_subject_triggers(
-                    self, attacker, {"creature_blocks_or_blocked_by"},
+                    self, attacker,
+                    {
+                        "creature_blocks_or_blocked_by",
+                        # "Whenever **enchanted creature** becomes blocked"
+                        # (Bestial Fury) — the attacking half on its own, where
+                        # the joined kind beside it is the pair. Both are the
+                        # attacker's event and both are printed on something
+                        # attached to it, so both are read from the attachment
+                        # scan here; the attacker's own card is scanned above
+                        # for the same two kinds. Leaving this one out is how a
+                        # trigger compiles, claims, reports supported and never
+                        # fires — the one failure `attached_subject_triggers`
+                        # exists to make impossible to repeat per card.
+                        "creature_becomes_blocked",
+                    },
                     "combatant_attached",
                 )
             ]

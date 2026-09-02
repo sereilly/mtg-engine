@@ -122,6 +122,7 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # so it is honoured in the same sense every state word here is — what it
     # additionally needs is the ability's source, which that function takes.
     "tapped_to_pay_for_source_this_turn",
+    "other_than_attached_host",
     "attached_to_filter",
     # "…**whose controller controls an Island**" (Seasinger). ``to_payload``
     # emits it unconditionally, and ``subject_filters.subject_matches`` is what

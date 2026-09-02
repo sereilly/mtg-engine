@@ -165,6 +165,37 @@ def is_equipment(permanent: "Permanent") -> bool:
     return permanent.has_type("equipment")
 
 
+def attachment_refusal(
+    game: "Game", attachment: "Permanent", host: "Permanent"
+) -> str | None:
+    """Why *attachment* may not become attached to *host*, or None when it may.
+
+    The one question ``attach_source_to_target`` asks — at the picker
+    (CR 602.2b) and again at resolution (CR 608.2b) — dispatched on what the
+    attaching permanent is, because CR 301.5 and CR 303.4 are different rules
+    with different legality:
+
+    * an Equipment attaches by :func:`equip_refusal` (a creature, never itself,
+      never through protection);
+    * an Aura attaches by ``auras.aura_attach_refusal``, which reads the
+      **enchant ability** (CR 702.5) — the noun it names, the seat clause, and
+      CR 303.4's protection half.
+
+    Both call sites used to ask ``equip_refusal`` outright, and its
+    ``is_equipment`` guard then refused *every* host for an Aura. Kjeldoran
+    Pride's "{2}{U}: Attach this Aura to target creature other than enchanted
+    creature" is the card that found it: the ability compiled, claimed, reported
+    supported, offered an empty picker and moved nothing. An Aura with its own
+    attach ability is not an exotic shape — it is CR 701.3 asked by the other
+    kind of Attachment.
+    """
+    from .auras import aura_attach_refusal
+
+    if attachment.has_type("aura"):
+        return aura_attach_refusal(game, attachment, host)
+    return equip_refusal(game, attachment, host)
+
+
 def equipped_creature(equipment: "Permanent") -> "Permanent | None":
     """The creature *equipment* is attached to, or None (CR 301.5a)."""
     return equipment.metadata.get("attached_to")
@@ -224,8 +255,18 @@ def attach_equipment(game: "Game", equipment: "Permanent", creature: "Permanent"
 
     The record written is the Aura one (``engine/auras.py``), and
     :func:`auras.attach_aura` stamps the fresh timestamp CR 613.7e requires.
+
+    **The legality is asked of whichever kind of Attachment this is.** CR 701.3
+    is one action and an Aura can be its subject: Kjeldoran Pride's "{2}{U}:
+    Attach this Aura to target creature other than enchanted creature" arrives
+    here exactly as an equip ability does. Asking ``equip_refusal`` outright
+    refused it on ``is_equipment`` and logged "is no longer an Equipment" about
+    a card that never was one — the ability resolved, reported resolved, and
+    moved nothing. The function keeps its Equipment-shaped name because that is
+    still what nearly every caller is; what it must not keep is an
+    Equipment-shaped *rule*.
     """
-    refusal = equip_refusal(game, equipment, creature)
+    refusal = attachment_refusal(game, equipment, creature)
     if refusal is not None:
         game.log.append(f"{equipment.card.name} doesn't move: {refusal}")
         return False

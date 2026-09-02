@@ -387,6 +387,8 @@ class ObjectFilter:
     # ``subject_matches`` already takes. A caller with no source answers no,
     # which refuses the sweep rather than handing it the board.
     tapped_to_pay_for_source_this_turn: bool = False
+    #: "…other than enchanted creature" (Kjeldoran Pride).
+    other_than_attached_host: bool = False
     # "all creatures **banded with it**" (Icatian Skirmishers), "creatures
     # **banded with this creature**" (Camel). Membership of the attacking band
     # the ability's own source is in (CR 702.22e) — a relation, like
@@ -565,6 +567,8 @@ class ObjectFilter:
             payload["blocked_source_this_turn"] = True
         if self.tapped_to_pay_for_source_this_turn:
             payload["tapped_to_pay_for_source_this_turn"] = True
+        if self.other_than_attached_host:
+            payload["other_than_attached_host"] = True
         if self.banded_with_source:
             payload["banded_with_source"] = True
         if self.attacking_you:

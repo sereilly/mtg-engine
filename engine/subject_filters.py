@@ -162,6 +162,7 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # tests it. Relative to the ability's own source, which makes it testable
     # here and nowhere else — the same footing as ``blocked_by_source``.
     "tapped_to_pay_for_source_this_turn",
+    "other_than_attached_host",
     # "target creature **whose controller controls an Island**" (Seasinger).
     # A nested noun phrase about a *seat's board* rather than about the object,
     # so it needs the game — and only the game: no observer, because the seat
@@ -604,6 +605,14 @@ def subject_matches(
         from .cost_tap_records import tapped_to_pay_for
 
         if not tapped_to_pay_for(obj, source):
+            return False
+    # "target creature **other than enchanted creature**" (Kjeldoran Pride).
+    # By identity off the live attachment record, not by value: a second copy of
+    # the same creature card is a different permanent and a legal target.
+    if described.get("other_than_attached_host"):
+        from .handlers._common import attached_host
+
+        if source is not None and obj is attached_host(game, source, last_known=False):
             return False
     # "all creatures **banded with it**" — the other members of the attacking
     # band the source is in (CR 702.22e), through the one reader of the band
