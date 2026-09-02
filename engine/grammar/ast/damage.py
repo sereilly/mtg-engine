@@ -83,6 +83,17 @@ class DealDamage:
     riders: DamageRiders = field(default_factory=DamageRiders)
     # "of an opponent's choice" — the opponent, not the controller, picks.
     chooser: PlayerRef | None = None
+    # "…deals 2 damage to each creature **for each Aura attached to that
+    # creature**." (Baki's Curse.) A multiplier on the printed amount, as a noun
+    # phrase — the same clause `ast.Pump.per_each` carries for "+2/+2 for each
+    # Aura attached to it" (Rabid Wombat), read by the same production.
+    #
+    # Its own field rather than a computed ``amount``, because the number is not
+    # one number: the phrase names a set **relative to each recipient**, so a
+    # sweep over five creatures computes five multipliers. An ``amount`` has one
+    # value per resolution, which is exactly the reading that would deal every
+    # creature the count taken off the first one.
+    per_each: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)

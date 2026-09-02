@@ -25,7 +25,7 @@ from ..where_x import _parse_where_x_is
 from ..phrases import (
     _accept_mana_alternatives,
     _parse_duration, _parse_mana_payment, _parse_opponents_choice,
-    _parse_that_object,
+    _parse_per_each_objects, _parse_that_object,
 )
 
 
@@ -274,7 +274,20 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
         if bound is not None:
             amount = bound
 
-    first = ast.DealDamage(source, amount, tuple(recipients), riders, chooser)
+    # "…deals 2 damage to each creature **for each Aura attached to that
+    # creature**." (Baki's Curse.) A multiplier on the printed amount, read
+    # through the one reader that reads this clause — `phrases`, where it moved
+    # the day this became its second caller. "…beyond the first" comes back
+    # from it and is refused rather than dropped: it discounts the *set* being
+    # counted, and no damage handler applies that, so a clause printing it
+    # would deal one repetition too many on every recipient.
+    per_each, per_each_beyond_first = _parse_per_each_objects(stream)
+    if per_each_beyond_first:
+        raise stream.error("no damage clause discounts the first of a counted set")
+
+    first = ast.DealDamage(
+        source, amount, tuple(recipients), riders, chooser, per_each
+    )
 
     # "… unless you pay {2}" — the cost is the alternative to the damage, not a
     # step alongside it, so it is read here and kept fused (see ast.DamageUnlessPay).

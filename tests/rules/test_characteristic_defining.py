@@ -273,3 +273,99 @@ def test_604_3_an_unnarrowed_land_count_counts_every_land_and_only_lands(catalog
     game.remove_from_battlefield(mine[0])
     game._refresh_dynamic_creatures()
     assert (blade.effective_power, blade.effective_toughness) == (2, 2)
+
+
+# --- W1G2: a CDA whose counted set is an ordinary printed noun phrase ---
+
+@pytest.mark.cr("604.3", "613.4a", "403.1")
+def test_604_3_a_counted_cda_reads_its_noun_phrase_through_the_noun_parser():
+    """"<name>'s power and toughness are each equal to **N plus the number of
+    <noun phrase>**."
+
+    Fifteen rows of this table each spell their counted set into the pattern —
+    a land type, a card type, a creature name — which is one row per printed
+    noun. The general row hands the phrase to the noun parser instead, so a
+    colour, a union of two creature types and CR 403.1's shared battlefield
+    cost no code at all.
+
+    Invented cards throughout, for this file's own stated reason: a test naming
+    An-Havva Constable and Aysen Crusader would pass against a version that
+    hardcoded exactly those two.
+    """
+    for text, expected in (
+        ("its power and toughness are each equal to 1 plus the number of "
+         "green creatures on the battlefield",
+         {"zone": "battlefield", "owner": "all",
+          "filter": {"type_filter": "creature", "color_filter": "G"},
+          "offset": 1}),
+        ("its power and toughness are each equal to 3 plus the number of "
+         "soldiers and warriors you control",
+         {"zone": "battlefield", "owner": "you",
+          "filter": {"type_filter": "creature",
+                     "subtype_filter": ["soldier", "warrior"]},
+          "offset": 3}),
+        ("its power and toughness are each equal to 2 plus the number of "
+         "black creatures you control",
+         {"zone": "battlefield", "owner": "you",
+          "filter": {"type_filter": "creature", "color_filter": "B"},
+          "offset": 2}),
+    ):
+        found = dynamic_pt_for(text.replace("its", "some creature's", 1))
+        assert found is not None, text
+        assert found.payload == {"count_spec": expected}, text
+
+
+@pytest.mark.cr("604.3")
+def test_604_3_a_counted_cda_defines_only_the_half_the_sentence_names():
+    """"…**toughness** is equal to …" leaves the printed power alone, and the
+    mirror leaves the printed toughness alone. Which half a CDA defines is part
+    of the sentence, so it is payload rather than three templates — and getting
+    it wrong is a 2/1+* that reports itself as a 4/4."""
+    both = dynamic_pt_for(
+        "x's power and toughness are each equal to 1 plus the number of "
+        "green creatures on the battlefield"
+    )
+    toughness = dynamic_pt_for(
+        "x's toughness is equal to 1 plus the number of green creatures on "
+        "the battlefield"
+    )
+    power = dynamic_pt_for(
+        "x's power is equal to 1 plus the number of green creatures on the "
+        "battlefield"
+    )
+
+    assert "defines" not in both.payload
+    assert toughness.payload["defines"] == "toughness"
+    assert power.payload["defines"] == "power"
+
+
+@pytest.mark.cr("604.3")
+def test_604_3_a_counted_cda_refuses_a_noun_phrase_it_cannot_count():
+    """The general row ends in a catch-all — ``the number of <anything>`` — so
+    it has to read the tail itself and refuse what it cannot.
+
+    A characteristic-defining ability is recomputed continuously, so a payload
+    the counter cannot answer is not a card that does less: it is a creature
+    whose power and toughness are silently wrong every time anything looks at
+    it. Both refusals below are that: a phrase the noun parser does not read,
+    and one it reads into a count that cannot be taken.
+    """
+    # Not a noun phrase this engine reads at all.
+    assert dynamic_pt_for(
+        "x's power and toughness are each equal to 1 plus the number of "
+        "wishes you have made this game"
+    ) is None
+    # Read, but the count cannot be narrowed to another player's permanents:
+    # nothing downstream tests a controller, so the key would be handed over
+    # and ignored and the count taken on the wrong battlefield.
+    assert dynamic_pt_for(
+        "x's power and toughness are each equal to 1 plus the number of "
+        "creatures an opponent controls"
+    ) is None
+    # Read, but a keyword is CR 613 layer 6 — only the game can answer it, and
+    # the count asks the pure matcher, which would drop the adjective and count
+    # every creature.
+    assert dynamic_pt_for(
+        "x's power and toughness are each equal to 1 plus the number of "
+        "creatures with flying you control"
+    ) is None

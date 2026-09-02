@@ -29,8 +29,12 @@ from ._amounts import (
     _lower_counted_damage,
 )
 from ._sacrifices import _SACRIFICE_CARRIED, _forced_sacrifice_filter
+from ._sweeps import (
+    lower_described_set_damage,
+    lower_each_matching_damage,
+    refuse_unswept_multiplier,
+)
 from ._common import (
-    _lower_described_set_damage,
     _describe_several_targets,
     _names_several_targets,
     _amount_payload,
@@ -367,6 +371,13 @@ def _lower_damage_shape(
     event: str | None = None,
     produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
+    # "…for each Aura attached to that creature" (Baki's Curse). Read before
+    # every branch below rather than inside the one that honours it: a
+    # multiplier is a rider on the printed amount, and the twenty branches that
+    # do not know about it would each *drop* it — a flat 2 to the whole board,
+    # supported and wrong. `_sweeps` owns both the refusal and the reading, so
+    # the two cannot come apart.
+    refuse_unswept_multiplier(node)
     # "…equal to half the damage dealt by one of those sorcery spells this
     # turn" (Backdraft). Read first: the amount carries a *decision*, and every
     # branch below assumes a quantity computable where it stands.
@@ -794,46 +805,20 @@ def _lower_damage_shape(
             ),
         )
     elif isinstance(recipient, ast.TargetSpec) and recipient.quantifier == "each":
-        # "…deals 2 damage to **each creature you control**" (Sorrow's Path).
-        # A creature sweep narrowed by a printed noun phrase, which is what
-        # `_sweep_kind`'s three fused kinds each are with the narrowing baked
-        # into the kind's name. Here the narrowing is payload, so a card
-        # printing a different one needs no code — and the fused kinds keep
-        # their cards because `_sweep_kind` is consulted first, above.
-        #
-        # Creatures only, checked rather than assumed: CR 120.3 lists what
-        # damage can even be dealt to, and a sweep written over "each
-        # permanent" would quietly mark damage on artifacts and lands that
-        # nothing would ever read.
-        if recipient.filter.card_types != ("creature",):
-            raise LoweringError(
-                "only a creature sweep is damaged by the printed noun phrase",
-                node=node,
-            )
-        if back_reference or bonus:
-            raise LoweringError(
-                "a creature sweep cannot carry a computed damage amount", node=node
-            )
-        described = _filter_payload(
-            dataclasses.replace(recipient.filter, card_types=())
-        )
-        # Idiom 2: a restriction the matcher cannot test is one the handler
-        # would silently ignore, which widens the sweep rather than narrowing
-        # it — every creature on the board instead of the printed set.
-        if set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
-            raise LoweringError(
-                "the creature sweep cannot test this restriction", node=node
-            )
-        return (
-            OracleInstruction(
-                "deal_damage_each_matching", "",
-                {"amount": amount, "filter": described},
-            ),
+        # "…deals 2 damage to each creature" (Pyroclasm), "…to each creature
+        # you control" (Sorrow's Path), "…to each creature for each Aura
+        # attached to that creature" (Baki's Curse). One described set, and one
+        # lowering for it — see `lowering/_sweeps.py`, which holds this and the
+        # "all" spelling together because they are one printed idiom.
+        return lower_each_matching_damage(
+            node, recipient, amount, bool(back_reference or bonus)
         )
     elif isinstance(recipient, ast.TargetSpec) and recipient.quantifier not in (
         "any_target", "target", "this"
     ):
-        return _lower_described_set_damage(node, recipient, amount, back_reference or bonus)
+        return lower_described_set_damage(
+            node, recipient, amount, bool(back_reference or bonus)
+        )
 
     targets = _targets_payload(recipient)
     if targets is not None:

@@ -26,7 +26,7 @@ from ..vocabulary import (CARD_TYPES, COLOR_WORDS, IMPLEMENTED_KEYWORDS,
 from ..phrases import (is_pt_counter, _expect_counter_kind,
                        _parse_can_attack_as_though, _parse_duration,
                        _parse_for_each, _parse_keywords,
-                       parse_pair_ordinal_subject)
+                       _parse_per_each_objects, parse_pair_ordinal_subject)
 from ..where_x import parse_where_x_definition
 
 
@@ -916,41 +916,3 @@ def _parse_become_creature(
     )
 
 
-def _parse_per_each_objects(
-    stream: TokenStream,
-) -> tuple[ast.ObjectFilter | None, bool]:
-    """``for each <objects> [beyond the first]`` — the set whose size
-    multiplies a printed P/T, and whether the first of them is discounted.
-
-    "This creature gets +2/+2 **for each Aura attached to it**" (Rabid Wombat).
-    Distinct from ``phrases._parse_for_each``, which reads the *history* form
-    ("for each creature that died this turn"): a history is not a set anything
-    can scan, so the two produce different nodes and this one hands the history
-    spelling back rather than reading it as a board count.
-
-    "…**beyond the first**" (Johtull Wurm; CR 702.23a's reminder text for
-    rampage) is read here rather than left to the caller, because it modifies
-    the clause this production claimed — a trailing phrase the count's own
-    reader does not consume is unconsumed text that takes the whole line down.
-
-    Returns ``(None, False)`` with the cursor where it was when the clause is
-    not there, so a caller that does not find it still owes the rest of its
-    line to full-token consumption.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("for", "each"):
-        stream.reset(mark)
-        return None, False
-    try:
-        filt = parse_object_filter(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None, False
-    # "…that died this turn" / "…that died this way" belong to the productions
-    # that know what those sets are; a relative clause this cannot read would
-    # otherwise be left as unconsumed text with the count already claimed.
-    if stream.at_word("that"):
-        stream.reset(mark)
-        return None, False
-    beyond_first = stream.accept_phrase("beyond", "the", "first")
-    return filt, beyond_first

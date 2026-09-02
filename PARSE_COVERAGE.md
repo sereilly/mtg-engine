@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **1608**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **128**
+- With deletion-probe findings (ignored words): **130**
 
 ## Measured sets — reported, not gated
 
@@ -105,7 +105,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Goblin Arsonist | `you may have it deal 1 damage to any target` | have |
 | Goblin Flotilla | `unless you pay {r}, whenever this creature blocks or becomes blocked b` | creature |
 | Goblin Grenade | `goblin grenade deals 5 damage to any target` | grenade |
-| Goblin Shrine | `it deals 1 damage to each goblin creature` | creature |
+| Goblin Shrine | `it deals 1 damage to each goblin creature` | each creature |
 | Goblin Wizard | `you may put a goblin permanent card from your hand onto the battlefiel` | permanent |
 | Hazezon Tamar | `exile all sand warriors` | all |
 | Hell Swarm | `all creatures get -1/-0 until end of turn` | all |
@@ -137,6 +137,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Orcish Healer | `regenerate target black or green creature` | or |
 | Pestilent Haze | `all creatures get -2/-2 until end of turn` | all |
 | Power Leak | `that player may pay any amount of mana. this aura deals 2 damage to th` | aura |
+| Pyroclasm | `pyroclasm deals 2 damage to each creature` | each |
 | Raiding Party | `each player may tap any number of untapped white creatures they contro` | all |
 | Remove Enchantments | `return to your hand all enchantments you both own and control, all aur` | all all all all all all |
 | Reset | `untap all lands you control` | all |
@@ -153,6 +154,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Shyft | `you may have this creature become the color or colors of your choice` | have |
 | Snow Hound | `return this creature and target green or blue creature you control to ` | or |
 | Songs of the Damned | `add {b} for each creature card in your graveyard` | card |
+| Sorrow's Path | `it deals 2 damage to you and each creature you control` | each |
 | Spitting Slug | `you may pay {1}{g}. if you do, this creature gains first strike until ` | creature |
 | Spoils of Evil | `for each artifact or creature card in target opponent's graveyard, add` | card |
 | Spoils of War | `distribute x +1/+1 counters among any number of target creatures` | target |

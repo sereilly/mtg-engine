@@ -1580,12 +1580,23 @@ def deal_damage_each_matching(
 
     Resolved as one batch, like the attacking-creature sweep above, so
     simultaneous lethal damage kills together.
+
+    ``per_recipient_count`` is a multiplier taken **once per member** of that
+    set: "Baki's Curse deals 2 damage to each creature **for each Aura attached
+    to that creature**." It is a separate key from ``x_from_count`` precisely
+    because that one holds a single number for the whole resolution — folded
+    into it, the count read off the first creature would be dealt to all of
+    them. The spec's relations resolve against the permanent being damaged,
+    which is what the key's name says and what the ``source=perm`` below hands
+    over.
     """
+    from ..handlers._common import evaluate_count
     from ..subject_filters import subject_matches
 
     card = context.card
     damage = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     described = instruction.payload.get("filter") or {}
+    per_recipient = instruction.payload.get("per_recipient_count")
     caster = context.caster
     observer = game.players.index(caster) if caster in game.players else None
     struck = []
@@ -1594,13 +1605,23 @@ def deal_damage_each_matching(
             game, perm, described, observer=observer, source=context.source_permanent
         ):
             continue
-        apply_damage_to_creature(game, perm, damage, card)
-        struck.append(perm.card.name)
-    game.log.append(
-        f"{card.name} dealt {damage} damage to {', '.join(struck)}"
-        if struck
-        else f"{card.name} found nothing to damage"
-    )
+        dealt = damage
+        if per_recipient is not None:
+            dealt = damage * evaluate_count(game, caster, per_recipient, source=perm)
+            # CR 120.8: a source that *would* deal 0 damage does not deal damage
+            # at all — no event, so nothing triggers and no shield is spent. A
+            # creature with no Aura on it is not dealt 0 by Baki's Curse, it is
+            # not dealt to.
+            if dealt <= 0:
+                continue
+        apply_damage_to_creature(game, perm, dealt, card)
+        struck.append(f"{perm.card.name} ({dealt})" if per_recipient else perm.card.name)
+    if not struck:
+        game.log.append(f"{card.name} found nothing to damage")
+    elif per_recipient is not None:
+        game.log.append(f"{card.name} dealt damage to {', '.join(struck)}")
+    else:
+        game.log.append(f"{card.name} dealt {damage} damage to {', '.join(struck)}")
     return True, "resolved"
 
 
