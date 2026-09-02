@@ -190,8 +190,32 @@ class PhaseStepsMixin:
         # 500.11
         self.skip_turn_counts[player_index] = self.skip_turn_counts.get(player_index, 0) + max(0, count)
 
-    def skip_next_step(self, step_name: str, count: int = 1) -> None:
-        self.skip_step_counts[step_name] = self.skip_step_counts.get(step_name, 0) + max(0, count)
+    def skip_next_step(self, step_name: str, count: int = 1, *, seat=None) -> None:
+        """CR 500.7 / CR 614.10: skip the next *step_name*, once per *count*.
+
+        *seat* makes it **that player's** next such step ("you skip your next
+        draw step", Ivory Gargoyle). Keyed by step name alone the record is
+        consumed by whichever seat's step comes round first, which on an
+        opponent's turn is the wrong player's — so a seated skip gets its own
+        key and the two live in the same bucket, read by the same
+        :meth:`_consume_skip`.
+        """
+        key = step_name if seat is None else (self.seat_index(seat), step_name)
+        self.skip_step_counts[key] = self.skip_step_counts.get(key, 0) + max(0, count)
+
+    def _consume_step_skip(self, step: str, seat) -> bool:
+        """Whether *seat*'s *step* is skipped, spending one record if so.
+
+        The seated key first, then the unseated one: a skip aimed at this player
+        is more specific than a skip of everyone's step, and spending the wrong
+        one leaves the other to eat a step nobody named. Both consumers of the
+        bucket ask through here, so "who is skipped" has one answer.
+        """
+        if seat is not None and self._consume_skip(
+            self.skip_step_counts, (self.seat_index(seat), step)
+        ):
+            return True
+        return self._consume_skip(self.skip_step_counts, step)
 
     def _consume_skip(self, bucket: dict[object, int], key: object) -> bool:
         amount = bucket.get(key, 0)
@@ -208,7 +232,7 @@ class PhaseStepsMixin:
         expanded: list[str] = []
         for step in base:
             expanded.extend(self.extra_steps_after.pop(f"before:{step}", []))
-            if not self._consume_skip(self.skip_step_counts, step):
+            if not self._consume_step_skip(step, self.active_player_index):
                 expanded.append(step)
             expanded.extend(self.extra_steps_after.pop(step, []))
         return tuple(expanded)

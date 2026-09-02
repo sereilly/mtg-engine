@@ -901,3 +901,41 @@ def _parse_life_total_becomes(stream: TokenStream) -> ast.Statement | None:
     return ast.SetLifeTotal(player, amount)
 
 
+
+
+#: The steps a printed "skip your next <step>" may name, mapped to the internal
+#: step name ``Game.skip_next_step`` is keyed by. A table rather than a free
+#: word, because a step this engine does not run would be a skip that never
+#: fires and a card that reports supported.
+_SKIPPABLE_STEPS: dict[str, str] = {
+    "draw": "draw",
+    "untap": "untap",
+    "combat": "combat",
+}
+
+
+def _parse_skip_step(stream: TokenStream, subject) -> ast.Statement:
+    """``<player> skip[s] their next <step> step.`` (Ivory Gargoyle.)
+
+    CR 500.7: a skipped step never begins, and CR 614.10 makes the skip a
+    replacement effect. **Whose** step is half the sentence — a skip stored
+    against the step's name alone eats whichever seat's draw step comes round
+    first, which on an opponent's turn is the wrong player's — so the seat rides
+    the node and the lowering carries it into the payload.
+
+    Only "your next" today. "Skip your next turn" is a different rule (CR
+    500.11's turn counter) with its own handler, and an unbounded "skip your
+    draw steps" is a continuous effect rather than a one-shot; both refuse here
+    rather than borrowing this one's arithmetic.
+    """
+    stream.expect_word("skips", "skip")
+    if not (stream.accept_phrase("your", "next") or stream.accept_phrase("their", "next")):
+        raise stream.error("expected 'your next' after 'skip'")
+    word = stream.peek_word()
+    step = _SKIPPABLE_STEPS.get(word or "")
+    if step is None:
+        raise stream.error(f"no skippable step named {word!r}")
+    stream.advance()
+    if not stream.accept_word("step"):
+        raise stream.error("expected 'step' after the step's name")
+    return ast.SkipStep(subject, step)

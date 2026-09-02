@@ -67,7 +67,7 @@ from .effects import (
     _parse_exile_bound_card,
     _parse_put_exiled_card_into_hand,
     _parse_exile_cost_sacrifices,
-    _parse_mill, _parse_modal_head, _parse_player_adds_mana,
+    _parse_mill, _parse_modal_head, _parse_player_adds_mana, _parse_skip_step,
     _parse_prevent, _parse_put_iterated_card_on_library,
     _parse_distribute_counters,
     _parse_put_counter, _parse_put_exiled_with_source,
@@ -702,6 +702,8 @@ def parse_subject_verb(
             return _parse_discard(stream, source_spec)
         if token.text in ("mills", "mill") and isinstance(source_spec, ast.PlayerRef):
             return _parse_mill(stream, source_spec)
+        if token.text in ("skips", "skip") and isinstance(source_spec, ast.PlayerRef):
+            return _parse_skip_step(stream, source_spec)
         # "**That player** exiles all cards from their library." (Thought
         # Lash.) The only player-subject sentence in the exile family;
         # declines without consuming, so every other printed exile keeps the

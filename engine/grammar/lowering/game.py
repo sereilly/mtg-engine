@@ -804,3 +804,29 @@ def _lower_count_objects(node: ast.CountObjects) -> tuple[OracleInstruction, ...
             "count_objects", "", {"filter": described, "result_key": COUNTED_NUMBER}
         ),
     )
+
+
+def _lower_skip_step(node: "ast.SkipStep") -> tuple[OracleInstruction, ...]:
+    """"You skip your next draw step." (Ivory Gargoyle.)
+
+    The seat is on the payload, not implied: ``Game.skip_next_step`` is keyed by
+    step name and a skip with no seat is consumed by whichever player's step
+    comes round first (CR 500.7 — the step belongs to a turn, and a turn belongs
+    to a player).
+
+    Only "you" today. Every other player reference the grammar can read names a
+    seat this instruction would have to resolve at *resolution* rather than at
+    lowering, and no card in the pool prints one — so it refuses by name rather
+    than silently skipping the controller's step.
+    """
+    who = getattr(node.subject, "kind", None)
+    if who != "you":
+        raise LoweringError(
+            f"no handler skips a step for {who!r}", node=node
+        )
+    return (
+        OracleInstruction(
+            "skip_next_step", "",
+            {"step": node.step, "seat": "you", "count": int(node.count)},
+        ),
+    )

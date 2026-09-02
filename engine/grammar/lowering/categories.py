@@ -393,6 +393,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # +1/+1 counter where the keyword says "age". Without a row here the
     # lowering was `__ungated__` — an instruction produced and then discarded,
     # which reads as a card the grammar cannot parse.
+    # "You skip your next draw step." (Ivory Gargoyle.) CR 500.7's skip, which
+    # is a change to the turn's structure rather than to the board — the family
+    # `grant_extra_turn` is already in.
+    "skip_next_step": "turns",
     "cumulative_upkeep": "upkeep",
     # Rogue Skycaptain's decline: clear the counters and hand the permanent
     # over. Cumulative upkeep's own decline is a sacrifice and stays on the

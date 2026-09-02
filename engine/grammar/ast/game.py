@@ -383,3 +383,21 @@ class CountObjects:
     """
 
     filter: ObjectFilter
+
+
+@dataclass(frozen=True)
+class SkipStep:
+    """``You skip your next draw step.`` (Ivory Gargoyle.)
+
+    CR 500.7/614.10: skipping a step is a replacement effect, and *whose* step
+    it is is half the sentence — a skip keyed on the step's name alone would
+    eat whichever seat's draw step came round first, which on an opponent's
+    turn is the wrong player's.
+
+    Both the seat and the step are payload for the reason every other parameter
+    in this grammar is: "you skip your next untap step" is the same sentence.
+    """
+
+    subject: "PlayerRef"
+    step: str
+    count: int = 1

@@ -168,7 +168,7 @@ class DrawStepMixin:
         self.pending_draw_step_life_loss = still_pending
 
         # 614.1b/614.10: skip step is a replacement effect
-        if self._consume_skip(self.skip_step_counts, step):
+        if self._consume_step_skip(step, player_index):
             self.log.append(f"{player.name} skipped draw step")
             self._close_or_defer_step(phase, step, defer_priority)
             return 0
