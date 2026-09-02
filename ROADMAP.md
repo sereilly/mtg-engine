@@ -992,6 +992,76 @@ Free for every set: **"or fewer" now parses** in the `you control N ...`
 condition. `_compare_count` had answered "le" all along and nothing had ever
 printed the word that reached it.
 
+### W1G2 — library-top costs. Merged; supported 77 → 85 (all eight cards).
+
+Zero hooks added, and the differential moved exactly the eight programs it
+should have.
+
+**Six of the brief's eight scoping claims were wrong in the same direction as
+W1G1's and W1G3's: the machinery already existed, and the gap was a spelling.**
+Chaos Harlequin's exile half already worked and the refusal was the *second*
+sentence — "**that card** is a land card" is the pronoun with its noun spelled
+out, where only "it was ..." had a production. Storm Elemental's read-back of
+what the cost exiled was not an extra piece at all: the evaluator and the
+channel had shipped with Soul Exchange, and the production demanded the past
+tense (`the exiled <noun> **was** ...`) while the card prints **is**. Seasoned
+Tactician's whole CR 615 effect half — shield, source-of-choice picker and all
+— was already implemented, making the card cost-only. Phyrexian Devourer's
+variable counter count already parsed and lowered; `+1/+1` was **excluded by
+hand** from the branch that reads that exact sentence so older payloads stayed
+byte-identical, which made the pool's commonest counter kind the only one a
+variable count could not place. And cumulative upkeep was already implemented
+for mana **and life and a sacrifice**, so a library exile was one field through
+five small places.
+
+**A third front end nobody names.** `When this creature's power is 7 or
+greater` failed *twice* for different reasons, and then a third time: the
+grammar needed a production, `engine/oracle.py`'s condition table needed a row,
+and the `<name>_count` fan-out reads its numbers through `_NUMBER_WORDS` —
+which holds **words only**, so the printed `7` came back `None` and refused the
+whole condition after both front ends already read it. The playbook's failure
+taxonomy has five layers; this is a sixth.
+
+**Three shipped cards were activating an ability, paying its cost, resolving,
+and tapping nothing.** `legality._ability_target_legal`'s `tap_target_permanent`
+arm asked `permanent_matches_filter` — the **pure** half, which by design
+cannot answer a keyword (layer 6), a controller (a seat) or "attacking you" (a
+combat record), and **ignores** those keys rather than refusing. So the printed
+narrowing was enforced by nobody at the gate while the *handler* still read it:
+**Flood** (DRK/4ED/5ED) tapped at a flier, **Ice Floe** (ICE/5ED) at a creature
+attacking someone else, **Shacklegeist** (M21) at its own controller's
+creature. No crash, no missing ability — a cost paid for nothing. Fixed by
+routing that arm through `subject_matches`, which the function's own generic
+tail already documented as the right reader, with regression tests naming the
+shipped cards.
+
+**Two more of that class, declined with the reason, and the reason is the
+finding.** Seasinger (HML) drops `controller_controls` through
+`steal_target_linked_to_source`; the same one-line fix was tried and
+**reverted**, because that arm also serves Orcish Squatters' "target land
+*defending player* controls" — a seat belonging to the combat rather than to
+the permanent, which `subject_matches` refuses outright. The swap trades a
+widened picker for an empty one. The two phrases want different readers, and
+that is a round of its own. And `grant_regeneration_to_target_creature` uses
+the pure matcher too, saved today only by a gate further up — "safe by which
+cards exist" again.
+
+**Declines, as named parts:** CR 603.8 state triggers do not use the stack here
+(Phyrexian Devourer is sacrificed inline in the state-based sweep like the
+other three), so the rules-correct version needs a state-trigger *announcement*
+path that enqueues instead of acting, plus CR 603.8's "doesn't trigger again
+until it has left the stack" bookkeeping — two answers to one question if done
+for one card. The bare imperative "Exile all cards from your library" (Leveler's
+shape) is one branch away. And Varchild's War-Riders' `Cumulative upkeep—Have
+an opponent create a token` remains the only unreadable upkeep cost in the
+pool, wanting an `UpkeepCost` term for "an opponent does X".
+
+**Cap pressure is now the integration risk.** `lowering/counters.py` crossed
+1,000 on the group's first attempt and was rewritten as a widening of the
+branch that already read the sentence, landing at 997; `subject_verb.py` sits
+at 998. Seven grammar modules are within 50 lines of the cap. The next group to
+touch one takes the split.
+
 ### W1G3 — Aura effect templates. Merged; supported 70 → 77 (7 of 8).
 
 Enchantments 10/24 → 17/24, zero hooks added, and the differential moved seven
