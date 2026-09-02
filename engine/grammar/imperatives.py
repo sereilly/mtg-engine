@@ -34,8 +34,7 @@ from .paragraphs import (
 )
 from .references import parse_recipient
 from .stream import TokenStream
-from .upkeep import (_parse_pay_mana_to_prevent_upkeep_damage,
-                     _parse_upkeep_damage_unless_cost)
+from .upkeep import parse_upkeep_paragraph
 from .phrases import _parse_duration, _parse_pay_life
 from .vocabulary import NUMBER_WORDS
 from .effects import (
@@ -174,22 +173,15 @@ def parse_imperative(
     flip_loop = _parse_coin_flip_damage_loop(stream)
     if flip_loop is not None:
         return flip_loop
-    # "<source> deals N damage to you unless you <cost>. If it deals damage to
-    # you this way, tap it." (Mishra's War Machine, Minion of Leshrac.) Two
-    # sentences and one effect, so it is tried before the ordinary damage
-    # production, which would read the first and strand the rider. Refuses
-    # without consuming.
-    upkeep_toll = _parse_upkeep_damage_unless_cost(stream)
-    if upkeep_toll is not None:
-        return upkeep_toll
-    # "That player may pay any amount of mana. <source> deals N damage to that
-    # player. Prevent X of that damage, where X is the amount of mana that
-    # player paid this way." (Power Leak, Errant Minion.) Three sentences and
-    # one effect, so it is tried before the offer below reads the first alone
-    # and strands the other two. Refuses without consuming.
-    paid_off = _parse_pay_mana_to_prevent_upkeep_damage(stream)
-    if paid_off is not None:
-        return paid_off
+    # Every paragraph whose frame is an upkeep obligation — Mishra's War
+    # Machine's damage-unless-cost, Power Leak's bounded payment, Phantasmal
+    # Sphere's counter toll. Each is several printed sentences answering one
+    # question, so all of them are tried before the ordinary damage and counter
+    # productions, which would read the first sentence and strand the rest.
+    # `grammar/upkeep.py` owns the order; each refuses without consuming.
+    upkeep_paragraph = parse_upkeep_paragraph(stream)
+    if upkeep_paragraph is not None:
+        return upkeep_paragraph
     # Tempest Efreet's whole ability, which opens "Target opponent may pay …"
     # — a subject the noun parser reads and then a "may" no production of its
     # own would finish. Refuses without consuming.

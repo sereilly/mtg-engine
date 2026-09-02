@@ -623,3 +623,25 @@ def pay_life(game: Game, instruction: OracleInstruction, context: OracleExecutio
         f"({before} -> {player.life})"
     )
     return True, "resolved"
+
+
+@effect_handler("skip_next_step")
+def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You skip your next draw step." (Ivory Gargoyle.)
+
+    CR 500.7 and CR 614.10: the step never begins, so nothing in it triggers.
+    Recorded against the *seat* rather than against the step's name alone —
+    without that the record is spent by whichever player's draw step comes round
+    first, and on the opponent's turn that is the wrong player.
+
+    The seat is the ability's controller, which is what "you" means (CR 109.5).
+    """
+    step = str(instruction.payload.get("step") or "")
+    if not step:
+        return False, "no step named"
+    seat = game.seat_index(context.caster)
+    game.skip_next_step(step, int(instruction.payload.get("count", 1) or 1), seat=seat)
+    game.log.append(
+        f"{game.players[seat].name} will skip their next {step} step"
+    )
+    return True, "resolved"

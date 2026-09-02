@@ -15,7 +15,7 @@ from ...tokens import PREDEFINED_TOKENS
 from .. import ast
 from ..amounts import expect_pt, parse_amount
 from ..errors import GrammarError
-from ..lexer import (PT, QUOTE, SELF, WORD)
+from ..lexer import (PT, PUNCT, QUOTE, SELF, WORD)
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..phrases import _parse_for_each
@@ -310,12 +310,19 @@ def _parse_token_keywords(stream: TokenStream) -> tuple[str, ...]:
         name, consumed = matched
         keywords.append(name)
         stream.advance(consumed)
+        # A separator is only a separator when a keyword follows it. "…creature
+        # token **with flying, where X is** the number of +1/+1 counters on this
+        # creature" (Phantasmal Sphere) ends the list at the comma and carries
+        # on with the sentence; consumed unconditionally, the comma made the
+        # loop demand a keyword where "where" stands and refused the whole line.
+        separator = stream.mark()
         if stream.accept_punct(","):
             stream.accept_word("and")
-            continue
-        if stream.accept_word("and"):
-            continue
-        break
+        elif not stream.accept_word("and"):
+            break
+        if match_longest(stream.words_from(), 0, KEYWORD_INDEX) is None:
+            stream.reset(separator)
+            break
     return tuple(keywords)
 
 
@@ -624,6 +631,18 @@ def _finish_create_token(
         else:
             keywords = _parse_token_keywords(stream)
 
+    # "…**for each time it regenerated this turn**" (Spiny Starfish). A
+    # multiplier on how many tokens are made, read here rather than by
+    # ``phrases._parse_for_each`` because that clause counts a set of *objects*
+    # and this one counts occurrences on one permanent. Both words of the
+    # window are required, for the reason the death tally's are: the record is
+    # swept each turn, so a clause naming another window is a different number.
+    per_source_regeneration = bool(
+        stream.accept_phrase(
+            "for", "each", "time", "it", "regenerated", "this", "turn"
+        )
+    )
+
     # "…that are tapped and attacking" (Basri Ket): the tokens' entry state.
     # Both words are recorded — a token entering merely tapped, or merely
     # attacking, would be a different effect wearing the same head.
@@ -684,6 +703,8 @@ def _finish_create_token(
     else:
         stream.reset(mark_tail)
 
+    granted_lines += _parse_token_trigger_sentences(stream)
+
     return ast.CreateToken(
         count=count,
         power=power.value if power is not None else None,
@@ -698,7 +719,68 @@ def _finish_create_token(
         keywords=keywords,
         tapped=tapped,
         attacking=attacking,
+        per_source_regeneration=per_source_regeneration,
     )
+
+
+def _parse_token_trigger_sentences(stream: TokenStream) -> tuple[str, ...]:
+    """Triggered abilities of the token printed as *unquoted* sentences after it.
+
+    "Create a 1/1 green Splinter creature token. It has flying and "Cumulative
+    upkeep {G}." **When it leaves the battlefield, it deals 1 damage to you and
+    each creature you control.**" (Splintering Wind.)
+
+    The same information ``_parse_token_quoted_lines`` reads, printed without
+    the quotation marks — Magic writes a token's ability either way, and the
+    difference is typography rather than rules. So it lands in the same field
+    and is gated by the same ``token_line_supported`` check in the lowering.
+
+    **The pronoun is rewritten, and that is the whole content of this
+    production.** "When **it** leaves the battlefield" is a sentence about the
+    token, but the string handed to the compiler becomes the *token's own* text,
+    where the same referent is spelled "this creature" — the bare "it" would
+    read as the ability's source and mean the same thing here only by accident.
+    Rewriting the trigger's subject and nothing else is deliberate: every later
+    "it" in the sentence is already the token's own self-reference on a card
+    whose text this is.
+
+    Slicing the printed span rather than re-rendering the parsed tokens, for
+    :func:`_parse_token_quoted_lines`'s reason: the compiler must read the words
+    the card prints.
+
+    Returns an empty tuple and consumes nothing when no such sentence follows,
+    so every token spec that parsed before this existed parses identically.
+    """
+    lines: list[str] = []
+    while True:
+        mark = stream.mark()
+        # The full stop is *optional* because the preceding tail may already
+        # have eaten it: the "It has …" run above closes itself with one, and
+        # a bare token spec does not. Requiring it here made this production
+        # unreachable on exactly the card it was written for.
+        stream.accept_punct(".")
+        trigger = stream.peek_word()
+        if trigger not in ("when", "whenever"):
+            stream.reset(mark)
+            break
+        stream.advance()
+        # Only the singular pronoun. "They" over several tokens is a sentence no
+        # card in the pool prints here, and admitting it would make one line the
+        # text of every token the effect created without anything having said so.
+        if not stream.accept_word("it"):
+            stream.reset(mark)
+            break
+        rest_open = stream.pos
+        while not stream.exhausted and not (
+            stream.at_kind(PUNCT) and stream.peek().text == "."
+        ):
+            stream.advance()
+        rest = stream.text_between(rest_open, stream.pos)
+        if not rest:
+            stream.reset(mark)
+            break
+        lines.append(f"{trigger.capitalize()} this creature {rest}.")
+    return tuple(lines)
 
 
 def _parse_enchant(stream: TokenStream) -> ast.Statement:
@@ -856,3 +938,41 @@ def _parse_life_total_becomes(stream: TokenStream) -> ast.Statement | None:
     return ast.SetLifeTotal(player, amount)
 
 
+
+
+#: The steps a printed "skip your next <step>" may name, mapped to the internal
+#: step name ``Game.skip_next_step`` is keyed by. A table rather than a free
+#: word, because a step this engine does not run would be a skip that never
+#: fires and a card that reports supported.
+_SKIPPABLE_STEPS: dict[str, str] = {
+    "draw": "draw",
+    "untap": "untap",
+    "combat": "combat",
+}
+
+
+def _parse_skip_step(stream: TokenStream, subject) -> ast.Statement:
+    """``<player> skip[s] their next <step> step.`` (Ivory Gargoyle.)
+
+    CR 500.7: a skipped step never begins, and CR 614.10 makes the skip a
+    replacement effect. **Whose** step is half the sentence — a skip stored
+    against the step's name alone eats whichever seat's draw step comes round
+    first, which on an opponent's turn is the wrong player's — so the seat rides
+    the node and the lowering carries it into the payload.
+
+    Only "your next" today. "Skip your next turn" is a different rule (CR
+    500.11's turn counter) with its own handler, and an unbounded "skip your
+    draw steps" is a continuous effect rather than a one-shot; both refuse here
+    rather than borrowing this one's arithmetic.
+    """
+    stream.expect_word("skips", "skip")
+    if not (stream.accept_phrase("your", "next") or stream.accept_phrase("their", "next")):
+        raise stream.error("expected 'your next' after 'skip'")
+    word = stream.peek_word()
+    step = _SKIPPABLE_STEPS.get(word or "")
+    if step is None:
+        raise stream.error(f"no skippable step named {word!r}")
+    stream.advance()
+    if not stream.accept_word("step"):
+        raise stream.error("expected 'step' after the step's name")
+    return ast.SkipStep(subject, step)

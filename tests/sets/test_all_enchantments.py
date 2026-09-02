@@ -825,3 +825,92 @@ def test_natures_blessing_is_declined_naming_two_parts(set_pool):
     """
     program = compile_card_oracle(set_pool("ALL")["Nature's Blessing"])
     assert not program.supported
+
+
+# --- W2G3: upkeep and counters ---
+#
+# Splintering Wind: a token that carries printed abilities, one of them the
+# cumulative upkeep that will kill it and fire the other.
+
+from engine import Game, PlayerState, load_cards
+from engine.card_loader import manifest_set_path
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+_W2G3_LEA = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+
+
+def _w2g3_perm(card) -> Permanent:
+    perm = Permanent(card=card)
+    perm.metadata["summoning_sickness_turn"] = -99
+    return perm
+
+
+def _w2g3_settle(game):
+    game._settle()
+    while game.stack:
+        game.resolve_top_of_stack()
+        game._settle()
+
+
+def test_w2g3_splintering_wind_makes_a_token_that_carries_its_own_abilities(set_pool):
+    """A Splinter token has flying, cumulative upkeep {G}, and a leaves-the-
+    battlefield trigger - the last of them printed as an unquoted sentence after
+    the token rather than inside the quotes, which is typography and not a
+    difference in rules.
+
+    The whole card is driven rather than read: the ability is activated, the
+    token is made, its upkeep goes unpaid, and the trigger the sacrifice fires
+    is the thing that proves the printed line reached the token at all.
+    """
+    wind = _w2g3_perm(set_pool("ALL")["Splintering Wind"])
+    bear = _w2g3_perm(_W2G3_LEA["Grizzly Bears"])
+    victim = _w2g3_perm(_W2G3_LEA["Hurloon Minotaur"])
+    p1 = PlayerState(name="P1", battlefield=[wind, bear])
+    p2 = PlayerState(name="P2", battlefield=[victim])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    assert game.activate_permanent_ability(
+        0, "Splintering Wind", target_player_index=1, target_permanent_index=0
+    ).supported
+    _w2g3_settle(game)
+
+    tokens = [perm for perm in p1.battlefield if perm.metadata.get("is_token")]
+    assert len(tokens) == 1
+    token = tokens[0]
+    assert (token.effective_power, token.effective_toughness) == (1, 1)
+    assert token.has_keyword("flying")
+    assert "Cumulative upkeep {G}" in token.card.oracle_text
+    assert "leaves the battlefield" in token.card.oracle_text
+    assert victim.damage_marked == 1
+
+    p1.life = 20
+    game.resolve_upkeep(0)
+    _w2g3_settle(game)
+
+    assert token not in p1.battlefield, "unpaid cumulative upkeep sacrifices it"
+    assert p1.life == 19, "and its own trigger deals 1 to its controller"
+    assert bear.damage_marked == 1, "and 1 to each creature they control"
+
+
+def test_w2g3_splintering_wind_reads_every_line(set_pool):
+    """The enchantment gate admits a permanent when *any* ability is
+    implemented, so the whole activated line is asserted rather than the card's
+    support flag: this one is a sentence for damage, a sentence for the token
+    and two sentences of the token's own text."""
+    program = compile_card_oracle(set_pool("ALL")["Splintering Wind"])
+    assert program.supported
+    assert len(program.activated_abilities) == 1
+    ability = program.activated_abilities[0]
+    assert ability.supported and ability.instruction is not None
+    steps = ability.instruction.payload["steps"]
+    kinds = [step.kind for step in steps]
+    assert kinds == ["deal_damage", "create_token"]
+    granted = steps[1].payload["oracle_text"].splitlines()
+    assert granted == [
+        "Cumulative upkeep {G}",
+        "When this creature leaves the battlefield, it deals 1 damage to you "
+        "and each creature you control.",
+    ]

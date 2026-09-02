@@ -1094,6 +1094,16 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     if raw_count == "trigger_count":
         tctx = context.trigger_context or {}
         count = int(tctx.get("trigger_count", context.results.get("trigger_count", 0)))
+    elif isinstance(raw_count, dict) and "source_record" in raw_count:
+        # "…for each time it regenerated this turn" (Spiny Starfish). A record
+        # on the permanent whose ability this is, not a game-wide tally — so it
+        # is read off the source rather than off the game, and a resolution with
+        # no source permanent makes nothing rather than falling back to one.
+        source = context.source_permanent
+        count = (
+            0 if source is None
+            else int(source.metadata.get(str(raw_count["source_record"]), 0) or 0)
+        )
     elif isinstance(raw_count, dict) and "history" in raw_count:
         # "…for each nontoken creature that died this turn" (Gadrak): the game's
         # own tally, because the objects counted are exactly the ones no zone
@@ -1109,6 +1119,14 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     who = payload.get("recipient_players")
     if who == "each_opponent":
         recipients = list(game.opponents_of(controller_index))
+    elif who == "target_opponent":
+        # "**Target** opponent creates …" (Phantasmal Sphere, Phelddagrif). The
+        # seat chosen when the ability went on the stack (CR 115.4), read off
+        # the context rather than guessed — with no target chosen there is
+        # nobody the card names, and creating the token for the controller
+        # instead would be the opposite of what it says.
+        chosen = context.target
+        recipients = [] if chosen is None else [game.seat_index(chosen)]
     elif who == "each_player":
         recipients = [i for i, p in enumerate(game.players) if not p.lost]
     elif who == "target_opponent":

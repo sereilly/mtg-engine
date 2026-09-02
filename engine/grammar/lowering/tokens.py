@@ -190,12 +190,13 @@ def _lower_create_token(
         payload["recipient_players"] = node.recipient_players
         if node.recipient_players == "target_opponent":
             # "**Target opponent** creates a 1/1 green Hippo creature token."
-            # (Phelddagrif.) The seat is chosen, so the ability has a target and
-            # the picker has to be told — a `recipient_players` key with no
-            # description beside it would name a seat nothing ever asks for, and
-            # the ability would resolve onto whatever ``context.target`` last
-            # held. The same player-target description "target opponent gains 2
-            # life" carries one ability line over on the same card.
+            # (Phelddagrif; Phantasmal Sphere prints the same shape.) The seat
+            # is chosen, so the ability targets (CR 115.4) and the picker has to
+            # be told — a ``recipient_players`` key with no description beside
+            # it would name a seat nothing ever asks for, and the token would go
+            # to whichever seat the handler reached for. The same description
+            # every other opponent-targeted effect carries, so one vocabulary
+            # answers every player picker.
             payload["targets"] = {
                 "quantifier": "target", "kind": "player", "opponents_only": True,
             }
@@ -258,6 +259,22 @@ def _stamp_token_count(payload: dict, node: "ast.CreateToken"):
                 node=node,
             )
         payload["count"] = {"history": history}
+        return payload["count"]
+    if node.per_source_regeneration:
+        # "…for each time it regenerated this turn" (Spiny Starfish). The count
+        # is a record on the ability's own source, so the payload names the key
+        # rather than a number and the handler reads it as the tokens are made
+        # (CR 608.2 counts at resolution). Beside the death tally above and not
+        # folded into it: that one is a game-wide counter on ``Game`` and this
+        # one is a permanent's own metadata, which no single reader can answer.
+        from ...regeneration import REGENERATED_THIS_TURN
+
+        if not isinstance(node.count, ast.Fixed) or node.count.value != 1:
+            raise LoweringError(
+                "a per-regeneration token count multiplies one token, not several",
+                node=node,
+            )
+        payload["count"] = {"source_record": REGENERATED_THIS_TURN}
         return payload["count"]
     if isinstance(node.count, ast.ThatMuch):
         # "create that many … tokens" — the count is the firing event's own

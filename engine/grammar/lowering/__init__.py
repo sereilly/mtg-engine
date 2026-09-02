@@ -90,6 +90,7 @@ from .damage import (
 )
 from .upkeep import (
     _lower_damage_reduced_by_paid_mana,
+    _lower_upkeep_counter_toll,
     _lower_upkeep_damage_unless_cost,
     _lower_damage_unless_pay,
 )
@@ -301,6 +302,7 @@ from .game import (
     _lower_coin_flip_damage_loop,
     _lower_coin_flip_stakes_loop,
     _lower_damage_this_game_history,
+    _lower_skip_step,
 )
 
 __all__ = [
@@ -350,6 +352,8 @@ __all__ = [
     "_lower_damage_unless_pay",
     "_lower_damage",
     "_lower_damage_reduced_by_paid_mana",
+    "_lower_skip_step",
+    "_lower_upkeep_counter_toll",
     "_lower_upkeep_damage_unless_cost",
     "_lower_damage_dealt_riders",
     "_lower_damage_conjunction",

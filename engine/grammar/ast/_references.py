@@ -753,6 +753,14 @@ class PlayerRef:
     # the reason every other narrowing is payload: a card printing the same
     # clause on "target opponent" needs no new kind.
     attacked_this_turn: bool = False
+    # "target opponent **previously dealt damage by it**" (Diseased Vermin).
+    # The same shape as the clause above — a printed restriction on which seats
+    # may be chosen, not a kind of player — over a record kept on the ability's
+    # own source rather than on the seat. Which is the whole reason it is a
+    # second flag: "who attacked" is a fact about the player and "whom did *this
+    # permanent* hurt" is a fact about the permanent, and the picker has to be
+    # handed the source to answer the second.
+    damaged_by_source: bool = False
 
 
 @dataclass(frozen=True)

@@ -115,6 +115,11 @@ _EOT_METADATA_KEYS = (
     # (Glyph of Reincarnation). Swept with the ids it keys, or a later turn's
     # sentence would read a seat from a block that is no longer in the window.
     "blocked_attacker_controllers_this_turn",
+    # How many times a permanent regenerated this turn (Spiny Starfish), written
+    # by ``engine/regeneration._apply``. Swept here rather than by a turn stamp
+    # for the same reason its neighbours are: the window the card prints is one
+    # turn, and the sweep is the only thing that says so.
+    "regenerated_this_turn",
 )
 
 _TURN_PHASES: tuple[str, ...] = (
@@ -159,6 +164,10 @@ _UPKEEP_PAY_KINDS = {
     # Rohgahh of Kher Keep: pay {R}{R}{R} or tap Rohgahh and every creature
     # named Kobolds of Kher Keep, then an opponent gains control of them all.
     "upkeep_pay_or_cede_named_creatures",
+    # Rogue Skycaptain: an escalating {2} per wage counter, or the counters come
+    # off and an opponent takes the creature. CR 702.24a's ability with a
+    # different decline, on the same `per_counter` payload key.
+    "upkeep_counter_toll_or_cede_control",
     # Optional pays with no decline consequence — pay to untap (Mana Vault /
     # Basalt Monolith untap themselves; Paralyze untaps the enchanted creature)
     # or pay for life (Farmstead's granted enchant-land upkeep ability).

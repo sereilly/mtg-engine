@@ -180,6 +180,14 @@ def _parse_return(
         "under", "your", "control"
     ):
         under_control_of = ast.PlayerRef("you")
+    # "…to the battlefield **under its owner's control**." (Ivory Gargoyle.)
+    # CR 400.3's default said out loud, on the same field as the two spellings
+    # above — the seat is what the phrase names, and reading it as the ability's
+    # controller would put a stolen creature back on the thief's side.
+    elif destination.name == "battlefield" and stream.accept_phrase(
+        "under", "its", "owner", "'s", "control"
+    ):
+        under_control_of = ast.PlayerRef("owner")
 
     # "…attached to that creature." (Takklemaggot.) CR 303.4f: an effect that
     # puts an Aura onto the battlefield has to say what it attaches to. "That

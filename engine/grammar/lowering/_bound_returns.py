@@ -81,6 +81,34 @@ def _graveyard_to_hand_payload(filt: ast.ObjectFilter) -> dict[str, object]:
     return {"any_card": card_type is None, "card_type": card_type}
 
 
+def _returns_itself_to_the_battlefield(node: "ast.ReturnToZone", subject) -> bool:
+    """Whether "return **it** to the battlefield under <seat>'s control" names
+    the ability's *own* card rather than the firing event's object.
+
+    "When this creature dies, return it to the battlefield under its owner's
+    control …" (Ivory Gargoyle). ``parse_recipient`` reads a bare "it" as the
+    ability's source, and on a self-dies trigger that is exactly what it means —
+    but the bound-object branch below claims every "it" first and then refuses,
+    because a self-dies event records no card. So the shape is recognised here
+    and falls through to the self-return branch further down, which is the one
+    that can read it.
+
+    Narrow on purpose. Storm Cauldron's bound "return it" goes to a *hand* and
+    Puppet Master's names a card, so neither is reachable; and the controller
+    phrase is required because the self-return branch demands one anyway
+    (CR 110.2's default is the ability's controller, and a sentence that does
+    not say which seat is one this engine will not guess for).
+    """
+    return (
+        subject.quantifier == "it"
+        and subject.filter.is_source
+        and node.from_zone is None
+        and node.to.name == "battlefield"
+        and node.to.owner is None
+        and node.under_control_of is not None
+    )
+
+
 def lower_untargeted_return(
     node: ast.ReturnToZone,
     subject,
@@ -109,6 +137,7 @@ def lower_untargeted_return(
         isinstance(subject, ast.TargetSpec)
         and subject.quantifier in ("that", "it")
         and (subject.filter.is_card or subject.quantifier == "it")
+        and not _returns_itself_to_the_battlefield(node, subject)
     ):
         # "Whenever a land is tapped for mana, **return it** to its owner's
         # hand." (Storm Cauldron.) The pronoun names a *permanent* — the land
@@ -389,17 +418,23 @@ def lower_untargeted_return(
             raise LoweringError(
                 f"the self-return does not honour {leftovers[0]!r}", node=node
             )
-        if node.under_control_of is None or node.under_control_of.kind != "you":
+        # Two seats the sentence may name, and it must name one: CR 110.2's
+        # default is the ability's controller, so a phrase consumed into nothing
+        # is a permanent whose controller the card stated and the engine
+        # guessed. "Its owner" (Ivory Gargoyle) is not the same seat as "you"
+        # for a creature that changed hands before it died.
+        control = getattr(node.under_control_of, "kind", None)
+        if control not in ("you", "owner"):
             raise LoweringError(
                 "this card returns to the battlefield under its own "
-                "controller's control", node=node,
+                "controller's or its owner's control", node=node,
             )
         if node.repetitions is not None or node.entering_tapped:
             raise LoweringError(
                 "the self-return to the battlefield reads no repetition or "
                 "tapped rider", node=node,
             )
-        payload: dict[str, object] = {"control": "you"}
+        payload: dict[str, object] = {"control": control}
         if node.attached_to is not None:
             # "attached to **that creature**" — the one an earlier step chose.
             # Refused when nothing did: an Aura told to enter attached to a

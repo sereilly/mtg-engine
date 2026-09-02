@@ -153,7 +153,7 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
     # is what lets `delay_binds_an_object` below see the "that creature" it now
     # contains.
     statement = fold_flip_stakes(stream, statement, parse_statement)
-    return ast.CreateDelayedTrigger(
+    delayed = ast.CreateDelayedTrigger(
         event=event, effect=statement,
         once=once, duration=duration,
         # A permission, not the answer — see ``delay_binds_an_object``.
@@ -161,6 +161,39 @@ def parse_statement(stream: TokenStream, *, top_level: bool = True) -> ast.State
         subject=None, agent=None,
         watches=watches,
     )
+    return _accept_conjunct_after_delay(stream, delayed)
+
+
+def _accept_conjunct_after_delay(
+    stream: TokenStream, delayed: ast.CreateDelayedTrigger
+) -> ast.Statement:
+    """``… <delay> and <effect>.`` — a second effect the delay does **not**
+    govern.
+
+    "When this creature dies, return it to the battlefield under its owner's
+    control **at the beginning of the next end step** and you skip your next
+    draw step." (Ivory Gargoyle.) The delay is a postfix on the first conjunct
+    and the second belongs to the trigger itself: the skip happens as the death
+    trigger resolves, not at the end step.
+
+    Read here, after the node is built, because that is the only place the
+    scope is unambiguous — the body parser has already stopped, so an "and" it
+    could see would have been swallowed into the delayed half. Before this the
+    word was simply unconsumed text and took the whole line down.
+
+    Returns *delayed* unchanged when no conjunct follows, so every line that
+    parsed before this existed parses identically.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("and"):
+        stream.reset(mark)
+        return delayed
+    try:
+        second = parse_statement(stream, top_level=False)
+    except GrammarError:
+        stream.reset(mark)
+        return delayed
+    return ast.Conjunction((delayed, second))
 
 
 def _parse_statement_body(stream: TokenStream) -> ast.Statement:

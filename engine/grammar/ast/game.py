@@ -170,6 +170,13 @@ class CreateToken:
     # multiplier over a history, exactly as on a counter placement or a life
     # gain — the set counted is the one no battlefield still holds.
     per_death: object | None = None
+    #: "…**for each time it regenerated this turn**" (Spiny Starfish). A
+    #: multiplier like ``per_death`` above, over a record kept on the ability's
+    #: own source rather than over a game-wide tally — which is why it is its
+    #: own field: "how many creatures died" and "how many times *this* one
+    #: regenerated" are counted in different places, and one field would make
+    #: the reader guess which.
+    per_source_regeneration: bool = False
     # "Create an **X/X** blue and red Weird creature token, where X is the
     # number of instant and sorcery cards in your graveyard." (Experimental
     # Overload.) The P/T is a *count*, taken as the token is created (CR 608.2)
@@ -376,3 +383,21 @@ class CountObjects:
     """
 
     filter: ObjectFilter
+
+
+@dataclass(frozen=True)
+class SkipStep:
+    """``You skip your next draw step.`` (Ivory Gargoyle.)
+
+    CR 500.7/614.10: skipping a step is a replacement effect, and *whose* step
+    it is is half the sentence — a skip keyed on the step's name alone would
+    eat whichever seat's draw step came round first, which on an opponent's
+    turn is the wrong player's.
+
+    Both the seat and the step are payload for the reason every other parameter
+    in this grammar is: "you skip your next untap step" is the same sentence.
+    """
+
+    subject: "PlayerRef"
+    step: str
+    count: int = 1

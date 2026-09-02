@@ -29,6 +29,7 @@ from ._common import (
     _restrictions_beyond,
     describe_target_roles,
 )
+from ._records import counts_prevented_damage, names_the_shielded_object
 from ._events import (
     _BOUND_OBJECT_DELAYED_EVENTS,
     CHOSEN_PERMANENT,
@@ -553,6 +554,9 @@ def _lower_put_counter(
         and (node.counter != "+1/+1" or isinstance(node.count, ast.Var))
         and not node.up_to
         and _is_source(node.subject)
+        # Declined here or this branch claims the shield sentence below
+        # (Scars of the Veteran's bare pronoun) and refuses its count.
+        and not counts_prevented_damage(node)
     ):
         if isinstance(node.count, ast.Fixed):
             placed_on_self: int | str = node.count.value
@@ -593,11 +597,7 @@ def _lower_put_counter(
                 "no earlier step of this effect armed a shield to count",
                 node=node,
             )
-        if (
-            not isinstance(node.subject, ast.TargetSpec)
-            or node.subject.quantifier != "that"
-            or _restrictions_beyond(node.subject.filter, frozenset({"card_types"}))
-        ):
+        if not names_the_shielded_object(node.subject):
             raise LoweringError(
                 "the counters land on the creature the shield was armed on",
                 node=node,

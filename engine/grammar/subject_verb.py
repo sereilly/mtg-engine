@@ -58,6 +58,7 @@ from .effects import (
     _parse_has,
     _parse_loses,
     _parse_mill,
+    _parse_skip_step,
     parse_player_looks_at_own_library_top,
     _parse_player_adds_mana,
     _parse_player_puts_hand_cards_on_library,
@@ -286,6 +287,8 @@ def parse_subject_verb(
             looked = parse_player_looks_at_own_library_top(stream, source_spec)
             if looked is not None:
                 return looked
+        if token.text in ("skips", "skip") and isinstance(source_spec, ast.PlayerRef):
+            return _parse_skip_step(stream, source_spec)
         # "**That player** exiles all cards from their library." (Thought
         # Lash.) The only player-subject sentence in the exile family;
         # declines without consuming, so every other printed exile keeps the

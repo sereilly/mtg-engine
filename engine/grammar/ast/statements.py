@@ -44,6 +44,7 @@ from .damage import (
     DealDamage,
     PreventDamage,
     RedirectDamage,
+    UpkeepCounterToll,
     UpkeepDamageUnlessCost,
 )
 from .characteristics import (
@@ -192,6 +193,7 @@ from .game import (
     SetLifeTotal,
     ExchangeLifeTotals,
     WinGame,
+    SkipStep,
 )
 
 
@@ -211,13 +213,14 @@ Effect = Union[
     DelayedSelfAction, Attach, ExchangeControl, ExchangeGreatestManaValue,
     Regenerate, ReanimateEnchantedCard, ChangeTarget, ChooseTarget, WaiveShroud, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, ModalNode, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutGraveyardTopOnLibraryBottom,
-    PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem,
+    PutOntoBattlefield, RevealTopToHandOrBottom, CreateEmblem, SkipStep,
     RevealTop, RevealUntil, NameAndStrip, NameAndRandomReveal, NameThenRevealTop,
     ChooseCardsInHand, PutIteratedCardOnLibrary,
     ExileGraveyardUntilLeaves, CastFromExiledWith, ForceChosenCreatureToAttack,
     PhaseOut,
     AddManaForTappedLand, NoteManaSpent, ProducesManaInstead, SpendManaAsThough, PreventDamage,
     RedirectDamage, DamageCantBePreventedOrRedirected, DamageReducedByPaidMana,
+    UpkeepCounterToll,
     UpkeepDamageUnlessCost,
     ExileBoundCard, PutExiledCardIntoHand, RepeatedGraveyardPick, NameThenConsult,
     SearchLibrary, SearchPlayerLibrary, SearchAndExile, TransmuteBySacrifice,

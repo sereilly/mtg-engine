@@ -54,6 +54,23 @@ from .upkeep_effects import UPKEEP_EFFECTS, UpkeepContext, UpkeepEffectsMixin
 #: anything about it was interactive. Erosion and Curse Artifact are the
 #: ordinary shape: an offer with a penalty, which the grammar reads as a `may`
 #: and the generic pending-choice queue already runs.
+def _reason_card(reason: str):
+    """A stand-in card naming the permanent a cost was paid for.
+
+    ``pay_upkeep_cost`` takes the source permanent when its caller has one, and
+    the token maker reads ``card.name`` for its log line and ``card.raw`` for
+    the token's art. This covers the callers that pass only the name, so no
+    reader has to test for None.
+    """
+    from ..models import CardDefinition
+
+    return CardDefinition(
+        name=reason, mana_cost="", cmc=0.0, type_line="", oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": reason},
+    )
+
+
 _ORDINARY_UPKEEP_SEATS = frozenset({
     "upkeep_self", "upkeep_each", "upkeep_chosen", "upkeep_enchanted_controller",
 })
@@ -196,9 +213,22 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # shorter exile.
         if cost.exile_top_of_library > len(player.library):
             return False
+        # "Cumulative upkeep—Have an opponent create a 1/1 red Survivor creature
+        # token." (Varchild's War-Riders.) The payer spends nothing, so there is
+        # no resource to check — but CR 118.3 still asks whether the cost can be
+        # paid *fully*, and with no living opponent there is nobody to have do
+        # it. Answering True there would create the tokens for the payer, which
+        # is the opposite of what the card says.
+        if cost.opponent_tokens and not any(
+            index != self.seat_index(player) and not other.lost
+            for index, other in enumerate(self.players)
+        ):
+            return False
         return True
 
-    def pay_upkeep_cost(self, player, cost, *, reason: str, purpose=None) -> None:
+    def pay_upkeep_cost(
+        self, player, cost, *, reason: str, purpose=None, source=None
+    ) -> None:
         """Pay an upkeep cost already validated by :meth:`can_pay_upkeep_cost`.
 
         The sacrifice goes through ``arm_forced_sacrifice``, which is what makes
@@ -234,6 +264,51 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 + ", ".join(card.name for card in taken)
                 + f" from the top of their library for {reason}"
             )
+        if cost.opponent_tokens:
+            self._have_an_opponent_create(player, cost, reason=reason, source=source)
+
+    def _have_an_opponent_create(self, player, cost, *, reason: str, source) -> None:
+        """Pay a "have an opponent create <token>" cost (Varchild's War-Riders).
+
+        The tokens are made by executing the ``create_token`` instruction the
+        grammar lowered the printed sentence to, against a context whose caster
+        is the opponent — so this pays with the engine's one token maker rather
+        than with a second construction of "1/1 red Survivor creature token".
+
+        "An opponent" is the payer's choice; with one living opponent there is
+        nothing to choose, and in a larger game this takes the first living
+        opponent in seat order after them — the same simplification the
+        Rohgahh handler names in ``upkeep_effects.py``, and honest for the same
+        reason: a real multiplayer choice wants the pending-choice queue, and
+        CR 702.24a would want it made once **per age counter** rather than once
+        per payment.
+        """
+        from ..game_types import OracleExecutionContext
+
+        seat = self.seat_index(player)
+        recipient = next(
+            (
+                index
+                for offset in range(1, len(self.players))
+                for index in [(seat + offset) % len(self.players)]
+                if not self.players[index].lost
+            ),
+            None,
+        )
+        if recipient is None:
+            # Unreachable behind `can_pay_upkeep_cost`, and a return rather than
+            # an assumption: a token made here would go to the payer.
+            return
+        payload = dict(cost.opponent_token or {})
+        payload["count"] = cost.opponent_tokens
+        instruction = OracleInstruction("create_token", "", payload)
+        context = OracleExecutionContext(
+            caster=self.players[recipient],
+            target=self.players[recipient],
+            card=source.card if source is not None else _reason_card(reason),
+            source_permanent=source,
+        )
+        self._execute_oracle_instruction(instruction, context)
 
     def get_upkeep_pay_triggers(self, player_index: int) -> list[dict]:
         """Return pay-or-consequence upkeep triggers that the player must decide on.

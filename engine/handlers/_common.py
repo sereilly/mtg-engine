@@ -833,10 +833,32 @@ def permanent_state_holds(perm, state: str) -> bool:
     in metadata, not a field — routed to the reader beside the stamp so this
     does not become a second place that knows the key.
     """
-    from ..turn_state import attacked_this_turn
+    from ..turn_state import BLOCKED_BY_BLOCKER_IDS_KEY, attacked_this_turn
 
     if state == "attacked_this_turn":
         return attacked_this_turn(perm)
+    if state == "was_blocked_this_turn":
+        # "When this creature dies, **if it was blocked this turn**, you gain 4
+        # life." (Fyndhorn Druid.) A window of one turn, so it cannot be the
+        # present-tense ``blocked`` above: that flag is the current combat's,
+        # cleared when combat ends, and a creature killed in the second main
+        # phase was still blocked this turn. The record is the pair list the
+        # declare-blockers step writes and the cleanup step sweeps — the same
+        # one "blocked or was blocked by" reads, so one block is one fact.
+        #
+        # Only the blockers' side. "Was blocked" is CR 509.1a from the
+        # attacker's end, and the other list on the same permanent is the
+        # attackers it blocked — reading both would make every Wall that
+        # blocked answer yes to a sentence about being blocked.
+        return bool(perm.metadata.get(BLOCKED_BY_BLOCKER_IDS_KEY))
+    if state == "regenerated_this_turn":
+        # "…**if this creature regenerated this turn**" (Spiny Starfish). The
+        # record is a count, and this reading is the presence half of it — the
+        # same key the token count reads, so "did it?" and "how many times?"
+        # cannot come apart.
+        from ..regeneration import REGENERATED_THIS_TURN
+
+        return int(perm.metadata.get(REGENERATED_THIS_TURN, 0)) > 0
     test = _STATE_TESTS.get(state)
     # A word with no test behind it must not read as False: that is a condition
     # nobody answered wearing the answer "no". Every producer of a state name is

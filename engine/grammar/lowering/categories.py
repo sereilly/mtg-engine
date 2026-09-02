@@ -389,6 +389,21 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # The controller-chosen sacrifice (Dire Fleet Warmonger's optional cost).
     "sacrifice_matching_permanent": "zones",
     "sacrifice_attached_permanent": "zones",
+    # CR 702.24a's own kind, reached from the grammar as well as from the
+    # keyword rewrite: Phantasmal Sphere prints the ability longhand with a
+    # +1/+1 counter where the keyword says "age". Without a row here the
+    # lowering was `__ungated__` — an instruction produced and then discarded,
+    # which reads as a card the grammar cannot parse.
+    # "You skip your next draw step." (Ivory Gargoyle.) CR 500.7's skip, which
+    # is a change to the turn's structure rather than to the board — the family
+    # `grant_extra_turn` is already in.
+    "skip_next_step": "turns",
+    "cumulative_upkeep": "upkeep",
+    # Rogue Skycaptain's decline: clear the counters and hand the permanent
+    # over. Cumulative upkeep's own decline is a sacrifice and stays on the
+    # `cumulative_upkeep` kind, so this is the family's second consequence
+    # rather than a second reading of the paragraph.
+    "upkeep_counter_toll_or_cede_control": "upkeep",
     "upkeep_pay_or_sacrifice_enchantment": "upkeep",
     "upkeep_pay_or_sacrifice_self": "upkeep",
     # The destroy twin (Cosmic Horror). Same family: it is the upkeep's

@@ -169,6 +169,30 @@ def damage_source_seat(game, source) -> int | None:
 #: the creature, cleared with the turn by ``mixins/_constants._EOT_METADATA_KEYS``.
 DAMAGE_LOCK = "damage_cant_be_prevented_or_redirected_until_eot"
 
+#: Every seat this permanent has ever dealt damage to, in the order it first
+#: did. "Target opponent **previously dealt damage by it**" (Diseased Vermin) —
+#: CR 603.10's history with no window at all, which is why it is not the
+#: turn-scoped ``dealt_damage_to_seats_this_turn`` beside it in
+#: :func:`deal_damage`: that one is swept at cleanup, and a Vermin that hit you
+#: last turn is still allowed to hit you now.
+#:
+#: Written at this seam and nowhere else, for the reason its neighbour is: a
+#: ping from an ability is damage this record must see too, and a record kept at
+#: the combat fire sites would miss it.
+DEALT_DAMAGE_TO_SEATS = "dealt_damage_to_seats"
+
+
+def seats_dealt_damage_by(permanent) -> list[int]:
+    """The seats *permanent* has dealt damage to at any point (CR 603.10).
+
+    The one reader of :data:`DEALT_DAMAGE_TO_SEATS`, so the target picker and
+    the legality gate ask one question. A permanent that has damaged nobody
+    answers an empty list, which for Diseased Vermin's narrowing is an ability
+    with no legal target rather than one that may hit anybody.
+    """
+    record = getattr(permanent, "metadata", None) or {}
+    return [int(seat) for seat in record.get(DEALT_DAMAGE_TO_SEATS) or ()]
+
 
 def damage_locked(recipient) -> bool:
     """Whether *recipient* carries Whippoorwill's lock. Accepts a player, which
@@ -461,9 +485,19 @@ def _announce(game, event: dict, dealt: int) -> None:
         # controller", which is a seat comparison. Cleared with the turn by
         # `_EOT_METADATA_KEYS`.
         seats = source.metadata.setdefault("dealt_damage_to_seats_this_turn", [])
-        seat = game.players.index(recipient)
+        seat = game.seat_index(recipient)
         if seat not in seats:
             seats.append(seat)
+        # "…deals X damage to target opponent **previously dealt damage by
+        # it**." (Diseased Vermin.) The same record with **no window**: the
+        # printed word is "previously", not "this turn", so it is a second key
+        # rather than a longer life for the first — the two are read by
+        # different clauses and a shared key would have to pick one meaning.
+        # Deliberately absent from ``_EOT_METADATA_KEYS`` for that reason, and
+        # it dies with the permanent, which CR 400.7 gives for free.
+        ever = source.metadata.setdefault(DEALT_DAMAGE_TO_SEATS, [])
+        if seat not in ever:
+            ever.append(seat)
     if not isinstance(recipient, PlayerState) and dealt > 0:
         # "…blocked by a creature **that has been dealt damage this turn**"
         # (Giant Shark). The mirror of the record above, kept on the creature

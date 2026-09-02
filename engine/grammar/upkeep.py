@@ -26,8 +26,9 @@ from __future__ import annotations
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
-from .lexer import NUMBER
+from .lexer import NUMBER, PT
 from .nouns import parse_object_filter
+from .phrases import _parse_mana_payment
 from .readers import accept_source_reference
 from .stream import TokenStream
 
@@ -172,3 +173,180 @@ def _parse_upkeep_damage_unless_cost(stream: TokenStream) -> "ast.Statement | No
     return ast.UpkeepDamageUnlessCost(
         amount, discard=discard, sacrifice=sacrifice, taps_source=taps_source,
     )
+
+
+def _accept_counter_word(stream: TokenStream, *, plural: bool = False) -> str | None:
+    """The counter kind named in front of the word "counter", or None.
+
+    Two token kinds, because Magic prints two sorts of counter word: a bare
+    noun ("wage", "age", "wind") lexes as a WORD, and a P/T counter ("+1/+1")
+    lexes as PT. One reader for both, so the paragraph below does not have to
+    know which the card printed — the kind is payload either way, and
+    ``engine/named_counters.py`` already stores both through one key function.
+    """
+    token = stream.peek()
+    if token is None:
+        return None
+    if token.kind == PT:
+        if stream.peek_word(1) != ("counters" if plural else "counter"):
+            return None
+        stream.advance()
+        return token.text
+    word = stream.peek_word()
+    # Rejected against the following word rather than against a list of counter
+    # names: the names are open (CR 122.1 lets a card invent one), so what
+    # identifies the phrase is that "counter" comes next.
+    # Checked against the *following* word rather than against a list of counter
+    # names: the names are open (CR 122.1 lets a card invent one), so what
+    # identifies the phrase is the noun that comes next. Both numbers, because
+    # one printed paragraph uses both — "put a wage counter" and "remove all
+    # wage counters" — and the caller says which it expects.
+    if word is None or stream.peek_word(1) != ("counters" if plural else "counter"):
+        return None
+    stream.advance()
+    return word
+
+
+def _parse_upkeep_counter_toll(stream: TokenStream) -> "ast.UpkeepCounterToll | None":
+    """CR 702.24a's ability printed longhand, in both of its spellings.
+
+    ``Put a +1/+1 counter on this creature, then sacrifice this creature unless
+    you pay {1} for each +1/+1 counter on it.`` (Phantasmal Sphere.)
+    ``Put a wage counter on this creature. You may pay {2} for each wage counter
+    on it. If you don't, remove all wage counters from this creature and an
+    opponent gains control of it.`` (Rogue Skycaptain.)
+
+    Tried before the ordinary counter-placement production, which would read the
+    first clause and strand everything after it — a permanent that grows a
+    counter every upkeep and is never asked to pay for it. Refuses without
+    consuming.
+
+    **The counter word must be the same in both halves.** "Pay {1} for each
+    <other> counter on it" is a different card: the escalation would be counted
+    off a store this ability never writes, which is a cost that never grows.
+
+    The keyword spelling is not read here. ``engine/cumulative_upkeep.py``
+    rewrites "Cumulative upkeep [cost]" into this same ability before any line
+    is classified, so the two front ends meet at the instruction rather than at
+    the sentence — and Cyclone, which prints this paragraph *plus* a rider
+    sentence of its own, fails full-token consumption here and keeps the card
+    hook that reads the rider.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("put", "a"):
+        return None
+    counter = _accept_counter_word(stream)
+    if counter is None or not stream.accept_word("counter"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_word("on") or not accept_source_reference(stream):
+        stream.reset(mark)
+        return None
+    optional = _accept_toll_frame(stream)
+    if optional is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("pay"):
+        stream.reset(mark)
+        return None
+    try:
+        cost = _parse_mana_payment(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("for", "each"):
+        stream.reset(mark)
+        return None
+    if _accept_counter_word(stream) != counter:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("counter", "on", "it"):
+        stream.reset(mark)
+        return None
+    consequence = "sacrifice" if not optional else _accept_toll_consequence(
+        stream, counter
+    )
+    if consequence is None:
+        stream.reset(mark)
+        return None
+    return ast.UpkeepCounterToll(
+        counter, dict(cost.pips), consequence=consequence
+    )
+
+
+def _accept_toll_frame(stream: TokenStream) -> bool | None:
+    """Which of CR 118.12a's two spellings frames the payment, or None.
+
+    ``False`` for ", then sacrifice this <noun> unless you …" — the consequence
+    is stated *before* the cost and is fixed by the sentence. ``True`` for ".
+    You may pay … " — the consequence comes after, in its own sentence, and the
+    caller reads it there.
+
+    One reader rather than two productions because CR 118.12a says the two are
+    the same sentence; what differs is only where the consequence is printed.
+    """
+    mandatory = stream.mark()
+    if stream.accept_punct(",") and stream.accept_phrase("then", "sacrifice"):
+        if accept_source_reference(stream) and stream.accept_phrase("unless", "you"):
+            return False
+    stream.reset(mandatory)
+    if stream.accept_punct(".") and stream.accept_phrase("you", "may"):
+        return True
+    return None
+
+
+def _accept_toll_consequence(stream: TokenStream, counter: str) -> str | None:
+    """What the "If you don't, …" sentence does, as a consequence word.
+
+    Only Rogue Skycaptain's shape today, and every word of it is required: the
+    counters are cleared **and** the permanent changes hands, so a printing that
+    did one without the other would be a different card and must refuse rather
+    than borrow this one's handler.
+
+    The counter word is checked against the one the ability places, for the
+    reason the cost's is: "remove all <other> counters" would clear a store this
+    ability never wrote.
+    """
+    if not stream.accept_punct("."):
+        return None
+    if not (
+        stream.accept_word("if")
+        and (stream.accept_word("you") or True)
+        and (stream.accept_word("don't") or stream.accept_phrase("do", "not"))
+    ):
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("remove", "all"):
+        return None
+    if _accept_counter_word(stream, plural=True) != counter:
+        return None
+    if not stream.accept_phrase("counters", "from"):
+        return None
+    if not accept_source_reference(stream):
+        return None
+    if not stream.accept_phrase(
+        "and", "an", "opponent", "gains", "control", "of", "it"
+    ):
+        return None
+    return "cede_control"
+
+
+def parse_upkeep_paragraph(stream: TokenStream) -> "ast.Statement | None":
+    """Every printed paragraph whose frame is an upkeep obligation, tried in
+    turn. Each refuses without consuming, so the order decides only which one
+    claims a line both could read — and none of them overlaps today.
+
+    One entry point rather than three call sites, because the dispatcher lives
+    in ``subject_verb`` and these all occupy the same position in it: before the
+    ordinary damage and counter productions, which would each read the
+    paragraph's first sentence and strand the rest.
+    """
+    for production in (
+        _parse_upkeep_counter_toll,
+        _parse_upkeep_damage_unless_cost,
+        _parse_pay_mana_to_prevent_upkeep_damage,
+    ):
+        node = production(stream)
+        if node is not None:
+            return node
+    return None

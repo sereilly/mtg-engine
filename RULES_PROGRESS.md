@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**346 / 612 tracked rules covered (56%)** — 1877 tests, 0 unannotated.
+**347 / 612 tracked rules covered (56%)** — 1886 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -27,7 +27,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [115. Targets](#115-targets) | 8/10 | 80% |
 | [116. Special Actions](#116-special-actions) | 3/3 | 100% |
 | [117. Timing and Priority](#117-timing-and-priority) | 6/6 | 100% |
-| [118. Costs](#118-costs) | 9/14 | 64% |
+| [118. Costs](#118-costs) | 10/14 | 71% |
 | [119. Life](#119-life) | 3/10 | 30% |
 | [120. Damage](#120-damage) | 5/10 | 50% |
 | [121. Drawing a Card](#121-drawing-a-card) | 3/9 | 33% |
@@ -292,7 +292,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **118.1** A cost is an action or payment necessary to take another action or to stop another action from ta... *(3 tests)*
 - [x] **118.2** If a cost includes a mana payment, the player paying the cost has a chance to activate mana abili... *(1 tests)*
-- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(16 tests, subrules ab)*
+- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(17 tests, subrules ab)*
 - [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
 - [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(3 tests, subrules a)*
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
@@ -301,7 +301,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(11 tests, subrules abcd)*
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
 - [ ] **118.11** The actions performed when paying a cost may be modified by effects. Even if they are, meaning th...
-- [ ] **118.12** Some spells, activated abilities, and triggered abilities read, “[Do something]. If [a player] [d...
+- [x] **118.12** Some spells, activated abilities, and triggered abilities read, “[Do something]. If [a player] [d... *(1 tests, subrules a)*
 - [ ] **118.13** Some costs contain mana symbols that can be paid in multiple ways. These include hybrid mana symb...
 - [ ] **118.14** Some effects say that “mana of any type can be spent” to pay a cost. This means that players may ...
 
@@ -345,7 +345,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 122. Counters
 
-- [x] **122.1** A counter is a marker placed on an object or player that modifies its characteristics and/or inte... *(21 tests, subrules af)*
+- [x] **122.1** A counter is a marker placed on an object or player that modifies its characteristics and/or inte... *(22 tests, subrules af)*
 - [x] **122.2** Counters on an object are not retained if that object moves from one zone to another. The counter... *(1 tests)*
 - [x] **122.3** If a permanent has both a +1/+1 counter and a -1/-1 counter on it, N +1/+1 and N -1/-1 counters a... *(2 tests)*
 - [ ] **122.4** If a permanent with an ability that says it can’t have more than N counters of a certain kind on ...
@@ -479,7 +479,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **400.1** A zone is a place where objects can be during a game. There are normally seven zones: library, ha... *(4 tests)*
 - [x] **400.2** Public zones are zones in which all players can see the cards’ faces, except for those cards that... *(4 tests)*
-- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(6 tests)*
+- [x] **400.3** If an object would go to any library, graveyard, or hand other than its owner’s, it goes to its o... *(7 tests)*
 - [x] **400.4** Cards with certain card types can’t enter certain zones. *(1 tests)*
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(1 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
@@ -561,7 +561,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **500.4** As a step or phase begins, if there are effects that last until that step or phase, those effects...
 - [x] **500.5** As a step or phase ends, if there are effects that last until the end of that step or phase, thos... *(1 tests)*
 - [x] **500.6** When a phase or step begins, any abilities that trigger “at the beginning of” that phase or step ... *(1 tests)*
-- [x] **500.7** Some effects can give a player extra turns. They do this by adding the turns directly after the s... *(3 tests)*
+- [x] **500.7** Some effects can give a player extra turns. They do this by adding the turns directly after the s... *(4 tests)*
 - [ ] **500.8** Some effects can add phases to a turn. They do this by adding the phases directly after the speci...
 - [ ] **500.9** Some effects can add steps to a phase. They do this by adding the steps directly after a specifie...
 - [x] **500.10** Some effects add a step after a particular phase. In that case, that effect first creates the pha... *(1 tests)*
@@ -685,7 +685,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(4 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(6 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(2 tests, subrules c)*
-- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(28 tests, subrules bcde)*
+- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(29 tests, subrules bcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(4 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
 - [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(5 tests, subrules a)*
@@ -795,7 +795,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **614.7** If a replacement effect would replace an event, but that event never happens, the replacement eff... *(5 tests, subrules a)*
 - [x] **614.8** Regeneration is a destruction-replacement effect. The word “instead” doesn’t appear on the card b... *(9 tests)*
 - [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(11 tests)*
-- [x] **614.10** An effect that causes a player to skip an event, step, phase, or turn is a replacement effect. “S... *(4 tests, subrules a)*
+- [x] **614.10** An effect that causes a player to skip an event, step, phase, or turn is a replacement effect. “S... *(6 tests, subrules a)*
 - [ ] **614.11** Some effects replace card draws. These effects are applied even if no cards could be drawn becaus...
 - [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(6 tests, subrules a)*
 - [x] **614.13** An effect that modifies how a permanent enters the battlefield may cause other objects to change ... *(1 tests, subrules a)*
@@ -888,7 +888,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
 - [x] **702.22** Banding *(35 tests, subrules abcdefghjk)*
 - [x] **702.23** Rampage *(6 tests, subrules abc)*
-- [x] **702.24** Cumulative Upkeep *(19 tests, subrules ab)*
+- [x] **702.24** Cumulative Upkeep *(25 tests, subrules ab)*
 - [x] **702.25** Flanking *(3 tests, subrules a)*
 - [x] **702.26** Phasing *(5 tests, subrules ad)*
 - [x] **702.36** Fear *(5 tests, subrules ab)*

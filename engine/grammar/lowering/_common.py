@@ -669,7 +669,7 @@ def _targets_payload(
             # planeswalker". A shared `player` answer dropped the word, which
             # silently deleted the planeswalker half of the card — the picker
             # offers exactly what this describes.
-            return {
+            described: dict[str, object] = {
                 "quantifier": "target",
                 "kind": (
                     "player_or_planeswalker" if recipient.or_planeswalker
@@ -677,6 +677,13 @@ def _targets_payload(
                 ),
                 "opponents_only": True,
             }
+            if recipient.damaged_by_source:
+                # "…**previously dealt damage by it**" (Diseased Vermin), for
+                # the reason the attack narrowing one arm up is carried: the
+                # picker enforces it, and a restriction the enumerator never
+                # sees lets the ability hit any opponent at all.
+                described["damaged_by_source"] = True
+            return described
         return None
     if not isinstance(recipient, ast.TargetSpec):
         return None

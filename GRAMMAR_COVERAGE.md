@@ -30,7 +30,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 76.1% | 73.7% | 54.6% | 105 |
+| ALL *(measured)* | 144 | 251 | 79.7% | 77.7% | 58.6% | 111 |
 | **All (shipped)** | **3439** | **5016** | **89.2%** | **88.2%** | **57.1%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -43,11 +43,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 287 | 129 | expected a subject |  |
+| 285 | 127 | expected a subject |  |
 | 102 | 41 | unrecognized effect verb |  |
-| 77 | 38 | unconsumed text |  |
+| 72 | 33 | unconsumed text |  |
 | 36 | 36 | unrecognized activation cost |  |
-| 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
+| 32 | 17 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 10 | 2 | expected a keyword ability |  |
 | 8 | 2 | expected 'the number of' in a where-clause |  |
@@ -1028,6 +1028,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `End the turn. (Exile all spells and abilities from the stack, including this card. The player whose turn it is discards down to their maximum hand size. Damage wears off, and "this turn" and "until end of turn" effects end.)`
 - **Diseased Vermin**
   - `Whenever this creature deals combat damage to a player, put an infection counter on it.`
+  - `At the beginning of your upkeep, this creature deals X damage to target opponent previously dealt damage by it, where X is the number of infection counters on it.`
 - **Disenchant**
   - `Destroy target artifact or enchantment.`
   - `Destroy target artifact or enchantment.`
@@ -1495,6 +1496,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: Target creature gains first strike until end of turn.`
 - **Fyndhorn Brownie**
   - `{2}{G}, {T}: Untap target creature.`
+- **Fyndhorn Druid**
+  - `When this creature dies, if it was blocked this turn, you gain 4 life.`
 - **Fyndhorn Elder**
   - `{T}: Add {G}{G}.`
   - `{T}: Add {G}{G}.`
@@ -2046,6 +2049,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player casts a white spell, you may pay {1}. If you do, you gain 1 life.`
   - `Whenever a player casts a white spell, you may pay {1}. If you do, you gain 1 life.`
 - **Ivory Gargoyle**
+  - `When this creature dies, return it to the battlefield under its owner's control at the beginning of the next end step and you skip your next draw step.`
   - `{4}{W}: Exile this creature.`
 - **Ivory Guardians**
   - `Creatures named Ivory Guardians get +1/+1 as long as an opponent controls a nontoken red permanent.`
@@ -2115,6 +2119,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Jungle Hollow**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {B} or {G}.`
+- **Juniper Order Advocate**
+  - `As long as this creature is untapped, green creatures you control get +1/+1.`
 - **Juniper Order Druid**
   - `{T}: Untap target land.`
 - **Junún Efreet**
@@ -2903,6 +2909,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {U}.`
 - **Phantasmal Mount**
   - `{T}: Target creature you control with toughness 2 or less gets +1/+1 and gains flying until end of turn. When this creature leaves the battlefield this turn, sacrifice that creature. When the creature leaves the battlefield this turn, sacrifice this creature.`
+- **Phantasmal Sphere**
+  - `At the beginning of your upkeep, put a +1/+1 counter on this creature, then sacrifice this creature unless you pay {1} for each +1/+1 counter on it.`
+  - `When this creature leaves the battlefield, target opponent creates an X/X blue Orb creature token with flying, where X is the number of +1/+1 counters on this creature.`
 - **Phelddagrif**
   - `{G}: Phelddagrif gains trample until end of turn. Target opponent creates a 1/1 green Hippo creature token.`
   - `{W}: Phelddagrif gains flying until end of turn. Target opponent gains 2 life.`
@@ -3262,6 +3271,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: This artifact deals 1 damage to any target.`
   - `{3}, {T}: This artifact deals 1 damage to any target.`
   - `{3}, {T}: This artifact deals 1 damage to any target.`
+- **Rogue Skycaptain**
+  - `At the beginning of your upkeep, put a wage counter on this creature. You may pay {2} for each wage counter on it. If you don't, remove all wage counters from this creature and an opponent gains control of it.`
 - **Rohgahh of Kher Keep**
   - `Creatures you control named Kobolds of Kher Keep get +2/+2.`
 - **Rookie Mistake**
@@ -3358,6 +3369,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this artifact: Return all Auras attached to target permanent you own to their owners' hands. Draw a card at the beginning of the next turn's upkeep.`
 - **Scarecrow**
   - `{6}, {T}: Prevent all damage that would be dealt to you this turn by creatures with flying.`
+- **Scars of the Veteran**
+  - `Prevent the next 7 damage that would be dealt to any target this turn. If it's a creature, put a +0/+1 counter on it for each 1 damage prevented this way at the beginning of the next end step.`
 - **Scarwood Bandits**
   - `{2}{G}, {T}: Unless an opponent pays {2}, gain control of target artifact for as long as this creature remains on the battlefield.`
 - **Scarwood Hag**
@@ -3664,6 +3677,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, scry 1. (Look at the top card of your library. You may put that card on the bottom.)`
 - **Spiny Starfish**
   - `{U}: Regenerate this creature.`
+  - `At the beginning of each end step, if this creature regenerated this turn, create a 0/1 blue Starfish creature token for each time it regenerated this turn.`
 - **Spirit Link**
   - `Whenever enchanted creature deals damage, you gain that much life.`
   - `Whenever enchanted creature deals damage, you gain that much life.`
@@ -3679,6 +3693,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, if that player controls a Plains, they gain 1 life.`
 - **Spitting Slug**
   - `Whenever this creature blocks or becomes blocked, you may pay {1}{G}. If you do, this creature gains first strike until end of turn. Otherwise, each creature blocking or blocked by this creature gains first strike until end of turn.`
+- **Splintering Wind**
+  - `{2}{G}: This enchantment deals 1 damage to target creature. Create a 1/1 green Splinter creature token. It has flying and "Cumulative upkeep {G}." When it leaves the battlefield, it deals 1 damage to you and each creature you control. (At the beginning of its controller's upkeep, that player puts an age counter on it, then sacrifices it unless they pay its upkeep cost for each age counter on it.)`
 - **Spoils of Evil**
   - `For each artifact or creature card in target opponent's graveyard, add {C} and you gain 1 life.`
 - **Spoils of War**

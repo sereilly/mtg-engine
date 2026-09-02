@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **1723**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **150**
+- With deletion-probe findings (ignored words): **151**
 
 ## Measured sets — reported, not gated
 
@@ -89,6 +89,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Cleanse | `destroy all black creatures` | all |
 | Cloak of Confusion | `you may have it assign no combat damage this turn. if you do, defendin` | have |
 | Curse of Marit Lage | `tap all islands` | all |
+| Cyclone | `put a wind counter on this enchantment, then sacrifice this enchantmen` | enchantment |
 | Dance of the Dead | `if it's on the battlefield, it loses "enchant creature card in a grave` | tapped |
 | Didgeridoo | `you may put a minotaur permanent card from your hand onto the battlefi` | permanent |
 | Drain Life | `drain life deals x damage to any target. you gain life equal to the da` | life |
@@ -222,13 +223,13 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 1591 |
+| parse rule | 1592 |
 | activation cost | 722 |
 | trigger table | 490 |
 | static-line table | 362 |
 | keyword table | 328 |
 | aura enchant noun (oracle_instructions attach) | 136 |
-| card_hooks bespoke (name-keyed) | 96 |
+| card_hooks bespoke (name-keyed) | 95 |
 | activation_restrictions.py | 69 |
 | aura static (oracle_instructions/permanent_state) | 50 |
 | auras.py (attached effect) | 43 |

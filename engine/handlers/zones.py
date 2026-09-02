@@ -1497,7 +1497,24 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
 
     card = context.card
     source = context.source_permanent
-    seat = game.players.index(context.caster)
+    seat = game.seat_index(context.caster)
+    # "…under **its owner's** control." (Ivory Gargoyle.) CR 400.3's seat, which
+    # is not the ability's controller for a creature that changed hands before
+    # it died. Read off the *permanent* while there still is one and off the
+    # graveyard that held the card once there is not — CR 404.3 puts a card in
+    # its owner's graveyard, so the pile that had it names the owner. An absent
+    # payload key is every card written before the phrase existed and keeps
+    # meaning "you".
+    owners_control = instruction.payload.get("control") == "owner"
+    if owners_control and source is not None:
+        from ..control import base_controller
+
+        # CR 108.3's answer, which this engine reads off the seat the permanent
+        # *entered* under — never off where it currently sits, which is the
+        # thief's side and the whole reason the card names the owner.
+        owner = base_controller(source)
+        if isinstance(owner, int):
+            seat = owner
     if source is not None and game.is_on_battlefield(source):
         game.remove_from_battlefield(source)
     else:
@@ -1505,6 +1522,8 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
             for index, held in enumerate(player.graveyard):
                 if held is card:
                     player.graveyard.pop(index)
+                    if owners_control:
+                        seat = game.seat_index(player)
                     break
             else:
                 continue
