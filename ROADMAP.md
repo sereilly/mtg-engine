@@ -936,6 +936,61 @@ Wave 2 holds the unblocked-attacker family (`defending_player` life loss,
 poison, hand-revealing), the `An opponent chooses one —` modal, and the
 remaining singletons.
 
+### W1G4 — alternative costs (CR 118.9). Merged; supported 62 → 62.
+
+**The flat count is the finding, and the brief was wrong about the size in
+both directions.** All three cards this round fixed were *already* counted as
+supported, so the census could not move; what the round bought was
+correctness. `parse_coverage.py --set ALL` went 130 → **133** fully claimed.
+
+**"Alternative costs do not exist" was half wrong**, which changed the design.
+`engine/cast_permissions.py`'s `CastPermission.free` already implemented CR
+118.9's *waiver* ("without paying its mana cost") and `queue_from_hand` already
+had the branch that skips the payment. What was missing was the **priced** half
+— an alternative cost whose payment is something other than nothing — so the
+new `engine/alternative_costs.py` is a sibling of `cast_costs.py` plus one `if`
+ahead of the existing waiver branch, not a new subsystem. That reading also
+produced a rule the scoping would have missed: **CR 118.9a forbids applying two
+alternative costs, and a waiver is one**, so the two now exclude each other.
+
+The *casting seam* was smaller than billed (one announcement site, one CR
+601.2h gate, one payment fork) and the **blast radius larger**: `ai_policy.py`,
+`ai_simulator.py`, `web/game_flow.py`, `web/schemas.py` and
+`web/action_helpers.py` all had to forward the announcement, or the cast falls
+back silently to the mana cost.
+
+**Three shipped-adjacent cards were mis-playing, and one bug predates the set.**
+Force of Will and Pyrokinesis compiled supported with the line they are famous
+for claimed by nothing. **Surge of Strength cast discarding nothing** — its
+additional cost was printed, unread and uncharged; the diagnosis took three
+layers, and only the third was real (not a missing discard clause, not the
+noun parser, but `any_colors` missing from `CARD_ONLY_FILTER_KEYS`, so nothing
+could test the filter the parser had read correctly all along). Charging that
+cost then exposed a **pre-existing** hole: `_cast_candidate` never asked
+`_unpayable_additional_cost`, and **Village Rites with no creature on board had
+the identical shape**. `refused_casts` is 0 across five seeds. Six stale
+**CR 118.4** citations for the life-payment rule were corrected to **CR 119.4**
+(118.4 is `{X}`).
+
+**Unowned and worth taking early in wave 2: the bounded distributed target
+count (CR 601.2c).** `_parse_distribute_counters` exists and works, but
+requires the literal `among any number of`; Contagion prints `among one or
+two` and Bounty of the Hunt `among one, two, or three`. The bound must also be
+*enforced*, not just parsed. It unblocks **Contagion outright** and Bounty of
+the Hunt jointly with the delayed-trigger work. Three of this group's five
+refusal sites were misleading in the usual way — Contagion's "expected a mana
+cost to pay" and Scars'/Bounty's "unconsumed text" are one failure at three
+tokenizer offsets, and none of them is about a mana cost.
+
+**One shape deliberately left unbuilt, and it becomes real at promotion:** the
+wire carries `alternative_cost` / `alternative_cost_hand_index` to the engine,
+but there is **no cost picker**, because `_cost_picker_spec` models a
+*mandatory* cost and emitting one would make the UI demand the pitch on every
+cast. An optional alternative cost needs an **offer** shape ("cast for {3}{U}{U}
+or for 1 life + a blue card?") which does not exist. `picker_sweep` cannot see
+it and the set is measured, so nothing is broken today — but this is a Phase 4
+item, not a Phase 3 one.
+
 ## Homelands (HML) — shipped
 
 **Census at ingest: 115 cards, 76 supported (66.1%), 44 refused lines over 44
