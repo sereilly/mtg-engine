@@ -4532,17 +4532,30 @@ class PendingChoicesMixin:
             return False
         if entry.get("_on_decline") or int(entry.get("damage", 0) or 0):
             return False
+        return offered_action_is_a_payment(
+            entry.get("_on_accept") or (), self._offer_self_recipients(choice)
+        )
+
+    def _offer_self_recipients(self, choice: PendingChoice) -> frozenset[str]:
+        """The printed player references in this offer's branches that resolve
+        to the offered seat ("caster", "target_player"), for the readers whose
+        answer depends on who a step lands on
+        (``ai_valuation.offered_action_is_a_payment``, ``toll_branch_loss``).
+
+        Resolved here because only the resolution knows the bindings: "that
+        player" is whoever the offer was rebound to, and CR 601.2b's chooser is
+        the seat holding the prompt.
+        """
+        entry = choice.data
         seat = self.players[choice.player_index]
         context = entry.get("_context")
-        self_recipients = set()
+        self_recipients: set[str] = set()
         if context is not None:
             if getattr(context, "caster", None) is seat:
                 self_recipients.add("caster")
             if getattr(context, "target", None) is seat:
                 self_recipients.update(("target", "target_player"))
-        return offered_action_is_a_payment(
-            entry.get("_on_accept") or (), self_recipients
-        )
+        return frozenset(self_recipients)
 
     def _default_optional_pay(self, choice: PendingChoice) -> None:
         """Pay when the floating mana is already there; an unpayable "unless you
@@ -4614,14 +4627,30 @@ class PendingChoicesMixin:
         # Take gifts, pay tolls, make no trades: an offer whose price is a deed
         # rather than a payment, and whose refusal the card prices at nothing,
         # is refused. A *toll* — an offer with a printed "if you don't" — is
-        # still paid, because refusing it is not free either and choosing which
-        # of two losses is smaller is the seat's judgement, not a default's.
+        # still paid by default, because refusing it is not free either.
         if floating is not None and self._offer_is_an_unpriced_trade(choice):
             floating = None
             self.log.append(
                 f"{player.name} declined {entry['card_name']} "
                 "(declining costs nothing)"
             )
+        # …unless the toll's two losses are both priceable off the compiled
+        # program and the penalty is the smaller one — "2 damage" against
+        # "sacrifice that artifact" (Curse Artifact). The comparison and its
+        # weights are `ai_policy.toll_decline_is_smaller_loss` with the
+        # magnitudes derived in `ai_valuation.toll_branch_loss`; a side the
+        # program cannot price answers False and the pay-tolls policy stands.
+        elif floating is not None:
+            from ...ai_policy import toll_decline_is_smaller_loss
+
+            if toll_decline_is_smaller_loss(
+                self, choice.player_index, entry, self._offer_self_recipients(choice)
+            ):
+                floating = None
+                self.log.append(
+                    f"{player.name} declined {entry['card_name']} "
+                    "(the penalty is the smaller loss)"
+                )
         self.discard_pending_choice(choice)
         if floating is not None and self._optional_action_still_takeable(
             choice.player_index, entry
