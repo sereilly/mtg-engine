@@ -30,7 +30,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | HML | 115 | 189 | 92.6% | 92.6% | 64.0% | 93 |
 | 5ED | 434 | 631 | 92.7% | 92.4% | 60.1% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 66.5% | 61.8% | 44.2% | 84 |
+| ALL *(measured)* | 144 | 251 | 68.9% | 64.1% | 46.6% | 88 |
 | **All (shipped)** | **3439** | **5016** | **88.9%** | **87.9%** | **56.9%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -43,10 +43,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 273 | 123 | expected a subject |  |
+| 272 | 122 | expected a subject |  |
 | 140 | 59 | unrecognized effect verb |  |
 | 77 | 40 | unconsumed text |  |
-| 39 | 39 | unrecognized activation cost |  |
+| 36 | 36 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 10 | 2 | expected a keyword ability |  |
@@ -780,6 +780,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: Prevent the next 2 damage that would be dealt to you this turn.`
   - `{3}, {T}: Prevent the next 2 damage that would be dealt to you this turn.`
   - `{3}, {T}: Prevent the next 2 damage that would be dealt to you this turn.`
+- **Contagion**
+  - `Distribute two -2/-1 counters among one or two target creatures.`
 - **Contract from Below**
   - `Discard your hand, ante the top card of your library, then draw seven cards.`
   - `Discard your hand, ante the top card of your library, then draw seven cards.`
@@ -3192,6 +3194,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Tap all blue creatures.`
 - **Rise Again**
   - `Return target creature card from your graveyard to the battlefield.`
+- **Ritual of the Machine**
+  - `Gain control of target nonartifact, nonblack creature.`
 - **Riven Turnbull**
   - `{T}: Add {B}.`
 - **River Delta**
@@ -3543,6 +3547,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}{C}.`
 - **Sol'kanar the Swamp King**
   - `Whenever a player casts a black spell, you gain 1 life.`
+- **Soldevi Adnate**
+  - `{T}, Sacrifice a black or artifact creature: Add an amount of {B} equal to the sacrificed creature's mana value.`
 - **Soldevi Digger**
   - `{2}: Put the top card of your graveyard on the bottom of your library.`
 - **Soldevi Excavations**
@@ -4180,6 +4186,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Draw two cards.`
 - **Viscerid Armor**
   - `{1}{U}: Return this Aura to its owner's hand.`
+- **Viscerid Drone**
+  - `{T}, Sacrifice a creature and a Swamp: Destroy target nonartifact creature. It can't be regenerated.`
+  - `{T}, Sacrifice a creature and a snow Swamp: Destroy target creature. It can't be regenerated.`
 - **Visions**
   - `Look at the top five cards of target player's library. You may then have that player shuffle that library.`
   - `Look at the top five cards of target player's library. You may then have that player shuffle that library.`
@@ -4270,6 +4279,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Wandering Mage**
   - `{W}, Pay 1 life: Prevent the next 2 damage that would be dealt to target creature this turn.`
   - `{U}: Prevent the next 1 damage that would be dealt to target Cleric or Wizard creature this turn.`
+  - `{B}, Put a -1/-1 counter on a creature you control: Prevent the next 2 damage that would be dealt to target player or planeswalker this turn.`
 - **Wanderlust**
   - `At the beginning of the upkeep of enchanted creature's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted creature's controller, this Aura deals 1 damage to that player.`

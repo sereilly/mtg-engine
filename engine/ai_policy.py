@@ -352,6 +352,20 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # every main phase for a pump that wears off. Derived from the compiled
         # cost, so it reaches every card printed this way and names none.
         if ability.cost.sacrifice_filter is not None or ability.cost.discard_cards:
+            # A conjoined sacrifice ("a creature **and a Swamp**", Viscerid
+            # Drone) is covered by the clause above rather than by a second
+            # test: the charger never fills `sacrifice_also_filter` without
+            # `sacrifice_filter`, so a second condition would be unreachable
+            # and would read as a claim that it is not.
+            continue
+
+        # "Put a -1/-1 counter on a creature you control" (Wandering Mage). The
+        # same trade one resource over, and the same reason the policy cannot
+        # price it: the score below reads the *effect*, so a shield bought by
+        # permanently shrinking a creature reads as free — and the AI would pay
+        # it every main phase until its own board is gone. Derived from the
+        # compiled cost, so it names no card.
+        if ability.cost.put_counter_filter is not None:
             continue
 
         # "Exile the top card of your library" (Royal Herbalist, Phyrexian
