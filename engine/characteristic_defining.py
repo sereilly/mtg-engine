@@ -182,6 +182,66 @@ def _same_name_count(match: re.Match) -> dict[str, object]:
     return {"count": "same_name", "scope": "all"}
 
 
+#: Which printed half of the P/T a clause defines, by the words it uses. The
+#: third row carries no key at all, because "power and toughness are each" is
+#: what ``set_base_pt`` already does when neither is named — and an absent key
+#: is what every payload here says for "the sentence did not narrow this".
+_DEFINED_HALF: dict[str, str | None] = {
+    "power and toughness are each": None,
+    "power is": "power",
+    "toughness is": "toughness",
+}
+
+
+def _counted_noun_phrase(match: re.Match) -> dict[str, object] | None:
+    """"…equal to **1 plus the number of green creatures on the battlefield**."
+    (An-Havva Constable; Aysen Crusader prints the same shape over both halves
+    and a two-subtype union.)
+
+    The counted set is a printed noun phrase, so it is read by the noun parser
+    and turned into the count every other computed amount in the engine uses —
+    ``lowering/_amounts.count_spec``. Nothing about the phrase is spelled into
+    the pattern, which is what makes this one row rather than one row per
+    printed noun: a colour, a creature type, a union of two, and the scope
+    ("you control" against CR 403.1's shared battlefield) are all things that
+    reader already answers.
+
+    That shared count is also the point of the row rather than a convenience.
+    An-Havva Inn prints An-Havva Constable's exact count as a life gain
+    ("…where X is the number of green creatures on the battlefield"), and a
+    second counter written here would be a second answer to one sentence — the
+    drift ``count_spec`` exists to prevent, with a card on each side of it.
+
+    Returns None — leaving the card unsupported — where either half refuses: a
+    noun phrase the parser cannot read, or a count that reader cannot take
+    (a zone, a controller narrowing, a restriction with no payload form). A
+    characteristic-defining ability is recomputed continuously, so a payload
+    the counter cannot answer is not a card that does less, it is a creature
+    whose P/T is silently wrong every time anything looks at it.
+
+    The printed constant rides as the count's ``offset``, which is the key
+    ``_scaled`` already adds in one place for "…beyond the first" — so "1 plus"
+    and "2 plus" are one arithmetic with one number changed, and there is no
+    second site where a constant could be honoured or forgotten.
+    """
+    from .grammar.errors import LoweringError
+    from .grammar.lowering._amounts import count_spec
+    from .grammar.phrases import parse_subject_filter
+
+    filt = parse_subject_filter(match.group("counted"), plural=True)
+    if filt is None:
+        return None
+    try:
+        spec = count_spec(filt, None, offset=int(match.group("plus")))
+    except LoweringError:
+        return None
+    payload: dict[str, object] = {"count_spec": spec}
+    half = _DEFINED_HALF[match.group("half")]
+    if half is not None:
+        payload["defines"] = half
+    return payload
+
+
 def _chosen_number(match: re.Match) -> dict[str, object]:
     """Shapeshifter. The only CDA in the pool that counts nothing: its value is
     a number a player chose (CR 614.1c as it enters, and again each upkeep).
@@ -435,6 +495,33 @@ _PATTERNS: tuple[tuple[re.Pattern[str], object], ...] = (
         ),
         _chosen_number,
     ),
+    (
+        # "**An-Havva Constable's toughness is equal to 1 plus the number of
+        # green creatures on the battlefield.**" and "**Aysen Crusader's power
+        # and toughness are each equal to 2 plus the number of Soldiers and
+        # Warriors you control.**"
+        #
+        # The general row, and read **last** on purpose: every pattern above is
+        # a prefix or a special case of this shape, and each one already emits
+        # the payload its counter branch reads. A row that claimed them would
+        # not be wrong so much as it would be a second answer to a question
+        # that already has one — and Angry Mob's two-sentence form would lose
+        # its second half to the ``.+$`` here.
+        #
+        # What it counts is not spelled into the pattern at all: the noun phrase
+        # goes to the same parser every other reader of a printed noun phrase
+        # uses, and the count it becomes is ``count_spec``, the same one a
+        # ", where X is the number of …" clause produces. That is the whole
+        # point of the row — An-Havva Inn prints An-Havva Constable's count as
+        # a life gain, and the two must be one number or the pair is two
+        # readings of one sentence.
+        re.compile(
+            rf"^{_SUBJECT} (?P<half>power and toughness are each|power is|"
+            r"toughness is) equal to (?P<plus>\d+) plus the number of "
+            r"(?P<counted>.+)$"
+        ),
+        _counted_noun_phrase,
+    ),
 )
 
 
@@ -458,7 +545,16 @@ def dynamic_pt_for(normalized_line: str) -> DynamicPT | None:
         # against a phrase nobody parsed.
         if "phrase" in groups and _names_objects(groups["phrase"] or "") is False:
             return None
-        return DynamicPT("dynamic_pt_count", build(match))
+        payload = build(match)
+        # A builder may refuse. The general row above reads its own noun phrase
+        # and its own count, and either can fail on a line whose *shape* matched
+        # — which is a card this file cannot answer, not a card with no
+        # characteristic-defining ability, so it leaves the line to whatever
+        # else might read it and the card is reported unsupported naming the
+        # clause.
+        if payload is None:
+            return None
+        return DynamicPT("dynamic_pt_count", payload)
     return None
 
 

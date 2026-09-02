@@ -15,6 +15,44 @@ from .stream import TokenStream
 from .vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS, singular as _singular
 
 
+def _accept_variable_offset(stream: TokenStream, variable: ast.Var) -> ast.Amount:
+    """``X plus <n>`` — the variable with the constant the sentence adds to it.
+
+    "You gain **X plus 1** life, where X is the number of green creatures on the
+    battlefield." (An-Havva Inn.) "…deals **X plus 3** damage to you."
+    (Hellfire.) One reading, here, because the two cards print the same
+    quantity: ``effects/damage.py`` had read its own copy of this since Hellfire
+    landed, so the same three words were a quantity in a damage clause and
+    unconsumed text everywhere else — the fork that round 8 found in the
+    where-clause parsers, one production over. The damage branch still stands
+    for its *other* left-hand sides ("half X plus 1"); this one claims the
+    variable case first and builds the identical node, so nothing about Hellfire
+    changes.
+
+    Only a printed **number** follows, and only after "plus". "X minus 1" is
+    left entirely unconsumed rather than read as a negative offset: no card in
+    the pool prints it, and an unread word fails the line loudly, which is the
+    direction this parser exists to fail in.
+
+    A ``Fixed`` right-hand side is the whole vocabulary for the same reason —
+    "X plus the number of …" is a sum of two computed quantities, and the
+    resolution reads one X.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("plus"):
+        return variable
+    token = stream.peek()
+    if token is not None and token.kind == NUMBER:
+        stream.advance()
+        return ast.Plus(variable, ast.Fixed(int(token.text)))
+    number = NUMBER_WORDS.get(stream.peek_word() or "")
+    if number is not None:
+        stream.advance()
+        return ast.Plus(variable, ast.Fixed(number))
+    stream.reset(mark)
+    return variable
+
+
 def parse_amount(stream: TokenStream, *, back_reference: str | None = None) -> ast.Amount:
     """Parse a quantity at the cursor.
 
@@ -36,7 +74,7 @@ def parse_amount(stream: TokenStream, *, back_reference: str | None = None) -> a
         word = token.text
         if word in ("x", "y"):
             stream.advance()
-            return ast.Var(word)
+            return _accept_variable_offset(stream, ast.Var(word))
         # "a third of their life" (Pox). Read **before** the number-word table,
         # which maps a bare "a" onto 1 — without this the fraction parses as the
         # quantity one and the rest of the phrase is unconsumed text.

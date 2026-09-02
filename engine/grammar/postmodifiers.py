@@ -466,6 +466,18 @@ def _parse_postmodifiers(
                     continue
             stream.reset(probe)
             break
+        # "the number of green creatures **on the battlefield**" (An-Havva
+        # Constable, An-Havva Inn). Not one of ``_ZONE_NOUNS`` and deliberately
+        # not added to them: CR 403.1 makes the battlefield one shared zone,
+        # ``zone`` already says "battlefield", and consuming the words into it
+        # would leave no trace that they were read — which is the exact silent
+        # drop that set's docstring refuses. So they set a field of their own,
+        # and what that field records is the *scope*: the set is scoped to
+        # nobody. That is not the same as saying nothing, because a count whose
+        # filter names no controller is taken on the caster's own board.
+        if stream.accept_phrase("on", "the", "battlefield"):
+            d.on_the_battlefield = True
+            continue
         if stream.at_word("from", "in"):
             # "from your graveyard" / "in a graveyard" — which zone the objects
             # are in, and whose. Both halves are recorded: a handler that only

@@ -14,7 +14,7 @@ from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS, card_only_filter
 from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import count_spec, halved_count_spec
+from ._amounts import count_spec, halved_count_spec, x_offset_amount
 from ._common import (
     _amount_payload,
     _describe_targets,
@@ -212,8 +212,18 @@ def _lower_gain_life(
                 },
             ),
         )
+    # "You gain **X plus 1** life, where X is the number of green creatures on
+    # the battlefield." (An-Havva Inn.) A printed constant on top of the
+    # sentence's X, carried on the amount rather than folded into the count that
+    # defines it: the where-clause is stamped onto this instruction afterwards
+    # and is the same count An-Havva Constable's toughness reads, so a constant
+    # added there would belong to the count and change the creature too.
+    # `_amount_payload` is deliberately not taught the shape — it feeds fifty
+    # callers, several of which compare its result to a number.
+    offset = x_offset_amount(node.amount)
     payload: dict[str, object] = {
-        "amount": _amount_payload(node.amount), "recipient": recipient,
+        "amount": offset if offset is not None else _amount_payload(node.amount),
+        "recipient": recipient,
     }
     # "…for each creature you control with flying" (Aven Gagglemaster): a
     # battlefield count of the gainer's own permanents. The honoured fields are

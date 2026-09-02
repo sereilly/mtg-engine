@@ -200,6 +200,9 @@ class _FilterDraft:
     their_choice: bool = False
     chosen_by_opponent: bool = False
     not_chosen_this_way: bool = False
+    # "…**on the battlefield**" (An-Havva Constable) — see
+    # ``ast.ObjectFilter.on_the_battlefield``.
+    on_the_battlefield: bool = False
     named: str | None = None
     attached_to: str | None = None
     attached_to_filter: ast.ObjectFilter | None = None
@@ -502,16 +505,34 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             # list of six differently from a list of two, and the card means the
             # same thing either way.
             #
-            # A comma is only consumed when a subtype follows it, so a phrase
-            # that ends its noun and goes on ("destroy target Wall, then draw a
-            # card") keeps the comma for whatever reads the rest.
-            while stream.at_word("or") or stream.at_punct(","):
+            # "the number of **Soldiers and Warriors** you control" (Aysen
+            # Crusader) is the third spelling and the same union: a Soldier is
+            # in the set and a Warrior is in the set, and one creature that is
+            # both is in it once. English writes a union of two sets this way as
+            # readily as with "or", which is why the branch above this one has
+            # read "artifact **and** enchantment" as a type union since it was
+            # written — this is the same word doing the same job one axis over
+            # (CR 205.2 against CR 205.3), and reading it as a conjunction would
+            # make the set every creature that is a Soldier *and* a Warrior,
+            # which on Aysen Crusader's own board is almost always empty.
+            #
+            # A comma or connector is only consumed when a subtype follows it,
+            # so a phrase that ends its noun and goes on ("destroy target Wall,
+            # then draw a card" / "destroy target Wall and draw a card") keeps
+            # the word for whatever reads the rest.
+            while stream.at_word("or", "and") or stream.at_punct(","):
                 probe = stream.mark()
                 stream.advance()
                 # "…, or Snake" — the final item carries both, and the comma
                 # above already moved past its own token.
-                stream.accept_word("or")
-                alternative = match_longest(stream.words_from(), 0, SUBTYPE_INDEX)
+                stream.accept_word("or", "and")
+                # The plural spelling too ("Soldiers and **Warriors**"), through
+                # the same reader the head noun used. `match_longest` alone
+                # matches singulars, so a printed plural after the connector was
+                # a non-match and took the whole union with it — the head of the
+                # list is nearly always plural where a count is being taken, so
+                # the tail almost always is as well.
+                alternative = _match_subtype_or_plural(stream)
                 if alternative is None:
                     stream.reset(probe)
                     break
@@ -702,6 +723,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         was_dealt_damage_this_turn=d.was_dealt_damage_this_turn,
         chosen_by_opponent=d.chosen_by_opponent,
         not_chosen_this_way=d.not_chosen_this_way,
+        on_the_battlefield=d.on_the_battlefield,
         dealt_damage_to_source_this_turn=d.dealt_damage_to_source_this_turn,
     )
 

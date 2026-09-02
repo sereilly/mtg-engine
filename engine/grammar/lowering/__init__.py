@@ -64,11 +64,11 @@ from ._common import (
     _MANA_KEYS,
     _full_mana_payload,
     _REST_OF_TURN,
-    _mentions_x,
     _refuse_unfused_distinctness,
-    _stamp_x_from_count,
 )
 from ._amounts import (
+    _mentions_x,
+    _stamp_x_from_count,
     _READABLE_COST_SACRIFICE_CHARACTERISTICS,
     _SWAMPS_THEY_CONTROL,
     _BOARD_COUNT_DAMAGE,

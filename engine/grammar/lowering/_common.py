@@ -229,6 +229,16 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # two lowerings written for them name them in ``carried_separately``.
     "blocked_by_bound_object": "blocked_by_bound_object",
     "blocked_by_target_object": "blocked_by_target_object",
+    # "the number of green creatures **on the battlefield**" (An-Havva
+    # Constable, An-Havva Inn). CR 403.1's shared zone, which is a statement
+    # about *scope* rather than a characteristic of any object — so
+    # ``to_payload`` emits nothing for it, and a lowering that built a payload
+    # and did not know the field would scope the set to one seat. That
+    # direction is not a card doing less: on a two-player board a count is
+    # halved, silently, while the sentence still reports supported. Only
+    # ``_amounts.count_spec`` reads it, because it is the one reader with
+    # somewhere to put a scope (``owner: "all"``).
+    "on_the_battlefield": "on_the_battlefield",
 }
 
 
@@ -875,62 +885,6 @@ def _refuse_unfused_distinctness(steps: tuple[ast.Statement, ...]) -> None:
                     "a lowering with a slot per clause",
                     node=spec,
                 )
-
-
-def _stamp_x_from_count(
-    instructions: tuple[OracleInstruction, ...], spec: dict
-) -> tuple[OracleInstruction, ...]:
-    """Put *spec* on every instruction, including the steps nested inside one.
-
-    A sentence lowers to a tuple, and a wrapper (`sequence`, `if_then`, `may`)
-    carries its own steps in its payload — so stamping the top level alone would
-    define X for the outer instruction and leave the inner ones reading the
-    cast's X, which for a triggered ability is None.
-    """
-    stamped = []
-    for instruction in instructions:
-        payload = dict(instruction.payload)
-        if X_FROM_COUNT in payload and payload[X_FROM_COUNT] != spec:
-            # One resolution has one X (`context.x_value`), so a sentence whose
-            # where-clause defines one *and* whose amount is a count of its own
-            # ("draw cards equal to the number of …, where X is …") would have
-            # the two silently overwrite each other. Neither reading is the
-            # card, so the line refuses.
-            raise LoweringError("two counts cannot share one X")
-        payload[X_FROM_COUNT] = spec
-        for key in ("steps", "then", "else", "otherwise", "action"):
-            nested = payload.get(key)
-            if isinstance(nested, tuple) and nested and isinstance(nested[0], OracleInstruction):
-                payload[key] = _stamp_x_from_count(nested, spec)
-        stamped.append(OracleInstruction(instruction.kind, instruction.value, payload))
-    return tuple(stamped)
-
-
-def _mentions_x(instructions: tuple[OracleInstruction, ...]) -> bool:
-    """Whether anything in *instructions* actually reads an X.
-
-    Most amounts carry the literal string; ``unless_pays_x`` is the one that
-    says so with a flag instead ("counter it unless that player pays {X}"), and
-    it is named here because a where-clause over that sentence is a real card
-    (In the Eye of Chaos) that would otherwise be refused for defining an X
-    nothing reads.
-    """
-    for instruction in instructions:
-        if instruction.payload.get("unless_pays_x"):
-            return True
-        for key, value in instruction.payload.items():
-            if value == "x":
-                return True
-            # A cost is a symbol dict, so its X sits one level down —
-            # "you may pay {X}" lowers to ``{"generic": "x"}``. Read here rather
-            # than by naming the ``cost`` key, because what makes it an X is the
-            # amount, not which key carries it.
-            if isinstance(value, dict) and "x" in value.values():
-                return True
-            if isinstance(value, tuple) and value and isinstance(value[0], OracleInstruction):
-                if _mentions_x(value):
-                    return True
-    return False
 
 
 def _lower_described_set_damage(

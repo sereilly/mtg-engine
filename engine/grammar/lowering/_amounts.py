@@ -484,6 +484,17 @@ _COUNTABLE_ZONES = ("battlefield", "graveyard", "hand", "exile", "library")
 # larger than the card printed.
 _CARD_ZONE_KEYS = frozenset({"type_filter", "named", "color_filter"})
 
+#: Narrowings a count cannot apply even on the battlefield. ``evaluate_count``
+#: asks ``permanent_matches_filter`` — the *pure* half of the matcher — and a
+#: keyword is CR 613 layer 6, which needs the game, so only ``subject_matches``
+#: answers these two. Handed to the pure matcher they are keys nothing reads,
+#: and a count that ignores its adjective is larger than the card printed.
+#:
+#: No card in the pool counts a keyword-narrowed set today, which is exactly why
+#: this is here: the first one to print "the number of creatures with flying you
+#: control" would otherwise count every creature and report itself supported.
+_UNCOUNTABLE_FILTER_KEYS = frozenset({"with_keywords", "without_keywords"})
+
 
 def count_spec(
     filt: "ast.ObjectFilter", node, *, aggregate: str = "count", multiplier: int = 1,
@@ -512,7 +523,7 @@ def count_spec(
     # permanent, which the matcher cannot test and the evaluator resolves.
     dropped = tuple(
         field for field in dropped_narrowings(filt, payload)
-        if field != "blocking_source"
+        if field not in ("blocking_source", "on_the_battlefield")
     )
     if dropped:
         raise LoweringError(
@@ -522,6 +533,11 @@ def count_spec(
         raise LoweringError(
             f"a {filt.zone} count cannot test {sorted(set(payload) - _CARD_ZONE_KEYS)}",
             node=node,
+        )
+    uncountable = set(payload) & _UNCOUNTABLE_FILTER_KEYS
+    if uncountable:
+        raise LoweringError(
+            f"a count cannot test {', '.join(sorted(uncountable))}", node=node
         )
     # Whose objects are counted is the *zone owner*, and the counter reads it
     # off there. A filter narrowing by controller as well ("the number of
@@ -534,9 +550,30 @@ def count_spec(
         raise LoweringError(
             f"a count cannot be narrowed to the {controller}'s permanents", node=node
         )
+    # "the number of green creatures **on the battlefield**" (An-Havva
+    # Constable, An-Havva Inn). CR 403.1's one shared zone, which is the *whole*
+    # of it and not one seat's share — and the default here is "you", so the
+    # phrase has to be read or the card counts half a board. `owner: "all"` is
+    # the spelling `evaluate_count` already uses for "in all graveyards"
+    # (Lhurgoyf), so this is one more zone that answers to it rather than a
+    # second vocabulary for the same idea.
+    #
+    # Two scopes in one phrase would name two different sets, so a filter that
+    # says both refuses instead of picking: "creatures you control on the
+    # battlefield" is not a card, and reading it as either half would be
+    # reading a card nobody printed.
+    if filt.on_the_battlefield:
+        if filt.zone != "battlefield" or controller is not None or filt.zone_owner:
+            raise LoweringError(
+                "a count cannot be scoped to the battlefield and to a player",
+                node=node,
+            )
+        owner = "all"
+    else:
+        owner = filt.zone_owner.kind if filt.zone_owner else "you"
     spec: dict = {
         "zone": filt.zone,
-        "owner": (filt.zone_owner.kind if filt.zone_owner else "you"),
+        "owner": owner,
         "filter": payload,
     }
     # "the number of Auras **attached to it**" (Rabid Wombat). A relation to one
@@ -628,6 +665,31 @@ def halved_count_spec(amount: "ast.Amount", node) -> dict | None:
 # guard holding them. They read the count spec above and nothing reads them
 # back, which is what makes them floor rather than family.
 # ---------------------------------------------------------------------------
+def x_offset_amount(amount: ast.Amount) -> dict | None:
+    """``{"plus_x": n}`` for "**X plus n**", or None when the amount is not one.
+
+    "You gain X plus 1 life, where X is the number of green creatures on the
+    battlefield." (An-Havva Inn.) The constant belongs to the *sentence that
+    spends* the quantity, not to the count that defines it — a card printing
+    the same "plus 1" over a different where-clause is this shape — so it rides
+    the amount payload rather than the count spec, exactly as ``{"times_x": n}``
+    beside it does and for the reason that key gives: one spec may feed two
+    halves scaled differently.
+
+    ``resolve_amount`` is the one reader, so the arithmetic happens where every
+    other amount's does. Returns None rather than raising, so a caller that has
+    no branch for it keeps the refusal it already had — which is every caller
+    but the one family with a card printing the words.
+    """
+    if (
+        isinstance(amount, ast.Plus)
+        and isinstance(amount.left, ast.Var)
+        and isinstance(amount.right, ast.Fixed)
+    ):
+        return {"plus_x": amount.right.value}
+    return None
+
+
 def _static_x_amount(amount: ast.Amount, negative: bool, node) -> int | str:
     """One half of a computed static bonus: the string "x" or a literal.
 
@@ -688,3 +750,87 @@ def _x_definition_spec(definition: ast.Amount, node) -> dict:
 def _per_each_offset(node: ast.Pump) -> int:
     """"…beyond the first" as the count spec's offset."""
     return -1 if node.per_each_beyond_first else 0
+
+
+# ---------------------------------------------------------------------------
+# The other end of a computed quantity: the sentence that spends it.
+#
+# Moved here from ``_common`` at the thousand-line guard, along the line this
+# module's own docstring already draws. These two are read by
+# ``lowering/where_x.py`` and by nothing else, and what they do is the "against
+# the sentence that spends it" half of CR 107.3: one asks whether the sentence
+# reads an X at all, the other writes the definition onto every step of it.
+# ``count_spec`` above answers what the quantity *is*; these answer where it
+# goes. `_common` is the module every family imports, so a pair with one caller
+# and one subject belongs in the floor that owns the subject.
+# ---------------------------------------------------------------------------
+
+def _stamp_x_from_count(
+    instructions: tuple[OracleInstruction, ...], spec: dict
+) -> tuple[OracleInstruction, ...]:
+    """Put *spec* on every instruction, including the steps nested inside one.
+
+    A sentence lowers to a tuple, and a wrapper (`sequence`, `if_then`, `may`)
+    carries its own steps in its payload — so stamping the top level alone would
+    define X for the outer instruction and leave the inner ones reading the
+    cast's X, which for a triggered ability is None.
+    """
+    stamped = []
+    for instruction in instructions:
+        payload = dict(instruction.payload)
+        if X_FROM_COUNT in payload and payload[X_FROM_COUNT] != spec:
+            # One resolution has one X (`context.x_value`), so a sentence whose
+            # where-clause defines one *and* whose amount is a count of its own
+            # ("draw cards equal to the number of …, where X is …") would have
+            # the two silently overwrite each other. Neither reading is the
+            # card, so the line refuses.
+            raise LoweringError("two counts cannot share one X")
+        payload[X_FROM_COUNT] = spec
+        for key in ("steps", "then", "else", "otherwise", "action"):
+            nested = payload.get(key)
+            if isinstance(nested, tuple) and nested and isinstance(nested[0], OracleInstruction):
+                payload[key] = _stamp_x_from_count(nested, spec)
+        stamped.append(OracleInstruction(instruction.kind, instruction.value, payload))
+    return tuple(stamped)
+
+
+#: Amount-payload keys whose *value* is a printed constant and whose meaning is
+#: an arithmetic on X. Named rather than inferred from a suffix, because what
+#: makes a key one of these is that ``handlers/_common.resolve_amount`` reads
+#: the X for it — and a key added here that resolver does not read is an
+#: instruction reporting itself computed and resolving to a literal.
+_X_ARITHMETIC_KEYS = frozenset({"times_x", "plus_x"})
+
+
+def _mentions_x(instructions: tuple[OracleInstruction, ...]) -> bool:
+    """Whether anything in *instructions* actually reads an X.
+
+    Most amounts carry the literal string; ``unless_pays_x`` is the one that
+    says so with a flag instead ("counter it unless that player pays {X}"), and
+    it is named here because a where-clause over that sentence is a real card
+    (In the Eye of Chaos) that would otherwise be refused for defining an X
+    nothing reads.
+    """
+    for instruction in instructions:
+        if instruction.payload.get("unless_pays_x"):
+            return True
+        for key, value in instruction.payload.items():
+            if value == "x":
+                return True
+            # A cost is a symbol dict, so its X sits one level down —
+            # "you may pay {X}" lowers to ``{"generic": "x"}``. Read here rather
+            # than by naming the ``cost`` key, because what makes it an X is the
+            # amount, not which key carries it.
+            if isinstance(value, dict) and "x" in value.values():
+                return True
+            # An amount that does *arithmetic* on X carries the number instead
+            # of the letter: ``{"times_x": n}`` for a "for each" repetition,
+            # ``{"plus_x": n}`` for "X plus 1 life" (An-Havva Inn). Both read
+            # the X, so a where-clause over either is defining one that *is*
+            # read — refusing them would refuse the card that prints the words.
+            if isinstance(value, dict) and set(value) & _X_ARITHMETIC_KEYS:
+                return True
+            if isinstance(value, tuple) and value and isinstance(value[0], OracleInstruction):
+                if _mentions_x(value):
+                    return True
+    return False

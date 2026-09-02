@@ -27,12 +27,9 @@ from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
 from ._amounts import _READABLE_COST_SACRIFICE_CHARACTERISTICS
+from ._amounts import _mentions_x, _stamp_x_from_count
 from ._records import produced_keys
-from ._common import (
-    _mentions_x,
-    _restrictions_beyond,
-    _stamp_x_from_count,
-)
+from ._common import _restrictions_beyond
 from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
 
 def lower_where_x(

@@ -60,9 +60,19 @@ def resolve_amount(raw: object, x_value: int | None) -> int:
     # count spec, because one spec may feed two halves scaled differently.
     if isinstance(raw, dict):
         times = raw.get("times_x")
-        if times is None:
-            raise ValueError(f"unreadable amount payload {raw!r}")
-        return int(times) * max(0, x_value or 0)
+        if times is not None:
+            return int(times) * max(0, x_value or 0)
+        # ``{"plus_x": n}`` — "You gain **X plus 1** life" (An-Havva Inn). The
+        # constant the sentence prints on top of its X, and the mirror of the
+        # multiplier above: applied here, where every amount is resolved, so
+        # there is no second site at which it could be honoured or forgotten.
+        # Floored after the addition rather than before it, because the floor
+        # belongs to the whole quantity — the card gains 1 with nothing on the
+        # board, which is exactly what it prints.
+        base = raw.get("plus_x")
+        if base is not None:
+            return max(0, int(base) + max(0, x_value or 0))
+        raise ValueError(f"unreadable amount payload {raw!r}")
     return max(0, x_value or 0) if raw == "x" else int(raw)
 
 
@@ -417,7 +427,16 @@ def evaluate_count(
             spec,
         )
     if zone == "battlefield":
-        seat = game.players.index(owner)
+        # "…the number of green creatures **on the battlefield**" (An-Havva
+        # Constable, An-Havva Inn). CR 403.1 makes the battlefield one zone
+        # shared by every player, so a phrase that scopes to it scopes to
+        # nobody — the same ``owner: "all"`` the graveyard branch below already
+        # answers for "in all graveyards" (Lhurgoyf), which is why it is one
+        # more zone reading that key rather than a second key meaning it.
+        # Through the control seam, because "on the battlefield" is every
+        # permanent in play and `all_permanents` is the one answer to that.
+        every_seat = spec.get("owner") == "all"
+        seat = None if every_seat else game.players.index(owner)
         # "**Other** …" (CR 109.5) is an identity comparison against the ability's
         # own source, which the matcher deliberately does not answer — it is
         # about one permanent alone. A spec carrying the key with no source to
@@ -432,8 +451,9 @@ def evaluate_count(
         # refuses the unresolved key outright, so a caller with no source
         # counts nothing rather than counting the whole board.
         filt = _resolve_chosen_color(filt, source)
+        scanned = game.all_permanents() if every_seat else game.controlled_by(seat)
         matched = [
-            perm for perm in game.controlled_by(seat)
+            perm for perm in scanned
             if perm is not skip and permanent_matches_filter(perm, filt)
         ]
         if aggregate == "greatest_power":

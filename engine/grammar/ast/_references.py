@@ -394,6 +394,26 @@ class ObjectFilter:
     #: the phrase, which is what keeps a sweep from quietly widening back to
     #: everything the noun names.
     not_chosen_this_way: bool = False
+    #: "the number of green creatures **on the battlefield**" (An-Havva
+    #: Constable, An-Havva Inn). CR 403.1 makes the battlefield one zone shared
+    #: by every player, so the phrase is not a zone *change* — ``zone`` is
+    #: already "battlefield" — it is the statement that the set is scoped to
+    #: **nobody**. That matters because the absent scope is not neutral: a count
+    #: whose filter names no controller is taken on the caster's own board
+    #: (``lowering/_amounts.count_spec`` defaults ``owner`` to "you"), so a
+    #: phrase read as though these words were not printed counts half the
+    #: objects the card names.
+    #:
+    #: Its own field rather than a fourth ``controller`` value, because
+    #: ``controller`` *is* emitted and every matcher reading it compares against
+    #: "you" — a new value there would be answered by whichever branch happened
+    #: to be the ``else``. Never emitted by ``to_payload`` for that reason, and
+    #: listed in ``lowering/_common.CONDITIONALLY_EMITTED_FIELDS`` so every
+    #: lowering except the count refuses the phrase by name rather than quietly
+    #: narrowing it to one seat. ``postmodifiers`` keeps "battlefield" out of
+    #: ``_ZONE_NOUNS`` on exactly this argument — "a production that needs it
+    #: should say so explicitly"; this is that explicit reading.
+    on_the_battlefield: bool = False
 
     def to_payload(self) -> dict[str, object]:
         """Instruction-payload dict, emitting only keys that are set.
