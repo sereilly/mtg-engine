@@ -143,6 +143,13 @@ DELAYED_EVENTS: dict[str, str] = {
     # The controller's own upkeep, however many turns away it is — so unlike
     # the "this turn" rows it survives the turn and is removed only by firing.
     "controllers_next_upkeep": "the upkeep step",
+    # "…at the beginning of **each of your draw steps**, put a -1/-1 counter
+    # on that creature." (Giant Oyster.) The controller's own draw step, and
+    # **every** one of them for as long as the ability lasts — CR 603.7b's
+    # repeating half, where the two upkeep rows below are one-shot. Seated for
+    # the reason `controllers_next_upkeep` is: a draw step belongs to one
+    # player, so an entry an opponent created is not waiting for this one.
+    "controllers_draw_step": "the draw step",
     # "…at the beginning of **the next turn's** upkeep" (Ice Age's cantrip
     # cycle: Portent, Pyknite, Urza's Bauble, …). Not the same event as the row
     # above, and the difference is the one that matters at the table: "your
@@ -189,6 +196,22 @@ END_OF_TURN = "end_of_turn"
 #: narrower sweep does not run.
 END_OF_COMBAT = "end_of_combat"
 UNTIL_IT_TRIGGERS = "until_it_triggers"
+#: "**For as long as this creature remains tapped,** … at the beginning of each
+#: of your draw steps, put a -1/-1 counter on that creature." (Giant Oyster.)
+#: CR 603.7b's stated duration once more, and the first one that is a **state**
+#: rather than a moment: the ability lasts while the permanent that created it
+#: stays tapped on the battlefield, so nothing ever announces its end.
+#:
+#: That is why it is not swept with the turn-scoped pair above and not read at
+#: the fire site either. CR 603.7b gives the ability its stated duration and
+#: CR 611.2a makes that duration the whole of its life — so once the permanent
+#: has untapped the ability is gone, and only activating again creates another.
+#: An entry left in the list and merely skipped would come back to life the next
+#: time the permanent tapped, which is an ability nobody created. It is ended
+#: where the condition can stop being true, by
+#: :func:`end_source_tapped_delayed_triggers`, which the two sites that already
+#: announce ``bound_permanent_leaves_or_untaps`` call for the same moment.
+WHILE_SOURCE_TAPPED = "while_source_tapped"
 
 
 # ``eq=False`` so two entries compare by **identity**. Two copies of Reincarnation
@@ -500,6 +523,37 @@ def expire_delayed_triggers(game: "Game") -> None:
         entry for entry in game.delayed_triggers
         if entry.duration not in _TURN_SCOPED
     ]
+
+
+def end_source_tapped_delayed_triggers(game: "Game", permanent: "Permanent") -> int:
+    """CR 603.7b's stated duration for :data:`WHILE_SOURCE_TAPPED`: *permanent*
+    has stopped being a tapped permanent on the battlefield, so every ability it
+    created under that duration ends. Returns how many were dropped.
+
+    Called from the two sites that already announce
+    ``bound_permanent_leaves_or_untaps`` — ``Game.become_untapped`` and the
+    leaves-the-battlefield transition — because they are the same moment: those
+    are the one place a permanent stops being tapped and the one place it leaves
+    the battlefield, which is exactly when this condition can stop holding.
+
+    Ended here rather than re-asked at the fire site, and the difference is the
+    rule: CR 611.2a makes an ability last exactly as long as its creator stated,
+    and nothing re-creates this one except activating the ability again. An
+    entry skipped while the permanent was untapped would fire again the next
+    time it tapped — an ability nobody created.
+    """
+    ending = [
+        entry for entry in game.delayed_triggers
+        if entry.duration == WHILE_SOURCE_TAPPED
+        and entry.source_permanent_id == permanent.permanent_id
+    ]
+    if not ending:
+        return 0
+    game.delayed_triggers = [
+        entry for entry in game.delayed_triggers
+        if not any(entry is done for done in ending)
+    ]
+    return len(ending)
 
 
 def expire_combat_delayed_triggers(game: "Game") -> None:

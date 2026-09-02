@@ -61,6 +61,7 @@ from .stream import TokenStream
 from .vocabulary import (KEYWORD_INDEX, match_longest)
 from .rebinding import (bind_recorded_card,
                         rebind_attachment_pronoun_to_sentence_target,
+                        rebind_delayed_pronoun_to_sentence_target,
                         rebind_pump_pronoun_to_sentence_target,
                         rebind_pronoun_to_event_subject)
 from .triggers import _parse_trigger_event
@@ -546,7 +547,14 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
     # ability is exactly where Orcish Captain prints the pronoun.
     if len(steps) == 1:
         return steps[0]
-    return rebind_pump_pronoun_to_sentence_target(ast.Sequence(tuple(steps)))
+    sequence = rebind_pump_pronoun_to_sentence_target(ast.Sequence(tuple(steps)))
+    # The other cross-sentence pronoun, and the same argument: "remove all
+    # -1/-1 counters from **the creature**" (Giant Oyster) names the creature
+    # the sentence in front of it chose, and read as the bare source pronoun it
+    # empties the ability's own permanent instead. Composed rather than folded
+    # into the walk above, because the two rewrite different nodes under
+    # different conditions — see `rebinding.py` for why each is narrow.
+    return rebind_delayed_pronoun_to_sentence_target(sequence)
 
 
 

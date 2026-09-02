@@ -296,3 +296,90 @@ def test_502_3_a_block_need_not_name_creatures_at_all():
     game.resolve_untap_step(0)
 
     assert island.tapped
+
+
+# ---------------------------------------------------------------------------
+# A restriction whose duration is a *state*: "...for as long as this creature
+# remains tapped" (CR 611.2a/611.2b), the half CR 502.3 only says is possible.
+# ---------------------------------------------------------------------------
+
+
+def _lock_board():
+    """A holder tapped and holding one permanent down, built through the
+    handler's own record so the untap step reads exactly what a resolution
+    would have written."""
+    from engine import Game, PlayerState
+    from engine.handlers.tapping import UNTAP_LOCK_WHILE_TAPPED_KEY
+    from engine.models import CardDefinition, Permanent
+
+    def _card(name, type_line, **raw):
+        return CardDefinition(
+            name=name, mana_cost="", cmc=0.0, type_line=type_line,
+            oracle_text="", colors=(), color_identity=(), keywords=(),
+            produced_mana=(),
+            raw={"name": name, "type_line": type_line, **raw},
+        )
+
+    holder = Permanent(
+        card=_card("Holder", "Creature - Gremlin", power="1", toughness="1")
+    )
+    held = Permanent(card=_card("Held", "Artifact"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[holder]),
+        PlayerState(name="P2", battlefield=[held]),
+    ])
+    game._settle()
+    holder.tapped = True
+    held.tapped = True
+    holder.metadata[UNTAP_LOCK_WHILE_TAPPED_KEY] = held.permanent_id
+    return game, holder, held
+
+
+@pytest.mark.cr("502.3", "611.2a")
+def test_502_3_a_lock_holds_for_as_long_as_its_holder_stays_tapped():
+    """The restriction is a state rather than a count of steps: it survives
+    every untap step for as long as the holder is tapped."""
+    game, _holder, held = _lock_board()
+
+    game.resolve_untap_step(1)
+    assert held.tapped
+    game.resolve_untap_step(1)
+    assert held.tapped
+
+
+@pytest.mark.cr("611.2a", "611.2b")
+def test_611_2_a_lock_ends_when_its_holder_untaps_and_does_not_resume():
+    """"A continuous effect ... lasts as long as stated by the spell or ability
+    creating it", and CR 611.2b's "it doesn't start and immediately stop again"
+    settles the other direction: once the holder has untapped, the effect is
+    over. Tapping that permanent again — an attack, another card's tap effect —
+    does not put the restriction back, because nothing created a second one.
+
+    Read back conditionally and never cleared, the record did exactly that for
+    four sets: Phyrexian Gremlins re-locked its artifact every time it tapped.
+    """
+    game, holder, held = _lock_board()
+
+    game.become_untapped(holder)
+    game.resolve_untap_step(1)
+    assert not held.tapped
+
+    held.tapped = True
+    game.become_tapped(holder)
+    game.resolve_untap_step(1)
+
+    assert not held.tapped, "an ended duration started again"
+
+
+@pytest.mark.cr("611.2a")
+def test_611_2_a_lock_ends_when_its_holder_leaves_the_battlefield():
+    """The other way the condition stops holding. What comes back is a new
+    object with none of the old one's records (CR 400.7), so there is nothing
+    for a return to restart."""
+    game, holder, held = _lock_board()
+
+    game.remove_from_battlefield(holder)
+    game._settle()
+    game.resolve_untap_step(1)
+
+    assert not held.tapped

@@ -976,6 +976,27 @@ def untap_up_to_matching(game: Game, instruction: OracleInstruction, context: Or
 UNTAP_LOCK_WHILE_TAPPED_KEY = "untap_lock_while_tapped"
 
 
+def end_untap_lock(permanent) -> int | None:
+    """End the lock *permanent* is holding, if any; returns what it held.
+
+    CR 611.2a: the effect lasts exactly as long as the card states, and "for as
+    long as this creature remains tapped" has ended the moment the permanent
+    untaps. So the record is *removed* rather than left to be skipped while the
+    holder is untapped — a record still there would re-apply the restriction the
+    next time the holder tapped for any reason (an attack, another card's tap
+    effect), which is an effect nobody created and which CR 611.2b's "it doesn't
+    start and immediately stop again" rules out. Phyrexian Gremlins printed that
+    bug for four sets, in the one direction a restriction may not err: doing
+    more than the card allows.
+
+    Called from ``Game.become_untapped``, the one place a permanent stops being
+    tapped, beside the delayed abilities the same duration governs. A permanent
+    that *leaves* takes its own metadata with it and comes back a new object
+    (CR 400.7), so there is nothing to end there.
+    """
+    return permanent.metadata.pop(UNTAP_LOCK_WHILE_TAPPED_KEY, None)
+
+
 @effect_handler("restrict_untap_while_source_tapped")
 def restrict_untap_while_source_tapped(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Phyrexian Gremlins: "{T}: Tap target artifact. It doesn't untap during
@@ -985,9 +1006,15 @@ def restrict_untap_while_source_tapped(game: Game, instruction: OracleInstructio
     Nothing is written onto the restricted permanent. The record lives on the
     source and the untap step reads it back while the source is tapped, so the
     restriction ends the instant the Gremlins untaps — or leaves, taking its
-    record with it — and no step has to remember to clear a flag. The same
-    shape round 5's linked pump uses, and for the same reason: a duration that
-    ends on a *condition* has no moment anyone could hook.
+    record with it. The same shape round 5's linked pump uses, and for the same
+    reason: a duration that ends on a *condition* has no moment anyone could
+    hook.
+
+    Reading it back conditionally is **not** the whole of ending it, which is
+    what this said before Giant Oyster's round: a record left in place while the
+    holder was untapped re-applied the restriction the next time that permanent
+    tapped. :func:`end_untap_lock` is what CR 611.2a asks for, and
+    ``become_untapped`` is the moment it is asked at.
     """
     source = context.source_permanent
     if source is None:
@@ -1000,6 +1027,30 @@ def restrict_untap_while_source_tapped(game: Game, instruction: OracleInstructio
     if target is None:
         game.log.append(f"{context.card.name}: nothing to hold tapped")
         return True, "resolved"
+    # "…**target tapped creature** doesn't untap …" (Giant Oyster). The printed
+    # noun phrase, re-asked at resolution against the permanent that was chosen
+    # — CR 608.2b, and the same check the chosen ``skip_next_untap`` branch
+    # makes with the same reader. Absent on the back-reference spelling
+    # (Phyrexian Gremlins carries no filter at all), where the sentence before
+    # it did the choosing and there is nothing to narrow.
+    described = {
+        key: value for key, value in instruction.payload.items()
+        if key != "targets"
+    }
+    if described:
+        from ..subject_filters import subject_matches
+
+        observer = (
+            game.players.index(context.caster)
+            if context.caster in game.players else None
+        )
+        if not subject_matches(
+            game, target, described, observer=observer, source=source
+        ):
+            game.log.append(
+                f"{context.card.name}: {target.card.name} is not what it names"
+            )
+            return True, "resolved"
     source.metadata[UNTAP_LOCK_WHILE_TAPPED_KEY] = target.permanent_id
     game.log.append(
         f"{target.card.name} won't untap while {context.card.name} remains tapped"

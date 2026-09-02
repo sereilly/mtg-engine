@@ -46,6 +46,7 @@ from .prevention import (
 )
 from .tapping import (
     _parse_doesnt_untap_next_step,
+    _parse_linked_untap_restriction,
     _parse_tap_untap,
     _parse_untap_chosen_by_paying,
 )
@@ -209,6 +210,7 @@ __all__ = [
     "_parse_further_subjects",
     "_parse_that_object",
     "_parse_doesnt_untap_next_step",
+    "_parse_linked_untap_restriction",
     "_parse_tap_untap",
     "_parse_untap_chosen_by_paying",
     "_parse_attach",

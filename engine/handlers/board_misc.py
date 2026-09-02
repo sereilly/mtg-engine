@@ -1394,6 +1394,45 @@ def remove_counter_from_self(game: Game, instruction: OracleInstruction, context
     return True, "resolved"
 
 
+@effect_handler("remove_all_counters_from_bound")
+def remove_all_counters_from_bound(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"When this creature leaves the battlefield or becomes untapped, remove
+    all -1/-1 counters from the creature." (Giant Oyster.)
+
+    :func:`remove_all_counters_from_self`'s bound-object twin, and its own kind
+    for the reason ``destroy_bound_permanent`` is one: the object is the one the
+    *creating* ability bound (CR 603.7c), carried by id in the delayed trigger's
+    context, and the self-reading handler would empty the ability's own source
+    instead — the Oyster rather than the creature it locked down.
+
+    Through the same one removal seam (``named_counters.remove_counters``), so
+    the P/T the counters were carrying (CR 122.1a, layer 7d) comes off with them
+    and the emptied-kind record every state trigger reads is written.
+
+    A creature already gone has no counters to take off, which is CR 608.2b
+    doing as much as it can.
+    """
+    victim = game.permanent_by_id(
+        (context.trigger_context or {}).get("bound_permanent_id")
+    )
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: the creature it named is gone")
+        return True, "resolved"
+    counter = str(instruction.payload.get("counter", ""))
+    held = counters_on(victim, counter)
+    if held <= 0:
+        game.log.append(
+            f"{victim.card.name} has no {counter} counters to remove"
+        )
+        return True, "resolved"
+    remove_counters(victim, counter, held)
+    game.log.append(
+        f"Removed all {held} {counter} counters from {victim.card.name} "
+        f"({context.card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("remove_all_counters_from_self")
 def remove_all_counters_from_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Remove all tide counters from it." (Homarid, Tidal Influence.)
