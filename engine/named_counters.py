@@ -140,16 +140,30 @@ def add_counters(permanent, kind: str, count: int = 1) -> int:
     cap = counter_cap(permanent, kind)
     if cap is not None:
         total = min(total, cap)
-    from .pt import add_pt_counters, pt_counter_deltas
+    from .pt import add_pt_counters, pt_counter_deltas, pt_counter_key
 
-    if pt_counter_deltas(kind) is not None:
+    # ``hasattr`` rather than a type check, and it is not defensive coding: the
+    # other thing this function is handed is an ``ExiledRecord``, which carries
+    # the same ``metadata`` dict on purpose so "how many scream counters are on
+    # it" is one question for a permanent and for an exiled card. A record has
+    # no layer-7c channel to write to — the card it names is in exile, where
+    # nothing in this engine reads a P/T — so it takes the record alone.
+    if pt_counter_deltas(kind) is not None and hasattr(permanent, "power_bonus"):
         # The cap decides how many actually land, and only that many may move
         # the P/T: a placement clipped by the cap that still added its full
         # delta would leave the creature a size its counters do not explain.
         if total > current:
             add_pt_counters(permanent, kind, total - current)
         return total
-    permanent.metadata[counters_key(kind)] = total
+    # ``pt_counter_key``, which is what :func:`counters_on` and
+    # :func:`remove_counters` already read. The two spellings agree for every
+    # kind but the three CR 122.1a pairs the engine keeps under established
+    # names, and for those they did not: this line wrote ``"-1/-1_counters"``
+    # while every reader looked in ``"minus_counters"``, so a P/T counter
+    # placed through this store was written where nothing would ever find it.
+    # One key, and the module docstring's "one store, not two" is finally true
+    # of both ends of it.
+    permanent.metadata[pt_counter_key(kind)] = total
     return total
 
 
