@@ -22,6 +22,7 @@ from ._common import (
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
     _DEFENDING_PLAYER_EVENTS,
+    _back_reference_payload,
 )
 
 
@@ -394,11 +395,21 @@ def _fused_discard_then_draw(
     )
 
 
-def _lower_draw(node: ast.Draw) -> tuple[OracleInstruction, ...]:
+def _lower_draw(
+    node: ast.Draw,
+    produced: frozenset[str] = frozenset(),
+    event: str | None = None,
+) -> tuple[OracleInstruction, ...]:
     """"You draw" and "target player draws" are different handlers, not one
     handler with a recipient flag: ``draw_controller_cards`` draws for the
     effect's controller, ``draw_target_cards`` for the chosen player. Picking by
-    the drawer keeps each one's existing contract intact."""
+    the drawer keeps each one's existing contract intact.
+
+    *produced* and *event* are what a back-referenced count needs — "draws **as
+    many cards as they discarded this way**" (Forget) — and they are the reason
+    this lowering is dispatched from ``lower.py``'s chain rather than from
+    ``by_node``'s name-only table.
+    """
     # "For each creature exiled this way, **its controller** draws a card."
     # (Martyr's Cry.) A possessive with no target in front of it: whose hand it
     # is, is a fact an earlier step recorded about the loop's object, so it
@@ -445,6 +456,16 @@ def _lower_draw(node: ast.Draw) -> tuple[OracleInstruction, ...]:
         payload: dict[str, object] = {
             "amount": "x", X_FROM_COUNT: count_spec(node.count.filter, node),
         }
+    elif isinstance(node.count, ast.ThatMuch):
+        # "Target player discards two cards, then draws **as many cards as they
+        # discarded this way**." (Forget.) The number is one an earlier step of
+        # this same resolution recorded, and where it is read from is decided in
+        # the one place that decides it for every back-reference — which refuses
+        # outright when no step of this effect produces the key, because the
+        # words would otherwise name nothing and draw zero on a card reporting
+        # itself supported.
+        payload: dict[str, object] = {"amount": 0}
+        payload.update(_back_reference_payload(node.count, produced, event))
     else:
         payload = {"amount": _amount_payload(node.count)}
     if drawer_seat is not None:

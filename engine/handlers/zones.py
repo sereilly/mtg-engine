@@ -57,7 +57,17 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
         target = game.players[int(seat)]
     else:
         target = context.target
-    count = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    # "…then draws **as many cards as they discarded this way**" (Forget).
+    # ``amount_from`` names a scratchpad key an earlier step of this same
+    # resolution wrote; a key nothing wrote reads as zero, which is what the
+    # sentence says when the step in front of it did nothing (an empty hand
+    # discards no cards, so this draws none).
+    counted_from = instruction.payload.get("amount_from")
+    count = (
+        max(0, int(context.results.get(counted_from, 0) or 0))
+        if counted_from is not None
+        else resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    )
     drawn = game._draw_with_replacements(target, count)
     game.log.append(f"{target.name} drew {drawn} cards")
     return True, "resolved"
@@ -497,6 +507,12 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
     actual = min(
         resolve_amount(instruction.payload.get("amount", 0), context.x_value), len(target.hand)
     )
+    # "…then draws as many cards as they discarded this way" (Forget) reads the
+    # count back out of the scratchpad, so a discard that never happened has to
+    # leave a zero rather than no key at all — a missing key and a zero read the
+    # same to the draw, and writing it is what says the number is this step's
+    # answer rather than an absence.
+    context.results["discarded_count"] = 0
     if actual <= 0:
         game.log.append(f"{target.name} has no cards to discard")
         return True, "resolved"
@@ -508,6 +524,11 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
         "discard", player_index,
         count=actual,
         allow_top_of_library=game._controls_top_of_library_discard(target),
+        # The scratchpad rides the prompt: how many cards actually went is not
+        # known until the seat answers, and `_after_discard_answered` is the one
+        # place both answer paths (a seat's own picks and the non-interactive
+        # default) reach.
+        _results=context.results,
     )
     game.log.append(f"{target.name} must choose {actual} card(s) to discard")
     return True, "pending_discard"

@@ -955,6 +955,28 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
         counted = max(0, int(context.x_value or 0))
         printed_power = counted if printed_power == "x" else printed_power
         printed_toughness = counted if printed_toughness == "x" else printed_toughness
+    # "Create a black Spirit creature token. **Its power is equal to that
+    # creature's power and its toughness is equal to that creature's
+    # toughness.**" (Broken Visage.) Each half names a scratchpad key an earlier
+    # step of this same resolution wrote — the destroy froze both numbers about
+    # the creature it was aimed at, because by now that creature is a card in a
+    # graveyard with no computed characteristics at all (CR 613.1).
+    #
+    # A key nothing wrote reads as zero, and a 0/0 creature token dies to
+    # CR 704.5a the moment it arrives. That is the honest outcome and not a
+    # silent one: the lowering refuses the sentence unless a step of the effect
+    # declares the record, so the only way to reach it is a target that was
+    # already gone when the spell resolved (CR 608.2b), where nothing should be
+    # created anyway.
+    for key, field in (("power_from", "power"), ("toughness_from", "toughness")):
+        recorded = payload.get(key)
+        if recorded is None:
+            continue
+        value = max(0, int(context.results.get(recorded, 0) or 0))
+        if field == "power":
+            printed_power = value
+        else:
+            printed_toughness = value
     token_card = make_token_card(
         str(payload.get("name", "Token")),
         None if printed_power is None else int(printed_power),

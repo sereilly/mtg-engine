@@ -32,7 +32,9 @@ from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_CAST_DAMAGE,
                       CHOSEN_PERMANENT, CHOSEN_PLAYER,
                       COUNTED_NUMBER, CREATED_TOKEN, DAMAGE_RECIPIENT,
-                      EXILED_THIS_WAY, _PERMANENTS_GIVEN_COUNTERS,
+                      EXILED_THIS_WAY, _EVENT_SUBJECT_POWER_RECORD,
+                      _EVENT_SUBJECT_TOUGHNESS_RECORD,
+                      _PERMANENTS_GIVEN_COUNTERS,
                       _REANIMATED_PERMANENTS)
 
 
@@ -144,6 +146,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # The per-seat form records the same thing, so a sentence reading "the
     # number of cards they discarded this way" has a producer to name.
     "each_player_discards_up_to_cards": "discarded_count",
+    # "Target player discards two cards, **then draws as many cards as they
+    # discarded this way**." (Forget.) The chosen-discard prompt is the same
+    # one ``discard_controller_cards`` arms, so it records the same key — what
+    # differs is whose hand it came out of, and the sentence behind it is about
+    # that same seat. Without the row the back-reference has no producer to
+    # name and the draw refuses (idiom 7), which is the honest failure; with it
+    # the count is the one the player actually gave rather than the printed
+    # two, and an empty hand draws none.
+    "discard_target_cards": "discarded_count",
     # "Choose two cards in your hand … **For each of those cards**, …"
     # (Sylvan Library.) The pick records what it chose, which is the only
     # place the next sentence can read that set from: nothing about a hand
@@ -327,8 +338,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # Every branch of the handler writes it, because this table declares for
     # the *kind*: a branch that skipped it would be a producer the lowering
     # can cite and a record that reads as zero.
+    # …and its power and its toughness, for the same reason and read at the same
+    # moment: "Destroy target nonartifact attacking creature. … Its power is
+    # equal to **that creature's power**" (Broken Visage) is a number about an
+    # object that no longer exists by the time the token is built — CR 613.1
+    # gives a card in a graveyard no computed characteristics at all, so the
+    # numbers are frozen where the object still had them (CR 608.2h, idiom 6).
     "destroy_target_permanent": (
         "its_mana_value", "destroyed_target", "destroyed_this_way",
+        _EVENT_SUBJECT_POWER_RECORD, _EVENT_SUBJECT_TOUGHNESS_RECORD,
     ),
     # "Prevent the next 3 damage … **for each 1 damage prevented this way**."
     # (Sacred Boon.) The shield object itself, because what it prevents is

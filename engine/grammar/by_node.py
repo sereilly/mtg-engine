@@ -166,7 +166,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.CountObjects: _lower_count_objects,
     ast.ExchangeControl: _lower_exchange_control,
     ast.ExchangeGreatestManaValue: _lower_exchange_greatest_mana_value,
-    ast.Draw: _lower_draw,
     ast.PutHandCardsOnLibrary: _lower_put_hand_cards_on_library,
     ast.Mill: _lower_mill,
     ast.Scry: _lower_scry,

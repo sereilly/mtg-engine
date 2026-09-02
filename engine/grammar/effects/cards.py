@@ -15,8 +15,8 @@ re-forms instead of forking.
 import dataclasses
 
 from .. import ast
-from ..amounts import (accept_fraction_head, accept_rounding, parse_amount,
-                       parse_equal_to)
+from ..amounts import (accept_as_many_as, accept_fraction_head, accept_rounding,
+                       parse_amount, parse_equal_to)
 from ..errors import GrammarError
 from ..lexer import (MANA, render)
 from ..nouns import parse_object_filter
@@ -40,6 +40,14 @@ def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
         if counted is not None:
             return ast.Draw(player, counted)
         stream.reset(mark)
+    # "…then draws **as many cards as they discarded this way**" (Forget). The
+    # comparative spelling puts the noun *inside* the quantity, which is why it
+    # is read here with the noun handed to it rather than by `parse_amount`
+    # below — that one is called where the noun has not been reached yet, and
+    # returns before it.
+    as_many = accept_as_many_as(stream, ("card", "cards"), player)
+    if as_many is not None:
+        return ast.Draw(player, as_many)
     count = parse_amount(stream)
     # "draw two **additional** cards" (Sylvan Library). The word says the draw
     # is on top of one the turn already provides; it names no second effect and

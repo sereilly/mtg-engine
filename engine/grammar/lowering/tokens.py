@@ -21,6 +21,7 @@ from ...subject_filters import TESTABLE_SUBJECT_FILTER_KEYS
 from ...tokens import default_token_name
 from .. import ast
 from ..errors import LoweringError
+from ._events import _back_reference_payload
 from ._common import (_amount_payload, _describe_targets, _filter_payload,
                       _restrictions_beyond)
 
@@ -59,7 +60,9 @@ def _lower_create_copy_token(
 
 
 def _lower_create_token(
-    node: ast.CreateToken, produced: frozenset[str] = frozenset()
+    node: ast.CreateToken,
+    produced: frozenset[str] = frozenset(),
+    event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"Create a 1/1 colorless Insect artifact creature token with flying named
     Wasp." (The Hive.)
@@ -100,7 +103,11 @@ def _lower_create_token(
         return (OracleInstruction("create_token", "", payload),)
     if "creature" not in node.types:
         raise LoweringError("make_token_card only builds creature tokens", node=node)
-    if node.counted_pt is None and (node.power is None or node.toughness is None):
+    if (
+        node.counted_pt is None
+        and node.pt_from is None
+        and (node.power is None or node.toughness is None)
+    ):
         raise LoweringError("a creature token has a printed power/toughness", node=node)
     if node.name:
         name = _title(node.name)
@@ -133,6 +140,34 @@ def _lower_create_token(
         "toughness": "x" if node.counted_pt is not None else node.toughness,
         "type_line": type_line,
     }
+    if node.pt_from is not None:
+        # "Its power is equal to that creature's power and its toughness is
+        # equal to that creature's toughness." (Broken Visage.) Each half is an
+        # ordinary back-reference, resolved by the one function that decides
+        # where any back-reference is read from — so a token whose sentence has
+        # no producer in front of it refuses naming the missing step (idiom 7)
+        # rather than arriving 0/0 and dying to a state-based action.
+        #
+        # Only the resolution scratchpad, never the firing event's context: the
+        # numbers are read as the token is built (CR 111.9's characteristics are
+        # set by the creating effect), and the two records a fire site keeps are
+        # both powers — a toughness read through that channel would be handed
+        # one (see the note beside the phrase in ``amounts.parse_equal_to``).
+        for key, amount in zip(("power_from", "toughness_from"), node.pt_from):
+            if not isinstance(amount, ast.ThatMuch):
+                raise LoweringError(
+                    "a token's stated power/toughness is a back-reference",
+                    node=node,
+                )
+            resolved = _back_reference_payload(amount, produced, event)
+            recorded = resolved.get("amount_from")
+            if recorded is None:
+                raise LoweringError(
+                    "a token's power/toughness is read from a step of this "
+                    "effect, not from the trigger that fired it",
+                    node=node,
+                )
+            payload[key] = recorded
     if node.colors:
         payload["colors"] = node.colors
     if node.keywords:

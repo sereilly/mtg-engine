@@ -443,6 +443,19 @@ def parse_equal_to(stream: TokenStream) -> ast.Amount | None:
     if stream.accept_phrase("that", "creature", "'s", "power"):
         return ast.ThatMuch("event_subject_power")
 
+    # "…and its toughness is equal to **that creature's toughness**" (Broken
+    # Visage) — the same creature, one characteristic over, and a *plain*
+    # producer-gated back-reference where the power beside it also has a
+    # trigger reading. The asymmetry is the pool's rather than this table's:
+    # `_EVENT_QUANTITIES` is keyed by trigger kind and every row of it names a
+    # *power* (the entering creature's, the damage dealt), so a toughness read
+    # through that channel would silently be handed a power. Under a trigger
+    # the words therefore refuse for want of a producer, which is the loud
+    # failure; a step of the same effect that records one is what makes them
+    # legal.
+    if stream.accept_phrase("that", "creature", "'s", "toughness"):
+        return ast.ThatMuch("its_toughness")
+
     # "equal to **that creature's mana value**" (Niambi, Esteemed Speaker) — the
     # creature the *preceding step* moved, not the trigger's event object and not
     # the ability's source. A third referent and so a third key: the step records
@@ -756,6 +769,77 @@ def _parse_for_each_this_way(stream: TokenStream) -> ast.ThatMuch | None:
         return None
     singular = noun.text[:-1] if noun.text.endswith("s") else noun.text
     stream.next()
+    participle = stream.peek()
+    key = (
+        _THIS_WAY_COUNTS.get((singular, participle.text))
+        if participle is not None and participle.kind == WORD
+        else None
+    )
+    if key is None:
+        stream.reset(mark)
+        return None
+    stream.next()
+    if not stream.accept_phrase("this", "way"):
+        stream.reset(mark)
+        return None
+    return ast.ThatMuch(key)
+
+
+#: The pronoun a "this way" back-reference uses for the seat the verb in front
+#: of it already named. A table rather than a bare "consume whatever pronoun is
+#: there": "target player discards two cards, then draws as many cards as
+#: **they** discarded this way" and "…as **you** discarded this way" are two
+#: different seats, and a reader that accepted either would let the sentence
+#: count one player's answer and act on another's.
+_SEAT_PRONOUNS: dict[str, tuple[str, ...]] = {
+    "you": ("you",),
+    "target_player": ("they",),
+    "target_opponent": ("they",),
+    "each_player": ("they",),
+    "each_opponent": ("they",),
+    "that_player": ("they",),
+}
+
+
+def accept_as_many_as(
+    stream: TokenStream, noun: tuple[str, ...], player: "ast.PlayerRef"
+) -> "ast.ThatMuch | None":
+    """``as many <noun> as <pronoun> <participle> this way`` — or None, unmoved.
+
+    The comparative spelling of the back-reference ``_parse_for_each_this_way``
+    above reads: "draws **as many cards as they discarded this way**" (Forget)
+    names the count one earlier step of this same resolution produced, and it
+    reads it through the same ``_THIS_WAY_COUNTS`` table for that function's
+    stated reason — the noun and the participle are checked *together*, so "as
+    many cards as they exiled this way" is a sentence nobody printed and
+    refuses rather than quietly counting discards.
+
+    *noun* is the caller's own noun ("card"/"cards" for a draw), because the
+    phrase puts the noun inside the amount where every other quantity puts it
+    after: the caller has already committed to what is being counted, and a
+    clause counting something else is not this clause.
+
+    *player* is the seat the verb names, and the pronoun has to agree with it
+    (``_SEAT_PRONOUNS``). A mismatch refuses: the record is one seat's answer,
+    and a pronoun naming a different seat would be read as though it named this
+    one.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("as", "many"):
+        return None
+    counted = stream.peek()
+    if counted is None or counted.kind != WORD or counted.text not in noun:
+        stream.reset(mark)
+        return None
+    singular = counted.text[:-1] if counted.text.endswith("s") else counted.text
+    stream.next()
+    if not stream.accept_word("as"):
+        stream.reset(mark)
+        return None
+    pronouns = _SEAT_PRONOUNS.get(player.kind)
+    if pronouns is None or not stream.accept_word(*pronouns):
+        stream.reset(mark)
+        return None
     participle = stream.peek()
     key = (
         _THIS_WAY_COUNTS.get((singular, participle.text))

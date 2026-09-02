@@ -282,6 +282,20 @@ EVENT_SUBJECT_CONTROLLER = "event_subject_controller"
 # than a rule — an event either carries a number or it does not, and a kind
 # absent here refuses the back-reference instead of reading a zero out of an
 # empty context.
+#: The scratchpad key "that creature's power" falls back to when the sentence
+#: sits under no trigger — the power an earlier step of the same effect froze
+#: about the permanent it acted on (Broken Visage's destroy). Named here beside
+#: the event table because ``_back_reference_payload`` is what chooses between
+#: the two, and ``_records._PRODUCES`` writes the same string: a second spelling
+#: would make the producer gate vacuous while the handler read an empty record.
+_EVENT_SUBJECT_POWER_RECORD = "its_power"
+
+#: Its toughness twin, for the other half of the same printed sentence. A
+#: constant rather than a literal for the reason above, and separate from the
+#: power because the two are different characteristics of one object rather than
+#: one number under two names.
+_EVENT_SUBJECT_TOUGHNESS_RECORD = "its_toughness"
+
 _EVENT_QUANTITIES: dict[str, str] = {
     "you_gain_life": "life_gained",
     # The mirror, from the state-based sweep that announces it: "for each 1
@@ -378,6 +392,13 @@ COUNTED_NUMBER = "counted_number"
 # number out of something that is not one.
 _PRODUCED_QUANTITIES: frozenset[str] = frozenset({
     "damage_dealt",
+    # The power and toughness a destroy froze about the permanent it was aimed
+    # at, which is where a token's stated P/T reads them (Broken Visage). Both,
+    # because the card states both halves and a bare "that much" after a
+    # destroy would otherwise have two numbers to choose between — which
+    # `_back_reference_payload` refuses outright rather than picking one.
+    _EVENT_SUBJECT_POWER_RECORD,
+    _EVENT_SUBJECT_TOUGHNESS_RECORD,
     # How many counters a "loses all <kind> counters" step took off (Leeches),
     # which is what "deals **that much** damage to that player" reads.
     COUNTERS_REMOVED,
@@ -456,18 +477,29 @@ def _back_reference_payload(
     behalf of every caller.
     """
     if amount.source == "event_subject_power":
-        # "That creature's power" names the *event's* object, so the only place
-        # it can be read is the firing event's captured context — and only under
-        # an event whose fire site records one. Under any other trigger the words
-        # name a creature nobody recorded, and the amount would silently be zero.
+        # "That creature's power" names the *event's* object, so under a trigger
+        # the only place it can be read is the firing event's captured context —
+        # and only under an event whose fire site records one.
         key = _EVENT_QUANTITIES.get(event or "")
-        if key is None:
-            raise LoweringError(
-                "\"that creature's power\" needs a trigger whose event records "
-                "one",
-                node=amount,
-            )
-        return {"amount_from_trigger": key}
+        if key is not None:
+            return {"amount_from_trigger": key}
+        # "Destroy target nonartifact attacking creature. … Its power is equal
+        # to **that creature's power**." (Broken Visage.) With no trigger at all
+        # there is no event for the words to be about, and the creature the
+        # sentence names is the one an earlier step of this same effect acted on
+        # — which is the reading "that creature's mana value" already takes one
+        # characteristic over. Gated on the record existing, so a spell with no
+        # such step still refuses by name rather than reading a zero: by the
+        # time the token is built the creature is a card in a graveyard with no
+        # characteristics at all (CR 613.1), so the number has to have been
+        # frozen when it left (CR 608.2h).
+        if _EVENT_SUBJECT_POWER_RECORD in produced:
+            return {"amount_from": _EVENT_SUBJECT_POWER_RECORD}
+        raise LoweringError(
+            "\"that creature's power\" needs a trigger whose event records "
+            "one, or a step of this effect that recorded one",
+            node=amount,
+        )
     if amount.source is not None:
         # The words named the producer ("equal to the damage dealt"), so a step
         # of this same effect has to have recorded it.

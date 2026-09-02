@@ -13,7 +13,7 @@ from ...tokens import PREDEFINED_TOKENS
 from .. import ast
 from ..amounts import expect_pt, parse_amount
 from ..errors import GrammarError
-from ..lexer import (QUOTE, SELF, WORD)
+from ..lexer import (PT, QUOTE, SELF, WORD)
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_target_spec
 from ..phrases import _parse_for_each
@@ -398,7 +398,9 @@ def _parse_token_name_words(stream: TokenStream) -> str | None:
     return " ".join(parts) if parts else None
 
 
-def _parse_create_token(stream: TokenStream) -> ast.Statement:
+def _parse_create_token(
+    stream: TokenStream, *, pt_optional: bool = False
+) -> ast.Statement:
     """``Create <N> <P/T> <colours> <subtypes> <types> token(s) [with …] [named …]``.
 
     One production for the whole family, because ``create_token`` is already
@@ -479,10 +481,20 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
     supertypes: list[str] = []
     _parse_token_supertypes(stream, supertypes)
 
+    counted_pt = None
+    if pt_optional and not stream.at_kind(PT):
+        # "Create a black Spirit creature token. **Its power is equal to …**"
+        # (Broken Visage.) The P/T is stated by the sentence behind this one, so
+        # there is no number here to read. Only a caller that goes on to read
+        # that sentence passes ``pt_optional`` — defaulted off, a token line
+        # with no P/T keeps the refusal it has always had rather than compiling
+        # to a 0/0 nothing printed.
+        return _finish_create_token(
+            stream, count, leading_name, supertypes, None, None, None
+        )
     power, power_negative, toughness, toughness_negative = expect_pt(stream)
     if power_negative or toughness_negative:
         raise stream.error("a token's printed power/toughness cannot be negative")
-    counted_pt = None
     if not (isinstance(power, ast.Fixed) and isinstance(toughness, ast.Fixed)):
         # "Create an **X/X** … token, where X is the number of …" (Experimental
         # Overload). Both halves must be the *same* variable: "X/Y" is two
@@ -497,7 +509,28 @@ def _parse_create_token(stream: TokenStream) -> ast.Statement:
             )
         counted_pt = power
         power = toughness = None
+    return _finish_create_token(
+        stream, count, leading_name, supertypes, power, toughness, counted_pt
+    )
 
+
+def _finish_create_token(
+    stream: TokenStream,
+    count,
+    leading_name: str,
+    supertypes: list[str],
+    power,
+    toughness,
+    counted_pt,
+) -> ast.Statement:
+    """Everything a token spec states *after* its power and toughness.
+
+    Split out of :func:`_parse_create_token` rather than duplicated, because
+    the P/T is the one field that has two printed positions — inline, or in the
+    sentence behind the token (Broken Visage) — and everything else reads the
+    same either way. Two copies of this tail is how a colour word or a `with`
+    clause comes to be honoured on one spelling and dropped on the other.
+    """
     colors: list[str] = []
     stated_colour = _parse_token_colors(stream, colors)
 

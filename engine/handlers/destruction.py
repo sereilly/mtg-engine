@@ -679,6 +679,15 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         # leaving the battlefield, which is exactly what last-known
         # information means.
         context.results["destroyed_target"] = victim
+        # "…Its power is equal to **that creature's power** and its toughness is
+        # equal to **that creature's toughness**." (Broken Visage.) Frozen here
+        # for the mana value's reason and one step more urgently: P/T is
+        # *computed* (CR 613), and a card in a graveyard has no computed
+        # characteristics at all — so read after the destroy both numbers would
+        # be the printed ones, or nothing. The effective values, so a pumped or
+        # counter-laden creature is worth what it was worth on the battlefield.
+        context.results["its_power"] = max(0, int(victim.effective_power))
+        context.results["its_toughness"] = max(0, int(victim.effective_toughness))
     destroyed = game._destroy_target_permanent(
         target,
         type_filter=instruction.payload.get("type_filter"),
