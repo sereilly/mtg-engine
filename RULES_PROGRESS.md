@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**341 / 612 tracked rules covered (55%)** — 1730 tests, 0 unannotated.
+**341 / 612 tracked rules covered (55%)** — 1734 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -379,8 +379,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 205. Type Line
 
-- [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(1 tests, subrules b)*
-- [x] **205.2** Card Types *(6 tests, subrules ab)*
+- [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(5 tests, subrules ab)*
+- [x] **205.2** Card Types *(7 tests, subrules ab)*
 - [x] **205.3** Subtypes *(3 tests, subrules bi)*
 - [x] **205.4** Supertypes *(10 tests, subrules abcd)*
 
@@ -772,7 +772,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(74 tests, subrules bcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(76 tests, subrules bcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(13 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(70 tests, subrules abcd)*

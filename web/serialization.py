@@ -205,9 +205,11 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         "is_commander": game.is_commander_permanent(perm),
         # Effective type line so a copy shows its copied types (a Copy Artifact
         # copying a Mox reads "Artifact Enchantment", not just "Enchantment"),
-        # with layer 4's *removals* folded in as well — a permanent returned "as
-        # a non-Aura enchantment" (Takklemaggot) must not still read "Aura" on
-        # screen while every rules query says it is not one.
+        # with the whole of layer 4 folded in: a permanent returned "as a
+        # non-Aura enchantment" (Takklemaggot) must not still read "Aura", an
+        # Evil Presence'd Forest must read Swamp, and a creature wearing Demonic
+        # Embrace must show the Demon type it was granted. Every one of those is
+        # the screen disagreeing with what the rules queries answer.
         "type": displayed_type_line(perm),
         "tapped": perm.tapped,
         "colors": effective_colors,

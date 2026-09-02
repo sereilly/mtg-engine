@@ -329,8 +329,17 @@ class TestKormusBellSwampBlocks:
         assert ok, msg
 
     def test_animated_swamp_serializes_is_creature_for_the_client(self, cards):
-        # The client-side "Only creatures can block." check reads is_creature;
-        # the printed type line has no "creature" for an animated Swamp.
+        """The flag the client's "Only creatures can block." check reads — and,
+        now, the type line beside it.
+
+        This used to assert the *opposite* of the first line below: that the
+        serialized type had no "creature" in it. That was true, and it was the
+        disagreement rather than the evidence — ``displayed_type_line`` stopped
+        at layers 1 and 3, so an animated Swamp read "Basic Land — Swamp" on
+        screen while ``is_creature`` said yes. Layer 4 is folded into the line
+        now, so the two agree. What the assertion was really defending is one
+        test down: the client must read the flag rather than the words.
+        """
         sid = _new_session(seed=21)
         session = store.get(sid)
         bell = Permanent(card=_C["Kormus Bell"])
@@ -339,7 +348,7 @@ class TestKormusBellSwampBlocks:
         session.game._refresh_dynamic_creatures()
         state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
         serialized = state["players"][0]["battlefield"][1]
-        assert "creature" not in serialized["type"].lower()
+        assert serialized["type"] == "Basic Land Creature — Swamp"
         assert serialized["is_creature"] is True
 
     def test_client_block_check_uses_is_creature_flag(self):

@@ -823,39 +823,89 @@ def computed_abilities(perm: Permanent) -> set[str]:
 
 
 def displayed_type_line(perm: Permanent) -> str:
-    """The type line to *show* for *perm*, with layer 4's removals folded in.
+    """The type line to *show* for *perm*: the printed line with layer 4's
+    removals dropped and its additions appended.
 
     ``effective_card.type_line`` is layers 1 and 3 — what the object copies and
-    what a text change rewrote — and stops there, so a permanent an effect
-    returned "as a **non-Aura** enchantment" (Takklemaggot) still reads
-    "Enchantment — Aura" on screen while every rules query says it is not one.
+    what a text change rewrote — and stops there, which left the screen
+    disagreeing with the rules in both directions. A permanent returned "as a
+    **non-Aura** enchantment" (Takklemaggot) read "Enchantment — Aura" while
+    every rules query said it was not one; an Evil Presence'd Forest read
+    "Basic Land — Forest" while the engine, correctly, answered Swamp and not
+    Forest; and a creature wearing Demonic Embrace read "Creature — Dog" with no
+    sign of the Demon its Aura grants. One rule answers all three, because they
+    are one question: what does layer 4 say this permanent is?
 
-    Only the words a ``LOST_TYPES`` record names are dropped, and only when
-    :meth:`Permanent.has_type` agrees they are gone — so this is a *view* of the
-    layer-4 answer rather than a second opinion about it, and a permanent no
-    removal touches gets its printed line back unchanged. Rebuilding the whole
-    line from ``computed_types`` would be the second opinion: the computed sets
-    carry no order, no em dash and no supertype spelling, and a land whose
-    subtypes were *replaced* (Blood Moon) would come back with none at all.
+    A **view of that answer, not a second opinion about it.** Every printed word
+    is kept or dropped by asking the same computed sets :meth:`Permanent.has_type`
+    and :meth:`Permanent.has_supertype` answer from, and a word that survives
+    keeps its printed spelling and its printed position. That is what rebuilding
+    the line from ``computed_types`` could not do — the computed sets are
+    lowercase and unordered, so "Assembly-Worker" comes back mis-spelled and
+    "Basic Snow Land" comes back in some other order — and it is why a permanent
+    no effect touches gets its printed line back byte-identical.
+
+    A *gained* word has no printed position to keep, so it is placed by class: a
+    supertype goes ahead of the card types, which is where CR 205.4a puts one
+    ("Basic Land" + snow reads "Basic Snow Land"), and a card type or subtype is
+    appended after the printed ones. An animated Mishra's Factory therefore
+    reads "Land Artifact Creature — Assembly-Worker" rather than the "Artifact
+    Creature Land" a card printed that way would use: there is no printed
+    authority for a temporary animation's word order, and inventing one would
+    mean reordering the printed half to match a guess.
     """
+    from .grammar.vocabulary import TYPE_LINE_SUPERTYPES, display_type_word
+
     line = perm.effective_card.type_line
-    lost = {
-        str(word).lower()
-        for record in (perm.metadata.get(LOST_TYPES) or ())
-        for word in tuple(record.get("subtypes") or ()) + tuple(record.get("card_types") or ())
+    card_types, subtypes = computed_types(perm)
+    supertypes = computed_supertypes(perm)
+    # Split the same way ``_printed_shape`` seeds from, so the words being
+    # judged are the words that were counted.
+    head, _, tail = line.replace("—", "-").partition("-")
+
+    printed_head = head.split()
+    printed_tail = tail.split()
+    # Which half of the head each printed word belongs to. A supertype and a
+    # card type are checked against different computed sets, and only the line
+    # itself says which a word is.
+    printed_supertype_words = {
+        word for word in printed_head if word.lower() in TYPE_LINE_SUPERTYPES
     }
-    if not lost:
-        return line
-    head, sep, tail = line.partition("—")
-    if not sep:
-        return line
-    kept = [
-        word for word in tail.split()
-        if word.lower() not in lost or perm.has_type(word)
+
+    kept_supertypes = [
+        word for word in printed_head
+        if word in printed_supertype_words and word.lower() in supertypes
     ]
-    if not kept:
-        return head.strip()
-    return f"{head.strip()} — {' '.join(kept)}"
+    kept_card_types = [
+        word for word in printed_head
+        if word not in printed_supertype_words and word.lower() in card_types
+    ]
+    kept_subtypes = [word for word in printed_tail if word.lower() in subtypes]
+
+    printed_head_words = {word.lower() for word in printed_head}
+    printed_tail_words = {word.lower() for word in printed_tail}
+    gained_supertypes = sorted(supertypes - printed_head_words)
+    gained_card_types = sorted(card_types - printed_head_words)
+    gained_subtypes = sorted(subtypes - printed_tail_words)
+    if not (gained_supertypes or gained_card_types or gained_subtypes) and (
+        len(kept_supertypes) + len(kept_card_types) == len(printed_head)
+        and len(kept_subtypes) == len(printed_tail)
+    ):
+        # Nothing added and nothing dropped: hand back the printed line itself
+        # rather than a reassembled copy of it, so the punctuation and spacing
+        # of a line no effect has touched are the card's own.
+        return line
+
+    words = (
+        kept_supertypes
+        + [display_type_word(word) for word in gained_supertypes]
+        + kept_card_types
+        + [display_type_word(word) for word in gained_card_types]
+    )
+    described = kept_subtypes + [display_type_word(word) for word in gained_subtypes]
+    if not described:
+        return " ".join(words)
+    return f"{' '.join(words)} — {' '.join(described)}"
 
 
 def computed_types(perm: Permanent) -> tuple[set[str], set[str]]:

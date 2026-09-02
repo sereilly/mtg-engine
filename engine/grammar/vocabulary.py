@@ -16,6 +16,7 @@ noun parser can try a longest match without scanning the whole catalog.
 from __future__ import annotations
 
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -191,6 +192,30 @@ def match_longest(
     return None
 
 
+#: Where a capital letter starts inside a type word. A space, a hyphen and a
+#: period each begin a new one ("time lord", "assembly-worker", "b.o.b."); an
+#: apostrophe does **not** ("urza's", "c'tan", "shi'ar"), which is the whole
+#: reason this is a regex rather than ``str.title()`` — that spells the land
+#: type "Urza'S".
+_TYPE_WORD_CAPITALS = re.compile(r"(^|[\s\-.])([a-z])")
+
+
+def display_type_word(word: str) -> str:
+    """*word* spelled as a type line prints it.
+
+    The catalogs are lowercase — Scryfall's own casing is not preserved by
+    ``fetch_vocabulary.py`` and nothing in the engine needs it until a word has
+    to be *shown*. That happens when an effect grants a type the printed line
+    never carried (Demonic Embrace's Demon, Mishra's Factory's Assembly-Worker):
+    the word has no printed spelling on that card to copy, so it is spelled
+    here. A word the line already carries keeps its printed spelling instead —
+    see ``layer_bridge.displayed_type_line``.
+    """
+    return _TYPE_WORD_CAPITALS.sub(
+        lambda found: found.group(1) + found.group(2).upper(), word.lower()
+    )
+
+
 __all__ = [
     "ABILITY_WORDS", "ALL_SUBTYPES", "ARTIFACT_TYPES", "CARD_TYPES",
     "COLOR_WORDS", "CREATURE_TYPES", "ENCHANTMENT_TYPES", "IMPLEMENTED_KEYWORDS",
@@ -199,7 +224,8 @@ __all__ = [
     "NUMBER_WORDS", "NUMERIC_ARGUMENT_KEYWORDS", "ORDINAL_WORDS",
     "PLANESWALKER_TYPES", "SPELL_TYPES",
     "SUBTYPE_INDEX",
-    "SUPERTYPES", "TYPE_LINE_SUPERTYPES", "manifest", "match_longest",
+    "SUPERTYPES", "TYPE_LINE_SUPERTYPES", "display_type_word", "manifest",
+    "match_longest",
 ]
 
 

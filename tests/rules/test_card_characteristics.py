@@ -614,3 +614,112 @@ def test_a_type_change_does_not_take_a_supertype_away(catalog_by_name):
 
     assert [perm.card.name for perm in p1.battlefield].count("Chromatic Orrery") == 1
     assert [card.name for card in p1.graveyard] == ["Chromatic Orrery"]
+
+
+# ---------------------------------------------------------------------------
+# The type line as it is *shown* — CR 205.1's line, read after layer 4
+# ---------------------------------------------------------------------------
+#
+# ``displayed_type_line`` used to stop where ``effective_card`` does, at layers
+# 1 and 3, so the screen and the rules disagreed in both directions: a
+# permanent whose subtype an effect removed still showed it, one whose subtypes
+# were replaced still showed the old ones, and one granted a type showed no sign
+# of it. Every card below is in the pool and every one of them was wrong.
+
+
+@pytest.mark.cr("205.1", "613.1d")
+def test_a_granted_subtype_is_shown(catalog_by_name):
+    """"…and is a Demon in addition to its other types" (Demonic Embrace).
+
+    The rules layer had this right from the start — ``has_type("demon")`` was
+    already True — and the line under the art did not say so, which is the whole
+    bug: a player checking whether their Dog is a legal target for something
+    that hits Demons had the answer withheld.
+    """
+    game, p1, _p2 = _duel()
+    watchdog = _nosick(Permanent(card=catalog_by_name["Alpine Watchdog"]))
+    p1.battlefield.append(watchdog)
+    p1.hand = [catalog_by_name["Demonic Embrace"]]
+
+    game.cast_from_hand(
+        0, "Demonic Embrace", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert watchdog.has_type("demon") and watchdog.has_type("dog")
+    # Printed word first, in its printed spelling and position; the granted one
+    # appended, because it has no printed position to keep.
+    assert displayed_type_line(watchdog) == "Creature — Dog Demon"
+
+
+@pytest.mark.cr("205.1", "205.1a")
+def test_replaced_land_subtypes_replace_the_words_on_the_line(catalog_by_name):
+    """CR 205.1a: setting a subtype *replaces* the old ones. The line has to
+    follow, or an Evil Presence'd Forest reads "Forest" while every rules query
+    — the mana it taps for included — says Swamp.
+
+    The removal half and the addition half are one rule here, which is why this
+    is one function rather than a rebuild plus a subtraction: a word is on the
+    line if layer 4 says the permanent has it.
+    """
+    game, p1, _p2 = _duel()
+    forest = Permanent(card=catalog_by_name["Forest"])
+    p1.battlefield.append(forest)
+    p1.hand = [catalog_by_name["Evil Presence"]]
+
+    game.cast_from_hand(
+        0, "Evil Presence", target_player_index=0, target_permanent_index=0
+    )
+    game._settle()
+
+    assert forest.has_type("swamp") and not forest.has_type("forest")
+    # CR 205.4b: the supertype is untouched by a subtype change, so "Basic"
+    # keeps its printed place at the front.
+    assert displayed_type_line(forest) == "Basic Land — Swamp"
+
+
+@pytest.mark.cr("205.2a", "613.1d")
+def test_an_animation_shows_every_type_it_grants(catalog_by_name):
+    """Mishra's Factory: "…becomes a 2/2 Assembly-Worker artifact creature until
+    end of turn. It's still a land."
+
+    All three card types and the subtype, and the subtype spelled the way a card
+    prints it — the catalogs are lowercase, so "assembly-worker" has to be
+    capitalized on both sides of its hyphen rather than by ``str.title()``.
+
+    The printed "Land" keeps its printed position and the granted types follow
+    it, which is not the order a card printed this way would use ("Artifact
+    Creature Land"). There is no printed authority for a temporary animation's
+    word order, and choosing one would mean moving the printed half.
+    """
+    game, p1, _p2 = _duel()
+    factory = _nosick(Permanent(card=catalog_by_name["Mishra's Factory"]))
+    p1.battlefield.append(factory)
+    factory.metadata["animate_until_end_of_turn"] = {
+        "card_types": ["artifact"], "subtypes": ["assembly-worker"],
+        "power": 2, "toughness": 2,
+    }
+    game._recompute_continuous_effects()
+
+    assert factory.is_creature and factory.has_type("land")
+    assert displayed_type_line(factory) == "Land Artifact Creature — Assembly-Worker"
+
+
+@pytest.mark.cr("205.1")
+def test_a_line_no_effect_touches_is_the_printed_one(catalog_by_name):
+    """The guard on the whole approach: this is a *view* of layer 4, not a
+    rebuild from it, so a permanent nothing has changed hands back the card's
+    own line — same spelling, same order, same punctuation.
+
+    Asked of every permanent card in the pool rather than of an example, because
+    a rebuild is exactly the kind of change that looks right on the card you
+    tried it on: the computed sets are lowercase and unordered, so any card
+    whose line the reassembly cannot reproduce shows up here.
+    """
+    game, p1, _p2 = _duel()
+    for card in catalog_by_name.values():
+        if card.primary_type in ("instant", "sorcery"):
+            continue
+        permanent = Permanent(card=card)
+        p1.battlefield = [permanent]
+        assert displayed_type_line(permanent) == card.type_line, card.name
