@@ -56,6 +56,11 @@ def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
         qualifiers=qualifiers,
         with_plus1_counter=filt.with_plus1_counter,
         named=filt.named,
+        # "Creatures **with flying** get +1/+1." (Serra Aviary.) Carried
+        # through like every other field, so the equality below is what
+        # decides whether the table can express it — the same round trip and
+        # not a probe, for the reason this function's docstring gives.
+        with_keywords=filt.with_keywords,
     )
 
 
@@ -69,6 +74,7 @@ def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
         "other_than_source": lord.other_than_source,
         "with_plus1_counter": lord.with_plus1_counter,
         "named": lord.named,
+        "with_keywords": lord.with_keywords,
     }
     for qualifier in lord.qualifiers:
         field_name, value = QUALIFIER_FIELDS[qualifier]
@@ -148,6 +154,21 @@ def _lower_lord_effects(
             "has no matching rule behind it",
             node=node,
         )
+    # "Creatures **with <word>** get +1/+1." The round trip above only proves the
+    # table can *carry* the word; whether the consumer can answer it is a
+    # separate question, and it is the dangerous one. ``_lord_buff_matches``
+    # asks ``Permanent.has_keyword``, which answers "no" for a category word
+    # like "protection" on every creature there is — so an ungated word would
+    # be an anthem that compiles, reports supported, and buffs nobody. The same
+    # gate ``lord_buffs._filter_keywords`` puts on the text-table path, asked
+    # here because the two front ends must admit the same sentences.
+    for keyword in lord_filter.with_keywords:
+        if keyword not in grantable_keywords():
+            raise LoweringError(
+                f"_lord_buff_matches cannot ask whether a creature has "
+                f"{keyword!r}",
+                node=node,
+            )
     return LordBuff(
         lord_filter,
         power,

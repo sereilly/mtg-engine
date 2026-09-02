@@ -175,11 +175,33 @@ def test_the_spells_keep_their_own_instruction_kind(catalog_by_name):
          "nothing charges {5} for the granted ability"),
         ("Other Goblins get +1/+1 as long as you control a Mountain.",
          "an unmodelled condition would become permanent if dropped"),
-        ("Creatures with flying get +1/+1.", "no keyword restriction on the buffed set"),
+        # "Creatures **with** flying get +1/+1" stood here until Serra Aviary
+        # printed it and ``LordBuffFilter.with_keywords`` learned to carry it.
+        # These two rows are what is left of that question, and they are the
+        # sharper pair: the restriction is refused for a word the consumer
+        # cannot ask about ("protection" is a category, not an ability
+        # ``has_keyword`` answers), and for the negation, which the filter has
+        # no field for at all. A word dropped from either would be an anthem
+        # reaching a set the card does not name.
+        ("Creatures with protection get +1/+1.",
+         "has_keyword cannot answer a category word"),
+        ("Creatures without flying get +1/+1.",
+         "no negated keyword restriction on the buffed set"),
     ],
 )
 def test_an_unimplemented_shape_refuses_rather_than_partly_matching(line, why):
     assert _derive(line) is None, why
+
+
+def test_a_keyword_restriction_on_the_buffed_set_is_carried():
+    """Serra Aviary's "Creatures with flying get +1/+1", the positive half of
+    the two rows above. Asserted beside them so the pair reads as a line the
+    table draws rather than as a table that reads nothing."""
+    buff = _derive("Creatures with flying get +1/+1.")
+
+    assert buff is not None
+    assert buff.filter.with_keywords == ("flying",)
+    assert (buff.power, buff.toughness) == (1, 1)
 
 
 def test_a_granted_protection_rides_its_own_channel_not_layer_6():

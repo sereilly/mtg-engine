@@ -467,6 +467,27 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # unnarrowed condition with its rider dropped on the floor.
     ("creature_blocks",
      r"whenever this creature blocks (?P<blocked_subject>(?:a|another) [^,]+)"),
+    # "…blocks **one or more black creatures**" (Rashka the Slayer). The counted
+    # spelling of the row above, arranged exactly as the joined
+    # `creature_blocks_or_blocked_by` family already arranges its own: singular
+    # first, counted second, bare last. CR 509.3e is what the number means — an
+    # ability that triggers on blocking *at least* N creatures fires **once**,
+    # however many answered, where the singular row fires once per creature
+    # (CR 509.3b) — and the threshold is read by `_threshold_firings` in
+    # phases/declare_blockers_step.py off the same `block_pair_count` key
+    # Dwarven Soldier's joined sentence writes. One key, because it is one rule
+    # about one number; a second spelling of it would be a second reader free
+    # to disagree about how often the ability fires.
+    #
+    # Rashka is why this row is not a nicety. Its card *compiled supported*
+    # without it — the keyword line above carries the card — while this sentence
+    # fell through to the bare row below, so the +1/+2 fired on blocking
+    # anything at all. The census cannot see that (a card is supported when any
+    # of its lines is); `scripts/parse_coverage.py` named the sentence and
+    # nothing else did.
+    ("creature_blocks",
+     r"whenever this creature blocks (?P<block_pair_count>[a-z]+) or more "
+     r"(?P<blocked_subjects>[^,]+)"),
     ("creature_blocks",             r"whenever this creature blocks"),
     # "…becomes blocked by **a creature**" (Gloom Sower): once per blocking
     # creature that answers the filter (CR 509.1h), where the bare form below
