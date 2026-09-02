@@ -49,6 +49,7 @@ from .oracle_types import (
 from .characteristic_defining import dynamic_pt_for
 from .auras import unclaimed_aura_lines
 from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
+from .alternative_costs import alternative_cost_claims_line
 from .cast_costs import cast_cost_claims_line
 from .combat_restrictions import combat_restriction_for
 from .enter_effects import enter_effect_line
@@ -1223,9 +1224,22 @@ def _chargeable_discard_filters(phrase: str) -> tuple[dict, ...] | None:
     An empty tuple is the unrestricted "Discard a card" — a real answer, not a
     refusal — which is why None is the refusal and why the caller reads the
     *count* off this rather than off a second regex of its own.
+
+    **The whole phrase is offered to the noun parser before the "or" is split
+    on**, and that ordering is load-bearing: Magic prints two different
+    disjunctions with one word. "A land card **or** Shrine card" is two noun
+    phrases, each with its own head, and only the split reads it; "a red **or**
+    green card" is *one* noun phrase with two colour adjectives sharing a head,
+    which the noun parser reads on its own and the split shreds into "a red"
+    (nothing) and "green card". Splitting first therefore refused the second
+    shape outright — and a refused cost clause is a cost the card prints and
+    nothing charges.
     """
     from .grammar import card_filter_payload
 
+    whole = card_filter_payload(phrase)
+    if whole is not None:
+        return (whole,) if whole else ()
     alternatives: list[dict] = []
     for side in phrase.split(" or "):
         described = card_filter_payload(side)
@@ -3324,6 +3338,18 @@ def _parse_creature_program(
         # without this step the line was the reason the whole card came back
         # "text too complex".
         if cast_cost_claims_line(line):
+            continue
+
+        # 1c. An **alternative** cost (CR 118.9) — "You may pay 1 life and exile
+        # a blue card from your hand rather than pay this spell's mana cost."
+        # The other half of the step above and read the same way, because it is
+        # the same kind of sentence: a price, not an effect, collected by
+        # `queue_from_hand` from the table this asks. Without this the line was
+        # claimed by nothing at all, and Force of Will and Pyrokinesis reported
+        # `supported` on their *other* line while the one they are famous for
+        # did nothing — the population a refusal census cannot see, because the
+        # card is not refused.
+        if alternative_cost_claims_line(line):
             continue
 
         # 2. Triggered ability

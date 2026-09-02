@@ -380,6 +380,14 @@ class GameActionRequest(BaseModel):
     cost_permanent_ids: list[int] | None = None
     # Which card in hand pays a "Discard a card" activation cost.
     cost_hand_index: int | None = None
+    # CR 118.9: cast this spell for its printed *alternative* cost rather than
+    # its mana cost ("You may pay 1 life and exile a blue card from your hand
+    # rather than pay this spell's mana cost"), and which card in hand pays the
+    # exile half. Its own pair of fields rather than a reuse of the additional
+    # cost's above, because CR 118.9d keeps both in force on one cast and a
+    # shared field could not say which price a click was answering.
+    alternative_cost: bool | None = None
+    alternative_cost_hand_index: int | None = None
     # Which zone `hand_index` addresses when a search may look in more than one
     # ("search your library and/or graveyard"). Absent means the library, so
     # every existing client is unchanged.

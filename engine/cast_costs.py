@@ -58,8 +58,22 @@ class AdditionalCost:
     #: "anything".
     exile_filter: dict | None = None
     discard_cards: int = 0
+    #: "…, discard **a red or green card**." (Surge of Strength.) Which cards in
+    #: hand may pay the discard above, as the alternatives the payer chooses
+    #: between — the same tuple-of-payloads shape
+    #: ``ActivatedAbilityCost.discard_filters`` carries, read by the same
+    #: function (``oracle._chargeable_discard_filters``) and tested by the same
+    #: matcher (``subject_filters.card_matches_any``). CR 601.2b and CR 602.2b
+    #: are one announcement step, so what may pay a printed discard is one
+    #: answer wherever the discard is printed.
+    #:
+    #: An empty tuple is the unrestricted "discard a card", where the whole hand
+    #: pays — never "nothing pays", which is what a refusal means and why the
+    #: reader returns None for that instead.
+    discard_filters: tuple[dict, ...] = ()
     #: "…by paying **3 life** and discarding a card" (Demonic Embrace).
-    #: CR 118.4 makes an unpayable life cost an uncastable spell, checked with
+    #: CR 119.4 caps a life payment at the payer's life total and CR 601.2h then
+    #: makes an unpayable cost an uncastable spell, checked with
     #: the rest of the costs before anything is spent.
     pay_life: int = 0
     #: "As an additional cost to cast this spell, pay **X** life." (Fire
@@ -99,7 +113,8 @@ class AdditionalCost:
         elif self.pay_life:
             parts.append(f"pay {self.pay_life} life")
         if self.discard_cards:
-            parts.append(f"discard {self.discard_cards} card(s)")
+            named = filter_head_noun(self.discard_filters[0]) if self.discard_filters else "card"
+            parts.append(f"discard {self.discard_cards} {named}(s)")
         return " and ".join(parts) or "no additional cost"
 
 
@@ -150,7 +165,21 @@ _SELF_PERMISSION_COSTS = re.compile(
 _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"^(?:pay )?x life$"), "pay_life_x"),
     (re.compile(r"^(?:pay )?(\d+) life$"), "pay_life"),
-    (re.compile(r"^(?:discard|discarding) (?:a|one) card$"), "discard_one"),
+    # "discard a card", and its **narrowed** spelling: "discard a red or green
+    # card" (Surge of Strength). This row used to be the literal
+    # ``(?:a|one) card``, so a printed narrowing matched nothing at all — and a
+    # clause this table cannot read leaves the whole sentence unread, which for
+    # a card whose *other* line compiles means it reports ``supported`` and is
+    # cast **without the cost**. Surge of Strength was exactly that: the discard
+    # was printed, claimed by nobody, and never charged.
+    #
+    # The noun phrase goes through the same reader an activation cost's discard
+    # does (``oracle._chargeable_discard_filters``), so what may pay a printed
+    # discard is one answer wherever the discard is printed. Only the singular
+    # is admitted, for the reason ``grammar/costs.py`` states on the activation
+    # side: a counted "discard two cards" is a shape nothing charges, and
+    # admitting it would describe a payment that never happens.
+    (re.compile(r"^(?:discard|discarding) (?P<noun>(?:a|an|one) .+)$"), "discard"),
     # The **noun phrase is read, not spelled out**. This row was
     # ``sacrifice a creature`` as a literal, so Goblin Grenade's "sacrifice a
     # **Goblin**" matched nothing at all -- and a clause the table cannot read
@@ -179,6 +208,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
     """
     fields: dict = {
         "pay_life": 0, "pay_life_x": False, "discard_cards": 0,
+        "discard_filters": (),
         "sacrifice_filter": None, "exile_filter": None,
     }
     for clause in re.split(r",\s*|\s+and\s+", costs):
@@ -193,8 +223,21 @@ def _read_cost_clauses(costs: str) -> dict | None:
                 fields["pay_life_x"] = True
             elif field == "pay_life":
                 fields["pay_life"] += int(found.group(1))
-            elif field == "discard_one":
+            elif field == "discard":
+                from .oracle import _chargeable_discard_filters
+
+                if fields["discard_cards"]:
+                    # A second discard clause would need a second alternatives
+                    # list, and one field cannot hold two: folded together they
+                    # would read as a union, which is a strictly *cheaper* cost
+                    # than the two narrowings printed. Refused whole, which is
+                    # this function's rule everywhere else.
+                    return None
+                narrowed = _chargeable_discard_filters(found.group("noun"))
+                if narrowed is None:
+                    return None
                 fields["discard_cards"] += 1
+                fields["discard_filters"] = narrowed
             else:
                 described = _chargeable_object(found.group("noun"), field)
                 if described is None:

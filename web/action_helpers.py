@@ -134,6 +134,12 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         # creature the spell was aimed at.
         cost_permanent_index=req.cost_permanent_index,
         cost_hand_index=req.cost_hand_index,
+        # CR 118.9's announcement, on its own pair of fields for the reason the
+        # cost fields above are on theirs: an alternative cost and an additional
+        # cost can both apply to one cast (CR 118.9d), so one field could not
+        # say which price a click answered.
+        alternative_cost=req.alternative_cost,
+        alternative_cost_hand_index=req.alternative_cost_hand_index,
     )
 
 def _find_card_in_hand(player: PlayerState, card_name: str):

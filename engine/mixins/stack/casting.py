@@ -20,6 +20,7 @@ import re
 from .._constants import _MANA_SYMBOLS as _POOL_SYMBOLS
 from ...cast_permissions import consume as consume_permission, permission_for
 from ...auras import aura_enchant_clause
+from ...alternative_costs import AlternativeCost, alternative_costs
 from ...cast_costs import AdditionalCost, additional_costs
 from ...auras import controller_cast_ban
 from ...cast_restrictions import check_cast_timing, global_cast_ban
@@ -43,7 +44,7 @@ from ...oracle_types import x_spend_colors_from_text
 from ...restricted_mana import CAST, PaymentPurpose
 from ...target_restrictions import forbidden_target
 from ...targeting import bounce_subject_filter, graveyard_target_spec
-from ...subject_filters import filter_head_noun, subject_matches
+from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
 from ...targeting import (derive_cast_spec, enchant_subject_keyword_exclusion,
                           enchant_subject_seat, spec_roles, targets_mana_value_x)
 
@@ -249,6 +250,11 @@ class SpellCastingMixin:
         # deterministic pick, which keeps AI and headless play unblocked.
         cost_permanent_index: int | None = None,
         cost_hand_index: int | None = None,
+        # CR 118.9's choice, forwarded whole for the reason the cost fields
+        # above are: dropping it here would resolve the spell having quietly
+        # paid the mana cost the caller said they were replacing.
+        alternative_cost: bool | None = None,
+        alternative_cost_hand_index: int | None = None,
     ) -> SimulationResult:
         queued = self.queue_from_hand(
             caster_index,
@@ -267,6 +273,8 @@ class SpellCastingMixin:
             use_free_permission=use_free_permission,
             cost_permanent_index=cost_permanent_index,
             cost_hand_index=cost_hand_index,
+            alternative_cost=alternative_cost,
+            alternative_cost_hand_index=alternative_cost_hand_index,
         )
         if not queued.supported:
             return queued
@@ -373,6 +381,15 @@ class SpellCastingMixin:
         # deterministic pick, which keeps AI and headless play unblocked.
         cost_permanent_index: int | None = None,
         cost_hand_index: int | None = None,
+        # CR 118.9's choice: whether to pay the spell's printed *alternative*
+        # cost rather than its mana cost, and which card in hand pays the exile
+        # half of it. Announced with the cast for the reason the additional
+        # costs' choices are (CR 601.2b announces both, before targets and long
+        # before payment), and defaulting to None — "pay the mana cost" — because
+        # CR 118.9b makes an alternative cost optional and a default that took
+        # it would cast every Force of Will for a life and a card.
+        alternative_cost: bool | None = None,
+        alternative_cost_hand_index: int | None = None,
     ) -> SimulationResult:
         caster = self.players[caster_index]
         # Casting from the hand is a rule; casting from anywhere else is an
@@ -556,7 +573,8 @@ class SpellCastingMixin:
         # (Terror of the Peaks.) A tax in life rather than mana, scoped to what
         # the spell *targets* — so it is charged here, where the chosen targets
         # are known (CR 601.2c chooses them before 601.2h pays), and refused
-        # rather than clamped when the caster cannot pay: CR 118.4 makes an
+        # rather than clamped when the caster cannot pay: CR 119.4 caps the
+        # payment at the payer's life total and CR 601.2h makes an
         # unpayable cost an uncastable spell, not a free one.
         life_tax, life_taxing_names = spell_life_tax(self, caster_index, aimed_at)
         if life_tax:
@@ -632,6 +650,26 @@ class SpellCastingMixin:
         if cost_denial is not None:
             self.log.append(cost_denial)
             return SimulationResult(card.name, False, classification.effect_kind, cost_denial)
+
+        # The **alternative** cost (CR 118.9), announced in the same step as the
+        # additional costs above (CR 601.2b) and resolved here for the same
+        # reason the discard is: the card that pays it is named by an index into
+        # the hand the caster is looking at, and that hand still holds the spell.
+        # A cast that names a card it cannot pay with is refused before anything
+        # is spent, never repointed at a neighbour.
+        chosen_alternative, alternative_card, alternative_denial = (
+            self._resolve_alternative_cost(
+                caster_index, card,
+                taking_it=alternative_cost,
+                named_hand_index=alternative_cost_hand_index,
+                spell_hand_index=hand_index if from_zone == "hand" else None,
+            )
+        )
+        if alternative_denial is not None:
+            self.log.append(alternative_denial)
+            return SimulationResult(
+                card.name, False, classification.effect_kind, alternative_denial
+            )
 
         # "Choose one or more —": the modes are chosen as the spell is cast
         # (CR 601.2b) and are checked here, before any mana leaves the pool, so
@@ -809,12 +847,24 @@ class SpellCastingMixin:
             self.log.append(unpayable)
             return SimulationResult(card.name, False, classification.effect_kind, unpayable)
 
+        # The announced alternative cost, checked in the same step and for the
+        # same rule (CR 601.2h). Below the additional costs only in source
+        # order; nothing between the two spends anything, so a refusal from
+        # either costs the caster the same nothing.
+        unpayable = self._unpayable_alternative_cost(
+            caster_index, card, chosen_alternative,
+            spell_hand_index=hand_index if from_zone == "hand" else None,
+        )
+        if unpayable is not None:
+            self.log.append(unpayable)
+            return SimulationResult(card.name, False, classification.effect_kind, unpayable)
+
         # "Spells cost an additional "Sacrifice a Swamp" to cast for each black
         # mana symbol in their mana costs." (Drought.) An additional cost
         # imposed from a *board* rather than printed on the spell, so it is
         # asked here beside the printed ones and at the same moment (CR 601.2f
         # determines it, CR 601.2h pays it), and refused rather than clamped:
-        # CR 118.4 makes an unpayable cost an uncastable spell, not a free one.
+        # CR 601.2h makes an unpayable cost an uncastable spell, not a free one.
         sacrifice_demands = sacrifice_taxes(
             self, caster_index, card.mana_cost or "", "cast"
         )
@@ -834,13 +884,40 @@ class SpellCastingMixin:
             and card.primary_type != "land"
             and use_free_permission is not False
             and (use_free_permission or "{X}" not in card.mana_cost.upper())
+            # CR 118.9a: "A player can't apply two alternative methods of
+            # casting or two alternative costs to a single spell." A cost waiver
+            # is an alternative cost (`CastPermission.free` cites the same rule),
+            # so a caster who announced the spell's own printed one is not also
+            # handed a waiver — which would otherwise make the printed cost a
+            # pure loss, paid on top of a spell that was already free.
+            and chosen_alternative is None
         ):
             waiver = permission_for(self, caster_index, card, "hand")
             if waiver is not None and from_zone == "hand":
                 free_grant = waiver
                 if permission is None:
                     permission = waiver
-        if free_grant is not None and card.primary_type != "land":
+        if chosen_alternative is not None and card.primary_type != "land":
+            # CR 118.9: the alternative cost is paid **rather than** the mana
+            # cost, so the mana payment below is skipped whole. Not a reduction
+            # and not a waiver: the cost itself is charged just below, once the
+            # spell is off the hand, beside the additional costs CR 118.9d keeps
+            # in force.
+            #
+            # CR 118.9c is what this branch does *not* do: nothing here touches
+            # `card.mana_cost`, so the taxes above, the commander tax and every
+            # "with mana value X" reader still see the printed cost.
+            if "{X}" in card.mana_cost.upper():
+                # CR 107.3b: X is 0 when neither the mana cost nor an
+                # alternative cost that includes X is paid. No card in the pool
+                # prints both an {X} and an alternative cost; this is the rule's
+                # answer rather than a guess at one.
+                resolved_x_value = 0
+            self.log.append(
+                f"{card.name} cast for its alternative cost "
+                f"({chosen_alternative.describe()})"
+            )
+        elif free_grant is not None and card.primary_type != "land":
             if "{X}" in card.mana_cost.upper():
                 resolved_x_value = 0  # CR 107.3b: the only legal choice for X
             self.log.append(
@@ -875,6 +952,11 @@ class SpellCastingMixin:
         # Now, and not before: the spell is no longer in the hand, so it cannot
         # be discarded to pay for itself, and the creature it eats is gone from
         # the battlefield before the spell is on the stack.
+        # CR 118.9d keeps the additional costs in force alongside an
+        # alternative one, so both are paid, in the order CR 601.2h leaves free.
+        self._pay_alternative_cost(
+            caster_index, card, chosen_alternative, alternative_card,
+        )
         cost_spoils = self._pay_additional_costs(
             caster_index, card, cast_costs,
             cost_permanent_index=cost_permanent_index,
@@ -1108,7 +1190,7 @@ class SpellCastingMixin:
                         f"{filter_head_noun(cost.exile_filter)} to "
                         f"exile for its additional cost (CR 601.2h)"
                     )
-            # CR 118.4: a player may pay life only down to 0, and CR 601.2h then
+            # CR 119.4: a player may pay life only down to 0, and CR 601.2h then
             # makes an unpayable cost an uncastable spell rather than a free
             # one. Checked with the others, before anything is spent.
             life = cost.life_charged(x_value)
@@ -1122,15 +1204,59 @@ class SpellCastingMixin:
                 # The spell itself is still in the zone it is being cast from,
                 # and it is about to be on the stack — so it cannot be one of
                 # the cards discarded to pay for itself.
-                available = len(caster.hand)
-                if from_zone == "hand" and spell_hand_index is not None:
-                    available -= 1
-                if available < cost.discard_cards:
+                #
+                # Counted over the cards the printed phrase *names* rather than
+                # over the whole hand ("discard a **red or green** card", Surge
+                # of Strength), through the same matcher the payment picks with
+                # — a gate that counted the hand would admit a cast the payment
+                # then could not collect, and the payment would fall back to
+                # discarding whatever was first.
+                payable = self._discard_cost_payers(
+                    caster_index, cost,
+                    spell_hand_index=(
+                        spell_hand_index if from_zone == "hand" else None
+                    ),
+                )
+                if len(payable) < cost.discard_cards:
+                    shortfall = (
+                        "no card in hand answers this cost"
+                        if cost.discard_filters
+                        else "not enough cards in hand to discard"
+                    )
                     return (
-                        f"{card.name} can't be cast: not enough cards in hand to "
-                        f"discard for its additional cost (CR 601.2h)"
+                        f"{card.name} can't be cast: {shortfall} "
+                        f"for its additional cost (CR 601.2h)"
                     )
         return None
+
+    def _discard_cost_payers(
+        self,
+        caster_index: int,
+        cost: AdditionalCost,
+        *,
+        spell_hand_index: int | None,
+    ) -> list["CardDefinition"]:
+        """The cards in hand that may pay *cost*'s discard, in hand order.
+
+        One enumeration for the gate, the named-card check and the payment, so
+        what is admitted and what is collected cannot disagree — the same
+        arrangement ``_additional_cost_candidates`` makes for the sacrifice and
+        the exile one zone over. The narrowing is read through
+        ``card_matches_any``, which is what the activation path's identical
+        discard cost is matched with (CR 601.2b and CR 602.2b are one
+        announcement step).
+
+        The spell is excluded **by index**, never by identity: a deck repeats
+        one immutable ``CardDefinition`` per copy, so a second copy of the spell
+        in hand is the *same object* and an identity filter would refuse the
+        card that may legitimately pay.
+        """
+        return [
+            held
+            for position, held in enumerate(self.players[caster_index].hand)
+            if position != spell_hand_index
+            and card_matches_any(held, cost.discard_filters)
+        ]
 
     def _resolve_discard_cost_card(
         self,
@@ -1156,7 +1282,8 @@ class SpellCastingMixin:
         means the deterministic default, which keeps AI and headless play
         unblocked.
         """
-        if cost_hand_index is None or not any(cost.discard_cards for cost in costs):
+        discarding = next((cost for cost in costs if cost.discard_cards), None)
+        if cost_hand_index is None or discarding is None:
             return None, None
         hand = self.players[caster_index].hand
         if not 0 <= cost_hand_index < len(hand):
@@ -1169,7 +1296,214 @@ class SpellCastingMixin:
                 f"{card.name} can't be cast: it is on the stack (CR 601.2a) and "
                 "cannot be discarded to pay for itself"
             )
+        # A named card that does not answer the printed phrase is an error, not
+        # a cheaper cost — refused rather than quietly slid onto a legal one,
+        # which is the same answer the activation path gives the identical cost.
+        if not card_matches_any(hand[cost_hand_index], discarding.discard_filters):
+            return None, (
+                f"{card.name} can't be cast: {hand[cost_hand_index].name} does "
+                f"not answer its additional cost (CR 601.2b)"
+            )
         return hand[cost_hand_index], None
+
+    # ------------------------------------------------------------------
+    # The printed alternative cost (CR 118.9)
+    # ------------------------------------------------------------------
+
+    def _alternative_cost_payers(
+        self,
+        caster_index: int,
+        cost: AlternativeCost,
+        *,
+        spell_hand_index: int | None,
+    ) -> list["CardDefinition"]:
+        """The cards in hand that could pay *cost*'s exile, in hand order.
+
+        One enumeration for the gate, the named-card check and the payment, the
+        arrangement ``_discard_cost_payers`` and ``_additional_cost_candidates``
+        both make and for the same reason: a gate that counted a different set
+        from the one the payment picks from would admit a cast the payment
+        cannot collect.
+
+        The spell is withheld **by index**, never by identity. CR 601.2a puts it
+        on the stack before costs are paid, so it cannot pay for itself — but a
+        *second copy* in hand is a different card that legitimately can, and a
+        deck repeats one immutable ``CardDefinition`` per copy, so an identity
+        filter would refuse it along with the spell.
+        """
+        return [
+            held
+            for position, held in enumerate(self.players[caster_index].hand)
+            if position != spell_hand_index
+            and card_matches_any(held, cost.exile_from_hand or ())
+        ]
+
+    def _resolve_alternative_cost(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        *,
+        taking_it: bool | None,
+        named_hand_index: int | None,
+        spell_hand_index: int | None,
+    ) -> "tuple[AlternativeCost | None, CardDefinition | None, str | None]":
+        """CR 601.2b's announcement: ``(cost taken, card that pays it, refusal)``.
+
+        Three answers rather than a boolean, because the announcement decides
+        three things at once and every one of them has to survive the spell
+        leaving the hand: *which* alternative cost is being paid (CR 118.9a
+        allows one), *which card* pays its exile half (an index is only
+        meaningful beside the list it was read from, so it is resolved to a card
+        here), and whether the announcement is legal at all.
+
+        ``taking_it`` is None for "pay the mana cost", which is the default and
+        the behaviour every caller had before this existed. CR 118.9b makes an
+        alternative cost optional, so nothing is inferred: a caster who did not
+        ask pays the printed cost even when they could not afford it, because the
+        alternative is the engine spending a life total the player never offered.
+
+        The affordability question is **not** asked here. It belongs beside the
+        additional costs' gate at CR 601.2h, after X and the targets are
+        announced, and asking it twice would be two answers to one question.
+        """
+        printed = alternative_costs(card)
+        if not taking_it:
+            return None, None, None
+        if not printed:
+            return None, None, (
+                f"{card.name} can't be cast that way: it prints no alternative "
+                f"cost (CR 118.9)"
+            )
+        if len(printed) > 1:
+            # CR 118.9a: only one alternative cost may be applied. No card in
+            # the pool prints two, so rather than invent a choice nobody has to
+            # make, the cast is refused and names the rule — a silent "take the
+            # first" would be this engine picking which price the player pays.
+            return None, None, (
+                f"{card.name} prints more than one alternative cost and only "
+                f"one may be applied (CR 118.9a)"
+            )
+        cost = printed[0]
+        if cost.exile_from_hand is None:
+            return cost, None, None
+        payable = self._alternative_cost_payers(
+            caster_index, cost, spell_hand_index=spell_hand_index
+        )
+        if named_hand_index is None:
+            # Nothing named is the deterministic default, which keeps AI and
+            # headless play unblocked — the same answer every other cost choice
+            # on this path gives. An empty list is not a refusal here: the gate
+            # at CR 601.2h says so, in one place, with the rule's own wording.
+            return cost, (payable[0] if payable else None), None
+        hand = self.players[caster_index].hand
+        if not 0 <= named_hand_index < len(hand):
+            return None, None, (
+                f"{card.name} can't be cast: no card at hand position "
+                f"{named_hand_index} to exile for its alternative cost"
+            )
+        if named_hand_index == spell_hand_index:
+            return None, None, (
+                f"{card.name} can't be cast: it is on the stack (CR 601.2a) and "
+                "cannot be exiled to pay for itself"
+            )
+        if not any(held is hand[named_hand_index] for held in payable):
+            # A named card that does not answer the printed phrase is an error,
+            # not a cheaper cost: refused rather than quietly slid onto a legal
+            # one, so a stale click cannot exile the card the player meant to
+            # keep. The same answer the discard cost beside it gives.
+            return None, None, (
+                f"{card.name} can't be cast: {hand[named_hand_index].name} does "
+                f"not answer its alternative cost (CR 118.9)"
+            )
+        return cost, hand[named_hand_index], None
+
+    def _unpayable_alternative_cost(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        cost: "AlternativeCost | None",
+        *,
+        spell_hand_index: int | None,
+    ) -> str | None:
+        """Why the announced alternative cost can't be paid, or None.
+
+        CR 601.2h: "Unpayable costs can't be paid", and CR 601.2e makes the
+        whole casting a rewind — so the answer is that the spell is not cast,
+        never that it is cast without the cost. Which for an *alternative* cost
+        is the sharper version of the same rule: a dropped additional cost is a
+        spell cast for less than it prints, and a dropped alternative cost is a
+        spell cast for **nothing at all**, because the mana payment has already
+        been replaced by whatever this was supposed to collect.
+
+        Asked beside ``_unpayable_additional_cost`` and at the same moment, so a
+        refusal here costs the caster exactly what a refusal there does: nothing.
+        """
+        if cost is None:
+            return None
+        caster = self.players[caster_index]
+        # CR 119.4: a player may pay life only down to 0.
+        if cost.pay_life and caster.life < cost.pay_life:
+            return (
+                f"{card.name} can't be cast: {caster.name} cannot pay "
+                f"{cost.pay_life} life with {caster.life} remaining (CR 601.2h)"
+            )
+        if cost.exile_from_hand is not None and not self._alternative_cost_payers(
+            caster_index, cost, spell_hand_index=spell_hand_index
+        ):
+            return (
+                f"{card.name} can't be cast: no card in hand answers its "
+                f"alternative cost, {cost.describe()} (CR 601.2h)"
+            )
+        return None
+
+    def _pay_alternative_cost(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        cost: "AlternativeCost | None",
+        chosen: "CardDefinition | None",
+    ) -> None:
+        """Perform the announced alternative cost (CR 601.2h).
+
+        Called once the spell is off the hand and on the stack (CR 601.2a), so
+        the spell itself cannot pay and a second copy of it still can — which is
+        the whole reason the *choice* was resolved to a card upstream while the
+        index still meant something.
+
+        The card leaves through ``Game.take_card_from_hand``: a deck repeats one
+        immutable ``CardDefinition`` per copy, so every copy in a hand is the
+        same Python object and the obvious identity filter would exile all of
+        them while this puts exactly one into exile.
+        """
+        if cost is None:
+            return
+        caster = self.players[caster_index]
+        if cost.pay_life:
+            caster.life -= cost.pay_life
+            self.log.append(
+                f"{caster.name} paid {cost.pay_life} life to cast {card.name}"
+            )
+        if cost.exile_from_hand is None:
+            return
+        paying = chosen
+        if paying is None or not any(held is paying for held in caster.hand):
+            # The announcement's pick is re-checked rather than trusted: a hand
+            # that changed between announcement and payment is a board this
+            # engine cannot rewind, and re-picking is the honest half-step.
+            paying = next(
+                (
+                    held for held in caster.hand
+                    if card_matches_any(held, cost.exile_from_hand)
+                ),
+                None,
+            )
+        if paying is None:
+            return  # gated above; a hand that changed since is a no-op
+        self.take_card_from_hand(caster, paying)
+        caster.exile.append(paying)
+        self.log.append(
+            f"{caster.name} exiled {paying.name} to cast {card.name}"
+        )
 
     def _pay_additional_costs(
         self,
@@ -1267,14 +1601,28 @@ class SpellCastingMixin:
                     # hand; find it by identity now. Two copies of one card are
                     # the same object, which is fine — either pays the cost, and
                     # discarding "the first equal one" is the whole choice.
-                    index = 0
+                    #
+                    # The default is the first card the printed phrase *names*,
+                    # never a bare index 0: "discard a red or green card" paid
+                    # with the first card in hand is a different, cheaper cost.
+                    # The spell has already left the hand by now (it is on the
+                    # stack, CR 601.2a), so nothing needs excluding here.
+                    index = next(
+                        (
+                            i for i, held in enumerate(caster.hand)
+                            if card_matches_any(held, cost.discard_filters)
+                        ),
+                        None,
+                    )
+                    if index is None:
+                        break  # gated above; a hand that changed since is a no-op
                     if cost_hand_card is not None:
                         index = next(
                             (
                                 i for i, held in enumerate(caster.hand)
                                 if held is cost_hand_card
                             ),
-                            0,
+                            index,
                         )
                         cost_hand_card = None  # one named card pays once
                     discarded = caster.hand.pop(index)

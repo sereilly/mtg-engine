@@ -615,6 +615,16 @@ def _card_matches_filter(card, filt: dict) -> bool:
     color_filter = filt.get("color_filter")
     if color_filter and color_filter not in (getattr(card, "colors", ()) or ()):
         return False
+    # "…discard a **red or green** card" (Surge of Strength). The union
+    # spelling of the key above — one filter carrying several colours, which is
+    # how the noun parser reads a shared-head disjunction ("red or green card"
+    # is one noun phrase, not two) — OR'd exactly as the permanent matcher OR's
+    # it. Off the same printed colours and for the same reason (CR 202.2).
+    any_colors = filt.get("any_colors")
+    if any_colors and not any(
+        color in (getattr(card, "colors", ()) or ()) for color in any_colors
+    ):
+        return False
     # "a **nonblack** card" (Krovikan Sorcerer). The negative of the test above,
     # off the same printed colours, and OR'd the same way a type exclusion is: a
     # card carrying *any* excluded colour is out, which is what "nonblack,
