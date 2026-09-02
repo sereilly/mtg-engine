@@ -828,6 +828,46 @@ def test_a_commander_headed_for_its_owners_library_may_go_to_the_command_zone(se
 
 
 @pytest.mark.cr("903.9b")
+def test_a_commander_shuffled_out_of_a_hand_reaches_the_command_zone(set_pool):
+    """Winds of Change (LEG/4ED/5ED) shuffled a commander straight into the
+    library, and the rule is exactly why "from anywhere" has no single fire
+    site: the handler moved the whole hand with ``library.extend`` rather than
+    through ``put_card_into_library``, so no seam ever asked. Nothing crashed
+    and nothing was missing — the commander was simply gone for the rest of the
+    game.
+
+    Watched failing before the fix and passing after it, which is the only
+    reading of a bug this quiet that means anything."""
+    pool = set_pool("M21")
+    game = _commander_game(pool)
+    gadrak = pool["Gadrak, the Crown-Scourge"]
+    game.players[0].command_zone.clear()
+    game.players[0].hand = [gadrak]
+    game.enforce_mana_costs = False
+
+    game._apply_spell_text(
+        game.players[0], game.players[1], _shuffle_hand_into_library_card(),
+    )
+    game._settle()
+
+    assert not any(c.name == gadrak.name for c in game.players[0].library)
+    assert [c.name for c in game.players[0].command_zone] == [gadrak.name]
+
+
+def _shuffle_hand_into_library_card() -> CardDefinition:
+    """Winds of Change's printed text, as a card. Written out rather than looked
+    up because this file's pool fixture is M21's and the card is Legends'; what
+    is under test is the *sentence*, and any card printing it is the same
+    test."""
+    return _mk_card(
+        "Hand Shuffle Test",
+        "Sorcery",
+        "Each player shuffles the cards from their hand into their library, "
+        "then draws that many cards.",
+    )
+
+
+@pytest.mark.cr("903.9b")
 def test_a_bounced_commander_is_diverted_from_the_battlefield(set_pool):
     """"…from anywhere" — the battlefield included, which is the case the rule
     is best known for."""

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**346 / 612 tracked rules covered (56%)** — 1856 tests, 0 unannotated.
+**346 / 612 tracked rules covered (56%)** — 1857 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -975,7 +975,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **903.6** At the start of the game, each player puts their commander from their deck face up into the comma... *(3 tests)*
 - [x] **903.7** Once the starting player has been determined, each player sets their life total to 40 and draws a... *(4 tests)*
 - [x] **903.8** A player may cast a commander they own from the command zone. A commander cast from the command z... *(9 tests)*
-- [x] **903.9** A commander may return to the command zone during a Commander game. *(19 tests, subrules ab)*
+- [x] **903.9** A commander may return to the command zone during a Commander game. *(20 tests, subrules ab)*
 - [x] **903.10** The Commander variant includes the following specification for winning and losing the game. All o... *(6 tests, subrules a)*
 - [x] **903.11** Except via rules, special actions, and effects that specifically bring cards into Commander games... *(8 tests, subrules a)*
 - [x] **903.12** Brawl Option *(26 tests, subrules abcdefgh)*
