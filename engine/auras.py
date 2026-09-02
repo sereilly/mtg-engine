@@ -769,6 +769,24 @@ def unclaimed_aura_lines(normalized_lines: list[str], card_name: str = "") -> li
     return unclaimed
 
 
+def _enchant_line_claimed(line: str) -> bool:
+    """Whether an ``Enchant <subject>`` line has both its readers behind it.
+
+    Two, because the clause is answered in two places and either one missing is
+    a hole: ``targeting.enchant_line_subject`` is what the *picker* is built
+    from, and the graveyard form beside it
+    (``targeting.enchant_graveyard_line``) is the other zone's picker, raised by
+    ``_cast_target_spec`` and spent by ``_apply_aura_effect``. Anything else
+    starting with the word is a subject nobody reads, and a line nobody reads is
+    what leaves this gate.
+    """
+    from .targeting import enchant_graveyard_line, enchant_line_subject
+
+    return (
+        enchant_line_subject(line) is not None or enchant_graveyard_line(line)
+    )
+
+
 def _aura_line_claimed(line: str, card_name: str) -> bool:
     """Whether one Aura/Equipment effect line has an implementation behind it."""
     from .oracle import _is_supported_keyword_line
@@ -777,7 +795,16 @@ def _aura_line_claimed(line: str, card_name: str) -> bool:
     from .target_restrictions import target_restriction_line
 
     return bool(
-        line.startswith("enchant ")
+        # The "Enchant <subject>" line, asked of the readers that **implement**
+        # it rather than of the word it starts with. `startswith("enchant ")`
+        # was this file's own widened gate (ICE 36's rule, one module over): it
+        # claimed any subject at all, so Roots' "Enchant creature without
+        # flying" compiled supported while `targeting.enchant_subject_spec`
+        # derived no picker — the card was uncastable — and
+        # `permanent_matches_enchant_noun` fell through to its permissive
+        # fallback, so the exclusion was unenforced. One line, two contradictory
+        # failures, and a green suite.
+        _enchant_line_claimed(line)
         or _is_supported_keyword_line(line)
         # "This Equipment enters with a soul counter on it." (Malefic Scythe.)
         # Entry state `_initialize_permanent_state` carries out from the

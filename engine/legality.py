@@ -1562,6 +1562,16 @@ class LegalityMixin:
             colour in perm.effective_colors for colour in any_colors
         ):
             return False
+        # "Enchant creature **without flying**" (Roots). Asked here, before the
+        # switch, for the same reason the colour tests above it are: an
+        # exclusion asked inside one branch is an exclusion every other branch
+        # drops, and CR 702.5's [quality] can narrow any of the six enchant
+        # nouns. Layer 6, through the same ``has_keyword`` the cast gate asks
+        # (``stack/casting.permanent_matches_enchant_noun``) — one reading, so
+        # the picker cannot offer a host the cast then refuses.
+        without_keyword = spec.get("without_keyword")
+        if without_keyword and self._has_keyword(perm, without_keyword):
+            return False
         if kind == "player_or_planeswalker":
             # "Target player or planeswalker" (Chandra's Magmutt): the only
             # permanents in the union are planeswalkers — the player faces were

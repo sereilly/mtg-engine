@@ -46,7 +46,7 @@ import re
 from .cast_costs import additional_costs
 from .divided_damage import CHOSEN, DIVIDED_TARGETS, divided_entry
 from .enter_effects import copy_on_enter_type
-from .subject_filters import filter_head_noun
+from .subject_filters import filter_head_noun, unimplemented_filter_keywords
 
 # "Enchant creature", "Enchant land", ... — but NOT "Enchant creature card in a
 # graveyard" (Animate Dead), which targets a graveyard card rather than a
@@ -72,12 +72,30 @@ _ENCHANT_NOUNS = ("creature", "land", "artifact", "enchantment", "wall",
 #: the excluded ones. Admitting the prefix here rather than a second noun per
 #: exclusion keeps the two readers on one vocabulary.
 _ENCHANT_NEGATION = r"(?:non-[a-z]+ )?"
+#: "Enchant creature **without flying**" (Roots). CR 702.5's [quality] once
+#: more, this time a keyword rather than a subtype, and a third *independent*
+#: half of the clause — so it composes with the noun and the seat instead of
+#: multiplying the rows, exactly as the negation above it does. The word is
+#: payload: "Enchant creature without defender" is the same clause.
+#:
+#: Only the **negated** spelling. "Enchant creature with flying" refuses here
+#: and leaves its card visibly unsupported, because no card in this pool prints
+#: it and a filter with no card behind it is untested by construction
+#: (ROADMAP.md's rule about the sacrifice trigger's narrowing). It is one
+#: alternative to add beside this the day such a card arrives.
+_ENCHANT_KEYWORD_EXCLUSION = r"(?: without [a-z]+)?"
 _ENCHANT_SEAT_CLAUSES = {"you control": "you", "an opponent controls": "opponent"}
 _ENCHANT_SUBJECT = (
     rf"{_ENCHANT_NEGATION}"
     rf"(?:{'|'.join(_ENCHANT_NOUNS)})"
+    rf"{_ENCHANT_KEYWORD_EXCLUSION}"
     rf"(?: (?:{'|'.join(_ENCHANT_SEAT_CLAUSES)}))?"
 )
+#: The keyword half of a subject, split off the way the seat half is. Anchored
+#: at the end so it is read after :func:`enchant_subject_seat` has taken the
+#: seat clause off — "creature without flying you control" is not printed, but
+#: splitting in that order means it would still come apart correctly.
+_ENCHANT_WITHOUT = re.compile(r"^(?P<noun>.+?) without (?P<keyword>[a-z]+)$")
 # Anchored at both ends, and read one printed line at a time. It used to be
 # searched over the card's whole *normalized* text, which is space-joined - so
 # Steal Artifact ("Enchant artifact" / "You control enchanted artifact") reads
@@ -100,6 +118,25 @@ def enchant_subject_seat(subject: str) -> tuple[str, str | None]:
         if subject.endswith(suffix):
             return subject[: -len(suffix)].strip(), seat
     return subject, None
+
+
+def enchant_subject_keyword_exclusion(subject: str) -> tuple[str, str | None]:
+    """Split an enchant subject into its noun and the keyword it excludes.
+
+    ``"creature without flying"`` -> ``("creature", "flying")``; a subject with
+    no such clause -> ``(subject, None)``.
+
+    The third half of CR 702.5's [quality], separated for exactly the reason
+    :func:`enchant_subject_seat` separates the second: the picker, the cast
+    gate, ``auras.aura_attach_refusal`` and the CR 704.5m sweep all need it, and
+    four ``" without " in noun`` tests between them is four chances to read the
+    clause differently. Ask for the seat first — this is anchored at the end of
+    the string and a seat clause left on would swallow the keyword.
+    """
+    match = _ENCHANT_WITHOUT.match(subject)
+    if match is None:
+        return subject, None
+    return match.group("noun").strip(), match.group("keyword")
 
 
 # The graveyard form the scan above deliberately excludes. It is its own entry
@@ -132,10 +169,41 @@ def enchant_line_subject(line: str) -> str | None:
     deliberately refuse it, because it names a graveyard card rather than a
     battlefield permanent — so claiming it would report a reanimation Aura's
     attachment rule as handled while nothing handles it.
+
+    A "without <keyword>" clause naming a keyword this engine does not
+    implement is refused for the reason ``engine/combat_restrictions.py``
+    refuses one: ``has_keyword`` answers no for a word nothing is registered
+    under, so the exclusion would match **every** creature and the Aura would
+    attach to anything while reporting the restriction implemented.
     """
     normalized = _REMINDER_TEXT.sub("", line).strip().lower().rstrip(".").strip()
     match = _WHOLE_ENCHANT_LINE.match(normalized)
-    return match.group(1) if match is not None else None
+    if match is None:
+        return None
+    subject = match.group(1)
+    _noun, keyword = enchant_subject_keyword_exclusion(
+        enchant_subject_seat(subject)[0]
+    )
+    if keyword is not None and unimplemented_filter_keywords(
+        {"without_keywords": [keyword]}
+    ):
+        return None
+    return subject
+
+
+def enchant_graveyard_line(line: str) -> bool:
+    """Whether one printed line is Animate Dead's "Enchant creature card in a
+    graveyard".
+
+    :func:`enchant_line_subject` deliberately refuses it — it names a card in a
+    graveyard rather than a battlefield permanent, and so a different picker —
+    but the engine *does* implement it: ``_cast_target_spec`` raises the
+    graveyard picker and ``_apply_aura_effect`` spends the chosen index. So the
+    Aura support gate needs to ask both readers, and this is the second one,
+    read here rather than spelled again beside the gate.
+    """
+    normalized = _REMINDER_TEXT.sub("", line).strip().lower().rstrip(".").strip()
+    return _ENCHANT_GRAVEYARD_LINE.match(normalized) is not None
 
 
 def card_enchant_subject(oracle_text: str) -> str | None:
@@ -189,10 +257,19 @@ def enchant_subject_spec(subject: str) -> dict | None:
     # so the client sent no target and the engine refused the cast outright.
     if noun.startswith("non-"):
         noun = noun.split(" ", 1)[1] if " " in noun else noun
+    # "creature **without flying**" (Roots). Unlike the negated subtype above,
+    # this one *is* carried into the spec: `_enumerate_targets` can ask layer 6
+    # for a keyword, so the picker offers exactly the legal hosts rather than a
+    # superset. The gate enforces it as well, through
+    # `permanent_matches_enchant_noun` and off the same split — the offered list
+    # and the enforced rule are one reading, which is this clause's whole rule.
+    noun, without_keyword = enchant_subject_keyword_exclusion(noun)
     spec = _ENCHANT_NOUN_TO_SPEC.get(noun)
     if spec is None:
         return None
     spec = dict(spec)
+    if without_keyword is not None:
+        spec["without_keyword"] = without_keyword
     flag = _ENCHANT_SEAT_TO_FLAG.get(seat)
     if flag is not None:
         spec[flag] = True

@@ -44,8 +44,8 @@ from ...restricted_mana import CAST, PaymentPurpose
 from ...target_restrictions import forbidden_target
 from ...targeting import bounce_subject_filter, graveyard_target_spec
 from ...subject_filters import filter_head_noun, subject_matches
-from ...targeting import (derive_cast_spec, enchant_subject_seat, spec_roles,
-                          targets_mana_value_x)
+from ...targeting import (derive_cast_spec, enchant_subject_keyword_exclusion,
+                          enchant_subject_seat, spec_roles, targets_mana_value_x)
 
 # Maps an "enchant X" noun to a predicate matching legal battlefield targets.
 # "creature" uses Permanent.is_creature so animated lands (Kormus Bell / Living
@@ -146,6 +146,20 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
     negated = _NON_SUBTYPE_ENCHANT.match(noun)
     if negated is not None:
         excluded, noun = negated.group("subtype"), negated.group("noun")
+    # "Enchant creature **without flying**" (Roots). The keyword half of
+    # CR 702.5's [quality], split by the reader `targeting.enchant_subject_spec`
+    # builds the picker from — so the hosts offered and the hosts allowed are
+    # one reading. Through ``Permanent.has_keyword``, which is CR 613 layer 6's
+    # answer: a creature *granted* flying stops being a legal host (and
+    # ``unattach_illegal_equipment``'s sibling sweep, CR 704.5m, then puts the
+    # Aura in the graveyard), while one that has lost it becomes one.
+    #
+    # The word itself is validated where the clause is *claimed*
+    # (`targeting.enchant_line_subject`): a keyword nothing implements answers
+    # no for every creature, which would make this exclusion match them all.
+    noun, without_keyword = enchant_subject_keyword_exclusion(noun)
+    if without_keyword is not None and permanent.has_keyword(without_keyword):
+        return False
     matcher = _ENCHANT_TARGET_MATCHERS.get(noun)
     if matcher is None:
         # A noun nobody has read. Every one the pool prints has a row above, so
