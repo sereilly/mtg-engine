@@ -171,6 +171,13 @@
   ]
  },
  {
+  "card": "Cyclone",
+  "clause": "put a wind counter on this enchantment, then sacrifice this enchantment unless you pay {g} for each wind counter on it",
+  "ignored": [
+   "enchantment"
+  ]
+ },
+ {
   "card": "Dance of the Dead",
   "clause": "if it's on the battlefield, it loses \"enchant creature card in a graveyard\" and gains \"enchant creature put onto the battlefield with this aura.\" put enchanted creature card onto the battlefield tapped under your control and attach this aura to it. when this aura leaves the battlefield, that creature's controller sacrifices it",
   "ignored": [

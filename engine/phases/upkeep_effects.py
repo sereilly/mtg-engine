@@ -59,6 +59,27 @@ class UpkeepContext:
     enqueue_damage: Callable
 
 
+def offer_declined(human_choices: dict | None, permanent) -> bool:
+    """Whether the controller answered "no" at *permanent*'s upkeep prompt.
+
+    The prompt protocol is keyed by printed card name on **both** sides — the
+    arming side in ``upkeep_step.get_upkeep_pay_triggers`` and the reading side
+    here — so the name is read once, in one place, rather than twice per
+    handler in every handler. A seat that was never asked has not declined,
+    which is what makes the headless and AI paths pay by default.
+
+    Written as "declined" rather than "chose": the two are not complements for
+    a seat with no entry, and every caller wants the same reading — *this*
+    seat said no. `paid = not declined(...) and can_pay(...)` is then one line
+    with one meaning, where the if/else it replaces spelled the affordability
+    test twice and could drift between the branches.
+    """
+    if human_choices is None:
+        return False
+    name = permanent.card.name
+    return name in human_choices and not human_choices[name]
+
+
 UpkeepEffect = Callable[[Any, UpkeepContext], None]
 
 UPKEEP_EFFECTS: dict[tuple[str, str], UpkeepEffect] = {}
@@ -108,12 +129,9 @@ class UpkeepEffectsMixin:
         counters = add_counters(permanent, "wind", 1)
         self.log.append(f"{permanent.card.name} gains a wind counter ({counters} total)")
         cost = scaled_cost(ctx.trig.instruction, counters)
-        if human_choices is not None and permanent.card.name in human_choices:
-            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_cost(
-                controller, cost
-            )
-        else:
-            paid = self.can_pay_upkeep_cost(controller, cost)
+        paid = not offer_declined(human_choices, permanent) and self.can_pay_upkeep_cost(
+            controller, cost
+        )
         if paid:
             self.pay_upkeep_cost(controller, cost, reason=permanent.card.name)
             self.log.append(
@@ -172,12 +190,9 @@ class UpkeepEffectsMixin:
 
         purpose = PaymentPurpose(CUMULATIVE_UPKEEP, source=permanent)
         human_choices = ctx.human_choices
-        if human_choices is not None and permanent.card.name in human_choices:
-            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_cost(
-                controller, cost, purpose=purpose
-            )
-        else:
-            paid = self.can_pay_upkeep_cost(controller, cost, purpose=purpose)
+        paid = not offer_declined(human_choices, permanent) and self.can_pay_upkeep_cost(
+            controller, cost, purpose=purpose
+        )
         if paid:
             self.pay_upkeep_cost(
                 controller, cost, reason=permanent.card.name, purpose=purpose,
@@ -919,13 +934,9 @@ class UpkeepEffectsMixin:
             f"{permanent.card.name} gains a {counter} counter ({total} total)"
         )
         cost = scaled_cost(ctx.trig.instruction, total)
-        human_choices = ctx.human_choices
-        if human_choices is not None and permanent.card.name in human_choices:
-            paid = bool(human_choices[permanent.card.name]) and self.can_pay_upkeep_cost(
-                controller, cost
-            )
-        else:
-            paid = self.can_pay_upkeep_cost(controller, cost)
+        paid = not offer_declined(
+            ctx.human_choices, permanent
+        ) and self.can_pay_upkeep_cost(controller, cost)
         if paid:
             self.pay_upkeep_cost(
                 controller, cost, reason=permanent.card.name, source=permanent

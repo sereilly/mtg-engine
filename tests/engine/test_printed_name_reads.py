@@ -139,7 +139,7 @@ def _dispatch_reads(path: pathlib.Path) -> tuple[tuple[int, str], ...]:
 # fixed — is in the module docstring above.
 PRINTED_NAME_DISPATCH_BASELINE: dict[str, int] = {
     # The interactive upkeep prompt protocol: name-keyed on both sides.
-    "engine/phases/upkeep_effects.py": 22,
+    "engine/phases/upkeep_effects.py": 18,
     "engine/phases/upkeep_step.py": 7,
     # Wire/test addressing by the printed name serialization handed out.
     "engine/mixins/helpers.py": 2,
