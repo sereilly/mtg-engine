@@ -176,7 +176,7 @@ def test_no_registry_key_names_a_card_outside_the_pool(analysis):
 def test_measures_are_internally_consistent(analysis):
     """Hooked counts are subsets, so a percentage over 100 means a miscount."""
     per_set, overall, _registries, *_ = analysis
-    for scope, stats in [*per_set.items(), ("ALL", overall)]:
+    for scope, stats in [*per_set.items(), (hook_reliance.POOL_SCOPE, overall)]:
         assert stats.supported_cards <= stats.cards, scope
         assert stats.hooked_cards <= stats.supported_cards, scope
         assert stats.hooked_lines <= stats.lines, scope

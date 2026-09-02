@@ -77,4 +77,4 @@ def test_every_ratcheted_scope_is_in_the_baseline(measures):
 
 def test_grammar_executes_something(measures):
     """A zero floor everywhere would make the ratchet vacuous."""
-    assert measures["ALL"]["executed_pct"] > 0
+    assert measures[grammar_coverage.POOL_SCOPE]["executed_pct"] > 0

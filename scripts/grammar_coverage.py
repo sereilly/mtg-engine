@@ -49,7 +49,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from engine.card_loader import load_cards, manifest_measured_codes, manifest_set_paths
-from set_argument import add_set_argument, resolve_set
+from set_argument import POOL_SCOPE, add_set_argument, resolve_set
 from engine.grammar import GRAMMAR_CATEGORIES, compile_line
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -314,7 +314,7 @@ def _measures(
         for code, stats in per_set.items()
         if code not in measured_codes
     }
-    measures["ALL"] = overall.as_dict()
+    measures[POOL_SCOPE] = overall.as_dict()
     return measures
 
 
@@ -417,8 +417,8 @@ def main() -> int:
             print(f"FAIL: {OUTPUT_PATH.name} is stale — rerun the script and commit the result")
             return 1
         print(
-            f"OK: grammar parses {measures['ALL']['parsed_pct']}% of lines, "
-            f"executes {measures['ALL']['executed_pct']}%"
+            f"OK: grammar parses {measures[POOL_SCOPE]['parsed_pct']}% of lines, "
+            f"executes {measures[POOL_SCOPE]['executed_pct']}%"
         )
         return 0
 
@@ -435,9 +435,9 @@ def main() -> int:
     )
     print(f"Wrote {OUTPUT_PATH}")
     print(
-        f"parsed {measures['ALL']['parsed_pct']}% | "
-        f"lowered {measures['ALL']['lowered_pct']}% | "
-        f"executed {measures['ALL']['executed_pct']}%"
+        f"parsed {measures[POOL_SCOPE]['parsed_pct']}% | "
+        f"lowered {measures[POOL_SCOPE]['lowered_pct']}% | "
+        f"executed {measures[POOL_SCOPE]['executed_pct']}%"
     )
     return 0
 

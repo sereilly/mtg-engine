@@ -12,6 +12,52 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **149**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**16 unclaimed sentence(s) across 14 supported card(s).**
+
+- **Arcane Denial**
+  - `its controller may draw up to two cards at the beginning of the next turn's upkeep`
+- **Death Spark**
+  - `at the beginning of your upkeep, if this card is in your graveyard with a creature card directly above it, you may pay {1}. if you do, return this card to your hand`
+- **Dystopia**
+  - `at the beginning of each player's upkeep, that player sacrifices a green or white permanent of their choice`
+- **Force of Will**
+  - `you may pay 1 life and exile a blue card from your hand rather than pay this spell's mana cost`
+- **Foresight**
+  - `search your library for three cards, exile them, then shuffle`
+- **Gorilla War Cry**
+  - `all creatures gain menace until end of turn`
+- **Nature's Wrath**
+  - `whenever a player puts an island or blue permanent onto the battlefield, that player sacrifices an island or blue permanent of their choice`
+  - `whenever a player puts a swamp or black permanent onto the battlefield, that player sacrifices a swamp or black permanent of their choice`
+- **Pyrokinesis**
+  - `you may exile a red card from your hand rather than pay this spell's mana cost`
+- **Royal Decree**
+  - `whenever a swamp, mountain, black permanent, or red permanent becomes tapped, this enchantment deals 1 damage to that permanent's controller`
+- **Sol Grail**
+  - `{t}: add one mana of the chosen color`
+- **Suffocation**
+  - `cast this spell only if you were dealt damage this turn by a red instant or sorcery spell`
+  - `suffocation deals 4 damage to the controller of the last red instant or sorcery spell that dealt damage to you this turn`
+- **Surge of Strength**
+  - `as an additional cost to cast this spell, discard a red or green card`
+- **Tidal Control**
+  - `pay 2 life or {2}: counter target red or green spell. any player may activate this ability`
+- **Tornado**
+  - `{2}{g}, pay 3 life for each velocity counter on this enchantment: destroy target permanent and put a velocity counter on this enchantment. activate only once each turn`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |

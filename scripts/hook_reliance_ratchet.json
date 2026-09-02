@@ -20,7 +20,7 @@
       "hooked_cards_pct_of_supported": 2.8,
       "hooked_lines_pct_of_supported": 1.7
     },
-    "ALL": {
+    "<pool>": {
       "entries_per_100_supported_cards": 3.9,
       "hooked_cards_pct_of_supported": 3.6,
       "hooked_lines_pct_of_supported": 2.2

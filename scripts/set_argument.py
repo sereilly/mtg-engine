@@ -152,3 +152,28 @@ def resolve_set(parser: argparse.ArgumentParser, args: argparse.Namespace) -> Se
     # read one set, it was that the output never said which.
     suffix = " — measured, not shipped" if entry["code"] in manifest_measured_codes() else ""
     return SetSelection(paths=[path], label=f"{entry['name']} ({entry['code']}){suffix}")
+
+
+# ---------------------------------------------------------------------------
+# the whole-pool scope
+# ---------------------------------------------------------------------------
+
+POOL_SCOPE = "<pool>"
+"""The ratchet key for the whole-pool row, in a spelling no set code can take.
+
+`grammar_coverage.py` and `hook_reliance.py` both report a per-set row per
+manifest entry plus one aggregate row, and both keyed that aggregate `"ALL"` —
+which was safe for exactly as long as no set was *called* ALL. Alliances is,
+and the collision is silent in the direction that matters: `_measures` drops
+the measured sets, then re-adds the string as the aggregate, so the guard that
+proves a measured set is never ratcheted fails on the aggregate row wearing
+its code. Worse is what happens after promotion, where nothing fails at all —
+the per-set entry is computed and then overwritten by the aggregate, so
+Alliances' own floor and ceiling vanish from the ratchet and every guard stays
+green, because `"ALL"` really is in the baseline.
+
+Angle brackets are the point: a set code is alphanumeric, so this string
+cannot collide with one however the manifest grows. Asserted rather than
+assumed — `tests/engine/test_scope_keys.py` checks it against the live
+manifest and against the code shape, not against a list of today's sets.
+"""

@@ -67,7 +67,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import engine.card_hooks as card_hooks
-from set_argument import add_set_argument, resolve_set  # noqa: E402
+from set_argument import POOL_SCOPE, add_set_argument, resolve_set  # noqa: E402
 import engine.oracle as oracle
 from engine.card_loader import (
     load_cards,
@@ -406,7 +406,7 @@ def render(
     for code, stats in per_set.items():
         label = f"{code} *(measured)*" if code in measured_codes else code
         add(row(label, stats, bold=False))
-    add(row("ALL (shipped, deduped)", overall, bold=True))
+    add(row("Whole pool (shipped, deduped)", overall, bold=True))
     add("")
     if measured_codes:
         add(
@@ -485,7 +485,7 @@ def _measures(
         for code, stats in per_set.items()
         if code not in measured_codes
     }
-    measures["ALL"] = overall.as_dict()
+    measures[POOL_SCOPE] = overall.as_dict()
     return measures
 
 
@@ -598,9 +598,9 @@ def main() -> int:
             print(f"FAIL: {OUTPUT_PATH.name} is stale — rerun the script and commit the result")
             return 1
         print(
-            f"OK: {measures['ALL']['hooked_cards_pct_of_supported']}% of "
+            f"OK: {measures[POOL_SCOPE]['hooked_cards_pct_of_supported']}% of "
             "supported cards name-keyed, "
-            f"{measures['ALL']['entries_per_100_supported_cards']} entries per "
+            f"{measures[POOL_SCOPE]['entries_per_100_supported_cards']} entries per "
             "100 supported cards"
         )
         return 0
@@ -617,10 +617,10 @@ def main() -> int:
     )
     print(f"Wrote {OUTPUT_PATH}")
     print(
-        f"hooked cards {measures['ALL']['hooked_cards_pct_of_supported']}% | "
-        f"hooked lines {measures['ALL']['hooked_lines_pct_of_supported']}% | "
+        f"hooked cards {measures[POOL_SCOPE]['hooked_cards_pct_of_supported']}% | "
+        f"hooked lines {measures[POOL_SCOPE]['hooked_lines_pct_of_supported']}% | "
         f"entries/100 supported "
-        f"{measures['ALL']['entries_per_100_supported_cards']} "
+        f"{measures[POOL_SCOPE]['entries_per_100_supported_cards']} "
         f"(pool {overall.support_pct()}% supported)"
     )
     return 0

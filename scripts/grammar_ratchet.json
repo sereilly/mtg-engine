@@ -20,7 +20,7 @@
       "lowered_pct": 92.4,
       "parsed_pct": 92.6
     },
-    "ALL": {
+    "<pool>": {
       "executed_pct": 56.9,
       "lowered_pct": 87.9,
       "parsed_pct": 88.8
