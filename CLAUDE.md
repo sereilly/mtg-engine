@@ -88,7 +88,8 @@ All Python runs through the workspace venv (Windows / PowerShell):
 
 ```powershell
 # Tests (pytest.ini sets testpaths=tests, addopts=-q)
-python -m pytest                                  # full suite
+python -m pytest                                  # full suite (serial — the CI-comparable number)
+python -m pytest -n auto                          # full suite in parallel (~3x faster; use for the merge-gate loop)
 python -m pytest -m "not slow"                    # skip the AI-simulation batch tests
 python -m pytest tests/ui/test_web_api.py -q      # one file
 python -m pytest tests/sets/test_lea_creatures.py::test_name -q   # one test

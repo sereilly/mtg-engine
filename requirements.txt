@@ -10,3 +10,10 @@ uvicorn==0.47.0
 # httpx backs fastapi.testclient.TestClient, which the web-layer tests use.
 httpx==0.28.1
 pytest==9.0.3
+
+# Local parallel runs only: `python -m pytest -n auto` for the merge-gate loop.
+# Deliberately NOT in pytest.ini's addopts — CI's timed run must stay serial or
+# the suite-time BASELINE/BUDGET readings in .github/workflows/ci.yml lose
+# their meaning.
+pytest-xdist==3.8.0
+execnet==2.1.2
