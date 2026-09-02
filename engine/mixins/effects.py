@@ -222,7 +222,12 @@ class EffectsMixin:
             return False
         controller = self.players[controller_seat]
         return any(
-            perm.card.name in UNTAPPED_ARTIFACT_PROTECTORS and not perm.tapped
+            # The *effective* name (CR 707.2): a Clone copying Guardian Beast
+            # is named Guardian Beast and protects, and a Guardian Beast that
+            # copied something else stops. The registry stays name-keyed; which
+            # name a permanent wears is layer 1's answer, not the printer's.
+            perm.effective_card.name in UNTAPPED_ARTIFACT_PROTECTORS
+            and not perm.tapped
             for perm in self.controlled_by(controller)
         )
 

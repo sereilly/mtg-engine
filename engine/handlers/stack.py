@@ -424,7 +424,11 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                     and item.source_permanent is not None
                     and item.source_permanent is not source
                     and source is not None
-                    and item.source_permanent.card.name == source.card.name
+                    # The *effective* names (CR 707.2): a Clone copying Goblin
+                    # Artisans is a creature named Goblin Artisans, and its
+                    # ability locks the spell out like any other rival's.
+                    and item.source_permanent.effective_card.name
+                    == source.effective_card.name
                 ),
                 None,
             )

@@ -30,6 +30,7 @@ layer system from there.
 from __future__ import annotations
 
 import dataclasses
+from unittest.mock import patch
 
 import pytest
 
@@ -562,3 +563,124 @@ def test_707_10c_the_new_target_may_be_a_player_rather_than_a_permanent(set_pool
 
     assert p2.life == 17   # the original
     assert p1.life == 17   # the copy, sent back
+
+
+# ---------------------------------------------------------------------------
+# The copied name is the name every name-reader sees
+# ---------------------------------------------------------------------------
+#
+# CR 707.2 lists *name* first among the copiable values, so a permanent's name
+# is a layer-1 answer (``perm.effective_card.name``), not the printed face
+# (``perm.card.name``). Four dispatch sites asked the printed face and every
+# one missed copies in both directions: the same-name P/T count, the Guardian
+# Beast artifact-protector check, the leave-battlefield hook lookup, and
+# Goblin Artisans' "another creature named ~" rival scan. These are the four
+# fixes; ``tests/engine/test_printed_name_reads.py`` is the ratchet that keeps
+# the next one out.
+
+
+@pytest.mark.cr("604.3", "707.2")
+def test_a_clone_of_plague_rats_is_named_plague_rats_to_the_count(catalog):
+    """"…the number of creatures named Plague Rats": the Clone both *is* one
+    (its copiable name is Plague Rats) and counts the other, so each of the two
+    is a 2/2. The printed-face read left both at 1/1."""
+    rats = Permanent(card=catalog["Plague Rats"])
+    clone = Permanent(card=catalog["Clone"])
+    # Before the Game exists: construction runs state-based actions, and an
+    # un-copied Clone is a printed 0/0 (CR 704.5f would eat the fixture).
+    become_copy(clone, rats)
+    p1 = PlayerState(name="P1", battlefield=[rats, clone])
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    game._refresh_dynamic_creatures()
+
+    assert (rats.effective_power, rats.effective_toughness) == (2, 2)
+    assert (clone.effective_power, clone.effective_toughness) == (2, 2)
+
+
+@pytest.mark.cr("707.2", "613.2c")
+def test_a_clone_of_guardian_beast_protects_its_controllers_artifacts(catalog):
+    """The name-keyed protector check reads the name the permanent wears after
+    layer 1, so a Clone copying Guardian Beast protects its own controller's
+    noncreature artifacts while untapped."""
+    clone = Permanent(card=catalog["Clone"])
+    lotus = Permanent(card=catalog["Black Lotus"])
+    beast = Permanent(card=catalog["Guardian Beast"])
+    become_copy(clone, beast)  # before construction's state-based sweep
+    p1 = PlayerState(name="P1", battlefield=[clone, lotus])
+    p2 = PlayerState(name="P2", battlefield=[beast])
+    game = Game(players=[p1, p2])
+
+    assert game._is_indestructible(lotus)
+
+
+@pytest.mark.cr("707.2", "613.2c")
+def test_a_guardian_beast_that_copied_away_stops_protecting(catalog):
+    """The other direction: the printed face still says Guardian Beast, but the
+    permanent is a Grizzly Bears now and protects nothing."""
+    beast = Permanent(card=catalog["Guardian Beast"])
+    bears = Permanent(card=catalog["Grizzly Bears"])
+    lotus = Permanent(card=catalog["Black Lotus"])
+    p1 = PlayerState(name="P1", battlefield=[beast, lotus, bears])
+    game = Game(players=[p1, PlayerState(name="P2")])
+    assert game._is_indestructible(lotus), "the control: the printed Beast protects"
+
+    become_copy(beast, bears)
+
+    assert not game._is_indestructible(lotus)
+
+
+@pytest.mark.cr("707.2")
+def test_a_clones_leaving_fires_the_copied_cards_leave_hook(catalog):
+    """The Clone forested the land through Gaea's Liege's copied text, so the
+    Clone's leaving is what ends the effect. The leave-hook lookup keyed on the
+    printed face found no hook for "Clone" and left the Forest standing."""
+    liege = Permanent(card=catalog["Gaea's Liege"])
+    clone = Permanent(card=catalog["Clone"])
+    forest = Permanent(card=catalog["Forest"])  # keeps both Lieges at 1/1
+    plains = Permanent(card=catalog["Plains"])
+    become_copy(clone, liege)  # before construction's state-based sweep
+    p1 = PlayerState(name="P1", battlefield=[liege, clone, forest])
+    p2 = PlayerState(name="P2", battlefield=[plains])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+
+    game.activate_permanent_ability(
+        0, "Clone", permanent_index=1, target_player_index=1, target_permanent_index=0
+    )
+    assert plains.changed_land_types == ("forest",), game.log
+
+    p1.battlefield.remove(clone)
+    game._permanent_to_graveyard(p1, clone)
+
+    assert plains.changed_land_types == ()
+
+
+@pytest.mark.cr("707.2")
+def test_a_clone_named_goblin_artisans_locks_the_spell_out(catalog):
+    """"…that isn't the target of an ability from another creature *named*
+    Goblin Artisans": the Clone's copiable name is Goblin Artisans, so its
+    ability aiming at the spell locks the printed one out like any rival."""
+    artisans = Permanent(card=catalog["Goblin Artisans"])
+    clone = Permanent(card=catalog["Clone"])
+    p1 = PlayerState(
+        name="P1", battlefield=[artisans, clone], hand=[catalog["Ornithopter"]]
+    )
+    become_copy(clone, artisans)  # before construction's state-based sweep
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.current_turn_phase = "precombat_main"
+    game.current_step = "precombat_main"
+
+    game.queue_from_hand(0, "Ornithopter")
+    with patch("engine.handlers._common.random.random", return_value=0.99):
+        game.queue_permanent_ability(0, "Clone", permanent_index=1, target_stack_index=0)
+        game.queue_permanent_ability(
+            0, "Goblin Artisans", permanent_index=0, target_stack_index=0
+        )
+        game._settle()
+
+    assert any(
+        "already the target of another" in entry for entry in game.log
+    ), game.log

@@ -852,7 +852,12 @@ class GameHelpersMixin:
             },
         )
 
-        leave_hook = ON_LEAVE_BATTLEFIELD.get(permanent.card.name)
+        # The *effective* name (CR 707.2): the hook implements what the
+        # permanent's text said, and a copy carries the copied text — a Clone
+        # of Gaea's Liege forested lands through that text, so its leaving is
+        # what reverts them. The printed face here left every copy's linked
+        # effect standing.
+        leave_hook = ON_LEAVE_BATTLEFIELD.get(permanent.effective_card.name)
         if leave_hook is not None:
             leave_hook(self, player, permanent)
 
