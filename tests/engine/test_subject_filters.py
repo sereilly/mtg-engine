@@ -355,6 +355,8 @@ _COVERED_ELSEWHERE = {
     "not_attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "could_attack_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "blocked_by_source": "test_blocked_by_source_names_only_what_the_source_blocks",
+    "blocked_source_this_turn":
+        "test_blocked_source_this_turn_outlives_the_combat_it_names",
     "attacking_you": "test_attacking_you_is_two_questions_not_one",
     "unblocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
     "blocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
@@ -526,6 +528,46 @@ def test_blocked_by_source_names_only_what_the_source_blocks(pool):
     assert subject_matches(game, attacker, described, source=blocker)
     assert not subject_matches(game, other, described, source=blocker)
     assert not subject_matches(game, attacker, described)
+
+
+def test_blocked_source_this_turn_outlives_the_combat_it_names(pool):
+    """"all creatures **that blocked this creature this turn**" (Joven's
+    Ferrets).
+
+    The history twin of the relation above, and the difference is the whole
+    reason it is a second key: ``blocked_by_source`` reads the live combat maps
+    and this reads the record the declare-blockers step stamps on each blocker.
+    So it still answers after the combat is over -- which is when the card that
+    prints it asks, and what a matcher reading the maps would get wrong.
+
+    Two rejections beside it. A creature that was in the combat but blocked
+    nothing is not in the set, or the phrase would read "creatures in combat";
+    and with no source the answer is **no**, because a matcher that shrugged
+    would name every creature that has ever blocked, which for a tap sweep is a
+    strictly larger board than the card prints.
+    """
+    attacker = Permanent(card=pool["Grizzly Bears"])
+    blocker = Permanent(card=pool["Grizzly Bears"])
+    bystander = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", battlefield=[blocker, bystander]),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    # The combat is over: the maps have let go and only the record is left,
+    # which is exactly the moment "at end of combat" asks.
+    game.end_combat()
+
+    described = {"blocked_source_this_turn": True}
+    assert subject_matches(game, blocker, described, source=attacker)
+    assert not subject_matches(game, bystander, described, source=attacker)
+    assert not subject_matches(game, blocker, described)
 
 
 def test_tapped_to_pay_names_only_what_paid_for_this_source(pool):
