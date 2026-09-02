@@ -43,7 +43,15 @@ _STATE_ADJECTIVES = {
     "tapped": ("tapped", True),
     "untapped": ("tapped", False),
     "attacking": ("attacking", True),
+    # "target **nonattacking, nonblocking** creature" (Unlikely Alliance).
+    # CR 506.3/509.1g: attacking and blocking are states of the permanent, so
+    # their negations are the same two axes read the other way — the pair
+    # "blocked"/"unblocked" already below has exactly this shape. A word with no
+    # entry here is not an adjective at all and ends the noun phrase, which is
+    # how this card refused with "expected a subject".
+    "nonattacking": ("attacking", False),
     "blocking": ("blocking", True),
+    "nonblocking": ("blocking", False),
     "blocked": ("blocked", True),
     "unblocked": ("blocked", False),
 }

@@ -192,23 +192,33 @@ class DeclareBlockersStepMixin:
                     return False, f"{blocker.card.name} is in the wrong pile to block {attacker.card.name}"
                 assignments.setdefault(blocker_idx, []).append(attacker_idx)
 
-        # Menace (CR 702.111b): an attacker with menace can't be blocked by
-        # exactly one creature. A restriction on the declaration as a whole
+        # **How many creatures must block at once.** Menace (CR 702.111b) is
+        # the N=2 case and Gorilla Berserkers' printed "can't be blocked except
+        # by three or more creatures" is the same restriction with its number
+        # written out, so one check reads both through
+        # :meth:`_minimum_blockers`. A restriction on the declaration as a whole
         # rather than on any single blocker pair (CR 509.1c), so it is checked
-        # over the finished assignment — none or two-plus blockers are fine,
-        # one is not. A Camouflage resolution is not a declaration (the piles
-        # were matched at random), so there the illegal block simply does not
-        # happen rather than invalidating the whole resolution.
+        # over the finished assignment — none, or at least N, is fine; anything
+        # between is not. A Camouflage resolution is not a declaration (the
+        # piles were matched at random), so there the illegal block simply does
+        # not happen rather than invalidating the whole resolution.
         menace_blocker_counts: dict[int, int] = {}
         for assigned_attackers in assignments.values():
             for attacker_idx in assigned_attackers:
                 menace_blocker_counts[attacker_idx] = menace_blocker_counts.get(attacker_idx, 0) + 1
         for attacker_idx, count in menace_blocker_counts.items():
-            if count != 1:
-                continue
             attacker = resolved_attackers[attacker_idx]
-            if not self._has_keyword(attacker, "menace"):
+            minimum = self._minimum_blockers(attacker)
+            if count == 0 or count >= minimum:
                 continue
+            # Menace names itself where the keyword is what set the bar: the
+            # player is owed the printed reason their declaration bounced, and
+            # "fewer than 2" is not what their card says.
+            reason = (
+                "has menace and can't be blocked by only one creature"
+                if minimum == 2 and self._has_keyword(attacker, "menace")
+                else f"can't be blocked by fewer than {minimum} creatures"
+            )
             if _camouflage_resolution:
                 for blocker_idx in list(assignments):
                     remaining = [a for a in assignments[blocker_idx] if a != attacker_idx]
@@ -217,12 +227,10 @@ class DeclareBlockersStepMixin:
                     else:
                         del assignments[blocker_idx]
                 self.log.append(
-                    f"{attacker.card.name} has menace; a lone creature cannot block it"
+                    f"{attacker.card.name} {reason}; those blocks do not happen"
                 )
                 continue
-            return False, (
-                f"{attacker.card.name} has menace and can't be blocked by only one creature"
-            )
+            return False, f"{attacker.card.name} {reason}"
 
         # Lure enforcement: every creature that can block a Lure attacker (aimed at
         # this defender) must do so. Skipped for Camouflage resolutions: blocks then
@@ -578,6 +586,29 @@ class DeclareBlockersStepMixin:
         self.log.append("Attacker labeled each creature left/right")
         return True, "attacker piles assigned"
 
+    def _minimum_blockers(self, attacker: Permanent) -> int:
+        """How many creatures must block *attacker* at once, or 1 if any may.
+
+        CR 509.1b: every restriction applies, so the answer is the **largest**
+        minimum any of them imposes — a creature with menace and Gorilla
+        Berserkers' line needs three blockers, not two, and taking the first
+        match would have made the second restriction free.
+
+        Menace is read as a keyword (CR 702.111a defines it as exactly this
+        sentence with N=2) and the printed template as a restriction, because
+        that is how each is written on a card; both answer the same question,
+        and one caller asking it once is what stops the two disagreeing.
+        """
+        minimum = 2 if self._has_keyword(attacker, "menace") else 1
+        for restriction in (
+            *compile_card_oracle(attacker.effective_card).instructions,
+            *attached_combat_restrictions(attacker),
+        ):
+            if restriction.kind != "cant_be_blocked_by_fewer_than":
+                continue
+            minimum = max(minimum, int(restriction.payload.get("count", 1)))
+        return minimum
+
     def _can_block_attacker(self, blocker: Permanent, attacker: Permanent) -> bool:
         if attacker.metadata.get("cant_be_blocked_until_eot"):
             return False
@@ -876,6 +907,15 @@ class DeclareBlockersStepMixin:
         ``declare_blockers``, exactly as ``_attack_mana_costs_of`` is on the
         other side: a cost checked by one rule and paid by another is how a
         declaration gets accepted and then left unpaid.
+
+        **Two channels, because either end of the pair may print the cost.**
+        Hipparion prints it on the blocker; Awesome Presence prints it on an
+        Aura on the *attacker* ("…unless defending player pays {3} for each
+        creature they control that's blocking it"), which is the same CR 509.1d
+        cost owed by the same seat. The "for each" needs no multiplier here for
+        Koskun Falls' reason on the attack side: this is asked once per pair and
+        ``_block_declaration_mana_plan`` sums the pairs, so a per-pair {3} is
+        already {3} per blocking creature.
         """
         costs: list[dict[str, int]] = []
         for instruction in compile_card_oracle(blocker.effective_card).instructions:
@@ -886,6 +926,18 @@ class DeclareBlockersStepMixin:
             cost = {
                 symbol: int(amount)
                 for symbol, amount in (instruction.payload.get("mana") or {}).items()
+            }
+            if cost:
+                costs.append(cost)
+        for restriction in (
+            *compile_card_oracle(attacker.effective_card).instructions,
+            *attached_combat_restrictions(attacker),
+        ):
+            if restriction.kind != "cant_be_blocked_unless_pay":
+                continue
+            cost = {
+                symbol: int(amount)
+                for symbol, amount in (restriction.payload.get("mana") or {}).items()
             }
             if cost:
                 costs.append(cost)

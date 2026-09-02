@@ -325,6 +325,45 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "cant_be_blocked_by",
     ),
     (
+        # "Enchanted creature can't be blocked unless defending player pays {3}
+        # **for each creature they control that's blocking it**." (Awesome
+        # Presence, through the Aura subject rewrite.) CR 509.1b's restriction
+        # with CR 509.1d's cost hung off it — the mirror of Brainwash's
+        # ``cant_attack_unless_pay`` above, printed about the attacker and owed
+        # by the *defender*.
+        #
+        # **The multiplier needs no payload**, for Koskun Falls' reason two
+        # rows up: ``_block_mana_costs_of`` is asked once per (blocker,
+        # attacker) pair and ``_block_declaration_mana_plan`` sums the pairs, so
+        # a per-pair {3} already *is* "{3} for each creature blocking it". A
+        # payload carrying the multiplication would be a second way to say what
+        # the summing says, free to disagree with it.
+        re.compile(
+            r"^this creature can't be blocked unless defending player pays "
+            r"(?P<block_mana>(?:\{[^}]+\})+) for each creature they control "
+            r"that's blocking it$"
+        ),
+        "cant_be_blocked_unless_pay",
+    ),
+    (
+        # "…can't be blocked except by **three or more creatures**" (Gorilla
+        # Berserkers). Menace with the number printed out (CR 702.111a is
+        # exactly the N=2 case of this sentence), so it is a *count* rather
+        # than a noun union — which is why it is read here, above the union row
+        # whose `.+` would otherwise swallow "three or more creatures" and hand
+        # it to a noun parser that cannot read it.
+        #
+        # The number is payload, as every number in this file is, and the
+        # enforcement site takes the largest minimum any restriction imposes:
+        # CR 509.1b's restrictions all apply, so a creature with menace *and*
+        # this line needs three blockers, not two.
+        re.compile(
+            r"^this creature can't be blocked except by "
+            r"(?P<count>\w+) or more creatures$"
+        ),
+        "cant_be_blocked_by_fewer_than",
+    ),
+    (
         # "…can't be blocked **except by** Walls and/or creatures with flying"
         # (Elven Riders, Evil Eye of Orms-by-Gore). The inverse of the rows
         # above: those name what may not block, this names the only things that

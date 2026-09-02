@@ -559,8 +559,16 @@ class ObjectFilter:
         # sweep took the opponent's Auras too.
         if self.owner is not None:
             payload["owner"] = self.owner
-        if self.attacking:
+        if self.attacking is True:
             payload["attacking_only"] = True
+        elif self.attacking is False:
+            # "target **nonattacking**, nonblocking creature" (Unlikely
+            # Alliance). Both directions, like ``blocked`` below — the field has
+            # been ``bool | None`` all along and only the True half had a
+            # payload form, which is the silent-drop the ``blocked`` comment
+            # names: a card printing the negative would have been narrowed by
+            # nobody and pumped anything on the board.
+            payload["not_attacking"] = True
         if self.blocked_by_source:
             payload["blocked_by_source"] = True
         if self.blocked_source_this_turn:
@@ -575,8 +583,10 @@ class ObjectFilter:
             payload["attacking_you"] = True
         if self.was_dealt_damage_this_turn:
             payload["dealt_damage_this_turn"] = True
-        if self.blocking:
+        if self.blocking is True:
             payload["blocking_only"] = True
+        elif self.blocking is False:
+            payload["not_blocking"] = True
         # "…by **unblocked** creatures" (Kjeldoran Royal Guard, Veteran
         # Bodyguard) / "**blocked** creature" (Sorrow's Path). CR 509.1h makes
         # both a state of the attacking permanent itself, so both are payload

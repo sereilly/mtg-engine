@@ -32,13 +32,28 @@ def player_loses_game(game: Game, instruction: OracleInstruction, context: Oracl
 @effect_handler("player_gets_poison_counters")
 def player_gets_poison_counters(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…that player gets a poison counter." (Pit Scorpion, Serpent Generator's
-    tokens.) The player is the one the damage trigger recorded
-    (``defending_player_index``, frozen by ``damage_events._announce``), and the
-    counter lands on ``PlayerState.poison_counters`` — the field the CR 704.5c /
-    122.1f state-based sweep in ``mixins/game_ending.py`` already reads, so ten
-    or more loses the game with no code here."""
+    tokens.) The player is the one the firing trigger recorded, and the counter
+    lands on ``PlayerState.poison_counters`` — the field the CR 704.5c / 122.1f
+    state-based sweep in ``mixins/game_ending.py`` already reads, so ten or more
+    loses the game with no code here.
+
+    **Two events freeze two different seats**, and the ``player`` payload key
+    says which one this sentence named (``lowering/_events.frozen_seat_record``).
+    A damage event freezes the damaged player (``defending_player_index``,
+    stamped by ``damage_events._announce``); an attack freezes CR 506.2's
+    defender (``trigger_defending_player_index``, stamped by the combat fire
+    sites) — Swamp Mosquito, whose trigger deals no damage at all, so the
+    damage key is simply absent for it. Reading one key for both words would
+    have poisoned nobody on every card of the second kind.
+    """
     amount = max(0, int(instruction.payload.get("amount", 1)))
-    idx = (context.trigger_context or {}).get("defending_player_index")
+    record = str(instruction.payload.get("player") or "damaged_player")
+    key = (
+        "trigger_defending_player_index"
+        if record == "defending_player"
+        else "defending_player_index"
+    )
+    idx = (context.trigger_context or {}).get(key)
     if amount <= 0 or idx is None or not (0 <= idx < len(game.players)):
         return True, "resolved"
     player = game.players[idx]
@@ -173,6 +188,18 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
         seat = (context.trigger_context or {}).get("event_subject_controller")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             game.log.append(f"{card.name}: no recorded controller, no life lost")
+            return True, "resolved"
+        victims = [game.players[seat]]
+    elif recipient == "defending_player":
+        # "… and **defending player** loses 2 life." (Keeper of Tresserhorn.)
+        # CR 506.2's seat, read from the key the combat fire sites stamp rather
+        # than from the board: this resolves in a priority window after the
+        # declaration, and the attacker can have left combat by then — a board
+        # read would then answer "nobody is being attacked" and the loss would
+        # land on whichever player the resolution happened to be carrying.
+        seat = (context.trigger_context or {}).get("trigger_defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{card.name}: no recorded defending player, no life lost")
             return True, "resolved"
         victims = [game.players[seat]]
     elif recipient == "last_target_controller":

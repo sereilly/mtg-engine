@@ -381,6 +381,22 @@ class InABlockSinceLastUpkeep:
 
 
 @dataclass(frozen=True)
+class AttackedOrBlockedThisCombat:
+    """"if this creature **attacked or blocked this combat**" (Clockwork Beast,
+    Avian, Steed and Swarm; Kjeldoran Home Guard).
+
+    :class:`InABlockSinceLastUpkeep`'s sibling over the narrowest window there
+    is, and a history for the same reason: by the time an end-of-combat trigger
+    resolves, this combat's record has been swept, so the answer is frozen when
+    the trigger is announced (CR 603.10) and read back from the trigger's
+    context. Both halves of the "or" are one condition, as they are there —
+    every printed sentence joins them, and the two records the fire site reads
+    are the attack map and the block mark.
+    """
+    subject: "TargetSpec"
+
+
+@dataclass(frozen=True)
 class PaidCost:
     cost: Cost | None = None
 
@@ -837,6 +853,7 @@ Condition = Union[
     DealtDamageThisTurn, SubjectCharacteristicIs, BlockersOfBoundCreature,
     SourceExiledWithCounter, SourceCounterCount, SourceAbilityActivations,
     OnBattlefield,
+    AttackedOrBlockedThisCombat,
     SelfInGraveyardWithCardsAbove,
     TurnIsYours,
 ]

@@ -21,6 +21,7 @@ from ._common import (
     _restrictions_beyond,
 )
 from ._events import (
+    _DEFENDING_PLAYER_EVENTS,
     _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
     COUNTED_NUMBER,
@@ -493,6 +494,20 @@ def _lower_lose_life(
         # "Each player loses 2 life." (Bad Deal) — caster included, CR 120.3
         # plain, same handler with one more recipient key.
         payload["recipient"] = "each_player"
+        return (OracleInstruction("target_loses_life", "", payload),)
+    # "… and **defending player** loses 2 life." (Keeper of Tresserhorn,
+    # Lim-Dûl's Paladin.) CR 506.2's seat, frozen into the trigger's context by
+    # the combat fire site — the same gate the discard and the offer already put
+    # in front of the phrase, and for the same reason: under any other event
+    # nothing recorded a defender, and a life loss aimed at nobody is an effect
+    # that compiles clean and silently does not happen.
+    if node.player.kind == "defending_player":
+        if event not in _DEFENDING_PLAYER_EVENTS:
+            raise LoweringError(
+                '"defending player" names a seat this event did not record',
+                node=node,
+            )
+        payload["recipient"] = "defending_player"
         return (OracleInstruction("target_loses_life", "", payload),)
     raise LoweringError(f"unsupported life-loss target {node.player.kind!r}", node=node)
 

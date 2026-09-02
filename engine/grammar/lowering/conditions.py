@@ -543,6 +543,11 @@ def _lower_condition(
             "count": condition.count,
             "comparison": condition.comparison,
         }
+    if isinstance(condition, ast.AttackedOrBlockedThisCombat):
+        # No payload for the sibling's reason: the sentence names no side of
+        # the combat and no other window, and the object is the ability's own
+        # source. The evaluator reads the answer the fire site froze.
+        return {"kind": "attacked_or_blocked_this_combat"}
     if isinstance(condition, ast.InABlockSinceLastUpkeep):
         # No payload: the sentence names no seat, no side of the block and no
         # other window. "Your" is the ability's controller, which the evaluator

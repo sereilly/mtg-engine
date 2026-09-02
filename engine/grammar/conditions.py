@@ -710,6 +710,23 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         return ast.InABlockSinceLastUpkeep(_SOURCE_SPEC)
     stream.reset(block_mark)
 
+    # "if this creature **attacked or blocked this combat**" (the four Clockwork
+    # creatures, Kjeldoran Home Guard). The same two-sided history over the
+    # narrowest window there is. Read as a condition rather than left to the
+    # text probe the end-of-combat step used to carry: with no production here
+    # the whole line compiled as a *static* line, which is a printed trigger
+    # nothing announces — fine while one card's counter removal was hard-coded
+    # beside the sweep, and no use at all to the next card that prints it.
+    #
+    # Every word required. "Attacked this combat" alone is a narrower claim and
+    # "this turn" a wider window, and both are different sentences.
+    combat_mark = stream.mark()
+    if accept_source_reference(stream) and stream.accept_phrase(
+        "attacked", "or", "blocked", "this", "combat"
+    ):
+        return ast.AttackedOrBlockedThisCombat(_SOURCE_SPEC)
+    stream.reset(combat_mark)
+
     damage_mark = stream.mark()
     if accept_source_reference(stream) and stream.accept_phrase("dealt", "damage", "to"):
         for phrase, recipient in _DAMAGE_HISTORY_RECIPIENTS:

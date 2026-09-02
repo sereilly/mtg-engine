@@ -642,15 +642,20 @@ def choose_combat_blockers(
         return {}
 
     legal_pairs: list[tuple[int, int, float]] = []
-    menace_attackers: set[int] = set()
+    # How many blockers each attacker needs at once, asked of the engine rather
+    # than of the keyword: menace is the N=2 case of a printed template the
+    # declaration gate reads through one helper (Gorilla Berserkers' "except by
+    # three or more creatures"), and an AI that knew only the keyword would keep
+    # submitting a declaration the gate bounces — which is a seat that declares
+    # no blockers at all for the rest of the combat.
+    minimum_blockers: dict[int, int] = {}
     for blocker_idx in available_blockers:
         blocker = defender.battlefield[blocker_idx]
         for attacker_idx in attackers:
             if attacker_idx < 0 or attacker_idx >= len(attacker_player.battlefield):
                 continue
             attacker = attacker_player.battlefield[attacker_idx]
-            if game._has_keyword(attacker, "menace"):
-                menace_attackers.add(attacker_idx)
+            minimum_blockers[attacker_idx] = game._minimum_blockers(attacker)
             if not game._can_block_attacker(blocker, attacker):
                 continue
             legal_pairs.append((blocker_idx, attacker_idx, _score_block_pair(blocker, attacker)))
@@ -729,16 +734,18 @@ def choose_combat_blockers(
                 assignments[blocker_idx] = attacker_idx
                 break
 
-    # Menace (CR 702.111b): declare_blockers refuses an assignment that puts
-    # exactly one blocker on a menace attacker, so the AI declines those blocks
-    # rather than submitting a declaration that bounces. Ganging up is a
-    # valuation question for another day; not blocking is always legal.
+    # CR 509.1b's minimum-blocker restrictions (menace, and Gorilla Berserkers'
+    # printed spelling of the same thing): declare_blockers refuses an
+    # assignment that puts fewer than N blockers on such an attacker, so the AI
+    # declines those blocks rather than submitting a declaration that bounces.
+    # Ganging up is a valuation question for another day; not blocking is always
+    # legal.
     menace_counts: dict[int, int] = {}
     for assigned in assignments.values():
         for attacker_idx in assigned if isinstance(assigned, list) else [assigned]:
             menace_counts[attacker_idx] = menace_counts.get(attacker_idx, 0) + 1
     for attacker_idx, count in menace_counts.items():
-        if count != 1 or attacker_idx not in menace_attackers:
+        if count >= minimum_blockers.get(attacker_idx, 1):
             continue
         for blocker_idx in list(assignments):
             assigned = assignments[blocker_idx]

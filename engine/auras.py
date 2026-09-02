@@ -1691,6 +1691,15 @@ ENFORCED_ATTACHED_COMBAT_RESTRICTIONS = frozenset({
     # blocker's own compiled program in one loop, so the two spellings of the
     # restriction cannot come to be enforced differently.
     "cant_block_subject",
+    # "Enchanted creature can't be blocked unless defending player pays {3} for
+    # each creature they control that's blocking it." (Awesome Presence.)
+    # CR 509.1d's cost owed by the **defender**, the mirror of
+    # ``cant_attack_unless_pay`` above. Its reader is
+    # ``phases/declare_blockers_step._block_mana_costs_of``, which asks this
+    # channel about the *attacker* alongside the blocker's own program, so the
+    # gate in ``_can_block_attacker`` and the charge in ``declare_blockers``
+    # share one reading and a block cannot be accepted and left unpaid.
+    "cant_be_blocked_unless_pay",
 })
 
 #: "Enchanted creature" / "equipped creature" in the subject position, with the

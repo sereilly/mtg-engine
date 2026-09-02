@@ -937,6 +937,16 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     if payload.get("blocking_only") and not state_holds(perm, "blocking"):
         return False
 
+    # "target **nonattacking, nonblocking** creature" (Unlikely Alliance). The
+    # same two readings negated, and asked through the same accessors so the
+    # positive and negative halves of one word cannot come to disagree. A
+    # creature in neither role is what the card names — not "any creature",
+    # which is what these keys being unanswered would have meant.
+    if payload.get("not_attacking") and perm.attacking:
+        return False
+    if payload.get("not_blocking") and state_holds(perm, "blocking"):
+        return False
+
     # "…by **unblocked** creatures" / "**blocked** creature". CR 509.1h's pair,
     # asked through the one reading above so a redirect's source class, a
     # target restriction and the picker cannot disagree about the word.

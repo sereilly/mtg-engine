@@ -237,3 +237,278 @@ def test_w1g5_nether_shadows_deeper_condition_still_reads(set_pool):
     spec = {"card_type": "creature", "count": 3, "op": "ge", "directly": False}
     assert satisfies_above(pile, 0, spec)
     assert not satisfies_above([pile[0], bear, forest], 0, spec)
+
+
+# --- W2G1: combat triggers and restrictions ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+from engine.named_counters import counters_on
+from engine.oracle import compile_card_oracle
+
+
+def _w2g1_attack_unblocked(set_pool, name):
+    """*name* attacking P2 with nothing declared to block it.
+
+    The trigger every card in this block hangs off is announced by the
+    declare-blockers step (CR 509.1h), so the board has to reach that step: a
+    compiled program alone cannot show that the seat the effect names is the
+    seat the fire site froze.
+    """
+    subject = Permanent(card=set_pool("ALL")[name])
+    p1 = PlayerState(name="P1", battlefield=[subject], life=20)
+    p2 = PlayerState(name="P2", life=20)
+    game = Game(players=[p1, p2])
+    game._settle()
+    subject.metadata["summoning_sickness_turn"] = -99
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    game._fire_unblocked_attack_triggers()
+    while game.stack:
+        game.resolve_top_of_stack()
+    return game, subject
+
+
+def test_keeper_of_tresserhorn_drains_the_seat_the_combat_froze(set_pool):
+    """"Whenever this creature attacks and isn't blocked, it assigns no combat
+    damage this turn and **defending player loses 2 life**."
+
+    The seat is CR 506.2's, read from the key the combat fire site stamps
+    (``trigger_defending_player_index``) rather than from the board: this
+    resolves in a priority window after the declaration, and an attacker that
+    left combat in between would leave a board read naming nobody.
+    """
+    game, keeper = _w2g1_attack_unblocked(set_pool, "Keeper of Tresserhorn")
+
+    assert game.players[1].life == 18
+    assert game.players[0].life == 20, "the drain is not the controller's"
+    # Both halves of one sentence: the life loss is what the card trades its
+    # combat damage for, so a version that only drained would be a better card.
+    assert keeper.metadata.get("assigns_no_combat_damage_until_eot") is True
+
+
+def test_lim_duls_paladin_drains_four_and_keeps_its_other_three_lines(set_pool):
+    """The same trigger with a different number, on a card whose other three
+    lines already compiled. The number is payload, so nothing about the second
+    card is a second implementation."""
+    game, paladin = _w2g1_attack_unblocked(set_pool, "Lim-Dûl's Paladin")
+
+    assert game.players[1].life == 16
+    assert paladin.metadata.get("assigns_no_combat_damage_until_eot") is True
+    program = compile_card_oracle(set_pool("ALL")["Lim-Dûl's Paladin"])
+    assert program.supported, program.reason
+    assert all(trig.supported for trig in program.triggered_abilities)
+    assert "trample" in program.static_lines
+
+
+def test_swamp_mosquito_poisons_the_defender_not_a_damaged_player(set_pool):
+    """"... defending player gets a poison counter."
+
+    The counter reaches ``PlayerState.poison_counters`` through the same
+    handler Pit Scorpion uses, and the difference is which *record* names the
+    seat: a damage event freezes the damaged player and this one freezes
+    CR 506.2's defender. The Mosquito's trigger deals no damage at all, so
+    reading the damage key for both words would have poisoned nobody.
+    """
+    game, _ = _w2g1_attack_unblocked(set_pool, "Swamp Mosquito")
+
+    assert game.players[1].poison_counters == 1
+    assert game.players[0].poison_counters == 0
+    assert game.players[1].life == 20, "a poison counter is not damage"
+
+
+def test_gorilla_berserkers_needs_three_blockers_at_once(set_pool):
+    """"This creature can't be blocked except by three or more creatures."
+
+    Menace (CR 702.111a) is the N=2 case of this sentence, so the declaration
+    gate asks one helper for the largest minimum any restriction imposes
+    (CR 509.1b). Zero blockers stays legal - the restriction says how many must
+    block together, not that any must.
+    """
+    pool = set_pool("ALL")
+
+    def board(n):
+        ape = Permanent(card=pool["Gorilla Berserkers"])
+        bears = [Permanent(card=pool["Elvish Ranger"]) for _ in range(3)]
+        game = Game(players=[
+            PlayerState(name="P1", battlefield=[ape], life=20),
+            PlayerState(name="P2", battlefield=bears, life=20),
+        ])
+        game._settle()
+        ape.metadata["summoning_sickness_turn"] = -99
+        game.active_player_index = 0
+        game._set_phase_and_step("combat", "declare_attackers")
+        assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+        game._set_phase_and_step("combat", "declare_blockers")
+        return game.declare_blockers(1, {i: 0 for i in range(n)})
+
+    assert not board(1)[0]
+    assert not board(2)[0]
+    assert board(3)[0]
+    assert board(0)[0], "declining to block is always legal"
+
+
+def test_gorilla_berserkers_keeps_the_keywords_printed_beside_the_semicolon(set_pool):
+    """"Trample; rampage 2 (...)" is one printed line carrying two keywords.
+
+    The oracle keyword classifier normalises the semicolon to a comma and reads
+    both, which is why this card never lost trample or rampage - the refusal
+    census reports the *grammar* refusing the line, and the grammar is not the
+    reader for a keyword line.
+    """
+    program = compile_card_oracle(set_pool("ALL")["Gorilla Berserkers"])
+
+    assert program.supported, program.reason
+    assert "trample, rampage 2" in program.static_lines
+    (rampage,) = [
+        trig for trig in program.triggered_abilities
+        if trig.condition.kind == "creature_becomes_blocked"
+    ]
+    assert rampage.instruction.payload == {"amount": 2}
+
+
+def test_whip_vine_holds_only_the_flier_it_is_blocking(set_pool):
+    """"{T}: Tap target creature with flying **blocked by this creature**. **That
+    creature** doesn't untap ... for as long as this creature remains tapped."
+
+    Two readings the parser lacked: the passive voice of "target creature it's
+    blocking" (one relation, CR 509.1a, printed from either end), and the
+    demonstrative back-reference the linked untap lock accepted only as "it".
+    """
+    from engine.legality import usable_activated_abilities
+
+    pool = set_pool("ALL")
+    vine = Permanent(card=pool["Whip Vine"])
+    flier = Permanent(card=pool["Storm Crow"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[flier], life=20),
+        PlayerState(name="P2", battlefield=[vine], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._settle()
+    for perm in (vine, flier):
+        perm.metadata["summoning_sickness_turn"] = -99
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert game.declare_blockers(1, {0: 0})[0]
+
+    vine_idx = game.players[1].battlefield.index(vine)
+    spec = game.activation_target_spec(1, vine_idx, 0)
+    assert [t["name"] for t in spec["valid_targets"]] == [flier.card.name]
+
+    ability = usable_activated_abilities(compile_card_oracle(vine.effective_card))[0]
+    assert game.activation_target_refusal(
+        1, vine, ability, target_permanent_ids=[flier.permanent_id]
+    ) is None
+
+    assert game.activate_permanent_ability(
+        1, "Whip Vine", permanent_index=vine_idx,
+        target_player_index=0, target_permanent_index=0,
+        target_permanent_ids=[flier.permanent_id],
+    ).supported
+    while game.stack:
+        game.resolve_top_of_stack()
+
+    assert flier.tapped and vine.tapped
+    game.resolve_untap_step(0)
+    assert flier.tapped, "held while the Vine remains tapped (CR 611.2a)"
+    game.become_untapped(vine)
+    game.resolve_untap_step(0)
+    assert not flier.tapped, "the lock ends the moment the Vine untaps"
+
+
+def test_whip_vine_refuses_a_creature_it_is_not_blocking(set_pool):
+    """The narrowing enforced, which is the half a parsed-and-dropped rider
+    would lose: the ability would tap the source for nothing and hold down a
+    creature the card never names."""
+    from engine.legality import usable_activated_abilities
+
+    pool = set_pool("ALL")
+    vine = Permanent(card=pool["Whip Vine"])
+    bystander = Permanent(card=pool["Elvish Ranger"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bystander], life=20),
+        PlayerState(name="P2", battlefield=[vine], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._settle()
+
+    ability = usable_activated_abilities(compile_card_oracle(vine.effective_card))[0]
+    assert game.activation_target_refusal(
+        1, vine, ability, target_permanent_ids=[bystander.permanent_id]
+    ) is not None
+    assert not vine.tapped, "refused before the {T} cost is paid (CR 602.2b)"
+
+
+def _w2g1_home_guard(set_pool, mode):
+    """Kjeldoran Home Guard through one combat as an attacker, a blocker, or
+    neither."""
+    pool = set_pool("ALL")
+    guard = Permanent(card=pool["Kjeldoran Home Guard"])
+    other = Permanent(card=pool["Elvish Ranger"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[guard], life=20),
+        PlayerState(name="P2", battlefield=[other], life=20),
+    ])
+    game._settle()
+    for perm in (guard, other):
+        perm.metadata["summoning_sickness_turn"] = -99
+    if mode == "attack":
+        game.active_player_index = 0
+        game._set_phase_and_step("combat", "declare_attackers")
+        assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+        game._set_phase_and_step("combat", "declare_blockers")
+        game.declare_blockers(1, {})
+    elif mode == "block":
+        game.active_player_index = 1
+        game._set_phase_and_step("combat", "declare_attackers")
+        assert game.declare_attackers(1, [0], defending_player_index=0)[0]
+        game._set_phase_and_step("combat", "declare_blockers")
+        assert game.declare_blockers(0, {0: 0})[0]
+    else:
+        game.active_player_index = 0
+        game._set_phase_and_step("combat", "declare_attackers")
+        game._set_phase_and_step("combat", "declare_blockers")
+    game.end_combat()
+    while game.stack:
+        game.resolve_top_of_stack()
+    return game, guard
+
+
+@pytest.mark.parametrize("mode", ["attack", "block"])
+def test_kjeldoran_home_guard_pays_its_toll_from_either_side_of_combat(
+    set_pool, mode
+):
+    """"At end of combat, **if this creature attacked or blocked this combat**,
+    put a -0/-1 counter on this creature and create a 0/1 white Deserter."
+
+    Both halves of CR 509.1a's relation, and the blocking half is the one a
+    board read gets wrong: ``end_combat`` sweeps the combat record before the
+    priority window that resolves this batch, so the answer is frozen when the
+    trigger is announced (CR 603.10).
+    """
+    game, guard = _w2g1_home_guard(set_pool, mode)
+
+    assert counters_on(guard, "-0/-1") == 1
+    assert guard.effective_toughness == 5, "1/6 printed, one -0/-1 counter"
+    tokens = [
+        p.card.name for p in game.controlled_by(game.players[0]) if p is not guard
+    ]
+    assert tokens == ["Deserter Token"]
+
+
+def test_kjeldoran_home_guard_does_nothing_if_it_stayed_home(set_pool):
+    """The intervening-if actually gating (CR 603.4). Read as always true, the
+    card would shed a counter at the end of every combat of every turn."""
+    game, guard = _w2g1_home_guard(set_pool, "idle")
+
+    assert counters_on(guard, "-0/-1") == 0
+    assert guard.effective_toughness == 6
+    assert list(game.controlled_by(game.players[0])) == [guard]
+# --- end W2G1 ---

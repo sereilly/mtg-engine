@@ -58,6 +58,39 @@ _DEFENDING_PLAYER_EVENTS: frozenset[str] = frozenset({
     "attacks_unblocked",
 })
 
+#: Which *frozen seat* a printed player word names, per event that froze one:
+#: the events that froze it, and the record key the handler reads it back from.
+#:
+#: The two rows are not two spellings of one thing. A damage event freezes the
+#: player the damage went to; a combat one freezes CR 506.2's defender, and on a
+#: trampling attacker those are the same seat only by coincidence. So the word
+#: decides which record is asked, and a word whose event froze neither has no
+#: seat at all — which is the answer this table exists to give, because an
+#: effect aimed at a seat nobody recorded compiles clean and then lands on
+#: whichever player the resolution happened to be carrying.
+#:
+#: A table beside the two sets it reads rather than an if-chain beside one
+#: caller, for this module's own reason: two effect families ask it — a poison
+#: counter (``lowering/counters.py``) and a life loss (``lowering/game.py``).
+_FROZEN_SEAT_WORDS: dict[str, tuple[frozenset[str], str]] = {
+    "that_player": (_DAMAGED_PLAYER_EVENTS, "damaged_player"),
+    "defending_player": (_DEFENDING_PLAYER_EVENTS, "defending_player"),
+}
+
+
+def frozen_seat_record(player_kind: str, event: str | None) -> str | None:
+    """The record key holding the seat *player_kind* names under *event*.
+
+    ``None`` when the firing event froze no seat for that word — the caller
+    refuses the line there rather than emitting an instruction that would read
+    a missing key and act on a default.
+    """
+    entry = _FROZEN_SEAT_WORDS.get(player_kind)
+    if entry is None or event is None or event not in entry[0]:
+        return None
+    return entry[1]
+
+
 
 # Trigger events after which "that player" names the controller of the object
 # the event was about, frozen into the trigger's context by the fire site.

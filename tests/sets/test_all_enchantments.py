@@ -497,3 +497,109 @@ def test_thought_lash_prevention_ability_charges_its_library_cost(set_pool):
     assert len(me.library) == 3 and len(me.exile) == 1
     game.resolve_top_of_stack()
     assert me.damage_prevention_pool == 1
+
+
+# --- W2G1: combat triggers and restrictions ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.auras import attach_aura
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _w2g1_presence_board(set_pool, blockers, lands):
+    """An Elvish Ranger wearing Awesome Presence, attacking a defender holding
+    *blockers* creatures and *lands* untapped mana lands."""
+    pool = set_pool("ALL")
+    attacker = Permanent(card=pool["Elvish Ranger"])
+    aura = Permanent(card=pool["Awesome Presence"])
+    defenders = [Permanent(card=pool["Elvish Ranger"]) for _ in range(blockers)]
+    forests = [Permanent(card=pool["School of the Unseen"]) for _ in range(lands)]
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker, aura], life=20),
+        PlayerState(name="P2", battlefield=defenders + forests, life=20),
+    ])
+    attach_aura(aura, attacker)
+    game._settle()
+    for perm in [attacker] + defenders:
+        perm.metadata["summoning_sickness_turn"] = -99
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    ok, message = game.declare_blockers(1, {i: 0 for i in range(blockers)})
+    return game, forests, ok, message
+
+
+def test_awesome_presence_is_supported_through_the_aura_subject_rewrite(set_pool):
+    """"Enchanted creature can't be blocked unless defending player pays {3} for
+    each creature they control that's blocking it."
+
+    One ``combat_restrictions.py`` row, reached the way Brainwash's
+    pay-to-attack twin is: ``auras.aura_combat_restriction`` rewrites the
+    printed subject and asks the same table, so the Aura and a creature
+    printing the sentence about itself are one template.
+    """
+    from engine.auras import aura_combat_restriction
+
+    card = set_pool("ALL")["Awesome Presence"]
+    assert compile_card_oracle(card).supported
+
+    restriction = aura_combat_restriction(card.oracle_text.splitlines()[1])
+    assert restriction is not None
+    assert restriction.kind == "cant_be_blocked_unless_pay"
+    assert restriction.payload["mana"] == {"generic": 3}
+
+
+@pytest.mark.parametrize(
+    "blockers,lands,expected", [(1, 3, 3), (2, 6, 6)],
+    ids=["one blocker costs {3}", "two blockers cost {6}"],
+)
+def test_awesome_presence_charges_three_per_blocker(
+    set_pool, blockers, lands, expected
+):
+    """"...**for each creature they control that's blocking it**."
+
+    No multiplier rides the payload: ``_block_mana_costs_of`` is asked once per
+    (blocker, attacker) pair and ``_block_declaration_mana_plan`` sums the
+    pairs (CR 509.1d), so a per-pair {3} already is {3} per blocking creature.
+    Koskun Falls records the same argument on the attack side.
+    """
+    game, lands_on_board, ok, message = _w2g1_presence_board(
+        set_pool, blockers, lands
+    )
+
+    assert ok, message
+    assert sum(1 for land in lands_on_board if land.tapped) == expected
+
+
+@pytest.mark.parametrize(
+    "blockers,lands", [(1, 2), (2, 5)],
+    ids=["one blocker, {2} available", "two blockers, {5} available"],
+)
+def test_awesome_presence_refuses_a_declaration_that_cannot_be_paid(
+    set_pool, blockers, lands
+):
+    """CR 509.1b and 509.1f: partial payments are not allowed, so a defender who
+    cannot cover the total has made an illegal declaration.
+
+    **Nothing is rolled back, because nothing has happened yet** - CR 509.1g
+    makes the chosen creatures blockers only *after* the cost is paid, which is
+    why this needs no pending choice and no undo of a declared block.
+    """
+    game, lands_on_board, ok, _ = _w2g1_presence_board(set_pool, blockers, lands)
+
+    assert not ok
+    assert not any(land.tapped for land in lands_on_board), "nothing spent"
+
+
+def test_awesome_presence_leaves_a_declined_block_free(set_pool):
+    """CR 509.1c: the defender is never *required* to pay, because they are
+    never required to block. Declaring none costs nothing."""
+    game, lands_on_board, ok, message = _w2g1_presence_board(set_pool, 0, 3)
+
+    assert ok, message
+    assert not any(land.tapped for land in lands_on_board)
+# --- end W2G1 ---

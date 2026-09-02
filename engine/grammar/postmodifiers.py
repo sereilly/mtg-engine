@@ -848,20 +848,33 @@ def _parse_postmodifiers(
                     continue
             stream.reset(probe)
             break
+        # "…**blocking or [being] blocked by this creature**" (Sentinel, the
+        # noun-phrase half of Abu Ja'far's sentence, Sworn Defender) is the
+        # two-sided relation to the ability's own source (CR 509) — never a
+        # payload key: the lowering written for it carries the relation itself
+        # and every other one refuses it. "Being" is English, not a second
+        # relation, so it is an optional word rather than a second branch.
         if stream.at_word("blocking") and stream.peek_word(1) == "or":
-            # "…**blocking or blocked by this creature**" (Sentinel, and the
-            # noun-phrase half of Abu Ja'far's sentence). The object is in
-            # combat with the ability's own source (CR 509) — a relation, not a
-            # characteristic, so the field is never emitted as a payload key;
-            # the lowering written for it carries the relation itself and every
-            # other one refuses the phrase. Both words are required: bare
-            # "blocking" is the state adjective the premodifier run already
-            # reads, and "blocked by" without an "or" would be a different
-            # (one-sided) relation this does not implement.
             probe = stream.mark()
             stream.advance()
-            if stream.accept_phrase("or", "blocked", "by") and accept_source_reference(stream):
-                d.in_combat_with_source = True
+            if stream.accept_word("or"):
+                stream.accept_word("being")
+                if stream.accept_phrase("blocked", "by") and accept_source_reference(stream):
+                    d.in_combat_with_source = True
+                    continue
+            stream.reset(probe)
+            break
+        # "…with flying **blocked by this creature**" (Whip Vine): the passive
+        # voice of "target creature **it's blocking**" (Goblin Snowman) above,
+        # one relation printed from either end, so it sets that same field
+        # rather than a second one every matcher must remember to test. The
+        # "that …" clauses further down read a *history* off a record; both of
+        # these read the live combat fact.
+        if stream.at_word("blocked") and stream.peek_word(1) == "by":
+            probe = stream.mark()
+            stream.advance(2)
+            if accept_source_reference(stream):
+                d.blocked_by_source = True
                 continue
             stream.reset(probe)
             break

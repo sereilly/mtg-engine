@@ -33,7 +33,7 @@ from ._events import (
     CHOSEN_PERMANENT,
     OTHER_CHOSEN_PERMANENT,
     EVENT_SUBJECT_CONTROLLER,
-    _DAMAGED_PLAYER_EVENTS,
+    frozen_seat_record,
     _EVENT_SUBJECT_OBJECTS,
     _RECORDED_PERMANENTS,
 )
@@ -934,10 +934,11 @@ def _lower_player_gets_counters(
     (``PlayerState.poison_counters``, read by the CR 704.5c / 122.1f sweep in
     ``mixins/game_ending.py``), so any other kind refuses by name rather than
     compiling onto a field nobody sweeps. "That player" is a reading of the
-    trigger that fired — the damaged player's seat, frozen into the trigger's
-    context by ``damage_events._announce`` — so under any other event the words
-    name a player nobody recorded, and the sentence refuses the same way the
-    on-damage discard does.
+    trigger that fired — the damaged player's seat, frozen by
+    ``damage_events._announce`` — and "**defending player**" (Swamp Mosquito) is
+    CR 506.2's, frozen by the combat fire site. ``_events.frozen_seat_record``
+    says which record a printed word names, so under an event that froze neither
+    the words name a player nobody recorded and the sentence refuses.
     """
     if node.counter != "poison":
         raise LoweringError(
@@ -946,16 +947,16 @@ def _lower_player_gets_counters(
     amount = _amount_payload(node.count)
     if not isinstance(amount, int) or amount <= 0:
         raise LoweringError("a player-counter count is a fixed number", node=node)
-    if node.player.kind != "that_player" or event not in _DAMAGED_PLAYER_EVENTS:
+    who = frozen_seat_record(node.player.kind, event)
+    if who is None:
         raise LoweringError(
-            "the poison handler reads the damaged player out of a damage "
-            "trigger's context; no other player reference has one",
+            "a player counter lands on the seat the firing event froze, and "
+            "this player reference has none under this event",
             node=node,
         )
     return (
         OracleInstruction(
-            "player_gets_poison_counters", "",
-            {"amount": amount, "player": "damaged_player"},
+            "player_gets_poison_counters", "", {"amount": amount, "player": who},
         ),
     )
 
