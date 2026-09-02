@@ -121,6 +121,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # on the source, so the same category: what differs is which permanent
     # holds it, not what the sentence does.
     "animate_target_until_eot": "pump",
+    # "Target land becomes a 3/3 artifact creature that's still a land. (This
+    # effect lasts indefinitely.)" (Mishra's Groundbreaker.) The same record on
+    # the same permanent with no end to it (CR 611.2b), so the same category:
+    # what differs is the duration, not what the sentence does.
+    "animate_target_indefinitely": "pump",
     # "Forests you control become 2/3 creatures until end of turn." (Thelonite
     # Druid.) The same record again, over every permanent a noun phrase
     # describes rather than over one the sentence named — so the same category
@@ -739,6 +744,13 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # inline by Game.tap_land_for_mana, not through EFFECT_HANDLERS on the
     # stack, because CR 605.4a says a triggered mana ability never uses it.
     "add_mana_for_tapped_land": "mana",
+    # "Whenever a land is tapped for mana, return it to its owner's hand."
+    # (Storm Cauldron.) The "zones" family rather than "mana": the trigger
+    # fires on a mana event and the effect is a zone change. Resolved inline at
+    # the same seam as its neighbour above and for the same reason — a land is
+    # tapped for mana part-way through paying a cost, before the spell it pays
+    # for is on the stack, so there is no stack to enqueue onto.
+    "return_tapped_land_to_hand": "zones",
     # "If target Plains is tapped for mana, it produces colorless mana instead
     # of white mana." (Quarum Trench Gnomes.) A CR 611.2 continuous effect on
     # one land rather than a production of mana — the same category because

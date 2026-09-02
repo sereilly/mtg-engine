@@ -540,6 +540,19 @@ class TurnManagementMixin:
                     trig.instruction, player_index, land, mana_symbol, perm
                 )
                 continue
+            # "Whenever a land is tapped for mana, return it to its owner's
+            # hand." (Storm Cauldron.) Resolved inline beside the mana above,
+            # and for Manabarbs' reason rather than CR 605.4a's: this is not a
+            # mana ability and by the rules would use the stack, but the land is
+            # tapped part-way through paying a cost (CR 601.2g) and enqueuing
+            # here would order the trigger *under* the spell being paid for.
+            #
+            # The mana has already been added, which is what the rules say
+            # happens: the mana ability resolved (CR 605.3b) and the land
+            # leaving afterwards takes nothing back.
+            if trig.instruction.kind == "return_tapped_land_to_hand":
+                self._return_tapped_land_to_hand(land, perm)
+                continue
             # The compiled payload names its victim ``event_subject_player`` —
             # `land_tapped_for_mana` is in `_EVENT_SUBJECT_PLAYERS` on the
             # strength of this site — and the seat the event is about is
@@ -588,6 +601,31 @@ class TurnManagementMixin:
             )
 
         return True
+
+    def _return_tapped_land_to_hand(self, land, source) -> None:
+        """Storm Cauldron: the land that was just tapped for mana goes home.
+
+        Guarded on the land still being on the battlefield, because two copies
+        of this card are two triggers over one event: the second one finds a
+        permanent that has already left, and bouncing it again would put a
+        second copy of the card into its owner's hand out of nowhere.
+
+        Through the two seams rather than a list rebuild:
+        ``remove_from_battlefield`` is the one leave-the-battlefield transition,
+        and ``put_card_into_hand`` is CR 903.9b's fire site as well as this one.
+        """
+        if not self.is_on_battlefield(land):
+            return
+        owner_index = self.owner_index_of(land)
+        if owner_index is None:
+            return
+        owner = self.players[owner_index]
+        self.remove_from_battlefield(land)
+        self.put_card_into_hand(owner, land.card, from_battlefield=land)
+        self.log.append(
+            f"{land.card.name} was returned to {owner.name}'s hand "
+            f"({source.card.name})"
+        )
 
     def _add_triggered_land_mana(
         self,

@@ -923,14 +923,32 @@ def _parse_become_creature(
         if not keywords:
             stream.reset(mark)
             return None
-    # The addition clause, in either of the two places the pool prints it:
+    # The addition clause, in any of the three places the pool prints it:
     # before the duration ("…in addition to its other types until end of turn",
-    # Riddleform) or as its own sentence after it ("…until end of turn. It's
-    # still a land.", Mishra's Factory). One of the two is **required** — it is
-    # the difference between animating the permanent and replacing what it is,
-    # and a production that let it be absent would also let it be deleted.
+    # Riddleform), as a relative clause on the noun itself ("…a 3/3 artifact
+    # creature **that's still a land**", Mishra's Groundbreaker) or as its own
+    # sentence after the duration ("…until end of turn. It's still a land.",
+    # Mishra's Factory). One of the three is **required** — it is the difference
+    # between animating the permanent and replacing what it is, and a production
+    # that let it be absent would also let it be deleted.
     in_addition = stream.accept_phrase("in", "addition", "to", "its", "other", "types")
-    if not stream.accept_phrase("until", "end", "of", "turn"):
+    if not in_addition:
+        relative = stream.mark()
+        if stream.accept_phrase("that", "'s", "still", "a"):
+            kept = stream.peek_word()
+            if kept is not None and _singular_type(kept) in CARD_TYPES:
+                stream.advance()
+                in_addition = True
+            else:
+                stream.reset(relative)
+    # **Read, not required.** A sentence printing no duration is CR 611.2b's
+    # default — the animation lasts indefinitely (Mishra's Groundbreaker) — and
+    # the two lower to different instruction kinds, so the absence is carried
+    # rather than defaulted. It is only optional once the addition clause has
+    # already been consumed: the third spelling puts that clause *after* the
+    # duration, so it has no sentence to find without one.
+    until_eot = stream.accept_phrase("until", "end", "of", "turn")
+    if not until_eot and not in_addition:
         stream.reset(mark)
         return None
     if not in_addition:
@@ -961,7 +979,7 @@ def _parse_become_creature(
         stream.advance()
     return ast.BecomeCreature(
         subject, power.value, toughness.value, tuple(subtypes), tuple(keywords),
-        tuple(card_types),
+        tuple(card_types), until_eot,
     )
 
 

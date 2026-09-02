@@ -296,6 +296,42 @@ def _lower_return_to_zone(
         and subject.quantifier in ("that", "it")
         and (subject.filter.is_card or subject.quantifier == "it")
     ):
+        # "Whenever a land is tapped for mana, **return it** to its owner's
+        # hand." (Storm Cauldron.) The pronoun names a *permanent* — the land
+        # still on the battlefield, not a card in a graveyard — so it is its own
+        # instruction kind rather than a variant of the bound-card return below:
+        # what the two do with what they find could not be more different, one
+        # moving a card between hidden zones and one taking a permanent off the
+        # battlefield.
+        #
+        # Admitted under ``land_tapped_for_mana`` alone, for the reason the
+        # bound-card set exists: that is the one event whose fire site is
+        # holding the permanent when it executes the instruction
+        # (``mixins/turn_management.tap_land_for_mana``, inline as CR 605.4a
+        # requires of its triggered-mana siblings). Under any other condition
+        # the word "it" names a permanent nobody recorded.
+        if event == "land_tapped_for_mana":
+            if node.to.name != "hand" or node.to.owner is None:
+                raise LoweringError(
+                    "the tapped land returns to a hand alone", node=node
+                )
+            if node.to.owner.kind != "owner":
+                raise LoweringError(
+                    f"no tapped-land return reaches {node.to.owner.kind!r}'s hand",
+                    node=node,
+                )
+            # "Return **it**" re-states the set the trigger already narrowed
+            # (the condition's own "a land"), so the filter is not a further
+            # restriction to honour — but any *other* field is, and a field
+            # dropped here is a bounce wider than the card prints.
+            leftovers = _restrictions_beyond(
+                subject.filter, frozenset({"is_card", "zone", "card_types", "controller"})
+            )
+            if leftovers:
+                raise LoweringError(
+                    f"no tapped-land return honours {sorted(leftovers)}", node=node
+                )
+            return (OracleInstruction("return_tapped_land_to_hand", "", {}),)
         # Which events record the object the pronoun names. Both fire sites
         # stamp ``dead_card``; under anything else the words name a card nobody
         # wrote down, and the honest answer is a refusal — the handler would

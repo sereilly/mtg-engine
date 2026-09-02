@@ -172,23 +172,32 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             if not another:
                 stream.accept_word("a", "an")
             # "you control **two or more** nonland, nontoken permanents…"
-            # (Chrome Replicator). Read where it is printed, in front of the
-            # noun phrase, and only when "or more" follows the number: a bare
-            # number here would be a different condition ("exactly two"), and no
-            # card in the pool prints one, so guessing which it meant is the
-            # kind of silent widening a threshold must never take.
-            at_least: int | None = None
+            # (Chrome Replicator) / "you control **three or fewer** lands"
+            # (Sheltered Valley). Read where it is printed, in front of the
+            # noun phrase, and only when "or more"/"or fewer" follows the
+            # number: a bare number here would be a different condition
+            # ("exactly two"), and no card in the pool prints one, so guessing
+            # which it meant is the kind of silent widening a threshold must
+            # never take.
+            #
+            # The two directions are one production because they are one
+            # sentence with one word changed, and the word rides the comparison
+            # rather than the kind — the evaluator (`handlers/control_flow.
+            # _compare_count`) already answers "le" and always did; nothing had
+            # ever printed the word that reaches it.
+            bound: tuple[str, int] | None = None
             if not negated and not another:
                 count_mark = stream.mark()
                 try:
                     amount = parse_amount(stream)
                 except GrammarError:
                     amount = None
-                if (
-                    isinstance(amount, ast.Fixed)
-                    and stream.accept_phrase("or", "more")
+                if isinstance(amount, ast.Fixed) and stream.accept_phrase("or", "more"):
+                    bound = ("ge", amount.value)
+                elif isinstance(amount, ast.Fixed) and stream.accept_phrase(
+                    "or", "fewer"
                 ):
-                    at_least = amount.value
+                    bound = ("le", amount.value)
                 else:
                     stream.reset(count_mark)
             filt = parse_object_filter(stream)
@@ -203,8 +212,8 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             comparison = None
             if negated:
                 comparison = ast.Comparison("eq", ast.Fixed(0))
-            elif at_least is not None:
-                comparison = ast.Comparison("ge", ast.Fixed(at_least))
+            elif bound is not None:
+                comparison = ast.Comparison(bound[0], ast.Fixed(bound[1]))
             first = ast.Controls(player, filt, comparison, shared_name)
 
             # "you control an Urza's Mine **and** an Urza's Tower" (the
@@ -219,7 +228,7 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             # distributed over each conjunct to stay faithful, and no card in
             # the pool prints one — so it refuses to widen instead of guessing
             # which of the two readings was meant.
-            if not negated and at_least is None and not shared_name:
+            if not negated and bound is None and not shared_name:
                 parts = [first]
                 while True:
                     conj = stream.mark()

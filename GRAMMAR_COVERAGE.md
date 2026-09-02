@@ -30,7 +30,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | HML | 115 | 189 | 92.6% | 92.6% | 64.0% | 93 |
 | 5ED | 434 | 631 | 92.6% | 92.4% | 60.1% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 54.2% | 48.2% | 33.5% | 66 |
+| ALL *(measured)* | 144 | 251 | 57.8% | 52.2% | 34.7% | 68 |
 | **All (shipped)** | **3439** | **5016** | **88.8%** | **87.9%** | **56.9%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -43,8 +43,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 295 | 140 | expected a subject |  |
-| 142 | 61 | unrecognized effect verb |  |
+| 288 | 133 | expected a subject |  |
+| 141 | 60 | unrecognized effect verb |  |
 | 80 | 43 | unconsumed text |  |
 | 39 | 39 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -62,9 +62,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 5 | 3 | expected 'a' |  |
 | 4 | 1 | expected 'that' |  |
-| 4 | 2 | expected a colour or a creature body after 'becomes' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
+| 3 | 1 | expected a colour or a creature body after 'becomes' |  |
 | 3 | 3 | expected 'counter or counters' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | unrecognized "can't be" restriction |  |
@@ -2558,6 +2558,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}.`
   - `{1}: This land becomes a 2/2 Assembly-Worker artifact creature until end of turn. It's still a land.`
   - `{T}: Target Assembly-Worker creature gets +1/+1 until end of turn.`
+- **Mishra's Groundbreaker**
+  - `{T}, Sacrifice this artifact: Target land becomes a 3/3 artifact creature that's still a land. (This effect lasts indefinitely.)`
 - **Mishra's War Machine**
   - `At the beginning of your upkeep, this creature deals 3 damage to you unless you discard a card. If it deals damage to you this way, tap it.`
   - `At the beginning of your upkeep, this creature deals 3 damage to you unless you discard a card. If it deals damage to you this way, tap it.`
@@ -3426,6 +3428,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Shelkin Brownie**
   - `{T}: Target creature loses all "bands with other" abilities until end of turn.`
 - **Sheltered Valley**
+  - `At the beginning of your upkeep, if you control three or fewer lands, you gain 1 life.`
   - `{T}: Add {C}.`
 - **Shield Sphere**
   - `Whenever this creature blocks, put a -0/-1 counter on it.`
@@ -3643,6 +3646,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: Enchanted creature gets +1/+0 until end of turn.`
 - **Storm Caller**
   - `When this creature enters, it deals 2 damage to each opponent.`
+- **Storm Cauldron**
+  - `Whenever a land is tapped for mana, return it to its owner's hand.`
 - **Storm Seeker**
   - `Storm Seeker deals damage to target player equal to the number of cards in that player's hand.`
 - **Storm Shaman**

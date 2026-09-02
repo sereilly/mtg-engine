@@ -42,6 +42,7 @@ def _lower_become_creature(
     (`engine/land_animation.py`), not a record stamped once.
     """
     if _is_source(node.subject):
+        _refuse_indefinite(node, "a permanent animating itself")
         return (
             OracleInstruction(
                 "animate_self_until_eot", "", _animation_payload(node)
@@ -71,6 +72,7 @@ def _lower_become_creature(
             raise LoweringError(
                 "the animation sweep cannot test this noun phrase", node=node
             )
+        _refuse_indefinite(node, "an animation sweep")
         payload = _animation_payload(node)
         payload.update(described)
         return (OracleInstruction("animate_matching_until_eot", "", payload),)
@@ -82,7 +84,35 @@ def _lower_become_creature(
     payload = _animation_payload(node)
     payload.update(_filter_payload(node.subject.filter))
     _describe_targets(payload, node.subject)
+    # "Target land becomes a 3/3 artifact creature that's still a land. (This
+    # effect lasts indefinitely.)" (Mishra's Groundbreaker.) CR 611.2a: a
+    # continuous effect from a resolving spell or ability with no stated
+    # duration lasts as long as the game does, so the *record* has to outlive
+    # the cleanup sweep that ends every other animation. Its own kind rather
+    # than a flag on the one above, for the reason the three kinds above are
+    # three: what differs is which record is written, and a kind whose name says
+    # "until_eot" writing a record nothing sweeps would be a lie a reader has no
+    # way to see.
+    if not node.until_end_of_turn:
+        return (OracleInstruction("animate_target_indefinitely", "", payload),)
     return (OracleInstruction("animate_target_until_eot", "", payload),)
+
+
+def _refuse_indefinite(node: ast.BecomeCreature, what: str) -> None:
+    """Refuse an animation with no printed duration that no handler can hold.
+
+    Only the *targeted* animation has an indefinite record behind it
+    (``animate_target_indefinitely``); the source and sweep kinds write the
+    until-end-of-turn record the cleanup step clears, so admitting one here
+    would compile a permanent animation and end it at cleanup — a card doing
+    strictly less than it prints, silently. No card in the pool prints either
+    shape; the refusal names which piece is missing so the one that does gets a
+    round rather than a bug.
+    """
+    if not node.until_end_of_turn:
+        raise LoweringError(
+            f"no handler holds an indefinite animation for {what}", node=node
+        )
 
 
 def _animation_payload(node: ast.BecomeCreature) -> dict[str, object]:

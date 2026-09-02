@@ -1543,9 +1543,18 @@ class EffectsMixin:
         if not (0 <= player_index < len(self.players)):
             return []
         found = []
-        for permanent in self.controlled_by(player_index):
+        # **Every** battlefield, not this seat's. "Each player may play an
+        # additional land during each of their turns" (Storm Cauldron) names a
+        # seat the permanent's controller is only one of, and the seat the
+        # sentence names is what `LandPlayAllowance.every_player` carries — so
+        # an opponent's Storm Cauldron grants this seat its land drop and
+        # scanning one battlefield would have made it a card that only ever
+        # helped whoever cast it.
+        for permanent in self.all_permanents():
             allowance = land_play_allowance_for(permanent.effective_card.oracle_text)
-            if allowance is not None:
+            if allowance is None:
+                continue
+            if allowance.every_player or self.controls(player_index, permanent):
                 found.append((permanent, allowance))
         return found
 
