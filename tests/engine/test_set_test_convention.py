@@ -19,6 +19,7 @@ from engine.card_loader import (
     manifest_set_codes,
     manifest_set_path,
 )
+from tests.source_index import source_text, source_tree
 
 REPO = Path(__file__).resolve().parents[2]
 TESTS = REPO / "tests"
@@ -41,7 +42,7 @@ EXPECTED_FIXTURES = {
 
 
 def _fixture_names(path: Path) -> set[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = source_tree(path)
     return {
         node.name
         for node in tree.body
@@ -90,7 +91,7 @@ def test_no_test_spells_out_a_card_filename():
     offenders = [
         f"{path.relative_to(REPO)}:{i}"
         for path in TESTS.rglob("*.py")
-        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        for i, line in enumerate(source_text(path).splitlines(), 1)
         if pattern.search(line)
     ]
     assert not offenders, (
@@ -130,9 +131,9 @@ def test_per_set_files_stay_readable():
     9,402 lines, which is the reason this convention exists."""
     limit = 2_600
     too_big = {
-        path.name: len(path.read_text(encoding="utf-8").splitlines())
+        path.name: len(source_text(path).splitlines())
         for path in (TESTS / "sets").glob("test_*.py")
-        if len(path.read_text(encoding="utf-8").splitlines()) > limit
+        if len(source_text(path).splitlines()) > limit
     }
     assert not too_big, (
         f"per-set test files over {limit} lines: {too_big}. "

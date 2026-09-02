@@ -31,6 +31,7 @@ import pathlib
 import re
 
 import pytest
+from tests.source_index import source_text, source_tree
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "engine"
@@ -85,7 +86,7 @@ def _hits(pattern: re.Pattern, skip: set[str]) -> list[tuple[str, int, str]]:
     for path in _engine_files():
         if path.name in skip:
             continue
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        for number, line in enumerate(source_text(path).splitlines(), 1):
             if pattern.search(line):
                 found.append((str(path.relative_to(ENGINE)), number, line.strip()))
     return found
@@ -139,7 +140,7 @@ def _named_in_code(path: pathlib.Path) -> set[str]:
     module's whole documentation is about the channels it must not touch, and a
     plain substring scan would forbid explaining why.
     """
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = source_tree(path)
     prose = {id(node.value) for node in ast.walk(tree) if isinstance(node, ast.Expr)}
     names: set[str] = set()
     for node in ast.walk(tree):
@@ -176,7 +177,7 @@ def test_no_acknowledgement_has_gone_stale():
         if path is None:
             stale.append(f"{name} no longer exists")
             continue
-        text = path.read_text(encoding="utf-8")
+        text = source_text(path)
         keys = [key for keys in STORAGE_OWNERS.values() for key in keys]
         wanted = [*(f'"{key}"' for key in keys), *ACCESSOR_READERS]
         if not any(token in text for token in wanted):

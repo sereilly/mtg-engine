@@ -43,7 +43,7 @@ ALLOWED = {
 
 def _draw_calls(path: Path) -> list[tuple[str, int]]:
     """``(enclosing function, line)`` for each ``<something>.draw(...)`` call."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = source_tree(path)
     found: list[tuple[str, int]] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -92,6 +92,7 @@ import pytest  # noqa: E402
 from engine import Game  # noqa: E402
 from engine.card_loader import load_cards, manifest_set_paths  # noqa: E402
 from engine.models import Permanent, PlayerState  # noqa: E402
+from tests.source_index import source_tree
 
 
 @pytest.fixture(scope="module")

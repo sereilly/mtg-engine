@@ -27,6 +27,7 @@ import ast
 import pathlib
 
 import pytest
+from tests.source_index import source_tree
 
 ENGINE = pathlib.Path(__file__).resolve().parents[2] / "engine"
 
@@ -76,7 +77,7 @@ def _offending_calls() -> list[tuple[str, int, str, str]]:
     """
     offenders: list[tuple[str, int, str, str]] = []
     for path in sorted(ENGINE.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = source_tree(path)
         for function in ast.walk(tree):
             if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
@@ -126,7 +127,7 @@ def test_the_exemptions_still_name_real_functions():
     suite."""
     present = set()
     for path in sorted(ENGINE.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = source_tree(path)
         for function in ast.walk(tree):
             if isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 present.add((_module_key(path), function.name))
@@ -142,7 +143,7 @@ def test_the_graveyard_exit_goes_through_the_one_transition():
     count and every CR 614 replacement along with this one."""
     offenders = []
     for path in sorted(ENGINE.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = source_tree(path)
         for function in ast.walk(tree):
             if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue

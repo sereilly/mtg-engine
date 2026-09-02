@@ -37,6 +37,7 @@ import pathlib
 from pathlib import Path
 
 import pytest
+from tests.source_index import source_text, source_tree
 
 GRAMMAR = Path(__file__).resolve().parent.parent.parent / "engine" / "grammar"
 
@@ -428,7 +429,7 @@ def _imports(path: Path) -> list[tuple[int, str, bool]]:
     than by the layer order — conflating the two is what made the first version
     of this guard fail on every legitimate `from ._common import`.
     """
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = source_tree(path)
     inside_package = path.parent != GRAMMAR
     out: list[tuple[int, str, bool]] = []
     for node in ast.walk(tree):
@@ -582,7 +583,7 @@ def test_the_front_door_exports_every_family_name(package):
     `__all__` had stopped naming three of its own node types.
     """
     init = GRAMMAR / package / "__init__.py"
-    tree = ast.parse(init.read_text(encoding="utf-8"))
+    tree = source_tree(init)
     imported: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
@@ -613,9 +614,9 @@ def test_no_module_is_back_to_its_old_size():
     absorbing new work and something is being appended to whatever was easiest.
     """
     oversized = {
-        str(path.relative_to(GRAMMAR)): len(path.read_text(encoding="utf-8").splitlines())
+        str(path.relative_to(GRAMMAR)): len(source_text(path).splitlines())
         for path in GRAMMAR.rglob("*.py")
-        if len(path.read_text(encoding="utf-8").splitlines()) > 1000
+        if len(source_text(path).splitlines()) > 1000
     }
     assert not oversized, (
         f"grammar modules back over 1,000 lines: {oversized}. Split along the "
@@ -779,7 +780,7 @@ def test_no_module_defines_the_same_name_twice():
     for root in ("engine", "tests", "web", "scripts"):
         for path in sorted(pathlib.Path(root).rglob("*.py")):
             try:
-                tree = ast.parse(path.read_text(encoding="utf-8"))
+                tree = source_tree(path)
             except SyntaxError:  # not ours to police here
                 continue
             names = [

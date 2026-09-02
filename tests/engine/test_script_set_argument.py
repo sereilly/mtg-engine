@@ -40,6 +40,7 @@ import run_duel  # noqa: E402
 import set_argument  # noqa: E402
 import simulate_ai_games  # noqa: E402
 import support_report  # noqa: E402
+from tests.source_index import source_text, source_tree
 
 # (script module, the extra arguments its parser requires). Every script that
 # takes a set is listed: the wiring is the thing under test, and a script that
@@ -199,7 +200,7 @@ def test_no_script_spells_out_a_card_filename():
     offenders = [
         f"{path.relative_to(REPO)}:{i}"
         for path in SCRIPTS.glob("*.py")
-        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        for i, line in enumerate(source_text(path).splitlines(), 1)
         if literal_card_file.search(line)
     ]
     assert not offenders, (
@@ -250,7 +251,7 @@ def test_the_manifest_is_parsed_in_one_place():
             relative = path.relative_to(REPO)
             if Path(*relative.parts) in _MANIFEST_READERS:
                 continue
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = source_tree(path)
             offenders += [
                 f"{relative.as_posix()}:{node.lineno}"
                 for node in ast.walk(tree)

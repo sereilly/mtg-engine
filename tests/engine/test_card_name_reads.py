@@ -36,6 +36,7 @@ import pathlib
 import pytest
 
 from engine.card_loader import load_cards, manifest_set_paths
+from tests.source_index import source_text, source_tree
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCANNED = (ROOT / "engine",)
@@ -99,7 +100,7 @@ def _enclosing_functions(tree: ast.Module) -> dict[int, str]:
 @functools.lru_cache(maxsize=None)
 def _name_dispatch_sites(path: pathlib.Path) -> tuple[tuple[int, str, str, str], ...]:
     """``(line, function, card name, source)`` for each name-keyed decision."""
-    source = path.read_text(encoding="utf-8")
+    source = source_text(path)
     tree = ast.parse(source)
     lines = source.splitlines()
     owners = _enclosing_functions(tree)
@@ -163,7 +164,7 @@ def test_card_hooks_still_keys_on_names():
     would be protecting nothing and every other file's compliance would be
     accidental."""
     hooks = ROOT / HOOKS
-    tree = ast.parse(hooks.read_text(encoding="utf-8"))
+    tree = source_tree(hooks)
     keys = {
         node.value
         for node in ast.walk(tree)

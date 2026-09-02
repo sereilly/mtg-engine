@@ -24,6 +24,7 @@ import pytest
 
 from engine.delayed_triggers import (DELAYED_EVENTS, DelayedTrigger,
                                      expire_delayed_triggers)
+from tests.source_index import source_text
 
 ENGINE = Path(__file__).resolve().parent.parent.parent / "engine"
 DECLARING = {"delayed_triggers.py"}
@@ -31,7 +32,7 @@ DECLARING = {"delayed_triggers.py"}
 
 def _sources() -> list[tuple[str, str]]:
     return [
-        (str(path.relative_to(ENGINE)), path.read_text(encoding="utf-8"))
+        (str(path.relative_to(ENGINE)), source_text(path))
         for path in ENGINE.rglob("*.py")
         if path.name not in DECLARING
     ]

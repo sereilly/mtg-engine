@@ -16,6 +16,7 @@ import pathlib
 
 from engine.game import Game
 from engine.models import PlayerState
+from tests.source_index import source_text, source_tree
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -74,12 +75,12 @@ def test_no_engine_module_filters_a_hand_by_identity():
     """
     offenders: list[str] = []
     for path in sorted((ROOT / "engine").rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = source_tree(path)
         for node in ast.walk(tree):
             if not isinstance(node, ast.ListComp):
                 continue
             source = ast.get_source_segment(
-                path.read_text(encoding="utf-8"), node
+                source_text(path), node
             ) or ""
             flat = " ".join(source.split())
             if ".hand" in flat and " is not " in flat:

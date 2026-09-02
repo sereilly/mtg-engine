@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from tests.source_index import source_text
 
 REPO = Path(__file__).resolve().parents[2]
 ENGINE = REPO / "engine"
@@ -45,7 +46,7 @@ def _offenders(sources: dict[str, str]) -> list[str]:
 
 def _engine_sources() -> dict[str, str]:
     return {
-        str(path.relative_to(REPO)): path.read_text(encoding="utf-8")
+        str(path.relative_to(REPO)): source_text(path)
         for path in ENGINE.rglob("*.py")
     }
 

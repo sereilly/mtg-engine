@@ -30,6 +30,7 @@ import re
 import tokenize
 
 import pytest
+from tests.source_index import source_text
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "engine"
@@ -97,7 +98,7 @@ def _hits(pattern: re.Pattern, skip: set[str]) -> list[tuple[str, int, str]]:
     for path in _engine_files():
         if path.name in skip:
             continue
-        source = path.read_text(encoding="utf-8")
+        source = source_text(path)
         raw = source.splitlines()
         for number, line in enumerate(_code_only(source), 1):
             if pattern.search(line):
@@ -155,7 +156,7 @@ def test_no_acknowledgement_has_gone_stale():
         if path is None:
             stale.append(f"{name} no longer exists")
             continue
-        text = path.read_text(encoding="utf-8")
+        text = source_text(path)
         keys = [key for keys in STORAGE_OWNERS.values() for key in keys]
         wanted = [*(f'"{key}"' for key in keys), *ACCESSOR_READERS]
         if not any(token in text for token in wanted):

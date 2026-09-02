@@ -36,6 +36,7 @@ import pytest
 
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.oracle import compile_card_oracle
+from tests.source_index import source_tree
 
 ENGINE = pathlib.Path(__file__).resolve().parents[2] / "engine"
 
@@ -78,7 +79,7 @@ def _trigger_event_call(node: ast.Call) -> bool:
 def _mentioned_kinds() -> set[str]:
     mentioned: set[str] = set()
     for path in sorted(ENGINE.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        tree = source_tree(path)
         skip = _docstring_nodes(tree)
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign) and any(

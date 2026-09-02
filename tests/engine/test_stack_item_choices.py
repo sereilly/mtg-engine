@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from engine.game_types import CHOICE_KEYS
+from tests.source_index import source_text
 
 _ROOT = Path(__file__).resolve().parents[2]
 _SOURCES = sorted(
@@ -38,7 +39,7 @@ def _keys_in_use() -> dict[str, set[str]]:
     """Every ``choices`` key each source file reads or writes."""
     found: dict[str, set[str]] = {}
     for path in _SOURCES:
-        text = path.read_text(encoding="utf-8")
+        text = source_text(path)
         if "choices" not in text:
             continue
         keys = set(_SUBSCRIPT.findall(text))

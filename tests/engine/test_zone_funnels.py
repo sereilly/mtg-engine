@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from tests.source_index import source_tree
 
 ENGINE = Path(__file__).resolve().parents[2] / "engine"
 
@@ -43,7 +44,7 @@ ALLOWED = {
 def _zone_writes(path: Path) -> list[tuple[str, int]]:
     """``(enclosing function, line)`` for each append/insert onto a hand or
     library receiver."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = source_tree(path)
     found: list[tuple[str, int]] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):

@@ -33,6 +33,7 @@ import re
 from pathlib import Path
 
 import pytest
+from tests.source_index import source_text, source_tree
 
 ENGINE = Path(__file__).resolve().parents[2] / "engine"
 
@@ -61,7 +62,7 @@ def _names_pulled_from_each_module() -> dict[str, set[str]]:
     pulled: dict[str, set[str]] = {}
     for path in _sources():
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = source_tree(path)
         except SyntaxError:  # pragma: no cover - a syntax error fails elsewhere
             continue
         importer = _module_path(path)
@@ -85,7 +86,7 @@ def _unused_imports(path: Path) -> list[str]:
     negative here costs nothing — one stale import survives — while a false
     positive would delete a `TYPE_CHECKING` import and break a signature.
     """
-    src = path.read_text(encoding="utf-8")
+    src = source_text(path)
     tree = ast.parse(src)
     exported = PULLED.get(_module_path(path), set())
     dead: list[str] = []

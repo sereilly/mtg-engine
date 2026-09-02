@@ -24,6 +24,13 @@ from engine.pending_choices import CHOICE_SPECS, ChoiceSpec, PendingChoice, regi
 from web.action_registry import ACTION_HANDLERS
 from web.prompts import PROMPT_RENDERERS, blocking_prompt
 from web.schemas import ActionKind
+from tests.source_index import source_text
+
+# The handlers under test register when web/actions.py's decorators run, so
+# the registry is only populated once that module is imported. The full suite
+# always imports it somewhere earlier; this file run alone found the registry
+# empty and reported every handler missing. The import is the fixture.
+import web.actions  # noqa: E402,F401
 
 REPO = Path(__file__).resolve().parents[2]
 ENGINE = REPO / "engine"
@@ -31,7 +38,7 @@ ACTION_KINDS = set(get_args(ActionKind))
 
 
 def _engine_sources() -> list[str]:
-    return [path.read_text(encoding="utf-8") for path in ENGINE.rglob("*.py")]
+    return [source_text(path) for path in ENGINE.rglob("*.py")]
 
 
 def _incomplete(kind: str, spec: ChoiceSpec) -> list[str]:

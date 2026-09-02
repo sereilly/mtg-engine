@@ -24,6 +24,7 @@ import pytest
 from engine import Game
 from engine.card_loader import load_cards, manifest_set_path
 from engine.models import Permanent, PlayerState
+from tests.source_index import source_tree
 
 ENGINE = Path(__file__).resolve().parents[2] / "engine"
 
@@ -33,7 +34,7 @@ ALLOWED = {"pt.py", "effects.py"}
 
 
 def _calls_in(path: Path) -> list[int]:
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = source_tree(path)
     return [
         node.lineno
         for node in ast.walk(tree)

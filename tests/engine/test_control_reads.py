@@ -63,6 +63,7 @@ import re
 import pathlib
 
 import pytest
+from tests.source_index import source_text, source_tree
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCANNED = (ROOT / "engine", ROOT / "web")
@@ -178,7 +179,7 @@ def _raw_control_reads(path: pathlib.Path) -> tuple[tuple[int, str, str], ...]:
 
     Cached: three tests sweep the same tree, and this scan is the whole cost of
     the guard."""
-    source = path.read_text(encoding="utf-8")
+    source = source_text(path)
     tree = ast.parse(source)
     lines = source.splitlines()
     exempt = _exempt_reads(tree)
@@ -235,7 +236,7 @@ def test_the_seam_still_owns_the_reads_it_claims():
     exemption would be protecting nothing and every other file's compliance
     would be accidental."""
     seam = ROOT / SEAM
-    tree = ast.parse(seam.read_text(encoding="utf-8"))
+    tree = source_tree(seam)
     methods = {
         node.name
         for node in ast.walk(tree)
@@ -261,7 +262,7 @@ def test_no_acknowledgement_has_gone_stale(entry):
     module, _, function = entry.partition("::")
     path = ROOT / module
     assert path.exists(), f"{entry} names a file that no longer exists"
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = source_tree(path)
     names = {
         node.name
         for node in ast.walk(tree)
@@ -369,7 +370,7 @@ def _battlefield_aliases(tree: ast.Module) -> set[str]:
 def _positional_reads(path: pathlib.Path) -> tuple[tuple[int, str], ...]:
     """``(line, source)`` for each positional battlefield read in *path* —
     ``<expr>.battlefield[...]`` and the aliased ``bf = x.battlefield; bf[...]``."""
-    source = path.read_text(encoding="utf-8")
+    source = source_text(path)
     lines = source.splitlines()
     tree = ast.parse(source)
     aliases = _battlefield_aliases(tree)
@@ -389,7 +390,7 @@ def _positional_reads(path: pathlib.Path) -> tuple[tuple[int, str], ...]:
 @functools.lru_cache(maxsize=None)
 def _value_comparison_calls(path: pathlib.Path) -> tuple[tuple[int, str], ...]:
     """``(line, source)`` for each ``.battlefield.index(...)`` / ``.remove(...)``."""
-    source = path.read_text(encoding="utf-8")
+    source = source_text(path)
     lines = source.splitlines()
     found = []
     for node in ast.walk(ast.parse(source)):
@@ -516,7 +517,7 @@ def _battlefield_writes(path: pathlib.Path):
     ``.battlefield.remove()`` while explaining why it is banned. A guard that
     reports its own documentation is a guard people learn to skim.
     """
-    source = path.read_text(encoding="utf-8")
+    source = source_text(path)
     tree = ast.parse(source)
     lines = source.splitlines()
     spans = [
@@ -606,7 +607,7 @@ def _leadb_calls_to(name: str):
     """
     for package in ("engine", "web"):
         for path in sorted((ROOT / package).rglob("*.py")):
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = source_tree(path)
             for node in ast.walk(tree):
                 if not isinstance(node, ast.Call):
                     continue
