@@ -15,6 +15,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
@@ -28,10 +30,28 @@ def _load_parse_coverage():
     return module
 
 
-def test_every_supported_card_text_is_claimed_or_acknowledged():
-    pc = _load_parse_coverage()
-    coverages = pc.analyze_pool()
-    unclaimed, stale_ack, new_probe, stale_probe = pc.collect_findings(coverages)
+@pytest.fixture(scope="module")
+def pc():
+    """One execution of scripts/parse_coverage.py for the whole file.
+
+    Executing the module reloads the card pool, and ``analyze_pool()`` runs the
+    deletion probe over every supported card — the single most expensive
+    analysis in the suite. Every test here reads, never mutates, so one shared
+    run is the same guard at a fraction of the cost.
+    """
+    return _load_parse_coverage()
+
+
+@pytest.fixture(scope="module")
+def pool_coverages(pc):
+    """One probe-bearing ``analyze_pool()`` shared by every test that needs the
+    pool. The probe-run result is a strict superset of ``run_probe=False`` —
+    the gate test reads only fields both runs carry."""
+    return pc.analyze_pool()
+
+
+def test_every_supported_card_text_is_claimed_or_acknowledged(pc, pool_coverages):
+    unclaimed, stale_ack, new_probe, stale_probe = pc.collect_findings(pool_coverages)
 
     assert not unclaimed, (
         "[UNCLAIMED] supported cards with oracle text nothing parses or claims — fix the "
@@ -53,10 +73,9 @@ def test_every_supported_card_text_is_claimed_or_acknowledged():
     )
 
 
-def test_validator_detects_a_silently_dropped_sentence():
+def test_validator_detects_a_silently_dropped_sentence(pc):
     """Self-test: the machinery must flag a card whose text only half-parses,
     otherwise the green guard above proves nothing."""
-    pc = _load_parse_coverage()
     from engine.models import CardDefinition
 
     fake = CardDefinition(
@@ -83,7 +102,7 @@ def test_validator_detects_a_silently_dropped_sentence():
     assert any("destroy_target_permanent" in channel for _, channel in coverage.claims)
 
 
-def test_deletion_probe_flags_a_word_the_parse_does_not_carry():
+def test_deletion_probe_flags_a_word_the_parse_does_not_carry(pc):
     """Self-test: the probe must still find a word whose deletion changes nothing.
 
     Its old self-test appended nonsense to a clause ("…when the wumbus
@@ -104,14 +123,12 @@ def test_deletion_probe_flags_a_word_the_parse_does_not_carry():
     replacement is any live entry in
     ``scripts/parse_coverage_probe_baseline.json``.
     """
-    pc = _load_parse_coverage()
     assert "all" in pc._probe("destroy all creatures", activated=False)
 
 
-def test_deletion_probe_is_silent_when_every_word_is_load_bearing():
+def test_deletion_probe_is_silent_when_every_word_is_load_bearing(pc):
     """The other direction, without which the test above proves only that the
     probe returns *something*."""
-    pc = _load_parse_coverage()
     assert pc._probe("destroy target black creature", activated=False) == ()
 
 
@@ -161,7 +178,7 @@ def test_grammar_refuses_the_rider_shape_instead_of_swallowing_it():
     assert resolvable.instructions[0].payload["actor"] == "controller"
 
 
-def test_the_gate_is_the_shipped_pool_and_measured_sets_are_reported():
+def test_the_gate_is_the_shipped_pool_and_measured_sets_are_reported(pc, pool_coverages):
     """The instrument reads every supported card; only the shipped half gates.
 
     It used to read `manifest_set_paths()` — the shipped pool — so a *supported*
@@ -189,15 +206,13 @@ def test_the_gate_is_the_shipped_pool_and_measured_sets_are_reported():
     """
     from engine.card_loader import manifest_set_paths
 
-    pc = _load_parse_coverage()
-
     assert set(pc.CARD_PATHS) == set(manifest_set_paths(include_measured=True)), (
         "parse coverage stopped reading both manifest roles — CARD_PATHS lost "
         "include_measured=True, and the instrument is back to watching only "
         "the shipped pool"
     )
 
-    coverages = pc.analyze_pool(run_probe=False)
+    coverages = pool_coverages
     measured = [c for c in coverages if not c.shipped]
     if not measured:
         # No set is being measured right now. The invariant above still holds,
