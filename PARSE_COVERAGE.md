@@ -12,6 +12,32 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **128**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**6 unclaimed sentence(s) across 4 supported card(s).**
+
+- **Aether Storm**
+  - `creature spells can't be cast`
+- **Jinx**
+  - `target land becomes the basic land type of your choice until end of turn`
+- **Prophecy**
+  - `reveal the top card of target opponent's library`
+  - `if it's a land, you gain 1 life`
+  - `then that player shuffles`
+- **Rashka the Slayer**
+  - `one or more black creatures, this creature gets +1/+2 until end of turn`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |

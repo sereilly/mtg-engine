@@ -742,6 +742,134 @@ Third, **alternative costs (CR 118.9) do not exist** — `cast_costs.py` impleme
 *additional* costs well, and the phrase appears in the engine only in comments —
 which blocks the buyback/flashback/evoke/madness family wholesale.
 
+## Homelands (HML) — measured, in progress
+
+**Census at ingest: 115 cards, 76 supported (66.1%), 39 unsupported, 44 refused
+lines.** 140 printings dedupe to 115 by `oracle_id`, and **all 115 are new to
+this pool** — zero overlap with the shipped 1,610, so Phase 1 step 5's question
+answers *implement*. Grammar coverage at ingest: 75.1% parsed, 70.4% lowered,
+45.5% executed, 62 distinct unparsed lines, 0 name-keyed hooks.
+
+**HML released 1995-10-01, so the entry belongs at printing-order index 11** —
+after Ice Age and before M21, which is an *insert* in the list and an append in
+the release line. Nothing in the shipped pool can move: every HML card is new,
+so no `original_printing` has an earlier candidate to lose. That is FEM's blind
+spot again — `test_appending_a_set_never_changes_an_existing_original_printing`
+cannot fail from any index — and
+`test_the_shipped_sets_are_in_printing_order` is the guard that fires, off the
+`released` dates the entries already carry.
+
+**The order is load-bearing for one card anyway, in the other direction.**
+Apocalypse Chime destroys "all nontoken permanents with a name originally
+printed in the Homelands expansion" — Golgothian Sylex's twin, and the second
+card in the pool to read `original_printing` as data. Its own set is the one
+being inserted, so the card is the assertion: if HML's entry ever sits after a
+set that reprints it, the Chime stops seeing its own set.
+
+**Both Phase 2 subsystem sweeps came back empty**, as at FEM. Every card is
+`layout: normal`; the type words are ones the pool already has (`World` included
+— CR 704.5k's world rule ships and is CR-cited in
+`tests/rules/test_state_based_actions.py`), and the three new creature subtypes
+(Badger, Ferret, Oyster) are in the committed vocabulary. Every keyword HML
+prints — defender, first strike, flying, haste, protection, reach, shroud,
+trample, vigilance, plus the Scryfall tags Enchant / Mill / Regenerate whose
+behaviour lives elsewhere — is in `IMPLEMENTED_KEYWORDS`, and none is in
+`UNSUPPORTED_KEYWORDS` (which holds only Phasing). **So HML opens with no
+keyword round**, the second set running.
+
+**The ingest's yield was four cards and one ratchet.**
+`test_no_card_in_the_pool_loses_a_word_to_the_expansion` went red on Eron the
+Relentless, Hazduhr the Abbot, Rashka the Slayer and Veldrane of Sengir — every
+one a legend whose printed text calls it by its first word ("Regenerate Eron",
+"is dealt to Hazduhr instead"), which is exactly the case CR 201.5's expansion
+exists for and exactly the read the ratchet exists to force. Four cards' lines
+would otherwise have refused at a name no reader knew. The rule was right; the
+ratchet is now seven names.
+
+### The census is flat again, and the fragment census is not
+
+**The refusal rollup measures 44 lines over 44 distinct sentences — 1.00, the
+fourth set running.** Twelve lines stop at "expected a subject", eight at
+"unconsumed text", five at "unrecognized effect verb", and seventeen sites carry
+one line each. Read as FEM's table reads it, that says *no production here buys
+two cards*.
+
+It is wrong, and the reason is one level below the sentence. **HML repeats
+fragments, not sentences.** Ten of its cards print an untap-denial clause and
+the census sees ten different sentences:
+
+| Card | The clause | Compiles? |
+| --- | --- | --- |
+| Black Carriage | This creature doesn't untap during your untap step. | supported |
+| Marjhan | This creature doesn't untap during your untap step. | supported |
+| Roots | Enchanted creature doesn't untap during its controller's untap step. | supported |
+| Reveka, Wizard Savant | …and doesn't untap during your next untap step. | refused |
+| Samite Alchemist | It doesn't untap during your next untap step. | refused |
+| Spectral Bears | …it doesn't untap during your next untap step. | refused |
+| Labyrinth Minotaur | that creature doesn't untap during its controller's next untap step | refused |
+| Joven's Ferrets | They don't untap during their controller's next untap step. | refused |
+| An-Zerrin Ruins | Creatures of the chosen type don't untap during their controllers' untap steps. | refused |
+| Giant Oyster | target tapped creature doesn't untap during its controller's untap step | refused |
+
+Three of the ten already work, which is the FEM pairing arriving a second time
+and from the other side: the fragment has readers, and what the seven refused
+cards need is the *subject* widened, not the clause built. Seven cards, one
+family.
+
+**So rank the next set by the fragment, not by the sentence.** The n-gram census
+over the refused lines is four lines of Python and it named every group boundary
+below; the sentence census named none of them. This is the same finding FEM
+recorded ("the leverage is somewhere the census structurally cannot look")
+arriving one abstraction lower, and it generalises further: FEM's instrument
+found repeats between a refused card and a supported one, and this one finds
+repeats *inside* a sentence neither instrument reads whole.
+
+**The two sentence-level instruments, run at ingest as Phase 1 requires.**
+`--hollow-lines` reads **0**. `parse_coverage.py`'s measured section reads **6
+unclaimed sentences across 4 supported cards**: Aether Storm ("creature spells
+can't be cast"), Jinx ("target land becomes the basic land type of your choice
+until end of turn"), Prophecy (three sentences — reveal the top card of target
+opponent's library / if it's a land, you gain 1 life / then that player
+shuffles) and Rashka the Slayer ("blocks one or more black creatures, gets
++1/+2"). Rashka pairs straight into the block-trigger group below; the other
+three are their own work.
+
+### The round plan — two waves of five
+
+43 work items: 39 unsupported cards plus the 4 supported ones carrying an
+unimplemented sentence. Wave 1 takes the five families the fragment census
+found; wave 2 takes the remainder and whatever wave 1 declines with its parts
+enumerated.
+
+**Wave 1**
+
+- **W1G1 — untap denial, the pronoun subjects** (4): Reveka, Wizard Savant;
+  Spectral Bears; Labyrinth Minotaur; Joven's Ferrets.
+- **W1G2 — untap denial, the board subjects** (3): An-Zerrin Ruins (with "as
+  this enters, choose a creature type"); Giant Oyster; Trade Caravan.
+- **W1G3 — "N plus the number of …" as an amount** (4): An-Havva Constable;
+  An-Havva Inn; Aysen Crusader; Baki's Curse.
+- **W1G4 — prevention and redirection to a named permanent** (4): Daughter of
+  Autumn; Hazduhr the Abbot; Samite Alchemist; Evaporate.
+- **W1G5 — filtered static buffs and block triggers** (4): Serra Aviary;
+  Rashka the Slayer; Mammoth Harness; Sea Troll.
+
+**Wave 2**
+
+- **W2G1 — spells whose second sentence reads the first** (4): Forget; Leeches;
+  Memory Lapse; Truce.
+- **W2G2 — library reveal, search and cast locks** (4): Merchant Scroll;
+  Prophecy; Jinx; Aether Storm.
+- **W2G3 — combat restrictions** (4): Ironclaw Curse; Joven's Tools; Koskun
+  Falls; Dwarven Sea Clan.
+- **W2G4 — combat memory and counters** (4): Giant Albatross; Greater Werewolf;
+  Rysorian Badger; Reef Pirates.
+- **W2G5 — Auras and the bespoke tail** (4): Funeral March; Orcish Mine; Broken
+  Visage; Retribution.
+
+Left for wave 3 or for whoever finishes early: Apocalypse Chime, Autumn Willow,
+Irini Sengir, Timmerian Fiends.
+
 ## Fallen Empires (FEM) — shipped
 
 **Final: 102/102 supported, hollow lines 0, unclaimed parse sentences 0, and the

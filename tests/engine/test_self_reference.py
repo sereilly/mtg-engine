@@ -77,6 +77,12 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
     Every card whose text the expansion *changes* is named here. A set that adds
     another one is a set whose card should be read — either it is a legend
     referring to itself, or the rule has found a word it should not have.
+
+    Homelands added four at once and every one was the first case: a legend
+    whose printed text calls it by its first word ("Regenerate Eron", "dealt to
+    Hazduhr instead"). That is the read this ratchet exists to force, and it is
+    the whole yield of the HML ingest — four cards whose lines would otherwise
+    have refused at a name no reader knew.
     """
     changed = {
         card.name
@@ -85,4 +91,12 @@ def test_no_card_in_the_pool_loses_a_word_to_the_expansion(_r28_pool):
             card.oracle_text or "", card.name, legendary=card.is_legendary
         ) != (card.oracle_text or "")
     }
-    assert changed == {"Hazezon Tamar", "Rasputin Dreamweaver", "Rohgahh of Kher Keep"}
+    assert changed == {
+        "Hazezon Tamar",
+        "Rasputin Dreamweaver",
+        "Rohgahh of Kher Keep",
+        "Eron the Relentless",
+        "Hazduhr the Abbot",
+        "Rashka the Slayer",
+        "Veldrane of Sengir",
+    }
