@@ -1171,6 +1171,86 @@ or for 1 life + a blue card?") which does not exist. `picker_sweep` cannot see
 it and the set is measured, so nothing is broken today — but this is a Phase 4
 item, not a Phase 3 one.
 
+### W1G5 — delayed triggers. Merged; supported 85 → 89.
+
+Four cards landed (Thawing Glaciers, Krovikan Horror, Reinforcements,
+Lat-Nam's Legacy) and two more were fixed without moving the count — which is
+where the round's value is.
+
+**Arcane Denial was a supported counterspell that countered nothing.** Its line
+refused at `no draw handler offers a ceiling the drawer chooses under` — "may
+draw **up to** two cards", nothing to do with the delay the brief named — and
+because the *whole line* refused, `Counter target spell` compiled to **no
+instruction at all**. The card reported supported on its second line's delayed
+draw plus two `SUPPORTED_SPELL_PATTERNS` substrings. Its picker finding was a
+symptom, not the diagnosis. Fixed, and the countered spell's controller now has
+to be written down as the counter happens (`COUNTERED_SPELL_CONTROLLER`),
+because CR 108.4 gives a card in a graveyard no controller and the ability fires
+a turn later.
+
+**Death Spark's decline was the opposite of what the brief said.** Nothing
+claimed its trigger — there was no rival claimant to find — and the missing
+piece was a **dispatcher**: `engine/phases/upkeep_step.py` had **no graveyard
+scan at all**, where the end step has had one since Silversmote Ghoul. The
+graveyard-position family is also three cards, not two: Nether Shadow (LEA,
+shipped) prints the same clause and is claimed by a card hook.
+
+**The graveyard→library-top production already existed**, written for Drafna's
+Restoration (ATQ) — a fourth card in the family the brief did not mention — and
+routed by the *quantifier* (`any_number`), a fact about how many cards move
+rather than where they come from. The three ALL cards then failed in three
+different places, only one of which was that production.
+
+**CR 603.7 has two implementations here and only one uses the stack.** 26 pool
+cards print "at the beginning of the next end step"; 8 arm a
+`create_delayed_trigger`, twelve use `arm_self_action_at_next_end_step` →
+per-permanent metadata swept in `resolve_end_step`, and six are per-card kinds.
+Rakalite and Varchild's Crusader were driven headless and **both fire
+correctly**, so this is not a bug — but nobody can respond to the second
+mechanism, and it is invisible to `DELAYED_EVENTS`' fire-site guard.
+
+**A test that baked in its subject's properties.** `test_graveyard_triggers.py`
+held three of Silversmote Ghoul's facts as constants — which step announces it,
+what its intervening-if wants armed, which zone it lands in — and each of this
+round's three new subjects differed in a *different* one. All three are now read
+off the card.
+
+### Wave 1 closed: 62 → 89 of 144, zero hooks added
+
+Five worktree groups, five merges, and the integration cost ran at roughly the
+predicted ratio. **Zero name-keyed hooks across 27 cards**, so reliance fell
+while the pool's supported denominator grew.
+
+**Two integration findings, both predicted by the playbook and both real.** The
+per-set block convention produced five append conflicts and every one
+reconstructed mechanically from the merge base with the "both sides are pure
+appends" assertion holding. And `lowering/returns.py` reached **1,020 lines**
+with no single branch responsible — W1G1, W1G3 and W1G5 each added a reading
+under the cap. Split at the line the module's own docstring already drew, into
+`_bound_returns` as a **floor** rather than a second family, because the
+layering guard forbids families importing each other and `returns` is its only
+reader (`_sweeps` is the precedent). The post-split **missing-import** scan then
+paid: `_back_reference_payload` was used in `returns.py` after the move, which
+is a `NameError` in a function body — the package still imported clean.
+
+**The substring support gate, measured rather than argued.**
+`SUPPORTED_SPELL_PATTERNS` appends a no-op `spell_pattern` instruction for every
+listed substring in a card's text, and the support gate answers True to one — so
+a card whose every real line refuses can still compile supported, which is
+exactly how Arcane Denial shipped. Swept over both manifest roles: **66 cards
+are supported on a substring alone**, and all 66 are legitimately implemented in
+a derivation the compiler cannot see — 58 Auras through `engine/auras.py`, and 8
+through replacements or derived statics (Titania's Song, Zur's Weirding,
+Fastbond, Island Sanctuary, Lich, Chains of Mephistopheles, Fiery Emancipation,
+Teferi's Ageless Insight). **After wave 1 no Alliances card is in that
+population.** So the hole is real and currently empty: nothing is broken today,
+and nothing but a substring is stopping the next broken card from reporting
+supported. It pairs with the gate asymmetry W1G1 named (the
+artifact/enchantment gate asks "is *any* ability implemented" where the creature
+gate asks "is *every* trigger"), and the two together are one round: give every
+one of those 66 cards a real claim from the derivation that implements it, then
+narrow the substring list to nothing.
+
 ## Homelands (HML) — shipped
 
 **Census at ingest: 115 cards, 76 supported (66.1%), 44 refused lines over 44
