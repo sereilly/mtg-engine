@@ -65,6 +65,10 @@ class CastAction:
     # unchanged, so an ordinary duel — where nothing but "hand" is ever
     # proposed — is untouched.
     from_zone: str = "hand"
+    # CR 118.9: pay the spell's printed alternative cost rather than its mana
+    # cost. False on every candidate this policy builds from a payable mana
+    # cost, which is all of them but one shape — see `_alternative_cost_cast`.
+    alternative_cost: bool = False
 
 
 @dataclass(frozen=True)
@@ -170,6 +174,26 @@ def _cast_candidate(
     x_value = _pick_x_value(game, player, card, extra_generic)
     if x_value == 0:
         return None
+
+    # CR 601.2h's printed **additional** costs, asked of the engine's own gate
+    # for the reason every gate above is asked here: the cast path refuses a
+    # spell whose additional cost the board cannot pay, nothing is spent, and
+    # the AI re-proposes the same card every turn — which is precisely what
+    # `simulate_ai_games.py`'s `refused_casts` counts.
+    #
+    # Below the X pick, because one of those costs is measured in X (Fire
+    # Covenant's "pay X life") and asking before the announcement would gate on
+    # a number nobody had chosen — the same ordering the cast path itself makes,
+    # and for the same reason.
+    #
+    # This gap predates the narrowed discard that surfaced it: Village Rites
+    # with no creature to sacrifice had the same shape and was refused ten turns
+    # running. What made it visible was Surge of Strength, whose "discard a red
+    # or green card" became payable-or-not the moment the clause was read at all.
+    if not _printed_costs_are_payable(
+        game, player_index, card, hand_index, from_zone, x_value
+    ):
+        return None
     target = _choose_target_for_spell(card, player_index, game, x_value)
     target_permanent_index: int | list[int] | None = None
     target_permanent_ids: list[int] | None = None
@@ -194,12 +218,28 @@ def _cast_candidate(
                 target, target_permanent_index, target_permanent_ids = several
     tap_indices: tuple[int, ...] = ()
 
+    alternative_cost = False
     if game.enforce_mana_costs and card.primary_type != "land":
         required = _cost_for(game, player, card, x_value, extra_generic=extra_generic)
         plan = _plan_taps_for_cost(player, required)
         if plan is None:
-            return None
-        tap_indices = tuple(plan)
+            # CR 118.9: the mana cost is not the only price. A spell whose
+            # printed alternative cost this board *can* pay is castable right
+            # now, and a seat that only ever asked the mana question sat on
+            # Force of Will all game — the same "does nothing for the rest of
+            # the game" shape `refused_casts` counts, one step earlier, where
+            # nothing is even proposed.
+            #
+            # Asked only when the mana cost cannot be paid, which is the
+            # conservative reading of CR 118.9b's "generally optional": paying a
+            # life and exiling a card is a real price, and a seat that took it
+            # while holding the mana would be spending two resources to save
+            # none.
+            if not _alternative_cost_is_payable(game, player_index, card, hand_index):
+                return None
+            alternative_cost = True
+        else:
+            tap_indices = tuple(plan)
 
     score = _score_cast(game, player_index, card, target, x_value)
     if from_zone == "command":
@@ -214,7 +254,72 @@ def _cast_candidate(
         target_permanent_index=target_permanent_index,
         target_permanent_ids=target_permanent_ids,
         from_zone=from_zone,
+        alternative_cost=alternative_cost,
     )
+
+
+def _printed_costs_are_payable(
+    game: Game,
+    player_index: int,
+    card: CardDefinition,
+    hand_index: int,
+    from_zone: str,
+    x_value: int | None,
+) -> bool:
+    """Whether *card*'s printed additional costs (CR 601.2b) can be paid now.
+
+    Asked of ``_unpayable_additional_cost`` rather than re-derived, for the
+    reason :func:`_alternative_cost_is_payable` beside it gives: a policy that
+    judged a cost by its own reading would propose casts the cast path then
+    refuses. The gate is pure — it spends nothing and moves nothing — so asking
+    it here cannot leave a half-paid cost behind.
+
+    The costs are filtered by zone first, exactly as ``queue_from_hand`` filters
+    them: a cost naming a zone is a price for casting from *that* zone, so a
+    hand cast must not be gated on the graveyard price of the same card
+    (Demonic Embrace).
+    """
+    from .cast_costs import additional_costs
+
+    printed = tuple(
+        cost for cost in additional_costs(card)
+        if cost.from_zone is None or cost.from_zone == from_zone
+    )
+    if not printed:
+        return True
+    return game._unpayable_additional_cost(
+        player_index, card, printed,
+        spell_hand_index=hand_index if from_zone == "hand" else None,
+        from_zone=from_zone,
+        x_value=x_value,
+    ) is None
+
+
+def _alternative_cost_is_payable(
+    game: Game, player_index: int, card: CardDefinition, hand_index: int
+) -> bool:
+    """Whether *card*'s printed alternative cost (CR 118.9) can be paid now.
+
+    Asked of the engine's own gate rather than re-derived here, for the reason
+    every other affordability question in this policy is: a policy that judged
+    a cost by its own reading would propose casts the cast path then refuses,
+    and `refused_casts` counts exactly that.
+
+    The gate is a pure predicate over the board — it spends nothing and moves
+    nothing — so asking it here costs a lookup and cannot leave a half-paid
+    cost behind.
+    """
+    from .alternative_costs import alternative_costs
+
+    printed = alternative_costs(card)
+    if len(printed) != 1:
+        # None to take, or more than one and CR 118.9a lets only one be
+        # applied — a choice this policy has no card to make and the cast path
+        # refuses outright.
+        return False
+    return game._unpayable_alternative_cost(
+        player_index, card, printed[0], spell_hand_index=hand_index,
+    ) is None
 
 
 def choose_activation_action(game: Game, player_index: int) -> ActivationAction | None:

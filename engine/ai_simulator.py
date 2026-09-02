@@ -546,6 +546,11 @@ def run_ai_simulation(
                         target_permanent_ids=cast_action.target_permanent_ids,
                         x_value=cast_action.x_value,
                         from_zone=cast_action.from_zone,
+                        # CR 118.9. Forwarded like every other announcement on
+                        # the action: dropped here, the cast would fall back to
+                        # a mana cost the policy has already established this
+                        # seat cannot pay, and be refused.
+                        alternative_cost=cast_action.alternative_cost,
                     )
                     _resolve_pending_choices(game)
                     after = _snap(game)

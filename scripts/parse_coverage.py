@@ -58,6 +58,7 @@ from engine.card_loader import manifest_set_paths  # noqa: E402
 from engine.grammar import compile_line as compile_grammar_line  # noqa: E402
 from engine.oracle_types import (OracleInstruction,  # noqa: E402
                                  x_spend_colors_from_text)
+from engine.alternative_costs import alternative_cost_claims_line  # noqa: E402
 from engine.cast_costs import cast_cost_claims_line  # noqa: E402
 from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_absence_line, cast_condition_line,
@@ -273,6 +274,12 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # is what it *should* have read while the phrase sat in the spell-pattern
     # whitelist producing a marker nothing performed.
     ("cast_costs.py", cast_cost_claims_line),
+    # A printed **alternative** cost (CR 118.9) — the other half of the row
+    # above, and its own channel because it is its own module and its own
+    # payment. It is the row this report was already asking for: Force of Will
+    # and Pyrokinesis sat in the unclaimed list with their defining line, which
+    # is what an alternative cost with nothing behind it looks like from here.
+    ("alternative_costs.py", alternative_cost_claims_line),
     ("untap_restrictions.py", lambda s: untap_restriction_for(s) is not None),
     # The per-source untap lines — "this artifact doesn't untap during your
     # untap step" and "you may choose not to untap this artifact …" — which the

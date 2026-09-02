@@ -292,7 +292,16 @@ CARD_ONLY_FILTER_KEYS = frozenset(
      # so it is testable here for exactly the reason the positive is — and it
      # has to be listed, because a colour exclusion the charger could not test
      # made the whole cost refuse rather than be charged narrowly.
-     "exclude_colors"}
+     "exclude_colors",
+     # "As an additional cost to cast this spell, discard a **red or green**
+     # card." (Surge of Strength.) The *union* spelling of ``color_filter``,
+     # which the noun parser has always produced for a shared-head disjunction
+     # ("red or green card" reads as one filter with two colours, not two
+     # filters) and which nothing here could test — so the whole clause refused,
+     # the cost was never read, and the card reported ``supported`` on its other
+     # line and was cast **without discarding anything**. Testable off the
+     # printed mana cost for exactly the reason the singular is (CR 202.2).
+     "any_colors"}
 )
 
 

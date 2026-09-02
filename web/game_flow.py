@@ -149,6 +149,10 @@ def _ai_step(session: Session) -> bool:
                 target_permanent_ids=cast_action.target_permanent_ids,
                 x_value=cast_action.x_value,
                 from_zone=cast_action.from_zone,
+                # CR 118.9, forwarded whole: the policy only sets this when the
+                # mana cost cannot be paid, so dropping it here would turn every
+                # such cast into an "insufficient mana" refusal.
+                alternative_cost=cast_action.alternative_cost,
             )
             if result.supported:
                 game.note_priority_action_taken(seat)
@@ -170,6 +174,10 @@ def _ai_step(session: Session) -> bool:
                 target_permanent_ids=cast_action.target_permanent_ids,
                 x_value=cast_action.x_value,
                 from_zone=cast_action.from_zone,
+                # CR 118.9, forwarded whole: the policy only sets this when the
+                # mana cost cannot be paid, so dropping it here would turn every
+                # such cast into an "insufficient mana" refusal.
+                alternative_cost=cast_action.alternative_cost,
             )
             _auto_resolve_ai_pending(session)
 
