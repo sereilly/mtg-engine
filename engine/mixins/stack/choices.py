@@ -4544,7 +4544,10 @@ class PendingChoicesMixin:
 
         Resolved here because only the resolution knows the bindings: "that
         player" is whoever the offer was rebound to, and CR 601.2b's chooser is
-        the seat holding the prompt.
+        the seat holding the prompt. A trigger's own "that player" compiles to
+        an ``event_subject_*`` reference resolved off the seat the fire site
+        froze in ``trigger_context`` (Curse Artifact's decline damage), so
+        those references answer for the offered seat the same way.
         """
         entry = choice.data
         seat = self.players[choice.player_index]
@@ -4555,6 +4558,10 @@ class PendingChoicesMixin:
                 self_recipients.add("caster")
             if getattr(context, "target", None) is seat:
                 self_recipients.update(("target", "target_player"))
+            trigger = getattr(context, "trigger_context", None) or {}
+            for reference in ("event_subject_player", "event_subject_controller"):
+                if trigger.get(reference) == choice.player_index:
+                    self_recipients.add(reference)
         return frozenset(self_recipients)
 
     def _default_optional_pay(self, choice: PendingChoice) -> None:
