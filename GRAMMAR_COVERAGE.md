@@ -28,7 +28,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4ED | 368 | 520 | 90.4% | 90.0% | 53.8% | 246 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| HML *(measured)* | 115 | 189 | 77.2% | 74.1% | 48.7% | 68 |
+| HML *(measured)* | 115 | 189 | 78.3% | 75.1% | 49.7% | 70 |
 | **All (shipped)** | **2890** | **4196** | **88.0%** | **87.1%** | **56.1%** | **1985** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -43,11 +43,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 236 | 103 | expected a subject |  |
 | 119 | 52 | unrecognized effect verb |  |
-| 62 | 32 | unconsumed text |  |
+| 61 | 31 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 16 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 9 | 3 | expected a keyword ability |  |
+| 8 | 2 | expected a keyword ability |  |
 | 7 | 2 | no lowering for RawEffect |  |
 | 7 | 2 | expected 'the number of' in a where-clause |  |
 | 7 | 7 | expected 'unless defending player controls' |  |
@@ -145,6 +145,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, {T}: Prevent the next 1 damage that would be dealt to any target this turn.`
 - **Amulet of Quoz**
   - `{T}, Sacrifice this artifact: Target opponent may ante the top card of their library. If they don't, you flip a coin. If you win the flip, that player loses the game. If you lose the flip, you lose the game. Activate only during your upkeep.`
+- **An-Havva Inn**
+  - `You gain X plus 1 life, where X is the number of green creatures on the battlefield.`
 - **An-Havva Township**
   - `{T}: Add {C}.`
   - `{1}, {T}: Add {G}.`
@@ -285,6 +287,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Black creatures get +1/+1.`
   - `Black creatures get +1/+1.`
   - `Black creatures get +1/+1.`
+- **Baki's Curse**
+  - `Baki's Curse deals 2 damage to each creature for each Aura attached to that creature.`
 - **Balduvian Conjurer**
   - `{T}: Target snow land becomes a 2/2 creature until end of turn. It's still a land.`
 - **Balduvian Hydra**

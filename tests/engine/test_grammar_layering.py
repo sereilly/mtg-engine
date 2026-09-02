@@ -420,7 +420,7 @@ def test_layers_only_import_downward(layers):
     "package,shared,roof",
     [
         ("effects", (), ()),
-        ("lowering", ("_common", "_events", "_amounts", "_sacrifices", "_records", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_events", "_amounts", "_sacrifices", "_records", "_sweeps", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -658,6 +658,18 @@ FAMILY_SHARED = {
     # step records forward, `where_x` asks whether "this way" has a producer),
     # so it cannot live in either.
     "_records",
+    # `_sweeps` split out of `lowering/damage.py` the next time *that* module
+    # reached the guard, along CR 611.2c's line: a set the sentence **describes**
+    # against one it chooses (CR 115). A floor for `_amounts`' reason exactly —
+    # `damage` reads it and it reads nothing back.
+    #
+    # It is also the split that made one idiom one lowering again. The "all"
+    # spelling of the sweep had already been exiled into `_common` — the module
+    # every family reads — with a comment saying it was there only because
+    # `damage.py` was full, while the "each" spelling stayed inline in
+    # `damage.py`; the two had drifted, and the inline one was dropping the head
+    # noun from the payload it built.
+    "_sweeps",
 }
 
 

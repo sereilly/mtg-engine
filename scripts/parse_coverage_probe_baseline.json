@@ -359,6 +359,7 @@
   "card": "Goblin Shrine",
   "clause": "it deals 1 damage to each goblin creature",
   "ignored": [
+   "each",
    "creature"
   ]
  },
@@ -575,6 +576,13 @@
   ]
  },
  {
+  "card": "Pyroclasm",
+  "clause": "pyroclasm deals 2 damage to each creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Raiding Party",
   "clause": "each player may tap any number of untapped white creatures they control. for each creature tapped this way, that player chooses up to two plains. then destroy all plains that weren't chosen this way by any player",
   "ignored": [
@@ -690,6 +698,13 @@
   "clause": "add {b} for each creature card in your graveyard",
   "ignored": [
    "card"
+  ]
+ },
+ {
+  "card": "Sorrow's Path",
+  "clause": "it deals 2 damage to you and each creature you control",
+  "ignored": [
+   "each"
   ]
  },
  {

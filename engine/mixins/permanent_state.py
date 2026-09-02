@@ -1068,8 +1068,21 @@ class PermanentStateMixin:
                 # different matcher — and the same evaluator the computed 7c
                 # bonus below uses, so one phrase means one number wherever it
                 # is printed.
+                # The permanent being refreshed *is* the source of its own
+                # characteristic-defining ability, and it is handed over here
+                # for the reason the computed 7c bonus below hands it over: a
+                # spec may name a relation to it ("other Rats on the
+                # battlefield", "Auras attached to it") rather than only a set
+                # of characteristics, and an evaluator with no source answers
+                # such a spec by counting all of the set or none of it. Both
+                # are silent, and a CDA is recomputed continuously (CR 604.3),
+                # so either would be wrong every time anything read the
+                # creature.
                 value = (
-                    evaluate_count(self, player, spec) if spec is not None
+                    evaluate_count(
+                        self, player, spec, source=permanent, exclude=permanent
+                    )
+                    if spec is not None
                     else _count_dynamic_pt(self, player, permanent, dynamic_pt.payload)
                 )
                 # "…**power** is equal to" leaves the printed toughness alone

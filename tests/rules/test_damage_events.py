@@ -757,3 +757,35 @@ def test_the_points_a_counted_redirect_moves_are_still_dealt():
     game._mark_damage_on_permanent(protected, 3, source=pinger)
 
     assert p2.life == before + 3
+
+
+# --- W1G2: a sweep over a described set damages creatures and nothing else ---
+
+@pytest.mark.cr("120.1a", "611.2c")
+def test_120_1a_a_described_set_sweep_reaches_only_creatures():
+    """"<source> deals N damage to each creature" is a sweep over the set the
+    sentence *describes* (CR 611.2c), and CR 120.1a says damage cannot be dealt
+    to an object that is not a battle, a creature or a planeswalker.
+
+    The lowering checked the head noun and then **stripped** it from the payload
+    it built, while the handler walks every permanent and asks only what the
+    payload says — so the sweep reached lands and artifacts too. Nothing failed:
+    only a creature is buried by lethal damage (CR 704.5g), so the damage sat
+    unread. It still stamped the "dealt damage this turn" record a printed noun
+    phrase can test, and it still spent whatever shield the land carried.
+
+    Written over an invented card, because the bug was never about Pyroclasm:
+    every card printing these words had it.
+    """
+    from engine.grammar import parse_line
+    from engine.grammar.lower import lower_ability
+
+    node = parse_line(
+        "Scorch Everything deals 2 damage to each creature.",
+        card_name="Scorch Everything",
+    )
+    lowered = lower_ability(node)
+    sweep = next(i for i in lowered if i.kind == "deal_damage_each_matching")
+
+    assert sweep.payload["filter"] == {"type_filter": "creature"}
+

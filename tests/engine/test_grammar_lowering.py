@@ -4779,3 +4779,72 @@ def test_a_lowering_that_does_not_perform_the_choice_refuses_the_word():
 
 
 # --- end FixA ---
+
+
+# --- W1G2: refusals around a per-recipient multiplier and a scoped count ---
+
+def test_a_per_recipient_multiplier_refuses_outside_a_described_set_sweep():
+    """"…for each <objects>" on a damage clause is a rider on the printed
+    amount, and only the described-set sweep can apply one per recipient.
+
+    Written because the gate is the whole safety argument for the node field:
+    twenty branches of the damage lowering never look at ``per_each``, so
+    without this refusal a clause reaching any of them would deal the *printed*
+    amount and report itself supported — Baki's Curse as a flat 2 to the board.
+    A dropped rider that makes a card weaker is still a card doing something it
+    does not say.
+    """
+    refused = compile_line(
+        "Foo Bar deals 2 damage to target creature for each Aura attached to "
+        "that creature.",
+        card_name="Foo Bar",
+    )
+    assert not refused.instructions
+    assert "per recipient" in (refused.lowering_error or refused.parse_error or "")
+
+
+def test_a_per_recipient_multiplier_refuses_a_set_it_cannot_scope():
+    """The sweep admits only a count *relative to the recipient*. A phrase
+    naming a set of its own — "for each card in your hand" — would be counted
+    once for the whole sweep off a spec with no relation to the creature being
+    damaged, which is a different card."""
+    refused = compile_line(
+        "Foo Bar deals 2 damage to each creature for each Forest you control.",
+        card_name="Foo Bar",
+    )
+    assert not refused.instructions
+    assert "per recipient" in (refused.lowering_error or refused.parse_error or "")
+
+
+def test_on_the_battlefield_refuses_where_it_has_nowhere_to_go():
+    """CR 403.1's shared zone is a *scope*, and only a count has anywhere to
+    put one.
+
+    ``to_payload`` emits nothing for the phrase, so a lowering that built a
+    payload and did not know the field would scope the set to one seat — which
+    on a sweep is not a card doing less, it is a card doing something else. The
+    field is listed in ``CONDITIONALLY_EMITTED_FIELDS`` so every such lowering
+    refuses it by name instead.
+    """
+    refused = compile_line(
+        "Destroy all green creatures on the battlefield.", card_name="Foo Bar"
+    )
+    assert not refused.instructions
+    assert "on_the_battlefield" in (refused.lowering_error or refused.parse_error or "")
+
+
+def test_a_count_scoped_both_ways_refuses():
+    """"…you control **on the battlefield**" names two different sets, and
+    reading it as either half would be reading a card nobody printed."""
+    import dataclasses
+
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lowering._amounts import count_spec
+    from engine.grammar.phrases import parse_subject_filter
+
+    filt = parse_subject_filter("green creatures on the battlefield", plural=True)
+    assert filt.on_the_battlefield
+    # Scoped to the battlefield alone, the count is taken everywhere.
+    assert count_spec(filt, None)["owner"] == "all"
+    with pytest.raises(LoweringError):
+        count_spec(dataclasses.replace(filt, controller="you"), None)
