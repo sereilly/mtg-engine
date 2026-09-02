@@ -325,6 +325,24 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "cant_be_blocked_by",
     ),
     (
+        # "…can't be blocked except by **three or more creatures**" (Gorilla
+        # Berserkers). Menace with the number printed out (CR 702.111a is
+        # exactly the N=2 case of this sentence), so it is a *count* rather
+        # than a noun union — which is why it is read here, above the union row
+        # whose `.+` would otherwise swallow "three or more creatures" and hand
+        # it to a noun parser that cannot read it.
+        #
+        # The number is payload, as every number in this file is, and the
+        # enforcement site takes the largest minimum any restriction imposes:
+        # CR 509.1b's restrictions all apply, so a creature with menace *and*
+        # this line needs three blockers, not two.
+        re.compile(
+            r"^this creature can't be blocked except by "
+            r"(?P<count>\w+) or more creatures$"
+        ),
+        "cant_be_blocked_by_fewer_than",
+    ),
+    (
         # "…can't be blocked **except by** Walls and/or creatures with flying"
         # (Elven Riders, Evil Eye of Orms-by-Gore). The inverse of the rows
         # above: those name what may not block, this names the only things that
