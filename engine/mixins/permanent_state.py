@@ -194,7 +194,11 @@ def _count_dynamic_pt(
                 if perm.is_creature and not (excluded and perm.has_type(str(excluded))):
                     total += 1
             elif what == "same_name":
-                total += perm.card.name == permanent.card.name
+                # "creatures named ~": an object's *name* is a copiable value
+                # (CR 707.2, layer 1), so a Clone copying Plague Rats both is
+                # named Plague Rats and counts the others. The printed face
+                # answered here for a year and missed every copy.
+                total += perm.effective_card.name == permanent.effective_card.name
             elif what == "card_type":
                 total += bool(card_type and perm.has_type(str(card_type)))
             elif what == "subtype":

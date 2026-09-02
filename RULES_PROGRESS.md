@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**342 / 612 tracked rules covered (55%)** — 1788 tests, 0 unannotated.
+**342 / 612 tracked rules covered (55%)** — 1793 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -696,7 +696,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **604.1** Static abilities do something all the time rather than being activated or triggered. They are wri... *(2 tests)*
 - [x] **604.2** Static abilities create continuous effects, some of which are prevention effects or replacement e... *(2 tests)*
-- [x] **604.3** Some static abilities are characteristic-defining abilities. A characteristic-defining ability co... *(15 tests)*
+- [x] **604.3** Some static abilities are characteristic-defining abilities. A characteristic-defining ability co... *(16 tests)*
 - [ ] **604.4** Many Auras, Equipment, and Fortifications have static abilities that modify the object they’re at...
 - [ ] **604.5** Some static abilities apply while a spell is on the stack. These are often abilities that refer t...
 - [ ] **604.6** Some static abilities apply while a card is in any zone that you could cast or play it from (usua...
@@ -773,7 +773,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 613. Interaction of Continuous Effects
 
 - [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(78 tests, subrules bcdefg)*
-- [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(13 tests, subrules ac)*
+- [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(15 tests, subrules ac)*
 - [ ] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t...
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(72 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
@@ -922,7 +922,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 707. Copying Objects
 
 - [ ] **707.1** Some objects become or turn another object into a “copy” of a spell, permanent, or card. Some eff...
-- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(24 tests, subrules ab)*
+- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(29 tests, subrules ab)*
 - [x] **707.3** The copy’s copiable values become the copied information, as modified by the copy’s status (see r... *(2 tests)*
 - [x] **707.4** Some effects cause a permanent that’s copying a permanent to copy a different object while remain... *(2 tests)*
 - [x] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ... *(2 tests)*
