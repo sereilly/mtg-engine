@@ -834,3 +834,34 @@ def test_407_1_no_ownership_changes_outside_the_ante_variant(set_pool):
     assert not game.pending_choices_of("optional_pay", 1)
     assert lotus in list(game.all_permanents())
     assert game.players[1].graveyard == []
+
+
+@pytest.mark.cr("407.4")
+def test_407_4_an_offered_ante_a_player_cannot_take_is_never_offered(set_pool):
+    """"Target opponent may ante the top card of their library. **If they
+    don't**, you flip a coin…" (Amulet of Quoz.)
+
+    An empty library is a real and checkable "nothing to give", so the offer is
+    not made and the printed penalty applies — ``handlers/control_flow``'s own
+    rule for an optional *action*, which the ante was not on until Timmerian
+    Fiends needed the same question asked. Without it the seat "accepted", anted
+    nothing, and the coin was never flipped: a card that buys itself off for
+    free, which is the direction a cost must never move.
+    """
+    game = _ante_game(players=2)
+    game.players[1].library = []
+    game.players[0].battlefield = [
+        Permanent(card=set_pool("ICE")["Amulet of Quoz"])
+    ]
+    game.start_turn(0)
+    game.current_turn_phase = "beginning"
+    game.current_step = "upkeep"
+
+    assert game.activate_permanent_ability(
+        0, "Amulet of Quoz", target_player_index=1
+    ).supported
+    game._settle()
+
+    assert not game.pending_choices_of("optional_pay", 1)
+    assert game.players[1].ante == []
+    assert any("coin flip" in line or "flip" in line for line in game.log)
