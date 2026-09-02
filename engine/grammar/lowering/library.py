@@ -384,7 +384,13 @@ def _lower_search_library(node: ast.SearchLibrary) -> tuple[OracleInstruction, .
         # gives: honoured and emitted are two facts, and a filter admitted by
         # the gate and dropped from the payload is a tutor for *any* instant
         # while the card still reports supported.
-        restrictions["colors"] = list(filt.colors)
+        #
+        # ``any_colors``, not ``colors``: a multi-colour filter means "green
+        # **or** white" here exactly as it does in ``ObjectFilter.to_payload``,
+        # which emits that case under this name for every other matcher in the
+        # engine. Spelling it the same way is what stops one field meaning
+        # "or" to the battlefield and "and" to a library.
+        restrictions["any_colors"] = list(filt.colors)
     # One entry per find, in the printed order: how many are found and where each
     # goes are the same fact, so a card that names two destinations cannot lower
     # to a search that finds one.

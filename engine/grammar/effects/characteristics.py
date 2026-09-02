@@ -718,6 +718,15 @@ def _parse_becomes_land_type(
     printing a new one needs `scripts/fetch_vocabulary.py` and nothing here.
     """
     mark = stream.mark()
+    # "…becomes **the basic land type of your choice** until end of turn."
+    # (Jinx.) CR 609.3 makes the choice part of resolving the spell, so the
+    # sentence names no type and the node carries the sentinel — the same shape
+    # "becomes the color of your choice" takes two branches up, and read before
+    # the article branch below, which would see "the" and refuse.
+    if stream.accept_phrase("the", "basic", "land", "type", "of", "your", "choice"):
+        return ast.ChangeLandType(
+            subject, ast.CHOSEN_LAND_TYPE, _parse_duration(stream)
+        )
     if not (stream.accept_word("a") or stream.accept_word("an")):
         stream.reset(mark)
         return None

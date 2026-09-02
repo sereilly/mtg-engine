@@ -282,6 +282,14 @@ CHOSEN_COLOR = "chosen_color"
 #: apart would silently answer the wider offer with the narrower one.
 CHOSEN_COLORS = "chosen_colors"
 
+#: The basic land type an effect does not name, for the same CR 609.3 reason —
+#: "becomes **the basic land type of your choice** until end of turn" (Jinx).
+#: It rides :attr:`ChangeLandType.land_type` exactly as the two above ride
+#: ``BecomeColor.color``, and for the identical reason: a node carrying both a
+#: named type and a "no, ask" flag has a state where the two disagree and
+#: nothing to say which one the handler should believe.
+CHOSEN_LAND_TYPE = "chosen_land_type"
+
 
 @dataclass(frozen=True)
 class BecomeColor:

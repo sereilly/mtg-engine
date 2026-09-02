@@ -110,19 +110,24 @@ def search_matches(card, data: dict) -> bool:
     if any(excluded in type_line for excluded in data.get("exclude_types") or ()):
         return False
     restrictions = data.get("restrictions") or {}
-    # "a **blue** instant card" (Merchant Scroll). AND'd like the supertypes and
-    # subtypes below, and for the same reason a search may test it at all: a
-    # card's colour is its mana cost's (CR 202.2), which is printed on it and
-    # needs no computed characteristic. A phrase naming two colours wants a card
-    # that is both — a gold card — which is what "a white and blue card" means
-    # and is not the same phrase as "a white or blue card"; the pool prints no
-    # search that says the second, and the noun parser gives it no spelling, so
-    # a card that printed one would arrive here as an untestable filter rather
-    # than as this one silently widened.
-    wanted_colors = restrictions.get("colors") or ()
+    # "a **blue** instant card" (Merchant Scroll). A search may test a colour at
+    # all for the reason it may test the type line: a card's colour is its mana
+    # cost's (CR 202.2), printed on it, and needs no computed characteristic
+    # that a card in a library does not have (CR 613.1).
+    #
+    # **OR'd, and the key says so.** A multi-colour ``ObjectFilter.colors``
+    # means "a green **or** white creature" everywhere else in this engine —
+    # ``ObjectFilter.to_payload`` emits exactly that case as ``any_colors`` and
+    # every matcher reads it with ``any(...)``. AND'ing it here would give one
+    # field two meanings depending on which reader asked, which is how the two
+    # come to disagree about the same card; and it would be the *narrow*
+    # disagreement, so a "white or blue" tutor would quietly find only gold
+    # cards. The key is spelled ``any_colors`` rather than ``colors`` so the
+    # name carries the semantics it already has one module over.
+    wanted_colors = restrictions.get("any_colors") or ()
     if wanted_colors:
         colors = card_colors(card)
-        if any(str(symbol).upper() not in colors for symbol in wanted_colors):
+        if not any(str(symbol).upper() in colors for symbol in wanted_colors):
             return False
     # "a **basic** land card" (Cultivate). A supertype is printed on the type
     # line and needs no computed characteristic to read — which is the whole
