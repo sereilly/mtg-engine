@@ -442,6 +442,13 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
             raise LoweringError(
                 f"nothing performs the {node.unpaid_penalty!r} penalty", node=node
             )
+    if node.countered_to is not None:
+        # "…**put it on top of its owner's library instead of into that
+        # player's graveyard**" (Memory Lapse). CR 614.1 replacing CR 701.5a's
+        # own destination, carried as the one key the handler reads before it
+        # bins the card. Emitted only when the card prints the tail, so every
+        # counterspell written before this keeps a byte-identical payload.
+        payload["countered_destination"] = _countered_destination(node)
 
     if bound_to_trigger:
         # No `targets` description at all: a trigger chooses nothing (CR 603.3),
@@ -454,6 +461,47 @@ def _lower_counter_spell(node: ast.CounterSpell) -> tuple[OracleInstruction, ...
     # battlefield permanents.
     payload["targets"] = {"quantifier": "target", "kind": "spell"}
     return (OracleInstruction("counter_top_stack_spell", "", payload),)
+
+
+#: Where a countered card may be sent instead of its owner's graveyard, as
+#: ``(zone name, position)`` → the key the handler routes on. A pair outside
+#: this refuses: the seams that move a card are
+#: :meth:`Game.put_card_into_library` and :meth:`Game.put_card_into_hand`, and
+#: a destination neither performs would be a card announced somewhere and
+#: quietly binned in the graveyard the sentence said it was avoiding.
+_COUNTERED_DESTINATIONS = {
+    ("library", "top"): "library_top",
+    ("library", "bottom"): "library_bottom",
+    ("hand", ""): "hand",
+}
+
+
+def _countered_destination(node: ast.CounterSpell) -> str:
+    """The key :data:`_COUNTERED_DESTINATIONS` gives *node*'s printed tail.
+
+    The zone's owner has to be the card's **owner**. CR 404.3 puts a countered
+    card into its owner's graveyard, so "its owner's library" is the same seat
+    the sentence is replacing — and a possessive naming anyone else would land
+    the card in the wrong player's zone, visibly only when the two seats differ
+    (a spell cast from an opponent's library, or with an ownership change
+    behind it). Refusing is the loud half of that.
+    """
+    zone = node.countered_to
+    assert zone is not None
+    if zone.owner is None or zone.owner.kind != "owner":
+        raise LoweringError(
+            "a countered card is redirected to its owner's zone", node=node
+        )
+    key = (zone.name, node.countered_to_position)
+    destination = _COUNTERED_DESTINATIONS.get(key)
+    if destination is None:
+        raise LoweringError(
+            "no counter flow sends a countered card to "
+            f"{(node.countered_to_position + ' of ') if node.countered_to_position else ''}"
+            f"its owner's {zone.name}",
+            node=node,
+        )
+    return destination
 
 
 def _lower_counter_ability(

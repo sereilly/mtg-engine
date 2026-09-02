@@ -121,6 +121,7 @@ from .cards import (
 from .library import (
     _parse_shuffle_graveyard_into_library,
     _parse_shuffle_hand_into_library,
+    _parse_shuffle_library,
     _parse_exile_top_of_library,
     _parse_look_at_hand,
     _parse_put_iterated_card_on_library,
@@ -219,6 +220,7 @@ __all__ = [
     "_parse_delayed_self_action",
     "_parse_shuffle_graveyard_into_library",
     "_parse_shuffle_hand_into_library",
+    "_parse_shuffle_library",
     "_parse_discard",
     "_parse_discard_revealed_unless_pay_life",
     "_parse_mill",

@@ -52,6 +52,12 @@ _NOT_A_BATTLEFIELD_EXIT = {
     # not a permanent, and not a battlefield exit. Its creature half goes
     # through ``_bounce_target_creature``, which does pass the keyword.
     ("handlers/zones.py", "return_spell_or_creature_to_hand"),
+    # "…put it on top of its owner's library instead of into that player's
+    # graveyard" (Memory Lapse). ``countered`` is a StackItem for the same
+    # reason as the row above: a countered spell is an object on the stack
+    # (CR 701.5a), so its card was never on a battlefield to leave one, and
+    # there is no permanent for the seam to name.
+    ("handlers/stack.py", "_redirect_countered_card"),
 }
 
 

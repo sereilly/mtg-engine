@@ -1720,21 +1720,50 @@ class PendingChoicesMixin:
         return self.resolve_pending_choice("land_type_choice", player_index, land_type=land_type)
 
     def _resolve_land_type(self, choice: PendingChoice, land_type: str) -> bool:
+        """CR 609.3's choice, made: the land's type is recorded now.
+
+        Two armings reach here. Phantasmal Terrain's names the land by its
+        owner's seat and its battlefield slot, and keys the contribution on the
+        **Aura**, so the change ends when the Aura does. Jinx's names it by
+        ``permanent_id`` and keys the contribution on a duration label, because
+        an instant has no permanent for the change to hang on and the cleanup
+        step is what ends it. Which land and which source are therefore both
+        read off the choice rather than assumed — the Aura's spelling is kept
+        exactly as it was so its behaviour does not move.
+        """
         land_type = str(land_type or "").strip().lower()
         if land_type not in self._BASIC_LAND_TYPES:
             return False
-        owner = self.players[choice.data["land_owner_index"]]
-        idx = choice.data["land_index"]
-        if 0 <= idx < len(owner.battlefield):
-            land = owner.battlefield[idx]
+        permanent_id = choice.data.get("land_permanent_id")
+        if permanent_id is not None:
+            # An id, not a slot: anything leaving the battlefield renumbers
+            # every later index, and this answer arrives after the handler that
+            # armed it has returned (ROADMAP idiom 11). A land that has left
+            # resolves to None, which is a fizzle and not a fall back to
+            # whichever permanent inherited the slot.
+            land = self.permanent_by_id(permanent_id)
+        else:
+            owner = self.players[choice.data["land_owner_index"]]
+            idx = choice.data["land_index"]
+            land = (
+                owner.battlefield[idx]
+                if 0 <= idx < len(owner.battlefield) else None
+            )
+        if land is not None:
             # Keyed on the Aura, so the change ends when the Aura does — and
-            # ends only its own contribution.
+            # ends only its own contribution. Jinx passes its own label instead.
             change_land_type(
                 land, land_type,
-                source=choice.data.get("_aura"), label=choice.data["card_name"],
+                source=choice.data.get("land_type_source", choice.data.get("_aura")),
+                label=choice.data["card_name"],
             )
             self.log.append(
-                f"{choice.data['card_name']}: enchanted land becomes a {land_type.title()}"
+                f"{choice.data['card_name']}: "
+                + (
+                    "enchanted land" if permanent_id is None
+                    else land.card.name
+                )
+                + f" becomes a {land_type.title()}"
             )
         self.discard_pending_choice(choice)
         return True

@@ -228,3 +228,190 @@ def test_bakis_curse_counts_an_opponents_aura_on_your_creature(set_pool):
 
     assert mine.damage_marked == 2
 
+
+
+# --- W2G2: library search, reveal and tuck ---
+
+from engine import Game as _G2Game, PlayerState as _G2PlayerState
+from engine.oracle import compile_card_oracle as _g2_compile
+from engine.targeting import derive_cast_spec as _g2_cast_spec
+
+
+def _g2_duel(*, interactive=(0,)):
+    """A two-seat game with costs off. Seat 0 is interactive by default, so a
+    prompt this group arms is *queued* rather than answered by its own default —
+    ROADMAP idiom 39: a headless probe cannot tell "nobody was asked" from
+    "nobody was there to ask"."""
+    p0, p1 = _G2PlayerState(name="A"), _G2PlayerState(name="B")
+    game = _G2Game(players=[p0, p1])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game, p0, p1
+
+
+def test_merchant_scroll_offers_only_blue_instants(set_pool, catalog_by_name):
+    """"Search your library for **a blue instant** card."
+
+    Both halves of the phrase are tested by the picker, so the library holds one
+    card that fails each half on its own. A colour the flow could not test would
+    have left every instant offered — the card would still have reported
+    supported, and the search would silently be Merchant Scroll's without its
+    adjective.
+    """
+    game, p0, _p1 = _g2_duel()
+    p0.library = [
+        catalog_by_name["Lightning Bolt"],      # instant, wrong colour
+        catalog_by_name["Ancestral Recall"],    # blue, and an instant
+        catalog_by_name["Counterspell"],        # blue, and an instant
+        catalog_by_name["Time Walk"],           # blue, wrong card type
+    ]
+    p0.hand = [set_pool("HML")["Merchant Scroll"]]
+
+    game.cast_from_hand(0, "Merchant Scroll")
+    game._settle()
+
+    assert game.pending_search_library is not None
+    assert not game.confirm_search_library(0, 0)   # Lightning Bolt: not blue
+    assert not game.confirm_search_library(0, 3)   # Time Walk: not an instant
+    assert game.confirm_search_library(0, 1)       # Ancestral Recall
+    assert [card.name for card in p0.hand] == ["Ancestral Recall"]
+
+
+def test_merchant_scroll_reveals_what_it_finds(set_pool, catalog_by_name):
+    """"…**reveal that card**…" (CR 701.20a): the find is shown to every player,
+    which is the printed word this production used to refuse outright — it read
+    "reveal it" and "reveal them" and nothing else."""
+    game, p0, _p1 = _g2_duel()
+    p0.library = [catalog_by_name["Counterspell"]]
+    p0.hand = [set_pool("HML")["Merchant Scroll"]]
+
+    game.cast_from_hand(0, "Merchant Scroll")
+    game._settle()
+    game.confirm_search_library(0, 0)
+
+    assert any(
+        "Counterspell" in event["cards"] for event in game.reveal_events
+    ), game.reveal_events
+
+
+def test_prophecy_reads_the_opponents_library_and_not_its_own(set_pool, catalog_by_name):
+    """"Reveal the top card of **target opponent's** library. If it's a land,
+    you gain 1 life."
+
+    The two decks are stacked to disagree: the caster's top card is a land and
+    the opponent's is not. A reveal that opened the caster's own library — which
+    is what the handler did before whose-library became payload — would gain the
+    life, so the assertion that no life was gained is the one that can only pass
+    for the right reason.
+    """
+    game, p0, p1 = _g2_duel()
+    p0.library = [catalog_by_name["Forest"], catalog_by_name["Forest"]]
+    p1.library = [catalog_by_name["Counterspell"], catalog_by_name["Forest"]]
+    p0.hand = [set_pool("HML")["Prophecy"]]
+    before = p0.life
+
+    game.cast_from_hand(0, "Prophecy", target_player_index=1)
+    game._settle()
+
+    assert p0.life == before
+    assert any(
+        "Counterspell" in event["cards"] for event in game.reveal_events
+    ), game.reveal_events
+
+
+def test_prophecy_gains_a_life_for_a_land_on_top(set_pool, catalog_by_name):
+    """The other branch of the same conditional, off the same record: the
+    revealed card is read out of the resolution's scratchpad rather than off the
+    library, which is what lets the shuffle behind it be a real shuffle."""
+    game, p0, p1 = _g2_duel()
+    p1.library = [catalog_by_name["Forest"], catalog_by_name["Island"]]
+    p0.hand = [set_pool("HML")["Prophecy"]]
+    before = p0.life
+
+    game.cast_from_hand(0, "Prophecy", target_player_index=1)
+    game._settle()
+
+    assert p0.life == before + 1
+
+
+def test_prophecy_leaves_the_revealed_card_in_the_library(set_pool, catalog_by_name):
+    """CR 701.20a — revealing shows a card and **moves it nowhere**. The library
+    keeps every card it had, and "Then that player shuffles" is the sentence
+    that makes the reveal cost the opponent something rather than nothing."""
+    game, p0, p1 = _g2_duel()
+    p1.library = [catalog_by_name["Forest"], catalog_by_name["Island"]]
+    p0.hand = [set_pool("HML")["Prophecy"]]
+
+    game.cast_from_hand(0, "Prophecy", target_player_index=1)
+    game._settle()
+
+    assert sorted(card.name for card in p1.library) == ["Forest", "Island"]
+
+
+def test_prophecy_shuffles_the_opponents_library_and_not_the_casters(set_pool, catalog_by_name):
+    """"**Then that player shuffles.**" — the player the first sentence named,
+    not the one resolving the spell.
+
+    Which library was **not** touched is what a test can prove exactly: the
+    caster's deck is left in a distinguishable order and has to still be in it.
+    A shuffle is random, so the one that did happen is read off the log — the
+    honest observable for an event whose whole content is that an order stopped
+    being knowable.
+    """
+    game, p0, p1 = _g2_duel()
+    p0.library = [
+        catalog_by_name[name] for name in ("Forest", "Island", "Swamp", "Mountain")
+    ]
+    p1.library = [catalog_by_name["Island"], catalog_by_name["Forest"]]
+    p0.hand = [set_pool("HML")["Prophecy"]]
+
+    game.cast_from_hand(0, "Prophecy", target_player_index=1)
+    game._settle()
+
+    assert [card.name for card in p0.library] == [
+        "Forest", "Island", "Swamp", "Mountain"
+    ]
+    assert sorted(card.name for card in p1.library) == ["Forest", "Island"]
+    assert "B shuffled their library" in game.log
+    assert "A shuffled their library" not in game.log
+
+
+def test_prophecy_offers_an_opponent_to_target(set_pool):
+    """The picker's half of the same fix. ``derive_cast_spec`` answered None
+    while the first line did not parse — no instruction carried a target
+    description — and None is what the client tests to decide whether to ask for
+    a target at all, so the app could not aim the card it was happily
+    reporting supported."""
+    card = set_pool("HML")["Prophecy"]
+
+    assert _g2_cast_spec(card, _g2_compile(card)) == {
+        "kind": "player", "opponents_only": True
+    }
+
+
+def test_a_two_colour_search_phrase_means_either_colour(catalog_by_name):
+    """Merchant Scroll names one colour, but the field it rides can hold two —
+    and "a green **or** white creature" is what two mean everywhere else in this
+    engine (``ObjectFilter.to_payload`` emits that case as ``any_colors``).
+
+    Written against an invented sentence rather than a card, because the pool
+    prints no two-colour search: the bug this pins is a *disagreement between
+    readers*, and it would have shipped silently in the narrow direction — a
+    "white or blue" tutor finding only gold cards, with nothing red and no card
+    to notice it on.
+    """
+    from engine.grammar import compile_line as _g2_compile_line
+    from engine.search_filters import search_matches as _g2_matches
+
+    result = _g2_compile_line(
+        "Search your library for a white or blue card, put that card into "
+        "your hand, then shuffle.",
+        card_name="Test",
+    )
+    assert result.usable, result.lowering_error
+    data = result.instructions[0].payload
+
+    assert _g2_matches(catalog_by_name["Swords to Plowshares"], data)  # white
+    assert _g2_matches(catalog_by_name["Counterspell"], data)          # blue
+    assert not _g2_matches(catalog_by_name["Lightning Bolt"], data)    # red
+    assert not _g2_matches(catalog_by_name["Black Lotus"], data)       # colourless

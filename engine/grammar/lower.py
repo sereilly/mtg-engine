@@ -331,10 +331,6 @@ def lower_statement(
             statement, statement.bound_card_from or event
         )
 
-    if isinstance(statement, ast.RevealTop):
-        # CR 701.20b: revealing shows a card and moves nothing, so the whole
-        # effect is the record it leaves for the sentences after it.
-        return (OracleInstruction("reveal_top_of_library", "", {}),)
     if isinstance(statement, ast.Sacrifice):
         # ``event``, not ``dispatch_event``: what "that artifact" names is a
         # fact about the *trigger* — its condition already named the enchanted

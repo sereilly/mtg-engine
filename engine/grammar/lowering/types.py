@@ -168,7 +168,12 @@ def _lower_change_supertype(node: ast.ChangeSupertype) -> tuple[OracleInstructio
 #: duration always fails in. "Until its controller's next untap step" is the
 #: one the untap step itself lifts; the absent kind is CR 611.2's
 #: "indefinitely", which the recorded contribution already holds.
-_LAND_TYPE_DURATIONS = frozenset({None, "until_controllers_next_untap_step"})
+#: "Until end of turn" (Jinx) is the cleanup step's, swept beside every other
+#: until-end-of-turn record; it is admitted here *because* that sweep exists,
+#: which is the whole rule this table states.
+_LAND_TYPE_DURATIONS = frozenset(
+    {None, "until_controllers_next_untap_step", "until_end_of_turn"}
+)
 
 
 def _lower_change_land_type(node: ast.ChangeLandType) -> tuple[OracleInstruction, ...]:
@@ -183,6 +188,13 @@ def _lower_change_land_type(node: ast.ChangeLandType) -> tuple[OracleInstruction
     The land type is payload, so a card printed about a Forest is this
     production. The **duration** is not: a window with no sweep behind it is a
     change that never ends, so a kind absent from the table above refuses.
+
+    "…becomes **the basic land type of your choice**" (Jinx) carries the choice
+    as its own boolean and no ``land_type`` at all. The sentinel stops at this
+    boundary the way ``CHOSEN_COLOR`` does one family over: a handler reading an
+    AST constant would be the dispatch side importing the parser's vocabulary,
+    and a payload whose ``land_type`` is the literal string "chosen_land_type"
+    is one ``change_land_type`` call away from stamping that on a land.
     """
     if node.duration.kind not in _LAND_TYPE_DURATIONS:
         raise LoweringError(
@@ -192,10 +204,19 @@ def _lower_change_land_type(node: ast.ChangeLandType) -> tuple[OracleInstruction
         raise LoweringError(
             "a land-type change names one target land", node=node
         )
+    # The named type keeps its place at the front of the payload: these dicts
+    # are compared by ``repr`` in the behavioural signatures and in the
+    # whole-pool differential, so a key that changed position would report every
+    # land-type card as moved.
+    named = {} if node.land_type == ast.CHOSEN_LAND_TYPE else {
+        "land_type": node.land_type
+    }
     payload: dict[str, object] = {
-        "land_type": node.land_type,
+        **named,
         "duration": node.duration.kind or "permanent",
         **_filter_payload(node.subject.filter),
     }
+    if not named:
+        payload["choose_land_type"] = True
     _describe_targets(payload, node.subject)
     return (OracleInstruction("change_land_type_until", "", payload),)

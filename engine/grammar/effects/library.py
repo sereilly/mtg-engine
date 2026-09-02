@@ -33,15 +33,34 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     your hand. Otherwise, put it on the bottom of your library.`` (Garruk,
     Savage Herald.)
 
+    ``Reveal the top card of target opponent's library.`` (Prophecy.)
+
     One production for the whole three-sentence template, interior full stops
     included: the sentences all describe one revealed card, so parsed apart
     two of them dangle a referent nothing binds. Every word of both
     destinations is required — hand-or-bottom is the effect, and a wording
     that sorted elsewhere would be a different card wearing this one's head.
+
+    **Whose** library is read rather than spelled, because the seat is the one
+    thing about a reveal that cannot be inferred: it was the literal word
+    "your", so Prophecy failed on the word after "of" — and admitting the
+    phrase without recording it would have opened the caster's own library
+    while the card named an opponent's.
     """
     stream.expect_word("reveal")
-    for word in ("the", "top", "card", "of", "your", "library"):
+    for word in ("the", "top", "card", "of"):
         stream.expect_word(word)
+    if stream.accept_word("your"):
+        player = ast.PlayerRef("you")
+    else:
+        # "…of **target opponent's** library" (Prophecy). The lexer splits the
+        # possessive into its own token, as it does everywhere a player owns a
+        # zone.
+        player = parse_player_ref(stream)
+        if player is None:
+            raise stream.error("expected whose library is revealed from")
+        stream.expect_word("'s")
+    stream.expect_word("library")
     # "Scry 3, then reveal the top card of your library. If it's a creature or
     # land card, draw a card." (Track Down.) The reveal is the whole sentence
     # and what follows it is an ordinary conditional, so the bare node is
@@ -51,13 +70,21 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     # unaffected, and a line that does not gets a node instead of a refusal.
     mark = stream.mark()
     if not stream.accept_punct("."):
-        return ast.RevealTop()
+        return ast.RevealTop(player)
+    # The hand-or-bottom template is about the reader's **own** library: both of
+    # its destinations say "your", and reaching it from another seat's library
+    # would move a card out of that deck into this one's hand. A reveal of
+    # somebody else's top card gets the bare node and whatever ordinary
+    # sentences follow it, which is Prophecy's shape.
+    if player.kind != "you":
+        stream.reset(mark)
+        return ast.RevealTop(player)
     if not stream.accept_word("if"):
         stream.reset(mark)
-        return ast.RevealTop()
+        return ast.RevealTop(player)
     if not (stream.accept_phrase("it", "'s") or stream.accept_phrase("it", "is")):
         stream.reset(mark)
-        return ast.RevealTop()
+        return ast.RevealTop(player)
     stream.accept_word("a", "an")
     filt = parse_object_filter(stream)
     stream.accept_punct(",")
@@ -66,7 +93,7 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
         # thing back and let the sentence loop read it as the two statements it
         # is.
         stream.reset(mark)
-        return ast.RevealTop()
+        return ast.RevealTop(player)
     if not stream.accept_punct("."):
         raise stream.error("expected the 'Otherwise' sentence")
     stream.expect_word("otherwise")
@@ -479,8 +506,14 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # the two-name spelling of the same word.
     reveal = bool(stream.accept_word("reveal"))
     if reveal:
-        if not stream.accept_word("them"):
-            stream.expect_word("it")
+        # "reveal it" / "reveal them" / "reveal **that card**" (Merchant
+        # Scroll). The same three spellings the `put` clause twelve lines below
+        # already reads, because both name the same find: the referent is one
+        # fact about this sentence, and a reader admitting fewer spellings here
+        # than there refuses a line whose two halves agree with each other.
+        if not stream.accept_word("it", "them"):
+            stream.expect_word("that")
+            stream.expect_word("card")
         stream.accept_punct(",")
     # ", and put it into your hand" — the conjunction is the graveyard
     # template's punctuation, not a second effect: "put" must follow either way.
@@ -845,3 +878,45 @@ def _parse_shuffle_hand_into_library(stream: TokenStream) -> ast.Statement | Non
     else:
         stream.reset(probe)
     return ast.ShuffleHandIntoLibrary(player, then_draw=then_draw)
+
+
+def _parse_shuffle_library(stream: TokenStream) -> ast.Statement | None:
+    """``That player shuffles.`` (Prophecy's third sentence.)
+    ``Shuffle your library.``
+
+    CR 701.16 on its own — a library randomised with nothing moving into it.
+    Read **after** the two zone-moving shuffles above, because both of those
+    open with the same subject and the same verb and only they name the pile
+    that moves: tried first, this one would take "Each player shuffles the
+    cards from their hand into their library" as a bare shuffle and leave the
+    rest of the sentence to fail the line.
+
+    Non-consuming on refusal, so the sentence readers after it keep whatever
+    refusal they had. The player is required — "shuffles" with no subject is a
+    library nobody named, and defaulting it to the caster is how Prophecy would
+    shuffle its own deck instead of the opponent's.
+    """
+    mark = stream.mark()
+    if stream.accept_word("shuffle"):
+        # The imperative spelling, whose subject is the effect's controller
+        # (CR 608.2): "Shuffle your library."
+        if not stream.accept_phrase("your", "library"):
+            stream.reset(mark)
+            return None
+        return ast.ShuffleLibrary(ast.PlayerRef("you"))
+    player = parse_player_ref(stream)
+    if player is None or not stream.accept_word("shuffles"):
+        stream.reset(mark)
+        return None
+    # "that player shuffles **their library**" — the same zone the bare verb
+    # already means (CR 701.16a shuffles a library), so the words are optional
+    # rather than a second production. Any *other* possessive is a different
+    # player's deck and refuses: consuming it unread is how a shuffle lands on
+    # the wrong library.
+    probe = stream.mark()
+    if stream.accept_word("their", "your"):
+        if not stream.accept_word("library"):
+            stream.reset(probe)
+            stream.reset(mark)
+            return None
+    return ast.ShuffleLibrary(player)

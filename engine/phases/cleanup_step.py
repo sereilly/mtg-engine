@@ -15,7 +15,9 @@ from ..models import Permanent
 from ..keywords import (clear_granted_ability_lines,
                         clear_granted_keywords)
 from ..control import end_until_eot_control_changes
+from ..handlers.board_misc import LAND_TYPE_UNTIL_EOT
 from ..handlers.control_changes import TAP_WHEN_CONTROL_LOST
+from ..land_types import end_land_type_changes_from
 from ..layer_bridge import GAINED_TYPES
 from ..mixins._constants import _EOT_METADATA_KEYS
 from ..damage_redirects import clear_redirects
@@ -133,6 +135,15 @@ class CleanupStepMixin:
                 # the end of the turn it was created.
                 permanent.regeneration_shield = 0
                 remove_temporary_pt(permanent, "end_of_turn")
+                # "Target land becomes the basic land type of your choice
+                # **until end of turn**." (Jinx.) The untap step's twin, one
+                # turn boundary earlier: the record is keyed by a label rather
+                # than by the permanent that made it — Jinx is an instant and
+                # has none — and it is dropped here by that label's prefix.
+                # Dropping one contribution *is* the reversion (CR 611.3b):
+                # what the land is afterwards is whatever the other
+                # contributions still say, not what was printed on it.
+                end_land_type_changes_from(permanent, prefix=LAND_TYPE_UNTIL_EOT)
                 for key in _EOT_METADATA_KEYS:
                     permanent.metadata.pop(key, None)
                 # A gained type whose duration is "until end of turn" ends here,

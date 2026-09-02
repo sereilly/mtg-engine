@@ -2871,14 +2871,47 @@ def reveal_top_of_library(game: Game, instruction: OracleInstruction, context: O
     card. An empty library records nothing, which the condition reads as False —
     a legal outcome, not an error.
     """
-    caster = context.caster
-    if not caster.library:
-        game.log.append(f"{caster.name} has no library to reveal from")
+    # "Reveal the top card of **target opponent's** library." (Prophecy.) Whose
+    # deck is opened is payload, because the sentences behind the reveal read
+    # the record it leaves: revealing off the caster's own library would gain
+    # the life for the wrong card and leave the wrong deck to be shuffled.
+    # Absent for every reveal printed about "your library", so those keep
+    # reaching ``context.caster`` and their payload byte-identical.
+    whose = str(instruction.payload.get("whose", "you"))
+    revealer = context.caster if whose == "you" else context.target
+    if revealer is None:
+        game.log.append(f"{context.card.name}: no player to reveal from")
         return True, "resolved"
-    top = caster.library[0]
+    if not revealer.library:
+        game.log.append(f"{revealer.name} has no library to reveal from")
+        return True, "resolved"
+    top = revealer.library[0]
     context.results["revealed_card"] = top
-    game.log.append(f"{caster.name} revealed {top.name} from the top of their library")
-    game.record_reveal(game.players.index(caster), [top.name])
+    game.log.append(
+        f"{revealer.name} revealed {top.name} from the top of their library"
+    )
+    game.record_reveal(game.players.index(revealer), [top.name])
+    return True, "resolved"
+
+
+@effect_handler("shuffle_library")
+def shuffle_library(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Then that player shuffles." (Prophecy.) CR 701.16.
+
+    The library is randomised and **nothing moves into it**, which is what
+    separates this from the two shuffles below that empty a zone first: those
+    have a pile to move, and this has the reason no pile is needed — a card was
+    looked at, and the shuffle is what stops anybody knowing where it went.
+
+    Through the module-level RNG every other shuffle here uses, so a seeded run
+    stays reproducible (the determinism invariant).
+    """
+    whose = str(instruction.payload.get("whose", "you"))
+    player = context.caster if whose == "you" else context.target
+    if player is None:
+        return False, "no player to shuffle"
+    random.shuffle(player.library)
+    game.log.append(f"{player.name} shuffled their library")
     return True, "resolved"
 
 

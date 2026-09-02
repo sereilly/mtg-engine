@@ -23,9 +23,10 @@ from .. import ast
 from ..errors import LoweringError
 from ._events import CREATED_TOKEN, EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
 from ._common import (
-    _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_several_targets, _describe_targets,
-    _filter_payload, _is_created_token, _is_source, _names_several_targets,
-    _restrictions_beyond, dropped_narrowings,
+    _PAYLOAD_HONOURED_FILTER_FIELDS, _amount_payload, _describe_several_targets,
+    _describe_targets, _filter_payload, _is_created_token, _is_source,
+    _names_several_targets, _restrictions_beyond, chargeable_card_filter,
+    dropped_narrowings,
 )
 
 
@@ -465,3 +466,331 @@ def _lower_exile_cost_sacrifices(
     decided.
     """
     return (OracleInstruction("exile_cost_sacrifices", "", {}),)
+
+
+# ---------------------------------------------------------------------------
+# Cards exiled *with* a source, and the permission to cast them
+# ---------------------------------------------------------------------------
+#
+# Moved here whole from `lowering/library.py` when that module crossed the
+# thousand-line guard. Its docstring named its family "search, reveal,
+# look-at, **and exile linkage**", and the trailing conjunct is what had
+# stopped being a lodger: every shape below pivots on the linked-exile record
+# (`engine/linked_exile.py`) and on what may later be cast out of it, which is
+# this module's stated subject and not that one's. The cut is where the call
+# graph already fell apart — nothing left in `library` calls anything below
+# and nothing below calls anything left there, which is what the family rule
+# requires of two families in one package.
+
+def _lower_exile_top_of_library(node: ast.ExileTopOfLibrary) -> tuple[OracleInstruction, ...]:
+    """"Exile the top three cards of your library." (Chandra, Heart of Fire's
+    +1.) The handler records what it exiled under ``exiled_cards``, which is
+    what makes a following "you may play cards exiled this way" lowerable —
+    see ``_lower_cast_permission``'s producer check."""
+    amount = _amount_payload(node.count)
+    if not isinstance(amount, int) or amount <= 0:
+        raise LoweringError(
+            "the top-of-library exile handler takes a fixed count", node=node
+        )
+    payload: dict = {"amount": amount}
+    if node.face_down:
+        payload["face_down"] = True
+    return (OracleInstruction("exile_top_of_library", "", payload),)
+
+
+#: Where a linked pile can be sent. Payload, not part of the kind: a second
+#: card printing the sentence with another destination needs no code. A zone
+#: outside this refuses, because a pile put somewhere the handler cannot reach
+#: is a pile silently left in exile. A library is deliberately not here: a card
+#: put into one has to go somewhere in it, and no printing of this sentence says
+#: where.
+_LINKED_EXILE_DESTINATIONS = frozenset({"hand", "graveyard", "battlefield"})
+
+
+def _lower_put_exiled_with_source(
+    node: ast.PutExiledWithSource,
+) -> tuple[OracleInstruction, ...]:
+    """"Put all cards exiled with this artifact into their owner's hand."
+    (Knowledge Vault.)
+
+    The owner reference is checked rather than dropped: every printing of this
+    sentence sends each card to *its own* owner's zone (CR 400.3), and a
+    wording naming one player would be a different effect the handler does not
+    implement.
+    """
+    zone = node.zone
+    if zone.name not in _LINKED_EXILE_DESTINATIONS:
+        raise LoweringError(
+            f"a linked exile cannot be put into the {zone.name}", node=node
+        )
+    if zone.owner is None or zone.owner.kind != "owner":
+        raise LoweringError(
+            "a linked exile goes to each card's own owner's zone", node=node
+        )
+    return (
+        OracleInstruction("put_exiled_with_source", "", {"zone": zone.name}),
+    )
+
+
+# Restrictions the exile-search picker tests (engine/search_filters.py's
+# vocabulary is not reused because this picker admits a *union* of card types,
+# which the single-tutor flow deliberately refuses).
+_SEARCH_EXILE_HONOURED = frozenset({"card_types", "colors", "is_card", "type_match"})
+
+
+def _lower_search_and_exile(node: ast.SearchAndExile) -> tuple[OracleInstruction, ...]:
+    """"Search your graveyard and library for any number of red instant and/or
+    sorcery cards, exile them, then shuffle." (Chandra, Heart of Fire's −9.)
+
+    Arms the multi-select search choice; the picks are validated against the
+    same payload by the resolver, the AI default and the web renderer, so
+    every seat answers the same search. A restriction the picker cannot test
+    refuses rather than being dropped.
+    """
+    filt = node.filter
+    if not filt.is_card:
+        raise LoweringError("a search finds cards, not permanents", node=node)
+    leftover = _restrictions_beyond(filt, _SEARCH_EXILE_HONOURED)
+    if leftover:
+        raise LoweringError(
+            "the exile-search picker cannot test this restriction: "
+            + ", ".join(leftover),
+            node=node,
+        )
+    payload: dict[str, object] = {
+        "zones": ("graveyard", "library"),
+        "card_types": tuple(filt.card_types),
+        "colors": tuple(filt.colors),
+    }
+    return (OracleInstruction("search_and_exile_matching", "", payload),)
+
+
+def _linked_exile_filter(filt: ast.ObjectFilter) -> dict:
+    """The payload for a filter over cards in a **zone**, or a refusal.
+
+    The zone words are read by the production and so are honoured here; what is
+    left has to be answerable of a card that has no battlefield object behind it,
+    which is the one question ``chargeable_card_filter`` exists to settle. Going
+    through it rather than round the side means "creature cards with mana value 3
+    or less" narrows the same way whether it is being exiled, discarded as a cost,
+    or offered by a picker.
+    """
+    default = ast.ObjectFilter()
+    described = chargeable_card_filter(
+        dataclasses.replace(
+            filt, zone=default.zone, zone_owner=default.zone_owner, is_card=True
+        )
+    )
+    if described is None:
+        raise LoweringError(
+            "the linked exile cannot test this restriction on a card in a zone",
+            node=filt,
+        )
+    return described
+
+
+def _lower_exile_graveyard_until_leaves(
+    node: ast.ExileGraveyardUntilLeaves,
+) -> tuple[OracleInstruction, ...]:
+    """"Exile all creature cards with mana value 3 or less from your graveyard
+    **until this artifact leaves the battlefield**." (Idol of Endurance.)
+
+    A linked exile (CR 400.7): the cards are held by the *permanent*, so both
+    halves of the card read one pile — what comes back when the Idol dies is
+    what its ability could cast while it lived.
+    """
+    return (
+        OracleInstruction(
+            "exile_graveyard_until_leaves", "",
+            {"filter": _linked_exile_filter(node.filter)},
+        ),
+    )
+
+
+def _lower_transmute_by_sacrifice(
+    node: "ast.TransmuteBySacrifice",
+) -> tuple[OracleInstruction, ...]:
+    """Transmute Artifact. Both printed nouns ride the payload; everything else
+    the sentence says was required by the production that read it, so there is
+    nothing left here to drop."""
+    from ...subject_filters import object_only_filter
+
+    sacrificed = _filter_payload(node.sacrificed)
+    if object_only_filter(sacrificed) is None:
+        # The sacrifice prompt is handed a set of the player's own permanents
+        # and no observer, so a narrowing it cannot test would be dropped where
+        # it is charged — the same refusal every sacrifice cost makes.
+        raise LoweringError(
+            "the sacrifice half of this effect cannot test that phrase", node=node
+        )
+    found = chargeable_card_filter(node.found)
+    if found is None:
+        raise LoweringError(
+            "the search half of this effect cannot test that phrase", node=node
+        )
+    return (
+        OracleInstruction(
+            "transmute_by_sacrifice", "",
+            {"sacrifice_filter": sacrificed, "search_filter": found},
+        ),
+    )
+
+
+def _lower_cast_from_exiled_with(
+    node: ast.CastFromExiledWith,
+) -> tuple[OracleInstruction, ...]:
+    """"Until end of turn, you may cast a creature spell from among cards exiled
+    with this artifact without paying its mana cost." (Idol of Endurance.)
+
+    Not a new mechanism: this is CR 601.3 permission over the exile zone, which
+    ``grant_cast_permission`` already is. What differs is only which pile —
+    ``cards_from`` names it, where "exiled_cards" reads a step of this same
+    effect and "exiled_with_source" reads the permanent's own linked pile.
+    """
+    return (
+        OracleInstruction(
+            "grant_cast_permission", "",
+            {
+                "zone": "exile",
+                "mode": "cast",
+                "cards_from": "exiled_with_source",
+                "filter": _linked_exile_filter(node.filter),
+                "free": node.free,
+                "duration": "end_of_turn",
+            },
+        ),
+    )
+
+
+#: Which printed duration an "exiled this way" permission carries, keyed by the
+#: three flags the parser sets. A key with two of them set is deliberately
+#: absent: a sentence stating two durations is one this cannot honour, and
+#: picking either would be a permission that ends at a moment the card does not
+#: name.
+_EXILED_PERMISSION_DURATIONS: dict[tuple[bool, bool, bool, bool], str] = {
+    (True, False, False, False): "end_of_turn",
+    (False, True, False, False): "until_source_grants_again",
+    (False, False, True, False): "your_next_upkeep",
+    # "…for as long as it remains exiled" (Ice Cauldron). Nothing sweeps it:
+    # ``cast_permissions._covers`` re-checks the card is still in the granted
+    # zone on every read, which *is* the printed duration. Stated rather than
+    # lowered as "no duration", which is what a card saying nothing means.
+    (False, False, False, True): "while_exiled",
+}
+
+
+def _lower_cast_permission(
+    node: ast.CastPermission, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """A cast-or-play permission sentence (CR 601.3), one instruction kind for
+    all its printed forms — the differences are payload:
+
+    * ``exiled_this_way`` reads the cards a step of this same effect exiled,
+      so it demands the producer exactly as "that much" life does — a
+      permission with nothing to permit is the sentence read wrong;
+    * ``target_card`` carries the chosen graveyard card and the "exile it
+      instead" rider, and deliberately no duration (CR 611.2a);
+    * ``spells_from_hand`` is a cost waiver and must carry one, or it would
+      state the rules default.
+    """
+    if node.what == "exiled_this_way":
+        if "exiled_cards" not in produced:
+            raise LoweringError(
+                "back-reference to 'cards exiled this way' with no exile "
+                "in this effect",
+                node=node,
+            )
+        # A *stated* duration is required (CR 611.2a), but there are now two of
+        # them. Without one the permission outlives the card that granted it;
+        # read as the wrong one it is wrong in a stated direction — end-of-turn
+        # discards Furious Rise's card at the next cleanup, and no-duration
+        # leaves every card it has ever exiled playable at once.
+        # A *stated* duration is required (CR 611.2a), and there are three of
+        # them now. Which one is load-bearing: end-of-turn discards Elkin
+        # Bottle's card at this cleanup, your-next-upkeep keeps it a turn, and
+        # no-duration leaves every card the source ever exiled playable at once.
+        stated = _EXILED_PERMISSION_DURATIONS.get(
+            (
+                node.until_end_of_turn,
+                node.until_source_grants_again,
+                node.until_your_next_upkeep,
+                node.while_exiled,
+            )
+        )
+        if stated is None:
+            raise LoweringError(
+                "an exiled-cards permission needs exactly one printed duration, "
+                "or it would outlive the card that granted it",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "grant_cast_permission", "",
+                {
+                    "zone": "exile",
+                    "mode": node.mode,
+                    "cards_from": "exiled_cards",
+                    "duration": stated,
+                },
+            ),
+        )
+
+    if node.what == "target_card":
+        spec = node.target
+        filt = spec.filter if spec is not None else None
+        if node.mode != "cast" or filt is None:
+            raise LoweringError("a targeted permission casts a chosen card", node=node)
+        if filt.zone != "graveyard" or filt.zone_owner is None or filt.zone_owner.kind != "you":
+            raise LoweringError(
+                "the graveyard cast permission reads the caster's own "
+                f"graveyard, not the {filt.zone}",
+                node=node,
+            )
+        leftover = _restrictions_beyond(
+            filt, _SEARCH_EXILE_HONOURED | {"zone", "zone_owner"}
+        )
+        if leftover:
+            raise LoweringError(
+                "the graveyard cast picker cannot test this restriction: "
+                + ", ".join(leftover),
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "grant_cast_permission", "",
+                {
+                    "zone": "graveyard",
+                    "mode": "cast",
+                    "target_graveyard_card": True,
+                    "card_types": tuple(filt.card_types),
+                    "colors": tuple(filt.colors),
+                    "exile_instead": node.exile_instead,
+                    "duration": "end_of_turn" if node.until_end_of_turn else None,
+                },
+            ),
+        )
+
+    if node.what == "spells_from_hand":
+        if not node.free:
+            raise LoweringError(
+                "a hand permission without a cost waiver states the rules "
+                "default",
+                node=node,
+            )
+        if not node.until_end_of_turn:
+            raise LoweringError(
+                "an unbounded cost waiver is a different card", node=node
+            )
+        return (
+            OracleInstruction(
+                "grant_cast_permission", "",
+                {
+                    "zone": "hand",
+                    "mode": "cast",
+                    "free": True,
+                    "duration": "end_of_turn",
+                },
+            ),
+        )
+
+    raise LoweringError(f"no cast-permission lowering for {node.what!r}", node=node)

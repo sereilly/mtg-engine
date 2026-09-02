@@ -22,7 +22,9 @@ import re
 # set from the first and validates against the second, so a field added here
 # without a test — or a test added without the field — cannot drift apart:
 # there is one copy and the lowering imports it.
-SEARCH_RESTRICTIONS = frozenset({"mana_value", "named", "named_among", "subtypes"})
+SEARCH_RESTRICTIONS = frozenset(
+    {"colors", "mana_value", "named", "named_among", "subtypes"}
+)
 SEARCH_COMPARISONS = frozenset({"eq", "ge", "gt", "le", "lt"})
 
 _COMPARE = {
@@ -49,6 +51,27 @@ def card_has_type(card, wanted: str) -> bool:
     so the line is the whole of what there is to ask.
     """
     return str(wanted).lower() in (getattr(card, "type_line", "") or "").lower()
+
+
+def card_colors(card) -> frozenset[str]:
+    """The colours *card* is, as symbols (CR 105.1, CR 202.2).
+
+    The printed colours, for the same reason :func:`card_has_type` reads the
+    printed type line: a card in a library or a graveyard is not a permanent and
+    has no computed characteristics (CR 613.1), so the card is the whole of what
+    there is to ask. It is the reading ``_stack_item_colors`` and
+    ``damage_source_colors.source_colors`` already take of an object with no
+    layers under it, and this is the third — one function, so a fourth reader
+    cannot spell it a fourth way.
+
+    Deliberately **not** ``commander.color_identity``: CR 903.4 folds in every
+    mana symbol in the rules text and the intrinsic ability of a basic land
+    type, so a Badlands is a black-red *identity* and a colourless *card*.
+    "A blue instant card" asks the second question.
+    """
+    return frozenset(
+        str(symbol).upper() for symbol in (getattr(card, "colors", ()) or ())
+    )
 
 
 def name_key(text: str) -> str:
@@ -87,6 +110,25 @@ def search_matches(card, data: dict) -> bool:
     if any(excluded in type_line for excluded in data.get("exclude_types") or ()):
         return False
     restrictions = data.get("restrictions") or {}
+    # "a **blue** instant card" (Merchant Scroll). A search may test a colour at
+    # all for the reason it may test the type line: a card's colour is its mana
+    # cost's (CR 202.2), printed on it, and needs no computed characteristic
+    # that a card in a library does not have (CR 613.1).
+    #
+    # **OR'd, and the key says so.** A multi-colour ``ObjectFilter.colors``
+    # means "a green **or** white creature" everywhere else in this engine —
+    # ``ObjectFilter.to_payload`` emits exactly that case as ``any_colors`` and
+    # every matcher reads it with ``any(...)``. AND'ing it here would give one
+    # field two meanings depending on which reader asked, which is how the two
+    # come to disagree about the same card; and it would be the *narrow*
+    # disagreement, so a "white or blue" tutor would quietly find only gold
+    # cards. The key is spelled ``any_colors`` rather than ``colors`` so the
+    # name carries the semantics it already has one module over.
+    wanted_colors = restrictions.get("any_colors") or ()
+    if wanted_colors:
+        colors = card_colors(card)
+        if not any(str(symbol).upper() in colors for symbol in wanted_colors):
+            return False
     # "a **basic** land card" (Cultivate). A supertype is printed on the type
     # line and needs no computed characteristic to read — which is the whole
     # test for what this predicate may honour, because a card in a library has

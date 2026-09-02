@@ -532,10 +532,16 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         from ..targeting import stack_object_mana_value
 
         context.results["countered_spell_mana_value"] = stack_object_mana_value(countered)
+        destination = instruction.payload.get("countered_destination")
         if countered.is_copy:
             # 704.5e: a countered copy of a spell ceases to exist instead of
-            # going to a graveyard — it has no physical card to put there.
+            # going to a graveyard — it has no physical card to put there. Also
+            # the answer for a redirected destination: a copy has no card to
+            # put on a library either, and CR 707.10 makes the copy cease to
+            # exist wherever the replacement would have sent it.
             game.log.append(f"{card.name} countered {countered.card.name} (copy), which ceases to exist")
+        elif destination is not None:
+            _redirect_countered_card(game, card, countered, str(destination))
         else:
             game._bin_spell_card(
                 game.players[countered.caster_index], countered.card,
@@ -548,6 +554,41 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
     else:
         game.log.append(f"{card.name} resolved with no spell to counter")
     return True, "resolved"
+
+
+def _redirect_countered_card(game: Game, card, countered, destination: str) -> None:
+    """"…put it on top of its owner's library instead of into that player's
+    graveyard." (Memory Lapse.)
+
+    CR 614.1 replacing the destination CR 701.5a would otherwise give the card,
+    so it happens *instead of* ``_bin_spell_card`` rather than after it — a
+    graveyard visit that is then undone is a zone change other replacements and
+    triggers would have seen.
+
+    Through ``Game.put_card_into_library`` / ``put_card_into_hand`` and not a
+    raw ``library.insert``: those are the two seams CR 903.9b has to be asked at
+    and they have no single fire site, which is why every "put a card into a
+    hand or a library" in this engine goes through them. Each answers False
+    when something diverted the card, and the log says which happened.
+
+    The **owner**, not the caster: CR 404.3's destination is the owner's zone
+    and this replaces only *which* zone, not whose. ``_bin_spell_card``'s
+    caller passes the caster seat, which is the same player for every cast in
+    this pool and is that call site's existing approximation, not one to copy.
+    """
+    owner = game.players[countered.caster_index]
+    if destination == "hand":
+        arrived = game.put_card_into_hand(owner, countered.card)
+        where = "their hand"
+    else:
+        position = "top" if destination == "library_top" else "bottom"
+        arrived = game.put_card_into_library(owner, countered.card, position=position)
+        where = f"the {position} of their library"
+    if arrived:
+        game.log.append(
+            f"{countered.card.name} was countered by {card.name} and put on "
+            f"{where} instead of into their graveyard"
+        )
 
 
 @effect_handler("copy_this_spell")

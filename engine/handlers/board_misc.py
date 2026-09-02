@@ -686,6 +686,13 @@ def animate_self_until_eot(game: Game, instruction: OracleInstruction, context: 
 #: a land permanently something else.
 LAND_TYPE_UNTIL_UNTAP = "until_controllers_next_untap_step"
 
+#: Its twin, one turn boundary earlier. "Target land becomes the basic land
+#: type of your choice **until end of turn**" (Jinx) — the sweep is in
+#: `engine/phases/cleanup_step.py`, beside every other until-end-of-turn record,
+#: and the same rule holds: the lowering admits this duration only because that
+#: sweep exists.
+LAND_TYPE_UNTIL_EOT = "until_end_of_turn"
+
 
 @effect_handler("animate_target_until_eot")
 def animate_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
@@ -837,8 +844,31 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
         # activations of the same Farmer aimed at two lands must not have the
         # second replace the first's contribution.
         source = f"{LAND_TYPE_UNTIL_UNTAP}:{next_timestamp()}"
+    elif duration == LAND_TYPE_UNTIL_EOT:
+        # A label for the same reason, and one this duration cannot do without:
+        # Jinx is an *instant*, so ``context.source_permanent`` is None and two
+        # copies would both key their contribution on None — the second
+        # replacing the first, on a different land.
+        source = f"{LAND_TYPE_UNTIL_EOT}:{next_timestamp()}"
     else:
         source = context.source_permanent
+    if instruction.payload.get("choose_land_type"):
+        # "…becomes **the basic land type of your choice**" (Jinx). CR 609.3
+        # puts the choice inside the resolution, so nothing is recorded until
+        # the seat answers — the prompt holds priority, and the change is made
+        # by the resolver rather than here. The land travels by
+        # ``permanent_id``: an index renumbers when anything leaves, and the
+        # answer arrives after this handler has returned.
+        game.arm_pending_choice(
+            "land_type_choice", game.players.index(context.caster),
+            card_name=context.card.name,
+            land_permanent_id=target.permanent_id,
+            land_type_source=source,
+        )
+        game.log.append(
+            f"{context.card.name}: choose a basic land type for {target.card.name}"
+        )
+        return True, "resolved"
     change_land_type(target, land_type, source=source, label=context.card.name)
     game.log.append(
         f"{target.card.name} became a {land_type.title()} ({context.card.name})"

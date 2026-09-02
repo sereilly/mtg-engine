@@ -19,7 +19,7 @@ from ..lexer import DASH, WORD
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (_accept_mana_alternatives, _parse_counted_sacrifice,
-                       _parse_mana_payment)
+                       _parse_mana_payment, _parse_zone)
 from ..vocabulary import NUMBER_WORDS
 
 
@@ -183,7 +183,73 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
             replaces_prior_amount=replaces_prior,
         )
 
+    # "**If that spell is countered this way, put it on top of its owner's
+    # library instead of into that player's graveyard.**" (Memory Lapse.) Read
+    # here, after every other clause has refused, because a card printing this
+    # tail *and* an "unless … pays" would be a shape no flow performs — the
+    # counter that never happens has no card to redirect — and refusing the
+    # whole line is this grammar's answer to a shape it cannot honour.
+    zone, position = _parse_countered_destination(stream)
+    if zone is not None:
+        return ast.CounterSpell(
+            subject, countered_to=zone, countered_to_position=position
+        )
     return ast.CounterSpell(subject)
+
+
+def _parse_countered_destination(
+    stream: TokenStream,
+) -> "tuple[ast.Zone | None, str]":
+    """``If that spell is countered this way, put it <zone> instead of into
+    that player's graveyard.`` (Memory Lapse; Remand's zone is the hand.)
+
+    CR 614.1's replacement of CR 701.5a's destination, and a *tail of the
+    counter* rather than the next statement: "that spell" is the one the
+    sentence before it countered, so parsed apart this sentence names an object
+    no earlier step handed it. The interior full stop is consumed here for the
+    same reason the search's conditional-shuffle sentence consumes its own —
+    left to the sequence parser it would be a statement no production
+    implements and the whole line would refuse.
+
+    Non-consuming when the tail is not there, and **loud** once its opening
+    seven words have matched: a line that says "countered this way" and then
+    something this cannot read is a card whose destination would otherwise be
+    silently the graveyard, which is the counter it already was.
+    """
+    mark = stream.mark()
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None, ""
+    if not stream.accept_phrase(
+        "if", "that", "spell", "is", "countered", "this", "way"
+    ):
+        stream.reset(mark)
+        return None, ""
+    stream.accept_punct(",")
+    stream.expect_word("put")
+    stream.expect_word("it")
+    position = ""
+    if stream.accept_word("on"):
+        # "on top of" / "on the bottom of" — one zone, two places in it, which
+        # is the pair the library seam takes rather than two destinations.
+        stream.accept_word("the")
+        if stream.accept_word("top"):
+            position = "top"
+        elif stream.accept_word("bottom"):
+            position = "bottom"
+        else:
+            raise stream.error("expected 'top' or 'bottom' of the library")
+        stream.expect_word("of")
+    elif not stream.accept_word("into"):
+        raise stream.error("expected where a countered spell goes instead")
+    zone = _parse_zone(stream)
+    # "**instead of into that player's graveyard**" — required, not skipped.
+    # Without it the sentence would be an unconditional move of a card that is
+    # already somewhere else, and the word "instead" is the whole of what makes
+    # this a replacement (CR 614.1) rather than a second effect.
+    for word in ("instead", "of", "into", "that", "player", "'s", "graveyard"):
+        stream.expect_word(word)
+    return zone, position
 
 
 def _parse_change_target(stream: TokenStream) -> "ast.ChangeTarget | None":
