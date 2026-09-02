@@ -1314,3 +1314,81 @@ def test_leviathan_keeps_its_islands_when_nobody_is_asked(set_pool):
     assert leviathan.tapped, game.log
     assert sum(1 for p in game.controlled_by(0) if p.has_type("island")) == 3, game.log
 # --- end LeadC ---
+
+
+# --- HML W2G4: the pronoun in Whippoorwill's third sentence ---
+
+def test_whippoorwill_exiles_the_creature_that_died_and_not_itself(set_pool):
+    """"When that creature dies this turn, exile **it**."
+
+    "It" is the creature the ability targeted (idiom 20), not the ability's own
+    source — CR 603.7d makes the Whippoorwill the *source* of the delayed
+    ability, and the sentence is not about it. The noun parser collapses the
+    printed "the creature" onto the same bare-pronoun spec "it" produces, and
+    the exile lowering could not tell that from a card naming itself: so the
+    Whippoorwill exiled **itself** every time its target died, while the dead
+    creature's card stayed in the graveyard.
+
+    Nothing in the repo could see it. The card is supported, the census reads
+    every line as claimed, the compiled-program shape is right, and the test
+    beside this one asserts the instruction *kinds* — a list ``exile_self``
+    passes as happily as ``exile_bound_card``. Only giving the behaviour a game
+    finds it, which is the Rock Hydra rule stated one card later.
+    """
+    bird = _nosick(Permanent(card=set_pool("DRK")["Whippoorwill"]))
+    quarry = _nosick(Permanent(card=_mk_creature_card("Quarry", 2, 2)))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bird], life=20),
+        PlayerState(name="P2", battlefield=[quarry], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    result = game.activate_permanent_ability(
+        0, "Whippoorwill", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    game._settle()
+    assert result.supported, result.details
+
+    game._mark_damage_on_permanent(quarry, 5, source=bird)
+    game.check_state_based_actions()
+    game._settle()
+
+    assert game.is_on_battlefield(bird), game.log
+    assert [c.name for c in game.players[1].exile] == ["Quarry"], game.log
+    assert game.players[1].graveyard == [], game.log
+    assert game.players[0].exile == [], game.log
+
+
+def test_whippoorwill_exiles_nothing_when_the_card_has_already_left(set_pool):
+    """CR 608.2's "as much as possible", and the direction that matters: a
+    handler that fell back to a scan would exile whichever card it reached
+    first — an opponent's, or the Whippoorwill's own."""
+    bird = _nosick(Permanent(card=set_pool("DRK")["Whippoorwill"]))
+    quarry = _nosick(Permanent(card=_mk_creature_card("Quarry", 2, 2)))
+    other = _mk_creature_card("Someone Else", 1, 1)
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[bird], life=20),
+        PlayerState(name="P2", battlefield=[quarry], life=20),
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+
+    game.activate_permanent_ability(
+        0, "Whippoorwill", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    game._settle()
+
+    game._mark_damage_on_permanent(quarry, 5, source=bird)
+    game.check_state_based_actions()
+    # Something else moved the card out of the graveyard before the delayed
+    # ability resolved, and left a different card in its place.
+    game.players[1].graveyard = [other]
+    game._settle()
+
+    assert game.players[1].exile == [], game.log
+    assert [c.name for c in game.players[1].graveyard] == ["Someone Else"], game.log
+    assert game.is_on_battlefield(bird), game.log
+# --- end HML W2G4 ---

@@ -77,7 +77,9 @@ def _lower_exile_card_from_hand(
 
 
 def _lower_exile(
-    node: ast.Exile, produced: frozenset[str] = frozenset()
+    node: ast.Exile,
+    produced: frozenset[str] = frozenset(),
+    event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"Exile target creature until end of turn." — and nothing else.
 
@@ -204,6 +206,38 @@ def _lower_exile(
                 f"the counted exile does not honour {leftovers[0]!r}", node=node
             )
         return (OracleInstruction("exile_any_number_of_own_tokens", "", {}),)
+    # "When **the creature** dies this turn, exile **the creature**."
+    # (Whippoorwill.) Idiom 20's pronoun, inside a delayed ability that bound
+    # an object: the words name the creature the *creating* ability targeted,
+    # not the ability's own source (CR 603.7d makes the source the Whippoorwill
+    # and the sentence is not about it). By the time this fires that creature
+    # is a card in a graveyard, so what is exiled is the card — which is why it
+    # is its own kind rather than a payload flag on ``exile_self``: one handler
+    # moves a permanent off a battlefield and the other moves a card out of a
+    # pile, and they share nothing.
+    #
+    # Read above the source branch below, which cannot tell the two apart: the
+    # noun parser collapses "the creature" onto the same bare-pronoun spec "it"
+    # produces (quantifier ``it``, ``is_source``), where a card naming itself
+    # ("this creature", Archfiend's Vessel) parses to quantifier ``this``. That
+    # collapse is why Whippoorwill exiled **itself** whenever its target died —
+    # supported, tested by nothing, and invisible to every census in the repo.
+    #
+    # ``bound_permanent_dies`` alone, not every bound-object delay: it is the
+    # one whose fire site records the dead card. Under a leaves-the-battlefield
+    # or end-of-combat delay the object may still be on a battlefield, which is
+    # a different move and a different handler.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and _is_source(subject)
+        and event == "bound_permanent_dies"
+    ):
+        if node.duration.kind is not None or node.counters:
+            raise LoweringError(
+                "a bound card's exile carries no duration or counters", node=node
+            )
+        return (OracleInstruction("exile_bound_card", "", {}),)
     # "Exile it." / "Exile this creature." (Archfiend's Vessel.) The ability's
     # own source, which is not a chosen target at all — nothing is picked, so
     # there is no picker, no legality check and nothing to re-resolve if it has

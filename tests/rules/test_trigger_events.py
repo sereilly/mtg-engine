@@ -622,3 +622,83 @@ def test_an_opponent_scoped_cast_trigger_can_count_the_spell_that_fired_it():
     game.cast_from_hand(1, "Trick", target_player_index=0, target_permanent_index=0)
     game.resolve_stack()
     assert opponent.life == 16, "the second instant is past the exemption"
+
+
+# --- HML W2G4: "that player" at a three-seat table ---
+#
+# The census this pins is ROADMAP's open item: a trigger's "that player"
+# back-reference falls through to ``target_player`` in the damage family, so
+# every card printing it is correct only by whatever its fire site happens to
+# put in ``context.target``. Ten supported cards were named as candidates and
+# none had been confirmed. Two seats hide the failure — the ability's
+# controller and "that player" are the only two seats there, so a fall-through
+# to the wrong one lands on the right player half the time by coincidence
+# (Mystic Remora's bug, found the same way). Three seats do not.
+#
+# Two cards, because the ten split into exactly two mechanisms: an Aura whose
+# seat comes from the *attachment* and a seam whose seat comes from the *event*.
+
+
+def _w2g4_pool(set_pool, code: str, name: str):
+    return set_pool(code)[name]
+
+
+def _w2g4_three_seats(*battlefields):
+    game = Game(players=[
+        PlayerState(name=f"P{i}", battlefield=list(bf))
+        for i, bf in enumerate(battlefields)
+    ])
+    game.enforce_mana_costs = False
+    game._sync_control()
+    game._settle()
+    return game
+
+
+@pytest.mark.cr("608.2h", "613.1b")
+def test_an_upkeep_auras_that_player_is_the_hosts_controller_not_a_bystander(set_pool):
+    """"At the beginning of the upkeep of enchanted land's controller, this
+    Aura deals 1 damage to **that player**." (Cursed Land.)
+
+    The seat is a fact about the *attachment*, read where the trigger fires;
+    the Aura's controller is a third party here and the third seat is a
+    bystander. Both are asserted, because "the right player lost life" is only
+    half of "nobody else did".
+    """
+    aura = Permanent(card=_w2g4_pool(set_pool, "LEA", "Cursed Land"))
+    land = Permanent(card=_card("Bog", "", "Land"))
+    game = _w2g4_three_seats([aura], [], [land])
+    from engine.auras import attach_aura
+
+    attach_aura(aura, land)
+    game._settle()
+
+    game.resolve_upkeep(2)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert [p.life for p in game.players] == [20, 20, 19], game.log
+
+
+@pytest.mark.cr("608.2h")
+def test_manabarbs_burns_the_player_who_tapped_the_land(set_pool):
+    """"Whenever a player taps a land for mana, this enchantment deals 1 damage
+    to **that player**." (Manabarbs.)
+
+    The other mechanism: the seat comes off the *event* rather than off an
+    attachment, and the tapping player is neither the enchantment's controller
+    nor, in a three-seat game, "the opponent".
+    """
+    barbs = Permanent(card=_w2g4_pool(set_pool, "LEA", "Manabarbs"))
+    forest = Permanent(card=_card("Forest", "", "Basic Land — Forest"))
+    game = _w2g4_three_seats([barbs], [], [forest])
+
+    game.tap_land_for_mana(2, "Forest", chosen_color="G", permanent_index=0)
+    while game.stack:
+        game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+    assert [p.life for p in game.players] == [20, 20, 19], game.log
+# --- end HML W2G4 ---

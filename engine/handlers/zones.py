@@ -1894,6 +1894,50 @@ def reveal_until_match(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+@effect_handler("exile_bound_card")
+def exile_bound_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"When that creature dies this turn, exile **it**." (Whippoorwill.)
+
+    The object a delayed ability was bound to, after the death that fired it —
+    so what is exiled is a *card in a graveyard*, never a permanent. CR 603.7d
+    makes the ability's source the permanent that created it, which is exactly
+    the reading this handler exists to avoid: routed through ``exile_self``,
+    Whippoorwill exiled itself every time its target died.
+
+    The card is found by name in the owner's graveyard, the two facts the death
+    seam freezes into the trigger's context (CR 608.2h): by resolution the
+    permanent is gone, CR 400.7 makes its card a new object, and a graveyard
+    has no controller to re-derive the seat from. Two copies of one card in a
+    pile are literally one ``CardDefinition``, so which of them is taken is not
+    a question with an answer — and the *last* one is taken, because a death
+    puts the card on top.
+
+    A card that has already left that pile exiles nothing rather than falling
+    back to a scan: CR 608.2's "as much as possible", and a scan would exile
+    whichever look-alike it reached first.
+    """
+    trigger = context.trigger_context or {}
+    seat = trigger.get("event_subject_owner")
+    name = trigger.get("dead_name")
+    if not isinstance(seat, int) or not (0 <= seat < len(game.players)) or not name:
+        game.log.append(f"{context.card.name}: no card was recorded to exile")
+        return True, "resolved"
+    owner = game.players[seat]
+    index = next(
+        (i for i in range(len(owner.graveyard) - 1, -1, -1)
+         if owner.graveyard[i].name == name),
+        None,
+    )
+    if index is None:
+        game.log.append(
+            f"{context.card.name}: {name} is no longer in {owner.name}'s graveyard"
+        )
+        return True, "resolved"
+    owner.exile.append(owner.graveyard.pop(index))
+    game.log.append(f"{context.card.name} exiled {name} from {owner.name}'s graveyard")
+    return True, "resolved"
+
+
 @effect_handler("exile_self")
 def exile_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Exile it." / "Exile this creature." (Archfiend's Vessel.)

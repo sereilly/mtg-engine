@@ -664,6 +664,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # graveyard" (Rysorian Badger) — the counted twin of the row above, whose
     # picks are made through a prompt.
     "exile_cards_from_graveyard": "zones",
+    # "When that creature dies this turn, exile **it**" (Whippoorwill) — the
+    # card the delayed ability was bound to, out of the graveyard the death put
+    # it in.
+    "exile_bound_card": "zones",
     # "Put it into your graveyard." (All Hallow's Eve, from exile.) The
     # ability's own source moving zones — the same category as the self-exile
     # above, because it is the same kind of move made by the same kind of
