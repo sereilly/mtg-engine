@@ -785,6 +785,18 @@ def graveyard_card_matches(spec: dict, card) -> bool:
     colors = spec.get("graveyard_colors")
     if colors and not any(color in card.colors for color in colors):
         return False
+    # "up to four target **basic** land cards from a player's graveyard"
+    # (Lodestone Bauble). Read off the printed type line, which for a card in a
+    # graveyard is the whole of what there is (CR 613.1) — the same reader and
+    # the same rule ``card_matches_filter`` above uses for the identical phrase
+    # in a hand. Asked *after* the type and colour tests and before the
+    # any-card exit, because a supertype narrows a phrase that already names a
+    # type ("basic **land** cards") and is not an alternative to naming one.
+    wanted_supertypes = tuple(spec.get("supertypes") or ())
+    if wanted_supertypes:
+        held = printed_supertypes(card.type_line)
+        if not all(word in held for word in wanted_supertypes):
+            return False
     if card_types or spec.get("any_card"):
         return True
     card_type = spec.get("card_type")

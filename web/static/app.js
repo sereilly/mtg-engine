@@ -2535,6 +2535,19 @@ function getModeChoiceInfo(state = currentState) {
   return info;
 }
 
+// Fatal Lore / Library of Lat-Nam / Misfortune: "An opponent chooses one —".
+// The modes of a spell somebody *else* cast, offered to the seat that has to
+// pick one (CR 700.2e). Its own getter rather than a flag on the one above,
+// because the two are different prompts on different seats and both can be on
+// screen in the same game.
+function getOpponentModeChoiceInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.opponent_mode_choice;
+  if (!info || !Array.isArray(info.modes) || info.modes.length === 0) return null;
+  if (info.player_seat !== undefined && info.player_seat !== seat) return null;
+  return info;
+}
+
 // Necromentia: "Choose a card name other than a basic land card name."
 function getNameAndStripInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -5229,6 +5242,48 @@ function applyModeChoicePrompt(info) {
   });
 }
 
+// "An opponent chooses one —" (CR 700.2e). The modes of a spell the *other*
+// player cast, with no targets to pick beside them: the compiler refuses a card
+// whose opponent-chosen mode also names the caster's targets, because the two
+// choices belong to two different players and there is no announcement shape
+// for that. So this is the label list and nothing else.
+function applyOpponentModeChoicePrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  title.textContent = "Choose one";
+  body.textContent = `${info.card_name || "Spell"}: your opponent cast it, and you pick the mode.`;
+  const buttons = (info.modes || [])
+    .map((mode) => {
+      const label = escapeHtml(mode.label || `Mode ${Number(mode.index) + 1}`);
+      return `<button type="button" class="prompt-choice-btn" data-mode-index="${Number(mode.index)}">${label}</button>`;
+    })
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+  steps.querySelectorAll("[data-mode-index]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "opponent_mode_choice_confirm",
+        hand_index: Number(btn.dataset.modeIndex),
+      });
+    });
+  });
+}
+
 // Necromentia: name a card. The suggestions are what the searched player has in
 // public zones (and their hand, which the engine offers as a convenience); any
 // name is accepted except a basic land's (CR 202.1 lets a player name any card).
@@ -7874,6 +7929,12 @@ function renderActivationPrompt() {
   const modeChoiceInfo = getModeChoiceInfo();
   if (modeChoiceInfo) {
     applyModeChoicePrompt(modeChoiceInfo);
+    return;
+  }
+
+  const opponentModeChoiceInfo = getOpponentModeChoiceInfo();
+  if (opponentModeChoiceInfo) {
+    applyOpponentModeChoicePrompt(opponentModeChoiceInfo);
     return;
   }
 

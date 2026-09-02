@@ -871,6 +871,48 @@ class PendingChoicesMixin:
 
     # -- Look at the top N, keep one, bottom the rest (See the Truth) ---------
 
+    def confirm_opponent_mode_choice(self, player_index: int, mode_index: int) -> bool:
+        return self.resolve_pending_choice(
+            "opponent_mode_choice", player_index, mode_index=mode_index
+        )
+
+    def _resolve_opponent_mode_choice(self, choice, mode_index) -> bool:
+        """CR 700.2e: record the mode the *other* player picked onto the spell
+        that is already on the stack.
+
+        Recorded rather than performed. The spell has not resolved — the cast is
+        what this decision is part of (CR 601.2b) — so the answer goes onto the
+        stack item exactly where an ordinary caster's announcement would have
+        put it, and resolution reads one field however the mode was chosen.
+        """
+        from ...game_types import ChosenMode
+
+        item = choice.data.get("_item")
+        labels = choice.data.get("labels") or []
+        if item is None or not isinstance(mode_index, int):
+            return False
+        if not 0 <= mode_index < len(labels):
+            return False
+        item.chosen_mode_index = mode_index
+        item.chosen_modes = (ChosenMode(index=mode_index),)
+        self.discard_pending_choice(choice)
+        self.log.append(
+            f"{self.players[choice.player_index].name} chose "
+            f"{labels[mode_index]!r} for {choice.data.get('card_name')}"
+        )
+        return True
+
+    def _default_opponent_mode_choice(self, choice) -> None:
+        """The first printed mode — a stated policy, not a valuation.
+
+        The same answer ``mode_choice`` takes one screen down, and for its
+        reason: an unanswered prompt inside an announcement would hold the cast
+        open forever, and the seat that owes this one is by definition not the
+        caster, so there is nobody else to ask.
+        """
+        if not self._resolve_opponent_mode_choice(choice, 0):
+            self.discard_pending_choice(choice)
+
     def confirm_look_top_pick(self, player_index: int, keep_index: int) -> bool:
         return self.resolve_pending_choice(
             "look_top_pick", player_index, keep_index=keep_index
@@ -918,6 +960,15 @@ class PendingChoicesMixin:
             if choice.data.get("rest_destination") == "graveyard":
                 for card in rest:
                     caster.graveyard.append(card)
+                return
+            # "…and **exile the rest**." (Browse.) The cards leave the game
+            # rather than the library, which is why the same ability may be
+            # activated again and again: the pile it looks at is a pile it has
+            # already shortened. No order is asked for — exile is unordered
+            # (CR 406.2 orders no zone but the library and the graveyard).
+            if choice.data.get("rest_destination") == "exile":
+                for card in rest:
+                    caster.exile.append(card)
                 return
             # "…and the rest on **top** of your library in any order."
             # (Diabolic Vision.) The same clause as the bottom one word over,
@@ -969,10 +1020,22 @@ class PendingChoicesMixin:
         kept = caster.library[keep_index]
         del caster.library[:top_count]
         _bottom_the_rest([card for i, card in enumerate(looked) if i != keep_index])
+        # Where the *kept* card goes, read the same way the rest's destination
+        # is. "Puts one of them **back on top of their library**" (Ashnod's
+        # Cylix) is this prompt's other printed answer: the card is not drawn,
+        # it is the next card that player draws — a difference nothing else in
+        # the sentence states and nobody can see until the draw step.
+        if choice.data.get("pick_destination") == "library_top":
+            self.put_card_into_library(caster, kept, position="top")
+            self.discard_pending_choice(choice)
+            self.log.append(
+                f"{caster.name} put a card back on top of their library"
+            )
+            return True
         self.put_card_into_hand(caster, kept)
         self.discard_pending_choice(choice)
         self.log.append(
-            f"{caster.name} put {kept.name} into their hand and the rest on the bottom"
+            f"{caster.name} put {kept.name} into their hand and the rest away"
         )
         return True
 
@@ -6191,6 +6254,37 @@ register_choice(
     prompt_key="body_choice",
     blocked_detail="choose the entering creature's body before other actions",
     default_at_arm=True,
+)
+
+register_choice(
+    "opponent_mode_choice",
+    resolve=lambda game, choice, r: game._resolve_opponent_mode_choice(
+        choice, r.get("mode_index")
+    ),
+    default=lambda game, choice: game._default_opponent_mode_choice(choice),
+    action="opponent_mode_choice_confirm",
+    prompt_key="opponent_mode_choice",
+    blocked_detail=(
+        "an opponent is choosing that spell's mode; wait for the answer"
+    ),
+    # CR 601.2i finishes the cast before anyone may respond, and CR 700.2e puts
+    # this choice inside that announcement — so **nobody** acts until it is
+    # answered, the caster included. That is what `blocks_every_seat` says, and
+    # it is stronger than the priority hold the detail above already implies.
+    blocks_every_seat=True,
+    # **Not** ``suspends``. That flag stops the resumable loop an effect was a
+    # step of, and this prompt is armed inside an *announcement*: no effect is
+    # running, the spell has not resolved, and there is no loop behind it. What
+    # holds the game is the block above — CR 601.2i finishes the cast, and then
+    # nobody has priority until the mode is known.
+    # A non-interactive chooser never queues it: the cast has to finish, and the
+    # stated default (the first printed mode) is taken where the offer stands.
+    # Without this an AI or headless seat would hold a cast open forever.
+    default_at_arm=True,
+    # A spell's modes are announced in the open (CR 601.2b), and so is whose
+    # choice this is.
+    spectator_visible=True,
+    hidden_for_ai=False,
 )
 
 register_choice(

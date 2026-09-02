@@ -77,6 +77,21 @@ PARSE_LAYERS = [
     # until Antiquities' token phrases pushed it past the guard below, and the
     # order is what keeps the split from folding back — the filter parser must
     # never need the quantifier one.
+    # Which zone a noun phrase is scoped to, and whose zone it is ("cards
+    # **from an opponent's graveyard**"). Split out of `postmodifiers` at the
+    # guard below, along the boundary that module's own docstring draws when it
+    # lists what a postmodifier relates an object to: the controller, another
+    # object, **or a zone**. A family rather than a cut, because CR 404.1 makes
+    # both halves one answer — a card is in the graveyard of the player who owns
+    # it, so the pile and the seat are read together or a phrase names the wrong
+    # pile. Below `postmodifiers`, which calls it and is never imported back.
+    #
+    # The name is `lowering/zones.py`'s, and the two are one subject from
+    # opposite ends: that module decides which zone an object **goes to**, this
+    # reads which zone it is **already in**. Different packages, neither
+    # importing the other, so the mirror re-forms rather than colliding — the
+    # one thing `statics` could not do.
+    "zones",
     # The trailing half of a noun phrase. Below `nouns`, which hands it the
     # recursive parser rather than being imported back — "blocking target
     # attacking creature" nests a whole phrase.
@@ -149,6 +164,13 @@ PARSE_LAYERS = [
     # `statements`, which hands it `parse_statement` rather than being
     # imported back — a delayed trigger contains a whole statement.
     "delayed",
+    # A sentence that prints no subject — the bare imperative ("Destroy target
+    # creature") and the whole paragraphs that open on a noun phrase no subject
+    # reader may eat. Split out of `subject_verb` at the guard below, along the
+    # boundary that module's own docstring drew: it reads a sentence's opening,
+    # and an opening is one of two shapes. Below `subject_verb`, which asks it
+    # first and is never imported back.
+    "imperatives",
     # The `<subject> <verb> …` opening. Split out of `statements` at the guard
     # below, and under it: `statements` hands it `parse_optional_action` rather
     # than being imported back, the same inversion `delayed` makes.
@@ -249,7 +271,21 @@ LOWER_LAYERS = ["lowering", "statics", "by_node", "lower"]
 # `board` destroys, returns or sacrifices one permanent at a time. The two
 # families share no fragment: both halves of an attachment go through
 # `references.parse_recipient`, one layer down.
-EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "control_changes", "prevention", "counters", "tapping", "attachments"]
+# `search` joined the parse side when `effects/library.py` reached the size
+# guard, along the boundary that module's own docstring had already drawn in
+# naming its contents "search, look-at, and the library's top". The line is
+# CR 701.19's: a *look* shows a fixed number of cards off the top and leaves the
+# pile otherwise untouched, where a **search** walks the whole library for a
+# card the sentence describes and ends in a shuffle — and the filter,
+# destination, reveal and shuffle vocabulary that reads appears nowhere else in
+# the family. `_parse_search_library` is the only name outside the new module
+# that anything reaches for, and nothing left in `library` calls into it.
+# Asymmetric the *other* way from the families below: the lowering side has no
+# `search`, because a tutor lowers to one `search_library` instruction however
+# elaborately its sentence is printed. The words are where the work is, so a
+# near-empty `lowering/search.py` would buy back the symmetry and cost the
+# thing symmetry is for — exactly the reasoning `zones` records in reverse.
+EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game", "mana", "library", "search", "control_changes", "prevention", "counters", "tapping", "attachments"]
 # The lowering side carries families the parsing side does not. Zone movement
 # is one `return`/`exile`/`put` production each on the way in and a decision
 # about *which handler moves the object* on the way out, so `lowering/board.py`
@@ -360,7 +396,15 @@ EFFECT_FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "comb
 # split. Asymmetric like `zones`, `types`, `destruction` and `counter_removal`:
 # the parse side stays in `effects/tapping.py`, where "tap it" and "it doesn't
 # untap" are printed in one sentence on Frost Breath, Telekinesis and Mind Whip.
-LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "types", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops"]
+# `search` is the first family the *parse* side has and the lowering side does
+# not — every asymmetry recorded above and below runs the other way. A tutor
+# lowers to one `search_library` instruction however elaborately its sentence
+# is printed, so `lowering/library.py` is nowhere near the guard while
+# `effects/library.py` crossed it; the words are where the work is. Subtracted
+# rather than left in, because a family list that named a module nobody wrote
+# would fail the "families do not import each other" test on a missing file
+# and say nothing true about the package.
+LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "returns", "exile", "keywords", "redirection", "fighting", "where_x", "control_flow", "types", "destruction", "counter_removal", "tokens", "upkeep", "untap_restrictions", "loops"]
 # `loops` is the fifth lowering-only family and it split off `control_flow.py`
 # when that module reached the guard below. The line is the one that module's
 # own docstring already drew: `control_flow` is named after the *composers* —
@@ -422,8 +466,8 @@ LOWERING_FAMILIES = EFFECT_FAMILIES + ["zones", "returns", "exile", "keywords", 
 AST_FAMILIES = [
     family for family in EFFECT_FAMILIES
     if family not in (
-        "library", "control_changes", "prevention", "counters", "tapping",
-        "attachments",
+        "library", "search", "control_changes", "prevention", "counters",
+        "tapping", "attachments",
     )
 ]
 

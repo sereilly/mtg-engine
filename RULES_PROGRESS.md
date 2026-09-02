@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**346 / 612 tracked rules covered (56%)** — 1862 tests, 0 unannotated.
+**346 / 612 tracked rules covered (56%)** — 1869 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -662,7 +662,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(155 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(159 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(10 tests)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -730,7 +730,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(49 tests, subrules bcdhn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(50 tests, subrules bcdhn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -828,7 +828,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 700. General
 
 - [ ] **700.1** Anything that happens in a game is an event. Multiple events may take place during the resolution...
-- [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(15 tests, subrules abd)*
+- [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(21 tests, subrules abde)*
 - [ ] **700.3** Some effects cause objects to be temporarily grouped into piles.
 - [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(4 tests)*
 - [ ] **700.5** A player’s devotion to [color] is equal to the number of mana symbols of that color among the man...
@@ -975,7 +975,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **903.6** At the start of the game, each player puts their commander from their deck face up into the comma... *(3 tests)*
 - [x] **903.7** Once the starting player has been determined, each player sets their life total to 40 and draws a... *(4 tests)*
 - [x] **903.8** A player may cast a commander they own from the command zone. A commander cast from the command z... *(9 tests)*
-- [x] **903.9** A commander may return to the command zone during a Commander game. *(19 tests, subrules ab)*
+- [x] **903.9** A commander may return to the command zone during a Commander game. *(20 tests, subrules ab)*
 - [x] **903.10** The Commander variant includes the following specification for winning and losing the game. All o... *(6 tests, subrules a)*
 - [x] **903.11** Except via rules, special actions, and effects that specifically bring cards into Commander games... *(8 tests, subrules a)*
 - [x] **903.12** Brawl Option *(26 tests, subrules abcdefgh)*

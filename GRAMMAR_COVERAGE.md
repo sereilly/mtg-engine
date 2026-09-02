@@ -30,7 +30,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 70.5% | 66.9% | 49.0% | 93 |
+| ALL *(measured)* | 144 | 251 | 74.5% | 70.5% | 51.4% | 98 |
 | **All (shipped)** | **3439** | **5016** | **89.2%** | **88.2%** | **57.1%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -43,9 +43,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 259 | 119 | expected a subject |  |
-| 140 | 59 | unrecognized effect verb |  |
-| 75 | 38 | unconsumed text |  |
+| 287 | 129 | expected a subject |  |
+| 105 | 44 | unrecognized effect verb |  |
+| 78 | 39 | unconsumed text |  |
 | 36 | 36 | unrecognized activation cost |  |
 | 33 | 18 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -60,7 +60,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5 | 1 | back-reference to 'its_toughness' with no producer in this effect |  |
 | 5 | 2 | the sacrifice prompt cannot test this restriction |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
-| 5 | 3 | expected 'a' |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
@@ -68,6 +67,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 2 | unrecognized "can't be" restriction |  |
 | 2 | 2 | a counter-removal cost only reads the ability's own source |  |
+| 2 | 2 | expected 'a' |  |
 
 ## Cards executing through the grammar
 
@@ -274,6 +274,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ashnod's Battle Gear**
   - `{2}, {T}: Target creature you control gets +2/-2 for as long as this artifact remains tapped.`
   - `{2}, {T}: Target creature you control gets +2/-2 for as long as this artifact remains tapped.`
+- **Ashnod's Cylix**
+  - `{3}, {T}: Target player looks at the top three cards of their library, puts one of them back on top of their library, then exiles the rest.`
 - **Ashnod's Transmogrant**
   - `{T}, Sacrifice this artifact: Put a +1/+1 counter on target nonartifact creature. That creature becomes an artifact in addition to its other types.`
   - `{T}, Sacrifice this artifact: Put a +1/+1 counter on target nonartifact creature. That creature becomes an artifact in addition to its other types.`
@@ -551,6 +553,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{R}{R}: This creature deals 1 damage to any target and 1 damage to you.`
 - **Brown Ouphe**
   - `{1}{G}, {T}: Counter target activated ability from an artifact source. (Mana abilities can't be targeted.)`
+- **Browse**
+  - `{2}{U}{U}: Look at the top five cards of your library, put one of them into your hand, and exile the rest.`
 - **Brushland**
   - `{T}: Add {C}.`
   - `{T}: Add {G} or {W}. This land deals 1 damage to you.`
@@ -1009,6 +1013,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice a creature: You gain life equal to the sacrificed creature's toughness.`
 - **Didgeridoo**
   - `{3}: You may put a Minotaur permanent card from your hand onto the battlefield.`
+- **Diminishing Returns**
+  - `Each player shuffles their hand and graveyard into their library. You exile the top ten cards of your library. Then each player draws up to seven cards.`
 - **Dingus Egg**
   - `Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.`
   - `Whenever a land is put into a graveyard from the battlefield, this artifact deals 2 damage to that land's controller.`
@@ -2297,6 +2303,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Draw a card. Activate only if you have exactly seven cards in hand.`
 - **Library of Lat-Nam**
   - `• You draw three cards at the beginning of the next turn's upkeep.`
+  - `• You search your library for a card, put that card into your hand, then shuffle.`
 - **Life Chisel**
   - `Sacrifice a creature: You gain life equal to the sacrificed creature's toughness. Activate only during your upkeep.`
 - **Life Goes On**
@@ -2388,6 +2395,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Llanowar Visionary**
   - `When this creature enters, draw a card.`
   - `{T}: Add {G}.`
+- **Lodestone Bauble**
+  - `{1}, {T}, Sacrifice this artifact: Put up to four target basic land cards from a player's graveyard on top of their library in any order. That player draws a card at the beginning of the next turn's upkeep.`
 - **Lofty Denial**
   - `Counter target spell unless its controller pays {1}. If you control a creature with flying, counter that spell unless its controller pays {4} instead.`
 - **Lord of Atlantis**
@@ -2598,6 +2607,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, this creature deals 3 damage to you unless you discard a card. If it deals damage to you this way, tap it.`
 - **Mishra's Workshop**
   - `{T}: Add {C}{C}{C}. Spend this mana only to cast artifact spells.`
+- **Misinformation**
+  - `Put up to three target cards from an opponent's graveyard on top of their library in any order.`
 - **Mistfolk**
   - `{U}: Counter target spell that targets this creature.`
 - **Mold Demon**

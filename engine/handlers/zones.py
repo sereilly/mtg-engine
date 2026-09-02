@@ -1008,10 +1008,16 @@ def put_graveyard_cards_on_library_top(
     else:
         game.log.append(f"{context.card.name}: no player chosen")
         return True, "resolved"
-    card_type = str(instruction.payload.get("card_type", "artifact"))
 
     def _eligible(card) -> bool:
-        return card_type in (getattr(card, "type_line", "") or "").lower()
+        # The picker's predicate, not a third spelling of it — the arrangement
+        # `return_creature_from_graveyard_to_hand` one screen down already
+        # makes, and for its reason: the payload and the spec carry the same key
+        # names because one is derived from the other, so there is one answer to
+        # "may this card be chosen?". This arm read `card_type in type_line`,
+        # which is the same answer for the one key it knew and no answer at all
+        # for "any card" (Misinformation) or a supertype (Lodestone Bauble).
+        return graveyard_card_matches(instruction.payload, card)
 
     # "Any number" prints no maximum, so the cap is the pile itself; "up to
     # three" prints one, and the description the lowering built carries it.
@@ -3766,8 +3772,22 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
     than the hand, in which case every looked-at card goes to the hand and
     there is nothing to choose. ``context.cast_from_zone`` is the field the
     permission-seam round added for exactly this sentence."""
-    caster = context.caster
     payload = instruction.payload
+    # Whose library. "Target player looks at the top three cards of **their**
+    # library" (Ashnod's Cylix) names a seat the activation chose, and the
+    # looker and the pile are the same player by construction — the possessive
+    # says so — so one lookup answers both. Every other card in this family
+    # prints "your library", which is the ability's own controller and the key
+    # is absent. A named looker the ability never chose does nothing at all:
+    # looking at a library the card did not name would be worse than the
+    # ability fizzling, and the pile is hidden, so nobody would see it.
+    if payload.get("looker") == "target_player":
+        if context.target not in game.players:
+            game.log.append(f"{context.card.name}: no player chosen")
+            return True, "resolved"
+        caster = context.target
+    else:
+        caster = context.caster
     # "Look at **that many** cards" (Garruk's Harbinger): the number the firing
     # event carried, frozen by the fire site. An absent record looks at nothing
     # rather than falling back to a count the card never printed.
@@ -3800,6 +3820,7 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
         optional=bool(payload.get("optional")),
         rest_order=payload.get("rest_order", "any"),
         rest_destination=payload.get("rest_destination", "library_bottom"),
+        pick_destination=payload.get("pick_destination", "hand"),
     )
     game.log.append(f"{caster.name} is looking at the top {top_count} cards of their library")
     return True, "pending_look_top_pick"
@@ -4054,7 +4075,7 @@ def shuffle_hand_into_library(game: Game, instruction: OracleInstruction, contex
     """Winds of Change: "Each player shuffles the cards from their hand into
     their library, then draws that many cards."
 
-    CR 701.19 — the cards move and the library is shuffled as one action, so
+    CR 701.24 — the cards move and the library is shuffled as one action, so
     the count the draw reads is taken *before* the move and nothing can observe
     a half-moved zone. Each player is one whole shuffle-then-draw: the libraries
     are separate, so no seat's draw can see another's cards whichever order the
@@ -4073,15 +4094,33 @@ def shuffle_hand_into_library(game: Game, instruction: OracleInstruction, contex
     else:  # pragma: no cover - the lowering admits no other subject
         return False, "no player to shuffle"
     then_draw = bool(instruction.payload.get("then_draw"))
+    # "…their hand **and graveyard** into their library." (Diminishing Returns.)
+    # The second pile joins the *same* move, which is why it rides this
+    # instruction: CR 701.24 randomises the library once, and a graveyard
+    # shuffle written as a statement after this one would shuffle it twice with
+    # the hand's cards already down among the graveyard's.
+    with_graveyard = bool(instruction.payload.get("with_graveyard"))
     for player in players:
         moved = len(player.hand)
-        player.library.extend(player.hand)
+        # Through the library seam, not a bare extend: CR 903.9b has no single
+        # fire site, and a commander shuffled in from a hand is exactly the
+        # "would be put into its owner's library from anywhere" the rule names.
+        for card in list(player.hand):
+            game.put_card_into_library(player, card)
         player.hand.clear()
+        buried = 0
+        if with_graveyard:
+            buried = len(player.graveyard)
+            for card in list(player.graveyard):
+                game.put_card_into_library(player, card)
+            player.graveyard.clear()
         # Through the module-level RNG every other shuffle uses, so a seeded run
         # stays reproducible (the determinism invariant).
         random.shuffle(player.library)
         game.log.append(
-            f"{player.name} shuffled {moved} card(s) from their hand into their library"
+            f"{player.name} shuffled {moved} card(s) from their hand"
+            + (f" and {buried} from their graveyard" if with_graveyard else "")
+            + " into their library"
         )
         if then_draw and moved:
             game._draw_with_replacements(player, moved)

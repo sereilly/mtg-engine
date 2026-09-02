@@ -331,7 +331,20 @@ def _parse_modal_head(stream: TokenStream) -> ast.ModalNode | None:
     card that chooses several.
     """
     mark = stream.mark()
-    if not stream.accept_word("choose"):
+    # "**An opponent** chooses one —" (Fatal Lore, Library of Lat-Nam,
+    # Misfortune). CR 700.2e's head: a player other than the controller picks
+    # the mode, and does it when the controller normally would (CR 601.2b, as
+    # the spell is cast). Read here rather than as a subject-verb sentence
+    # because it is the *same* head with its chooser printed — the bullets
+    # below it are the modes either way, and a second production would be a
+    # second answer to "how many of the lines below does somebody take?".
+    chooser: "ast.PlayerRef | None" = None
+    if not stream.at_word("choose"):
+        chooser = parse_player_ref(stream)
+        if chooser is None or not stream.accept_word("chooses"):
+            stream.reset(mark)
+            return None
+    elif not stream.accept_word("choose"):
         return None
     token = stream.peek()
     if token is None or token.kind != WORD or token.text not in _MODE_COUNT_WORDS:
@@ -356,7 +369,7 @@ def _parse_modal_head(stream: TokenStream) -> ast.ModalNode | None:
     if not stream.exhausted:
         stream.reset(mark)
         return None
-    return ast.ModalNode(count, at_least)
+    return ast.ModalNode(count, at_least, chooser=chooser)
 
 
 # What a card does to the player who declines an "unless … pays" cost, matched

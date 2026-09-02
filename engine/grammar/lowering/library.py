@@ -588,8 +588,24 @@ def _lower_look_top_pick(
         payload["rest_order"] = node.rest_order
     if node.rest_destination != "library_bottom":
         payload["rest_destination"] = node.rest_destination
+    if node.pick_destination != "hand":
+        payload["pick_destination"] = node.pick_destination
     if node.all_to_hand_if_cast_elsewhere:
         payload["all_to_hand_if_cast_elsewhere"] = True
+    # Who looks, when the sentence names them. Only the one seat this handler
+    # can find without a second question: "target player" is chosen as the
+    # ability is activated (CR 602.2b) and arrives as ``context.target``.
+    # Anything else refuses rather than defaulting to the controller — a look
+    # at the wrong library is a card doing something it never said, and the
+    # pile is hidden, so nobody would see it happen.
+    if node.looker is not None:
+        if node.looker.kind != "target_player":
+            raise LoweringError(
+                "the look-top pick reads the library of the player the ability "
+                "chose",
+                node=node,
+            )
+        payload["looker"] = "target_player"
     return (OracleInstruction("look_top_pick_to_hand", "", payload),)
 
 

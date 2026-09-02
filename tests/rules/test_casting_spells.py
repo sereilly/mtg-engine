@@ -1385,3 +1385,141 @@ def test_601_2c_a_control_change_checks_the_target_it_was_named():
         "CR 601.2e: an illegal announcement costs the caster nothing"
     )
     assert not game.stack
+
+
+# ---------------------------------------------------------------------------
+# Rule 700.2e — a mode chosen by somebody other than the controller
+# ---------------------------------------------------------------------------
+#
+# "Some spells and abilities specify that a player other than their controller
+# chooses a mode for it. In that case, the other player does so **when the
+# spell or ability's controller normally would do so**." That moment is
+# 601.2b — inside the announcement — so these sit here with the rest of it.
+
+
+@pytest.mark.cr("700.2e", "601.2b")
+def test_700_2e_a_named_chooser_is_asked_instead_of_the_controller():
+    """The head names who picks, and the prompt goes to that seat. Read as a
+    plain "Choose one —" the caster would take whichever half suits them, which
+    is the opposite of what a card printing this head is for."""
+    lore = _mk_card(
+        "Opponent Chooses Test",
+        "Sorcery",
+        "An opponent chooses one —\n• You draw a card.\n• You gain 3 life.",
+    )
+    p1 = PlayerState(name="P1", hand=[lore], library=[lore] * 3)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {0, 1}
+
+    game.queue_from_hand(0, "Opponent Chooses Test")
+
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("opponent_mode_choice", 1)
+    ]
+
+
+@pytest.mark.cr("700.2e", "601.2b")
+def test_700_2e_the_controller_may_not_announce_the_mode():
+    """601.2b announces the mode, but 700.2e says whose announcement it is. An
+    announcement naming a mode is refused rather than ignored: a dropped choice
+    is a client quietly getting a different spell from the one it asked for."""
+    lore = _mk_card(
+        "Opponent Chooses Refusal Test",
+        "Sorcery",
+        "An opponent chooses one —\n• You draw a card.\n• You gain 3 life.",
+    )
+    p1 = PlayerState(name="P1", hand=[lore], library=[lore] * 3)
+    game = Game(players=[p1, PlayerState(name="P2")])
+
+    result = game.queue_from_hand(
+        0, "Opponent Chooses Refusal Test", mode_choices=[{"index": 0}]
+    )
+
+    assert not result.supported
+    assert game.stack == []
+
+
+@pytest.mark.cr("700.2e", "601.2i")
+def test_700_2e_the_spell_is_on_the_stack_and_nobody_has_priority():
+    """601.2i finishes the casting before anyone may respond, and 700.2e puts
+    this choice inside that announcement — so the spell is already on the stack
+    while the mode is still open, and no seat may act until it is answered."""
+    lore = _mk_card(
+        "Opponent Chooses Priority Test",
+        "Sorcery",
+        "An opponent chooses one —\n• You draw a card.\n• You gain 3 life.",
+    )
+    p1 = PlayerState(name="P1", hand=[lore], library=[lore] * 3)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.interactive_seats = {0, 1}
+
+    game.queue_from_hand(0, "Opponent Chooses Priority Test")
+
+    assert [item.card.name for item in game.stack] == ["Opponent Chooses Priority Test"]
+    assert game.waiting_prompt() is not None
+
+
+@pytest.mark.cr("700.2e", "608.2c")
+def test_700_2e_the_answer_is_the_mode_that_resolves():
+    """What the other player picked is recorded on the stack item exactly where
+    an ordinary caster's announcement would have put it, so resolution reads one
+    field however the mode was chosen."""
+    lore = _mk_card(
+        "Opponent Chooses Resolution Test",
+        "Sorcery",
+        "An opponent chooses one —\n• You draw a card.\n• You gain 3 life.",
+    )
+    p1 = PlayerState(name="P1", hand=[lore], library=[lore] * 3)
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.interactive_seats = {0, 1}
+    game.queue_from_hand(0, "Opponent Chooses Resolution Test")
+
+    assert game.confirm_opponent_mode_choice(1, 1)
+    assert game.stack[-1].chosen_mode_index == 1
+
+    game.resolve_top_of_stack()
+
+    assert p1.life == 23
+    assert p1.hand == []
+
+
+@pytest.mark.cr("700.2e")
+def test_700_2e_a_non_interactive_chooser_answers_where_the_offer_stands():
+    """A stated policy — the first printed mode — rather than a valuation. An
+    unanswered prompt inside an announcement would hold the cast open forever,
+    which is what would happen to every AI and headless game."""
+    lore = _mk_card(
+        "Opponent Chooses Default Test",
+        "Sorcery",
+        "An opponent chooses one —\n• You draw a card.\n• You gain 3 life.",
+    )
+    p1 = PlayerState(name="P1", hand=[lore], library=[lore] * 3)
+    game = Game(players=[p1, PlayerState(name="P2")])
+    game.interactive_seats = {0}
+
+    game.queue_from_hand(0, "Opponent Chooses Default Test")
+
+    assert game.pending_choices == []
+    assert game.stack[-1].chosen_mode_index == 0
+
+
+@pytest.mark.cr("700.2e", "601.2c")
+def test_700_2e_a_mode_that_also_names_the_casters_targets_is_refused():
+    """601.2c announces targets after 601.2b picks the mode, and both are the
+    caster's steps — but here the mode is somebody else's, so the caster would
+    have to name a target before knowing which mode it was for. There is no
+    announcement shape for that, and admitting it would resolve a targeted mode
+    with no target at all."""
+    lore = _mk_card(
+        "Opponent Chooses Targeted Test",
+        "Sorcery",
+        "An opponent chooses one —\n• You draw a card.\n"
+        "• Destroy target creature.",
+    )
+
+    program = compile_card_oracle(lore)
+
+    assert not program.supported
+    assert "cannot also name the caster's targets" in program.reason

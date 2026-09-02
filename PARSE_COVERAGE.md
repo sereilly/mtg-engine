@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **1723**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **149**
+- With deletion-probe findings (ignored words): **150**
 
 ## Measured sets — reported, not gated
 
@@ -196,6 +196,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Tourach's Gate | `remove a time counter from this aura. if there are no time counters on` | aura, |
 | Track Down | `scry 3, then reveal the top card of your library. if it's a creature o` | card, |
 | Tranquility | `destroy all enchantments` | all |
+| Truce | `each player may draw up to two cards. for each card less than two a pl` | may |
 | Tsunami | `destroy all islands` | all |
 | Turn to Slag | `turn to slag deals 5 damage to target creature. destroy all equipment ` | all |
 | Twiddle | `you may tap or untap target artifact, creature, or land` | or |

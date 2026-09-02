@@ -603,3 +603,87 @@ def test_awesome_presence_leaves_a_declined_block_free(set_pool):
     assert ok, message
     assert not any(land.tapped for land in lands_on_board)
 # --- end W2G1 ---
+
+
+# --- W2G4: library and modal ---
+"""Browse: an ordered look whose leftovers leave the game.
+
+The template was already here — See the Truth and Diabolic Vision look at the
+top N, take one and put the rest somewhere — and Browse differs in two printed
+words: it runs the sentence on with a comma instead of a full stop, and it
+**exiles** the rest instead of bottoming them. Both are read rather than
+defaulted, and the second is the whole card: the pile shrinks every activation,
+which is what makes a four-mana repeatable draw fair.
+"""
+
+from engine import Game, PlayerState
+from engine.game_types import CardDefinition, Permanent
+
+
+def _w2g4_card(name: str, type_line: str = "Artifact") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line},
+    )
+
+
+def _w2g4_browse(set_pool, library):
+    p1 = PlayerState(name="P1", library=list(library))
+    p2 = PlayerState(name="P2")
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game._put_permanent_onto_battlefield(
+        0, Permanent(card=set_pool("ALL")["Browse"]), None
+    )
+    return game, p1
+
+
+def test_w2g4_browse_takes_one_and_exiles_the_other_four(set_pool):
+    """"…put one of them into your hand, and exile the rest." The rest leave
+    the game; nothing goes back to the library."""
+    deck = [_w2g4_card(f"Card {i}") for i in range(6)]
+    game, me = _w2g4_browse(set_pool, deck)
+
+    assert game.activate_permanent_ability(0, "Browse").supported
+    assert [c.kind for c in game.pending_choices] == ["look_top_pick"]
+    assert game.confirm_look_top_pick(0, 2)
+    game._settle()
+
+    assert [c.name for c in me.hand] == ["Card 2"]
+    assert [c.name for c in me.exile] == [
+        "Card 0", "Card 1", "Card 3", "Card 4",
+    ]
+    assert [c.name for c in me.library] == ["Card 5"]
+
+
+def test_w2g4_browse_eats_its_own_library(set_pool):
+    """The point of the exile, stated as a number: two activations move nine
+    cards out of a ten-card library. Bottoming them instead would leave the
+    library the same size forever, which is a different — and much stronger —
+    card."""
+    deck = [_w2g4_card(f"Card {i}") for i in range(10)]
+    game, me = _w2g4_browse(set_pool, deck)
+
+    for _ in range(2):
+        assert game.activate_permanent_ability(0, "Browse").supported
+        assert game.confirm_look_top_pick(0, 0)
+        game._settle()
+
+    assert len(me.hand) == 2
+    assert len(me.exile) == 8
+    assert len(me.library) == 0
+
+
+def test_w2g4_browse_looks_at_what_is_left_when_the_library_is_short(set_pool):
+    """CR 701.19-style "as many as you can": a library shorter than five is not
+    an error, and the ability still resolves."""
+    game, me = _w2g4_browse(set_pool, [_w2g4_card("Only Card")])
+
+    assert game.activate_permanent_ability(0, "Browse").supported
+    assert game.confirm_look_top_pick(0, 0)
+    game._settle()
+
+    assert [c.name for c in me.hand] == ["Only Card"]
+    assert me.exile == []

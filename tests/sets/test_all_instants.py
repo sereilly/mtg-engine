@@ -584,3 +584,90 @@ def test_the_unbounded_spelling_is_not_a_ceiling_of_infinity(set_pool):
         card_name="Test",
     )
     assert "max_targets" not in unbounded.instructions[0].payload["targets"]
+
+
+# --- W2G4: library and modal ---
+"""Misinformation: an instant that reaches into a graveyard nobody targeted.
+
+"an opponent's graveyard" chooses no player — CR 601.2c chooses the *cards*, and
+CR 404.1 puts a card in the graveyard of the player who owns it, so the pile and
+the seat are one answer. What the printed words add is a restriction on which
+piles may be reached, and left unscoped the picker would offer the caster their
+own graveyard: a strictly better card than the one printed.
+"""
+
+from engine import Game, PlayerState
+from engine.game_types import CardDefinition
+
+
+def _w2g4_gy_card(name: str, type_line: str = "Artifact") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line},
+    )
+
+
+def _w2g4_misinformation(set_pool, *, mine=(), theirs=()):
+    p1 = PlayerState(
+        name="P1", hand=[set_pool("ALL")["Misinformation"]],
+        graveyard=list(mine), library=[_w2g4_gy_card("Deck")] * 3,
+    )
+    p2 = PlayerState(
+        name="P2", graveyard=list(theirs), library=[_w2g4_gy_card("Their Deck")] * 3,
+    )
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, p1, p2
+
+
+def test_w2g4_misinformation_never_offers_the_casters_own_graveyard(set_pool):
+    """CR 115.4's own-seat exclusion, applied to the pile the cards are chosen
+    from rather than to a chosen player."""
+    game, _p1, _p2 = _w2g4_misinformation(
+        set_pool,
+        mine=[_w2g4_gy_card("My Relic")],
+        theirs=[_w2g4_gy_card("Their Relic")],
+    )
+
+    offered = game.cast_target_spec(0, set_pool("ALL")["Misinformation"])["valid_targets"]
+
+    assert [(t["seat"], t["name"]) for t in offered] == [(1, "Their Relic")]
+
+
+def test_w2g4_misinformation_offers_every_card_type(set_pool):
+    """"up to three target **cards**" — a head noun with no card type is not the
+    absence of a narrowing but a narrowing that says "any card"."""
+    game, _p1, _p2 = _w2g4_misinformation(
+        set_pool,
+        theirs=[
+            _w2g4_gy_card("Bear", "Creature — Bear"),
+            _w2g4_gy_card("Relic"),
+            _w2g4_gy_card("Wastes", "Land"),
+        ],
+    )
+
+    offered = game.cast_target_spec(0, set_pool("ALL")["Misinformation"])["valid_targets"]
+
+    assert [t["name"] for t in offered] == ["Bear", "Relic", "Wastes"]
+
+
+def test_w2g4_misinformation_stacks_them_in_the_order_they_were_named(set_pool):
+    """"…in any order." Nothing else on the wire could carry an ordering, so the
+    order the targets were chosen in (CR 601.2c) is the controller's choice of
+    order — first named, top of the library."""
+    game, _p1, p2 = _w2g4_misinformation(
+        set_pool,
+        theirs=[
+            _w2g4_gy_card("First"), _w2g4_gy_card("Untouched"), _w2g4_gy_card("Second"),
+        ],
+    )
+
+    game._apply_spell_text(
+        game.players[0], p2, set_pool("ALL")["Misinformation"],
+        target_permanent_index=[2, 0],
+    )
+    game._settle()
+
+    assert [c.name for c in p2.library[:2]] == ["Second", "First"]
+    assert [c.name for c in p2.graveyard] == ["Untouched"]
