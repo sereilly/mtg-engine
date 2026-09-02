@@ -727,6 +727,16 @@ def _action_number_choice_confirm(session, req, seat_type):
     if not session.game.confirm_number_choice(req.seat, req.number):
         raise HTTPException(status_code=400, detail="no number choice is pending for you")
 
+@action_handler("draw_up_to_confirm")
+def _action_draw_up_to_confirm(session, req, seat_type):
+    # Truce: "each player may draw up to two cards" — the answer is how many.
+    # Zero is a legal answer and the whole point of the card, so an absent
+    # number is a missing answer rather than a decline.
+    if req.number is None:
+        raise HTTPException(status_code=400, detail="number is required")
+    if not session.game.confirm_draw_up_to(req.seat, req.number):
+        raise HTTPException(status_code=400, detail="no draw choice is pending for you")
+
 @action_handler("body_choice_confirm")
 def _action_body_choice_confirm(session, req, seat_type):
     # Primal Clay: the controller picks which printed body the creature

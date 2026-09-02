@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from .. import ast
 from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, CHOSEN_THIS_WAY_OBJECTS,
+                             DREW_BY_SEAT,
                              COUNTERS_REMOVED, HAND_CARDS_TO_LIBRARY,
                              PER_OBJECT_SEAT_RECORDS,
                              TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS)
@@ -154,6 +155,14 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # The per-seat form records the same thing, so a sentence reading "the
     # number of cards they discarded this way" has a producer to name.
     "each_player_discards_up_to_cards": "discarded_count",
+    # "Each player may draw up to two cards. **For each card less than two a
+    # player draws this way**, that player gains 2 life." (Truce.) The draw's
+    # per-seat tally, written as each prompt is answered — the only place it
+    # exists, since how many a seat drew is a decision it has not made when the
+    # instruction returns. Per seat rather than a single number for
+    # ``DISCARDED_BY_SEAT``'s reason: a shortfall is one answer per player, and
+    # one key would let the last seat to answer decide everybody's life gain.
+    "each_player_draws_up_to_cards": DREW_BY_SEAT,
     # "Target player discards two cards, **then draws as many cards as they
     # discarded this way**." (Forget.) The chosen-discard prompt is the same
     # one ``discard_controller_cards`` arms, so it records the same key — what

@@ -78,6 +78,7 @@ ActionKind = Literal[
     "color_set_choice_confirm",
     "land_type_confirm",
     "number_choice_confirm",
+    "draw_up_to_confirm",
     "confirm_mana_payment",
     "kudzu_reattach_confirm",
     "face_down_cast_confirm",

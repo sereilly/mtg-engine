@@ -96,6 +96,7 @@ from .lowering import (
     _lower_for_each_exiled,
     _lower_for_each_tapped,
     _lower_for_each_chosen,
+    _lower_for_each_short_of_this_way,
     _lower_choose_permanent,
     _lower_choose_permanents,
     _lower_gain_control,
@@ -640,6 +641,14 @@ def lower_statement(
         # "For each **1 life you lost**" (Oath of Lim-Dûl).
         if isinstance(statement.iterator, ast.EachLifeLost):
             return _lower_for_each_life_lost(statement, repeated(), event)
+        # "For each **card less than two a player draws this way**" (Truce) —
+        # the sixth iterator: a per-seat shortfall against a record an earlier
+        # step of this same effect wrote, so it is refused without that
+        # producer exactly as the three "this way" sets are.
+        if isinstance(statement.iterator, ast.EachShortOfThisWay):
+            return _lower_for_each_short_of_this_way(
+                statement, repeated(), produced
+            )
         # "**For each player,** …" (Lim-Dûl's Hex) — a loop over seats, whose
         # iteration binds "that player" the way an object loop binds "it".
         if isinstance(statement.iterator, ast.PlayerRef):

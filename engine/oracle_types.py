@@ -40,6 +40,14 @@ X_FROM_COUNT_PER_RECIPIENT = "x_from_count_per_recipient"
 # fills it in, and a second spelling is how those three come apart.
 DISCARDED_BY_SEAT = "discarded_by_seat"
 
+# Its twin one zone over: ``{seat: cards drawn}`` for "Each player may draw up
+# to two cards", read by the sentence that is sized from the *shortfall* ("For
+# each card less than two a player draws this way, that player gains 2 life",
+# Truce). Per seat rather than a single number for the reason above — each
+# player's answer is their own, and one key would let the last seat to answer
+# decide everybody's life gain.
+DREW_BY_SEAT = "drew_by_seat"
+
 # The payload key an effect carries when the object it acts on was **bound by
 # the firing trigger** rather than chosen as a target — "…that creature becomes
 # green" under a block trigger (Aisling Leprechaun). Here for the same reason as

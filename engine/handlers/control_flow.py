@@ -1626,12 +1626,36 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
     # event froze. Read first, because the two branches below both build a list
     # of permanents and this one has none to build.
     repeat_key = filters.get("repeat_from_trigger")
+    # "For each **card less than two a player draws this way**" (Truce) — the
+    # same shape one channel over: a number, not a set, and one number per seat.
+    # It comes out of the *resolution scratchpad* rather than the firing event,
+    # because the count is what an earlier step of this same effect recorded,
+    # and it is a shortfall — the printed base minus what that seat did — so a
+    # seat the record never mentions did none of it and is short by the whole
+    # base. Read beside the counted form above and before the branches that
+    # build a list of permanents, neither of which has a board to scan for it.
+    repeat_record = filters.get("repeat_from_record")
     # "**For each player,** …" (Lim-Dûl's Hex) — a loop over *seats*. Read
     # beside the counted form and before the two object branches for the same
     # reason: neither of them has a board to scan for this.
     seat_set = filters.get("players")
     if repeat_key is not None:
         times = int((context.trigger_context or {}).get(repeat_key, 0) or 0)
+        matched = [_A_REPETITION] * max(0, times)
+    elif repeat_record is not None:
+        # Whose shortfall: the seat the loop *around* this one is on, which the
+        # seat branch below binds as ``context.target``. Outside such a loop
+        # there is no seat and the record is not a number about anybody, so the
+        # body runs no times rather than against a seat nobody named.
+        recorded = context.results.get(repeat_record.get("record")) or {}
+        seat = (
+            game.players.index(context.target)
+            if context.target in game.players else None
+        )
+        times = (
+            int(repeat_record.get("base", 0)) - int(recorded.get(seat, 0) or 0)
+            if seat is not None else 0
+        )
         matched = [_A_REPETITION] * max(0, times)
     elif seat_set is not None:
         # Through the same reader every multi-seat offer uses, so "each player"

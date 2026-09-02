@@ -370,7 +370,11 @@ def _lower_may(
     decision per player; the actor is carried as payload and
     ``handlers/control_flow.may`` arms one prompt for each named seat.
     """
-    for collapse in (_each_player_optional_discard, _each_player_optional_tap):
+    for collapse in (
+        _each_player_optional_discard,
+        _each_player_optional_draw,
+        _each_player_optional_tap,
+    ):
         collapsed = collapse(node)
         if collapsed is not None:
             return collapsed
@@ -645,6 +649,47 @@ def _each_player_optional_discard(
     return (
         OracleInstruction(
             "each_player_discards_up_to_cards", "",
+            {"actor": node.actor.kind, "amount": action.count.value},
+        ),
+    )
+
+
+def _each_player_optional_draw(
+    node: ast.May,
+) -> tuple[OracleInstruction, ...] | None:
+    """"Each player may draw **up to two** cards." (Truce.)
+
+    :func:`_each_player_optional_discard`'s twin one zone over, collapsed for
+    that function's two reasons. The offer and the ceiling are one decision —
+    "up to two" already lets a player draw none, so the "may" adds no answer the
+    prompt does not have — and the sentence *behind* it reads the answers: "For
+    each card less than two a player draws this way, that player gains 2 life"
+    has to run after every seat has said how many, which an offer does not wait
+    for and a suspending prompt does.
+
+    Deliberately narrow, exactly as its two siblings are: an offer with a cost,
+    an if-you-do or an otherwise is a second decision the prompt cannot carry,
+    and the sentence keeps the ordinary offer.
+    """
+    action = node.action
+    if (
+        node.cost is not None
+        or node.then is not None
+        or node.otherwise is not None
+        or node.reflexive is not None
+        or node.starting_with is not None
+        or not isinstance(node.actor, ast.PlayerRef)
+        or node.actor.kind not in _EACH_SEAT_ACTORS
+        or not isinstance(action, ast.Draw)
+        or not isinstance(action.player, ast.PlayerRef)
+        or action.player.kind != "you"
+        or not action.up_to
+        or not isinstance(action.count, ast.Fixed)
+    ):
+        return None
+    return (
+        OracleInstruction(
+            "each_player_draws_up_to_cards", "",
             {"actor": node.actor.kind, "amount": action.count.value},
         ),
     )

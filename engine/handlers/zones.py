@@ -19,7 +19,8 @@ from ._common import (
 )
 # The runtime class. The bare name is a TYPE_CHECKING-only import above, and
 # two handlers here *build* instructions for an optional payment's branches.
-from ..oracle_types import (DISCARDED_BY_SEAT, EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
+from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT,
+                            EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             HAND_CARDS_TO_LIBRARY, PER_OBJECT_SEAT_RECORDS,
                             X_FROM_COUNT_PER_RECIPIENT)
 from ..oracle_types import OracleInstruction as _OracleInstruction
@@ -3060,6 +3061,49 @@ def each_player_discards_up_to_cards(game: Game, instruction: OracleInstruction,
             _results=context.results,
         )
         game.log.append(f"{player.name} may discard up to {actual} card(s)")
+    return True, "resolved"
+
+
+@effect_handler("each_player_draws_up_to_cards")
+def each_player_draws_up_to_cards(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each player may draw up to two cards." (Truce.)
+
+    ``each_player_discards_up_to_cards``'s twin one zone over, and the same
+    arrangement for the same reasons. One ``draw_up_to`` prompt per seat with
+    the printed ceiling, offered in turn order (CR 101.4); the ceiling *is* the
+    offer, since a player may answer with none, which is why the "may" in front
+    of it collapses into this rather than arming a yes/no of its own
+    (``engine/grammar/lowering/control_flow._each_player_optional_draw``).
+
+    Every seat is recorded, including one that draws nothing, because "for each
+    card less than two **a player** draws this way" is a number for every player
+    and a seat the record never mentions has to read as zero rather than as a
+    missing key. The scratchpad rides the prompt, so what is written is what the
+    seat actually chose.
+    """
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    caster_index = game.players.index(context.caster)
+    if instruction.payload.get("actor") == "each_opponent":
+        seats = [s for s in game.opponents_of(caster_index) if not game.players[s].lost]
+    else:
+        # CR 101.4: the active player first, then the rest in turn order.
+        count = len(game.players)
+        active = game.active_player_index or 0
+        seats = sorted(
+            (i for i, p in enumerate(game.players) if not p.lost),
+            key=lambda i: ((i - active) % count, i),
+        )
+    by_seat = context.results.setdefault(DREW_BY_SEAT, {})
+    for seat in seats:
+        player = game.players[seat]
+        by_seat[seat] = 0
+        game.arm_pending_choice(
+            "draw_up_to", seat,
+            amount=amount,
+            card_name=context.card.name,
+            _results=context.results,
+        )
+        game.log.append(f"{player.name} may draw up to {amount} card(s)")
     return True, "resolved"
 
 

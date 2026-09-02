@@ -48,6 +48,12 @@ def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
     as_many = accept_as_many_as(stream, ("card", "cards"), player)
     if as_many is not None:
         return ast.Draw(player, as_many)
+    # "Each player may draw **up to** two cards." (Truce.) Read before the
+    # amount and recorded rather than consumed, exactly as `_parse_discard`
+    # below reads the same two words: a ceiling read as an exact count is a
+    # card that forces a draw its controller was offered the choice of
+    # declining — and on this card the declining is the whole point.
+    up_to = bool(stream.accept_phrase("up", "to"))
     count = parse_amount(stream)
     # "draw two **additional** cards" (Sylvan Library). The word says the draw
     # is on top of one the turn already provides; it names no second effect and
@@ -68,10 +74,10 @@ def _parse_draw(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
         # Only the plain "a card" spelling composes: "draw two cards for each …"
         # is a product this AST has no node for, and reading it as the
         # multiplier alone would halve the card's effect.
-        if not (isinstance(count, ast.Fixed) and count.value == 1):
+        if not (isinstance(count, ast.Fixed) and count.value == 1) or up_to:
             raise stream.error("a per-each draw multiplies one card")
         return ast.Draw(player, multiplier)
-    return ast.Draw(player, count)
+    return ast.Draw(player, count, up_to=up_to)
 
 
 def _parse_draw_multiplier(stream: TokenStream) -> "ast.Amount | None":

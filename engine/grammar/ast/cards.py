@@ -29,6 +29,11 @@ from ._core import (
 class Draw:
     player: PlayerRef
     count: Amount = field(default_factory=lambda: Fixed(1))
+    # "Each player may draw **up to** two cards." (Truce.) The same field
+    # :class:`Discard` below carries and for the same reason: fewer is a legal
+    # answer, none included, so the number is a ceiling rather than an amount.
+    # Not a second count — what changes is whether it is a floor as well.
+    up_to: bool = False
 
 
 @dataclass(frozen=True)

@@ -387,6 +387,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # "Each player may discard up to three cards." (Mind Bomb.) One prompt
     # per seat, and a discard like every other one in this category.
     "each_player_discards_up_to_cards": "zones",
+    # "Each player may draw up to two cards." (Truce.) The discard's twin one
+    # zone over, and the same category: a card moving between a library and a
+    # hand.
+    "each_player_draws_up_to_cards": "zones",
     # "Each opponent discards two cards." (Bad Deal) — one pending discard
     # choice per opponent, same flow as the targeted form.
     "each_opponent_discards_cards": "zones",

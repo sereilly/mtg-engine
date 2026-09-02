@@ -311,6 +311,33 @@ class EachLifeLost:
 
 
 @dataclass(frozen=True)
+class EachShortOfThisWay:
+    """"**For each card less than two a player draws this way**, that player
+    gains 2 life." (Truce.)
+
+    :class:`EachLifeLost`'s twin, and a count for its reason — the loop has no
+    objects, only a number. Two things make it a separate node rather than a
+    field on that one. The number is a **shortfall**, the printed base minus
+    what an earlier step of this same effect recorded, so a reader that took it
+    for a tally would repeat the effect for every card *drawn* instead of for
+    every card not drawn; and it is **one number per seat**, which is why the
+    sentence names "a player" and then "that player" — the loop it lowers to is
+    a loop over seats with this inside it.
+
+    ``record`` is the resolution-scratchpad key the count is read from, resolved
+    by the parse from the printed noun and verb *together* — exactly as
+    ``amounts._THIS_WAY_COUNTS`` resolves the pair it reads, and for its reason:
+    "for each card less than two a player *discards* this way" is a sentence
+    about a different record, and reading one for the other is a number nobody
+    printed. Carried resolved rather than as the two words, because that is what
+    :class:`ThatMuch` does with the same question and what keeps the lowering
+    from needing a second copy of the table.
+    """
+    record: str
+    base: int
+
+
+@dataclass(frozen=True)
 class LifeGainedThisTurn:
     """"if you gained 3 or more life this turn" (CR 603.4 intervening-if).
 
