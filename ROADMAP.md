@@ -46,8 +46,8 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **11,923 tests**, CI budget **400s**, baseline
-   **235s** (`ci.yml`). The budget catches a step change; the baseline
+2. **The suite stays fast.** **11,923 tests**, CI budget **500s**, CI-measured
+   baseline **260s** (`ci.yml`). The budget catches a step change; the baseline
    is what catches creep, and it is the number to keep honest. Raising the
    budget is a decision, not maintenance — it has been raised four times on
    purpose.
@@ -56,11 +56,12 @@ Anything that weakens these is a regression regardless of what it enables:
    numbers sat wrong in opposite directions for three sets because `BASELINE`
    was recorded from a *local* run and compared against an `ELAPSED` the step
    measures on the runner — the multiplier was never in the arithmetic at all,
-   it was the arithmetic's missing term. So a local timing may only enter these
-   numbers **through a multiplier that was itself measured**, and the way to
-   measure one is to time a commit this workflow has already run and divide:
-   `gh run view <id> --log | grep "suite wall time"` is where the runner's half
-   lives, and every successful run has it.
+   it was the arithmetic's missing term. A local timing may enter a *budget*
+   through a multiplier that was itself measured — time a commit this workflow
+   has already run and divide — but **`BASELINE` takes the step's own output and
+   nothing else**, because even that measured multiplier under-predicted by 10%
+   (see below). `gh run view <id> --log | grep "suite wall time"` is where the
+   runner's half lives, and every successful run has it.
 
    **Re-read at Phase 0, 2026-08-31, from four runner runs**: 172s, 186s,
    163s, 205s at 10,821 tests. `BASELINE` moved 110 → 180 as the record of
@@ -71,34 +72,27 @@ Anything that weakens these is a regression regardless of what it enables:
    run before letting the next ingest force the budget decision, and remember
    the `slow` marker exists if the AI-batch tests are the growth.
 
-   **HML made that decision due and it was taken: `BUDGET` 240 → 400,
-   2026-09-02, the fourth raise.** The set took the suite to 11,923 tests, +10%
-   on a run already reading 205s against 240. Three local runs measure a steady
-   137s / 141s / 138s, and this gate's observed local→runner multiplier spans
-   1.3x–1.6x, so the runner now lands somewhere between ~180s and ~250s —
-   *straddling* the old budget, which is a gate failing on runner weather rather
-   than on a step change. 400 is ~2x the middle of that projection and
-   deliberately not another doubling; the full arithmetic is in `ci.yml`.
+   **HML made that decision due and it was taken: `BUDGET` 240 → 500 and
+   `BASELINE` 180 → 260, 2026-09-02, the fourth raise.** Both are runner
+   readings of this tree — run 33644611682 on `homelands` reported
+   `suite wall time: 260s` at 11,923 tests. It was overdue rather than
+   precautionary: the last run before the set (33564882929, commit `1a294522`)
+   read **217s**, already 90% of the old 240, and the set added ~750 tests on
+   top of that. `BUDGET` is ~2x `BASELINE`, which is the headroom this gate is
+   documented to want and which puts the creep warning (1.5x = 390s) ~22% below
+   the gate so it can fire first.
 
-   **`BASELINE` 180 -> 235, and the multiplier in it is measured rather than
-   guessed** — which is the thing this invariant had been wrong about twice.
-   The workflow's own logs carry the readings (`gh run view <id> --log | grep
-   "suite wall time"`): 106s, 112s, 92s, 172s, 206s and **217s**, the last on
-   commit `1a294522` — the commit this branch is based on. Timing that same
-   commit in a worktree here gives 125s, so this machine's local -> runner
-   multiplier is **217/126 = 1.72**, measured on one commit rather than inferred
-   across three. At 138s local the current tree projects to **~237s**.
+   **And the method note, which cost a commit to learn.** An interim pass set
+   `BASELINE` from a *measured* multiplier rather than a guessed one: time a
+   commit this workflow has already run and divide. That gave 217/126 = **1.72**
+   on `1a294522`, projecting 138s local to ~237s. **The truth was 260s** — the
+   multiplier itself grows with the suite (1.72 at 11,176 tests, 1.88 at 11,923),
+   because the runner degrades faster than a local machine does. So a measured
+   multiplier is good enough to size a *budget* and not good enough to set
+   `BASELINE`, which wants the step's own output. That is one dispatch away
+   (`gh workflow run CI --ref <branch>`, then `gh run view <id> --log | grep
+   "suite wall time"`), and it is the only honest source for this number.
 
-   That projection is what makes the budget raise a finding rather than a
-   precaution: at 237s this suite would have run at **99% of the old 240**,
-   passing or failing on runner weather alone. `BASELINE` is set to 235 rather
-   than 237 because a creep detector should err low — an under-reading makes the
-   warning eager, which is the safe direction, and it puts the warning threshold
-   (1.5x = 352s) back below `BUDGET`, which is the design.
-
-   **It is still a projection.** Replace it with the step's own output the first
-   time CI runs on this tree; the number is one grep away, and a measured
-   multiplier is still a multiplier.
 3. **Determinism.** A given seed reproduces a run exactly. Parsing and lowering
    are pure functions of card text.
 4. **Ratchets only tighten.** Coverage floors, probe baselines, and accepted-diff
