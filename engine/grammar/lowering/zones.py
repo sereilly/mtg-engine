@@ -331,6 +331,75 @@ def _lower_shuffle_hand_into_library(
     )
 
 
+#: The seats a bare shuffle can name. "You" is the imperative's subject; the
+#: other three are a player an earlier sentence of the same effect chose, which
+#: the handler reads off the resolution's target. A reference outside this — an
+#: "each opponent", say — is a loop the handler does not have, and a shuffle
+#: taken on one library while the card names several is the direction nothing
+#: crashes and the card is quietly a different card.
+_SHUFFLE_LIBRARY_PLAYERS = frozenset(
+    {"you", "that_player", "target_player", "target_opponent"}
+)
+
+
+#: The seats a reveal of a library's top card can name — the same four the
+#: shuffle below admits, and for the same reason: a reveal opens one library,
+#: and a reference the handler cannot resolve is a card revealed off the wrong
+#: deck and recorded under a name every sentence behind it then reads.
+_REVEAL_TOP_PLAYERS = frozenset(
+    {"you", "that_player", "target_player", "target_opponent"}
+)
+
+
+def _lower_reveal_top_of_library(
+    node: ast.RevealTop,
+) -> tuple[OracleInstruction, ...]:
+    """"Reveal the top card of target opponent's library." (Prophecy.)
+    "Reveal the top card of your library." (Track Down.)
+
+    CR 701.20a: the card is shown and moves nowhere, so the effect is the
+    record it leaves — which is why *whose* library it came off has to reach
+    the handler. Unstated, the handler reads the caster's own deck, and a
+    Prophecy that revealed its controller's top card would gain life off the
+    wrong library and shuffle a deck nobody looked at.
+
+    ``whose`` is emitted only when the card names somebody else, so every
+    reveal written before this keeps a byte-identical payload and the
+    behaviour signatures do not move.
+    """
+    if node.player.kind not in _REVEAL_TOP_PLAYERS:
+        raise LoweringError(
+            f"no handler reveals the top of {node.player.kind!r}'s library",
+            node=node,
+        )
+    if node.player.kind == "you":
+        return (OracleInstruction("reveal_top_of_library", "", {}),)
+    payload: dict[str, object] = {"whose": node.player.kind}
+    if node.player.kind != "that_player":
+        _describe_targets(payload, node.player)
+    return (OracleInstruction("reveal_top_of_library", "", payload),)
+
+
+def _lower_shuffle_library(node: ast.ShuffleLibrary) -> tuple[OracleInstruction, ...]:
+    """"Then that player shuffles." (Prophecy.) CR 701.16 with nothing moving.
+
+    Whose library is payload, exactly as the two shuffles above carry whose
+    pile moves. ``that_player`` is deliberately **not** described as a target:
+    it names a seat an earlier sentence of this same effect already chose, and
+    describing it would raise a second picker for a target the spell has.
+    """
+    if node.whose.kind not in _SHUFFLE_LIBRARY_PLAYERS:
+        raise LoweringError(
+            f"no handler shuffles {node.whose.kind!r}'s library", node=node
+        )
+    payload: dict[str, object] = {"whose": node.whose.kind}
+    if node.whose.kind in ("target_player", "target_opponent"):
+        # A shuffle that *chooses* its player is the one spelling that needs a
+        # picker; the sentence naming one an earlier step chose does not.
+        _describe_targets(payload, node.whose)
+    return (OracleInstruction("shuffle_library", "", payload),)
+
+
 def _lower_random_reveal_ownership_exchange(
     node: "ast.RandomRevealOwnershipExchange",
 ) -> tuple[OracleInstruction, ...]:

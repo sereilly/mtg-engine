@@ -91,10 +91,12 @@ from .lowering import (
     _lower_put_on_library_top,
     _lower_regenerate,
     _lower_reveal_top,
+    _lower_reveal_top_of_library,
     _lower_reanimate_enchanted_card,
     _lower_sacrifice_expansion_permanents,
     _lower_shuffle_graveyard_into_library,
     _lower_shuffle_hand_into_library,
+    _lower_shuffle_library,
     _lower_destroy_each_unless_paid,
     _lower_sacrifice_unless_pay,
     _lower_cast_from_exiled_with,
@@ -197,6 +199,12 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.ChangeLandType: _lower_change_land_type,
     ast.ShuffleGraveyardIntoLibrary: _lower_shuffle_graveyard_into_library,
     ast.ShuffleHandIntoLibrary: _lower_shuffle_hand_into_library,
+    ast.ShuffleLibrary: _lower_shuffle_library,
+    # CR 701.20a's bare reveal. It moved out of `lower.py`'s if-chain when
+    # it grew a field: the chain's branch built the instruction inline
+    # because the node had nothing to read, and a lowering that reads its
+    # node is exactly what this table is for.
+    ast.RevealTop: _lower_reveal_top_of_library,
     ast.RevealHand: _lower_reveal_hand,
     ast.RevealRandomFromHand: _lower_reveal_random_from_hand,
     ast.ExileCostSacrifices: _lower_exile_cost_sacrifices,

@@ -56,6 +56,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "sacrifice_expansion_permanents": "destruction",
     "shuffle_graveyard_into_library": "zones",
     "shuffle_hand_into_library": "zones",
+    # CR 701.16 with nothing moving into the library (Prophecy's third
+    # sentence). The same category as the two above: what it touches is a zone.
+    "shuffle_library": "zones",
     "gain_type": "characteristics",
     "change_supertype": "characteristics",
     # "Target land becomes a Swamp until its controller's next untap step."

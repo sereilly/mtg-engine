@@ -653,6 +653,25 @@ class ShuffleHandIntoLibrary:
 
 
 @dataclass(frozen=True)
+class ShuffleLibrary:
+    """``Then that player shuffles.`` (Prophecy.) ``Shuffle your library.``
+
+    CR 701.16's shuffle with **nothing moving into the library first**, which
+    is the whole of what separates it from the two nodes above: those are zone
+    moves whose shuffle is part of the move, and this is a card having been
+    looked at and the deck being randomised again so nobody knows where it went.
+    Folding it into either would give a shuffle a pile to move that the printed
+    sentence never names.
+
+    Not a rider on the sentence before it, either. A search shuffles because
+    CR 701.19d ends every search with one, and that shuffle is spelled inside
+    the search production for exactly that reason; a *reveal* ends with no
+    shuffle at all, so Prophecy prints one and it is a statement of its own.
+    """
+    whose: PlayerRef
+
+
+@dataclass(frozen=True)
 class DoesntUntapWhileSourceTapped:
     """``<subject> doesn't untap during its controller's untap step **for as
     long as this creature remains tapped**.`` (Phyrexian Gremlins.)

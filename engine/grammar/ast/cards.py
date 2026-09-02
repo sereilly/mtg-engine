@@ -796,7 +796,17 @@ class RevealTop:
     the opposite decomposition — a reveal that records, and whatever ordinary
     conditional follows it — so folding them together would make the Garruk
     template's own docstring untrue of half its cases.
+
+    ``player`` is **whose** library is looked at. "Reveal the top card of
+    **target opponent's** library" (Prophecy) is this same effect over another
+    seat's deck, and which deck is opened is the one thing about it that cannot
+    be inferred: an unstated seat reads as the caster's, so a card that named
+    somebody else would reveal the wrong library and record the wrong card for
+    every sentence behind it. Defaulted to "you", so every reveal written
+    before this keeps a byte-identical node.
     """
+
+    player: PlayerRef = PlayerRef("you")
 
 
 @dataclass(frozen=True)
