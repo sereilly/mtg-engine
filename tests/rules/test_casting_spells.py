@@ -1323,3 +1323,65 @@ def test_601_3_the_prohibition_is_exactly_the_class_it_prints():
     artifacts = _w2g5_ban_board("artifact")
     assert artifacts.cast_from_hand(0, "Test Bear").supported
     assert not artifacts.cast_from_hand(0, "Test Thopter").supported
+
+
+# ---------------------------------------------------------------------------
+# W2G2 — CR 601.2c over a control change, which had no arm in the cast gate
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("601.2c", "601.2e")
+def test_601_2c_a_control_change_checks_the_target_it_was_named():
+    """Traitorous Greed: "Gain control of target **creature** until end of turn."
+
+    ``_validate_cast_targets`` is a per-kind chain and the control-change kinds
+    had no arm, while ``derive_cast_spec`` reduces them — exactly as it does
+    Terror — to a bare ``{"kind": "creature"}`` picker that carries no printed
+    narrowing. So an announcement naming a land was *legal*: the spell was cast,
+    it resolved, it found nothing, and the caster lost a card to a cast
+    CR 601.2c forbids. CR 601.2e is the other half of why it has to be caught
+    here — an illegal proposal returns the game to the moment before it, so the
+    spell must still be in hand.
+
+    Found by the first card in the pool to print a narrowing on a control
+    change (Alliances' Ritual of the Machine, "nonartifact, nonblack"), which
+    is why nothing shipped was visibly wrong: Traitorous Greed's only narrowing
+    is its head noun, and reaching for a land is a play nobody makes by
+    accident.
+    """
+    from engine.card_loader import load_catalog
+
+    catalog = {card.name: card for card in load_catalog()}
+
+    def _board():
+        caster, victim = PlayerState(name="A"), PlayerState(name="B")
+        game = Game(players=[caster, victim])
+        game.enforce_mana_costs = False
+        caster.hand.append(catalog["Traitorous Greed"])
+        return game, caster, victim
+
+    game, caster, victim = _board()
+    creature = Permanent(card=catalog["Grizzly Bears"])
+    victim.battlefield.append(creature)
+    game._settle()
+
+    legal = game.cast_from_hand(
+        0, "Traitorous Greed", target_player_index=1, target_permanent_index=0,
+    )
+    game._settle()
+    assert legal.supported, legal.details
+    assert game.controller_index_of(creature) == 0
+
+    game, caster, victim = _board()
+    victim.battlefield.append(Permanent(card=catalog["Forest"]))
+    game._settle()
+
+    illegal = game.cast_from_hand(
+        0, "Traitorous Greed", target_player_index=1, target_permanent_index=0,
+    )
+    game._settle()
+    assert not illegal.supported
+    assert [c.name for c in caster.hand] == ["Traitorous Greed"], (
+        "CR 601.2e: an illegal announcement costs the caster nothing"
+    )
+    assert not game.stack
