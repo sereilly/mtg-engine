@@ -918,7 +918,7 @@ def parse_subject_verb(
                 return permission
             # "<self> can be the target of spells and abilities controlled by
             # target player as though it didn't have shroud" (Autumn Willow) —
-            # the same "as though" permission (CR 115.4) about a different
+            # the same "as though" permission (CR 609.4) about a different
             # restriction, so it is tried beside its twin rather than inside
             # it: the two share the auxiliary and nothing else, and both refuse
             # without consuming.

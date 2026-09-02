@@ -892,7 +892,7 @@ def waive_shroud_for_target_player(game: Game, instruction: OracleInstruction, c
     """"Until end of turn, Autumn Willow can be the target of spells and
     abilities controlled by **target player** as though it didn't have shroud."
 
-    CR 115.4's "as though" cutting a hole in CR 702.18 for one seat. The record
+    CR 609.4's "as though" cutting a hole in CR 702.18 for one seat. The record
     is a list of seats on the permanent (``target_immunity``), read by
     ``_can_be_targeted`` and swept with the turn — the creature still *has*
     shroud, so every other seat is stopped exactly as before and a lord counting

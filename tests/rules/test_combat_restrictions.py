@@ -763,3 +763,80 @@ def test_508_1g_the_sacrifice_plan_prefers_the_permanent_each_cost_can_only_use(
         perm for perm in game.players[0].battlefield
         if perm.card.primary_type == "land"
     ], "all three lands paid: two Islands for the Leviathan, the Forest for the Bear"
+
+
+# ---------------------------------------------------------------------------
+# CR 509.1b — a restriction whose bound is another creature's characteristic
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("509.1b", "613.1")
+def test_509_1b_a_block_restriction_may_be_bounded_by_a_live_characteristic():
+    """A blocking restriction (CR 509.1b) whose threshold is not a printed
+    number but a characteristic of the creature the restriction is about —
+    Ironclaw Curse's "creatures with power equal to or greater than the
+    enchanted creature's toughness".
+
+    Both halves are read through CR 613's accessors at the moment the
+    declaration is checked, so the test moves the *attacker's* power rather
+    than either printed line: a bound folded into the payload when the
+    restriction was derived would keep answering about the 1/1 the card
+    started as.
+
+    Invented cards, deliberately. The pool's one printing of this sentence is
+    an Aura, and a test naming it would pass against a reading that only ever
+    worked for the Aura's own subject rewrite.
+    """
+    from engine.pt import add_pt_modifier
+    from engine.subject_filters import subject_matches
+    from tests.helpers import _mk_creature_card
+
+    blocker = _nosick(Permanent(card=_mk_creature_card("Test Blocker", 2, 3, "")))
+    attacker = _nosick(Permanent(card=_mk_creature_card("Test Attacker", 1, 1, "")))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", battlefield=[blocker]),
+    ])
+    described = {
+        "type_filter": "creature",
+        "characteristic_vs_source": {
+            "characteristic": "power", "op": "ge",
+            "source_characteristic": "toughness",
+        },
+    }
+
+    assert not subject_matches(game, attacker, described, source=blocker)
+    add_pt_modifier(attacker, 2, 0)      # power 3, against toughness 3
+    assert subject_matches(game, attacker, described, source=blocker)
+
+
+@pytest.mark.cr("509.1b")
+def test_509_1b_a_granted_whitelist_forbids_every_blocker_it_omits():
+    """"Target creature can't be blocked this turn except by Walls." (Joven's
+    Tools.) A whitelist and a blacklist are opposite restrictions, so the two
+    granted records are asserted against the same board: the blacklist lets the
+    unnamed blocker through and the whitelist does not.
+    """
+    from engine.combat_restrictions import (
+        grant_blocker_restriction, grant_blocker_whitelist,
+    )
+    from tests.helpers import _mk_creature_card
+
+    walls = {"type_filter": "creature", "subtype_filter": "wall"}
+    attacker = _nosick(Permanent(card=_mk_creature_card("Runner", 2, 2, "")))
+    bear = Permanent(card=_mk_creature_card("Bear", 2, 2, ""))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", battlefield=[bear]),
+    ])
+
+    grant_blocker_restriction(attacker, walls)
+    assert game._can_block_attacker(bear, attacker) is True, (
+        "'can't be blocked by Walls' says nothing about a Bear"
+    )
+
+    attacker.metadata.pop("cant_be_blocked_by_until_eot", None)
+    grant_blocker_whitelist(attacker, [walls])
+    assert game._can_block_attacker(bear, attacker) is False, (
+        "'except by Walls' says everything else may not block"
+    )

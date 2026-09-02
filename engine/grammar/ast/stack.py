@@ -231,7 +231,7 @@ class WaiveShroud:
     controlled by target player as though it didn't have shroud.`` (Autumn
     Willow.)
 
-    CR 702.18 with a hole cut in it for one seat — CR 115.4's "as though",
+    CR 702.18 with a hole cut in it for one seat — CR 609.4's "as though",
     which lifts the restriction and changes nothing else: the creature still
     *has* shroud, so a second copy of this ability opens it to a second player
     and nobody else, and a lord counting creatures with shroud still counts it.

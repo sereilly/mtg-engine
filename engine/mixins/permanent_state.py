@@ -2038,7 +2038,7 @@ class PermanentStateMixin:
 
             # "Until end of turn, Autumn Willow can be the target of spells and
             # abilities controlled by **target player** as though it didn't
-            # have shroud." (CR 702.18 with CR 115.4's hole in it.) The waiver
+            # have shroud." (CR 702.18 with CR 609.4's hole in it.) The waiver
             # is per seat, so it is asked with the seat whose spell or ability
             # is choosing: the caster for a spell, and the *controller of the
             # source* for an ability, which is CR 109.5's answer and not

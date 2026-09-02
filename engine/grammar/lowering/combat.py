@@ -492,7 +492,15 @@ def _lower_cant_be(
             # which on a *whitelist* widens the class allowed through — and an
             # empty description would allow everything, which is the card
             # doing nothing at all.
-            if not allowed or set(allowed) - TESTABLE_SUBJECT_FILTER_KEYS:
+            #
+            # ``OBJECT_ONLY_FILTER_KEYS``, not the wider set: this record is a
+            # list of filters on the *attacker*, and the blockers step asks it
+            # with neither an observer nor a source, because neither is
+            # recoverable — the seat "you control" would name is whoever
+            # activated the granting ability, and that is not in the record. A
+            # relative narrowing would therefore be dropped at the gate, so it
+            # refuses here instead (idiom 2).
+            if not allowed or set(allowed) - OBJECT_ONLY_FILTER_KEYS:
                 raise LoweringError(
                     "the granted blocker whitelist cannot test this noun "
                     "phrase",
@@ -537,7 +545,13 @@ def _lower_cant_be(
             # key outside what that answers would be carried and ignored — and
             # a *dropped* narrowing here makes the creature unblockable by
             # everything, which is the widening direction.
-            if not described or set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            #
+            # ``OBJECT_ONLY_FILTER_KEYS`` for the reason written on the
+            # whitelist above: the granted record travels on the attacker and
+            # is asked with no observer and no source, so a relative narrowing
+            # is one this gate cannot honour rather than one it merely has not
+            # met yet.
+            if not described or set(described) - OBJECT_ONLY_FILTER_KEYS:
                 raise LoweringError(
                     "the granted blocker restriction cannot test this noun "
                     "phrase",

@@ -730,7 +730,12 @@ class DeclareBlockersStepMixin:
             if restriction.kind == "cant_be_blocked_except_by":
                 allowed = restriction.payload.get("allowed_blockers") or ()
                 if not any(
-                    subject_matches(self, blocker, described) for described in allowed
+                    subject_matches(
+                        self, blocker, described,
+                        observer=self.controller_index_of(attacker),
+                        source=attacker,
+                    )
+                    for described in allowed
                 ):
                     return False
                 continue
@@ -762,8 +767,19 @@ class DeclareBlockersStepMixin:
             # Every field still goes through `subject_matches`, so the layers
             # answer: a Grizzly Bears laced red is a red creature, an animated
             # artifact is an artifact creature, and a pumped 2/2 has power 4.
+            # The restriction belongs to the *attacker* (its own printed line,
+            # or an Aura's about the creature it enchants), so CR 109.5's
+            # observer is the attacker's controller and the ability's source is
+            # the attacker itself. Passed here rather than left out because
+            # `_blocker_union` admits the whole testable key set: a phrase
+            # narrowed by "you control" or by "another" would otherwise be
+            # carried into a call that cannot answer it and silently dropped,
+            # which on a blocking restriction is a block the card forbids.
             for described in restriction.payload.get("blocker_filters") or ():
-                if subject_matches(self, blocker, described):
+                if subject_matches(
+                    self, blocker, described,
+                    observer=self.controller_index_of(attacker), source=attacker,
+                ):
                     return False
 
         # Invisibility's "can't be blocked except by Walls" used to be its own

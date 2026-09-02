@@ -494,7 +494,7 @@ def _parse_can_be_targeted_as_though(
     """``can be the target of spells and abilities controlled by <player> as
     though it didn't have shroud`` — the permission clause, without its subject.
 
-    Autumn Willow. CR 115.4's "as though" cutting a hole in CR 702.18 for one
+    Autumn Willow. CR 609.4's "as though" cutting a hole in CR 702.18 for one
     seat, and the twin of ``phrases._parse_can_attack_as_though`` one rule
     over: both are permissions that lift a restriction and change nothing else.
 

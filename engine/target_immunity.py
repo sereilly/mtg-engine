@@ -601,7 +601,7 @@ def source_is_in_class(game, source, source_class: str) -> bool:
 #: a decision an activation made, so it is a record with a window.
 #:
 #: A list of **seats**, not a boolean, because the permission is per player:
-#: CR 115.4's "as though" lifts the restriction only for the spells and
+#: CR 609.4's "as though" lifts the restriction only for the spells and
 #: abilities that seat controls, and a boolean would open the creature to the
 #: whole table. Swept with the turn by ``mixins/_constants._EOT_METADATA_KEYS``,
 #: which is what makes "until end of turn" true without anything having to
@@ -611,7 +611,7 @@ SHROUD_WAIVED_FOR_SEATS = "shroud_waived_for_seats_until_eot"
 
 def waive_shroud_for_seat(permanent, seat: int) -> None:
     """Let *seat*'s spells and abilities target *permanent* this turn although
-    it has shroud (CR 702.18, CR 115.4's "as though")."""
+    it has shroud (CR 702.18, CR 609.4's "as though")."""
     record = [int(index) for index in shroud_waived_seats(permanent)]
     if int(seat) not in record:
         record.append(int(seat))
