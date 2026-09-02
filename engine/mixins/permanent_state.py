@@ -7,6 +7,7 @@ from dataclasses import replace
 from ..enter_effects import (
     ENTERED_BATTLEFIELD_TURN,
     entry_exile_requirement,
+    entry_sacrifice_requirement,
     sacrifice_any_number_on_enter,
     CHOOSE_COLOR_AND_OPPONENT_ON_ENTER,
     chooses_color_on_enter,
@@ -638,6 +639,44 @@ class PermanentStateMixin:
                 filter=dict(required["filter"]),
                 counters=list(required["counters"]),
             )
+
+        # "If this land would enter, sacrifice an untapped Mountain instead. If
+        # you do, put this land onto the battlefield." (Balduvian Trading Post
+        # and its four siblings.) CR 614.1a's entry toll, charged here for
+        # Frankenstein's Monster's reason one branch up: the other half of the
+        # same paragraph - "if you don't, put it into its owner's graveyard" -
+        # is the interceptor in engine/replacements.py, and it declined to apply,
+        # which is exactly the statement that the battlefield holds something
+        # the toll accepts. So this is a cost that *can* be paid and the only
+        # open question is which permanent pays it.
+        #
+        # Mandatory, not offered: the sentence says "sacrifice ... instead", so
+        # ``up_to`` stays False and a non-interactive seat pays it inline
+        # through the same deterministic pick every other forced sacrifice uses.
+        #
+        # ``exclude`` is CR 614.13a - the permanent that is entering can never
+        # be chosen to pay for its own entry. It is on the battlefield by now,
+        # so unlike the predicate's copy of the same exclusion this one has
+        # something to exclude.
+        toll = entry_sacrifice_requirement(permanent.effective_card)
+        if toll is not None:
+            described = dict(toll["filter"])
+            owed = toll["count"]
+            if owed == "all":
+                # "instead sacrifice **each other permanent named Sheltered
+                # Valley you control**" — a set rather than a number, so the
+                # count is whatever the board holds and the player is offered no
+                # choice at all. Zero is a legal answer and needs no prompt,
+                # which is why this shape prints no "if you don't": an empty set
+                # is something everybody can give up.
+                owed = len(self._sacrifice_candidate_indices(
+                    self.players[caster_index], described, permanent
+                ))
+            if owed:
+                self.arm_forced_sacrifice(
+                    caster_index, int(owed), filter=described, exclude=permanent,
+                    reason=f"{permanent.card.name} enters",
+                )
 
         # enters with fixed counters (Clockwork Beast). Track the counter count so
         # the end-of-combat trigger and the upkeep activated ability can adjust it.

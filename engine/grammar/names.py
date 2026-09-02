@@ -30,7 +30,20 @@ from .stream import TokenStream
 # "get +2/+2" and the statement parser found no verb at all. No card in the pool
 # has any of these words in its name (checked against every set file), so the
 # stop can only end a scan the verb was never part of.
-_NAME_STOPS = ("reveal", "put", "then", "and", "or", "in", "get", "gets", "has", "have")
+#
+# "you" is the same stop one clause later: "permanents named Sheltered Valley
+# **you control**" ends the name where the *postmodifier* begins, and without
+# the stop the scan swallowed the seat — leaving a filter asking for a card
+# literally named "Sheltered Valley you control" (which matches nothing) with
+# ``controller`` never set (so the restriction was dropped as well). Both halves
+# silent, and both wrong in the direction of a wider sweep. No shipped card is
+# affected only because the pool's one instance of the phrase sits inside
+# reminder text (Master of the Hunt's banding parenthetical, which the lexer
+# drops); Sheltered Valley is the first card to print it as rules text.
+_NAME_STOPS = (
+    "reveal", "put", "then", "and", "or", "in", "get", "gets", "has", "have",
+    "you",
+)
 
 
 def parse_card_name(stream: TokenStream) -> str:

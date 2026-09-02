@@ -667,6 +667,14 @@ def add_mire_counter_to_target_land(game: Game, instruction: OracleInstruction, 
 #: and a flag could only say that it became something.
 ANIMATE_UNTIL_EOT = "animate_until_end_of_turn"
 
+#: Its indefinite twin (Mishra's Groundbreaker, CR 611.2a). A **second key**
+#: rather than a flag inside the record above, because what separates the two is
+#: exactly which sweep can see it: `mixins/_constants._EOT_METADATA_KEYS` clears
+#: the first at cleanup and knows nothing about the second. A flag would have
+#: meant teaching that sweep to read the record it is deleting, which is the one
+#: thing a key list cannot do.
+ANIMATE_INDEFINITELY = "animate_indefinitely"
+
 
 @effect_handler("animate_self_until_eot")
 def animate_self_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
@@ -712,6 +720,29 @@ LAND_TYPE_UNTIL_UNTAP = "until_controllers_next_untap_step"
 LAND_TYPE_UNTIL_EOT = "until_end_of_turn"
 
 
+@effect_handler("animate_target_indefinitely")
+def animate_target_indefinitely(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target land becomes a 3/3 artifact creature that's still a land. (This
+    effect lasts indefinitely.)" (Mishra's Groundbreaker, CR 611.2a.)
+
+    The same animation as its until-end-of-turn twin below, written to the key
+    the cleanup sweep does not clear and with the P/T on the **persistent**
+    channel rather than the ``_until_eot`` one. Those are the only two
+    differences, and both of them are the duration: a record on the swept key
+    would end the effect the turn it started, and a P/T on the swept channel
+    would leave a land that is a creature with no size — a 0/0 CR 704.5f puts
+    in the graveyard at the next state-based check.
+
+    Sharing the twin's body through :func:`_animate_target`, because which
+    permanent it reaches, which narrowing it tests and what it logs are one
+    question asked twice; only the record differs.
+    """
+    return _animate_target(
+        game, instruction, context,
+        record_key=ANIMATE_INDEFINITELY, until_eot=False, duration="indefinitely",
+    )
+
+
 @effect_handler("animate_target_until_eot")
 def animate_target_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target snow land becomes a 2/2 creature until end of turn. It's still a
@@ -732,6 +763,28 @@ def animate_target_until_eot(game: Game, instruction: OracleInstruction, context
     persistent one, which is harmless on a permanent that stops being a
     creature the same moment but would leave a stamp on someone else's land.
     """
+    return _animate_target(
+        game, instruction, context,
+        record_key=ANIMATE_UNTIL_EOT, until_eot=True, duration="until end of turn",
+    )
+
+
+def _animate_target(
+    game: Game,
+    instruction: OracleInstruction,
+    context: OracleExecutionContext,
+    *,
+    record_key: str,
+    until_eot: bool,
+    duration: str,
+) -> tuple[bool, str]:
+    """Both targeted animations: find the target, write the record, log it.
+
+    One body because the two kinds differ only in *how long* — which permanent
+    is reached, which narrowing is tested and what the log says are the same
+    question either way, and a second copy of the target resolution is a second
+    chance to disagree about what the printed noun phrase names.
+    """
     from ..subject_filters import subject_matches
 
     filt = (instruction.payload.get("targets") or {}).get("filter") or {}
@@ -751,15 +804,15 @@ def animate_target_until_eot(game: Game, instruction: OracleInstruction, context
         return True, "resolved"
     payload = instruction.payload
     power, toughness = int(payload.get("power", 0)), int(payload.get("toughness", 0))
-    set_base_pt(target, power, toughness, until_eot=True)
-    target.metadata[ANIMATE_UNTIL_EOT] = {
+    set_base_pt(target, power, toughness, until_eot=until_eot)
+    target.metadata[record_key] = {
         "subtypes": list(payload.get("subtypes") or ()),
         "keywords": list(payload.get("keywords") or ()),
         "card_types": list(payload.get("card_types") or ()),
     }
     game.log.append(
-        f"{target.card.name} becomes a {power}/{toughness} creature until end "
-        f"of turn ({context.card.name})"
+        f"{target.card.name} becomes a {power}/{toughness} creature "
+        f"{duration} ({context.card.name})"
     )
     return True, "resolved"
 

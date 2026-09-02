@@ -3500,7 +3500,15 @@ def _unread_land_text(
         collapsed = _restriction_line(line, card_name)
         if _is_supported_static_creature_line(line, card_name):
             continue
-        if enter_effect_line(collapsed) is not None:
+        # The **raw** line and the card's name, never the pre-collapsed one:
+        # `enter_effect_line` runs `_self_normalized` itself, and handing it a
+        # line whose self-references are already rewritten costs it the printed
+        # text. Sheltered Valley is what showed the difference — "each other
+        # permanent **named Sheltered Valley** you control" arrives here as
+        # "named this creature", so the reader that claims the line and the
+        # reader that carries it out were looking at two different cards, which
+        # is the exact mismatch `_self_normalized`'s own docstring warns about.
+        if enter_effect_line(line, card_name) is not None:
             continue
         if _derived_static_claims(collapsed, collapsed, card_name):
             continue

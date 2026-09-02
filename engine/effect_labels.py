@@ -376,6 +376,12 @@ ACTIVATED_LABELS: dict[str, str] = {
     # characteristic change: the Wall keeps defender and the restriction is
     # lifted for the turn.
     "attack_as_though_no_defender_until_eot": "activated_combat",
+    # --- Alliances ---------------------------------------------------------
+    # Mishra's Groundbreaker, beside ``animate_target_until_eot`` above and for
+    # its reason: CR 205 is what a permanent *is*, which is the bucket rather
+    # than the P/T the animation arrives with. Its own entry because it is its
+    # own instruction kind — the duration is what separates them.
+    "animate_target_indefinitely": "activated_characteristic",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -432,6 +438,10 @@ TRIGGERED_LABELS: dict[str, str] = {
     # bucket as a +1/+1 one: the report asks what the ability is for.
     "add_named_counter_to_self": "triggered_counter",
     "add_mana_for_tapped_land": "spell_pattern",
+    # Storm Cauldron, beside its neighbour: both are resolved inline by the tap
+    # seam rather than through EFFECT_HANDLERS, so neither has an
+    # ``activated_``/``triggered_`` bucket a dispatcher would give it.
+    "return_tapped_land_to_hand": "spell_pattern",
     "add_plus1_counters_for_each_creature_died": "triggered_counter",
     # The upkeep decay an Aura puts on what it enchants (Unstable Mutation).
     # `upkeep_effect` rather than `triggered_counter`, which is the label the

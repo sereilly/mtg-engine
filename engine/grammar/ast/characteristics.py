@@ -250,9 +250,14 @@ class BecomeCreature:
     defaulted, because a card that replaced its types would be a different card
     and the words are the only thing that says which.
 
-    ``until_end_of_turn`` is likewise required by the production: without a
-    duration this is a permanent animation, and the two differ by everything
-    that happens after the turn ends.
+    The duration is **read**, never defaulted by the production: a sentence
+    that prints "until end of turn" and one that prints nothing differ by
+    everything that happens after the turn ends, so the word decides
+    ``until_end_of_turn`` and the two lower to different instruction kinds.
+    Mishra's Groundbreaker's "Target land becomes a 3/3 artifact creature
+    that's still a land" is the second: CR 611.2a's default duration, stated by
+    saying nothing, and the printed reminder ("This effect lasts indefinitely")
+    is a parenthetical the lexer has already dropped.
     """
     subject: Recipient
     power: int
@@ -265,6 +270,12 @@ class BecomeCreature:
     #: not also an artifact is a different permanent: Shatter reaches one and
     #: not the other.
     card_types: tuple[str, ...] = ()
+    #: Whether the animation ends at cleanup. False is "the effect lasts
+    #: indefinitely" (Mishra's Groundbreaker) — CR 611.2a's default duration,
+    #: which a printed sentence states by saying nothing. Defaulted True because
+    #: that is what every other printing in the pool says out loud, and because
+    #: a node built without the field must keep meaning what it used to.
+    until_end_of_turn: bool = True
 
 
 #: The colour an effect does not name because CR 609.3 makes the choice part of

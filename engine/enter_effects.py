@@ -540,6 +540,167 @@ def exile_cards_on_enter(line: str, card_name: str | None = None) -> dict | None
     return {"count": count, "filter": described_cards, "counters": counters}
 
 
+#: "If this land would enter, sacrifice an untapped Mountain instead. If you do,
+#: put this land onto the battlefield. If you don't, put it into its owner's
+#: graveyard." (Balduvian Trading Post, Heart of Yavimaya, Kjeldoran Outpost,
+#: Lake of the Dead, Soldevi Excavations - one printed template with one word
+#: changed.)
+#:
+#: Three printed sentences and one CR 614.1a/614.12 replacement, exactly as
+#: :data:`EXILE_CARDS_ON_ENTER` above is: an entry cost, the entry it buys, and
+#: what happens when it cannot be paid. They are one pattern because they are
+#: one effect - a claim stopping at the first sentence would admit a card whose
+#: "if you don't" nothing performs.
+#:
+#: What is given up is a capture read by the same noun parser every other
+#: printed noun phrase in the engine goes through, so "an untapped Mountain"
+#: costs no more code than "a Forest" - the five cards differ by that phrase
+#: and by nothing else. The self-noun is a back-reference, so a card whose
+#: second sentence names a *different* permanent than the first is one this
+#: rule has not read.
+#:
+#: The sacrifice is **mandatory when it can be made**: the sentence says
+#: "sacrifice ... instead", not "you may sacrifice", and CR 101.3 is what makes
+#: the "if you don't" branch reachable at all - a player instructed to do
+#: something impossible ignores the instruction. Gatherer's own ruling on Lake
+#: of the Dead says the same in the other direction ("you have to sacrifice a
+#: swamp before this card is put onto the battlefield").
+ENTRY_SACRIFICE_TOLL = re.compile(
+    r"^if this (?P<self>[a-z]+) would enter, sacrifice (?P<phrase>.+?) instead\. "
+    r"if you do, put this (?P=self) onto the battlefield\. "
+    r"if you don't, put it into its owner's graveyard$"
+)
+
+#: "If this land would enter, instead sacrifice each other permanent named
+#: Sheltered Valley you control, then put this land onto the battlefield."
+#:
+#: The same replacement with **no failure branch**: what the sentence asks for
+#: is a set rather than one permanent, and an empty set is something everybody
+#: can give up, so the land always enters. That is why the two patterns are two
+#: and not one with an optional tail — "if you don't, put it into its owner's
+#: graveyard" is the whole of the difference and it decides whether the
+#: interceptor in ``engine/replacements.py`` is this card's business at all.
+#:
+#: "each" is consumed **here** rather than by the noun parser, which reads a
+#: description of a set of objects and leaves the quantifier to the sentence
+#: that spends it. This pattern is that sentence.
+ENTRY_SACRIFICE_ALL_TOLL = re.compile(
+    r"^if this (?P<self>[a-z]+) would enter, instead sacrifice each "
+    r"(?P<phrase>.+?), then put this (?P=self) onto the battlefield$"
+)
+
+
+def entry_sacrifice_toll(line: str, card_name: str | None = None) -> dict | None:
+    """What the entering permanent's controller must give up for it to enter.
+
+    ``{"filter": <object filter payload>, "count": 1 | "all", "unpaid":
+    "graveyard" | None}``, or None when the line is neither template.
+
+    ``count`` is how many the sentence asks for and ``unpaid`` is what it says
+    about not paying — the two axes the two printed templates differ on. They
+    are separate keys rather than one flag because they are separate questions,
+    and the reader that refuses an entry (``unpaid``) is not the reader that
+    charges for it (``count``).
+
+    Three readers, one string: the support gate (through
+    :func:`enter_effect_line`), the entry state that arms the sacrifice, and the
+    CR 614 interceptor in ``engine/replacements.py`` that performs the "if you
+    don't" sentence. The same arrangement :func:`exile_cards_on_enter` is half
+    of, and for its reason - the sentence that refuses the entry and the
+    sentence that charges for it must not describe different permanents.
+
+    A phrase the noun parser refuses, one carrying a narrowing the sacrifice
+    prompt cannot test, or one naming anything but a permanent on a battlefield
+    refuses the whole line: the prompt lists one player's battlefield with no
+    observer and no source behind it, so a restriction outside
+    :data:`subject_filters.OBJECT_ONLY_FILTER_KEYS` would be quietly ignored and
+    the player offered permanents the card does not name - which here is not a
+    smaller card but a **cheaper** one.
+    """
+    from .grammar.lowering._common import dropped_narrowings
+    from .grammar.phrases import parse_subject_filter
+    from .subject_filters import object_only_filter
+
+    # **Two normalizations, the uncollapsed one first**, and that order is the
+    # whole of Sheltered Valley's trouble. ``_self_normalized`` rewrites a card
+    # that names itself into "this <noun>" so a pre-modern subject reads like a
+    # modern one — but it rewrites the *whole line*, including the printed card
+    # name inside "each other permanent **named Sheltered Valley**". Collapsed
+    # first, this card asked for permanents named "this creature", which is a
+    # name nothing has: it would have compiled supported and sacrificed nothing,
+    # every time, silently. So the plain line is tried first and the collapse is
+    # the fallback for a subject spelled as a name; a phrase that still carries
+    # the marker after the fallback refuses below rather than matching nothing.
+    count: int | str = 1
+    unpaid: str | None = "graveyard"
+    plural = False
+    match = None
+    for text in (_normalized(line), _self_normalized(line, card_name)):
+        count, unpaid, plural = 1, "graveyard", False
+        match = ENTRY_SACRIFICE_TOLL.match(text)
+        if match is None:
+            match = ENTRY_SACRIFICE_ALL_TOLL.match(text)
+            count, unpaid, plural = "all", None, True
+        if match is not None:
+            break
+    if match is None:
+        return None
+    filt = parse_subject_filter(match.group("phrase"), plural=plural)
+    if filt is None or filt.zone != "battlefield" or filt.is_card:
+        return None
+    payload = filt.to_payload()
+    # A narrowing with no payload form leaves no key behind, so the testable-key
+    # check below cannot see it go missing.
+    if dropped_narrowings(filt, payload):
+        return None
+    # Two narrowings the *caller* performs rather than the matcher, declared one
+    # at a time because ``carried_separately`` is a claim that it really does:
+    #
+    # * ``exclude_self`` — "each **other** permanent named …". The prompt takes
+    #   the entering permanent as its own ``exclude`` argument (CR 614.13a says
+    #   it could never be chosen anyway), so the key is carried out and removed.
+    # * ``controller`` — "…**you control**". The prompt lists one player's
+    #   battlefield and that player is the seat the permanent would enter under,
+    #   so "you" is structural. Any *other* seat is a phrase this rule has not
+    #   read, and refuses below rather than being quietly answered as "you".
+    if payload.get("controller") not in (None, "you"):
+        return None
+    # The self-collapse fallback above can only have been reached by a line the
+    # plain reading refused, and it rewrites *every* self-reference on the line.
+    # A name restriction left holding one names no card at all, which is a
+    # sacrifice that would quietly find nothing.
+    if str(payload.get("named") or "").startswith("this "):
+        return None
+    described = object_only_filter(
+        payload, carried_separately=frozenset({"exclude_self", "controller"})
+    )
+    if described is None:
+        return None
+    return {"filter": described, "count": count, "unpaid": unpaid}
+
+
+def entry_sacrifice_requirement(card) -> dict | None:
+    """The entry sacrifice *card*'s own lines demand, or None.
+
+    The twin of :func:`entry_exile_requirement` below and the same reason for
+    existing: two seams need one answer about one permanent - the CR 614
+    interceptor that refuses the entry when nothing can pay, and the entry state
+    that charges it - and two readings of the printed phrase would be two
+    chances to disagree about which permanents may pay, which is a land that
+    entered for free.
+
+    Through :func:`engine.oracle.expand_card_lines` rather than a split of
+    ``oracle_text``, for the reason that function documents.
+    """
+    from .oracle import expand_card_lines
+
+    for line in expand_card_lines(card):
+        spec = entry_sacrifice_toll(line, card.name)
+        if spec is not None:
+            return spec
+    return None
+
+
 def entry_exile_requirement(card, x_value: int | None = None) -> dict | None:
     """The entry exile *card*'s own lines demand, with the announced X folded in.
 
@@ -756,6 +917,17 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
     # is carried out cannot describe different cards.
     if exile_cards_on_enter(normalized) is not None:
         return "exiles cards from your graveyard as it enters"
+    # The three-sentence entry toll (the Alliances sac lands). Claimed here for
+    # the reason the entry above is: all three sentences are one CR 614.1a
+    # replacement, the sacrifice performed by the entry state and the "if you
+    # don't" half by the interceptor in engine/replacements.py, both reading
+    # this same function.
+    # The **raw** line and the name, not `normalized`: this reader wants the
+    # printed card name inside "each other permanent named Sheltered Valley",
+    # and `normalized` has already had every self-reference on the line
+    # rewritten to "this <noun>". It does its own collapsing, plain text first.
+    if entry_sacrifice_toll(line, card_name) is not None:
+        return "sacrifices a permanent as it enters"
     return None
 
 
@@ -778,6 +950,10 @@ __all__ = [
     "enters_with_x_pt_counters",
     "ENTERS_WITH_X_NAMED_COUNTERS",
     "enters_with_x_named_counters",
+    "ENTRY_SACRIFICE_ALL_TOLL",
+    "ENTRY_SACRIFICE_TOLL",
+    "entry_sacrifice_toll",
+    "entry_sacrifice_requirement",
     "EXILE_CARDS_ON_ENTER",
     "exile_cards_on_enter",
     "entry_exile_requirement",

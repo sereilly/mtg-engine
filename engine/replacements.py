@@ -207,6 +207,12 @@ LANDS_CANT_ENTER = 0  # Worms of the Earth
 # because that one removes the entry outright - a creature exiled as it would
 # enter never had an entry cost to fail to pay.
 UNPAYABLE_ENTRY_COST = 15  # Frankenstein's Monster
+# Beside it, and the same kind of effect one sentence apart: an entry toll the
+# controller has nothing to pay with refuses the entry the way the exile above
+# does. After it only because two entry costs on one permanent is a shape no
+# card prints, so the slot is free rather than chosen - CR 616.1e would put the
+# choice to the affected player if one ever did.
+UNPAYABLE_ENTRY_SACRIFICE = 16  # the Alliances sac lands
 # After it, and it has to be: the exile replacement means the permanent never
 # enters, and a rider hung on an entry that did not happen is a sacrifice for
 # nothing.
@@ -1378,6 +1384,111 @@ def _graveyard_instead_of_entering(game, payload: dict) -> ReplacementOutcome | 
     game.log.append(
         f"{permanent.card.name} was put into {owner.name}'s graveyard instead of "
         f"entering the battlefield"
+    )
+    return ReplacementOutcome(replaced=True)
+
+
+def _entry_sacrifice_candidates(game, payload: dict) -> list[int]:
+    """Battlefield indices of the permanents that could pay the entering
+    permanent's toll.
+
+    Asked of ``Game._sacrifice_candidate_indices`` - the same reader the prompt
+    that charges the toll enumerates with - so "can they pay?" and "what may
+    they give up?" cannot answer about different permanents. That pairing is the
+    whole point: a predicate counting more widely than the prompt offers is a
+    land that enters and then charges nothing.
+
+    "From **your** battlefield" is the seat the permanent would enter under,
+    which is the payload's own ``controller_index``: a replacement is asked
+    about the event that *would* happen, and the permanent is on no battlefield
+    yet to have a controller derived for it.
+
+    CR 614.13a: the permanent that is entering can never be chosen to pay for
+    its own entry, so it is excluded here as well as at the prompt. It is not on
+    a battlefield yet, so nothing would find it - but the exclusion is what the
+    rule says and the entry state below repeats it where it *can* be found.
+    """
+    from .enter_effects import entry_sacrifice_requirement
+
+    permanent = payload["permanent"]
+    required = entry_sacrifice_requirement(permanent.card)
+    if required is None:
+        return []
+    return game._sacrifice_candidate_indices(
+        game.players[payload["controller_index"]], required["filter"], permanent
+    )
+
+
+def _entry_sacrifice_refuses_entry(game, payload: dict) -> bool:
+    """Whether this permanent's toll says what happens when nothing can pay it.
+
+    Only one of the two printed templates does. "If you don't, put it into its
+    owner's graveyard" is a refusal this interceptor performs; "instead
+    sacrifice each other permanent named Sheltered Valley you control, **then**
+    put this land onto the battlefield" names no such branch, because an empty
+    set is something every player can give up — so that card enters whatever
+    the board holds and this effect is not its business at all.
+    """
+    from .enter_effects import entry_sacrifice_requirement
+
+    required = entry_sacrifice_requirement(payload["permanent"].card)
+    return required is not None and required["unpaid"] == "graveyard"
+
+
+def _applies_unpayable_entry_sacrifice(game, payload: dict) -> bool:
+    """Whether the controller has nothing the entering permanent's toll accepts.
+
+    Pure, as CR 616.1 requires: it enumerates the battlefield rather than
+    emptying it. A permanent printing no toll is not this effect's business at
+    all, which is what the empty list from ``_entry_sacrifice_candidates``
+    distinguishes - so the requirement is asked again here rather than inferred
+    from the count.
+    """
+    if not _entry_sacrifice_refuses_entry(game, payload):
+        return False
+    return not _entry_sacrifice_candidates(game, payload)
+
+
+@replacement_effect(
+    "would_enter_battlefield", UNPAYABLE_ENTRY_SACRIFICE,
+    applies=_applies_unpayable_entry_sacrifice,
+)
+def _graveyard_instead_of_paying_entry_sacrifice(
+    game, payload: dict
+) -> ReplacementOutcome | None:
+    """The Alliances sac lands: "If you don't, put it into its owner's
+    graveyard."
+
+    A consuming replacement, and it has to be one for
+    ``_graveyard_instead_of_entering``'s reason: the land never enters, so
+    nothing that watches entering sees it - no permanent id, no layer
+    contribution, no enters-the-battlefield trigger, and no land drop spent on a
+    permanent that arrived. A "when it enters, sacrifice it" reading would let
+    every one of those happen first and would put a *permanent* into a
+    graveyard, which is a death (CR 700.4).
+
+    Its owner's graveyard, not its controller's: the card is going to the zone
+    CR 400.3 gives it, and the printed sentence says "its owner's".
+
+    The other half of the same printed paragraph - the sacrifice the entry is
+    bought with - is performed by the entry state
+    (``mixins/permanent_state._perform_entry_state``), which runs only once this
+    has declined to apply, so by then the battlefield is known to hold something
+    the toll accepts. That is Frankenstein's Monster's arrangement exactly, and
+    the claim for all three sentences lives with it in ``engine/enter_effects.py``
+    rather than in ``REPLACEMENT_LINES``: three sentences are one paragraph and
+    one replacement, and claiming a sentence of it twice is two claims free to
+    drift.
+    """
+    permanent = payload["permanent"]
+    owner_index = game.owner_index_of(permanent)
+    owner = game.players[
+        owner_index if owner_index is not None else payload["controller_index"]
+    ]
+    owner.graveyard.append(permanent.card)
+    game.log.append(
+        f"{permanent.card.name} was put into {owner.name}'s graveyard instead of "
+        f"entering the battlefield (nothing to sacrifice for it)"
     )
     return ReplacementOutcome(replaced=True)
 

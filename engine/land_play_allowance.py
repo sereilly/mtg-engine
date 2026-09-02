@@ -44,17 +44,30 @@ _SELF_NOUN = r"(?:this (?:artifact|creature|enchantment|land|permanent)|~)"
 
 @dataclass(frozen=True)
 class LandPlayAllowance:
-    """Extra land plays one permanent grants its controller.
+    """Extra land plays one permanent grants.
 
     extra                 -- additional land plays beyond the one CR 305.2
                              allows; ``None`` means any number
     damage_per_extra_land -- damage the source deals its controller when a land
                              is played that wasn't the first this turn (0 when
                              the card prints no such rider)
+    every_player          -- whether the permission reaches **every** seat
+                             ("Each player may play an additional land during
+                             each of their turns", Storm Cauldron) rather than
+                             its controller alone ("**You** may play…",
+                             Fastbond). A field rather than two dataclasses,
+                             because the seat the sentence names is the one
+                             thing that differs and the count, the rider and
+                             every reader are the same either way — and a field
+                             the caller must consult is what stops the wider
+                             sentence being read as the narrower one, which is
+                             a card that grants its own controller a land drop
+                             and quietly takes one from everybody else.
     """
 
     extra: int | None
     damage_per_extra_land: int = 0
+    every_player: bool = False
 
 
 _ANY_NUMBER = re.compile(r"^you may play any number of lands on each of your turns$")
@@ -74,7 +87,23 @@ _NO_LAND_PLAYS = re.compile(r"^players can't play lands$")
 
 _ADDITIONAL = re.compile(
     rf"^you may play (?:an|(?P<count>{_COUNT_WORD})) additional lands? "
-    r"on each of your turns$"
+    r"(?:on|during) each of your turns$"
+)
+
+# The same permission with the seat widened: "**Each player** may play an
+# additional land during **each of their turns**." (Storm Cauldron.)
+#
+# Its own pattern rather than an optional group on the one above, because the
+# possessive has to *agree* with the subject: "each player may play an
+# additional land on each of your turns" is a sentence nobody prints, and a
+# regex loose enough to accept it would be loose enough to read Fastbond's
+# sentence as everyone's. The preposition differs too ("during" against "on"),
+# which is the printing rather than a parameter — both spellings are accepted
+# on both patterns because the word carries no meaning here, and refusing one
+# would cost a card for its typography.
+_ADDITIONAL_EACH_PLAYER = re.compile(
+    rf"^each player may play (?:an|(?P<count>{_COUNT_WORD})) additional lands? "
+    r"(?:on|during) each of their turns$"
 )
 
 # Fastbond's rider. Anchored at both ends for the usual reason: a line saying
@@ -95,7 +124,11 @@ def land_play_line(normalized_line: str) -> str | None:
     dispatches on the returned name.
     """
     line = normalized_line.strip().lower().rstrip(".")
-    if _ANY_NUMBER.match(line) or _ADDITIONAL.match(line):
+    if (
+        _ANY_NUMBER.match(line)
+        or _ADDITIONAL.match(line)
+        or _ADDITIONAL_EACH_PLAYER.match(line)
+    ):
         return "allowance"
     if _NO_LAND_PLAYS.match(line):
         return "prohibition"
@@ -136,10 +169,11 @@ def land_play_allowance_for(oracle_text: str) -> LandPlayAllowance | None:
     printing only the rider returns None rather than silently granting a land.
     """
     lowered = oracle_text.lower()
-    if "on each of your turns" not in lowered:
+    if "each of your turns" not in lowered and "each of their turns" not in lowered:
         return None
     extra: int | None = 0
     found = False
+    every_player = False
     damage = 0
     for raw_line in lowered.split("\n"):
         line = raw_line.strip().rstrip(".")
@@ -149,6 +183,13 @@ def land_play_allowance_for(oracle_text: str) -> LandPlayAllowance | None:
             extra, found = None, True
             continue
         additional = _ADDITIONAL.match(line)
+        if additional is None:
+            # The seat-widened spelling (Storm Cauldron). Read second so the
+            # narrower sentence keeps its own reading; the two cannot both
+            # match, because each anchors on its own subject.
+            additional = _ADDITIONAL_EACH_PLAYER.match(line)
+            if additional is not None:
+                every_player = True
         if additional is not None:
             count = additional.group("count")
             if extra is not None:
@@ -160,7 +201,9 @@ def land_play_allowance_for(oracle_text: str) -> LandPlayAllowance | None:
             damage += int(rider.group("amount"))
     if not found:
         return None
-    return LandPlayAllowance(extra=extra, damage_per_extra_land=damage)
+    return LandPlayAllowance(
+        extra=extra, damage_per_extra_land=damage, every_player=every_player
+    )
 
 
 __all__ = [

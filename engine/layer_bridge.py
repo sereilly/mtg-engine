@@ -490,12 +490,17 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
     # layers, and each half collected where its layer is — a grant recorded in
     # the layer-4 collector is a grant `computed_abilities` never sees, which is
     # what this comment is here to stop happening again.
-    animation = perm.metadata.get("animate_until_end_of_turn") or {}
-    granted = animation.get("keywords") or ()
-    if granted:
-        effects.append(grant_abilities(
-            only, granted, timestamp=0, label="animated until end of turn"
-        ))
+    # Both animation records, because the keyword half of an animation is the
+    # same grant whichever duration wrote it — the swept key and the indefinite
+    # one (Mishra's Groundbreaker). Reading only the first is how a permanent
+    # animation would arrive without the keywords its own sentence granted.
+    for _key in ("animate_until_end_of_turn", "animate_indefinitely"):
+        animation = perm.metadata.get(_key) or {}
+        granted = animation.get("keywords") or ()
+        if granted:
+            effects.append(grant_abilities(
+                only, granted, timestamp=0, label=f"animated ({_key})"
+            ))
 
     for walk in _LANDWALKS:
         if perm.metadata.get(f"has_{walk}"):
@@ -674,19 +679,25 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             label=f"static:no longer {word}",
         ))
 
-    animation = meta.get("animate_until_end_of_turn")
-    if animation:
-        effects.append(add_types(
-            only,
-            # "…a 2/2 Assembly-Worker **artifact** creature" (Mishra's Factory):
-            # every type the sentence named, not just the head noun. A land
-            # animated without the artifact type is a permanent Shatter cannot
-            # reach and Titania's Song does not see.
-            card_types=["creature", *(animation.get("card_types") or ())],
-            subtypes=animation.get("subtypes") or (),
-            timestamp=0,
-            label="animated until end of turn",
-        ))
+    # Both animation records again, for the reason the keyword collector above
+    # reads both: the layer-4 contribution an animation makes does not depend on
+    # when it ends. The cleanup sweep clears the first key and never hears of
+    # the second (``handlers/board_misc.ANIMATE_INDEFINITELY``), which is the
+    # whole of the difference between them.
+    for _key in ("animate_until_end_of_turn", "animate_indefinitely"):
+        animation = meta.get(_key)
+        if animation:
+            effects.append(add_types(
+                only,
+                # "…a 2/2 Assembly-Worker **artifact** creature" (Mishra's
+                # Factory): every type the sentence named, not just the head
+                # noun. A land animated without the artifact type is a permanent
+                # Shatter cannot reach and Titania's Song does not see.
+                card_types=["creature", *(animation.get("card_types") or ())],
+                subtypes=animation.get("subtypes") or (),
+                timestamp=0,
+                label=f"animated ({_key})",
+            ))
     # Animate Artifact (CR 613.1d). Derived from the attached Aura, so the
     # artifact stops being a creature the moment the Aura leaves — where the
     # card-rebuilding version had to stash the original and restore it.
