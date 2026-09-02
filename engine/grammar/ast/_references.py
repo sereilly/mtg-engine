@@ -103,6 +103,19 @@ class ObjectFilter:
     toughness: Comparison | None = None
     mana_value: Comparison | None = None
     named: str | None = None
+    #: "…**with a name originally printed in the Homelands expansion**"
+    #: (Apocalypse Chime, Golgothian Sylex). The set *code* the printed
+    #: expansion name resolved to, read off ``CardDefinition.original_printing``
+    #: -- ``printings[0]``, the first set the card appeared in, which is the
+    #: whole content of the word "originally": nineteen Antiquities cards were
+    #: reprinted in Revised and the set a copy happened to be loaded from would
+    #: miss every one of them.
+    #:
+    #: A restriction on the *card*, like ``named`` above it, rather than on
+    #: anything a board can answer -- so it is testable by the pure matcher and
+    #: composes with any verb. It used to be spelled into one production's
+    #: instruction kind, which bought exactly the one card that production read.
+    original_expansion: str | None = None
     zone: str = "battlefield"
     # "target **activated or triggered ability**" (Sublime Epiphany). An ability
     # on the stack is an object (CR 113.7a/608.2) but not a spell, so it is not
@@ -553,6 +566,11 @@ class ObjectFilter:
             payload["enchanted_only"] = True
         if self.nontoken:
             payload["nontoken"] = True
+        # "…with a name originally printed in the <Set> expansion" -- a fact
+        # about the card, emitted like ``named`` below and tested by the pure
+        # matcher for the same reason.
+        if self.original_expansion:
+            payload["original_expansion"] = self.original_expansion
         if self.chosen_color:
             payload["chosen_color"] = True
         if self.chosen_creature_type:

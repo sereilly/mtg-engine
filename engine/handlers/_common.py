@@ -1109,6 +1109,20 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     named = payload.get("named")
     if named and name_key(perm.effective_card.name) != name_key(str(named)):
         return False
+    # "…with a name originally printed in the <Set> expansion" (Apocalypse
+    # Chime, Golgothian Sylex). ``original_printing`` is ``printings[0]`` -- the
+    # first set the card appeared in -- and not whichever set happened to load
+    # first; that distinction is the whole content of the word "originally".
+    #
+    # The **printed** card, deliberately: CR 201.5 makes "a name originally
+    # printed in" a question about where this physical card was first published,
+    # which a copy effect (layer 1) does not change. A Clone wearing an
+    # Apocalypse Chime name is still a Clone, first printed elsewhere.
+    expansion = payload.get("original_expansion")
+    if expansion and str(perm.card.original_printing or "").lower() != str(
+        expansion
+    ).lower():
+        return False
     return True
 
 

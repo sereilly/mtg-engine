@@ -17,6 +17,7 @@ from .ai_valuation import (
 )
 from .activation_permissions import activation_permission_denial
 from .auras import controller_cast_ban
+from .cast_restrictions import global_cast_ban
 from .cast_restrictions import check_cast_timing
 from .cost_modifiers import (cost_reduction_for_cast, reduce_cost,
                              spell_cost_tax, spell_symbol_tax)
@@ -922,6 +923,13 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
         # path refuses, nothing is spent, and a seat that re-proposes the card
         # every turn does nothing for the rest of the game — which is exactly
         # what `simulate_ai_games.py`'s `refused_casts` counts.
+        return False
+
+    if global_cast_ban(game, card) is not None:
+        # "Creature spells can't be cast." (Aether Storm.) The seatless
+        # spelling of the ban above, and on this list for the same reason: the
+        # cast path refuses it, so a seat left proposing creatures under an
+        # Aether Storm does nothing for the rest of the game.
         return False
 
     if card.primary_type not in SPELL_TYPES:

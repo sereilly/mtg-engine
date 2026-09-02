@@ -717,6 +717,76 @@ def _parse_exchange_greatest_mana_value(stream: TokenStream) -> ast.Statement | 
     return ast.ExchangeGreatestManaValue(tuple(types))
 
 
+def _parse_ante_offer_ownership_exchange(
+    stream: TokenStream,
+) -> ast.Statement | None:
+    """Timmerian Fiends' whole ability, as one statement.
+
+    ``The owner of target <type> may ante the top card of their library. If
+    that player doesn't, exchange ownership of that <type> and this permanent.
+    Put the <type> card into your graveyard and this permanent from anywhere
+    into that player's graveyard. This change in ownership is permanent.``
+
+    The sibling of :func:`_parse_random_reveal_ownership_exchange` below, and
+    every sentence is required for that production's reasons: without the offer
+    the exchange is unconditional, without the two moves the exchange has no
+    effect this engine can see, and without the last sentence the change would
+    be an ordinary until-end-of-turn one.
+
+    The printed **type** is payload and is required to be the same word in all
+    three places it appears. A paragraph that says "target artifact" and then
+    "put the creature card into your graveyard" is not describing one object,
+    and reading it as though it were would bin something the card never named.
+
+    Refuses without consuming, so every other sentence opening "The owner of …"
+    keeps the reading it has today.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("the", "owner", "of", "target"):
+        stream.reset(mark)
+        return None
+    type_word = stream.peek_word()
+    if type_word is None or type_word not in CARD_TYPES:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_phrase(
+        "may", "ante", "the", "top", "card", "of", "their", "library"
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase("if", "that", "player", "doesn't"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if (
+        not stream.accept_phrase("exchange", "ownership", "of", "that", type_word)
+        or not stream.accept_word("and")
+        or stream.accept_kind(SELF) is None
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase(
+        "put", "the", type_word, "card", "into", "your", "graveyard", "and"
+    ) or stream.accept_kind(SELF) is None:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "from", "anywhere", "into", "that", "player", "'s", "graveyard"
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(".")
+    if not stream.accept_phrase(
+        "this", "change", "in", "ownership", "is", "permanent"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.AnteOfferOwnershipExchange(type_word)
+
+
 def _parse_random_reveal_ownership_exchange(
     stream: TokenStream,
 ) -> ast.Statement | None:

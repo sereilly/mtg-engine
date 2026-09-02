@@ -22,7 +22,7 @@ from ...cast_permissions import consume as consume_permission, permission_for
 from ...auras import aura_enchant_clause
 from ...cast_costs import AdditionalCost, additional_costs
 from ...auras import controller_cast_ban
-from ...cast_restrictions import check_cast_timing
+from ...cast_restrictions import check_cast_timing, global_cast_ban
 from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling,
                                    cast_x_value, defines_cast_x)
 from ...damage_ledger import record_cast
@@ -469,6 +469,17 @@ class SpellCastingMixin:
         forbidding_aura = controller_cast_ban(self, caster_index, card)
         if forbidding_aura is not None:
             details = f"can't cast {card.name}: {forbidding_aura}"
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        # "Creature spells can't be cast." (Aether Storm.) The same CR 601.3a
+        # prohibition with no seat in the sentence, so it is asked of every
+        # battlefield and binds the enchantment's own controller too. Beside the
+        # Aura ban above rather than folded into it: what differs is the scope,
+        # and the two sentences say it in different words.
+        forbidding_permanent = global_cast_ban(self, card)
+        if forbidding_permanent is not None:
+            details = f"can't cast {card.name}: {forbidding_permanent}"
             self.log.append(details)
             return SimulationResult(card.name, False, classification.effect_kind, details)
 

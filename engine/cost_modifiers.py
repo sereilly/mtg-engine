@@ -96,6 +96,17 @@ class CostModifier:
     #: reason every other parameter here is: a card printing the same sentence
     #: about a red symbol needs no code.
     per_symbol: str | None = None
+    #: The **further** printed subjects one sentence names -- "green enchantment
+    #: spells **and** white enchantment spells" (Irini Sengir). Each entry is
+    #: the ``(colour, card_types)`` pair a second noun phrase read to, and an
+    #: object matching *any* of them is taxed.
+    #:
+    #: Its own field rather than a list-valued ``colour``: what the sentence
+    #: names is a disjunction of whole noun phrases, and the two conjuncts are
+    #: free to differ on both axes at once. Folding it into either field would
+    #: make "green enchantment spells and white artifact spells" describe a
+    #: green artifact, which is a set the card never names.
+    alternative_subjects: tuple[tuple[str | None, tuple[str, ...]], ...] = ()
     #: "Black spells you cast cost **{B}** more to cast." (Derelor.) The
     #: *coloured* pips the tax adds, beside ``amount``'s generic mana.
     #:
@@ -127,8 +138,31 @@ class CostReduction:
 # generic one, and reading only the digit form left the card refusing at
 # "unrecognized effect verb" with nothing else wrong with it.
 # ``_tax_symbols`` splits the run; a mixed "{1}{B}" would be read as both.
+#
+# **The subject is a list.** "Green enchantment spells **and** white enchantment
+# spells cost {2} more to cast." (Irini Sengir) is one sentence naming two
+# printed noun phrases that share one predicate, which is idiom 38's shape: each
+# conjunct needs its own reading, and a conjunct nothing reads leaves the whole
+# clause unclaimed. So the pattern captures the subjects as one run and
+# ``_spell_tax_modifier`` splits them, rather than a second template being
+# written for the pairing -- the pairings are quadratic in the phrases that
+# exist.
+#
+# It stays **one** modifier, not one per conjunct. CR 601.2f applies each cost
+# increase once, and this is one static ability describing a set of spells by
+# two phrases; two modifiers from one permanent would tax a spell that is both
+# green and white {4}.
+_SPELL_SUBJECT_TEXT = rf"(?:(?:{_COLOURS}) )?(?:(?:{_TYPE_LIST}) )?spells"
+_SPELL_SUBJECT = re.compile(
+    rf"^(?:(?P<colour>{_COLOURS}) )?(?:(?P<type>{_TYPE_LIST}) )?spells$"
+)
+# Split only where the "and" separates two *whole* subjects. `_TYPE_LIST`
+# spells its own alternation with the same word -- "Instant and enchantment
+# spells" (Mana Matrix) is one phrase -- so a bare split on " and " would tear
+# that card's subject in half and leave "instant" reading as nothing.
+_SUBJECT_SPLIT = re.compile(r"(?<=spells) and ")
 _SPELL_TAX = re.compile(
-    rf"(?:(?P<colour>{_COLOURS}) )?(?:(?P<type>{_TYPE_LIST}) )?spells"
+    rf"(?P<subjects>{_SPELL_SUBJECT_TEXT}(?: and {_SPELL_SUBJECT_TEXT})*)"
     r"(?: with (?P<keyword>[a-z]+))?(?P<controller> you cast)? cost "
     r"(?P<amount>(?:\{(?:\d+|[wubrgc])\})+) (?P<direction>more|less) to cast"
 )
@@ -231,32 +265,9 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
         return ()
     modifiers: list[CostModifier] = []
     for match in _SPELL_TAX.finditer(text):
-        generic, pips = _tax_symbols(match.group("amount"))
-        if generic < 0:
-            # A symbol this reader could not name. Skipped rather than charged
-            # as the part it did read, and `cost_modifier_claims_line` refuses
-            # the same clause, so the card is unsupported instead of taxed for
-            # less than it prints.
-            continue
-        if pips and match.group("direction") == "less":
-            # CR 118.7's coloured *reduction* is a different arithmetic from
-            # adding a pip (it falls back to generic, and an excess spills), and
-            # `reduce_cost` is where that lives. No card in the pool prints one
-            # from a permanent; admitting it here would discount a cost by a
-            # rule nothing in this path applies.
-            continue
-        modifiers.append(
-            CostModifier(
-                amount=generic,
-                applies_to="cast",
-                reduces=match.group("direction") == "less",
-                colour=_COLOR_WORD_TO_SYMBOL.get(match.group("colour") or ""),
-                card_types=_types_named(match.group("type")),
-                keyword=match.group("keyword"),
-                controller="you" if match.group("controller") else None,
-                symbols=pips,
-            )
-        )
+        modifier = _spell_tax_modifier(match)
+        if modifier is not None:
+            modifiers.append(modifier)
     for match in _TARGETING_LIFE_TAX.finditer(text):
         modifiers.append(
             CostModifier(
@@ -290,6 +301,58 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
         if modifier is not None:
             modifiers.append(modifier)
     return tuple(modifiers)
+
+
+def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
+    """The spell tax *match* charges, or None when this reader cannot read it in
+    full.
+
+    One builder, asked by :func:`cost_modifiers_for` so the tax is *charged* and
+    by :func:`cost_modifier_claims_line` so the line is *claimed* -- the same
+    pairing ``_sacrifice_symbol_modifier`` below has, and for the same reason: a
+    clause claimed by a pattern that then produces no modifier is a card
+    reporting supported with its whole sentence dropped.
+
+    Three readings are refused rather than approximated:
+
+    * a symbol :func:`_tax_symbols` could not name -- charging the part it did
+      read is a spell cast for less than it prints;
+    * a coloured *reduction* ("cost {B} less"), whose arithmetic is CR 118.7's
+      and lives in :func:`reduce_cost`. No card in the pool prints one from a
+      permanent, and admitting it here would discount a cost by a rule nothing
+      in this path applies;
+    * a conjunct the subject reader cannot read, which takes the **whole**
+      clause with it (idiom 38) -- half a sentence enforced is the failure that
+      refusal exists to prevent.
+    """
+    generic, pips = _tax_symbols(match.group("amount"))
+    if generic < 0:
+        return None
+    if pips and match.group("direction") == "less":
+        return None
+    subjects: list[tuple[str | None, tuple[str, ...]]] = []
+    for printed in _SUBJECT_SPLIT.split(match.group("subjects")):
+        read = _SPELL_SUBJECT.match(printed.strip())
+        if read is None:
+            return None
+        subjects.append(
+            (
+                _COLOR_WORD_TO_SYMBOL.get(read.group("colour") or ""),
+                _types_named(read.group("type")),
+            )
+        )
+    colour, card_types = subjects[0]
+    return CostModifier(
+        amount=generic,
+        applies_to="cast",
+        reduces=match.group("direction") == "less",
+        colour=colour,
+        card_types=card_types,
+        keyword=match.group("keyword"),
+        controller="you" if match.group("controller") else None,
+        symbols=pips,
+        alternative_subjects=tuple(subjects[1:]),
+    )
 
 
 def _sacrifice_symbol_modifier(match: "re.Match[str]") -> CostModifier | None:
@@ -334,10 +397,21 @@ def cost_modifier_claims_line(line: str) -> bool:
     text = line.strip().lower().rstrip(".")
     if ability_self_reduction(line) is not None:
         return True
+    # Claimed only when the whole subject list reads, for
+    # `_sacrifice_symbol_modifier`'s reason one branch down: a pattern that
+    # matches and then produces no modifier is a claim over a line nothing
+    # charges.
+    spell = _SPELL_TAX.match(text)
+    if (
+        spell is not None
+        and spell.end() == len(text)
+        and _spell_tax_modifier(spell) is not None
+    ):
+        return True
     if any(
         (match := pattern.match(text)) is not None and match.end() == len(text)
         for pattern in (
-            _SPELL_TAX, _ABILITY_TAX, _TARGETING_LIFE_TAX, _TARGETING_MANA_TAX,
+            _ABILITY_TAX, _TARGETING_LIFE_TAX, _TARGETING_MANA_TAX,
         )
     ):
         return True
@@ -379,18 +453,39 @@ def _has_printed_type(card, wanted: str) -> bool:
     return (wanted in card.type_line.lower()) != negated
 
 
-def _matches(modifier: CostModifier, card) -> bool:
-    if modifier.colour and modifier.colour not in (card.colors or ()):
+def _subject_matches(
+    colour: str | None, card_types: tuple[str, ...], card
+) -> bool:
+    """Whether *card* is one of the objects a single printed noun phrase names."""
+    if colour and colour not in (card.colors or ()):
         return False
-    if modifier.card_types and not any(
-        _has_printed_type(card, wanted) for wanted in modifier.card_types
+    if card_types and not any(
+        _has_printed_type(card, wanted) for wanted in card_types
     ):
         return False
+    return True
+
+
+def _matches(modifier: CostModifier, card) -> bool:
+    """Whether *card* is taxed by *modifier*.
+
+    The keyword narrows every subject -- it is printed after the list, so it is
+    a restriction on all of them -- while the noun phrases are a
+    **disjunction**: "green enchantment spells and white enchantment spells" is
+    one set described twice, and a spell in either half is taxed once
+    (CR 601.2f).
+    """
     if modifier.keyword and modifier.keyword not in {
         word.lower() for word in (card.keywords or ())
     }:
         return False
-    return True
+    return any(
+        _subject_matches(colour, card_types, card)
+        for colour, card_types in (
+            (modifier.colour, modifier.card_types),
+            *modifier.alternative_subjects,
+        )
+    )
 
 
 def _tax(

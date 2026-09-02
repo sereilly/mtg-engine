@@ -4061,6 +4061,178 @@ def _locate_card_for_ownership(
     return None
 
 
+@effect_handler("ante_or_exchange_ownership")
+def ante_or_exchange_ownership(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Timmerian Fiends: "The owner of target artifact may ante the top card of
+    their library. If that player doesn't, exchange ownership of that artifact
+    and this creature…"
+
+    The sibling of :func:`random_reveal_ownership_exchange` below, and built the
+    same way: the offer is the ordinary optional-pay entry, it is owed by the
+    **victim** rather than by the activator, and the decline branch is its own
+    instruction because the prompt machinery runs instruction lists.
+
+    Two things differ from the Efreet, and both are why the paragraph is its own
+    production. The seat asked is the target's **owner** (CR 108.3), not its
+    controller and not a chosen player — a stolen artifact is still anted for by
+    the player who owns it. And what the seat is offered is an *action* rather
+    than a payment, so whether the offer can be made at all is asked through
+    ``_narrow_to_takeable_actions`` — the same predicate ``handlers/control_flow``
+    asks of every other optional action, so a seat with no library is not
+    offered an ante it cannot perform and the card's "if that player doesn't"
+    branch applies instead.
+
+    Inert outside the ante variant, for the reason the Efreet is: CR 108.3 fixes
+    ownership for the whole game, CR 407 is the only exception, and CR 407.1
+    makes that variant opt-in.
+    """
+    from ..subject_filters import subject_matches
+    from .control_flow import _narrow_to_takeable_actions
+
+    card_name = getattr(context.card, "name", "")
+    if not getattr(game, "playing_for_ante", False):
+        game.log.append(
+            f"{card_name}: ownership changes only in a game played for ante "
+            "(CR 108.3, CR 407.1)"
+        )
+        return True, "resolved"
+    caster_seat = game.players.index(context.caster)
+    described = {"type_filter": str(instruction.payload.get("type_word", "artifact"))}
+    source = context.source_permanent
+
+    def _eligible(perm) -> bool:
+        return subject_matches(
+            game, perm, described, observer=caster_seat, source=source
+        )
+
+    victim = resolve_target_permanent(game, context, predicate=_eligible)
+    if victim is None:
+        game.log.append(f"{card_name}: no valid permanent to exchange")
+        return True, "resolved"
+    owner_seat = game.owner_index_of(victim)
+    if owner_seat is None:
+        return True, "resolved"
+    owner = game.players[owner_seat]
+    # The offer's own frozen context, with "that player" bound to the owner —
+    # which is who the printed ante and the printed graveyard both name. Frozen
+    # for ``_offer_to_seat``'s reason: the entry outlives this call.
+    offer_context = dataclasses.replace(context, target=owner)
+    # The permanent is addressed by id, never by index: an index stops naming
+    # the same object the moment anything leaves the battlefield, and the whole
+    # point of the decline branch is that something is about to.
+    decline = (
+        _OracleInstruction(
+            "take_permanent_in_ownership_exchange", "",
+            {"permanent_id": victim.permanent_id},
+        ),
+    )
+    accept, offerable = _narrow_to_takeable_actions(
+        game, owner,
+        (_OracleInstruction("ante_top_card", "", {"players": "that_player"}),),
+        offer_context,
+    )
+    if not offerable:
+        game.log.append(
+            f"{card_name}: {owner.name} has nothing to ante, so the exchange stands"
+        )
+        run_resumable(
+            game, decline,
+            lambda step: game._execute_oracle_instruction(step, offer_context),
+        )
+        return True, "resolved"
+    game.arm_pending_choice(
+        "optional_pay", owner_seat,
+        card_name=card_name,
+        cost={},
+        life=0,
+        prompt=f"Ante the top card of your library to keep {victim.card.name}?",
+        _source_permanent=source,
+        _on_accept=accept,
+        _on_decline=decline,
+        _on_reflexive=(),
+        _context=offer_context,
+    )
+    return True, "resolved"
+
+
+def _give_card_to_graveyard(
+    game: Game, card, new_owner_seat: int, prefer_seat: int
+) -> bool:
+    """Move *card*, wherever it is, into *new_owner_seat*'s graveyard.
+
+    "Put ~ **from anywhere** into that player's graveyard" (Timmerian Fiends).
+    The card is not on a battlefield — it was sacrificed to pay the ability's
+    cost and is sitting in a graveyard — so this reaches no zone seam: nothing
+    leaves play here, and ownership in this engine *is* which player's zone a
+    card sits in, which makes the move between the two piles the change itself.
+
+    Located by identity through :func:`_locate_card_for_ownership`, with
+    *prefer_seat* for its stated reason. False when the card is nowhere to be
+    found (CR 701.12a).
+    """
+    located = _locate_card_for_ownership(game, card, prefer_seat)
+    if located is None:
+        return False
+    seat, zone, at = located
+    getattr(game.players[seat], zone).pop(at)
+    game.players[new_owner_seat].graveyard.append(card)
+    return True
+
+
+@effect_handler("take_permanent_in_ownership_exchange")
+def take_permanent_in_ownership_exchange(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """The decline branch of Timmerian Fiends: the swap itself.
+
+    "Ownership" in this engine is which player's zone a card sits in, so the two
+    printed moves *are* the exchange rather than a consequence of it — the same
+    reading :func:`take_revealed_card_in_exchange` below makes.
+
+    **The ownership change is recorded before the permanent leaves**, on the
+    field ``owner_index_of`` reads. That is what routes the card to the
+    activator's graveyard through ``_permanent_to_graveyard`` — CR 400.3 sends a
+    permanent's card to its *owner*, and by then the activator is the owner
+    (CR 407's exception to CR 108.3). Writing the graveyard by hand instead
+    would have skipped the dies-triggers, the Aura teardown, the death count and
+    every CR 614 would-die replacement, which is exactly the class
+    ``tests/engine/test_leave_battlefield_seam.py`` exists to catch.
+
+    CR 701.12a's atomicity: with the source card nowhere to be found there is
+    nothing to exchange it *for*, so it is looked for **first** and no part of
+    the exchange happens.
+    """
+    card_name = getattr(context.card, "name", "")
+    victim_player = context.target
+    if victim_player is None or victim_player not in game.players:
+        return True, "resolved"
+    victim_seat = game.players.index(victim_player)
+    caster_seat = game.players.index(context.caster)
+    permanent_id = instruction.payload.get("permanent_id")
+    taken = (
+        game.permanent_by_id(permanent_id) if isinstance(permanent_id, int) else None
+    )
+    if taken is None:
+        game.log.append(f"{card_name}: the permanent it named has left")
+        return True, "resolved"
+    if _locate_card_for_ownership(game, context.card, caster_seat) is None:
+        # Nothing has moved yet, so CR 701.12a leaves the board untouched.
+        game.log.append(
+            f"{card_name} is nowhere to be found, so no ownership is exchanged"
+        )
+        return True, "resolved"
+    taken_name = taken.card.name
+    holder_seat = game.controller_index_of(taken)
+    holder = game.players[holder_seat] if holder_seat is not None else victim_player
+    taken.metadata["owner_player_index"] = caster_seat
+    game._permanent_to_graveyard(holder, taken)
+    game.remove_from_battlefield(taken)
+    _give_card_to_graveyard(game, context.card, victim_seat, caster_seat)
+    game.log.append(
+        f"{context.caster.name} now owns {taken_name} and "
+        f"{victim_player.name} now owns {card_name} (CR 407)"
+    )
+    return True, "resolved"
+
+
 @effect_handler("random_reveal_ownership_exchange")
 def random_reveal_ownership_exchange(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Tempest Efreet: "Target opponent may pay 10 life. If that player

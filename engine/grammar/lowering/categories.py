@@ -445,6 +445,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "exile_graveyard_until_leaves": "zones",
     "exile_until_leaves_or_untaps": "zones",
     "exchange_ownership_unless_paid": "zones",
+    "ante_or_exchange_ownership": "zones",
     "random_reveal_ownership_exchange": "zones",
     "take_ownership_of_exiled": "zones",
     "return_exiled_source_to_graveyard": "zones",

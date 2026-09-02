@@ -210,6 +210,9 @@ class _FilterDraft:
     # ``ast.ObjectFilter.on_the_battlefield``.
     on_the_battlefield: bool = False
     named: str | None = None
+    # "…with a name originally printed in the <Set> expansion" -- see
+    # ``ast.ObjectFilter.original_expansion``.
+    original_expansion: str | None = None
     attached_to: str | None = None
     attached_to_filter: ast.ObjectFilter | None = None
     # "…**whose controller controls an Island**" (Seasinger) — see
@@ -734,6 +737,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         token_only=d.token_only,
         their_choice=d.their_choice,
         named=d.named,
+        original_expansion=d.original_expansion,
         other_than_source=d.other_than_source,
         is_source=d.is_source,
         is_enchanted=d.is_enchanted,

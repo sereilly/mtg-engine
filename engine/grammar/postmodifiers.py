@@ -31,7 +31,7 @@ from .abilities import _accept_ability_source
 from .amounts import parse_comparison
 from .errors import GrammarError
 from .lexer import NUMBER, PT, PUNCT, SELF, WORD
-from .names import parse_card_name
+from .names import accept_original_expansion, parse_card_name
 from .readers import _SELF_NOUNS, accept_source_reference
 from .stream import TokenStream
 from .vocabulary import (ALL_SUBTYPES, CARD_TYPES, COLOR_WORDS, CREATURE_TYPES,
@@ -553,6 +553,18 @@ def _parse_postmodifiers(
             if stream.accept_word("toughness"):
                 d.toughness = parse_comparison(stream)
                 continue
+            # "…**with a name originally printed in the <Set> expansion**"
+            # (Apocalypse Chime, Golgothian Sylex). Read before the two "a …"
+            # probes below, which open on the same article and reset cleanly
+            # either way. An expansion the manifest does not know refuses
+            # without consuming, so the line fails loudly rather than sweeping
+            # the set the reader guessed.
+            expansion_probe = stream.mark()
+            expansion = accept_original_expansion(stream)
+            if expansion is not None:
+                d.original_expansion = expansion
+                continue
+            stream.reset(expansion_probe)
             # "…**with a single target**" (Reflecting Mirror; Deflection and
             # Divert print the same three words). CR 115.9a counts what the
             # object chose as it was put on the stack, so the phrase describes
