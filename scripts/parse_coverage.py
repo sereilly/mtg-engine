@@ -66,6 +66,9 @@ from engine.draw_step_modifiers import (  # noqa: E402
     draw_step_bonus_for, draw_step_skip_line,
 )
 from engine.global_statics import global_static_for  # noqa: E402
+from engine.targeting import (  # noqa: E402
+    enchant_graveyard_line, enchant_line_subject,
+)
 from engine.lord_buffs import sacrifice_state_trigger  # noqa: E402
 from engine.auras import (  # noqa: E402
     aura_effect_claim,
@@ -225,7 +228,14 @@ def _matches_any(sentence: str, patterns) -> bool:
 
 CHANNELS: tuple[tuple[str, object], ...] = (
     # (channel label, predicate(sentence) -> bool)
-    ("aura enchant noun (oracle_instructions attach)", lambda s: s.startswith("enchant ")),
+    # The "Enchant <subject>" line, asked of the two readers that implement it
+    # rather than of the word it starts with. `startswith("enchant ")` claimed
+    # every subject there could be, which is why this instrument could not see
+    # Roots: "Enchant creature without flying" had no picker and no enforcement
+    # and was reported as claimed text. Same reader as `auras._aura_line_claimed`
+    # asks, so the census and the support gate cannot disagree about it.
+    ("aura enchant noun (oracle_instructions attach)",
+     lambda s: enchant_line_subject(s) is not None or enchant_graveyard_line(s)),
     ("aura static (oracle_instructions/permanent_state)", lambda s: _matches_any(s, _AURA_STATIC_PATTERNS)),
     ("cast_restrictions.py", lambda s: any(r.phrase in s for r in CAST_RESTRICTIONS)),
     # The board half of CR 601.3 — "Cast this spell only if you control a

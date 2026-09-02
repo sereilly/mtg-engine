@@ -246,3 +246,48 @@ def test_303_4_the_death_damage_template_is_still_claimed_and_still_fires():
     assert compile_card_oracle(
         _aura("Enchant creature\n" + line, name="Probe Bond")
     ).supported
+
+
+@pytest.mark.cr("702.5a", "303.4")
+def test_702_5a_an_enchant_clause_nobody_reads_leaves_its_aura_unsupported():
+    """CR 702.5a's enchant ability "restricts what an Aura spell can target and
+    what an Aura can enchant" — so a clause no reader implements is not a
+    narrower Aura, it is an Aura with neither restriction.
+
+    This gate asked ``line.startswith("enchant ")``, which claimed every
+    subject there could be. Roots' "Enchant creature **without flying**" got
+    through it, derived no cast picker (the card was uncastable) and fell
+    through ``permanent_matches_enchant_noun``'s permissive fallback (the
+    exclusion unenforced) — one line, two contradictory failures, and a green
+    suite. Invented subjects, because every subject the pool prints is read.
+    """
+    for subject in (
+        "creature with three heads",
+        "creature without vigilant",       # not a keyword this engine has
+        "spell",
+        "creature you both own and control",
+    ):
+        program = compile_card_oracle(
+            _aura(f"Enchant {subject}\nEnchanted creature gets +2/+2.")
+        )
+        assert not program.supported, subject
+        assert "unimplemented aura effect" in program.reason
+
+
+@pytest.mark.cr("702.5a")
+def test_702_5a_a_readable_enchant_clause_still_claims_its_line():
+    """The control for the test above, and the graveyard form beside it:
+    Animate Dead's "Enchant creature card in a graveyard" names a different
+    zone and so a different picker, and the engine implements that one too."""
+    for subject in (
+        "creature", "creature without flying", "non-Wall creature",
+        "creature you control", "land", "artifact an opponent controls",
+        "permanent",
+    ):
+        program = compile_card_oracle(
+            _aura(f"Enchant {subject}\nEnchanted creature gets +2/+2.")
+        )
+        assert program.supported, f"{subject}: {program.reason}"
+    assert unclaimed_aura_lines(
+        [normalize_creature_line("Enchant creature card in a graveyard")]
+    ) == []

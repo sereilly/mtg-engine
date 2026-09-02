@@ -463,6 +463,60 @@ def _lower_cant_be(
         )
 
     if node.action == "blocked":
+        if node.except_by is not None:
+            # "Target creature can't be blocked this turn **except by Walls**."
+            # (Joven's Tools.) The granted twin of
+            # ``cant_be_blocked_except_by``, and a different instruction from
+            # the blacklist beside it for the reason those are two kinds: a
+            # blacklist lets everything unnamed through and a whitelist lets
+            # none of it through, so a lowering shared between them would give
+            # one of the two cards the other's effect.
+            if filt != ast.ObjectFilter(card_types=("creature",)):
+                raise LoweringError(
+                    "the granted blocker whitelist is armed on one "
+                    "unnarrowed target creature",
+                    node=node,
+                )
+            if (
+                not isinstance(node.except_by, ast.TargetSpec)
+                or node.except_by.targeted
+                or node.except_by.quantifier not in ("all", "each")
+            ):
+                raise LoweringError(
+                    "the granted blocker whitelist describes a class of "
+                    "blocker rather than choosing one",
+                    node=node,
+                )
+            allowed = _filter_payload(node.except_by.filter)
+            # A key the blockers step cannot test would be carried and ignored,
+            # which on a *whitelist* widens the class allowed through — and an
+            # empty description would allow everything, which is the card
+            # doing nothing at all.
+            #
+            # ``OBJECT_ONLY_FILTER_KEYS``, not the wider set: this record is a
+            # list of filters on the *attacker*, and the blockers step asks it
+            # with neither an observer nor a source, because neither is
+            # recoverable — the seat "you control" would name is whoever
+            # activated the granting ability, and that is not in the record. A
+            # relative narrowing would therefore be dropped at the gate, so it
+            # refuses here instead (idiom 2).
+            if not allowed or set(allowed) - OBJECT_ONLY_FILTER_KEYS:
+                raise LoweringError(
+                    "the granted blocker whitelist cannot test this noun "
+                    "phrase",
+                    node=node,
+                )
+            payload = _targets_only(node.subject)
+            # A **list**, the shape `cant_be_blocked_except_by` already uses for
+            # the static printing: the union spelling ("Walls and/or creatures
+            # with flying") is the same reader on that side, and one shape is
+            # what lets the blockers step ask both with one loop.
+            payload["allowed_blockers"] = [allowed]
+            return (
+                OracleInstruction(
+                    "grant_cant_be_blocked_except_by_until_eot", "", payload
+                ),
+            )
         if node.by is not None:
             # "Target creature can't be blocked **by Walls** this turn."
             # (Tower of Coireall.) The blocker class is payload, exactly as it
@@ -491,7 +545,13 @@ def _lower_cant_be(
             # key outside what that answers would be carried and ignored — and
             # a *dropped* narrowing here makes the creature unblockable by
             # everything, which is the widening direction.
-            if not described or set(described) - TESTABLE_SUBJECT_FILTER_KEYS:
+            #
+            # ``OBJECT_ONLY_FILTER_KEYS`` for the reason written on the
+            # whitelist above: the granted record travels on the attacker and
+            # is asked with no observer and no source, so a relative narrowing
+            # is one this gate cannot honour rather than one it merely has not
+            # met yet.
+            if not described or set(described) - OBJECT_ONLY_FILTER_KEYS:
                 raise LoweringError(
                     "the granted blocker restriction cannot test this noun "
                     "phrase",

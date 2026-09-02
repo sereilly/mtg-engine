@@ -284,6 +284,26 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             then=_damage_reporter(game, card, source_permanent),
         )
         return True, "resolved"
+    if instruction.payload.get("recipient") == "bound_permanent":
+        # "This creature deals 2 damage to **that creature** at end of combat."
+        # (Dwarven Sea Clan.) The object the creating ability bound (CR 603.7c),
+        # carried by id in the trigger's context — `destroy_bound_permanent`'s
+        # twin one family over, and the same reason it is its own recipient:
+        # the delayed ability chose nothing when it fired, so a fall-through
+        # would deal the damage to whatever the resolution context happened to
+        # be carrying.
+        #
+        # A creature already gone is damaged by nothing, which is CR 608.2b
+        # doing as much as it can rather than a failure.
+        bound = (context.trigger_context or {}).get("bound_permanent_id")
+        victim = (
+            game.permanent_by_id(bound) if isinstance(bound, int) else None
+        )
+        if victim is None or not game.is_on_battlefield(victim):
+            game.log.append(f"{card.name}: the creature it named is gone")
+            return True, "resolved"
+        apply_damage_to_creature(game, victim, damage, source_permanent or card)
+        return True, "resolved"
     if instruction.payload.get("recipient") == "caster":
         def _report(dealt: int) -> None:
             context.results["damage_dealt"] = dealt

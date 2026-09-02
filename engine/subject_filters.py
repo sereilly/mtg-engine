@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .handlers._common import (_resolve_chosen_color,
+from .handlers._common import (_comparison_holds, _resolve_chosen_color,
                                _resolve_chosen_creature_type,
                                permanent_matches_filter)
 
@@ -177,6 +177,14 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # the band declaration rather than from any characteristic of the creature,
     # and testable here for the same reason: this function takes the source.
     "banded_with_source",
+    # "…creatures with power **equal to or greater than the enchanted
+    # creature's toughness**" (Ironclaw Curse). A comparison whose bound is a
+    # live characteristic of the ability's own source rather than a printed
+    # number — so it needs the source, like ``blocked_by_source`` above, and is
+    # untestable for a caller with none. Both sides are read through the layer
+    # accessors at the moment the question is asked (CR 613), which is what
+    # makes the Aura's own -0/-1 count towards the toughness it compares.
+    "characteristic_vs_source",
 })
 
 #: The keys :func:`subject_matches` answers from the object alone. The other two
@@ -190,6 +198,9 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
 #: one step further away: a caller with no game cannot read anybody's board.
 OBJECT_ONLY_FILTER_KEYS = TESTABLE_SUBJECT_FILTER_KEYS - {
     "controller", "owner", "exclude_self", "controller_controls",
+    # Out for ``exclude_self``'s reason: the bound is a characteristic of the
+    # ability's *source*, and a caller with none would compare against nothing.
+    "characteristic_vs_source",
 }
 
 
@@ -348,6 +359,47 @@ def card_matches_any(card, alternatives) -> bool:
     return any(_card_matches_filter(card, dict(alt)) for alt in alternatives)
 
 
+#: The layer-computed reader for each characteristic a source-relative bound
+#: may name (CR 613). Never ``card.power`` — a comparison between two live
+#: characteristics is exactly the read `tests/engine/test_layer_reads.py`
+#: guards, and both halves of Ironclaw Curse's sentence are modified by the
+#: Aura printing it.
+_RELATIVE_CHARACTERISTIC_READERS = {
+    "power": lambda perm: perm.effective_power,
+    "toughness": lambda perm: perm.effective_toughness,
+}
+
+
+def _source_relative_bound_holds(
+    obj: "Permanent", relative: dict, source: "Permanent"
+) -> bool:
+    """Whether *obj* satisfies a bound stated against *source*'s characteristic.
+
+    "…creatures with power equal to or greater than the enchanted creature's
+    toughness" (Ironclaw Curse). Both numbers are read now rather than when the
+    restriction was derived: the creature the Aura is on may be pumped, the
+    attacker may be, and the answer must be the one the layers give at
+    CR 509.1b time.
+
+    A characteristic neither side names answers **False**, which for a printed
+    restriction is the direction that cannot let a forbidden block through. The
+    parser refuses those words already; this is the second half of that rule,
+    where a payload built by anything else arrives.
+    """
+    read_candidate = _RELATIVE_CHARACTERISTIC_READERS.get(
+        str(relative.get("characteristic"))
+    )
+    read_source = _RELATIVE_CHARACTERISTIC_READERS.get(
+        str(relative.get("source_characteristic"))
+    )
+    if read_candidate is None or read_source is None:
+        return False
+    return _comparison_holds(
+        {"op": relative.get("op"), "value": read_source(source)},
+        read_candidate(obj),
+    )
+
+
 def subject_matches(
     game: "Game",
     obj: "Permanent | None",
@@ -414,6 +466,24 @@ def subject_matches(
             )
             for other in game.controlled_by(game.players[seat])
         ):
+            return False
+    # "…creatures with power **equal to or greater than the enchanted
+    # creature's toughness**" (Ironclaw Curse). A bound the pure matcher cannot
+    # read, because the number is a characteristic of the ability's own source
+    # — so it is answered here, where the source is in hand, and the key is
+    # stripped before the pure matcher runs. With no source it refuses, which
+    # for a *blocking restriction* is the direction that cannot let through a
+    # block the card forbids.
+    #
+    # Both sides through the layer accessors (CR 613), never ``card.power``:
+    # Ironclaw Curse's own "-0/-1" is part of the toughness it compares against,
+    # and a pumped attacker is over the bound while it is pumped.
+    relative = described.get("characteristic_vs_source")
+    if relative:
+        described = {
+            k: v for k, v in described.items() if k != "characteristic_vs_source"
+        }
+        if source is None or not _source_relative_bound_holds(obj, relative, source):
             return False
     described = _resolve_chosen_color(described, source)
     described = _resolve_chosen_creature_type(described, source)

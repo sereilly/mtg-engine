@@ -79,6 +79,7 @@ from ._core import (
     Times,
     Amount,
     Comparison,
+    SourceRelativeComparison,
     ObjectFilter,
     PlayerRef,
     TargetSpec,
@@ -257,6 +258,7 @@ from .stack import (
     CounterAbility,
     CounterSpell,
     ModalNode,
+    WaiveShroud,
 )
 from .combat import (
     AssignsNoCombatDamage,
@@ -345,6 +347,7 @@ __all__ = [
     "Times",
     "Amount",
     "Comparison",
+    "SourceRelativeComparison",
     "ObjectFilter",
     "PlayerRef",
     "TargetSpec",
@@ -527,6 +530,7 @@ __all__ = [
     "CounterAbility",
     "ChangeTarget",
     "ChooseTarget",
+    "WaiveShroud",
     "CreateDelayedTrigger",
     "CounterSpell",
     "ModalNode",

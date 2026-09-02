@@ -555,6 +555,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # payload the blockers step tests — the arrangement the static printings in
     # engine/combat_restrictions.py already use.
     "grant_cant_be_blocked_by_until_eot": "evasion",
+    "grant_cant_be_blocked_except_by_until_eot": "evasion",
     "grant_unblockable_to_self": "evasion",
     # Restrictions on declaring attackers/blockers (CR 506, 509).
     "cant_attack_unless_defender_controls": "combat_restrictions",
@@ -624,6 +625,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # because it touches nothing: it is the targeting, and saying otherwise
     # would let the report claim the spell destroys or pumps something.
     "choose_target_permanent": "targeting",
+    # "…can be the target of spells and abilities controlled by target player
+    # as though it didn't have shroud" (Autumn Willow): a permission about
+    # who may choose this permanent as a target, which is this category.
+    "waive_shroud_for_target_player": "targeting",
     # "Choose X target attacking creatures." (Winter's Chill.) The same
     # category and the same nothing-happens-here reading; the plural records
     # what it chose so the loop behind it has a set to walk.

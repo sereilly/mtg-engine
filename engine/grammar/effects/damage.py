@@ -25,7 +25,7 @@ from ..where_x import _parse_where_x_is
 from ..phrases import (
     _accept_mana_alternatives,
     _parse_duration, _parse_mana_payment, _parse_opponents_choice,
-    _parse_per_each_objects, _parse_that_object,
+    _parse_per_each_objects, _parse_that_object, parse_bound_subject,
 )
 
 
@@ -62,6 +62,19 @@ def _parse_damage_recipient(stream: TokenStream) -> ast.Recipient | None:
         and stream.accept_phrase("who", "attacked", "this", "turn")
     ):
         return dataclasses.replace(recipient, attacked_this_turn=True)
+    if recipient is None:
+        # "This creature deals 2 damage to **that creature** at end of combat."
+        # (Dwarven Sea Clan.) The back-reference every other family already
+        # reads through ``parse_bound_subject`` — the object an earlier sentence
+        # of the same effect chose, which ``parse_recipient`` deliberately does
+        # not claim because a bare definite noun phrase is nobody's target.
+        #
+        # Read only where that reader found nothing, so no phrase it already
+        # takes changes meaning; and refused by default at the lowering, which
+        # accepts the quantifier under a bound-object delayed event and names
+        # what is missing under any other. A parse without that gate would deal
+        # the damage to whatever the resolution context happened to carry.
+        return parse_bound_subject(stream)
     return recipient
 
 

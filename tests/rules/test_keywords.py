@@ -1826,3 +1826,41 @@ def test_702_14a_a_basic_landwalk_still_goes_with_the_family():
     remove_keyword(walker, "landwalk", duration="end_of_turn")
 
     assert not walker.has_keyword("forestwalk")
+
+
+# ---------------------------------------------------------------------------
+# 609.4 — an "as though" effect lifts one restriction and changes nothing else
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("609.4", "702.18a")
+def test_609_4_a_shroud_exception_applies_only_to_the_seat_it_names():
+    """"Until end of turn, Autumn Willow can be the target of spells and
+    abilities controlled by target player as though it didn't have shroud."
+
+    CR 609.4: the permission "applies only to the stated effect", so the
+    creature keeps shroud against every other seat — and against the seat that
+    granted the permission, which is the half a boolean record would get wrong.
+
+    Three seats, because "the named player" and "not the controller" are the
+    same answer at a two-player table and different answers here.
+    """
+    from engine.target_immunity import waive_shroud_for_seat
+
+    bolt = _mk_instant("Bolt", "Bolt deals 3 damage to target creature.", colors=("R",))
+    hidden = Permanent(card=_mk_creature("Hidden One", 2, 3, keywords=("Shroud",)))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[hidden]),
+        PlayerState(name="P2", hand=[bolt]),
+        PlayerState(name="P3", hand=[bolt]),
+    ])
+
+    waive_shroud_for_seat(hidden, 1)
+
+    assert game._can_be_targeted(hidden, bolt, caster_index=1) is True
+    assert game._can_be_targeted(hidden, bolt, caster_index=2) is False
+    assert game._can_be_targeted(hidden, bolt, caster_index=0) is False
+    assert hidden.has_keyword("shroud"), (
+        "CR 609.4: the permission is not a removal — the creature still has "
+        "shroud for everything that asks"
+    )

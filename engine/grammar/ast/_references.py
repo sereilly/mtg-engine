@@ -30,6 +30,29 @@ class Comparison:
 
 
 @dataclass(frozen=True)
+class SourceRelativeComparison:
+    """"…with power **equal to or greater than the enchanted creature's
+    toughness**" (Ironclaw Curse).
+
+    :class:`Comparison`'s bound is a number the line prints; this one's is a
+    characteristic of the ability's **own source**, read when the question is
+    asked. Its own node rather than a ``Comparison`` whose ``value`` is a
+    reference, because the two are answered in different places: a printed bound
+    rides the payload into ``permanent_matches_filter``, the pure matcher, and
+    this one cannot — nothing there holds the source. Written as a
+    ``Comparison`` it would reach that matcher, find no number, and compare
+    against zero, which for "power 0 or greater" is every creature there is.
+
+    All three words travel as data for the reason every other printed word in
+    this grammar does: "toughness equal to or less than the enchanted
+    creature's power" is the same sentence and must need no second node.
+    """
+    characteristic: str          # of the candidate: "power" | "toughness"
+    op: str                      # "le" | "ge"
+    source_characteristic: str   # of the ability's source
+
+
+@dataclass(frozen=True)
 class ObjectFilter:
     """A noun phrase describing a set of objects.
 
@@ -449,6 +472,13 @@ class ObjectFilter:
     #: ``_ZONE_NOUNS`` on exactly this argument — "a production that needs it
     #: should say so explicitly"; this is that explicit reading.
     on_the_battlefield: bool = False
+    #: "…creatures with power **equal to or greater than the enchanted
+    #: creature's toughness**" (Ironclaw Curse). A bound that is not a number
+    #: but a live characteristic of the ability's own source — see
+    #: :class:`SourceRelativeComparison` for why it is not a ``Comparison``.
+    #: Emitted under its own payload key, which ``subject_filters`` answers
+    #: before the pure matcher runs and refuses when the caller named no source.
+    characteristic_vs_source: "SourceRelativeComparison | None" = None
 
     def to_payload(self) -> dict[str, object]:
         """Instruction-payload dict, emitting only keys that are set.
@@ -625,6 +655,17 @@ class ObjectFilter:
             payload["toughness"] = {
                 "op": self.toughness.op,
                 "value": self.toughness.value.value,
+            }
+        # "…with power equal to or greater than the enchanted creature's
+        # toughness" (Ironclaw Curse). Always emitted when set — there is no
+        # "literal only" half to fall back to, and a set field with no key is
+        # exactly what `dropped_narrowings` refuses.
+        if self.characteristic_vs_source is not None:
+            payload["characteristic_vs_source"] = {
+                "characteristic": self.characteristic_vs_source.characteristic,
+                "op": self.characteristic_vs_source.op,
+                "source_characteristic":
+                    self.characteristic_vs_source.source_characteristic,
             }
         if self.colored:
             payload["colored_only"] = True

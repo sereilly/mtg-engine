@@ -693,11 +693,27 @@ class DeclareBlockersStepMixin:
         # payload in all three — the difference is only where the record lives.
         from ..combat_restrictions import (
             granted_blocker_filters,
+            granted_blocker_whitelists,
             restriction_condition_holds,
         )
 
         for described in granted_blocker_filters(attacker):
             if subject_matches(self, blocker, described):
+                return False
+
+        # "Target creature can't be blocked this turn **except by Walls**."
+        # (Joven's Tools.) The granted *whitelist*, and its own loop for the
+        # reason the static whitelist below has its own branch: a blocker
+        # matching no member of the union is illegal, where the blacklist above
+        # only rejects the ones that do match.
+        #
+        # Every grant separately, because each is its own restriction
+        # (CR 509.1b): two of them must both be satisfied, and a blocker legal
+        # under either one alone is not legal under both.
+        for allowed in granted_blocker_whitelists(attacker):
+            if not any(
+                subject_matches(self, blocker, described) for described in allowed
+            ):
                 return False
 
         for restriction in (
@@ -714,7 +730,12 @@ class DeclareBlockersStepMixin:
             if restriction.kind == "cant_be_blocked_except_by":
                 allowed = restriction.payload.get("allowed_blockers") or ()
                 if not any(
-                    subject_matches(self, blocker, described) for described in allowed
+                    subject_matches(
+                        self, blocker, described,
+                        observer=self.controller_index_of(attacker),
+                        source=attacker,
+                    )
+                    for described in allowed
                 ):
                     return False
                 continue
@@ -746,8 +767,19 @@ class DeclareBlockersStepMixin:
             # Every field still goes through `subject_matches`, so the layers
             # answer: a Grizzly Bears laced red is a red creature, an animated
             # artifact is an artifact creature, and a pumped 2/2 has power 4.
+            # The restriction belongs to the *attacker* (its own printed line,
+            # or an Aura's about the creature it enchants), so CR 109.5's
+            # observer is the attacker's controller and the ability's source is
+            # the attacker itself. Passed here rather than left out because
+            # `_blocker_union` admits the whole testable key set: a phrase
+            # narrowed by "you control" or by "another" would otherwise be
+            # carried into a call that cannot answer it and silently dropped,
+            # which on a blocking restriction is a block the card forbids.
             for described in restriction.payload.get("blocker_filters") or ():
-                if subject_matches(self, blocker, described):
+                if subject_matches(
+                    self, blocker, described,
+                    observer=self.controller_index_of(attacker), source=attacker,
+                ):
                     return False
 
         # Invisibility's "can't be blocked except by Walls" used to be its own
@@ -762,8 +794,15 @@ class DeclareBlockersStepMixin:
         # kind, read through the same `subject_matches` the blocked-by
         # restriction above uses — so the layers answer here too: a pumped 2/2
         # has power 4 and a creature laced white is a white creature.
+        # An Aura prints the same restriction about the creature it is attached
+        # to (Ironclaw Curse), so the two channels are unioned here exactly as
+        # they are for the blocked-by restriction above: one sentence, and the
+        # only difference is whose text it is on.
         blocker_program = compile_card_oracle(blocker.effective_card)
-        for restriction in blocker_program.instructions:
+        for restriction in (
+            *blocker_program.instructions,
+            *attached_combat_restrictions(blocker),
+        ):
             if restriction.kind != "cant_block_subject":
                 continue
             for described in restriction.payload.get("blockee_filters") or ():

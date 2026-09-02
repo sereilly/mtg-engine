@@ -533,6 +533,72 @@ def parse_comparison(stream: TokenStream) -> ast.Comparison:
     return ast.Comparison("eq", amount)
 
 
+#: How a printed clause names the permanent whose ability the sentence is —
+#: what ``subject_filters.subject_matches`` is handed as ``source``. Two
+#: spellings of one referent, exactly as ``references`` reads "that" and "the"
+#: as one back-reference: an Aura says "the enchanted creature's" (Ironclaw
+#: Curse) and a creature printing the same sentence about itself says "this
+#: creature's". The Aura's line reaches this reader *unrewritten* —
+#: ``auras.aura_combat_restriction`` rewrites only the sentence's leading
+#: subject — which is why the enchanted spelling has to be here rather than
+#: normalized away upstream.
+_SOURCE_POSSESSIVES: tuple[tuple[str, ...], ...] = (
+    ("the", "enchanted", "creature", "'s"),
+    ("this", "creature", "'s"),
+)
+
+#: The characteristics a relative bound may name. English rather than a shared
+#: rule, on ``combat_restrictions._NUMBER_WORDS``'s argument — and closed, so a
+#: clause naming a third one refuses here instead of reaching a comparison with
+#: nothing to read.
+_RELATIVE_CHARACTERISTICS = ("power", "toughness")
+
+
+def accept_source_relative_comparison(
+    stream: TokenStream, characteristic: str
+) -> "ast.SourceRelativeComparison | None":
+    """``equal to or {greater,less} than <the source>'s <power|toughness>``.
+
+    Ironclaw Curse's "creatures with power **equal to or greater than the
+    enchanted creature's toughness**" — a bound that is a live characteristic
+    rather than a printed number, so it is its own node and its own payload key
+    (see :class:`ast.SourceRelativeComparison`).
+
+    Returns None with the cursor untouched when the words after the
+    characteristic are anything else, so ``parse_comparison``'s printed-number
+    reading is left exactly as it was: this is only ever reached on a phrase
+    that reading cannot take.
+
+    The comparison word comes from :data:`_COMPARISON_WORDS`, the same table the
+    printed-number form reads — one vocabulary, so "equal to or less than"
+    cannot come to mean something different from "2 or less".
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("equal", "to", "or"):
+        stream.reset(mark)
+        return None
+    token = stream.peek()
+    word = token.text if token is not None and token.kind == WORD else None
+    if word not in _COMPARISON_WORDS:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_word("than"):
+        stream.reset(mark)
+        return None
+    if not any(stream.accept_phrase(*phrase) for phrase in _SOURCE_POSSESSIVES):
+        stream.reset(mark)
+        return None
+    bound = stream.peek_word()
+    if bound not in _RELATIVE_CHARACTERISTICS:
+        stream.reset(mark)
+        return None
+    stream.advance()
+    return ast.SourceRelativeComparison(
+        characteristic, _COMPARISON_WORDS[word], str(bound)
+    )
+
+
 def accept_damage_dealt_this_turn(
     stream: TokenStream,
 ) -> "ast.DamageDealtThisTurn | None":

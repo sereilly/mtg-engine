@@ -606,3 +606,119 @@ def test_aether_storms_ban_ends_with_the_enchantment(set_pool, catalog_by_name):
 
     assert storm not in list(game.all_permanents())
     assert game.cast_from_hand(0, "Grizzly Bears").supported
+
+
+# --- W2G3: combat restrictions and shroud exceptions ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.auras import attach_aura
+from engine.keywords import grant_keyword
+from engine.mixins.stack.casting import permanent_matches_enchant_noun
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.pt import add_pt_modifier
+from engine.targeting import derive_cast_spec
+
+
+def _w2g3_board(set_pool, aura_name):
+    """P1's Aura, P2's 2/2, and a game holding both."""
+    pool = set_pool("HML")
+    aura = Permanent(card=pool[aura_name])
+    host = Permanent(card=set_pool("LEA")["Grizzly Bears"])
+    p1 = PlayerState(name="P1", battlefield=[aura])
+    p2 = PlayerState(name="P2", battlefield=[host])
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    return game, pool, aura, host
+
+
+def test_roots_derives_the_cast_target_its_enchant_clause_names(set_pool):
+    """"Enchant creature without flying."
+
+    Roots was supported, carried no hollow line and claimed every printed
+    sentence — and derived **no** cast spec, which is the exact value the client
+    tests to decide whether to ask for a target. So the browser sent a bare cast
+    and the engine refused it: an Aura no player could put on the battlefield.
+    """
+    card = set_pool("HML")["Roots"]
+    spec = derive_cast_spec(card, compile_card_oracle(card))
+
+    assert spec == {"kind": "creature", "without_keyword": "flying"}
+
+
+def test_roots_may_not_be_put_on_a_flyer(set_pool):
+    """The other half of the same defect: the subject missed
+    ``permanent_matches_enchant_noun``'s table and took its permissive
+    fallback, so the exclusion the card prints was enforced by nothing."""
+    game, pool, roots, host = _w2g3_board(set_pool, "Roots")
+
+    assert permanent_matches_enchant_noun(host, "creature without flying")
+    grant_keyword(host, "flying")
+    assert not permanent_matches_enchant_noun(host, "creature without flying")
+
+
+def test_roots_reads_flying_off_the_layers_not_the_printed_line(set_pool):
+    """CR 613 layer 6: a creature *granted* flying is a creature with flying,
+    and one that has lost its printed flying is not. Asserted with a card that
+    prints the word, because the printed-line reading passes the test above."""
+    game, pool, roots, _host = _w2g3_board(set_pool, "Roots")
+    flyer = Permanent(card=set_pool("LEA")["Mesa Pegasus"])
+    game.players[1].battlefield.append(flyer)
+
+    assert not permanent_matches_enchant_noun(flyer, "creature without flying")
+
+
+def test_ironclaw_curse_blocks_by_the_enchanted_creature_s_live_toughness(set_pool):
+    """"Enchanted creature can't block creatures with power equal to or greater
+    than the enchanted creature's toughness."
+
+    Two live characteristics, so the bound is not a number in the payload. The
+    Aura's own -0/-1 is part of the toughness it compares against: a 2/2 host
+    becomes a 2/1 and may then block nothing with power 1 or more.
+    """
+    game, pool, curse, host = _w2g3_board(set_pool, "Ironclaw Curse")
+    attacker = Permanent(card=set_pool("LEA")["Grizzly Bears"])       # 2/2
+    harmless = Permanent(card=set_pool("LEA")["Wall of Wood"])        # 0/3
+    game.players[0].battlefield.extend([attacker, harmless])
+    attach_aura(curse, host)
+
+    assert (host.effective_power, host.effective_toughness) == (2, 1)
+    assert game._can_block_attacker(host, attacker) is False
+    assert game._can_block_attacker(host, harmless) is True, (
+        "the restriction names power, and a 0-power attacker is under the bound"
+    )
+
+
+def test_ironclaw_curse_follows_the_toughness_as_it_moves(set_pool):
+    """The control for the test above: nothing printed on either creature
+    changes, and the answer does. A bound frozen when the restriction was
+    derived would keep the old answer."""
+    game, pool, curse, host = _w2g3_board(set_pool, "Ironclaw Curse")
+    attacker = Permanent(card=set_pool("LEA")["Wall of Wood"])        # 0/3
+    game.players[0].battlefield.append(attacker)
+    attach_aura(curse, host)
+
+    assert game._can_block_attacker(host, attacker) is True
+    add_pt_modifier(host, 0, -1)          # host is now 2/0's neighbour: 2/0
+    assert game._can_block_attacker(host, attacker) is False, (
+        "toughness 0 puts every attacker, a 0-power Wall included, at the bound"
+    )
+
+
+def test_an_unenchanted_creature_keeps_every_block(set_pool):
+    """Without this the two tests above would pass against a rule that stopped
+    every creature blocking."""
+    game, pool, curse, host = _w2g3_board(set_pool, "Ironclaw Curse")
+    attacker = Permanent(card=set_pool("LEA")["Grizzly Bears"])
+    game.players[0].battlefield.append(attacker)
+
+    assert game._can_block_attacker(host, attacker) is True
+
+
+@pytest.mark.parametrize("name", ["Roots", "Ironclaw Curse"])
+def test_the_w2g3_auras_are_supported(set_pool, name):
+    program = compile_card_oracle(set_pool("HML")[name])
+    assert program.supported, program.reason
+

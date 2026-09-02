@@ -251,6 +251,21 @@ def _parse_cant_be(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
         if by is None:
             stream.reset(by_mark)
     duration = _parse_duration(stream)
+    # "Target creature can't be blocked this turn **except by Walls**."
+    # (Joven's Tools.) The whitelist, printed *after* the duration where the
+    # blacklist is printed before it — so it is read here rather than beside
+    # the "by" clause above, and only once a duration has been consumed. That
+    # gate is the whole reason the static printing (Elven Riders, "can't be
+    # blocked except by Walls and/or creatures with flying") keeps its tokens
+    # and falls through to `engine/combat_restrictions.py` exactly as it did.
+    if word == "blocked" and by is None and duration.kind is not None:
+        except_mark = stream.mark()
+        if stream.accept_phrase("except", "by"):
+            allowed = parse_recipient(stream)
+            if allowed is None:
+                stream.reset(except_mark)
+            else:
+                return ast.CantBe(subject, word, duration, except_by=allowed)
     if by is not None and duration.kind is None:
         # The static printing. Put the phrase back and let the line fail
         # full-consumption, which is what routes it to the derived table.

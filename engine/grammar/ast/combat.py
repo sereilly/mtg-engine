@@ -48,6 +48,19 @@ class CantBe:
     # here would make a creature unblockable that the card only makes
     # unblockable by Walls.
     by: Recipient | None = None
+    # "…can't be blocked this turn **except by Walls**." (Joven's Tools.) The
+    # inverse of ``by``: that names what may not block, this names the only
+    # things that may, and the two say opposite things about everything
+    # unnamed — so they are separate fields with separate lowerings rather than
+    # one field with a polarity flag, exactly as
+    # ``combat_restrictions.py`` keeps ``cant_be_blocked_by`` and
+    # ``cant_be_blocked_except_by`` separate kinds for the static printings.
+    #
+    # Only the durationed form reaches here; the static "can't be blocked
+    # except by Walls and/or creatures with flying" (Elven Riders) keeps its
+    # tokens and falls through to that table, the same arrangement ``by``
+    # already makes.
+    except_by: Recipient | None = None
 
 
 @dataclass(frozen=True)

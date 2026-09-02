@@ -12,9 +12,10 @@ spell, activating an ability, or putting a triggered ability on the stack
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ._core import (
+    Duration,
     PlayerRef,
     TargetSpec,
     Zone,
@@ -241,3 +242,31 @@ class ModalNode:
 
     choose_count: int
     at_least: bool = False
+
+
+@dataclass(frozen=True)
+class WaiveShroud:
+    """``Until end of turn, <self> can be the target of spells and abilities
+    controlled by target player as though it didn't have shroud.`` (Autumn
+    Willow.)
+
+    CR 702.18 with a hole cut in it for one seat — CR 609.4's "as though",
+    which lifts the restriction and changes nothing else: the creature still
+    *has* shroud, so a second copy of this ability opens it to a second player
+    and nobody else, and a lord counting creatures with shroud still counts it.
+    Modelling it as a layer-6 removal would be a shorter implementation of a
+    different card.
+
+    Here in the stack family for :class:`ChooseTarget`'s reason: what this
+    changes is who may *choose* the permanent as a target (CR 601.2c,
+    CR 602.2b), which is a question asked while an object goes onto the stack
+    and never during resolution.
+
+    The subject is the ability's own source and is not a field: the record
+    lives on that permanent, and a sentence naming anything else is a different
+    card the production refuses rather than half-reads. The **player** is the
+    field, because it is what the sentence chooses.
+    """
+
+    player: PlayerRef
+    duration: Duration = field(default_factory=Duration)

@@ -53,6 +53,7 @@ from ._events import (
     _chosen_cast_amount,
     _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_CONTROLLERS,
+    _BOUND_OBJECT_DELAYED_EVENTS,
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_CONTROLLER,
     EVENT_SUBJECT_PLAYER,
@@ -564,6 +565,26 @@ def _lower_damage_shape(
         # and a bare `{"amount": 3}` reaches the same handler branch Lightning
         # Bolt does and deals the self-damage to the *other* creature, silently.
         payload["recipient"] = "source"
+    elif (
+        isinstance(recipient, ast.TargetSpec)
+        and recipient.quantifier == "that"
+        and not recipient.targeted
+    ):
+        # "This creature deals 2 damage to **that creature** at end of combat."
+        # (Dwarven Sea Clan.) The object the creating ability bound
+        # (CR 603.7c), which `create_delayed_trigger` stamps into the trigger's
+        # context by id. Admitted only under an event that records one: under
+        # any other the words name an object nobody wrote down, and the handler
+        # would fall through to whatever the resolution context was carrying.
+        # The same gate `destroy_bound_permanent` makes of the same quantifier
+        # one family over, refusing with the same sentence.
+        if event not in _BOUND_OBJECT_DELAYED_EVENTS:
+            raise LoweringError(
+                "\"that\" names the firing event's object, and this event "
+                "records none",
+                node=node,
+            )
+        payload["recipient"] = "bound_permanent"
     elif isinstance(recipient, ast.PlayerRef) and recipient.kind == "each_player":
         # "…deals damage … to each player" (Armageddon Clock). Its own recipient
         # rather than a fall-through: the kind used to be listed among the ones

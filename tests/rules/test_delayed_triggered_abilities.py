@@ -488,3 +488,55 @@ def test_701_21a_the_delayed_sacrifice_is_recorded_as_one_not_as_a_destruction()
 
     assert bear not in game.players[0].battlefield
     assert [c.name for c in game.players[0].graveyard] == ["Bear"]
+
+
+@pytest.mark.cr("603.7c")
+def test_a_bound_object_can_be_the_recipient_of_the_delayed_damage():
+    """"This creature deals 2 damage to **that creature** at end of combat."
+    (Dwarven Sea Clan.)
+
+    CR 603.7c's "particular object" as a *damage* recipient rather than a
+    destroy's victim. Asserted against a look-alike beside it, because a
+    recipient resolved by anything but the recorded id — the resolution
+    context's leftover target, the first creature on a battlefield — would hit
+    the twin just as readily.
+    """
+    game, p1, p2, watched = _board()
+    twin = Permanent(card=watched.card)
+    p2.battlefield.append(twin)
+    game.delayed_triggers.append(DelayedTrigger(
+        controller_index=0, event="next_end_of_combat", card=_SOURCE,
+        bound_permanent_id=watched.permanent_id,
+        instruction=OracleInstruction(
+            "deal_damage", "", {"amount": 2, "recipient": "bound_permanent"}
+        ),
+    ))
+
+    fire_delayed_triggers(game, "next_end_of_combat")
+    game._settle()
+
+    assert watched.damage_marked == 2
+    assert twin.damage_marked == 0
+
+
+@pytest.mark.cr("603.7c", "608.2b")
+def test_the_delayed_damage_finds_nobody_when_its_object_has_gone():
+    """"…if that object is no longer in the zone it's expected to be in at the
+    time the delayed triggered ability resolves, the ability won't affect it."
+    Nothing else on the board takes the damage instead."""
+    game, p1, p2, watched = _board()
+    bystander = Permanent(card=_creature("Bystander"))
+    p2.battlefield.append(bystander)
+    game.delayed_triggers.append(DelayedTrigger(
+        controller_index=0, event="next_end_of_combat", card=_SOURCE,
+        bound_permanent_id=watched.permanent_id,
+        instruction=OracleInstruction(
+            "deal_damage", "", {"amount": 2, "recipient": "bound_permanent"}
+        ),
+    ))
+    game.remove_from_battlefield(watched)
+
+    fire_delayed_triggers(game, "next_end_of_combat")
+    game._settle()
+
+    assert bystander.damage_marked == 0

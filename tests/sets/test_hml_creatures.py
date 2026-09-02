@@ -1482,3 +1482,184 @@ def test_rysorian_badger_ignores_a_graveyard_with_no_creature_card(set_pool):
     assert len(defender.graveyard) == 2
     assert game.players[0].life == 20
 
+
+# --- W2G3: combat restrictions and shroud exceptions ---
+
+from engine import Game, PlayerState
+from engine.activation_restrictions import activation_denial
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+from engine.target_immunity import shroud_waived_seats
+from engine.targeting import derive_activation_spec
+
+
+def _w2g3_ready(permanent: Permanent) -> Permanent:
+    permanent.metadata["summoning_sickness_turn"] = -5
+    return permanent
+
+
+def _w2g3_game(*seat_battlefields, set_pool=None):
+    lea = set_pool("LEA")
+    players = [
+        PlayerState(name=f"P{index + 1}", battlefield=list(battlefield),
+                    library=[lea["Forest"]] * 8)
+        for index, battlefield in enumerate(seat_battlefields)
+    ]
+    game = Game(players=players)
+    game.enforce_mana_costs = False
+    return game
+
+
+# Autumn Willow --------------------------------------------------------------
+
+
+def test_autumn_willow_opens_its_shroud_to_one_seat_only(set_pool):
+    """"{G}: Until end of turn, Autumn Willow can be the target of spells and
+    abilities controlled by target player as though it didn't have shroud."
+
+    CR 609.4's "as though" cutting a hole in CR 702.18 for the chosen seat and
+    nobody else. Asserted with three seats, where "the named player" and "not
+    the controller" are different answers.
+    """
+    lea = set_pool("LEA")
+    willow = _w2g3_ready(Permanent(card=set_pool("HML")["Autumn Willow"]))
+    game = _w2g3_game([willow], [], [], set_pool=set_pool)
+    game.start_turn(0)
+
+    result = game.activate_permanent_ability(
+        0, "Autumn Willow", target_player_index=1
+    )
+    game._settle()
+    assert result.supported, result.details
+    assert shroud_waived_seats(willow) == (1,)
+
+    terror = lea["Terror"]
+    assert game._can_be_targeted(willow, terror, caster_index=1) is True
+    assert game._can_be_targeted(willow, terror, caster_index=2) is False
+    assert game._can_be_targeted(willow, terror, caster_index=0) is False
+    assert game._can_be_targeted(willow, terror) is False, (
+        "a probe that cannot say whose spell this is keeps the shroud"
+    )
+
+
+def test_the_autumn_willow_waiver_ends_with_the_turn(set_pool):
+    """"Until end of turn" is the cleanup sweep and nothing else."""
+    willow = _w2g3_ready(Permanent(card=set_pool("HML")["Autumn Willow"]))
+    game = _w2g3_game([willow], [], set_pool=set_pool)
+    game.start_turn(0)
+    game.activate_permanent_ability(0, "Autumn Willow", target_player_index=1)
+    game._settle()
+    assert shroud_waived_seats(willow) == (1,)
+
+    game.resolve_cleanup_step(0)
+
+    assert shroud_waived_seats(willow) == ()
+    assert game._can_be_targeted(
+        willow, set_pool("LEA")["Terror"], caster_index=1
+    ) is False
+
+
+def test_autumn_willow_targets_a_player_while_it_cannot_be_targeted(set_pool):
+    """The card's own shape, and it is legal: CR 702.18 stops spells and
+    abilities from choosing the permanent, and says nothing about what the
+    permanent's own ability may choose."""
+    card = set_pool("HML")["Autumn Willow"]
+    program = compile_card_oracle(card)
+
+    assert program.supported, program.reason
+    assert "shroud" in program.static_lines
+    [ability] = program.activated_abilities
+    assert derive_activation_spec(ability) == {"kind": "player"}
+
+
+# Dwarven Sea Clan -----------------------------------------------------------
+
+
+def test_dwarven_sea_clan_shoots_the_creature_it_named_at_end_of_combat(set_pool):
+    """"{T}: Choose target attacking or blocking creature whose controller
+    controls an Island. This creature deals 2 damage to that creature at end of
+    combat."
+
+    The delay is printed after its effect and the victim is the object the
+    activation bound (CR 603.7c) — so nothing happens when the ability
+    resolves, and the damage lands when combat ends.
+    """
+    lea = set_pool("LEA")
+    clan = _w2g3_ready(Permanent(card=set_pool("HML")["Dwarven Sea Clan"]))
+    sailor = _w2g3_ready(Permanent(card=lea["Grizzly Bears"]))
+    game = _w2g3_game([clan], [Permanent(card=lea["Island"]), sailor],
+                      set_pool=set_pool)
+    game.start_turn(1)
+    game._close_current_priority_step()
+    game.advance_combat_phase()   # beginning of combat
+    game.advance_combat_phase()   # declare attackers
+    assert game.declare_attackers(1, [1], defending_player_index=0)[0]
+
+    result = game.activate_permanent_ability(
+        0, "Dwarven Sea Clan", target_player_index=1, target_permanent_index=1
+    )
+    game._settle()
+    assert result.supported, result.details
+    assert sailor.damage_marked == 0, "the damage waits for the end of combat"
+
+    game.advance_combat_phase()   # declare blockers
+    game.advance_combat_phase()   # combat damage
+    game.advance_combat_phase()   # end of combat
+    game._settle()
+
+    assert sailor.damage_marked == 2, game.log
+
+
+def test_dwarven_sea_clan_offers_only_islanders(set_pool):
+    """"…whose controller controls an Island" is a question about the
+    *candidate's* seat, not the activator's — and the picker asks it, so the
+    engine and the browser agree on what is a legal target."""
+    lea = set_pool("LEA")
+    clan = _w2g3_ready(Permanent(card=set_pool("HML")["Dwarven Sea Clan"]))
+    program = compile_card_oracle(clan.card)
+    [ability] = program.activated_abilities
+    spec = derive_activation_spec(ability)
+
+    offered = []
+    for land in ("Island", "Forest"):
+        attacker = _w2g3_ready(Permanent(card=lea["Grizzly Bears"]))
+        game = _w2g3_game([clan], [Permanent(card=lea[land]), attacker],
+                          set_pool=set_pool)
+        game.start_turn(1)
+        game._close_current_priority_step()
+        game.advance_combat_phase()
+        game.advance_combat_phase()
+        game.declare_attackers(1, [1], defending_player_index=0)
+        offered.append(len(game._enumerate_targets(
+            0, clan.card, spec, for_cast=False,
+            ability_instruction=ability.instruction,
+            ability_source=clan, source_permanent=clan,
+        )))
+
+    assert offered == [1, 0]
+
+
+def test_dwarven_sea_clan_closes_at_the_end_of_combat_step(set_pool):
+    """"Activate only before the end of combat step." The window closes when
+    that step begins and stays shut — the postcombat main phase is not during
+    the step either, and reading the clause as "not that step" would let the
+    ability be activated after the moment its damage was going to be dealt."""
+    clan = _w2g3_ready(Permanent(card=set_pool("HML")["Dwarven Sea Clan"]))
+    game = _w2g3_game([clan], [], set_pool=set_pool)
+    game.start_turn(0)
+    line = clan.card.oracle_text.splitlines()[0]
+
+    open_steps, shut_steps = [], []
+    for phase, step in (
+        ("beginning", "upkeep"), ("precombat_main", "precombat_main"),
+        ("combat", "declare_attackers"), ("combat", "combat_damage"),
+        ("combat", "end_of_combat"), ("postcombat_main", "postcombat_main"),
+        ("ending", "end"),
+    ):
+        game.current_turn_phase, game.current_step = phase, step
+        target = open_steps if activation_denial(game, 0, clan, line) is None else shut_steps
+        target.append(step)
+
+    assert open_steps == ["upkeep", "precombat_main", "declare_attackers",
+                          "combat_damage"]
+    assert shut_steps == ["end_of_combat", "postcombat_main", "end"]

@@ -2034,7 +2034,25 @@ class PermanentStateMixin:
         enumerating, hands it over.
         """
         if self._has_keyword(target, "shroud"):
-            return False
+            from ..target_immunity import shroud_waived_for
+
+            # "Until end of turn, Autumn Willow can be the target of spells and
+            # abilities controlled by **target player** as though it didn't
+            # have shroud." (CR 702.18 with CR 609.4's hole in it.) The waiver
+            # is per seat, so it is asked with the seat whose spell or ability
+            # is choosing: the caster for a spell, and the *controller of the
+            # source* for an ability, which is CR 109.5's answer and not
+            # necessarily the same seat.
+            #
+            # A caller that names neither gets the shroud, which is the
+            # direction that cannot let an illegal targeting through — the same
+            # answer every other seat-relative immunity here gives a seat-blind
+            # probe.
+            chooser = caster_index
+            if chooser is None and ability_source is not None:
+                chooser = self.controller_index_of(ability_source)
+            if not shroud_waived_for(target, chooser):
+                return False
         # "…can't be the target of Aura spells" (Bartel Runeaxe, Tetsuo
         # Umezawa), "…can't be the target of spells" (Anti-Magic Aura). Asked
         # only when the chooser is a *spell*, which `ability_source is None`

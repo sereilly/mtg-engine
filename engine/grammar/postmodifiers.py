@@ -28,7 +28,7 @@ from typing import Callable
 
 from . import ast
 from .abilities import _accept_ability_source
-from .amounts import parse_comparison
+from .amounts import accept_source_relative_comparison, parse_comparison
 from .errors import GrammarError
 from .lexer import NUMBER, PT, PUNCT, SELF, WORD
 from .names import accept_original_expansion, parse_card_name
@@ -555,9 +555,23 @@ def _parse_postmodifiers(
             probe = stream.mark()
             stream.advance()
             if stream.accept_word("power"):
+                # "…with power **equal to or greater than the enchanted
+                # creature's toughness**" (Ironclaw Curse). Tried before the
+                # printed-number bound, and it declines without consuming, so
+                # every phrase that reading already took is untouched: the two
+                # are told apart by the word after the characteristic, not by
+                # one of them failing.
+                relative = accept_source_relative_comparison(stream, "power")
+                if relative is not None:
+                    d.characteristic_vs_source = relative
+                    continue
                 d.power = parse_comparison(stream)
                 continue
             if stream.accept_word("toughness"):
+                relative = accept_source_relative_comparison(stream, "toughness")
+                if relative is not None:
+                    d.characteristic_vs_source = relative
+                    continue
                 d.toughness = parse_comparison(stream)
                 continue
             # "…**with a name originally printed in the <Set> expansion**"

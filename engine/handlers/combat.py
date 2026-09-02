@@ -772,6 +772,49 @@ def grant_cant_be_blocked_by_until_eot(game: Game, instruction: OracleInstructio
     return True, "resolved"
 
 
+@effect_handler("grant_cant_be_blocked_except_by_until_eot")
+def grant_cant_be_blocked_except_by_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Target creature can't be blocked this turn except by Walls." (Joven's
+    Tools.)
+
+    The granted twin of ``cant_be_blocked_except_by``, the static
+    `engine/combat_restrictions.py` derives — and the **inverse** of
+    ``grant_cant_be_blocked_by_until_eot`` beside it, not a flag on it: that one
+    names blockers the creature is safe from and leaves the rest of the board
+    able to block, this one names the only blockers there are. A record read as
+    the other would turn one card into the other's opposite.
+
+    An empty union would allow nothing at all rather than everything, which is
+    a strictly larger effect than the card prints — so it refuses to arm rather
+    than arming a whitelist nobody can satisfy. The lowering already declines
+    the phrase; this is the second half of that rule, where a payload built by
+    anything else arrives.
+    """
+    from ..combat_restrictions import grant_blocker_whitelist
+
+    allowed = [
+        described
+        for described in (instruction.payload.get("allowed_blockers") or ())
+        if described
+    ]
+    if not allowed:
+        game.log.append(f"{context.card.name}: no blocker class to allow")
+        return True, "resolved"
+    target_creature = resolve_target_permanent(
+        game, context, predicate=lambda p: p.is_creature,
+        fallback_on_invalid_choice=False,
+    )
+    if target_creature is None:
+        game.log.append(f"{context.card.name}: no creature to restrict")
+        return True, "resolved"
+    grant_blocker_whitelist(target_creature, allowed)
+    game.log.append(
+        f"{target_creature.card.name} can't be blocked this turn except by "
+        f"matching creatures ({context.card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("grant_banding_to_target")
 def grant_banding_to_target(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     # Helm of Chatzuk: "{1}, {T}: Target creature gains banding until end of turn."
