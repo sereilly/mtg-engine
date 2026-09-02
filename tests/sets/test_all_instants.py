@@ -420,3 +420,202 @@ def test_w1g5_lat_nams_legacy_draws_nothing_from_an_empty_hand(set_pool):
 
     assert game.pending_choices == []
     assert game.delayed_triggers == []
+
+
+# --- W2G5: damage, prevention and zones ---
+#
+# Four instants whose refusal sites were accurate and whose gaps were each one
+# reader that already read the sentence: a second damage clause that read one
+# recipient where the first reads a list, a global buff that dropped a printed
+# type exclusion, an "any number of" quantifier one word from "one or more",
+# and a pronoun for a back-reference the amount table already read with the
+# noun spelled out. The declines below name the *part* each is waiting on.
+
+from engine import Game, PlayerState, load_cards
+from engine.card_loader import manifest_set_path
+from engine.damage_events import deal_damage
+from engine.models import Permanent
+from engine.oracle import compile_card_oracle
+
+_W2G5_LEA = {c.name: c for c in load_cards(manifest_set_path("LEA"))}
+_W2G5_ALL: dict = {}
+
+
+def _w2g5_all(name: str):
+    """One Alliances card. The set is `measured`, so its cards are placed into a
+    driven game directly — no player can deck one."""
+    if not _W2G5_ALL:
+        _W2G5_ALL.update({
+            card.name: card
+            for card in load_cards(manifest_set_path("ALL", include_measured=True))
+        })
+    return _W2G5_ALL[name]
+
+
+def _w2g5_duel() -> Game:
+    """A two-seat duel with mana enforcement off (the standard rig)."""
+    game = Game(players=[PlayerState(name="A"), PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    return game
+
+
+def _w2g5_put(game: Game, seat: int, name: str, *, ready: bool = False) -> Permanent:
+    card = _W2G5_LEA.get(name) or _w2g5_all(name)
+    perm = Permanent(card=card)
+    if ready:
+        perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    return perm
+
+
+def _w2g5_damage(game, recipient, amount, source=None, combat=False) -> int:
+    """One damage event through CR 120.4, reporting what survived the shields.
+    Applying the result is deliberately not done here — see tests/helpers.py."""
+    return deal_damage(
+        game,
+        {"recipient": recipient, "amount": amount, "source": source, "combat": combat},
+    ).dealt
+
+
+def test_hail_storm_hits_three_described_sets_with_two_amounts(set_pool):
+    """"...2 damage to each attacking creature **and** 1 damage to you **and each
+    creature you control**." The second damage clause read one recipient where
+    the first reads a list, so the third recipient was stranded and the whole
+    line failed. All three sets, and the two amounts kept apart."""
+    game = _w2g5_duel()
+    game.players[0].hand.append(set_pool("ALL")["Hail Storm"])
+    attacker = _w2g5_put(game, 1, "Grizzly Bears")
+    attacker.attacking = True
+    mine = _w2g5_put(game, 0, "Hill Giant")
+
+    assert game.cast_from_hand(0, "Hail Storm").supported
+
+    assert attacker.damage_marked == 2, "each attacking creature takes 2"
+    assert mine.damage_marked == 1, "each creature you control takes 1"
+    assert game.players[0].life == 19, "and so does its caster"
+    assert game.players[1].life == 20, "the opponent is not a recipient"
+
+
+def test_stench_of_decay_spares_artifact_creatures(set_pool):
+    """"**Nonartifact** creatures get -1/-1." The exclusion is the whole card:
+    dropped, the sweep also shrinks the caster's own artifact creatures."""
+    game = _w2g5_duel()
+    game.players[0].hand.append(set_pool("ALL")["Stench of Decay"])
+    flesh = _w2g5_put(game, 1, "Grizzly Bears")
+    metal = _w2g5_put(game, 1, "Obsianus Golem")
+    before = (metal.effective_power, metal.effective_toughness)
+
+    assert game.cast_from_hand(0, "Stench of Decay").supported
+
+    assert (flesh.effective_power, flesh.effective_toughness) == (1, 1)
+    assert (metal.effective_power, metal.effective_toughness) == before
+
+
+def test_exile_gains_life_equal_to_the_toughness_it_exiled(set_pool):
+    """"Exile target nonwhite attacking creature. You gain life equal to **its
+    toughness**." By the second sentence the creature is a card in exile with no
+    computed characteristics at all (CR 613.1), so the number is the one frozen
+    where it still had one (CR 608.2h) - and it is the *effective* toughness,
+    not the printed one."""
+    game = _w2g5_duel()
+    game.players[0].hand.append(set_pool("ALL")["Exile"])
+    victim = _w2g5_put(game, 1, "Grizzly Bears")
+    victim.attacking = True
+    victim.toughness_bonus = 3
+
+    assert game.cast_from_hand(
+        0, "Exile", target_player_index=1,
+        target_permanent_index=game.battlefield_index_of(victim),
+    ).supported
+
+    assert [card.name for card in game.players[1].exile] == ["Grizzly Bears"]
+    assert game.players[0].life == 25, "2 printed toughness plus the +0/+3"
+
+
+def test_exile_is_a_card_whose_own_name_is_its_verb(set_pool):
+    """The lexer collapses a card's self-references to one SELF token, and this
+    card's name is the verb its only sentence opens with. Collapsed, the
+    sentence has a subject and no verb, and the card refuses on "unrecognized
+    effect verb" - a refusal naming a word it does not print."""
+    program = compile_card_oracle(set_pool("ALL")["Exile"])
+
+    assert program.supported, program.reason
+    assert [i.kind for i in program.instructions[0].payload["steps"]] == [
+        "exile_target_permanent", "target_gains_life",
+    ]
+
+
+def test_energy_arc_untaps_any_number_and_shields_both_ends(set_pool):
+    """"Untap **any number of** target creatures. Prevent all combat damage that
+    would be dealt to and dealt by **those creatures** this turn." The shield
+    reaches a set - the one the sentence in front of it recorded - and it is
+    combat damage in both directions and nothing else."""
+    game = _w2g5_duel()
+    game.players[0].hand.append(set_pool("ALL")["Energy Arc"])
+    first = _w2g5_put(game, 0, "Grizzly Bears")
+    second = _w2g5_put(game, 0, "Wall of Wood")
+    bystander = _w2g5_put(game, 1, "Hill Giant")
+    first.tapped = second.tapped = True
+
+    assert game.cast_from_hand(
+        0, "Energy Arc",
+        target_permanent_ids=[first.permanent_id, second.permanent_id],
+    ).supported
+
+    assert not first.tapped and not second.tapped
+    assert _w2g5_damage(game, first, 3, source=bystander, combat=True) == 0
+    assert _w2g5_damage(game, second, 3, source=bystander, combat=True) == 0
+    assert _w2g5_damage(game, game.players[1], 2, source=first, combat=True) == 0
+    assert _w2g5_damage(game, first, 3, source=bystander, combat=False) == 3, (
+        "the card says combat damage"
+    )
+    assert _w2g5_damage(game, bystander, 3, source=first.card, combat=True) == 3, (
+        "a creature the spell never named is untouched"
+    )
+
+
+# --- W2G5 declines, each naming the part it is waiting on -------------------
+#
+# Two instants this group did not implement. Each is recorded as the pieces it
+# needs rather than as "too complex", because a named part is one another group
+# may build incidentally - and the card then falls out for free.
+
+
+def test_martyrdom_is_declined_naming_three_parts(set_pool):
+    """Three independent gaps, none of them the granted ability itself:
+
+    1. **The trailing sentence after a quoted grant.** "Only you may activate
+       this ability." sits outside the closing quote, and the quote guard in
+       ``parser._parse_line`` hands the whole line to the quoted-token reader,
+       which has no reading for anything after the quote. The same line with
+       nothing behind the quote parses today.
+    2. **A counted redirect onto a player.** "The next 1 damage that would be
+       dealt to **target creature, planeswalker, or player**" is CR 115.4's
+       "any target", and ``redirect_next_damage_to_source_until_eot`` hangs its
+       record off the *protected permanent* - Daughter of Autumn and Hazduhr
+       the Abbot both print a creature-only slot. A player recipient needs the
+       record to live on a seat.
+    3. **A "who may activate" restriction.** ``activation_restrictions.py``
+       gates *when* an ability may be activated; "Only you may activate this
+       ability" gates *who*, and on a granted ability that is the granting
+       player rather than the permanent's controller.
+    """
+    program = compile_card_oracle(set_pool("ALL")["Martyrdom"])
+    assert not program.supported
+
+
+def test_omen_of_fire_is_declined_naming_two_parts(set_pool):
+    """Its first sentence already lowers; the second one needs two things.
+
+    1. **A sacrifice whose subject is a disjunction of two noun phrases** -
+       "a Plains **or** a white permanent of their choice". ``arm_forced_sacrifice``
+       takes one filter payload, and "Plains or white permanent" is a union no
+       single payload says; the prompt would have to offer the union and
+       CR 701.17b's shortfall rule be asked of it.
+    2. **A per-player repetition count read off that player's own board** -
+       "for each white permanent **they** control". ``X_FROM_COUNT_PER_RECIPIENT``
+       is exactly this shape and ``sacrifice_matching_permanent`` already reads
+       it, so this half is a lowering away once the union above exists.
+    """
+    program = compile_card_oracle(set_pool("ALL")["Omen of Fire"])
+    assert not program.supported

@@ -497,3 +497,77 @@ def test_thought_lash_prevention_ability_charges_its_library_cost(set_pool):
     assert len(me.library) == 3 and len(me.exile) == 1
     game.resolve_top_of_stack()
     assert me.damage_prevention_pool == 1
+
+
+# --- W2G5: damage, prevention and zones ---
+#
+# Two enchantments, both declined, both recorded as the pieces they need. The
+# refusal *sites* on each are accurate and the layer each names is not the
+# whole story, which is why the parts below are written out.
+
+from engine.oracle import compile_card_oracle, trigger_condition_of_line
+
+
+def test_winters_night_is_declined_naming_four_parts(set_pool):
+    """W1G1 built ``land_tapped_for_mana`` and its inline fire site for Storm
+    Cauldron, and the brief said to start there. It is the right seam and it
+    does not reach this card yet. Four parts:
+
+    1. **The active-voice condition with a narrowing.** ``engine/oracle.py``
+       reads "whenever a **<type>** is tapped for mana" (Gauntlet of Might) and
+       the bare "whenever a player taps a land for mana" (Manabarbs), and
+       nothing in between: "a player taps a **snow** land for mana" matches
+       neither, so the classifier returns no condition at all - which is why the
+       whole line falls through to the delayed-trigger production and refuses
+       with "this delayed ability states no duration", a message about a
+       different mechanism.
+    2. **A supertype narrowing on that condition.** The existing payload key is
+       ``tapped_land_subtype`` and the fire site asks ``has_type``; "snow" is a
+       supertype (CR 205.4a) and needs ``has_supertype``, so it is a second key
+       rather than a wider value for the first.
+    3. **The same phrase in the grammar's trigger table.** ``trigger_tables``
+       carries the active voice as a fixed seven-word phrase with no noun slot;
+       ``delayed._parse_land_tapped_for_mana`` already reads the noun phrase for
+       the delayed spelling, and the trigger table would read it the same way.
+    4. **An untap denial on the *event's* land.** "That land doesn't untap
+       during its controller's next untap step" names the land the event was
+       about, which is neither a target nor a permanent an earlier step of the
+       effect recorded - the two referents ``skip_next_untap`` accepts today.
+       CR 605.4a keeps this trigger off the stack, so the fire site that
+       resolves the mana inline is where the marker would be placed.
+    """
+    card = set_pool("ALL")["Winter's Night"]
+    program = compile_card_oracle(card)
+    assert not program.supported
+
+    trigger_line = card.oracle_text.split(chr(10))[0]
+    condition, _ = trigger_condition_of_line(trigger_line, card.name)
+    assert condition is None, (
+        "part 1: the classifier reads no condition here, so the trigger is not "
+        "merely unlowered - it is unrecognized"
+    )
+
+
+def test_natures_blessing_is_declined_naming_two_parts(set_pool):
+    """"{G}{W}, Discard a card: Put a +1/+1 counter on target creature **or**
+    that creature gains banding, first strike, or trample. (This effect lasts
+    indefinitely.)"
+
+    Both halves of the ability already exist in isolation - the counter
+    placement lowers, and each of the three keywords is in
+    ``vocabulary.IMPLEMENTED_KEYWORDS``. Two parts are missing:
+
+    1. **A modal written with "or" rather than "Choose one -".** The engine's
+       modes come from bulleted lines (``OracleProgram.modes``); this is pre-
+       Sixth-Edition templating that prints the alternatives inline, and the
+       nested "banding, first strike, or trample" is a *second* choice inside
+       the second mode, so the sentence offers four modes and not two.
+    2. **A keyword grant with an indefinite duration (CR 611.2a).** "Target
+       creature gains first strike." with no duration refuses today with
+       "continuous keyword grant needs the CR 613 layers engine" - the grant
+       kinds in the pool all end at a sweep (end of turn, end of combat), and
+       an effect that lasts indefinitely has no sweep to end it and so must be
+       a layer-6 contribution that outlives the resolution.
+    """
+    program = compile_card_oracle(set_pool("ALL")["Nature's Blessing"])
+    assert not program.supported
