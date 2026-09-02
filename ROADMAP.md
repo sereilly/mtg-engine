@@ -1,10 +1,11 @@
 # Scaling Roadmap
 
 Target: grow the card pool from **1,725** unique cards (LEA/LEB/2ED/ARN/ATQ/
-3ED/LEG/DRK/FEM/4ED/ICE/HML/M21, all shipped and all supported) to the full
+3ED/LEG/DRK/FEM/4ED/ICE/HML/5ED/M21, all shipped and all supported) to the full
 release line — **137 sets, 33,594 printings, 26,113 unique cards** per
-`set_progress.json`. Thirteen sets, and the recent arrivals span the whole
-range: 4ED is a pure reprint set that bought printings rather than cards, Ice
+`set_progress.json`. Fourteen sets, and the recent arrivals span the whole
+range: 4ED and 5ED are pure reprint sets that bought printings rather than
+cards, Ice
 Age brought 346 new ones (the largest addition since Alpha), Fallen Empires
 brought 102 of which every single one was new — the smallest work set so far,
 and the first inserted into the middle of the printing order rather than
@@ -12,10 +13,11 @@ appended — and Homelands repeated that all-new shape at 115 of 115, inserted
 at index 11 between Ice Age and M21.
 
 **The reprint shape recurs and is worth planning for** — `set_progress.json`
-records 13 sets in the release line with zero new cards, and ten are still
+records 13 sets in the release line with zero new cards, and nine are still
 ahead: the foreign-language base sets (FBB, SUM, 4BB), the rest of the core-set
-line (5ED through 10E), and Timeshifted. Each promotes roughly the way 4ED did,
-so their cost is an ingest and a rehearsal rather than a set of rounds. Sequence
+line (6ED through 10E), and Timeshifted. Each promotes roughly the way 4ED and
+5ED did, so their cost is an ingest and a rehearsal rather than a set of
+rounds. Sequence
 them after the sets they reprint from, not before, or they arrive carrying cards
 nothing supports and the shape is lost.
 
@@ -779,23 +781,25 @@ mean by it:
 
 | Set | Cards | New to pool | New & unsupported | New per unit work | Lines/distinct | Blocked by exactly one line |
 | --- | --: | --: | --: | --: | --: | --: |
-| 5ED | 434 | **0** | 0 | — | — | — |
+| 5ED *(shipped since)* | 434 | **0** | 0 | — | — | — |
 | 6ED | 335 | 152 | 53 | 2.6 | **1.00** | 48 of 53 |
 | ALL | 144 | 144 | 82 | 1.4 | 1.02 | 61 of 82 |
 
 (TMP/MIR/VIS/WTH were not re-fetched — none is a near-term candidate and their
 pre-ICE rows all read ~1.7–2.2 new-per-unit with no repeated sentence.)
 
-**Fifth Edition reached zero.** Its post-ICE row read 58 new cards, and those
-58 were exactly its FEM and HML reprints (29 each); both sets shipping took it
-to **434 of 434 already in the pool, all supported** — origins: LEA 158,
-ICE 89, LEG 53, ATQ 31, HML 29, FEM 29, DRK 28, ARN 16, LEB 1. 5ED is now
-literally 4ED's shape: it enters `measured` fully supported and promotes the
-same day, buying printings, a promotion rehearsal, and nothing else. Ingest it
-whenever the rehearsal is worth the hour; it no longer competes with the work
-sets. It thereby joins FBB/SUM/4BB as a zero-new-card set *relative to this
-pool* — and the release-line note below still applies to the rest of the
-core-set line.
+**Fifth Edition shipped 2026-09-02, the day of this census.** Its post-ICE row
+read 58 new cards, and those 58 were exactly its FEM and HML reprints (29
+each); both sets shipping took it to **434 of 434 already in the pool, all
+supported** — origins: LEA 158, ICE 89, LEG 53, ATQ 31, HML 29, FEM 29,
+DRK 28, ARN 16, LEB 1. It ran 4ED's shape exactly: entered `measured` fully
+supported, promoted the same session at index 12 (between HML and M21), bought
+printings and the rehearsal. The rehearsal's one new finding was Phase 1's,
+not Phase 4's: the manifest-write guard had baked in "measured starts empty"
+(true since HML's promotion) by asserting the copied manifest's measured list
+equals exactly its test entries — the emptiness-premise class from the Ice Age
+promotion, found from the other side. The release-line note below still
+applies to the rest of the core-set line.
 
 **The next work set is Alliances (ALL).** It appends (released 1996-06-10,
 after HML's 1995-10-01 — and everything after ALL appends too), it closes the
@@ -1276,6 +1280,7 @@ not commits.
 | ICE | 373 | 49.3% | 42 + 4 waves of 5 |
 | FEM | 102 | 67.6% | 1 wave of 5, + 1 for the decline |
 | HML | 115 | 66.1% | 2 waves of 5, + 1 for the decline |
+| 5ED | 434 | 100% | 0 (pure reprint) |
 
 Legends is the useful data point and the warning: the lowest starting coverage,
 the largest card count *at the time*, and the flattest ranking — after eight
@@ -1293,8 +1298,9 @@ remaining 89 in a fraction of the calendar time, with integration — not
 authorship — as the constraint throughout.
 
 **Where the pool stands** (regenerate rather than trust these): 1,725 unique
-cards over **13** sets, 100% supported. Grammar parses 88.3% of lines, lowers
-87.3% and executes 56.5% (`GRAMMAR_COVERAGE.md`). 3.6% of supported cards carry
+cards over **14** sets, 100% supported. Grammar parses 88.8% of lines, lowers
+87.9% and executes 56.9% (`GRAMMAR_COVERAGE.md` — the 5ED promotion moved that
+printing-weighted row on membership alone, the 4ED lesson again). 3.6% of supported cards carry
 a name-keyed hook — 62 cards, **68** entries in 6 registries
 (`HOOK_RELIANCE.md`) — the number that decides whether this architecture reaches
 26,113 cards, and the projection it implies has fallen from 1,195 hand-written

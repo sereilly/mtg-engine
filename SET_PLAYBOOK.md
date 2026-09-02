@@ -1244,3 +1244,21 @@ behaviour classes 62 → 69; suite 11,176 → 11,667 tests. **Nine already-suppo
 cards were found mis-playing**, every one invisible to the census, to
 `--hollow-lines` and to `parse_coverage.py`, because all three ask whether a line
 produced *something* and each of these produced the wrong thing.
+
+**5ED — 2026-09-02 (Phases 0–6, one session; the second pure-reprint
+promotion).** 434 printings, 434 unique oracle_ids, zero new to the pool —
+promoted the same session at index 12 (between HML and M21), moving neither
+the unique count (1,725) nor the verification backlog. The 4ED shape held
+end to end and the phase text needed no correction: Phase 1's oracle_id diff
+called the shape before any round was planned, Phase 4's rehearsal produced
+exactly the two predicted ratchet-scope failures (accept adds the set's
+floor and ceiling rows), grammar's printing-weighted All row moved on
+membership alone (88.3% → 88.8% parsed) while hook reliance's deduped ALL
+row did not, and the picker sweep read 0 before and after the move. The one
+finding was Phase 1 yield of the Ice Age promotion's emptiness class from
+the other side: `test_registration_inserts_in_release_order` copied the real
+manifest and asserted `measured` equals exactly its three fake entries —
+"measured is empty" baked in, true since HML's promotion, false on the first
+real ingest. Fixed to assert the invariant (the list is release-ordered; the
+fakes keep their relative order) rather than the population. Nothing drained
+from Known gaps; nothing added.
