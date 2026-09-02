@@ -656,7 +656,15 @@ def parse_subject_verb(
     if token.kind == WORD:
         source_target = source_spec if isinstance(source_spec, ast.TargetSpec) else None
         if token.text in ("deals", "deal"):
-            return _parse_damage(stream, source_target)
+            # "{T}: This creature deals 2 damage to any target **and doesn't
+            # untap during your next untap step**." (Reveka, Wizard Savant.)
+            # The same tail the two pump verbs below already carry, on the
+            # third verb that prints it: one noun phrase printed once, two
+            # things said about it. Left unread the clause is unconsumed text
+            # and takes the whole line down, which is what it did.
+            return _with_untap_conjunct(
+                stream, _parse_damage(stream, source_target), source_target
+            )
         if token.text in ("fights", "fight"):
             return _parse_fight(stream, source_spec)
         if token.text in ("gets", "get"):
@@ -917,7 +925,32 @@ def parse_subject_verb(
         # word Lich never prints. A line this branch cannot finish keeps the
         # refusal it already had.
         if token.text in ("don't", "doesn't") and stream.peek_word(1) == "untap":
-            return _parse_doesnt_untap_next_step(stream, source_spec)
+            return _parse_doesnt_untap_next_step(
+                stream, _untap_subject(source_spec)
+            )
 
     stream.reset(mark)
     raise stream.error("unrecognized effect verb")
+
+
+def _untap_subject(subject: "ast.Recipient | None") -> "ast.Recipient | None":
+    """*subject* as the untap restriction reads it — the plural pronoun made a
+    bound set.
+
+    "Tap all creatures that blocked this creature this turn. **They** don't
+    untap during their controller's next untap step." (Joven's Ferrets.) The
+    subject reader has no verb in hand when it meets "they", and reads it as a
+    *seat* (``that_player``) — which is what the word means in front of every
+    other verb it opens ("they lose 1 life", "they sacrifice a creature"). CR
+    502.1 untaps permanents and never players, so in front of this one verb the
+    same word is the plural of "those creatures": the objects the sentence
+    before it acted on.
+
+    Rewritten here rather than in the subject reader, and rewritten to the
+    quantifier the bound plural already carries rather than to a second
+    spelling of it — so the lowering keeps one branch, and its producer gate
+    (a set really was recorded) applies to both printings.
+    """
+    if isinstance(subject, ast.PlayerRef) and subject.kind == "that_player":
+        return ast.TargetSpec(quantifier="those", filter=ast.ObjectFilter())
+    return subject

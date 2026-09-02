@@ -231,7 +231,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # the ability's target is a *card* in a graveyard — so the reanimation is
     # the only step that can say which permanent the sentences behind it name.
     "reanimate_creature": _REANIMATED_PERMANENTS,
-    "tap_all_matching": "tapped_this_way",
+    # Two records, for the destroy family's reason: "…where X is the number of
+    # Islands **tapped this way**" (Monsoon) asks how many the sweep turned, and
+    # "**They** don't untap during their controller's next untap step" (Joven's
+    # Ferrets) asks which permanents the printed noun phrase named. The count is
+    # the primary — it is what a step of this kind has always written.
+    "tap_all_matching": (TAPPED_THIS_WAY, TAPPED_THIS_WAY_OBJECTS),
     # "Each player may tap any number of untapped white creatures they control.
     # **For each creature tapped this way, that player** chooses…" (Raiding
     # Party.) Three records, because the sentence behind it asks three

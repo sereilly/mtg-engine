@@ -121,7 +121,14 @@ class UntapStepMixin:
         # travels with the filter because CR 109.5 makes "you control" inside a
         # noun phrase relative to the *source's* controller, not to whoever is
         # untapping.
-        blocked: list[tuple[dict, int | None]] = []
+        # …and the *source permanent* beside the seat, because a narrowing can
+        # name something recorded on the source rather than printed in the
+        # sentence: "Creatures **of the chosen type**" (An-Zerrin Ruins) is
+        # CR 614.1c's entry choice, and ``subject_matches`` resolves it out of
+        # the source's own record. Dropped, the key survives into the pure
+        # matcher, which refuses every permanent — a restriction that quietly
+        # blocks nothing.
+        blocked: list[tuple[dict, int | None, object]] = []
         for perm in self.all_permanents():
             # effective_card, so a CR 613 layer-3 text change (Sleight of Mind
             # rewriting the colour word) is applied before the restriction is
@@ -142,7 +149,7 @@ class UntapStepMixin:
                     )
             elif restriction.blocked is not None:
                 blocked.append(
-                    (restriction.blocked, self.controller_index_of(perm))
+                    (restriction.blocked, self.controller_index_of(perm), perm)
                 )
         return {
             "skip_all_source": skip_all_source,
@@ -380,8 +387,10 @@ class UntapStepMixin:
             # "creature"` is what the three fields it replaced assumed, and
             # Curse of Marit Lage names Islands.
             if any(
-                subject_matches(self, permanent, described, observer=seat)
-                for described, seat in blocked
+                subject_matches(
+                    self, permanent, described, observer=seat, source=source
+                )
+                for described, seat, source in blocked
             ):
                 continue
 

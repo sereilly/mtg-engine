@@ -453,6 +453,12 @@ class GameActionRequest(BaseModel):
     # Phantasmal Terrain: the basic land type the controller chose for the
     # enchanted land, sent with `land_type_confirm`.
     land_type: Literal["plains", "island", "swamp", "mountain", "forest"] | None = None
+    # An-Zerrin Ruins: the creature type the controller chose as the permanent
+    # entered, sent with `enter_choice_confirm`. Not a Literal like the basic
+    # land types above -- CR 205.3m's catalog is 350 words and grows with every
+    # set, so the engine checks the answer against `data/vocabulary` (the same
+    # list the prompt offers) rather than a copy frozen into the wire format.
+    creature_type: str | None = None
     # Counterspell / Fork: which spell on the stack to target, as a top-first index
     # into the serialized stack (0 = topmost). Converted server-side to an engine
     # stack index.

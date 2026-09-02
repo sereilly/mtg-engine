@@ -11,6 +11,7 @@ from ..enter_effects import (
     CHOOSE_COLOR_AND_OPPONENT_ON_ENTER,
     chooses_color_on_enter,
     chooses_two_land_types_on_enter,
+    chooses_creature_type_on_enter,
     CHOOSE_CARD_NAME_ON_ENTER,
     chooses_opponent_on_enter,
     COPY_ARTIFACT_ON_ENTER,
@@ -450,6 +451,30 @@ class PermanentStateMixin:
                 needs_color=False, opponents=[], default_seat=None,
                 default_color=None, needs_land_types=True,
                 default_land_types=[first, second],
+            )
+
+        # "As this enchantment enters, choose **a creature type**."
+        # (An-Zerrin Ruins.) The third quality this one sentence can name, and
+        # the third shape of this one prompt that carries no seat — so it is
+        # armed exactly as the colour is, with the record stamped first so an
+        # AI or headless controller never blocks.
+        #
+        # The default is the creature type this permanent's controller's
+        # **opponents** have most of, which is the stated policy for a choice
+        # nothing else constrains (idiom 8) and the same reasoning as the
+        # colour one above: a type nobody controls makes the enchantment inert,
+        # which is a legal choice no player would make and an AI seat would be
+        # stuck with.
+        if chooses_creature_type_on_enter(text):
+            permanent.metadata["chosen_creature_type"] = (
+                self._default_chosen_creature_type(caster_index)
+            )
+            self.arm_pending_choice(
+                "enter_choice", caster_index,
+                card_name=permanent.card.name, permanent=permanent,
+                needs_color=False, opponents=[], default_seat=None,
+                default_color=None, needs_creature_type=True,
+                default_creature_type=permanent.metadata["chosen_creature_type"],
             )
 
         # "As this enchantment enters, choose a card name." (Runed Halo.) The
@@ -1598,6 +1623,42 @@ class PermanentStateMixin:
         if not counts:
             return "W"
         return max(sorted(counts), key=lambda c: counts[c])
+
+    def _default_chosen_creature_type(self, caster_index: int) -> str:
+        """The creature type An-Zerrin Ruins takes when nobody chooses.
+
+        The type *caster_index*'s opponents have most of among nontoken
+        creatures — the choice a player would make with the card, and the
+        reason a default is stated rather than left to the first word of a
+        catalog (idiom 8): a type nobody controls makes the enchantment inert,
+        which is legal and pointless.
+
+        Read through ``computed_types``, so a creature whose type line a layer-4
+        effect rewrote counts as what it *is* rather than as what it was
+        printed as — the same read ``subject_matches`` will make when the
+        restriction is applied.
+
+        "Human" when no opponent controls a creature at all: any word is a legal
+        choice there, and the printed catalog's most common type is the one most
+        likely to matter if a board arrives later.
+        """
+        from ..layer_bridge import computed_types
+
+        counts: dict[str, int] = {}
+        for seat, player in enumerate(self.players):
+            if seat == caster_index or player.lost:
+                continue
+            for perm in self.controlled_by(seat):
+                if perm.metadata.get("is_token"):
+                    continue
+                card_types, subtypes = computed_types(perm)
+                if "creature" not in card_types:
+                    continue
+                for subtype in subtypes:
+                    counts[subtype] = counts.get(subtype, 0) + 1
+        if not counts:
+            return "human"
+        return max(sorted(counts), key=lambda word: counts[word])
 
     def _default_terrain_land_types(self, caster_index: int) -> tuple[str, str]:
         """The ordered pair Illusionary Terrain takes when nobody chooses.

@@ -249,6 +249,15 @@ def _parse_postmodifiers(
         if stream.accept_phrase("of", "the", "chosen", "color"):
             d.chosen_color = True
             continue
+        # "Creatures **of the chosen type**" (An-Zerrin Ruins). The same
+        # CR 614.1c choice one characteristic over — a creature type recorded
+        # on the source as it entered — so it is its own filter key for the
+        # colour's reason: the pure matcher has no source and refuses the key
+        # outright, and the readers that do hold one resolve it into the
+        # ordinary subtype key before matching.
+        if stream.accept_phrase("of", "the", "chosen", "type"):
+            d.chosen_creature_type = True
+            continue
         # "all untapped creatures **that didn't attack this turn**, **except
         # for creatures that couldn't attack**" (Season of the Witch). Two
         # narrowings of one noun phrase, both about the same combat: the first
@@ -723,6 +732,29 @@ def _parse_postmodifiers(
                 if stream.accept_phrase("blocked", "this", "turn"):
                     d.blocked_by_target_object = blocker
                     continue
+            # "…all creatures **that blocked this creature this turn**"
+            # (Joven's Ferrets). The active voice of the passive clause above,
+            # with the ability's own source as the referent — so it sets its
+            # own field rather than either of theirs: which object the block
+            # record is read against decides which permanent the sweep names,
+            # and one field meaning either would leave the matcher guessing.
+            #
+            # Read *after* "blocked or were blocked by", whose first word this
+            # is: tried first it would take the word and strand the "or".
+            # "This turn" is required for that clause's reason — the record is
+            # kept per turn, and a clause naming another window is a different
+            # sentence.
+            elif stream.at_word("blocked"):
+                blocked_probe = stream.mark()
+                stream.advance()
+                if accept_source_reference(stream) and stream.accept_phrase(
+                    "this", "turn"
+                ):
+                    d.blocked_source_this_turn = True
+                    continue
+                stream.reset(blocked_probe)
+                stream.reset(probe)
+                break
             elif stream.accept_phrase("dealt", "damage", "to"):
                 if accept_source_reference(stream) and stream.accept_phrase(
                     "this", "turn"

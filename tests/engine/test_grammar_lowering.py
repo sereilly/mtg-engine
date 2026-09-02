@@ -3433,6 +3433,13 @@ def test_an_as_long_as_condition_no_table_models_is_refused_outright():
     fallback becoming a way to claim any "as long as" sentence: the table
     refuses an unmodelled condition rather than deriving an unconditional anthem
     from it.
+
+    The refusal moved from the parse to the lowering when An-Zerrin Ruins made
+    "of the chosen **type**" a phrase the noun parser reads — so the near miss
+    is now a readable sentence with an unmodelled condition, which is a sharper
+    version of this test rather than a weaker one. What it asserts is the thing
+    that matters either way: no anthem comes out, and ``lord_buffs`` did not
+    claim the line.
     """
     result = compile_line(
         "White creatures get +2/+1 as long as the chosen player controls a "
@@ -3440,7 +3447,9 @@ def test_an_as_long_as_condition_no_table_models_is_refused_outright():
         card_name="Test",
     )
 
-    assert not result.parsed
+    assert not result.usable
+    assert not result.instructions
+    assert getattr(result.node, "table", None) != "lord_buffs"
 
 
 def test_as_long_as_never_claims_a_one_shot_effect():

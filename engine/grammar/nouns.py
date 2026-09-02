@@ -173,6 +173,9 @@ class _FilterDraft:
     in_combat_with_bound_object: bool = False
     blocked_by_target_object: ast.ObjectFilter | None = None
     blocked_by_source: bool = False
+    # "…creatures **that blocked this creature this turn**" (Joven's Ferrets)
+    # — see the field of the same name on ``ast.ObjectFilter``.
+    blocked_source_this_turn: bool = False
     tapped_to_pay_for_source_this_turn: bool = False
     banded_with_source: bool = False
     attacking_you: bool = False
@@ -189,6 +192,9 @@ class _FilterDraft:
     # "permanents **of the chosen color**" (Psychic Allergy) — see
     # ``ast.ObjectFilter.chosen_color``.
     chosen_color: bool = False
+    # "Creatures **of the chosen type**" (An-Zerrin Ruins) — see the field of
+    # the same name on ``ast.ObjectFilter``.
+    chosen_creature_type: bool = False
     # "…that didn't attack this turn" / "…that couldn't attack" — see
     # ``ast.ObjectFilter``.
     attacked_this_turn: bool | None = None
@@ -707,6 +713,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         in_combat_with_bound_object=d.in_combat_with_bound_object,
         blocked_by_target_object=d.blocked_by_target_object,
         blocked_by_source=d.blocked_by_source,
+        blocked_source_this_turn=d.blocked_source_this_turn,
         tapped_to_pay_for_source_this_turn=d.tapped_to_pay_for_source_this_turn,
         banded_with_source=d.banded_with_source,
         attacking_you=d.attacking_you,
@@ -720,6 +727,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         with_plus1_counter=d.with_plus1_counter,
         nontoken=d.nontoken,
         chosen_color=d.chosen_color,
+        chosen_creature_type=d.chosen_creature_type,
         attacked_this_turn=d.attacked_this_turn,
         could_attack_this_turn=d.could_attack_this_turn,
         controlled_since_turn_start=d.controlled_since_turn_start,

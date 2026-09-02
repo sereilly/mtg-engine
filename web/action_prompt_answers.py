@@ -698,6 +698,21 @@ def _action_enter_choice_confirm(session, req, seat_type):
         if not session.game.confirm_enter_choice(req.seat, land_types=pair):
             raise HTTPException(status_code=400, detail="invalid enter choice")
         return
+    # "…choose a creature type." (An-Zerrin Ruins.) The other shape of this
+    # prompt that names no seat, so `target_seat` is not required for it
+    # either. The word travels as itself rather than as a colour: CR 205.3m's
+    # catalog has no five-way encoding to borrow, and the engine checks it
+    # against the same vocabulary the prompt offered.
+    if pending.get("needs_creature_type"):
+        if not req.creature_type:
+            raise HTTPException(
+                status_code=400, detail="creature_type is required"
+            )
+        if not session.game.confirm_enter_choice(
+            req.seat, creature_type=req.creature_type
+        ):
+            raise HTTPException(status_code=400, detail="invalid enter choice")
+        return
     if req.target_seat is None:
         raise HTTPException(status_code=400, detail="target_seat is required")
     if not session.game.confirm_enter_choice(req.seat, req.target_seat, req.mana_color):

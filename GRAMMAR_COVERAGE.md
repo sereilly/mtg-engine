@@ -28,7 +28,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4ED | 368 | 520 | 90.4% | 90.0% | 53.8% | 246 |
 | ICE | 373 | 601 | 89.4% | 88.9% | 63.4% | 301 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| HML *(measured)* | 115 | 189 | 78.3% | 75.1% | 49.7% | 70 |
+| HML *(measured)* | 115 | 189 | 81.0% | 78.8% | 52.4% | 74 |
 | **All (shipped)** | **2890** | **4196** | **88.0%** | **87.1%** | **56.1%** | **1985** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -41,9 +41,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 236 | 103 | expected a subject |  |
-| 119 | 52 | unrecognized effect verb |  |
-| 61 | 31 | unconsumed text |  |
+| 235 | 102 | expected a subject |  |
+| 118 | 51 | unrecognized effect verb |  |
+| 59 | 29 | unconsumed text |  |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 16 | granted ability in quotes | phase 3 (quoted abilities) |
 | 11 | 6 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
@@ -1793,6 +1793,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}{R}{R}, {T}: Destroy target noncreature artifact.`
 - **Joven's Ferrets**
   - `Whenever this creature attacks, it gets +0/+2 until end of turn.`
+  - `At end of combat, tap all creatures that blocked this creature this turn. They don't untap during their controller's next untap step.`
 - **Jovial Evil**
   - `Jovial Evil deals X damage to target opponent, where X is twice the number of white creatures that player controls.`
 - **Jump**
@@ -1905,6 +1906,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each end step, if a creature dealt damage by this creature this turn died, put that card onto the battlefield under your control. Sacrifice it when you lose control of this creature.`
 - **Kry Shield**
   - `{2}, {T}: Prevent all damage that would be dealt this turn by target creature you control. That creature gets +0/+X until end of turn, where X is its mana value.`
+- **Labyrinth Minotaur**
+  - `Whenever this creature blocks a creature, that creature doesn't untap during its controller's next untap step.`
 - **Lady Caleria**
   - `{T}: Lady Caleria deals 3 damage to target attacking or blocking creature.`
 - **Lady Evangela**
@@ -2705,6 +2708,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Destroy target artifact.`
   - `• Destroy target enchantment.`
   - `• Exile target card from a graveyard.`
+- **Reveka, Wizard Savant**
+  - `{T}: Reveka deals 2 damage to any target and doesn't untap during your next untap step.`
 - **Reverberation**
   - `All damage that would be dealt this turn by target sorcery spell is dealt to that spell's controller instead.`
 - **Revitalize**
@@ -2810,6 +2815,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, you may sacrifice this land. If you do, return each card exiled with this land to the battlefield under its owner's control.`
 - **Sage of Lat-Nam**
   - `{T}, Sacrifice an artifact: Draw a card.`
+- **Samite Alchemist**
+  - `{W}{W}, {T}: Prevent the next 4 damage that would be dealt this turn to target creature you control. Tap that creature. It doesn't untap during your next untap step.`
 - **Samite Healer**
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
@@ -3080,6 +3087,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}: This creature gains indestructible until end of turn.`
 - **Speaker of the Heavens**
   - `{T}: Create a 4/4 white Angel creature token with flying. Activate only if you have at least 7 life more than your starting life total and only as a sorcery.`
+- **Spectral Bears**
+  - `Whenever this creature attacks, if defending player controls no black nontoken permanents, it doesn't untap during your next untap step.`
 - **Spell Blast**
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`
   - `Counter target spell with mana value X. (For example, if that spell's mana cost is {3}{U}{U}, X is 5.)`

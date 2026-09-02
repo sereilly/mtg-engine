@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..oracle_types import X_FROM_COUNT
+from ..oracle_types import TAPPED_THIS_WAY_OBJECTS, X_FROM_COUNT
 from ._common import (
+    block_pair_permanents,
     frozen_that_player_seat,
     permanent_matches_filter,
     resolve_amount,
@@ -300,6 +301,23 @@ def _tap_or_untap_all_matching(
     # untap sweep untapped, and ``_PRODUCES`` declares what this records.
     if make_tapped:
         context.results["tapped_this_way"] = len(changed)
+        # "…tap all creatures that blocked this creature this turn. **They**
+        # don't untap during their controller's next untap step." (Joven's
+        # Ferrets.) The comment above used to say the victims were deliberately
+        # not recorded because no card asked; one does, and a sentence naming
+        # them has nowhere else to look — the board says which creatures *are*
+        # tapped, not which ones this sweep's noun phrase named.
+        #
+        # ``matched`` and not ``changed``, which is the whole difference
+        # between the two records: the count answers "the number of Islands
+        # **tapped this way**" (Monsoon) and so counts only the permanents this
+        # step actually turned, while the pronoun answers "**they**" and names
+        # the set the printed noun phrase did — a creature that blocked and was
+        # already tapped is one of them, and dropping it would let it untap a
+        # turn early.
+        context.results[TAPPED_THIS_WAY_OBJECTS] = [
+            perm.permanent_id for perm in matched
+        ]
     verb = "tapped" if make_tapped else "untapped"
     if changed:
         game.log.append(
@@ -606,7 +624,20 @@ def skip_next_untap(game: Game, instruction: OracleInstruction, context: OracleE
     none — and is not an error.
     """
     key = instruction.payload.get("permanents_from")
-    if instruction.payload.get("subject") == "source":
+    if instruction.payload.get("subject") == "block_pair":
+        # "Whenever this creature blocks a creature, **that creature** doesn't
+        # untap during its controller's next untap step." (Labyrinth Minotaur.)
+        # The creature is the trigger's, not the sentence's — CR 509.1a's other
+        # side of the block — so it comes from the one reader of both fire
+        # sites rather than from the stack item's target. Reading the target on
+        # the *blocks* half would mark the Minotaur itself, which is the bug
+        # ``block_pair_permanents`` exists to stop.
+        recorded = tuple(
+            permanent.permanent_id
+            for permanent in block_pair_permanents(game, context)
+            if permanent is not None
+        )
+    elif instruction.payload.get("subject") == "source":
         # "**This creature** … doesn't untap during your next untap step." The
         # sentence names the ability's own permanent, so nothing is chosen and
         # nothing is looked up; a source already gone is marked by nothing,

@@ -30,7 +30,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .handlers._common import _resolve_chosen_color, permanent_matches_filter
+from .handlers._common import (_resolve_chosen_color,
+                               _resolve_chosen_creature_type,
+                               permanent_matches_filter)
 
 if TYPE_CHECKING:
     from .game import Game
@@ -69,6 +71,12 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # source, like ``exclude_self``, and is resolved into the ordinary colour
     # key before the pure matcher is asked.
     "chosen_color",
+    # "Creatures **of the chosen type**" (An-Zerrin Ruins). A creature type the
+    # source recorded as it entered (CR 614.1c/205.3m) — the sibling of
+    # ``chosen_color`` above, needing the same thing and testable for the same
+    # reason, and resolved into the ordinary subtype key before the pure
+    # matcher is asked.
+    "chosen_creature_type",
     # "creatures **that didn't attack this turn**" / "…**that couldn't
     # attack**" (Season of the Witch). Per-turn records the permanent carries,
     # frozen when the combat asked the question — so they are answerable from
@@ -131,6 +139,14 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # by. That makes them testable *here* and nowhere else — and untestable for
     # a caller with neither, which is the direction that cannot widen a set.
     "blocked_by_source",
+    # "…all creatures **that blocked this creature this turn**" (Joven's
+    # Ferrets). The block *history* rather than the live relation: the record
+    # lives on the candidate — a blocker names the attackers it blocked — so
+    # what this needs beyond the object is the ability's own source, which
+    # makes it testable here on exactly ``blocked_by_source``'s footing. A
+    # caller with neither answers no, which is the direction that cannot widen
+    # a sweep.
+    "blocked_source_this_turn",
     "attacking_you",
     # "…all Merfolk **tapped this turn to pay for its abilities**" (Vodalian
     # War Machine). A history rather than a characteristic, and one no read of
@@ -393,6 +409,7 @@ def subject_matches(
         ):
             return False
     described = _resolve_chosen_color(described, source)
+    described = _resolve_chosen_creature_type(described, source)
     if not permanent_matches_filter(obj, described):
         return False
     controller = described.get("controller")
@@ -465,6 +482,21 @@ def subject_matches(
         if source is None:
             return False
         if not any(attacker is obj for attacker in game.creatures_blocked_by(source)):
+            return False
+    # "…all creatures **that blocked this creature this turn**" (Joven's
+    # Ferrets). The same relation as a *history* rather than as a live combat
+    # fact, and that is why it reads a record rather than the combat maps: the
+    # sentence fires at end of combat and names creatures that blocked in any
+    # combat this turn, including ones the maps have already let go. The record
+    # is on the blocker (``blocked_attacker_ids_this_turn``, written by
+    # ``declare_blockers_step``), so it survives the attacker leaving — and
+    # with no source there is no relation to test and the answer is no.
+    if described.get("blocked_source_this_turn"):
+        if source is None:
+            return False
+        if source.permanent_id not in set(
+            obj.metadata.get("blocked_attacker_ids_this_turn") or ()
+        ):
             return False
     # "target creature **that's attacking you**". Attacking is a state of the
     # creature (CR 508.1a), but *whom* it attacks is the defending player it was

@@ -141,6 +141,13 @@ class ObjectFilter:
     # and is stored on that permanent, so folding it in would need a sentinel
     # colour word every ``color_filter`` reader would then compare against.
     chosen_color: bool = False
+    # "Creatures **of the chosen type**" (An-Zerrin Ruins). The creature type
+    # its source recorded as it entered (CR 614.1c) — the sibling of
+    # ``chosen_color`` above, one characteristic over, and its own field for
+    # that field's reason: which quality was chosen decides what the phrase
+    # narrows by, and one field meaning either would leave the matcher
+    # guessing. Emitted, and answered only by a reader holding the source.
+    chosen_creature_type: bool = False
     # "creatures **that didn't attack this turn**" / "…**that couldn't
     # attack**" (Season of the Witch): two questions about one combat, both
     # answered off the permanent's own per-turn record.
@@ -318,6 +325,20 @@ class ObjectFilter:
     # ``subject_matches`` can answer it: it needs the source, which that
     # function already takes.
     blocked_by_source: bool = False
+    # "…all creatures **that blocked this creature this turn**" (Joven's
+    # Ferrets). The same block record as ``blocked_by_bound_object`` above,
+    # read off a third referent: the ability's own source. "This turn" is what
+    # makes it a *history* rather than the live relation ``blocking_source``
+    # carries — a turn holds several combats, and the creatures that blocked in
+    # an earlier one, or died doing it, are in the set the words name while the
+    # combat maps have forgotten them.
+    #
+    # Emitted, and testable for ``blocked_by_source``'s reason: the record
+    # lives on the *candidate* (a blocker names the attackers it blocked), and
+    # the only other thing needed is the ability's source, which
+    # ``subject_matches`` already takes. A caller with no source answers no,
+    # which refuses the sweep rather than handing it the board.
+    blocked_source_this_turn: bool = False
     # "…destroy all Merfolk **tapped this turn to pay for its abilities**."
     # (Vodalian War Machine.) Narrower than "tapped this turn": a Merfolk
     # tapped to attack, or by somebody else's Icy Manipulator, is not in the
@@ -497,6 +518,8 @@ class ObjectFilter:
             payload["attacking_only"] = True
         if self.blocked_by_source:
             payload["blocked_by_source"] = True
+        if self.blocked_source_this_turn:
+            payload["blocked_source_this_turn"] = True
         if self.tapped_to_pay_for_source_this_turn:
             payload["tapped_to_pay_for_source_this_turn"] = True
         if self.banded_with_source:
@@ -532,6 +555,8 @@ class ObjectFilter:
             payload["nontoken"] = True
         if self.chosen_color:
             payload["chosen_color"] = True
+        if self.chosen_creature_type:
+            payload["chosen_creature_type"] = True
         if self.attacked_this_turn is True:
             payload["attacked_this_turn"] = True
         elif self.attacked_this_turn is False:

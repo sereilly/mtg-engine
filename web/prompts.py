@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from engine.grammar.phrases import BASIC_LAND_WORDS
+from engine.grammar.vocabulary import CREATURE_TYPES
 from engine.mana_payment import mana_cost_label
 from engine.pending_choices import CHOICE_SPECS, public_data
 from engine.search_filters import search_matches, searched_seat
@@ -1047,6 +1048,18 @@ def _enter_choice(ctx: PromptContext, choices: list) -> dict:
         "needs_land_types": bool(data.get("needs_land_types")),
         "land_types": list(BASIC_LAND_WORDS) if data.get("needs_land_types") else [],
         "default_land_types": list(data.get("default_land_types") or ()),
+        # "…choose a creature type." (An-Zerrin Ruins.) A fifth shape of this
+        # one prompt: one word out of CR 205.3m's catalog, with no seat and no
+        # colour. The offered list is the whole vocabulary rather than the
+        # types in play, because the rule bounds the choice by the catalog and
+        # not by any board — and it is the same catalog the resolver checks the
+        # answer against, so the picker cannot offer a word the answer path
+        # would refuse (idiom 9).
+        "needs_creature_type": bool(data.get("needs_creature_type")),
+        "creature_types": (
+            sorted(CREATURE_TYPES) if data.get("needs_creature_type") else []
+        ),
+        "default_creature_type": data.get("default_creature_type"),
     }
 
 

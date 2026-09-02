@@ -187,6 +187,41 @@ def test_chosen_color_is_read_off_the_ability_s_source(pool):
     assert not subject_matches(game, bears, {"chosen_color": True})
 
 
+def test_chosen_creature_type_is_read_off_the_ability_s_source(pool):
+    """"Creatures **of the chosen type**" (An-Zerrin Ruins).
+
+    The sibling of the colour above, one characteristic over and relative for
+    the same reason: the type is not in the sentence and not on the permanent
+    being tested -- it was chosen as the *source* entered (CR 614.1c,
+    CR 205.3m) and lives in that permanent's metadata.
+
+    Without a source it must refuse every permanent rather than admit every
+    permanent, which for the card that prints it is the difference between
+    holding one tribe down and holding the whole board down.
+    """
+    bears = Permanent(card=pool["Grizzly Bears"])          # a Bear
+    knight = Permanent(card=pool["White Knight"])          # a Human Knight
+    ruins = Permanent(
+        card=pool["Grizzly Bears"], metadata={"chosen_creature_type": "bear"}
+    )
+    game = Game(
+        players=[
+            PlayerState(name="P1", battlefield=[bears, knight, ruins]),
+            PlayerState(name="P2"),
+        ]
+    )
+
+    assert subject_matches(game, bears, {"type_filter": "creature"}), (
+        "the control: the bare noun phrase must match, or the rows below "
+        "prove nothing about the key"
+    )
+    assert subject_matches(game, bears, {"chosen_creature_type": True}, source=ruins)
+    assert not subject_matches(
+        game, knight, {"chosen_creature_type": True}, source=ruins
+    )
+    assert not subject_matches(game, bears, {"chosen_creature_type": True})
+
+
 def test_the_combat_records_are_read_off_the_permanent(pool):
     """"…creatures **that didn't attack this turn**, except for creatures
     **that couldn't attack**." (Season of the Witch.)
@@ -351,10 +386,14 @@ _COVERED_ELSEWHERE = {
     "enchanted_only": "test_enchanted_only_rejects_a_permanent_with_no_aura",
     "attached_to_filter": "test_a_host_phrase_is_asked_of_the_host",
     "chosen_color": "test_chosen_color_is_read_off_the_ability_s_source",
+    "chosen_creature_type":
+        "test_chosen_creature_type_is_read_off_the_ability_s_source",
     "attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "not_attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "could_attack_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "blocked_by_source": "test_blocked_by_source_names_only_what_the_source_blocks",
+    "blocked_source_this_turn":
+        "test_blocked_source_this_turn_outlives_the_combat_it_names",
     "attacking_you": "test_attacking_you_is_two_questions_not_one",
     "unblocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
     "blocked_only": "test_the_blocked_pair_is_read_off_a_real_combat",
@@ -526,6 +565,46 @@ def test_blocked_by_source_names_only_what_the_source_blocks(pool):
     assert subject_matches(game, attacker, described, source=blocker)
     assert not subject_matches(game, other, described, source=blocker)
     assert not subject_matches(game, attacker, described)
+
+
+def test_blocked_source_this_turn_outlives_the_combat_it_names(pool):
+    """"all creatures **that blocked this creature this turn**" (Joven's
+    Ferrets).
+
+    The history twin of the relation above, and the difference is the whole
+    reason it is a second key: ``blocked_by_source`` reads the live combat maps
+    and this reads the record the declare-blockers step stamps on each blocker.
+    So it still answers after the combat is over -- which is when the card that
+    prints it asks, and what a matcher reading the maps would get wrong.
+
+    Two rejections beside it. A creature that was in the combat but blocked
+    nothing is not in the set, or the phrase would read "creatures in combat";
+    and with no source the answer is **no**, because a matcher that shrugged
+    would name every creature that has ever blocked, which for a tap sweep is a
+    strictly larger board than the card prints.
+    """
+    attacker = Permanent(card=pool["Grizzly Bears"])
+    blocker = Permanent(card=pool["Grizzly Bears"])
+    bystander = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker]),
+        PlayerState(name="P2", battlefield=[blocker, bystander]),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    # The combat is over: the maps have let go and only the record is left,
+    # which is exactly the moment "at end of combat" asks.
+    game.end_combat()
+
+    described = {"blocked_source_this_turn": True}
+    assert subject_matches(game, blocker, described, source=attacker)
+    assert not subject_matches(game, bystander, described, source=attacker)
+    assert not subject_matches(game, blocker, described)
 
 
 def test_tapped_to_pay_names_only_what_paid_for_this_source(pool):
