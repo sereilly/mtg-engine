@@ -61,6 +61,13 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
         return ast.BecomeColor(subject, ast.CHOSEN_COLOR, _parse_duration(stream))
     token = stream.peek()
     word = str(token.text).lower() if token is not None else ""
+    # "…becomes **colorless** until end of turn." (Raging Spirit, Ersatz
+    # Gnomes.) Read before the colour table, which cannot hold it: CR 105.2c
+    # makes colourless the absence of colour, and `COLOR_WORDS`' values are mana
+    # symbols. The duration is read the same way and for the same reason.
+    if word == "colorless":
+        stream.advance()
+        return ast.BecomeColor(subject, ast.COLORLESS, _parse_duration(stream))
     if word in COLOR_WORDS:
         stream.advance()
         # The duration is read rather than assumed. Without it the four words

@@ -1217,6 +1217,33 @@ rock; these three were the cheapest.
 
 `oracle_diff`: **5 changed of 2181**, all Mirage.
 
+### Round 7 — two conditions built at one end: 218 → 222 supported
+
+Both halves of this round are the **refusal-can-expire** shape, and one of them
+had already been caught once in the same file.
+
+- **"…has first strike as long as it's attacking"** (Purraj of Urborg, Spirit of
+  the Night). `conditional_static_holds` has answered `is_state` since Snow
+  Devil — but that payload only ever arrived from the grammar's *attached* path,
+  an Aura's "enchanted creature has first strike as long as it's blocking". The
+  same-subject spelling refuses in the grammar with the reason "derived by
+  `engine/static_bonuses.py`", and that table had no row for a state of the
+  permanent itself: every condition it knew asks what its *controller* has. An
+  evaluator built at one end and connected at neither, with both halves
+  individually correct and no test able to notice. The row's neighbour carries a
+  comment describing exactly this, from the last time it happened.
+- **"becomes colorless"** (Raging Spirit, Ersatz Gnomes). CR 105.2c makes
+  colourless the *absence* of colour, so it cannot ride `COLOR_WORDS` — those
+  values are mana symbols — and the layer-5 channel had to learn that the empty
+  set is an answer rather than a missing one: `collect_color_effects` tested the
+  key for truthiness, which reads "no colours" as "no override". It tests for
+  None now, which is safe because every writer of that channel already refuses a
+  falsy symbol at its own end. Raging Spirit also needed the source-subject
+  branch of a durationed recolour; the two beside it read a chosen object, and
+  reading the source as one would have recoloured whatever the picker offered.
+
+`oracle_diff`: **4 changed of 2181**, all Mirage.
+
 Everything after those two is the long tail, ranked by refusal site: `expected a
 subject` (50 cards), `unconsumed text` (29), `unrecognized effect verb` (13),
 then singletons. Rounds are planned from `--refusals`, and each is written up

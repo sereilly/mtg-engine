@@ -595,18 +595,64 @@ def recolor_targets_until_eot(game: Game, instruction: OracleInstruction, contex
     the effect still happens, which is what `resolve_target_permanents` gives
     without a per-slot fallback that would recolour the same creature twice.
     """
-    symbol = str(instruction.payload.get("target_color", ""))
-    if not symbol:
+    written = _colour_override_value(instruction.payload.get("target_color"))
+    if written is None:
         return True, "resolved"
     targets = resolve_target_permanents(game, context)
     if not targets:
         game.log.append(f"{context.card.name}: no creature to recolour")
         return True, "resolved"
     for perm in targets:
-        perm.metadata["color_override_until_eot"] = symbol
+        perm.metadata["color_override_until_eot"] = written
         game.log.append(
-            f"{perm.card.name} became {symbol} until end of turn ({context.card.name})"
+            f"{perm.card.name} became {_colour_override_word(written)} until end "
+            f"of turn ({context.card.name})"
         )
+    return True, "resolved"
+
+
+def _colour_override_value(printed):
+    """What a "becomes <colour>" payload writes into the layer-5 channel.
+
+    A mana symbol for a colour, and the **empty tuple** for colourless: CR 105.2c
+    makes colourless the absence of colour, so the object is given no colours
+    rather than a sixth one. That is why `collect_color_effects` tests the key
+    against None rather than for truthiness — an empty set of colours is a real
+    answer, and every writer of the channel already refuses to write a falsy
+    symbol by accident.
+
+    None when the payload names nothing at all, which is the "do nothing" the
+    truthiness test used to give and the one case that is not a colour change.
+    """
+    from ..grammar.ast import COLORLESS
+
+    if printed == COLORLESS:
+        return ()
+    symbol = str(printed or "")
+    return symbol or None
+
+
+def _colour_override_word(written) -> str:
+    """The channel value as the log should print it."""
+    return "colorless" if written == () else str(written)
+
+
+@effect_handler("recolor_self_until_eot")
+def recolor_self_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{2}: This creature becomes colorless until end of turn." (Raging Spirit.)
+
+    The source-subject twin of ``recolor_targets_until_eot``: same channel, same
+    sweep, and no target to resolve because the sentence names none.
+    """
+    written = _colour_override_value(instruction.payload.get("target_color"))
+    source = context.source_permanent
+    if written is None or source is None:
+        return True, "resolved"
+    source.metadata["color_override_until_eot"] = written
+    game._recompute_continuous_effects()
+    game.log.append(
+        f"{source.card.name} became {_colour_override_word(written)} until end of turn"
+    )
     return True, "resolved"
 
 

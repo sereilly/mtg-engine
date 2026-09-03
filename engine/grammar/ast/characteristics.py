@@ -293,6 +293,14 @@ CHOSEN_COLOR = "chosen_color"
 #: apart would silently answer the wider offer with the narrower one.
 CHOSEN_COLORS = "chosen_colors"
 
+#: "…becomes **colorless** until end of turn." (Raging Spirit, Ersatz Gnomes.)
+#: Not a colour word — CR 105.2c makes colourless the *absence* of colour, so it
+#: cannot ride ``COLOR_WORDS``, whose values are mana symbols. A sentinel on the
+#: same field for the same reason the two above are: what the object becomes is
+#: one fact about the sentence, and a second field for "and also nothing" would
+#: be a second thing every reader has to remember.
+COLORLESS = "colorless"
+
 #: The basic land type an effect does not name, for the same CR 609.3 reason —
 #: "becomes **the basic land type of your choice** until end of turn" (Jinx).
 #: It rides :attr:`ChangeLandType.land_type` exactly as the two above ride

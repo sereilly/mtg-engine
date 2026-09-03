@@ -359,6 +359,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # (Dwarven Song and its four siblings). Same category: what differs is how
     # long it lasts and how many it names, not what it does.
     "recolor_targets_until_eot": "recolor",
+    # "{2}: This creature becomes colorless until end of turn." (Raging
+    # Spirit.) The source-subject twin of the row above.
+    "recolor_self_until_eot": "recolor",
     # "…becomes the color of your choice" — the colour arrives with the answer
     # rather than with the text (CR 609.3), which is a payload difference and
     # not a category one.

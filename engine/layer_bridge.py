@@ -837,7 +837,13 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # keep a colour that should have worn off.
     for suffix, stamp in (("", 0), ("_until_eot", 1)):
         override = perm.metadata.get(f"color_override{suffix}")
-        if override:
+        # ``is not None``, not truthiness: the **empty tuple** is a real answer
+        # — CR 105.2c's colourless, which "becomes colorless" (Raging Spirit,
+        # Ersatz Gnomes) writes as an object with no colours rather than as a
+        # sixth colour. Every writer of this channel already refuses a falsy
+        # symbol at its own end, so nothing else reaches this branch by
+        # accident.
+        if override is not None:
             # A *set* of colours where the card offered one ("becomes the color
             # or colors of your choice", Dream Coat) — CR 105.2 makes an object
             # of two colours one object, not two effects. Normalized here rather

@@ -31,7 +31,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ALL | 144 | 251 | 90.4% | 90.0% | 70.5% | 132 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| MIR *(measured)* | 335 | 545 | 71.6% | 66.4% | 40.6% | 181 |
+| MIR *(measured)* | 335 | 545 | 72.1% | 67.0% | 41.1% | 183 |
 | **All (shipped)** | **3583** | **5267** | **89.2%** | **88.3%** | **57.8%** | **2526** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -54,7 +54,6 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 9 | 3 | expected 'the number of' in a where-clause |  |
 | 9 | 8 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
-| 7 | 5 | expected a colour or a creature body after 'becomes' |  |
 | 7 | 2 | expected who takes the redirected damage |  |
 | 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
@@ -62,6 +61,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
+| 4 | 2 | expected a colour or a creature body after 'becomes' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | no whole-hand discard handler for 'each_player' |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
@@ -1364,6 +1364,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Create a 1/1 white Knight creature token with banding. (Any creatures with banding, and up to one without, can attack in a band. Bands are blocked as a group. If any creatures with banding you control are blocking or being blocked by a creature, you divide that creature's combat damage, not its controller, among any of the creatures it's being blocked by or is blocking.)`
 - **Errant Minion**
   - `At the beginning of the upkeep of enchanted creature's controller, that player may pay any amount of mana. This Aura deals 2 damage to that player. Prevent X of that damage, where X is the amount of mana that player paid this way.`
+- **Ersatz Gnomes**
+  - `{T}: Target spell becomes colorless.`
+  - `{T}: Target permanent becomes colorless until end of turn.`
 - **Essence Filter**
   - `Destroy all enchantments or all nonwhite enchantments.`
 - **Essence Flare**
@@ -3368,6 +3371,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}{B}{B}, {T}: Target opponent reveals their hand and discards a creature card at random. Activate only during your turn.`
   - `{B}{B}{B}, {T}: Target opponent reveals their hand and discards a creature card at random. Activate only during your turn.`
   - `{B}{B}{B}, {T}: Target opponent reveals their hand and discards a creature card at random. Activate only during your turn.`
+- **Raging Spirit**
+  - `{2}: This creature becomes colorless until end of turn.`
 - **Ragnar**
   - `{G}{W}{U}, {T}: Regenerate target creature.`
 - **Raiding Party**

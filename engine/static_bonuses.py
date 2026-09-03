@@ -118,6 +118,27 @@ _CONTROLS_POWER_CONDITION = re.compile(
     r"^you control a creature with power (?P<power>\d+) or greater$"
 )
 
+#: "as long as **it's attacking**" (Purraj of Urborg, Spirit of the Night). A
+#: state of the permanent itself rather than of a board — and the *only*
+#: condition in this table that is, which is why it was missing: every row
+#: above asks what its controller has.
+#:
+#: ``conditional_static_holds`` has answered ``is_state`` since Snow Devil, but
+#: that payload only ever arrived from the grammar's **attached** path (an
+#: Aura's "enchanted creature has first strike as long as it's blocking"). The
+#: same-subject spelling refuses in the grammar with the reason "derived by
+#: engine/static_bonuses.py", and this table did not derive it — the evaluator
+#: built at one end and connected at neither, which is the refusal-can-expire
+#: shape one row down had already been caught in.
+#:
+#: The words are exactly ``_STATE_TESTS``', because that is what will answer
+#: this at every recompute; an unlisted one refuses the line rather than
+#: producing a condition nothing can test.
+_STATE_CONDITION = re.compile(
+    r"^(?:it's|this creature is) "
+    r"(?P<state>tapped|untapped|attacking|blocking|blocked|unblocked)$"
+)
+
 # "as long as an opponent has eight or more cards in their graveyard"
 # (Thieves' Guild Recruiter cycle). A zone *size*, not a set of objects: nothing
 # is matched, so it is its own condition kind rather than a `controls` payload
@@ -178,6 +199,9 @@ def _parse_condition_text(text: str) -> dict[str, object] | None:
             "who": "opponent" if match.group("who") == "an opponent" else "you",
             "count": count,
         }
+    match = _STATE_CONDITION.match(text)
+    if match is not None:
+        return {"kind": "is_state", "state": match.group("state")}
     match = _CONTROLS_POWER_CONDITION.match(text)
     if match is not None:
         return {

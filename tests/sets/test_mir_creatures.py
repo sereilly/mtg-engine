@@ -323,3 +323,71 @@ def test_the_keyword_comes_back_at_cleanup(set_pool):
     game.resolve_cleanup_step(0)
 
     assert game._has_keyword(gargoyle, "flying")
+
+
+# --- Round 7: two conditions the tables were built for and never fed ---
+
+from engine.handlers._common import permanent_effective_colors
+
+
+def test_spirit_of_the_night_has_first_strike_only_while_attacking(set_pool):
+    """"…has first strike as long as it's attacking."
+
+    `conditional_static_holds` has answered ``is_state`` since Snow Devil, but
+    that payload only ever arrived from the grammar's *attached* path — an
+    Aura's "enchanted creature has first strike as long as it's blocking". The
+    same-subject spelling refuses in the grammar with the reason "derived by
+    engine/static_bonuses.py", and that table had no row for it: an evaluator
+    built at one end and connected at neither.
+    """
+    pool = set_pool("MIR")
+    spirit = Permanent(card=pool["Spirit of the Night"])
+    blocker = Permanent(card=_r1_vanilla("Guard", 2, 2))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[spirit]),
+        PlayerState(name="P2", battlefield=[blocker]),
+    ])
+    game.enforce_mana_costs = False
+
+    assert not game._has_keyword(spirit, "first strike")
+
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0])[0]
+    game._recompute_continuous_effects()
+
+    assert game._has_keyword(spirit, "first strike")
+
+
+def test_raging_spirit_becomes_colorless_until_end_of_turn(set_pool):
+    """"{2}: This creature becomes colorless until end of turn."
+
+    CR 105.2c makes colourless the *absence* of colour, so it cannot ride the
+    colour-word table — its values are mana symbols — and the layer-5 channel
+    takes the empty set rather than a sixth colour. Which is why the channel's
+    reader now tests for None instead of truthiness: an object with no colours
+    is a real answer.
+    """
+    pool = set_pool("MIR")
+    spirit = Permanent(card=pool["Raging Spirit"])
+    spirit.metadata["summoning_sickness_turn"] = -1
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[spirit], library=[pool["Island"]] * 5),
+        PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    assert permanent_effective_colors(spirit) == {"R"}
+
+    result = game.activate_permanent_ability(0, "Raging Spirit", permanent_index=0)
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+
+    assert permanent_effective_colors(spirit) == set()
+
+    game.resolve_cleanup_step(0)
+    assert permanent_effective_colors(spirit) == {"R"}

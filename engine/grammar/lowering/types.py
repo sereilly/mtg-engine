@@ -345,6 +345,16 @@ def _lower_become_color(
         _describe_targets(payload, node.subject)
         return (OracleInstruction("recolor_target_chosen_color", "", payload),)
     if node.duration.kind in ("until_end_of_turn", "this_turn"):
+        # "{2}: **This creature** becomes colorless until end of turn." (Raging
+        # Spirit.) The ability's own source, which is not a target and never
+        # was — the branch below reads a chosen object, and reading the source
+        # as one would recolour whatever the picker happened to offer.
+        if _is_source(node.subject):
+            return (
+                OracleInstruction(
+                    "recolor_self_until_eot", "", {"target_color": node.color}
+                ),
+            )
         if not isinstance(node.subject, ast.TargetSpec) or not node.subject.targeted:
             raise LoweringError(
                 "no handler recolours an object nobody targeted", node=node
