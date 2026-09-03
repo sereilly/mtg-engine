@@ -164,7 +164,16 @@ def parse_keyword_list(stream: TokenStream) -> tuple[tuple[str, ...], bool]:
             # cannot name it — it names the *choice*, and the grant resolves it.
             # Read before the bare colour word, which would otherwise consume
             # "the" and grant protection from a colour called "the".
-            if stream.accept_phrase("the", "color", "of", "your", "choice"):
+            # "…from **the chosen color**" (Prismatic Boon), the same question
+            # asked by the sentence in front of it rather than by this clause:
+            # "Choose a color. X target creatures gain protection from the
+            # chosen color until end of turn." CR 609.3 puts both choices in
+            # the same resolution, so they name one colour and read one channel
+            # — a second keyword string would be a second answer to it, and the
+            # grant handler would have to learn which sentence had asked.
+            if stream.accept_phrase("the", "color", "of", "your", "choice") or (
+                stream.accept_phrase("the", "chosen", "color")
+            ):
                 name = PROTECTION_FROM_CHOSEN_COLOR
             else:
                 colour = stream.peek_word()

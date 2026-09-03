@@ -22,7 +22,7 @@ from dataclasses import replace
 from . import ast
 from .errors import GrammarError
 from .lexer import PT, QUOTE
-from .effects import _parse_gains, _parse_loses
+from .effects import _parse_gains, _parse_loses, _parse_put_counter
 from .effects.characteristics import _parse_quoted_abilities
 from .phrases import _accept_self_reference
 from .statements import _parse_condition
@@ -99,6 +99,50 @@ def _parse_pronoun_verb_rider(
         stream.reset(mark)
         return None
     return ast.Untap(target)
+
+
+def _parse_pronoun_counter_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``Put a -1/-0 counter on it.`` after a sentence that chose an object.
+
+    Jabari's Influence prints it joined by "and": "Gain control of target
+    nonartifact, nonblack creature that attacked you this turn **and put a
+    -1/-0 counter on it**." The counter goes on the creature the first half
+    took, not on the ability's own source — and that is what the sentence did
+    before this rider, because ``parse_recipient`` reads a bare "it" as the
+    source on every line whose sentence names nothing else.
+
+    Silent both ways, which is why it is a rider rather than a refusal: on a
+    spell ``add_counter_to_self`` has no permanent and places nothing, and on a
+    permanent it shrinks the ability's own source. Neither raises.
+
+    Read by parsing the sentence with the ordinary counter production and then
+    substituting the subject, rather than by a second copy of that production:
+    "up to two", "for each …" and the doubling rider are all things it already
+    reads, and a rider that re-spelled the placement would be free to disagree
+    about any of them. ``quantifier == "it"`` is what says the subject was the
+    bare pronoun — "this creature" and "that creature" parse to their own
+    quantifiers and keep their own referents.
+    """
+    target = _statement_bound_target(steps[-1]) if steps else None
+    if target is None or not stream.at_word("put"):
+        return None
+    mark = stream.mark()
+    try:
+        statement = _parse_put_counter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    subject = getattr(statement, "subject", None)
+    if (
+        not isinstance(statement, ast.PutCounter)
+        or not isinstance(subject, ast.TargetSpec)
+        or subject.quantifier != "it"
+    ):
+        stream.reset(mark)
+        return None
+    return replace(statement, subject=target)
 
 
 def _creates_the_permanent_it_names(statement: ast.Statement) -> bool:

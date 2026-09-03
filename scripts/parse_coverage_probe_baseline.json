@@ -556,6 +556,13 @@
   ]
  },
  {
+  "card": "Icequake",
+  "clause": "destroy target land. if that land was a snow land, icequake deals 1 damage to that land's controller",
+  "ignored": [
+   "land,"
+  ]
+ },
+ {
   "card": "Icy Manipulator",
   "clause": "tap target artifact, creature, or land",
   "ignored": [

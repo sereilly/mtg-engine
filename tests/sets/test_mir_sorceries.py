@@ -90,3 +90,71 @@ def test_fallow_earth_tucks_a_land(set_pool):
 
     assert not game.is_on_battlefield(land)
     assert game.players[1].library[0].name == "Island"
+
+
+# --- W1G5: the statics / characteristics / control family ---
+
+from engine import Game, PlayerState
+from engine.models import Permanent
+
+
+def _g5_game(pool, hand, battlefield=(), opponent=()):
+    game = Game(players=[
+        PlayerState(name="P1", hand=[pool[name] for name in hand],
+                    battlefield=list(battlefield),
+                    library=[pool["Island"]] * 6),
+        PlayerState(name="P2", battlefield=list(opponent),
+                    library=[pool["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game
+
+
+def test_choking_sands_damages_only_over_a_nonbasic_land(set_pool):
+    """"Destroy target non-Swamp land. **If that land was nonbasic**, this spell
+    deals 2 damage to the land's controller."
+
+    Both halves already worked apart. What refused was the condition's printed
+    shape: Icequake's "if that land was **a snow land**" spells the head noun
+    out and this one leaves it off, because the sentence supplied it two words
+    earlier. The adjective run is lifted out, the noun put back, and the result
+    handed to the same noun parser — so "nonbasic" is the same restriction here
+    as in any target's description.
+    """
+    pool = set_pool("MIR")
+    game = _g5_game(
+        pool, ["Choking Sands"],
+        opponent=[Permanent(card=pool["Bad River"]), Permanent(card=pool["Forest"])],
+    )
+    river = game.players[1].battlefield[0]
+
+    cast = game.cast_from_hand(0, "Choking Sands", target_player_index=1,
+                               target_permanent_index=0)
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(river)
+    assert game.players[1].life == 18, "a nonbasic land takes the 2 damage"
+
+
+def test_choking_sands_spares_a_basic_lands_controller(set_pool):
+    """The other arm of the same condition. Dropping it would have made the
+    damage unconditional, which is a strictly better card than the printed
+    one."""
+    pool = set_pool("MIR")
+    game = _g5_game(
+        pool, ["Choking Sands"],
+        opponent=[Permanent(card=pool["Forest"])],
+    )
+    forest = game.players[1].battlefield[0]
+
+    cast = game.cast_from_hand(0, "Choking Sands", target_player_index=1,
+                               target_permanent_index=0)
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(forest)
+    assert game.players[1].life == 20

@@ -99,6 +99,50 @@ def _parse_condition(stream: TokenStream) -> ast.Condition:
     return first if len(parts) == 1 else ast.EveryOf(tuple(parts))
 
 
+def _accept_quality_with_implied_noun(
+    stream: TokenStream, noun: str
+) -> "ast.ObjectFilter | None":
+    """The filter "was **nonbasic**" states about a *noun* named earlier.
+
+    "If that land was nonbasic, …" (Choking Sands) prints the quality without
+    its head noun, because the sentence supplied one two words back. The
+    adjective run is lifted out, the noun put on the end, and the rebuilt
+    phrase handed to :func:`parse_object_filter` — the **same** reader the
+    spelled-out "a nonbasic land" beside it goes through, which is what keeps
+    the two spellings one restriction rather than two readings of an adjective.
+
+    Non-consuming on refusal, and the run stops at the first non-word token —
+    for this clause the comma before the consequence — so a quality this cannot
+    read leaves the condition to the readers behind it rather than swallowing
+    the rest of the sentence.
+    """
+    from .lexer import tokenize
+
+    start = stream.mark()
+    count = 0
+    while stream.peek_word(count) is not None:
+        count += 1
+    if count == 0:
+        return None
+    phrase = stream.text_between(start, start + count)
+    if not phrase:
+        return None
+    rebuilt = f"a {phrase} {noun}"
+    lexed = tokenize(rebuilt)
+    if not lexed.tokens:
+        return None
+    inner = TokenStream(lexed.tokens, rebuilt)
+    inner.accept_word("a")
+    try:
+        filt = parse_object_filter(inner)
+    except GrammarError:
+        return None
+    if not inner.exhausted:
+        return None
+    stream.advance(count)
+    return filt
+
+
 def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     """Conditions the grammar models today. Anything else raises so the line
     falls back rather than silently losing the condition — the legacy compiler
@@ -595,13 +639,26 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # out of the whole condition.
     that_mark = stream.mark()
     if stream.accept_word("that"):
-        if stream.peek_word() is not None and stream.peek_word(1) == "was":
+        noun = stream.peek_word()
+        if noun is not None and stream.peek_word(1) == "was":
             stream.advance(2)
             stream.accept_word("a", "an")
+            quality_mark = stream.mark()
             try:
                 return ast.DestroyedTargetWas(parse_object_filter(stream))
             except GrammarError:
                 pass
+            stream.reset(quality_mark)
+            # "if that land was **nonbasic**" (Choking Sands) — the same
+            # question with the head noun left out, because the sentence said
+            # it two words earlier. Read only after the spelled-out form above
+            # refuses, and answered by putting the noun back rather than by a
+            # second reader of the adjective: the rebuilt phrase goes to the
+            # same `parse_subject_filter` every printed noun phrase does, so
+            # "nonbasic" narrows a land exactly as "a nonbasic land" would.
+            implied = _accept_quality_with_implied_noun(stream, noun)
+            if implied is not None:
+                return ast.DestroyedTargetWas(implied)
     stream.reset(that_mark)
     stream.reset(this_way)
 

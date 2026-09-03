@@ -135,3 +135,86 @@ def test_razor_pendulum_reads_a_life_total(set_pool):
     game.resolve_end_step(1)
     game.resolve_stack()
     assert game.players[1].life == 6
+
+
+# --- W1G5: the statics / characteristics / control family ---
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _g5_bear(name: str = "Bear", power: int = 2, toughness: int = 5) -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line="Creature - Bear",
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": "Creature - Bear",
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _g5_chariot(set_pool):
+    """Chariot of the Sun on seat 0 beside a 2/5, ready to activate."""
+    pool = set_pool("MIR")
+    chariot = Permanent(card=pool["Chariot of the Sun"])
+    chariot.metadata["summoning_sickness_turn"] = -1
+    bear = Permanent(card=_g5_bear())
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[chariot, bear],
+                    library=[pool["Island"]] * 5),
+        PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._settle()
+    return game, bear
+
+
+def test_chariot_of_the_sun_grants_flying_and_rewrites_the_toughness(set_pool):
+    """"{2}, {T}: Until end of turn, target creature you control **gains flying
+    and has base toughness 1**."
+
+    Two things were missing and they are one sentence. ``has base toughness N``
+    had no branch — the production demanded "power", so the toughness-only half
+    of CR 613.4b's rewrite could not be spelled at all, though ``set_base_pt``'s
+    None has expressed it since People of the Woods. And the conjunction is an
+    arm of the grant beside "and gets", "and loses" and "and \\"…\\"", under the
+    same duration rule: whichever half prints one governs both, and the leading
+    "Until end of turn" this card uses is distributed by the sentence layer.
+    """
+    game, bear = _g5_chariot(set_pool)
+    assert (bear.effective_power, bear.effective_toughness) == (2, 5)
+    assert not game._has_keyword(bear, "flying")
+
+    result = game.activate_permanent_ability(
+        0, "Chariot of the Sun", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+
+    assert game._has_keyword(bear, "flying")
+    assert (bear.effective_power, bear.effective_toughness) == (2, 1), (
+        "the printed power stands; only the toughness is rewritten"
+    )
+
+
+def test_the_chariots_rewrite_ends_with_the_turn(set_pool):
+    """Both halves carry the one printed duration. A base P/T that outlived the
+    turn would be the dropped-rider bug with the sign reversed — the creature
+    stays a 2/1 for good."""
+    game, bear = _g5_chariot(set_pool)
+    game.activate_permanent_ability(
+        0, "Chariot of the Sun", permanent_index=0,
+        target_player_index=0, target_permanent_index=1,
+    )
+    game.resolve_stack()
+    game._settle()
+
+    game.resolve_cleanup_step(0)
+    game._settle()
+
+    assert not game._has_keyword(bear, "flying")
+    assert (bear.effective_power, bear.effective_toughness) == (2, 5)

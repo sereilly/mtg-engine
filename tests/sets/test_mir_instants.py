@@ -221,3 +221,147 @@ def test_a_tutor_puts_its_find_on_top_after_the_shuffle(set_pool):
 
     assert game.players[0].library[0].name == "Femeref Knight"
     assert len(game.players[0].library) == len(_R9_LIBRARY)
+
+
+# --- W1G5: the statics / characteristics / control family ---
+
+import pytest
+
+from engine import Game, PlayerState
+from engine.models import CardDefinition, Permanent
+from engine.oracle import compile_card_oracle
+
+
+def _g5_vanilla(name: str, power: int = 2, toughness: int = 2,
+                type_line: str = "Creature - Test") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line,
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": type_line,
+             "power": str(power), "toughness": str(toughness)},
+    )
+
+
+def _g5_game(pool, hand, battlefield=(), opponent=()):
+    game = Game(players=[
+
+        PlayerState(name="P1", hand=[pool[name] for name in hand],
+                    battlefield=list(battlefield),
+                    library=[pool["Island"]] * 6),
+        PlayerState(name="P2", battlefield=list(opponent),
+                    library=[pool["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    return game
+
+
+def test_dissipate_exiles_the_spell_it_counters(set_pool):
+    """"Counter target spell. If that spell is countered this way, **exile it**
+    instead of putting it into its owner's graveyard."
+
+    CR 614.1 replacing CR 701.5a's destination, which Memory Lapse's production
+    already carried — written with the destination as a *verb* rather than a
+    zone, because "put it into exile" is not a sentence Magic uses. One branch
+    of that production rather than a second one: the "instead of … graveyard"
+    tail is the whole rest of the clause, and a second production would be a
+    second place to forget the word that makes this a replacement at all.
+    """
+    pool = set_pool("MIR")
+    game = _g5_game(pool, ["Dissipate"])
+    game.players[1].hand.append(pool["Mangara's Blessing"])
+    before = game.players[1].life
+
+    game.queue_from_hand(1, "Mangara's Blessing")
+    counter = game.cast_from_hand(0, "Dissipate", target_stack_index=0)
+    assert counter.supported, counter.details
+    game.resolve_stack()
+
+    # Both halves, because the failure a dropped destination clause causes is
+    # silent: the card in the graveyard is exactly what a plain Counterspell
+    # leaves behind and reads as nothing having gone wrong.
+    assert game.players[1].life == before, "the spell was countered"
+    assert [card.name for card in game.players[1].graveyard] == []
+    assert [getattr(card, "name", card) for card in game.players[1].exile] == [
+        "Mangara's Blessing"
+    ]
+
+
+def test_prismatic_boon_protects_every_creature_it_named(set_pool):
+    """"Choose a color. **X** target creatures gain protection from **the chosen
+    color** until end of turn."
+
+    "The chosen color" is the same question "the color of your choice" asks —
+    CR 609.3 puts both in this resolution, so they name one colour and read one
+    channel. A second keyword string would have been a second answer to it, and
+    the grant handler would have had to learn which sentence had done the
+    asking.
+    """
+    a = Permanent(card=_g5_vanilla("A"))
+    b = Permanent(card=_g5_vanilla("B"))
+    game = _g5_game(set_pool("MIR"), ["Prismatic Boon"], battlefield=[a, b])
+
+    cast = game.cast_from_hand(
+        0, "Prismatic Boon", x_value=2, new_color="R",
+        target_permanent_ids=[a.permanent_id, b.permanent_id],
+    )
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    assert game._protection_colors(a) == {"R"}
+    assert game._protection_colors(b) == {"R"}
+
+
+def test_prismatic_lace_offers_a_set_of_colours(set_pool):
+    """"Target permanent becomes the color **or colors** of your choice."
+
+    The one subject of the three that had no path to the set offer: the Aura's
+    host and the source itself both reached ``arm_color_set_choice`` and a
+    *target* refused outright. Asked as a prompt rather than read off the
+    activation's single symbol, because one symbol is a legal answer to the
+    offer and not the offer itself — taking it would quietly make "or colors"
+    mean "a color" on every printing.
+    """
+    host = Permanent(card=_g5_vanilla("Statue", 1, 1, "Artifact Creature - Golem"))
+    game = _g5_game(set_pool("MIR"), ["Prismatic Lace"], battlefield=[host])
+
+    cast = game.cast_from_hand(0, "Prismatic Lace",
+                               target_player_index=0, target_permanent_index=0)
+    assert cast.supported, cast.details
+    game.resolve_stack()
+    game._settle()
+
+    # A non-interactive seat takes the prompt's stated default at once, which
+    # is a colour — the point being that a colour was *asked for* rather than
+    # read off a cast that never named one.
+    assert game._effective_colors(host), "a colour was chosen and written"
+
+
+def test_a_counter_on_it_lands_on_what_the_sentence_before_chose():
+    """"Gain control of target creature. **Put a -1/-0 counter on it.**"
+
+    A bare "it" is the ability's own source everywhere else, which is what
+    ``parse_recipient`` reads — so this sentence lowered to
+    ``add_counter_to_self`` and the counter went on the wrong permanent, or,
+    for a spell, on nothing at all. Neither raises, which is why the rider
+    exists.
+    """
+    from engine.grammar import compile_line
+
+    result = compile_line(
+        "Gain control of target creature. Put a -1/-0 counter on it."
+    )
+    kinds = [instruction.kind for instruction in result.instructions]
+    assert kinds == ["gain_control_of_target", "add_counter_to_target"]
+
+
+def test_the_pronoun_rider_leaves_a_named_subject_alone():
+    """"Put a +1/+1 counter on **this creature**" is not the pronoun, and keeps
+    its own referent — the rider fires on ``quantifier == "it"`` alone."""
+    from engine.grammar import compile_line
+
+    result = compile_line("Tap target creature. Put a +1/+1 counter on this creature.")
+    kinds = [instruction.kind for instruction in result.instructions]
+    assert kinds == ["tap_target_permanent", "add_counter_to_self"]

@@ -50,6 +50,7 @@ from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
                        _parse_conditional_pronoun_grant_rider,
                        _parse_conditional_quoted_grant_rider,
                        _parse_exile_instead_of_leaving_rider,
+                       _parse_pronoun_counter_rider,
                        _parse_pronoun_grant_rider, _parse_pronoun_verb_rider)
 from .control_flow import (_attach_if_that_card_was_returned, _attach_if_you_cant,
                           _attach_if_you_do, _attach_otherwise, _attach_when_you_do)
@@ -551,6 +552,14 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             pronoun_verb = _parse_pronoun_verb_rider(stream, steps)
             if pronoun_verb is not None:
                 steps.append(pronoun_verb)
+                continue
+            # "…and put a -1/-0 counter on **it**." (Jabari's Influence.) The
+            # counter's own pronoun, beside the imperative one above: parsed
+            # fresh, "it" is the ability's source and the counter lands on the
+            # wrong permanent — or, for a spell, on nothing at all.
+            pronoun_counter = _parse_pronoun_counter_rider(stream, steps)
+            if pronoun_counter is not None:
+                steps.append(pronoun_counter)
                 continue
             # "It loses "enchant creature" and gains "…"." (Takklemaggot.) The
             # quoted half, read before the keyword rider below, whose "It

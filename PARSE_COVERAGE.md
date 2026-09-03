@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **1867**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **171**
+- With deletion-probe findings (ignored words): **172**
 
 ## Measured sets — reported, not gated
 
@@ -167,6 +167,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Icatian Moneychanger | `you gain 1 life for each credit counter on this creature` | creature |
 | Icatian Skirmishers | `all creatures banded with it gain first strike until end of turn` | all |
 | Icatian Store | `if this land is tapped, put a storage counter on it` | land |
+| Icequake | `destroy target land. if that land was a snow land, icequake deals 1 da` | land, |
 | Icy Manipulator | `tap target artifact, creature, or land` | or |
 | Infuse | `untap target artifact, creature, or land` | or |
 | Johan | `you may have johan gain "johan can't attack" until end of combat. if y` | have |

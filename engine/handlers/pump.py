@@ -1737,8 +1737,16 @@ def set_base_pt_target_until_eot(game: Game, instruction: OracleInstruction, con
     power = instruction.payload.get("power")
     toughness = instruction.payload.get("toughness")
     set_base_pt(target_perm, power, toughness, until_eot=True)
+    # The log names the half the card printed. "…has base **toughness** 1"
+    # (Chariot of the Sun) leaves the power standing, which ``set_base_pt``'s
+    # None already expresses — reading the pair unconditionally printed a
+    # "None/1" nobody could have cast.
     if toughness is None:
         game.log.append(f"{card.name}: {target_perm.card.name} has base power {power} until end of turn")
+    elif power is None:
+        game.log.append(
+            f"{card.name}: {target_perm.card.name} has base toughness {toughness} until end of turn"
+        )
     else:
         game.log.append(
             f"{card.name}: {target_perm.card.name} has base power and toughness {power}/{toughness} until end of turn"
