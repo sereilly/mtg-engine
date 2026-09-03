@@ -485,10 +485,17 @@ LOWERING_FAMILIES = [f for f in EFFECT_FAMILIES if f != "search"] + ["zones", "r
 AST_FAMILIES = [
     family for family in EFFECT_FAMILIES
     if family not in (
-        "library", "search", "control_changes", "prevention", "counters",
+        "search", "control_changes", "prevention", "counters",
         "tapping", "attachments",
     )
 ]
+# `library` left this list at Alliances' third wave, when the size guard below
+# fired on `ast/cards.py` itself. The note above records why it was excluded —
+# a near-empty `ast/library.py` would buy back the symmetry and cost the thing
+# symmetry is for — and that reason expired the moment the inventory grew past
+# the cap: the module is 280 lines, not near-empty, and it is cut on
+# `effects/library.py`'s own line, so a template has one home per side rather
+# than two candidates. The three other exclusions above still hold.
 
 
 def _imports(path: Path) -> list[tuple[int, str, bool]]:

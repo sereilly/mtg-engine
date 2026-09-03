@@ -989,6 +989,32 @@ def _exile_from_hand_choice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("library_cycle_offer")
+def _library_cycle_offer(ctx: PromptContext, choices: list) -> dict:
+    """Lim-Dul's Vault: pay the life again, or stop and shuffle.
+
+    The cards themselves are sent, because looking at them *is* the effect -
+    a prompt that asked "pay 1 life again?" without showing what the payment
+    already bought would be asking the player to decide blind. They come off
+    the top of the chooser's own library, which is where the loop left them.
+
+    ``payable`` is the engine's own CR 119.4 test rather than a second reading
+    of the life total, so the button the board draws and the answer the engine
+    accepts agree.
+    """
+    choice = choices[0]
+    player = ctx.game.players[choice.player_index]
+    count = min(int(choice.data.get("count", 0)), len(player.library))
+    life_cost = int(choice.data.get("life_cost", 0))
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "life_cost": life_cost,
+        "payable": player.life >= life_cost,
+        "cards": [ctx.serialize_card(card) for card in player.library[:count]],
+    }
+
+
 @prompt_renderer("linked_exile_return")
 def _linked_exile_return(ctx: PromptContext, choices: list) -> dict:
     """Gustha's Scepter: which card under the artifact comes back to this hand.

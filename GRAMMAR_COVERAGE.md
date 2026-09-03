@@ -30,7 +30,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | HML | 115 | 189 | 93.7% | 93.7% | 65.1% | 93 |
 | 5ED | 434 | 631 | 93.0% | 92.7% | 60.4% | 316 |
 | M21 | 285 | 503 | 87.3% | 86.9% | 60.8% | 237 |
-| ALL *(measured)* | 144 | 251 | 81.3% | 79.3% | 60.2% | 113 |
+| ALL *(measured)* | 144 | 251 | 81.7% | 79.7% | 60.6% | 114 |
 | **All (shipped)** | **3439** | **5016** | **89.2%** | **88.2%** | **57.1%** | **2394** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -2384,6 +2384,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, you may discard a card. If you don't, sacrifice this creature and draw a card.`
   - `Whenever this creature becomes blocked, it gets +6/+3 until end of turn.`
   - `Whenever this creature attacks and isn't blocked, it assigns no combat damage this turn and defending player loses 4 life.`
+- **Lim-Dûl's Vault**
+  - `Look at the top five cards of your library. As many times as you choose, you may pay 1 life, put those cards on the bottom of your library in any order, then look at the top five cards of your library. Then shuffle and put the last cards you looked at this way on top in any order.`
 - **Living Armor**
   - `{T}, Sacrifice this artifact: Put X +0/+1 counters on target creature, where X is that creature's mana value.`
 - **Living Artifact**

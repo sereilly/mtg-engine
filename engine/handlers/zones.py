@@ -2731,6 +2731,38 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+@effect_handler("look_top_cycle_and_stack")
+def look_top_cycle_and_stack(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """Lim-Dul's Vault, all three of its sentences (CR 701.24).
+
+    The whole effect is one offer asked over and over, so the handler does
+    almost nothing: it announces the first look and arms the offer. Every
+    iteration after that is a prompt armed by *answering* the one before it,
+    which is how a chain of decisions stays inside one resolution (CR 608.2,
+    CR 117.3b) - the ability stays on the stack until the last answer, and the
+    shuffle that ends the card happens on the answer that declines.
+
+    Nothing is moved here. "Look at the top five cards" changes no zone; what
+    it changes is what one player knows, and the cards it names are simply the
+    top of the library at the moment each offer is answered.
+    """
+    caster = context.caster
+    seat = game.players.index(caster)
+    count = resolve_amount(instruction.payload.get("count", 0), context.x_value)
+    life_cost = resolve_amount(instruction.payload.get("life_cost", 0), context.x_value)
+    looked = min(count, len(caster.library))
+    game.log.append(
+        f"{caster.name} looks at the top {looked} card(s) of their library"
+    )
+    game.arm_pending_choice(
+        "library_cycle_offer", seat,
+        card_name=context.card.name if context.card is not None else "",
+        count=int(count),
+        life_cost=int(life_cost),
+    )
+    return True, "resolved"
+
+
 @effect_handler("mill_until_matching")
 def mill_until_matching(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target opponent mills a card, then repeats this process until a

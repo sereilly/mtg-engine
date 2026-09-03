@@ -286,6 +286,11 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         "search_destination",
         # Reshapes the library; the spell's own CR 608.2n move waits behind it.
         "look_top_pick",
+        # "As many times as you choose, you may pay 1 life…" (Lim-Dul's Vault).
+        # The answer decides whether the *next* step is another round of the
+        # same offer or the shuffle that ends the card, and both are steps of
+        # this resolution.
+        "library_cycle_offer",
         # "Sacrifice an artifact. **If you do**, search your library…"
         # (Transmute Artifact): what the player gives up decides what the rest
         # of the resolution may find. Only an interactive seat queues it —

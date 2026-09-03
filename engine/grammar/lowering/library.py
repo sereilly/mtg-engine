@@ -248,6 +248,28 @@ def _lower_look_at_hand(node: ast.LookAtHand) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("look_at_target_hand", "", payload),)
 
 
+def _lower_look_top_cycle_for_life(
+    node: "ast.LookTopCycleForLife",
+) -> tuple[OracleInstruction, ...]:
+    """Lim-Dul's Vault's whole procedure, one instruction (CR 701.24).
+
+    Both numbers travel as payload for the reason every parameter in this
+    pipeline does: a card cycling three cards for 2 life needs no code. What
+    does *not* travel is the shape - the bottom, the shuffle and the stack on
+    top are the effect itself, so a wording that sorted them elsewhere refuses
+    at the production rather than arriving here as a fourth key.
+    """
+    return (
+        OracleInstruction(
+            "look_top_cycle_and_stack", "",
+            {
+                "count": _amount_payload(node.count),
+                "life_cost": _amount_payload(node.life_cost),
+            },
+        ),
+    )
+
+
 def _lower_look_at_library_top(
     node: ast.LookAtLibraryTop,
 ) -> tuple[OracleInstruction, ...]:

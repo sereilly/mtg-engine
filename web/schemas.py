@@ -85,6 +85,7 @@ ActionKind = Literal[
     "flip_again_confirm",
     "exile_from_hand_confirm",
     "linked_exile_return_confirm",
+    "library_cycle_confirm",
     "put_from_hand_confirm",
     "choose_cards_in_hand_confirm",
     "graveyard_exile_confirm",

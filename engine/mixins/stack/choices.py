@@ -3266,6 +3266,101 @@ class PendingChoicesMixin:
             return
         self._resolve_exile_from_hand_choice(choice, None)
 
+    # -- The repeated look-and-bottom offer (Lim-Dul's Vault) ----------------
+
+    def confirm_library_cycle_offer(self, player_index: int, accept: bool) -> bool:
+        """Answer one round of "as many times as you choose, you may pay N
+        life": accepting bottoms the cards just looked at, looks at the next
+        lot and asks again; declining ends the loop and does the shuffle."""
+        return self.resolve_pending_choice(
+            "library_cycle_offer", player_index, accept=bool(accept)
+        )
+
+    def _library_cycle_finish(self, choice: PendingChoice) -> None:
+        """"Then shuffle and put the last cards you looked at this way on top
+        in any order."
+
+        The order of the two halves is the whole card. The kept cards come out
+        *first*, the rest of the library is shuffled (CR 701.24), and only then
+        do they go back on top - shuffling with them still in it would lose
+        them, and stacking before shuffling would shuffle them away again.
+
+        The final ordering is chained onto this answer rather than done here:
+        ``reorder_library`` is a prompt that already exists with its own UI, AI
+        default and action, and a decision armed by answering another stays
+        inside the same resolution.
+        """
+        import random
+
+        player = self.players[choice.player_index]
+        count = min(int(choice.data.get("count", 0)), len(player.library))
+        kept = player.library[:count]
+        rest = player.library[count:]
+        random.shuffle(rest)
+        player.library = kept + rest
+        self.log.append(f"{player.name} shuffled their library")
+        if count > 1:
+            self.arm_pending_choice(
+                "reorder_library", choice.player_index,
+                target_index=choice.player_index, top_count=count,
+                may_shuffle=False,
+            )
+
+    def _resolve_library_cycle_offer(self, choice: PendingChoice, accept: bool) -> bool:
+        """One round of the loop.
+
+        An accept that cannot be paid for is a decline, not a refused answer:
+        CR 119.4 lets a player pay N life only with N or more life to pay it
+        from, and a seat that says yes without the life has simply not paid -
+        so the loop ends and the card still shuffles. Refusing the answer
+        instead would leave the prompt queued with no answer that could ever
+        clear it.
+        """
+        player = self.players[choice.player_index]
+        life_cost = int(choice.data.get("life_cost", 0))
+        count = int(choice.data.get("count", 0))
+        self.discard_pending_choice(choice)
+        if not accept or player.life < life_cost:
+            self._library_cycle_finish(choice)
+            self._release_stack_item(choice.data.get("_stack_item"))
+            return True
+        player.life -= life_cost
+        name = choice.data.get("card_name", "Effect")
+        self.log.append(f"{player.name} paid {life_cost} life ({name})")
+        # "…put those cards on the bottom of your library **in any order**".
+        # They go down as they lay: the order is the player's by rule, the
+        # cards are at the bottom of a library that is about to be shuffled,
+        # and nothing in the game can ask what it was.
+        moved = player.library[:count]
+        del player.library[:count]
+        for card in moved:
+            self.put_card_into_library(player, card, position="bottom")
+        looked = min(count, len(player.library))
+        self.log.append(
+            f"{player.name} looks at the top {looked} card(s) of their library"
+        )
+        # The next round, armed by answering this one - the ability is still
+        # resolving until the loop ends (CR 608.2).
+        self.arm_pending_choice(
+            "library_cycle_offer", choice.player_index,
+            card_name=name, count=count, life_cost=life_cost,
+        )
+        return True
+
+    def _default_library_cycle_offer(self, choice: PendingChoice) -> None:
+        """The stated policy: **decline at once**.
+
+        Not ``_default_optional_pay``'s "pay tolls" - that policy is written for
+        an offer made once, and this one is made again every time it is taken.
+        A headless seat that paid whenever it could afford to would pay its life
+        total down to 1 for a shuffle it has no way to evaluate, which is a
+        worse outcome than never having cast the spell. An unbounded optional
+        payment has no stopping rule anybody can compute for the player, so the
+        engine takes the only answer that cannot be wrong by an unbounded
+        amount.
+        """
+        self._resolve_library_cycle_offer(choice, False)
+
     # -- One card out of a permanent's linked-exile pile ---------------------
 
     def live_linked_exile_return_choices(self, choice: PendingChoice) -> list[int]:
@@ -6152,6 +6247,23 @@ register_choice(
 )
 
 register_choice(
+    "library_cycle_offer",
+    resolve=lambda game, choice, r: game._resolve_library_cycle_offer(
+        choice, bool(r.get("accept"))
+    ),
+    default=lambda game, choice: game._default_library_cycle_offer(choice),
+    action="library_cycle_confirm",
+    prompt_key="library_cycle_offer",
+    blocked_detail="answer the library cycle before other actions",
+    # Answering arms either the next round or the shuffle that ends the card,
+    # so nothing after it may run until it is answered (CR 608.2).
+    suspends=True,
+    # …and a non-interactive seat therefore takes its default the moment the
+    # offer is armed, or the resolution would stop on a prompt nobody answers.
+    default_at_arm=True,
+)
+
+register_choice(
     "linked_exile_return",
     resolve=lambda game, choice, r: game._resolve_linked_exile_return(
         choice, r.get("entry_index")
@@ -6160,6 +6272,12 @@ register_choice(
     action="linked_exile_return_confirm",
     prompt_key="linked_exile_return",
     blocked_detail="choose a card to return before other actions",
+    # The prompt refuses every other action, so a seat that never answers it
+    # freezes the game. A non-interactive seat therefore takes its default the
+    # moment it is armed, exactly as the exile that filled the pile does —
+    # ``auto_resolve_pending_choices`` drains only the kinds a caller lists,
+    # and a blocking prompt left off that list is a headless run that stops.
+    default_at_arm=True,
     # The pile is face down (CR 406.3) and only its owner may look, so the
     # options are the chooser's alone — exactly the hand pick's reason.
     hidden_for_ai=False,

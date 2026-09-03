@@ -697,6 +697,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "draw_target_cards": "zones",
     "draw_controller_cards": "zones",
     "mill_target_player": "zones",
+    "look_top_cycle_and_stack": "zones",
     "mill_until_matching": "zones",
     "put_milled_card_onto_battlefield": "zones",
     "put_hand_cards_on_library": "zones",

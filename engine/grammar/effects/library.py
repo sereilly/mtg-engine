@@ -194,6 +194,58 @@ def parse_player_looks_at_own_library_top(
     )
 
 
+def parse_look_top_cycle_tail(
+    stream: TokenStream, count
+) -> "ast.Statement | None":
+    """The rest of Lim-Dul's Vault, from the full stop after its first
+    sentence. Declines without consuming on anything else, so every other look
+    at your own library's top keeps its sorting sentence and its refusal.
+
+    Read as one production over three sentences for :func:`_parse_look_pick_tail`'s
+    reason: they describe one pile, and parsed apart "those cards" and "the last
+    cards you looked at this way" dangle referents nothing binds.
+
+    The second count is read and required to match the first. A wording that
+    looked at five and then at three would be a different loop, and quietly
+    reusing the first number is how a card comes to do something it does not
+    say.
+    """
+    mark = stream.mark()
+    if not stream.accept_punct("."):
+        return None
+    if not stream.accept_phrase("as", "many", "times", "as", "you", "choose"):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not stream.accept_phrase("you", "may", "pay"):
+        stream.reset(mark)
+        return None
+    life_cost = parse_amount(stream)
+    for word in ("life", ",", "put", "those", "cards", "on", "the", "bottom",
+                 "of", "your", "library", "in", "any", "order"):
+        if word == ",":
+            stream.accept_punct(",")
+            continue
+        stream.expect_word(word)
+    stream.accept_punct(",")
+    stream.expect_word("then")
+    for word in ("look", "at", "the", "top"):
+        stream.expect_word(word)
+    again = parse_amount(stream)
+    if again != count:
+        raise stream.error("the repeated look reads the same number of cards")
+    for word in ("cards", "of", "your", "library"):
+        stream.expect_word(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the shuffle sentence after the loop")
+    stream.expect_word("then")
+    for word in ("shuffle", "and", "put", "the", "last", "cards", "you",
+                 "looked", "at", "this", "way", "on", "top", "in", "any",
+                 "order"):
+        stream.expect_word(word)
+    return ast.LookTopCycleForLife(count, life_cost)
+
+
 def _parse_look_other_library_tail(
     stream: TokenStream, count, owner: ast.PlayerRef
 ) -> ast.Statement:
@@ -297,6 +349,13 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
         stream.expect_word("library")
         if owner.kind != "you":
             return _parse_look_other_library_tail(stream, count, owner)
+        # Lim-Dul's Vault: the look is the *first* of three sentences and the
+        # two behind it bind its pile. Tried before the sorting sentence below,
+        # and declining without consuming, so every card in that family keeps
+        # its own reading and its own refusal site.
+        cycled = parse_look_top_cycle_tail(stream, count)
+        if cycled is not None:
+            return cycled
         # The sentence break, printed either way. See the Truth and Diabolic
         # Vision start a new sentence; Browse runs the whole ability on as one
         # ("…of your library, put one of them into your hand, and exile the

@@ -599,6 +599,24 @@ def _action_choose_cards_in_hand_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="invalid card choice")
 
 
+@action_handler("library_cycle_confirm")
+def _action_library_cycle_confirm(session, req, seat_type):
+    # Lim-Dul's Vault: another round of "pay 1 life and look again", or stop.
+    # Both answers are legal every time - declining is what ends the loop and
+    # runs the shuffle, so there is no "invalid" case beyond an absent prompt.
+    pending = next(
+        (c for c in session.game.pending_choices_of("library_cycle_offer")), None
+    )
+    if pending is None:
+        raise HTTPException(status_code=400, detail="no library cycle pending")
+    if req.seat != pending.player_index:
+        raise HTTPException(status_code=400, detail="not your choice")
+    if req.accept is None:
+        raise HTTPException(status_code=400, detail="accept is required")
+    if not session.game.confirm_library_cycle_offer(req.seat, req.accept):
+        raise HTTPException(status_code=400, detail="invalid answer")
+
+
 @action_handler("linked_exile_return_confirm")
 def _action_linked_exile_return_confirm(session, req, seat_type):
     # Gustha's Scepter: the seat picks which of the cards it owns under the

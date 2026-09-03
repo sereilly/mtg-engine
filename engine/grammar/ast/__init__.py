@@ -215,6 +215,17 @@ from .mana import (
     ProducesManaInstead,
     SpendManaAsThough,
 )
+from .library import (
+    LookAtHand,
+    LookAtLibraryTop,
+    LookTopCycleForLife,
+    LookTopExileRandom,
+    LookTopPickToHand,
+    RevealTop,
+    RevealTopToHandOrBottom,
+    SearchLibrary,
+    SearchPlayerLibrary,
+)
 from .cards import (
     Draw,
     Discard,
@@ -233,8 +244,6 @@ from .cards import (
     ExileTopOfLibrary,
     ExileEntireLibrary,
     PutExiledWithSource,
-    LookTopExileRandom,
-    LookTopPickToHand,
     AnteOfferOwnershipExchange,
     OwnershipExchangeUnlessPaid,
     RandomRevealOwnershipExchange,
@@ -244,21 +253,15 @@ from .cards import (
     NameThenConsult,
     SearchAndExile,
     TransmuteBySacrifice,
-    SearchLibrary,
-    SearchPlayerLibrary,
     Shuffle,
     ChooseCardsInHand,
-    LookAtHand,
     PutIteratedCardOnLibrary,
-    LookAtLibraryTop,
-    RevealTop,
     ExileGraveyardUntilLeaves,
     CastFromExiledWith,
     NameAndRandomReveal,
     NameAndStrip,
     NameThenRevealTop,
     RevealUntil,
-    RevealTopToHandOrBottom,
 )
 from .stack import (
     ChangeTarget,
@@ -498,6 +501,7 @@ __all__ = [
     # cards
     "Draw",
     "Discard",
+    "LookTopCycleForLife",
     "Mill",
     "MillUntil",
     "PutMilledCardOntoBattlefield",
