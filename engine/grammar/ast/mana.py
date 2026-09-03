@@ -92,6 +92,21 @@ class AddMana:
     #: same sentence about *your* lands or about a chosen player's is the same
     #: production with a different word.
     any_color_from: str | None = None
+    #: "Add one mana of any **type that land** could produce." (Benthic
+    #: Explorers.) Its own field beside ``any_color_from`` rather than another
+    #: of that field's values, and the two printed words are both reasons.
+    #:
+    #: **"type", not "colour"**: CR 106.1b counts six types of mana, the five
+    #: colours and colourless, so a land tapping for {C} answers this phrase and
+    #: answers nothing ``any_color_from`` describes.
+    #:
+    #: **"that land", not "a land …"**: this names *one object* — the land the
+    #: ability's own cost untapped — where Fellwar Stone names a board to search.
+    #: A back-reference to a cost payment, so the value says which payment
+    #: ("cost_untapped_land") exactly as the sacrifice and exile back-references
+    #: do, and the lowering refuses it on any ability whose cost does not make
+    #: one.
+    any_type_from: str | None = None
     # "**an additional** {B}" (the Mana Batteries). Recorded rather than
     # consumed and dropped: the word says this clause adds on top of the one
     # before it, which is what makes the printed sentence two statements rather

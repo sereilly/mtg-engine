@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ..subject_filters import object_only_filter
+from ..subject_filters import object_only_filter, untestable_filter_keys
 from . import ast
 from .amounts import parse_amount
 from .effects import _expect_counter_kind
@@ -466,6 +466,40 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                 stream.reset(mark)
                 raise stream.error("no cost path charges this tap")
             costs.append(ast.TapPermanentsCost(number.value, tapped))
+            stream.accept_punct(",")
+            continue
+        if stream.at_word("untap"):
+            # "Untap a tapped land an opponent controls" (Benthic Explorers).
+            # CR 602.1a — a cost is any action, and this one is performed on a
+            # permanent the payer does not control. Read after the tap branch
+            # above, which shares none of its words; the two are separate
+            # productions because they are separate costs, and folding them
+            # into one with a direction flag would put the seat question (whose
+            # permanent) in a branch that has never had to ask it.
+            mark = stream.mark()
+            stream.advance()
+            if not stream.accept_word("a", "an"):
+                stream.reset(mark)
+                raise stream.error("an untap cost untaps one named permanent")
+            try:
+                untapped = parse_object_filter(stream)
+            except GrammarError:
+                stream.reset(mark)
+                raise stream.error("expected what to untap as a cost")
+            described = untapped.to_payload()
+            if untestable_filter_keys(described):
+                # The charger enumerates with ``subject_matches``, so a phrase
+                # it cannot test would be dropped and the cost would be payable
+                # from a wider set than the card prints — the direction a cost
+                # must never be wrong in.
+                stream.reset(mark)
+                raise stream.error("no cost path charges an untap of this shape")
+            if untapped.tapped is not True:
+                # "A **tapped** land": untapping an untapped permanent is no
+                # payment at all, so the word is required rather than optional.
+                stream.reset(mark)
+                raise stream.error("an untap cost names a tapped permanent")
+            costs.append(ast.UntapPermanentCost(untapped))
             stream.accept_punct(",")
             continue
         if stream.at_word("put"):

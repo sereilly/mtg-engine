@@ -43,6 +43,15 @@ CHOICE_KEYS = (
     # ``Permanent`` that is no longer on any battlefield, so this is the only
     # place it survives (CR 608.2h last-known information).
     "sacrificed_for_cost",
+    # The land a printed **untap** cost paid with (Benthic Explorers: "{T},
+    # Untap a tapped land an opponent controls: Add one mana of any type **that
+    # land** could produce"). The odd one out on this channel: it is still on
+    # the battlefield when the effect reads it, so this is not last-known
+    # information — it is a *back-reference*. "That land" names the one the cost
+    # untapped, and a board scan at resolution would name whichever tapped land
+    # of an opponent's happens to match then, which after the payment is a
+    # different one.
+    "untapped_for_cost",
     # The cards a printed **discard** cost ate, same channel and same reason:
     # "If the discarded card was a land card" (Land's Edge) is asked when the
     # card is already in a graveyard, which CR 400.7 makes a different object.

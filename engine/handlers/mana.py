@@ -487,6 +487,39 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         # rather than trusted from the picker (idiom 9) - and with the set empty
         # the ability produces nothing at all, which is the card: an opponent
         # with no lands offers no colour to copy.
+        # "…of any type **that land** could produce" (Benthic Explorers). The
+        # land the ability's own cost untapped, carried on the same
+        # last-known-information channel every other cost record uses — read
+        # rather than re-found, because "that land" names the one that was
+        # untapped and a board scan would name whichever one matches now.
+        #
+        # **Types, not colours** (CR 106.1b): a land tapping for {C} answers
+        # this phrase, so the set comes off `effective_produced_mana` rather
+        # than `produced_mana_colors`, which is the colour half one branch down.
+        if instruction.payload.get("any_type_from") is not None:
+            land = (context.choices or {}).get("untapped_for_cost")
+            available = tuple(dict.fromkeys(
+                str(sym).upper() for sym in (
+                    land.effective_produced_mana if land is not None else ()
+                )
+            ))
+            if not available:
+                game.log.append(
+                    f"{card.name}: the untapped land produces no mana"
+                )
+                return True, "resolved"
+            if symbol not in available:
+                # CR 609.3: the player chooses among the types the land could
+                # make, and a choice outside that set is not one of them —
+                # re-checked here rather than trusted from the picker (idiom 9).
+                symbol = sorted(available)[0]
+            if amount > 0:
+                caster.mana_pool[symbol] += amount
+            game.log.append(
+                f"{card.name} produced {amount} {symbol} mana "
+                f"({land.card.name} could make it)"
+            )
+            return True, "resolved"
         narrowed_to = instruction.payload.get("any_color_from")
         if narrowed_to is not None:
             available = _colors_opponents_lands_produce(game, caster)

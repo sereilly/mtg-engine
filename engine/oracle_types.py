@@ -326,6 +326,24 @@ class ActivatedAbilityCost:
     #: positional arguments ``parse_activated_ability_cost`` passes are at the
     #: front, so a field inserted among them silently rebinds one of them.
     sacrifice_also_filter: dict | None = None
+    #: Benthic Explorers: "{T}, **Untap a tapped land an opponent controls**:
+    #: …". The printed noun phrase of a cost that *unt*aps, and the first cost
+    #: in this dataclass paid with a permanent the payer does not control
+    #: (CR 602.1a: a cost is any action). Its own field rather than a direction
+    #: flag on ``tap_filter``: that one enumerates the payer's own untapped
+    #: permanents and this one enumerates somebody else's tapped ones, so a
+    #: shared field would be read by the wrong enumerator on whichever card was
+    #: written second.
+    #:
+    #: ``None`` means "no such cost", never "any permanent", for
+    #: ``sacrifice_filter``'s reason: an empty filter would let the charger
+    #: untap anything at all, and an *un*payable cost read as payable is an
+    #: ability activated for free.
+    #:
+    #: After ``sacrifice_also_filter`` for that field's stated reason: the six
+    #: positional arguments ``parse_activated_ability_cost`` passes are at the
+    #: front, so a field inserted among them silently rebinds one of them.
+    untap_filter: dict | None = None
 
     @property
     def is_loyalty(self) -> bool:

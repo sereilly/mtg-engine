@@ -460,6 +460,12 @@ def primary_produced(kind: str) -> str | None:
 #: the colon, and this module is the one home for "what does a step record?".
 #: It sat in `lower.py` while that file was the only reader; the table is a
 #: registry either way, and `lower.py` is dispatch.
+#: The scratchpad key an untap cost writes. Named rather than spelled twice
+#: because three files read it — the table below, the mana lowering's gate and
+#: the activation path that writes it — and the failure a third spelling
+#: produces is a gate that always refuses.
+UNTAPPED_FOR_COST = "untapped_for_cost"
+
 _COST_PRODUCES: dict[type, str] = {
     ast.DiscardCost: "discarded_cards",
     # "Sacrifice a creature: … **If the sacrificed creature was a Thrull**, …"
@@ -478,6 +484,13 @@ _COST_PRODUCES: dict[type, str] = {
     # anything at all, and threading ``produced`` into that branch is what
     # this row is for.
     ast.SacrificeCost: "sacrificed_for_cost",
+    # "{T}, **Untap a tapped land an opponent controls**: Add one mana of any
+    # type **that land** could produce." (Benthic Explorers.) The land the cost
+    # untapped, recorded by the activation path so the effect's back-reference
+    # has something to name — and, unlike the two rows above, this row really is
+    # a gate: the phrase is only meaningful on an ability whose own cost untaps
+    # something, and `_lower_add_mana` refuses it without this key.
+    ast.UntapPermanentCost: UNTAPPED_FOR_COST,
 }
 
 

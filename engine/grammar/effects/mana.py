@@ -359,6 +359,23 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
         return ast.AddMana((), from_noted=noted, source_text=_clause())
     stream.accept_word("any")
     stream.accept_word("one")
+    # "Add one mana of any **type that land could produce**." (Benthic
+    # Explorers.) Read before the colour branch, which would refuse the word:
+    # CR 106.1b's six *types* are the five colours plus colourless, so a phrase
+    # printing "type" is asking for a strictly larger set than one printing
+    # "color" and the two cannot share a branch. Every word after it is
+    # required — the phrase names the land the ability's own cost untapped, and
+    # a production that consumed "type" and stopped would add a colour of the
+    # payer's choosing off any land at all.
+    if stream.accept_word("type"):
+        if not stream.accept_phrase("that", "land", "could", "produce"):
+            raise stream.error(
+                "the only mana type this reads is one a named land could produce"
+            )
+        return ast.AddMana(
+            (), any_color=count, source_text=_clause(),
+            any_type_from="cost_untapped_land",
+        )
     stream.expect_word("color")
     # "Add **X** mana of any one color" (Sanctum of Fruitful Harvest). The count
     # travels as the amount it was parsed as — it used to be forced to an int

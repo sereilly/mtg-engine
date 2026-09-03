@@ -808,55 +808,6 @@ def test_the_drones_snow_variant_keeps_its_supertype(set_pool):
 # unnoticed, and the message says what to do about it.
 
 
-def test_benthic_explorers_declines_on_three_named_parts(set_pool):
-    """"{T}, Untap a tapped land an opponent controls: Add one mana of any type
-    that land could produce." Three parts, and none of them is the noun phrase
-    — "a tapped land an opponent controls" parses and is testable today:
-
-    1. **an activation cost that *untaps* a permanent.** ``grammar/costs.py``
-       has a ``tap`` branch and no ``untap`` one, and ``ActivatedAbilityCost``
-       has no field for it. ``tap_filter``/``tap_count`` is the opposite
-       direction and its payment path taps — reusing it would tap the
-       opponent's land rather than untapping it. Also the first cost in this
-       engine paid with a permanent **an opponent controls**: every existing
-       chosen cost enumerates ``controlled_by(payer)``.
-    2. **a record of which permanent that cost untapped.** "That land" is a
-       back-reference to the payment, and unlike every other cost record the
-       object is *still on the battlefield* — so it is not last-known
-       information, but there is no ``CHOICE_KEYS`` channel carrying it and no
-       producer key for a lowering to gate on.
-    3. **"one mana of any type that land could produce".** ``effects/mana.py``
-       reads "any **color**" (and Fellwar Stone's "that a land an opponent
-       controls could produce", which names a *class* of lands, not one). This
-       prints "any **type**", which includes {C} — CR 106.1b — and names the
-       land part 2 would have recorded. It refuses at ``expected 'color'``.
-    """
-    program = compile_card_oracle(set_pool("ALL")["Benthic Explorers"])
-    assert not program.supported
-
-    from engine.grammar import compile_line
-
-    cost_half = compile_line(
-        "{T}, Untap a tapped land an opponent controls: Add {U}.",
-        card_name="Benthic Explorers",
-    )
-    assert not cost_half.parsed, "part 1: no untap branch in the cost clause"
-
-    effect_half = compile_line(
-        "{T}: Add one mana of any type that land could produce.",
-        card_name="Benthic Explorers",
-    )
-    assert not effect_half.parsed, "part 3: 'any type' is not 'any color'"
-
-    # The noun phrase itself is *not* a blocker, which is what keeps this
-    # decline three parts rather than four.
-    from engine.grammar import subject_filter_payload
-
-    assert subject_filter_payload("a tapped land an opponent controls") == {
-        "type_filter": "land", "tapped_only": True, "controller": "opponent",
-    }
-
-
 # --- W2G5: damage, prevention and zones ---
 #
 # One creature landed and one declined. Phelddagrif's three abilities are the
@@ -1523,4 +1474,119 @@ def test_a_narrowed_this_way_rider_needs_a_sacrifice_in_front_of_it():
     with pytest.raises((GrammarError, LoweringError)):
         lower_ability(parse_line(
             "Draw a card. If you sacrifice a Forest this way, you gain 2 life."
+        ))
+
+
+def _w3g4_explorers(set_pool, opponent_lands, *, tapped=True, mine=()):
+    """Benthic Explorers ready to activate, with *opponent_lands* on seat 1.
+
+    ``mine`` puts tapped lands on the activator's own side, which is the case
+    the printed seat clause rules out — every other chosen cost in this engine
+    enumerates the payer's own permanents, so "an opponent controls" is only
+    read if something reads it.
+    """
+    explorers = Permanent(card=set_pool("ALL")["Benthic Explorers"])
+    explorers.metadata["summoning_sickness_turn"] = -99
+    own = [Permanent(card=_w3g4_basic(name)) for name in mine]
+    theirs = [Permanent(card=_w3g4_basic(name)) for name in opponent_lands]
+    p1 = PlayerState(name="P1", battlefield=[explorers] + own)
+    p2 = PlayerState(name="P2", battlefield=theirs)
+    game = Game(players=[p1, p2])
+    game.enforce_mana_costs = False
+    game._settle()
+    game.start_turn(0)
+    # After the untap step, which would otherwise untap the activator's own
+    # lands and take the "your own land is not a payment" case away.
+    for perm in own:
+        perm.tapped = True
+    for perm in theirs:
+        perm.tapped = tapped
+    return game, p1, explorers, own, theirs
+
+
+def _w3g4_basic(name: str) -> CardDefinition:
+    """A basic land, printed with the mana ability its type gives it, plus one
+    land that makes only {C} — which is what separates "any **type**" (CR 106.1b:
+    six types, colourless among them) from "any colour"."""
+    printed = {
+        "Mountain": ("Basic Land — Mountain", ("R",)),
+        "Forest": ("Basic Land — Forest", ("G",)),
+        "Island": ("Basic Land — Island", ("U",)),
+        "Wastes": ("Basic Land", ("C",)),
+    }[name]
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=printed[0],
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=printed[1],
+        raw={"name": name, "type_line": printed[0]},
+    )
+
+
+@pytest.mark.parametrize("land,symbol", [
+    ("Mountain", "R"), ("Forest", "G"),
+    # CR 106.1b: colourless is a mana *type*, so "any type that land could
+    # produce" reaches a land that makes only {C} — where Fellwar Stone's "any
+    # **color**" one branch away in the same handler does not.
+    ("Wastes", "C"),
+])
+def test_benthic_explorers_untaps_a_land_and_makes_its_mana(set_pool, land, symbol):
+    """"{T}, Untap a tapped land an opponent controls: Add one mana of any type
+    that land could produce."
+
+    Both halves in one activation: the cost really untaps the opponent's land
+    (CR 602.1a — a cost is any action, on anyone's permanent), and the effect
+    reads *that* land rather than the board.
+    """
+    game, p1, explorers, _mine, theirs = _w3g4_explorers(set_pool, [land])
+
+    result = game.activate_permanent_ability(0, "Benthic Explorers", permanent_index=0)
+
+    assert result.supported, result.details
+    assert theirs[0].tapped is False, "the cost untapped the opponent's land"
+    assert explorers.tapped is True, "…and {T} tapped the Explorers"
+    assert p1.mana_pool[symbol] == 1
+
+
+def test_benthic_explorers_cannot_be_activated_with_nothing_to_untap(set_pool):
+    """CR 601.2h via 602.2b: a cost that cannot be paid refuses the activation
+    with nothing spent — so the Explorers is still untapped afterwards, rather
+    than having tapped for an ability that produced no mana."""
+    game, p1, explorers, _mine, theirs = _w3g4_explorers(
+        set_pool, ["Mountain"], tapped=False
+    )
+
+    result = game.activate_permanent_ability(0, "Benthic Explorers", permanent_index=0)
+
+    assert not result.supported
+    assert explorers.tapped is False
+    assert not any(p1.mana_pool.values())
+
+
+def test_benthic_explorers_will_not_untap_your_own_land(set_pool):
+    """"an opponent controls" is a seat question (CR 109.5), and the only chosen
+    cost in this engine paid off somebody else's board — so the enumerator runs
+    over every permanent and the printed clause is what narrows it. A charger
+    that had reused the tap cost's ``controlled_by(payer)`` list would find this
+    Mountain and untap it."""
+    game, p1, explorers, mine, _theirs = _w3g4_explorers(
+        set_pool, [], mine=("Mountain",)
+    )
+
+    result = game.activate_permanent_ability(0, "Benthic Explorers", permanent_index=0)
+
+    assert not result.supported
+    assert mine[0].tapped is True, "your own tapped land is not a legal payment"
+
+
+def test_the_type_read_needs_an_untap_cost_to_read(set_pool):
+    """"That land" is a back-reference to the ability's own cost. On an ability
+    whose cost untaps nothing the words name no land, so the line refuses rather
+    than compiling into a handler that would add nothing."""
+    from engine.grammar import parse_line
+    from engine.grammar.errors import LoweringError
+    from engine.grammar.lower import lower_ability
+
+    with pytest.raises(LoweringError):
+        lower_ability(parse_line(
+            "{T}: Add one mana of any type that land could produce."
         ))
