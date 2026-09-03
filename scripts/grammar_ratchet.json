@@ -1,39 +1,44 @@
 {
   "floors": {
     "2ED": {
-      "executed_pct": 46.8,
-      "lowered_pct": 83.0,
-      "parsed_pct": 84.6
+      "executed_pct": 47.0,
+      "lowered_pct": 83.3,
+      "parsed_pct": 85.1
     },
     "3ED": {
-      "executed_pct": 49.4,
-      "lowered_pct": 84.8,
-      "parsed_pct": 86.9
+      "executed_pct": 49.6,
+      "lowered_pct": 85.1,
+      "parsed_pct": 87.4
     },
     "4ED": {
-      "executed_pct": 53.8,
-      "lowered_pct": 90.0,
-      "parsed_pct": 90.6
+      "executed_pct": 54.2,
+      "lowered_pct": 90.4,
+      "parsed_pct": 91.2
     },
     "5ED": {
-      "executed_pct": 60.1,
-      "lowered_pct": 92.4,
-      "parsed_pct": 92.6
+      "executed_pct": 60.4,
+      "lowered_pct": 92.7,
+      "parsed_pct": 93.0
     },
     "<pool>": {
-      "executed_pct": 56.9,
-      "lowered_pct": 87.9,
-      "parsed_pct": 88.8
+      "executed_pct": 57.8,
+      "lowered_pct": 88.3,
+      "parsed_pct": 89.2
+    },
+    "ALL": {
+      "executed_pct": 70.5,
+      "lowered_pct": 90.0,
+      "parsed_pct": 90.4
     },
     "ARN": {
-      "executed_pct": 50.9,
-      "lowered_pct": 73.1,
-      "parsed_pct": 76.9
+      "executed_pct": 51.9,
+      "lowered_pct": 74.1,
+      "parsed_pct": 77.8
     },
     "ATQ": {
-      "executed_pct": 62.5,
-      "lowered_pct": 90.0,
-      "parsed_pct": 90.0
+      "executed_pct": 63.3,
+      "lowered_pct": 90.8,
+      "parsed_pct": 90.8
     },
     "DRK": {
       "executed_pct": 73.7,
@@ -46,9 +51,9 @@
       "parsed_pct": 99.0
     },
     "HML": {
-      "executed_pct": 64.0,
-      "lowered_pct": 92.6,
-      "parsed_pct": 92.6
+      "executed_pct": 65.1,
+      "lowered_pct": 93.7,
+      "parsed_pct": 93.7
     },
     "ICE": {
       "executed_pct": 63.4,
@@ -56,14 +61,14 @@
       "parsed_pct": 89.4
     },
     "LEA": {
-      "executed_pct": 46.6,
-      "lowered_pct": 83.0,
-      "parsed_pct": 84.5
+      "executed_pct": 46.9,
+      "lowered_pct": 83.2,
+      "parsed_pct": 85.1
     },
     "LEB": {
-      "executed_pct": 46.8,
-      "lowered_pct": 83.0,
-      "parsed_pct": 84.6
+      "executed_pct": 47.0,
+      "lowered_pct": 83.3,
+      "parsed_pct": 85.1
     },
     "LEG": {
       "executed_pct": 58.7,
