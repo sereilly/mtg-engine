@@ -885,7 +885,7 @@ engine charges an alternative or repeated cost correctly and the browser can
 only announce the default — recorded as a named four-part item in
 SET_PLAYBOOK.md's Known gaps.
 
-## Mirage (MIR) — in progress
+## Mirage (MIR) — in progress (223/335 supported, still `measured`)
 
 **Ingest census: 184/335 supported (54.9%), 312 of 335 cards new to the pool.**
 Registered under `measured` on 2026-09-02 at release date 1996-10-08, which
@@ -1263,10 +1263,56 @@ restriction goes inert and the Tiger becomes blockable by *anything*. That is
 the widening direction, so the specific row goes above the general one and its
 test says so.
 
-Everything after those two is the long tail, ranked by refusal site: `expected a
-subject` (50 cards), `unconsumed text` (29), `unrecognized effect verb` (13),
+Everything after those two was the long tail, ranked by refusal site: `expected
+a subject` (50 cards), `unconsumed text` (29), `unrecognized effect verb` (13),
 then singletons. Rounds are planned from `--refusals`, and each is written up
 below as it lands.
+
+### Where the set stands — eight rounds in
+
+**223/335 supported (66.6%), from 184/335 (54.9%) at ingest.** Every gate is
+green, the trackers are current, and each round is its own commit with its own
+`oracle_diff` reading. The set is **not finished** and is still `measured`;
+Phase 4 has not been attempted.
+
+**The remaining 112 cards have no more big rocks in them, and the census says so
+in a way it did not at ingest.** 92 of the 112 are blocked by **exactly one
+refused line**, and the 133 refused lines that remain sit over 132 distinct
+sentences — 1.01, and this time the fragment census agrees: the two readings
+that were wrong at ingest (flanking's ten reminder-text lines, phasing's seven)
+are both spent. What is left is one production per card or thereabouts, at the
+three generic refusal sites (`expected a subject` 43, `unconsumed text` 26,
+`unrecognized effect verb` 14) plus singleton sites.
+
+So the shape of the work changed at round 6 and the round plan should follow it:
+**batch several one-card families per round** rather than looking for another
+keyword. Rounds 6–8 are what that looks like. The families still standing, each
+already probed against the live compiler:
+
+| Next | Cards | What it needs |
+| --- | --- | --- |
+| The tutor cycle | 3 | a library-**top** search destination (shuffle first, then place), and a search picker that reads a *union* of card types — `search_matches` compares one `card_type`, and the payload key is read by the AI and the client too |
+| Chosen-source prevention | 5 | five different shapes, not one family: a shield whose recipient is "any target" (Circle of Despair), one over "you and/or creatures you control" plus a life rider (Shadowbane), a **redirect** rather than a prevention (Reflect Damage), a prevention with an exile rider (Bone Mask), and a source narrowed by a chosen colour (Prismatic Circle, whose line is also the set's last hollow one) |
+| Trailing riders | ~8 | "X. **They can't be regenerated.** You lose 2 life for each creature that died this way" (Reign of Terror), "…and an additional 1 damage to each green creature" (Kaervek's Hex, Tropical Storm) — the `unconsumed text` site is mostly a second sentence on one printed line |
+| `lord_buffs` restrictions | 3 | Spectral Guardian ("as long as this creature is untapped"), Shimmer (a chosen land type), Chaosphere ("creatures without flying") — three different narrowings on the buffed set, not one |
+
+**Two Mirage cards are still deliberately open from an earlier round**, both
+named there and both cheap: Telim'Tor ("all attacking creatures **with**
+flanking get +1/+1" — the global buff cannot narrow by `with_keywords`) and
+Barbed Foliage ("it **loses** flanking until end of turn" — `remove_ability_line`
+has no duration channel, deliberately, because nothing in the pool had needed
+one until now).
+
+**Nine live engine defects came out of these eight rounds**, every one of them
+in code that predates Mirage and every one found by giving a card a game rather
+than by any instrument. They are written up in their rounds; the list is the
+answer to "what did the ingest buy besides cards": the dispatcher-less
+`becomes_target`, flanking applied at declaration, CR 702.26m's skipped phasing
+event, Reality Ripple's and the tuck's pinned creature type, `aura_enchants`
+answering no to a qualified clause and yes to the wrong branch of a union, the
+upkeep step's missing CR 603.4 check, the end step's unseated one, and the
+layer-5 colour channel reading "no colours" as "no override".
+
 
 ## Alliances (ALL) — shipped
 
