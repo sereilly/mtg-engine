@@ -361,10 +361,36 @@ class OracleInstructionsMixin:
         target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
         target_player = self.players[target_idx]
 
+        # "Enchant **artifact or creature**" (Teferi's Curse). The cascade below
+        # is one branch per printed noun, and a clause naming two of them
+        # answers yes to both — so the first branch wins and looks for a host of
+        # the wrong type. The Curse enchanted a creature and the artifact branch
+        # found no artifact, or the other way round; either way the Aura went to
+        # the graveyard reporting "no legal target" over a target the picker had
+        # offered and the cast gate had accepted.
+        #
+        # So a union dispatches on **what was chosen**. A single-noun clause is
+        # untouched, which is every other Aura in the pool.
+        from ..targeting import enchant_clause_nouns
+
+        _clause = aura_enchant_clause(printed)
+        _nouns = enchant_clause_nouns(_clause) if _clause else ()
+        _chosen = (
+            self.chosen_permanent(target_player, target_permanent_index, target_permanent_id)
+            if isinstance(target_permanent_index, int) else None
+        )
+
+        def _enchants(noun: str) -> bool:
+            if not aura_enchants(printed, noun):
+                return False
+            if len(_nouns) < 2 or _chosen is None:
+                return True
+            return _chosen.has_type(noun)
+
         # The enchant clause is *found* rather than assumed to be the first
         # thing in the text — Capture Sphere prints "Flash" above it, and
         # every branch below used to answer no for it (engine/auras.py).
-        if aura_enchants(printed, "creature"):
+        if _enchants("creature"):
             # Special-case reanimation-style Auras (e.g., Animate Dead) which target a
             # creature card in a graveyard and return it to the battlefield attached
             # to this Aura. Detect the presence of the reanimation language and
@@ -578,7 +604,7 @@ class OracleInstructionsMixin:
                 if key not in _pre_meta_keys and key not in _ATTACHMENT_KEYS
             ]
 
-        elif aura_enchants(printed, "land"):
+        elif _enchants("land"):
             target_land = None
             if target_permanent_index is not None:
                 candidate = self.chosen_permanent(
@@ -627,7 +653,7 @@ class OracleInstructionsMixin:
                     _aura=aura_permanent,
                 )
             self.log.append(f"{aura_permanent.card.name} enchants {target_land.card.name}")
-        elif aura_enchants(printed, "wall"):
+        elif _enchants("wall"):
             target_wall = None
             if isinstance(target_permanent_index, int):
                 candidate = self.chosen_permanent(
@@ -654,7 +680,7 @@ class OracleInstructionsMixin:
                 # (CR 611.3 — the Wall stops being able to attack). Otherwise the
                 # Wall could keep attacking after Animate Wall is removed.
                 self.log.append(f"{target_wall.card.name} can attack as though it didn't have defender")
-        elif aura_enchants(printed, "artifact"):
+        elif _enchants("artifact"):
             # Attach this Aura to the specified artifact (or first artifact found)
             target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
             target_player = self.players[target_idx]
@@ -703,7 +729,7 @@ class OracleInstructionsMixin:
                     "into an artifact creature"
                 )
 
-        elif aura_enchants(printed, "enchantment"):
+        elif _enchants("enchantment"):
             # Attach this Aura to the specified enchantment (or first enchantment found)
             target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
             target_player = self.players[target_idx]

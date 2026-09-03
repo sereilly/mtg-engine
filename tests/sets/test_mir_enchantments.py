@@ -169,3 +169,94 @@ def test_an_aura_flashed_in_is_sacrificed_at_the_next_cleanup(set_pool):
 
     assert not any(p.card.name == "Soar" for p in game.players[0].battlefield)
     assert (host.effective_power, host.effective_toughness) == (2, 2)
+
+
+# --- Round 5: the Enchant clause's fourth quality (CR 702.5) ---
+
+from engine.targeting import (enchant_clause_nouns, enchant_line_subject,
+                              enchant_subject_spec)
+
+
+def _r5_cast(set_pool, aura_name: str, host_name: str):
+    """*aura_name* cast from seat 0 at seat 1's *host_name*.
+
+    Cast rather than attached, because the half these cards were failing on is
+    what happens at resolution — `attach_aura` skips the branch that takes
+    control and the branch that picks a host by type.
+    """
+    pool = set_pool("MIR")
+    host = Permanent(card=pool[host_name])
+    game = Game(players=[
+        PlayerState(name="P1", hand=[pool[aura_name]], library=[pool["Island"]] * 6),
+        PlayerState(name="P2", battlefield=[host], library=[pool["Island"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    result = game.cast_from_hand(
+        0, aura_name, target_player_index=1, target_permanent_index=0
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    return game, host
+
+
+@pytest.mark.parametrize(
+    "line,spec",
+    [
+        ("Enchant black creature", {"kind": "creature", "any_colors": ["B"]}),
+        ("Enchant nonblack creature", {"kind": "creature", "exclude_colors": ["B"]}),
+        ("Enchant red or green creature",
+         {"kind": "creature", "any_colors": ["R", "G"]}),
+        ("Enchant artifact or creature", {"kind": "permanent"}),
+    ],
+)
+def test_the_enchant_clause_reads_a_colour_and_a_noun_union(line, spec):
+    """CR 702.5's [quality] has a fourth independent half — a colour — and one
+    half that cannot compose, a union of nouns. Four Mirage Auras print them and
+    the clause reader had neither, so all four refused at the *attachment* line
+    while every other line on them read fine."""
+    subject = enchant_line_subject(line)
+    assert subject is not None, line
+    assert enchant_subject_spec(subject) == spec
+
+
+def test_mind_harness_takes_control_of_what_it_enchants(set_pool):
+    """"Enchant red or green creature" / "You control enchanted creature."
+
+    The defect widening the clause exposed. `aura_enchants` asked
+    ``clause.startswith(noun)``, so "red or green creature" answered **no** to
+    every branch of the attach cascade: the Aura resolved, reported supported,
+    attached to nothing and stole nothing. The clause is reduced through the
+    same splitters the picker uses now.
+    """
+    game, host = _r5_cast(set_pool, "Mind Harness", "Brushwagg")
+
+    assert game.controller_index_of(host) == 0
+
+
+def test_teferis_curse_enchants_either_of_its_two_printed_types(set_pool):
+    """"Enchant artifact or creature."
+
+    The other half of the same defect, and the harder direction: a union answers
+    yes to *both* branches of the cascade, so the first one won and looked for a
+    host of the wrong type — the Aura went to the graveyard reporting "no legal
+    target" over a target the picker had offered and the cast gate had accepted.
+    A union dispatches on what was chosen.
+    """
+    game, creature = _r5_cast(set_pool, "Teferi's Curse", "Femeref Knight")
+    assert game._has_keyword(creature, "phasing")
+
+    game, artifact = _r5_cast(set_pool, "Teferi's Curse", "Charcoal Diamond")
+    assert game._has_keyword(artifact, "phasing")
+
+
+def test_a_union_clause_reduces_to_its_nouns(set_pool):
+    """The reducer both readers share, asserted directly — a graveyard clause
+    still reads as a creature Aura, which is what keeps Animate Dead on the
+    reanimation branch."""
+    assert enchant_clause_nouns("artifact or creature") == ("artifact", "creature")
+    assert enchant_clause_nouns("red or green creature") == ("creature",)
+    assert enchant_clause_nouns("nonblack creature") == ("creature",)
+    assert enchant_clause_nouns("creature card in a graveyard") == (
+        "creature card in a graveyard",
+    )

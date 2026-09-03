@@ -1152,6 +1152,39 @@ keeps it so.
 card — the "fewer" row moved no existing card, which is the reading to expect
 for a word that was previously a hard refusal.
 
+### Round 5 — the Enchant clause's fourth quality (CR 702.5): 209 → 213 supported
+
+Four Auras, all refusing at their **attachment** line while every other line on
+them read fine: "Enchant **black** creature" (Decomposition), "**nonblack**"
+(Armor of Thorns), "**red or green**" (Mind Harness) and "**artifact or
+creature**" (Teferi's Curse). A colour is a fourth independent half of
+CR 702.5's [quality], so it composes with the noun, the seat and the
+keyword-exclusion instead of multiplying rows; a union of *nouns* is the one
+half that cannot compose, so it is a second alternative rather than a suffix.
+
+**And widening the gate broke two readers keyed on the old shape, exactly as
+CLAUDE.md's Phase 3 note says it will.** `auras.aura_enchants` asked
+`clause.startswith(noun)`:
+
+- "red or green creature" answered **no** to every branch of the attach
+  cascade, so Mind Harness resolved, reported supported, attached to nothing and
+  stole nothing.
+- "artifact or creature" answered **yes to both** branches, so the first one won
+  and looked for a host of the wrong type — the Curse went to the graveyard
+  reporting "no legal target" over a target the picker had offered and the cast
+  gate had accepted.
+
+Both are the same fix: the clause is reduced by `targeting.enchant_clause_nouns`
+— the same three splitters the picker and the cast gate already use — and a
+*union* dispatches on what was actually chosen. Neither defect is visible from a
+compiled program; both were found by casting the card.
+
+The round also closed round 3's one loose end: `parse_coverage.py` reads a card
+sentence by sentence, and the flash cycle prints two, so `cast_timing`'s two
+halves are two channels there rather than one.
+
+`oracle_diff`: **4 changed of 2181**, exactly the four Auras.
+
 Everything after those two is the long tail, ranked by refusal site: `expected a
 subject` (50 cards), `unconsumed text` (29), `unrecognized effect verb` (13),
 then singletons. Rounds are planned from `--refusals`, and each is written up

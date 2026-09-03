@@ -46,6 +46,7 @@ import re
 from .cast_costs import additional_costs
 from .divided_damage import CHOSEN, DIVIDED_TARGETS, divided_entry
 from .enter_effects import copy_on_enter_type
+from .oracle_types import _COLOR_WORD_TO_SYMBOL
 from .subject_filters import filter_head_noun, unimplemented_filter_keywords
 
 # "Enchant creature", "Enchant land", ... — but NOT "Enchant creature card in a
@@ -85,12 +86,69 @@ _ENCHANT_NEGATION = r"(?:non-[a-z]+ )?"
 #: alternative to add beside this the day such a card arrives.
 _ENCHANT_KEYWORD_EXCLUSION = r"(?: without [a-z]+)?"
 _ENCHANT_SEAT_CLAUSES = {"you control": "you", "an opponent controls": "opponent"}
+#: "Enchant **black** creature" (Decomposition), "Enchant **red or green**
+#: creature" (Mind Harness), "Enchant **nonblack** creature" (Armor of Thorns).
+#: CR 702.5's [quality] once more, and a *fourth* independent half of the
+#: clause — so it composes with the noun, the seat and the keyword exclusion
+#: instead of multiplying the rows, exactly as the two halves above it do.
+#: The union and the negation are both printed and both read; a printed union
+#: is an OR, which is how `any_colors` is already tested everywhere else.
+_ENCHANT_COLOUR_WORDS = ("white", "blue", "black", "red", "green")
+_ENCHANT_COLOUR = (
+    rf"(?:(?:non)?(?:{'|'.join(_ENCHANT_COLOUR_WORDS)})"
+    rf"(?: or (?:{'|'.join(_ENCHANT_COLOUR_WORDS)}))* )?"
+)
+#: "Enchant **artifact or creature**" (Teferi's Curse). A union of *nouns*, the
+#: one half of the clause that cannot compose — the alternation above picks one
+#: word — so it is spelled here as a second alternative rather than as a suffix
+#: on the first. Two nouns is what the pool prints; a third would be another
+#: repetition of the same group.
+_ENCHANT_NOUN_UNION = (
+    rf"(?:{'|'.join(_ENCHANT_NOUNS)})(?: or (?:{'|'.join(_ENCHANT_NOUNS)}))*"
+)
 _ENCHANT_SUBJECT = (
+    rf"{_ENCHANT_COLOUR}"
     rf"{_ENCHANT_NEGATION}"
-    rf"(?:{'|'.join(_ENCHANT_NOUNS)})"
+    rf"{_ENCHANT_NOUN_UNION}"
     rf"{_ENCHANT_KEYWORD_EXCLUSION}"
     rf"(?: (?:{'|'.join(_ENCHANT_SEAT_CLAUSES)}))?"
 )
+#: The colour half of a subject, split off the way the seat and keyword halves
+#: are. Anchored at the start, because that is where the words are printed.
+_ENCHANT_COLOUR_PREFIX = re.compile(
+    rf"^(?P<colours>(?:non)?(?:{'|'.join(_ENCHANT_COLOUR_WORDS)})"
+    rf"(?: or (?:{'|'.join(_ENCHANT_COLOUR_WORDS)}))*) (?P<noun>.+)$"
+)
+
+
+def enchant_subject_colours(subject: str) -> tuple[str, tuple[str, ...], bool]:
+    """Split an enchant subject into its noun, its colours and whether they are
+    **excluded**.
+
+    ``"black creature"`` -> ``("creature", ("B",), False)``;
+    ``"nonblack creature"`` -> ``("creature", ("B",), True)``;
+    ``"red or green creature"`` -> ``("creature", ("R", "G"), False)``;
+    a subject with no colour word -> ``(subject, (), False)``.
+
+    The fourth half of CR 702.5's [quality] coming apart in one place, for the
+    reason :func:`enchant_subject_seat` and
+    :func:`enchant_subject_keyword_exclusion` each exist: the picker, the cast
+    gate and the CR 704.5m sweep all need it, and three ``startswith`` tests
+    between them is how they come to disagree about a card.
+
+    A printed "non" applies to the whole run — no card prints a mixed one, and
+    a mixed one would be ambiguous English rather than a shape to guess at.
+    """
+    match = _ENCHANT_COLOUR_PREFIX.match(subject)
+    if match is None:
+        return subject, (), False
+    words = match.group("colours")
+    excluded = words.startswith("non")
+    symbols = tuple(
+        _COLOR_WORD_TO_SYMBOL[word.removeprefix("non")]
+        for word in words.split(" or ")
+    )
+    return match.group("noun"), symbols, excluded
 #: The keyword half of a subject, split off the way the seat half is. Anchored
 #: at the end so it is read after :func:`enchant_subject_seat` has taken the
 #: seat clause off — "creature without flying you control" is not printed, but
@@ -191,6 +249,32 @@ def enchant_line_subject(line: str) -> str | None:
     return subject
 
 
+def enchant_clause_nouns(clause: str) -> tuple[str, ...]:
+    """The permanent noun(s) an ``Enchant <subject>`` clause names.
+
+    ``"red or green creature"`` -> ``("creature",)``;
+    ``"artifact or creature"`` -> ``("artifact", "creature")``;
+    ``"creature card in a graveyard"`` -> ``("creature card in a graveyard",)``,
+    which the prefix test in :func:`engine.auras.aura_enchants` still reads as a
+    creature — deliberately, because that reanimation clause is a creature Aura
+    with a different picker rather than a different noun.
+
+    The clause's four *qualities* (CR 702.5) taken off in the order they are
+    printed, through the same three splitters the picker and the cast gate use.
+    Written once here because widening the clause is what breaks its readers:
+    Mirage added a colour half and a noun union, and `aura_enchants` — which
+    asked ``clause.startswith(noun)`` — then answered no for "red or green
+    creature" and *yes to the wrong branch* for "artifact or creature", so Mind
+    Harness attached to nothing and Teferi's Curse looked for an artifact when
+    it had enchanted a creature. Both reported supported.
+    """
+    noun = enchant_subject_seat(clause)[0]
+    noun = enchant_subject_colours(noun)[0]
+    if noun.startswith("non-"):
+        noun = noun.split(" ", 1)[1] if " " in noun else noun
+    return tuple(part.strip() for part in noun.split(" or "))
+
+
 def enchant_graveyard_line(line: str) -> bool:
     """Whether one printed line is Animate Dead's "Enchant creature card in a
     graveyard".
@@ -264,10 +348,28 @@ def enchant_subject_spec(subject: str) -> dict | None:
     # `permanent_matches_enchant_noun` and off the same split — the offered list
     # and the enforced rule are one reading, which is this clause's whole rule.
     noun, without_keyword = enchant_subject_keyword_exclusion(noun)
-    spec = _ENCHANT_NOUN_TO_SPEC.get(noun)
+    # "Enchant **black** creature" / "**red or green** creature" / "**nonblack**
+    # creature". Carried into the spec like the keyword exclusion above and for
+    # the same reason: `_enumerate_targets` can read a permanent's colours, so
+    # the picker offers exactly the legal hosts rather than a superset, and the
+    # gate enforces it off this same split.
+    noun, colours, colours_excluded = enchant_subject_colours(noun)
+    # "Enchant **artifact or creature**" (Teferi's Curse). A union has no one
+    # noun to key a spec on, so it takes the general permanent picker and the
+    # gate narrows it — the safe direction, and the same one the negated-subtype
+    # branch above takes.
+    union = tuple(part.strip() for part in noun.split(" or ")) if " or " in noun else ()
+    if union:
+        if any(part not in _ENCHANT_NOUN_TO_SPEC for part in union):
+            return None
+        spec = {"kind": "permanent"}
+    else:
+        spec = _ENCHANT_NOUN_TO_SPEC.get(noun)
     if spec is None:
         return None
     spec = dict(spec)
+    if colours:
+        spec["exclude_colors" if colours_excluded else "any_colors"] = list(colours)
     if without_keyword is not None:
         spec["without_keyword"] = without_keyword
     flag = _ENCHANT_SEAT_TO_FLAG.get(seat)

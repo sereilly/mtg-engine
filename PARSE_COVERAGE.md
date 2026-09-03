@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**29 unclaimed sentence(s) across 21 supported card(s).**
+**25 unclaimed sentence(s) across 19 supported card(s).**
 
 - **Afiya Grove**
   - `at the beginning of your upkeep, move a +1/+1 counter from this enchantment onto target creature`
@@ -44,9 +44,6 @@ anything anyone did, and every ingest would arrive red.
   - `whenever a creature is put into an opponent's graveyard from the battlefield, you gain life equal to its toughness`
 - **Kaervek's Torch**
   - `as long as kaervek's torch is on the stack, spells that target it cost {2} more to cast`
-- **Lightning Reflexes**
-  - `you may cast this spell as though it had flash`
-  - `if you cast it any time a sorcery couldn't have been cast, the controller of the permanent it becomes sacrifices it at the beginning of the next cleanup step`
 - **Lure of Prey**
   - `cast this spell only if an opponent cast a creature spell this turn`
 - **Malignant Growth**
@@ -62,9 +59,6 @@ anything anyone did, and every ingest would arrive red.
   - `{1}: the next time a source of your choice of the chosen color would deal damage to you this turn, prevent that damage`
 - **Roots of Life**
   - `as this enchantment enters, choose island or swamp`
-- **Soar**
-  - `you may cast this spell as though it had flash`
-  - `if you cast it any time a sorcery couldn't have been cast, the controller of the permanent it becomes sacrifices it at the beginning of the next cleanup step`
 - **Soul Echo**
   - `at the beginning of your upkeep, sacrifice this enchantment if there are no echo counters on it. otherwise, target opponent may choose that for each 1 damage that would be dealt to you until your next upkeep, you remove an echo counter from this enchantment instead`
 - **Soul Rend**

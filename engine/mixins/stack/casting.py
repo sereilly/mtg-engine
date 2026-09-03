@@ -47,7 +47,8 @@ from ...restricted_mana import CAST, PaymentPurpose
 from ...target_restrictions import forbidden_target
 from ...targeting import bounce_subject_filter, graveyard_target_spec
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
-from ...targeting import (derive_cast_spec, enchant_subject_keyword_exclusion,
+from ...targeting import (derive_cast_spec, enchant_subject_colours,
+                          enchant_subject_keyword_exclusion,
                           enchant_subject_seat, spec_roles, targets_mana_value_x)
 
 def _optional_cost_offers(
@@ -239,6 +240,29 @@ def permanent_matches_enchant_noun(permanent: Permanent, noun: str) -> bool:
     noun, without_keyword = enchant_subject_keyword_exclusion(noun)
     if without_keyword is not None and permanent.has_keyword(without_keyword):
         return False
+    # "Enchant **black** creature" (Decomposition) / "**red or green**" (Mind
+    # Harness) / "**nonblack**" (Armor of Thorns). The colour half of CR 702.5's
+    # [quality], split by the same reader the picker builds its spec from — so
+    # the hosts offered and the hosts allowed stay one reading. Through
+    # `permanent_effective_colors`, which is CR 613 layer 5's answer: a creature
+    # an effect has recoloured is judged on what it is now, and the CR 704.5m
+    # sweep then puts the Aura in the graveyard if that made it illegal.
+    noun, colours, colours_excluded = enchant_subject_colours(noun)
+    if colours:
+        from ...handlers._common import permanent_effective_colors
+
+        present = permanent_effective_colors(permanent) & set(colours)
+        if bool(present) is colours_excluded:
+            return False
+    # "Enchant **artifact or creature**" (Teferi's Curse). A printed union is an
+    # OR, so any one member is enough — asked of the same matcher table a single
+    # noun uses, which is what keeps a union from being a second vocabulary.
+    if " or " in noun:
+        parts = [part.strip() for part in noun.split(" or ")]
+        matchers = [_ENCHANT_TARGET_MATCHERS.get(part) for part in parts]
+        if any(matcher is None for matcher in matchers):
+            return True
+        return any(matcher(permanent) for matcher in matchers)
     matcher = _ENCHANT_TARGET_MATCHERS.get(noun)
     if matcher is None:
         # A noun nobody has read. Every one the pool prints has a row above, so

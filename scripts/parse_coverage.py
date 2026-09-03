@@ -65,6 +65,8 @@ from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_absence_line, cast_condition_line,
                                       cast_damage_source_line,
                                       global_cast_ban_line)
+from engine.cast_timing import (grants_flash,  # noqa: E402
+                                sacrifices_at_cleanup_if_cast_at_instant_speed)
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.cost_modifiers import cost_modifier_claims_line, cost_modifiers_for  # noqa: E402
 from engine.draw_step_modifiers import (  # noqa: E402
@@ -244,6 +246,15 @@ CHANNELS: tuple[tuple[str, object], ...] = (
      lambda s: enchant_line_subject(s) is not None or enchant_graveyard_line(s)),
     ("aura static (oracle_instructions/permanent_state)", lambda s: _matches_any(s, _AURA_STATIC_PATTERNS)),
     ("cast_restrictions.py", lambda s: any(r.phrase in s for r in CAST_RESTRICTIONS)),
+    # The *widening* half of the same question — "You may cast this spell as
+    # though it had flash", plus the penalty printed with it (Mirage's five
+    # Auras). Two channels rather than one, because this census reads a card
+    # sentence by sentence and the card prints two: a permission and a rider,
+    # each implemented by its own half of `engine/cast_timing.py`. Asked of the
+    # readers that answer them, for the reason every claim above is.
+    ("cast_timing.py (granted flash)", grants_flash),
+    ("cast_timing.py (cleanup sacrifice rider)",
+     sacrifices_at_cleanup_if_cast_at_instant_speed),
     # The board half of CR 601.3 — "Cast this spell only if you control a
     # snow land" (Blizzard). A row whose noun phrase is payload, so the
     # claim asks the reader that answers it rather than comparing against a

@@ -327,11 +327,24 @@ def aura_enchant_clause(oracle_text: str) -> str | None:
 
 
 def aura_enchants(oracle_text: str, noun: str) -> bool:
-    """Whether this Aura's enchant clause names *noun* (a prefix match, so
-    "creature" answers "enchant creature card in a graveyard" too — exactly
-    what ``text.startswith("enchant creature")`` used to mean)."""
+    """Whether this Aura's enchant clause names *noun*.
+
+    A prefix match against each noun the clause names, so "creature" answers
+    "enchant creature card in a graveyard" too — exactly what
+    ``text.startswith("enchant creature")`` used to mean — while a printed
+    *quality* no longer hides the noun behind it. The clause is reduced by
+    ``targeting.enchant_clause_nouns``, the same three splitters the picker and
+    the cast gate use, because this reader was the one Mirage's widening broke:
+    "Enchant **red or green** creature" answered no to every branch and
+    "Enchant **artifact or creature**" answered yes to the artifact one whatever
+    the Aura had actually enchanted.
+    """
+    from .targeting import enchant_clause_nouns
+
     clause = aura_enchant_clause(oracle_text)
-    return clause is not None and clause.startswith(noun)
+    if clause is None:
+        return False
+    return any(part.startswith(noun) for part in enchant_clause_nouns(clause))
 
 
 #: "Whenever enchanted land is tapped for mana, its controller adds an
