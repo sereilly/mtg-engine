@@ -33,7 +33,7 @@ from .target_restrictions import forbidden_target
 from .auras import aura_restriction_active
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction, compile_card_oracle
-from .oracle_types import x_spend_colors_from_text
+from .oracle_types import cost_target_count, x_spend_colors_from_text
 from .search_filters import search_matches, searched_seat
 from .subject_filters import subject_matches
 from .targeting import (bounce_subject_filter, derive_activation_spec,
@@ -1495,7 +1495,19 @@ def _choose_several_targets(
     spec = derive_cast_spec(card, program)
     maximum = (spec or {}).get("max_targets")
     if not isinstance(maximum, int) or maximum <= 1:
-        return None
+        # "Destroy target artifact. For each additional {1}{R} you paid, destroy
+        # **another** target artifact…" (Primitive Justice): the count is fixed
+        # by an announcement (CR 601.2b) this policy does not make, since it
+        # takes no optional additional cost -- so the number is the base alone,
+        # and it can be one. One is still a number this chooser has to answer:
+        # CR 601.2c refuses an announcement that names no target
+        # (`legality.cast_target_refusal`), and a several-target handler has no
+        # resolution-time board scan to fall into the way a single-target one
+        # does. Without this the seat re-proposes the spell every turn and is
+        # refused every turn, which is exactly what `refused_casts` counts.
+        maximum = cost_target_count((spec or {}).get("cost_targets"), {}) or 0
+        if maximum < 1:
+            return None
     legal = game.cast_target_spec(caster_index, card).get("valid_targets") or []
     by_seat: dict[int, list[int]] = {}
     # A graveyard card is not a permanent and has no `permanent_id`; its slots
