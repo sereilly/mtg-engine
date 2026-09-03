@@ -1041,6 +1041,57 @@ Cloak of Invisibility (two effects on one Aura line), Teferi's Curse ("Enchant
 artifact **or** creature") and Shimmer (a chosen land type). None is a phasing
 gap any more; each is now blocked on something else.
 
+### Round 3 — the flash-Aura cycle (CR 113.6b): 204 → 206 supported
+
+**The one place Mirage's sentence census has leverage in it.** Five Auras —
+Armor of Thorns, Grave Servitude, Lightning Reflexes, Soar, Ward of Lights —
+print the identical sentence, and it is the only printed line in the set that
+more than two unsupported cards share:
+
+> You may cast this spell as though it had flash. If you cast it any time a
+> sorcery couldn't have been cast, the controller of the permanent it becomes
+> sacrifices it at the beginning of the next cleanup step.
+
+`engine/cast_timing.py` is the new table, and it is the **mirror** of
+`cast_restrictions.py` rather than an extension of it: that one narrows legal
+timing and fails by casting a card too often; this one widens it and fails the
+other way, by refusing a cast — which breaks no rule and fails no test, because
+a spell nobody can cast simply never appears. It is a third axis from
+`cast_permissions.py`, which is about *where* a spell may be cast from.
+
+**Both halves or neither**, and `cast_permission_line` says so out loud: the
+permission alone would ship five Auras that can be flashed in and never
+sacrificed, a strictly better card than the one printed. The rider is enforced
+across three places, none of which knows the sentence — the cast path freezes
+whether a sorcery could have been cast (a `StackItem.choices` key, because
+CR 601.3d's timing is a fact about the moment of announcement and by resolution
+the stack has emptied down to this spell), the permanent spell's resolution
+copies the answer onto the permanent, and the cleanup step sweeps what is
+marked.
+
+`CardDefinition.has_flash`'s docstring had predicted the shape exactly — "a
+granted flash is a permission about a card outside the battlefield, so it will
+arrive as its own seam on `Game`, not here". It did. And the seam **removed** a
+second copy on arrival: the web layer spelled the sorcery-speed gate twice
+(`web/actions.py` and `web/state_view.py`), so a third source of the answer
+would have been two more places to forget it. Both now ask
+`casts_at_instant_speed`. CR 601.3d's timing predicate is likewise now one
+function with two readers — `activation_restrictions`' "Activate only as a
+sorcery" and this cast path ask the same CR sentence.
+
+**One guard was blind in a way worth fixing rather than working around.**
+`test_stack_item_choices` scans for a `choices` key as a *string literal*, so a
+key named once as a module constant and imported by its three users read as
+declared-and-unused — the guard rewarding four copies of a literal over one
+constant. It now resolves a module-level `NAME = "literal"` before matching.
+
+`oracle_diff` after the round: **26 changed of 2181**, still every one a Mirage
+card. Two cards land (Lightning Reflexes, Soar); the other three are now blocked
+on one clause each and nothing to do with timing — Armor of Thorns on "Enchant
+nonblack creature", Grave Servitude on "gets +3/-1 **and is black**", Ward of
+Lights on "has protection from the chosen color. This effect doesn't remove this
+Aura."
+
 Everything after those two is the long tail, ranked by refusal site: `expected a
 subject` (50 cards), `unconsumed text` (29), `unrecognized effect verb` (13),
 then singletons. Rounds are planned from `--refusals`, and each is written up

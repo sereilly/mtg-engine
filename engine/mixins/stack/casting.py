@@ -24,6 +24,8 @@ from ...alternative_costs import AlternativeCost, alternative_costs
 from ...cast_costs import AdditionalCost, OptionalManaCost, additional_costs
 from ...auras import controller_cast_ban
 from ...cast_restrictions import check_cast_timing, global_cast_ban
+from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
+                            sacrifices_at_cleanup_if_cast_at_instant_speed)
 from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling,
                                    cast_x_value, defines_cast_x)
 from ...damage_ledger import record_cast
@@ -1345,6 +1347,20 @@ class SpellCastingMixin:
                         # a delta cannot tell those apart. The allocation is the
                         # cost, so the number is exact.
                         "x_mana_spent": x_mana_spent,
+                        # "If you cast it any time a sorcery couldn't have been
+                        # cast, …" (Mirage's five flash Auras). Answered *here*
+                        # because here is the only moment it can be: CR 601.3d's
+                        # timing is about the game state as the spell is
+                        # announced, and by resolution the stack has emptied
+                        # down to this spell and the step may have moved on.
+                        # Stamped only for a card whose text asks — see
+                        # `cast_permissions`, whose whole rider this feeds.
+                        CAST_AT_INSTANT_SPEED: (
+                            sacrifices_at_cleanup_if_cast_at_instant_speed(
+                                card.oracle_text or ""
+                            )
+                            and not a_sorcery_could_be_cast(self, caster_index)
+                        ),
                     },
             )
             self._stack_push(spell_item)

@@ -10,6 +10,7 @@ P/T buffs, damage prevention pools, and the EOT metadata flags. Creatures exiled
 
 from ..delayed_triggers import expire_delayed_triggers, fire_delayed_triggers
 from ..cast_permissions import expire_end_of_turn as expire_end_of_turn_permissions
+from ..cast_timing import CAST_AT_INSTANT_SPEED
 from ..hand_size import maximum_hand_size
 from ..models import Permanent
 from ..keywords import (clear_granted_ability_lines,
@@ -45,6 +46,17 @@ class CleanupStepMixin:
         if self.lingering_global_statics:
             self.lingering_global_statics.clear()
             self._refresh_dynamic_creatures()
+
+        # "…the controller of the permanent it becomes sacrifices it at the
+        # beginning of the next cleanup step" (Mirage's five flash Auras).
+        # CR 514.1's moment, and the *first* thing this step does, because the
+        # sentence says "at the beginning of". A sweep over the mark rather than
+        # a delayed trigger armed at the cast, for the reason every other sweep
+        # in this engine exists: the mark can arrive by more than one route (an
+        # Aura that becomes a permanent, and any later card that copies the
+        # sentence), and a rule with several fire sites is a rule that gets
+        # forgotten at one of them.
+        self._sacrifice_permanents_cast_at_instant_speed()
 
         active_player = self.players[player_index]
         cleanup_completed = True
@@ -234,3 +246,35 @@ class CleanupStepMixin:
             self._settle()
         self._on_step_or_phase_end(phase, step)
         return cleanup_completed
+
+    def _sacrifice_permanents_cast_at_instant_speed(self) -> None:
+        """CR 514.1's half of Mirage's flash-Aura rider.
+
+        "If you cast it any time a sorcery couldn't have been cast, the
+        controller of the permanent it becomes sacrifices it at the beginning of
+        the next cleanup step." The mark was frozen as the spell was announced
+        (`engine/cast_timing.py`) and copied onto the permanent as the spell
+        resolved, so nothing here has to reconstruct a timing question the board
+        can no longer answer.
+
+        **The next cleanup step, not this permanent's controller's.** CR 514.1
+        gives every turn one, and the sentence names the next one there is — so
+        an Aura flashed in on an opponent's turn dies at the end of that turn
+        rather than surviving to the caster's own.
+
+        Sacrificed rather than destroyed: a regeneration shield does not save it
+        and it is its controller's own action (CR 701.17a).
+        """
+        marked = [
+            perm for perm in self.all_permanents()
+            if perm.metadata.get(CAST_AT_INSTANT_SPEED)
+        ]
+        for perm in marked:
+            seat = self.controller_index_of(perm)
+            if seat is None:
+                continue
+            self.log.append(
+                f"{self.players[seat].name} sacrifices {perm.card.name} "
+                "(cast when a sorcery couldn't have been)"
+            )
+            self.sacrifice_permanent(perm)

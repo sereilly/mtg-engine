@@ -12,6 +12,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 from ...auras import aura_enchant_clause
+from ...cast_timing import CAST_AT_INSTANT_SPEED
 from ...classifier import CardClassification, classify_card
 from ...extra_triggers import additional_triggers
 from ...game_types import OracleExecutionContext, OracleStateMachine, StackItem
@@ -803,6 +804,14 @@ class StackResolutionMixin:
             # because a later card may ask either question and they are not the
             # same one: a reanimation stamps the first and not the second.
             permanent.metadata["cast_from_zone"] = cast_from_zone
+            # "…the controller of **the permanent it becomes** sacrifices it at
+            # the beginning of the next cleanup step" (Mirage's flash Auras).
+            # The answer was frozen as the spell was announced, because that is
+            # the only moment CR 601.3d's timing can be read; carried onto the
+            # permanent here because the permanent is what the sentence acts on
+            # and the stack item is gone by the time the cleanup step looks.
+            if (choices or {}).get(CAST_AT_INSTANT_SPEED):
+                permanent.metadata[CAST_AT_INSTANT_SPEED] = True
             self._put_permanent_onto_battlefield(
                 caster_index, permanent, target_player_index,
                 was_cast=True, from_zone=cast_from_zone,

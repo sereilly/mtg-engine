@@ -17,6 +17,7 @@ from fastapi import HTTPException
 
 from engine.activation_permissions import card_widens_activation
 from engine.cast_permissions import permission_for
+from engine.cast_timing import casts_at_instant_speed
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
 
@@ -219,10 +220,15 @@ def _action_cast(session, req, seat_type):
         if card is None:
             raise HTTPException(status_code=400, detail="card not in hand")
 
-    # CR 702.8b: a card with flash casts any time an instant could be cast,
-    # so the two sorcery-speed gates below ask instant-or-flash, not the
-    # type line alone. A land is never cast and keeps sorcery timing.
-    instant_speed = card.primary_type == "instant" or card.has_flash
+    # CR 702.8b: a card with flash casts any time an instant could be cast, so
+    # the two sorcery-speed gates below ask instant-or-flash, not the type line
+    # alone. A land is never cast and keeps sorcery timing. Asked of
+    # `engine/cast_timing.py` rather than spelled here, because there are three
+    # sources of the answer now — the type, the printed keyword and a card that
+    # grants itself flash (Mirage's five Auras) — and this question is asked in
+    # two places: a card castable in the picker and refused by the action is the
+    # shape a second copy produces.
+    instant_speed = casts_at_instant_speed(card)
     if req.seat != session.current_turn and not instant_speed:
         raise HTTPException(status_code=400, detail="non-instant spells can only be cast on your turn")
 

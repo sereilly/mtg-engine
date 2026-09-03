@@ -791,6 +791,7 @@ def _aura_line_claimed(line: str, card_name: str) -> bool:
     """Whether one Aura/Equipment effect line has an implementation behind it."""
     from .oracle import _is_supported_keyword_line
     from .cast_costs import cast_cost_claims_line
+    from .cast_timing import cast_permission_line
     from .enter_effects import enter_effect_line
     from .target_restrictions import target_restriction_line
 
@@ -831,6 +832,15 @@ def _aura_line_claimed(line: str, card_name: str) -> bool:
         # Asked as those tables rather than listed here, so a clause they cannot
         # charge leaves the line unclaimed and the card unsupported.
         or cast_cost_claims_line(line)
+        # "You may cast this spell as though it had flash. If you cast it any
+        # time a sorcery couldn't have been cast, …" (Mirage's five-Aura cycle.)
+        # A *timing permission* plus the penalty printed with it — neither an
+        # effect the Aura has while attached nor a restriction on its targeting,
+        # so it is claimed by the table that opens and enforces it. All or
+        # nothing there: the permission alone would ship an Aura that can be
+        # flashed in and never sacrificed, which is a strictly better card than
+        # the one printed.
+        or cast_permission_line(line)
         or aura_effect_claim(line, card_name) is not None
     )
 

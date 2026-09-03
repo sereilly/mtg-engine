@@ -108,6 +108,16 @@ CHOICE_KEYS = (
     # allocation the payment was *built* from, so "the amount of {B} spent on X"
     # is exact.
     "x_mana_spent",
+    # Whether the spell was cast at a time a sorcery could **not** have been
+    # (Mirage's five flash Auras: "If you cast it any time a sorcery couldn't
+    # have been cast, …"). On this channel for the same reason as every cost
+    # spoil above it: CR 601.3d's timing is a fact about the moment of
+    # announcement, and by resolution the stack has emptied down to this spell
+    # and the step may have moved on — so nothing in the game state can be asked
+    # the question afterwards. `engine/cast_timing.py` names the key and reads
+    # the sentence; the permanent's resolution copies the answer onto the
+    # permanent and the cleanup step acts on it.
+    "cast_at_instant_speed",
 )
 
 

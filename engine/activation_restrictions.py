@@ -91,12 +91,16 @@ class ActivationRestriction:
 
 
 def _as_a_sorcery(game: "Game", controller_index: int, source) -> bool:
-    """CR 601.3d's timing: your own main phase, with an empty stack."""
-    return (
-        game.active_player_index == controller_index
-        and game.current_turn_phase in ("precombat_main", "postcombat_main")
-        and not game.stack
-    )
+    """CR 601.3d's timing: your own main phase, with an empty stack.
+
+    Delegated rather than spelled here, because the cast path asks the identical
+    question of Mirage's flash Auras ("any time a sorcery couldn't have been
+    cast") — see ``engine/cast_timing.a_sorcery_could_be_cast``. This signature
+    stays what the restriction table's rows are: ``(game, seat, source)``.
+    """
+    from .cast_timing import a_sorcery_could_be_cast
+
+    return a_sorcery_could_be_cast(game, controller_index)
 
 
 def _a_creature_died_this_turn(game: "Game", controller_index: int, source) -> bool:

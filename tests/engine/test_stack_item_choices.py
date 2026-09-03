@@ -34,24 +34,60 @@ _SOURCES = sorted(
 # below, because a dict literal has no `choices` token next to its keys.
 _SUBSCRIPT = re.compile(r"""choices(?:\.get\(|\[)\s*["']([a-z_]+)["']""")
 
+#: The same three shapes written with a **named constant** instead of a literal:
+#: ``choices[CAST_AT_INSTANT_SPEED]``, ``choices.get(KEY)``, ``{KEY: value}``.
+#: A key whose string lives in one module and is imported by the three files
+#: that use it is strictly better than four copies of a literal — it is the
+#: arrangement `engine/enter_effects.py` exists to enforce for its own phrases —
+#: and this guard used to be blind to it, reporting the key as declared and
+#: unused while three files read and wrote it. So the constant is resolved:
+#: every module-level ``NAME = "literal"`` in the scanned tree, collected once.
+_CONSTANT_SUBSCRIPT = re.compile(r"""choices(?:\.get\(|\[)\s*([A-Z][A-Z0-9_]*)""")
+
+
+def _string_constants() -> dict[str, str]:
+    """Every module-level ``NAME = "value"`` in engine/ and web/."""
+    constants: dict[str, str] = {}
+    for path in _SOURCES:
+        for node in ast.parse(source_text(path)).body:
+            targets = (
+                node.targets if isinstance(node, ast.Assign)
+                else [node.target] if isinstance(node, ast.AnnAssign) and node.value
+                else []
+            )
+            value = getattr(node, "value", None)
+            if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
+                continue
+            for target in targets:
+                if isinstance(target, ast.Name) and target.id.isupper():
+                    constants[target.id] = value.value
+    return constants
+
 
 def _keys_in_use() -> dict[str, set[str]]:
     """Every ``choices`` key each source file reads or writes."""
+    constants = _string_constants()
     found: dict[str, set[str]] = {}
     for path in _SOURCES:
         text = source_text(path)
         if "choices" not in text:
             continue
         keys = set(_SUBSCRIPT.findall(text))
+        keys |= {
+            constants[name]
+            for name in _CONSTANT_SUBSCRIPT.findall(text)
+            if name in constants
+        }
         # `choices={...}` and `choices=dict(...)` keyword arguments.
         for node in ast.walk(ast.parse(text)):
             if not isinstance(node, ast.keyword) or node.arg != "choices":
                 continue
             if isinstance(node.value, ast.Dict):
-                keys |= {
-                    k.value for k in node.value.keys
-                    if isinstance(k, ast.Constant) and isinstance(k.value, str)
-                }
+                for key in node.value.keys:
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                        keys.add(key.value)
+                    elif isinstance(key, ast.Name) and key.id in constants:
+                        keys.add(constants[key.id])
         if keys:
             found[str(path.relative_to(_ROOT))] = keys
     return found
