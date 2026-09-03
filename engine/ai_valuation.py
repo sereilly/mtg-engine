@@ -45,6 +45,7 @@ from dataclasses import dataclass
 
 from .models import CardDefinition
 from .oracle import OracleInstruction, compile_card_oracle
+from .oracle_types import cost_target_count
 
 # Card types whose *resolution* carries out ``OracleProgram.instructions``.
 #
@@ -555,11 +556,15 @@ def _several_target_instruction(program):
     def walk(instructions):
         for instruction in instructions:
             targets = instruction.payload.get("targets")
-            if (
-                isinstance(targets, dict)
-                and isinstance(targets.get("count"), int)
-                and targets["count"] > 1
-            ):
+            count = targets.get("count") if isinstance(targets, dict) else None
+            # A ``dict`` count is an announcement sized by a CR 601.2b optional
+            # additional cost (Primitive Justice). It qualifies whatever its
+            # base is, where a printed number has to exceed one: a *one*-target
+            # announcement the caster must make explicitly still needs a side
+            # picked for it, because the several-target handlers have no
+            # resolution-time fallback to a board scan the way the single-target
+            # ones do.
+            if isinstance(count, dict) or (isinstance(count, int) and count > 1):
                 return instruction
             for key in ("steps", "then", "else", "action"):
                 nested = instruction.payload.get(key)
@@ -585,6 +590,29 @@ def _several_target_instruction(program):
 # through a different effect family.
 _SLOT_DISPOSITION: dict[str, str] = {
     "tap_target_permanent": "opponent",
+    # Destruction is the same claim one family over: a destroy is a denial, so
+    # every slot of a several-target destroy wants an opponent's permanent. A
+    # preference, exactly as the tap above is -- `_choose_several_targets` still
+    # falls back to a single seat's worth when no opponent holds a legal target,
+    # which for a destroy is the caster's own board and a weak play rather than
+    # an illegal one. What the entry buys is that the AI stops preferring its
+    # own permanents when the opponent has some.
+    #
+    # No shipped card reaches this: every several-target destroy in the pool is
+    # either a sweep (no targets) or announces its count off an X (which this
+    # chooser declines), so the entry arrived with Primitive Justice, whose
+    # count comes off a CR 601.2b payment and whose bare "target artifact" names
+    # no side at all.
+    "destroy_target_permanent": "opponent",
+    # And exile, which is the same denial one zone over. This entry is
+    # about two *shipped* cards rather than about the round that found
+    # it: Dust to Dust and Ashes to Ashes are the pool's only
+    # several-target exiles, both name a bare noun with no side in it,
+    # and both had the AI removing its own permanents. A card that
+    # exiles the caster's own ("exile two target creatures **you
+    # control**") never reaches this: the controller branch above
+    # answers first, off the printed noun phrase.
+    "exile_target_permanent": "opponent",
 }
 
 
@@ -607,7 +635,14 @@ def several_target_slot_sides(program) -> tuple[str | None, ...]:
         return ()
     targets = instruction.payload.get("targets") or {}
     count = targets.get("count")
-    if not isinstance(count, int) or count <= 1:
+    if isinstance(count, dict):
+        # An announcement sized by a CR 601.2b optional additional cost. This
+        # policy takes no such offer -- "may" is declined by default and nothing
+        # values one -- so the number of slots is the base count alone, which is
+        # the same reading `_choose_several_targets` makes when it asks how many
+        # targets to name.
+        count = cost_target_count(count, {}) or 0
+    if not isinstance(count, int) or count < 1:
         return ()
     filters = targets.get("filters") or [targets.get("filter") or {}] * count
     slots = tuple(instruction.payload.get("slots") or ())

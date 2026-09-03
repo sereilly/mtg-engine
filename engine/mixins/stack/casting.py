@@ -996,6 +996,11 @@ class SpellCastingMixin:
             target_permanent_index=target_permanent_index,
             target_permanent_ids=target_permanent_ids,
             from_zone=from_zone,
+            # CR 601.2b is announced above; CR 601.2c's target count follows
+            # from it for a spell that prints "for each additional <cost> you
+            # paid, … another target …". The gate is the only reader that can
+            # see both announcements at once.
+            optional_cost_payments=optional_paid,
         )
         if named_refusal is not None:
             self.log.append(named_refusal)

@@ -7,6 +7,16 @@ Destruction left for ``destruction`` at the thousand-line guard; tapping left
 for ``tapping`` one round earlier. What stays is what the CR calls something
 else.
 
+**The "… unless <someone> pays" productions are all here**, which is the one
+place that split cut a production family in half rather than along it. All
+three are parsed in ``effects/board.py`` — "sacrifice this permanent unless you
+pay", "destroy this creature unless you pay", "for each land, destroy that land
+unless any player pays 1 life" — and they are one printed shape with three
+verbs: an *offer*, whose refusal is the effect. Two of them left with CR 701.7
+and one did not, so the mirror forked; they came back when the fused
+cost-repeated destroy pushed ``destruction`` past the thousand-line guard and
+the boundary the guard asked about turned out to be this one.
+
 Control changes lower to a *contribution* rather than a move — see
 `engine/control.py`. What lowering owes is the timestamped source, not a new
 owner.
@@ -537,3 +547,95 @@ def _lower_sacrifice_one_of_chosen(
             {"permanents_from": CHOSEN_PERMANENT},
         ),
     )
+
+
+def _lower_destroy_unless_pay(
+    node: ast.DestroyUnlessPay, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
+    """"At the beginning of your upkeep, destroy this creature unless you pay
+    {3}{B}{B}{B}. If this creature is destroyed this way, it deals 7 damage to
+    you." (Cosmic Horror.)
+
+    Fused, like the sacrifice twin above and for the same reason: the upkeep
+    dispatcher is keyed on (trigger condition, instruction kind) pairs whose
+    handlers run the whole pay-or-consequence prompt. The event is threaded
+    down here rather than inferred, exactly as `_lower_damage_unless_pay` does
+    it — the handler takes its seat and its mana from the upkeep context, so
+    under any other trigger there is nothing to dispatch to and the line must
+    refuse rather than compile into a card that does nothing.
+    """
+    if not _is_source(node.subject):
+        raise LoweringError(
+            "the pay-or-destroy prompt destroys the ability's own source", node=node
+        )
+    if event != "upkeep_self":
+        raise LoweringError(
+            f"no handler pairs {event!r} with a pay-or-destroy prompt", node=node
+        )
+    payload: dict[str, object] = {"mana": _full_mana_payload(node.cost)}
+    if node.damage_if_destroyed is not None:
+        payload["damage_if_destroyed"] = node.damage_if_destroyed
+    # "…{1} for each music counter on it" — the same `per_counter` key
+    # `engine/cumulative_upkeep.scaled_cost` already reads, so the escalation is
+    # one implementation rather than a second multiplier beside it.
+    if node.per_counter is not None:
+        payload["per_counter"] = node.per_counter
+    return (OracleInstruction("upkeep_pay_or_destroy_self", "", payload),)
+
+
+def _lower_destroy_each_unless_paid(
+    node: ast.DestroyEachUnlessPaid,
+) -> tuple[OracleInstruction, ...]:
+    """"For each land, destroy that land unless any player pays 1 life."
+    (Cleansing.)
+
+    One instruction rather than a sweep plus a rider: the offer is made about
+    one permanent at a time, so the loop and the buyout are the same effect and
+    nothing but the handler can hold the record of which members were bought.
+
+    The noun phrase is gated by ``object_only_filter`` for the reason the
+    forced-sacrifice prompt is: the loop walks every battlefield with no
+    observer seat and no source to compare against, so a narrowing the matcher
+    could only answer relative to one of those would be dropped — and a dropped
+    narrowing on a sweep takes the board rather than doing less.
+
+    **"…that dealt damage to this creature this turn" is the one exception, and
+    it is an exception because it is not a narrowing of the sweep — it *is* the
+    set.** "When this creature dies, … for each creature that dealt damage to
+    this creature this turn, destroy that creature unless its controller pays 2
+    life." (Giant Albatross.) A relation to the ability's own source, which
+    ``to_payload`` has no key for (``_common.CONDITIONALLY_EMITTED_FIELDS``
+    names it so that every lowering but the one written for it refuses the
+    phrase); it is lifted off the filter here and carried as its own payload
+    key, exactly as Brine Hag's base-P/T rewrite carries the same relation. The
+    handler reads the record the damage seam kept on the victim
+    (``damaged_by_sources_this_turn``) rather than scanning a battlefield, which
+    is the only reading available at all: this trigger fires on a death, so by
+    resolution the source is a card in a graveyard (CR 603.10, idiom 6).
+    """
+    filt = node.filter
+    from_damage_record = filt.dealt_damage_to_source_this_turn
+    if from_damage_record:
+        filt = dataclasses.replace(filt, dealt_damage_to_source_this_turn=False)
+    described = object_only_filter(_filter_payload(filt))
+    if described is None:
+        raise LoweringError(
+            "the per-permanent buyout cannot test this restriction", node=node
+        )
+    if node.payer not in ("any_player", "controller"):
+        raise LoweringError(
+            f"no buyout is offered to {node.payer!r}", node=node
+        )
+    payload: dict[str, object] = {
+        "filter": dict(described), "life": int(node.life),
+    }
+    if node.payer != "any_player":
+        # Absent still means "any player", so Cleansing's payload stays
+        # byte-identical and the handler's APNAP round is what an absent key
+        # keeps meaning.
+        payload["payer"] = node.payer
+    if from_damage_record:
+        payload["from_damage_record"] = True
+    if node.no_regen:
+        payload["bypass_regeneration"] = True
+    return (OracleInstruction("destroy_each_unless_life_paid", "", payload),)

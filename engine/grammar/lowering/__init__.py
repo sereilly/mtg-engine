@@ -199,6 +199,8 @@ from .board import (
     _lower_exchange_greatest_mana_value,
     _lower_regenerate,
     _lower_sacrifice_unless_pay,
+    _lower_destroy_unless_pay,
+    _lower_destroy_each_unless_paid,
     _lower_sacrifice,
     _lower_sacrifice_expansion_permanents,
 )
@@ -206,10 +208,9 @@ from .destruction import (
     _DESTROY_ALL_KINDS,
     _BASIC_LAND_TYPES,
     _lower_destroy,
+    _fused_cost_repeated_destroys,
     _lower_for_each_destroyed,
     _lower_delayed_destroy,
-    _lower_destroy_unless_pay,
-    _lower_destroy_each_unless_paid,
 )
 from .control_changes import (
     _lower_exchange_control,
@@ -404,6 +405,7 @@ __all__ = [
     "_BLOCK_PAIR_EVENTS",
     "binds_block_pair",
     "_lower_destroy",
+    "_fused_cost_repeated_destroys",
     "_lower_for_each_destroyed",
     "_lower_delayed_destroy",
     "_lower_doesnt_untap_next_step",

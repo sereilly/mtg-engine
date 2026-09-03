@@ -41,6 +41,7 @@ from .models import CardDefinition, Permanent
 from .cost_x_definitions import (caps_cast_x, cast_x_ceiling,
                                  cast_x_value, defines_cast_x)
 from .oracle import compile_card_oracle, expand_ability_lines
+from .oracle_types import cost_target_count
 from .static_bonuses import conditional_static_holds
 from .subject_filters import card_matches_any, subject_matches
 from .modal_triggers import modal_trigger_mode_spec, modal_trigger_modes
@@ -999,6 +1000,7 @@ class LegalityMixin:
         self, caster_index: int, card: CardDefinition, *,
         target_player_index=None, target_permanent_index=None,
         target_permanent_ids=None, from_zone: str = "hand",
+        optional_cost_payments: dict | None = None,
     ) -> str | None:
         """CR 601.2c: a **named** target — a battlefield permanent, or a slot
         in a graveyard — must be a legal one, checked before any cost is paid.
@@ -1023,6 +1025,25 @@ class LegalityMixin:
         with a card-specific rule; this one answers "is the one you named among
         the ones the picker would have offered?", which is idiom #9 — the
         picker's enumeration is a hint and the engine re-checks the answer.
+
+        **One shape is the exception, and it is the exception because the count
+        itself was announced**: a spell whose targets are sized by a CR 601.2b
+        optional additional cost (Primitive Justice's "for each additional
+        {1}{R} you paid, destroy **another** target artifact"). CR 601.2c fixes
+        the number of targets one step after that payment, so "how many did you
+        name?" is answerable here and nowhere else — *optional_cost_payments* is
+        the announcement, passed down from the one cast path. A caster who takes
+        three offers with two artifacts on the table cannot make a legal
+        announcement, and CR 601.2c makes that an uncastable spell rather than
+        an ineffective one: the refusal lands before any mana is spent.
+
+        That is the engine's only enforced target **floor**. Everywhere else a
+        printed count is a maximum the announcement may fall short of — there is
+        no ``min_targets`` in this engine, so "one or more target creatures"
+        (Heaven's Gate and its four colour siblings) may still be cast naming
+        none. Widening this to those is a separate change with a separate blast
+        radius; what makes the cost-sized case answerable *now* is that its
+        number comes from an announcement the same cast already made.
         """
         if card.primary_type not in ("instant", "sorcery"):
             # **A permanent spell does not target.** ``derive_cast_spec`` reads
@@ -1060,6 +1081,32 @@ class LegalityMixin:
             if isinstance(target_permanent_index, list)
             else ([target_permanent_index] if isinstance(target_permanent_index, int) else [])
         )
+        # CR 601.2c's *count*, for the one shape that has one (see the
+        # docstring). Above the "nothing was named" return below, because
+        # naming nothing is precisely one of the announcements this refuses —
+        # and above the graveyard branch, which no cost-sized announcement
+        # reaches.
+        required = cost_target_count(spec.get("cost_targets"), optional_cost_payments)
+        if required is not None:
+            # Ids are the precise channel and indices the legacy one; a seat is
+            # part of an index's identity and no part of an id's, which is why
+            # the two are counted in their own vocabulary rather than mixed.
+            chosen_keys: list = (
+                named_ids or [(target_player_index, index) for index in indices]
+            )
+            if len(chosen_keys) != required:
+                return (
+                    f"{card.name} needs {required} target"
+                    + ("s" if required != 1 else "")
+                    + f", not {len(chosen_keys)}"
+                )
+            if spec.get("distinct_targets") and len(set(chosen_keys)) != required:
+                # The printed "another" (CR 601.2c): two instances of the word
+                # "target" may name one object *unless* something forbids it,
+                # and this sentence does. Refused at the announcement rather
+                # than deduplicated at resolution, which would quietly destroy
+                # fewer permanents than the caster paid for.
+                return f"{card.name} needs {required} different targets"
         if spec.get("kind") == GRAVEYARD_TARGET_KIND:
             # A named graveyard slot, checked against the ``graveyard``-kind
             # entries the same enumeration offers the picker — the one zone

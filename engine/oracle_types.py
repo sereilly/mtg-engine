@@ -62,6 +62,50 @@ SUBJECT_FROM_TRIGGER = "subject_from_trigger"
 # Its one value so far: the other half of the blocking pair the trigger fired on.
 BLOCK_PAIR_SUBJECT = "block_pair"
 
+# ``targets["count"]`` for an announcement whose **size** a CR 601.2b optional
+# additional cost fixes: ``{"base": 1, "per_cost": {"{1}{R}": 1, "{1}{G}": 1}}``
+# is Primitive Justice's "Destroy target artifact. For each additional {1}{R}
+# you paid, destroy another target artifact. For each additional {1}{G} you
+# paid, destroy another target artifact…".
+#
+# A dict beside the ``int`` and the string ``"x"`` the same field already
+# carries, because it is the same question with a third source for the number:
+# a printed literal, the X announced under CR 601.2b, and now the *count of
+# payments* announced in that same step. CR 601.2c fixes the number of targets
+# as the spell is announced, one step after the payment, so it is knowable at
+# the announcement and nowhere earlier — the pool that paid it is empty by
+# resolution (CR 500.4).
+#
+# Here rather than beside any one of its readers: the grammar's lowering writes
+# it, ``engine/targeting.py`` turns it into a picker spec and
+# ``engine/legality.py`` gates the announcement against it. Three copies of two
+# dict keys is exactly the drift this module exists to prevent, and the quiet
+# direction of that drift is a spell whose targets nobody counted.
+COST_TARGET_BASE = "base"
+COST_TARGET_PER = "per_cost"
+
+
+def cost_target_count(count: object, paid: dict | None) -> int | None:
+    """How many targets *count* names, given the CR 601.2b payments *paid*.
+
+    None when *count* is not a cost-derived description at all, which is every
+    other spell in the pool — a caller may therefore ask unconditionally and
+    treat None as "this announcement is not sized by a payment".
+
+    *paid* is the ``{offer: times}`` map the casting path records under
+    ``additional_costs_paid``, keyed by ``mana_payment.mana_cost_label``'s
+    canonical spelling — the same key the lowering wrote, because both sides go
+    through that one function (see ``lowering/_records.optional_cost_key``).
+    An offer the caster declined is simply absent, which is zero repetitions and
+    the base count alone.
+    """
+    if not isinstance(count, dict) or COST_TARGET_BASE not in count:
+        return None
+    total = int(count.get(COST_TARGET_BASE) or 0)
+    for offer, per in (count.get(COST_TARGET_PER) or {}).items():
+        total += int(per) * int((paid or {}).get(str(offer), 0) or 0)
+    return max(0, total)
+
 _COLOR_WORD_TO_SYMBOL: dict[str, str] = {
     "white": "W",
     "blue": "U",
