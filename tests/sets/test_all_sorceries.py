@@ -367,43 +367,19 @@ def test_taste_of_paradise_scales_its_one_life_gain_with_the_payments(set_pool):
         )
 
 
-def test_primitive_justice_declines_on_a_target_per_repetition(set_pool):
-    """The cost half now works — "you may pay {1}{R} **and/or** {1}{G} any
-    number of times" reads as two independent offers and both counts survive to
-    resolution — and the effect half does not. W1G4's parts 1-5 are done; what
-    is left is one part, and it is the hard one:
+def test_primitive_justice_announces_its_offers_as_two_independent_costs(set_pool):
+    """The cost half W3G1 landed, kept as the thing the effect half reads back.
 
-    **a target slot per clause, with the slot count fixed by the announcement.**
-    "Destroy target artifact. For each additional {1}{R} you paid, destroy
-    another target artifact." CR 601.2c fixes the number of targets when the
-    spell is announced, so the spell wants 1 + n(R) + n(G) *distinct* artifact
-    targets — a count that only CR 601.2b's payment, one step earlier, can
-    supply. Four concrete pieces:
-
-    1. **a ``min_targets``/``max_targets`` pair the picker derives from the
-       announced payment**, where ``targeting.derive_cast_spec`` today derives
-       both from the printed line alone;
-    2. **a per-clause target slot in the resolution**, which is exactly what
-       ``_refuse_unfused_distinctness`` refuses for want of: every handler but
-       ``_fused_two_target_pump`` and ``target_bites_target`` resolves through
-       ``_one_choice`` and would read the *first* chosen permanent for each
-       clause, so three destroys would kill one artifact three times;
-    3. **an index into that slot list for a ``for_each`` body**, since the loop
-       repeats one instruction and ``_A_REPETITION`` deliberately binds nothing
-       — the iteration would have to name "the i-th target of this spell";
-    4. **a web cost picker for the announcement**, which W1G4 already recorded
-       as missing for a different reason (an *offer* shape, "cast for {1}{R} or
-       for {1}{R} plus {1}{R}?", where ``_cost_picker_spec`` models a mandatory
-       cost). Without it a human can announce no payment at all.
-
-    None of the four is a card hook: every one is a template. Recorded here as
-    the assertions that will fail the day it lands, which is the point."""
-    justice = set_pool("ALL")["Primitive Justice"]
-    (cost,) = _w3g1_costs(justice)
+    "you may pay {1}{R} **and/or** {1}{G} any number of times" is two offers,
+    each taken however many times the caster likes, and the two counts are read
+    back separately. What the decline that stood here asked for -- a target slot
+    per repetition -- is in the ``W3-justice`` block at the foot of this file;
+    the assertion below is its input.
+    """
+    (cost,) = _w3g1_costs(set_pool("ALL")["Primitive Justice"])
     assert [(o.symbols, o.repeatable) for o in cost.optional_mana] == [
         ("{1}{R}", True), ("{1}{G}", True),
-    ], "the cost half landed this round; the decline below is the effect half"
-    assert not _w3g1_compile(justice).supported
+    ]
 
 
 # --- W3G5: hollow lines, pickers and unclaimed text ---
@@ -672,3 +648,248 @@ def test_w3g2_a_non_interactive_caster_names_targets_where_the_offer_stands(set_
     assert not [c for c in game.pending_choices if c.kind == "modal_mode_targets"]
     assert len(list(game.controlled_by(p2))) == 1, "two of the three, in board order"
     assert len(list(game.controlled_by(p1))) == 3, "the caster's own board is not offered"
+
+
+# --- W3-justice: a target slot per repetition ---
+#
+# The last card in the set. CR 601.2b announces Primitive Justice's optional
+# additional costs and CR 601.2c then fixes the number of targets, so the spell
+# names ``1 + n({1}{R}) + n({1}{G})`` **distinct** artifacts -- a count that only
+# the payment, one announcement step earlier, can supply. Imports are in this
+# block, per the header's parallel-authorship convention.
+
+from engine import Game as _WJGame, PlayerState as _WJPlayer
+from engine.models import Permanent as _WJPermanent
+from engine.oracle import compile_card_oracle as _wj_compile
+from engine.oracle_types import cost_target_count as _wj_count
+from engine.targeting import derive_cast_spec as _wj_spec
+
+
+def _wj_game(set_pool, *, artifacts: int, red: int = 0, green: int = 0):
+    """A caster holding Primitive Justice, an opponent holding *artifacts* Moxen
+    and one creature, and exactly the mana the announcement below will spend."""
+    caster = _WJPlayer(name="A", hand=[set_pool("ALL")["Primitive Justice"]])
+    other = _WJPlayer(name="B")
+    game = _WJGame(players=[caster, other])
+    game.enforce_mana_costs = True
+    caster.mana_pool["R"] = 1 + red
+    caster.mana_pool["G"] = green
+    caster.mana_pool["C"] = 1 + red + green
+    for _ in range(artifacts):
+        other.battlefield.append(_WJPermanent(card=set_pool("LEA")["Mox Pearl"]))
+    other.battlefield.append(
+        _WJPermanent(card=set_pool("LEA")["Grizzly Bears"])
+    )
+    game._settle()
+    return game, caster, other
+
+
+def _wj_artifact_ids(player):
+    return [
+        p.permanent_id for p in player.battlefield
+        if p.card.primary_type == "artifact"
+    ]
+
+
+def test_primitive_justice_is_one_announcement_sized_by_the_payment(set_pool):
+    """One ``destroy_target_permanent`` over a list, not three destroys.
+
+    Three targeted destroys lowered as three steps all resolve through
+    ``handlers/_common._one_choice``, which reads the *first* entry of the
+    target list -- the card would compile supported and destroy one artifact
+    three times, which is what ``_refuse_unfused_distinctness`` refused for. So
+    the clauses fuse (``lowering/destruction._fused_cost_repeated_destroys``),
+    the count travels as the *arithmetic* rather than as a number, and the
+    printed "another" travels as ``distinct`` -- a relation between slots that
+    no per-permanent filter could test.
+
+    The life gain keeps its own loop over the {1}{G} offer, because that is what
+    the sentence prints: once per payment, not once per spell.
+    """
+    program = _wj_compile(set_pool("ALL")["Primitive Justice"])
+    assert program.supported
+    (destroy, life) = program.instructions[0].payload["steps"]
+
+    assert destroy.kind == "destroy_target_permanent"
+    assert destroy.payload["targets"]["count"] == {
+        "base": 1, "per_cost": {"{1}{R}": 1, "{1}{G}": 1},
+    }
+    assert destroy.payload["targets"]["distinct"] is True
+    assert life.kind == "for_each"
+    assert life.payload["iterator"] == {"repeat_from_cost": "{1}{G}"}
+
+
+def test_primitive_justices_picker_carries_the_arithmetic_not_a_number(set_pool):
+    """How many targets the picker collects is unknowable from the card alone.
+
+    ``derive_cast_spec`` reads the compiled program and nothing else, and the
+    number here is fixed by an announcement the caster has not made yet -- so
+    the spec carries the sum, the way ``x_targets`` carries a flag rather than a
+    number one branch over, and every reader resolves it through the one
+    function the cast gate also uses.
+    """
+    card = set_pool("ALL")["Primitive Justice"]
+    spec = _wj_spec(card, _wj_compile(card))
+
+    assert spec["kind"] == "artifact"
+    assert spec["exact_targets"] is True
+    assert spec["distinct_targets"] is True
+    assert [
+        _wj_count(spec["cost_targets"], paid)
+        for paid in ({}, {"{1}{R}": 1}, {"{1}{G}": 1}, {"{1}{R}": 2, "{1}{G}": 2})
+    ] == [1, 2, 2, 5]
+
+
+def test_primitive_justice_destroys_one_artifact_for_no_payment(set_pool):
+    """The offer declined. "May" costs nothing and the spell is its first
+    sentence alone."""
+    game, caster, other = _wj_game(set_pool, artifacts=3)
+    ids = _wj_artifact_ids(other)
+
+    result = game.cast_from_hand(
+        0, "Primitive Justice", target_player_index=1, target_permanent_ids=[ids[0]],
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert _wj_artifact_ids(other) == ids[1:]
+    assert caster.life == 20
+
+
+def test_primitive_justice_destroys_a_second_distinct_artifact_per_red_payment(set_pool):
+    """"For each additional {1}{R} you paid, destroy **another** target
+    artifact." Two artifacts, and no life: the red offer buys destruction
+    only."""
+    game, caster, other = _wj_game(set_pool, artifacts=3, red=1)
+    ids = _wj_artifact_ids(other)
+
+    result = game.cast_from_hand(
+        0, "Primitive Justice", target_player_index=1,
+        target_permanent_ids=ids[:2], optional_cost_payments={"{1}{R}": 1},
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert _wj_artifact_ids(other) == ids[2:], "two *different* artifacts died"
+    assert caster.life == 20
+    assert sum(caster.mana_pool.values()) == 0, "the offer taken was charged"
+
+
+def test_primitive_justice_gains_a_life_per_green_payment(set_pool):
+    """The green offer buys the same extra target *and* one life. The life rides
+    its own ``for_each`` over that offer, so declining it gains nothing and the
+    red offer above never does."""
+    game, caster, other = _wj_game(set_pool, artifacts=3, green=1)
+    ids = _wj_artifact_ids(other)
+
+    result = game.cast_from_hand(
+        0, "Primitive Justice", target_player_index=1,
+        target_permanent_ids=ids[:2], optional_cost_payments={"{1}{G}": 1},
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert _wj_artifact_ids(other) == ids[2:]
+    assert caster.life == 21
+
+
+def test_primitive_justice_takes_both_offers_twice(set_pool):
+    """Five artifacts and two life off four payments, which is the whole card:
+    the two counts are read back apart, and only the green one gains life."""
+    game, caster, other = _wj_game(set_pool, artifacts=5, red=2, green=2)
+    ids = _wj_artifact_ids(other)
+
+    result = game.cast_from_hand(
+        0, "Primitive Justice", target_player_index=1,
+        target_permanent_ids=ids, optional_cost_payments={"{1}{R}": 2, "{1}{G}": 2},
+    )
+    game._settle()
+
+    assert result.supported, result.details
+    assert _wj_artifact_ids(other) == []
+    assert len(other.graveyard) == 5, "five destructions, never one artifact five times"
+    assert caster.life == 22
+
+
+def test_primitive_justice_refuses_an_announcement_short_of_what_was_paid(set_pool):
+    """CR 601.2c fixes the number of targets, and a caster who takes three
+    offers with two artifacts on the table cannot make a legal announcement.
+    That is an *uncastable* spell, not an ineffective one -- so the refusal
+    lands before any mana leaves the pool and the card stays in hand.
+
+    The engine's only enforced target floor, and it is enforceable here for a
+    reason that does not generalise: the number came from an announcement this
+    same cast already made. "One or more target creatures" still has no floor.
+    """
+    game, caster, other = _wj_game(set_pool, artifacts=2, red=2)
+    ids = _wj_artifact_ids(other)
+    pool = sum(caster.mana_pool.values())
+
+    result = game.cast_from_hand(
+        0, "Primitive Justice", target_player_index=1,
+        target_permanent_ids=ids, optional_cost_payments={"{1}{R}": 2},
+    )
+    game._settle()
+
+    assert not result.supported
+    assert "needs 3 targets, not 2" in result.details
+    assert _wj_artifact_ids(other) == ids, "nothing was destroyed"
+    assert sum(caster.mana_pool.values()) == pool, "nothing was spent"
+    assert [c.name for c in caster.hand] == ["Primitive Justice"]
+
+
+def test_primitive_justice_refuses_the_same_artifact_named_twice(set_pool):
+    """CR 601.2c: the same target can't be chosen twice for one instance of the
+    word "target", and the printed "another" says these are separate instances.
+    Refused at the announcement rather than deduplicated at resolution, which
+    would destroy fewer artifacts than the caster paid for."""
+    game, caster, other = _wj_game(set_pool, artifacts=3, red=1)
+    ids = _wj_artifact_ids(other)
+
+    result = game.cast_from_hand(
+        0, "Primitive Justice", target_player_index=1,
+        target_permanent_ids=[ids[0], ids[0]], optional_cost_payments={"{1}{R}": 1},
+    )
+    game._settle()
+
+    assert not result.supported
+    assert "different targets" in result.details
+    assert _wj_artifact_ids(other) == ids
+
+
+def test_primitive_justice_refuses_a_target_that_is_not_an_artifact(set_pool):
+    """The ordinary CR 601.2c check still runs over each named target: the count
+    gate is added to the enumeration, never in place of it."""
+    game, _caster, other = _wj_game(set_pool, artifacts=2)
+    creature = next(
+        p for p in other.battlefield if p.card.primary_type == "creature"
+    )
+
+    result = game.cast_from_hand(
+        0, "Primitive Justice", target_player_index=1,
+        target_permanent_ids=[creature.permanent_id],
+    )
+
+    assert not result.supported
+    assert "no valid target" in result.details
+
+
+def test_a_land_destroying_twin_of_primitive_justice_is_read_the_same_way():
+    """The proof that this is grammar rather than a card hook: an invented card
+    printing the same sentence about lands compiles to the same shape. Alliances
+    ships 144 cards and no name-keyed hook, and this is the card that would have
+    been the first."""
+    from engine.grammar import compile_line
+
+    compiled = compile_line(
+        "Destroy target land. For each additional {1}{W} you paid, destroy "
+        "another target land."
+    )
+
+    assert compiled.lowered, compiled.failure_reason
+    (destroy,) = compiled.instructions
+    assert destroy.kind == "destroy_target_permanent"
+    assert destroy.payload["type_filter"] == "land"
+    assert destroy.payload["targets"]["count"] == {
+        "base": 1, "per_cost": {"{1}{W}": 1},
+    }
