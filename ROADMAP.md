@@ -1015,6 +1015,63 @@ place: the resolution-time default cannot be chosen without the counter's
 the Hunt and hands Contagion's −2/−1 to its own caster — so the decision is
 `ai_valuation.py`'s, derived from the compiled program.
 
+### W3-divided — the divided-target announcement. Merged; three shipped cards were mis-playing.
+
+A closer branch off W3G1's accidental finding, and the finding grew by an order
+of magnitude on contact: **ten cards print a divided target and all ten were
+castable naming nothing at all** — verified on an empty board before the fix,
+every one returning `supported=True, 'resolved'`. `_cast_onto_stack` ran
+`division_refusal` only `if divided_targets is not None`, so CR 601.2c was
+never asked of the announcement that omitted one.
+
+**The two failure modes are opposite and the quieter one is the dangerous one.**
+Where the effect places counters the spell resolves into a no-op — Spoils of
+War (ICE, shipped), Contagion and Bounty of the Hunt log "no creatures were
+given counters" and go to the graveyard. Where the effect deals damage the
+older single-target path reads `target_player_index` and **hits the face**:
+Pyrokinesis, Fire Covenant (ICE, shipped) and Dwarven Catapult (FEM, shipped)
+all print "among … target **creatures**" and all three dealt their whole amount
+to a player. Nothing crashed, nothing was missing, and the cards were simply
+*stronger than printed* — which is the class an instrument cannot see, because
+every one of them compiles supported, carries no hollow line and claims every
+printed sentence.
+
+**W3G1's brief said the damage twin was fine and that is what made the round
+worth running.** "The damage twin falls through to ordinary target resolution,
+which is why Fireball works" is true of the four **any-target** burn spells and
+false of the three creature-only ones — the fall-through *is* the bug when the
+card cannot target a player. Four of the ten (Fireball, Pyrotechnics, Meteor
+Shower, Fiery Justice) were correct throughout and stayed byte-identical.
+
+**The floor was a new question, not a reachable old one.**
+`division_refusal`'s "an absent division is never a refusal" is right and stays
+— an evenly-divided spell announces nothing and a non-interactive seat takes
+the even split. What is refusable is an absent **target**, which is a different
+clause (`named_targets`); making the existing predicate reachable would have
+refused nothing.
+
+**And the resolution-time branch splits rather than raises.** With the floor in
+place it is still reached two ways, and only one is a defect: every announced
+target having left by resolution is CR 608.2b and must not crash, while a
+target named the older way with no division is a lawful announcement the
+handler was ignoring. The second now gives that target the whole amount
+(CR 601.2d permits one target taking all of it). Both run through the *divided*
+placement loop rather than falling into the generic single-target path below —
+which matters, because only the divided branch writes `counters_placed_this_way`,
+so the other route would have placed Bounty of the Hunt's counters and left its
+cleanup-step removal unarmed.
+
+**Declines, as named parts.** `legality._enumerate_targets` ignores a divided
+description's `controller` filter, so Dwarven Catapult's picker offers the
+*caster's own* creatures for "all creatures target opponent controls" — the AI
+is unaffected and a human in the browser is not; the parts are reading
+`filter.controller` in the seat loop the way `own_only`/`opponent_only` are
+read, and deciding whether the engine should model that card's target as the
+opponent, which is what the card actually says. And `_pick_x_value` reads only
+`{X}` in the mana cost, so Fire Covenant's X — announced in text and paid in
+life (CR 601.2b) — comes back `None`; the parts are an X chooser that reads
+`cast_costs.additional_costs`' life price and a policy for spending life on X.
+
 ### Round plan — wave 1, five worktree groups
 
 Split by grammar family, ranked by the fragment census rather than the
