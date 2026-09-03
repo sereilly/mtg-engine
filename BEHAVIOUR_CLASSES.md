@@ -4,20 +4,20 @@ Cards the engine resolves through the same code paths, differing only in values 
 
 A card whose class contains a **verified** card needs no separate manual pass: it exercises no engine path that card didn't. This is weaker than checking the card — it inherits its peer's correctness, and cannot catch a card whose data breaks a generic path.
 
-- Cards in the catalog: **1725**
-- Distinct behaviours: **1554**
-- Cards sharing a behaviour with another: **240** in **69** classes
-- Unverified cards covered by a verified peer: **81**
+- Cards in the catalog: **1869**
+- Distinct behaviours: **1693**
+- Cards sharing a behaviour with another: **247** in **71** classes
+- Unverified cards covered by a verified peer: **84**
 
 | Size | Cards |
 | --- | --- |
-| 48 | Balduvian Barbarians, Balduvian Bears, Barbary Apes, Barktooth Warbeard, **Craw Wurm**, Crimson Kobolds, Crookshank Kobolds, Durkwood Boars, Dwarven Trader, **Earth Elemental**, **Fire Elemental**, Garruk's Gorehorn, Goblin Hero, **Gray Ogre**, **Grizzly Bears**, Headless Horseman, **Hill Giant**, **Hurloon Minotaur**, **Ironroot Treefolk**, Jasmine Boreal, Jedit Ojanen, Jerrard of the Closed Fist, Kasimir the Lone Wolf, Keepers of the Faith, Kobolds of Kher Keep, Lady Orca, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, Moss Monster, Onakke Ogre, **Pearled Unicorn**, Raging Bull, **Savannah Lions**, Scaled Wurm, Scarwood Goblins, **Scathe Zombies**, Sir Shandlar of Eberyn, Sivitri Scarzam, Squire, Staunch Shieldmate, The Lady of the Mountain, Tobias Andrion, Tor Giant, Torsten Von Ursus, Vodalian Soldiers, Walking Corpse, **Water Elemental**, Wishcoin Crab |
+| 49 | Balduvian Barbarians, Balduvian Bears, Barbary Apes, Barktooth Warbeard, **Craw Wurm**, Crimson Kobolds, Crookshank Kobolds, Durkwood Boars, Dwarven Trader, **Earth Elemental**, Elvish Ranger, **Fire Elemental**, Garruk's Gorehorn, Goblin Hero, **Gray Ogre**, **Grizzly Bears**, Headless Horseman, **Hill Giant**, **Hurloon Minotaur**, **Ironroot Treefolk**, Jasmine Boreal, Jedit Ojanen, Jerrard of the Closed Fist, Kasimir the Lone Wolf, Keepers of the Faith, Kobolds of Kher Keep, Lady Orca, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, Moss Monster, Onakke Ogre, **Pearled Unicorn**, Raging Bull, **Savannah Lions**, Scaled Wurm, Scarwood Goblins, **Scathe Zombies**, Sir Shandlar of Eberyn, Sivitri Scarzam, Squire, Staunch Shieldmate, The Lady of the Mountain, Tobias Andrion, Tor Giant, Torsten Von Ursus, Vodalian Soldiers, Walking Corpse, **Water Elemental**, Wishcoin Crab |
 | 9 | **Air Elemental**, Azure Drake, **Bird Maiden**, Concordia Pegasus, **Flying Men**, **Phantom Monster**, **Roc of Kher Ridges**, **Scryb Sprites**, Willow Faerie |
+| 6 | **Benalish Hero**, Icatian Phalanx, Kjeldoran Escort, Kjeldoran Warrior, Shield Bearer, **Timber Wolves** |
 | 6 | **Elvish Archers**, Hornet Cobra, Land Leeches, Ramirez DePietro, Sabretooth Tiger, **Stone-Throwing Devils** |
 | 6 | Glacial Wall, Wall of Earth, Wall of Heat, **Wall of Ice**, **Wall of Stone**, **Wall of Wood** |
 | 5 | Adventurers' Guildhouse, Cathedral of Serra, Mountain Stronghold, Seafarer's Quay, Unholy Citadel |
 | 5 | Aerathi Berserker, Frost Giant, Hunding Gjornersen, Marhault Elsdragon, Wolverine Pack |
-| 5 | **Benalish Hero**, Icatian Phalanx, Kjeldoran Warrior, Shield Bearer, **Timber Wolves** |
 | 5 | Black Scarab, Blue Scarab, Green Scarab, Red Scarab, White Scarab |
 | 5 | **Black Ward**, **Blue Ward**, **Green Ward**, **Red Ward**, **White Ward** |
 | 5 | **Bog Wraith**, Lost Soul, Marsh Goblins, Moor Fiend, Pygmy Allosaurus |
@@ -27,6 +27,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 5 | Dwarven Song, Heaven's Gate, Sea Kings' Blessing, Sylvan Paradise, Touch of Darkness |
 | 5 | Hematite Talisman, Lapis Lazuli Talisman, Malachite Talisman, Nacre Talisman, Onyx Talisman |
 | 4 | **Deathlace**, **Lifelace**, **Purelace**, **Thoughtlace** |
+| 3 | Bog Imp, **Mahamoti Djinn**, Storm Crow |
 | 3 | Darkness, **Fog**, Holy Day |
 | 3 | Death Speakers, Ihsan's Shade, **Repentant Blacksmith** |
 | 3 | Devouring Deep, Pale Bears, Segovian Leviathan |
@@ -43,7 +44,6 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | **Bad Moon**, **Crusade** |
 | 2 | **Black Knight**, **White Knight** |
 | 2 | **Blue Elemental Blast**, **Red Elemental Blast** |
-| 2 | Bog Imp, **Mahamoti Djinn** |
 | 2 | Brassclaw Orcs, **Ironclaw Orcs** |
 | 2 | Burn Bright, Shield Wall |
 | 2 | Cancel, **Counterspell** |
@@ -55,6 +55,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | **Dandân**, **Sea Serpent** |
 | 2 | Drowned, Walking Dead |
 | 2 | Essence Flare, **Unstable Mutation** |
+| 2 | Flame Spirit, Storm Shaman |
 | 2 | Flooded Woodlands, Reclamation |
 | 2 | **Forest**, Snow-Covered Forest |
 | 2 | **Frozen Shade**, Hoar Shade |
@@ -65,6 +66,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Hell Swarm, Marsh Gas |
 | 2 | Hydroblast, Pyroblast |
 | 2 | **Island**, Snow-Covered Island |
+| 2 | Jacques le Vert, Kaysa |
 | 2 | Juniper Order Druid, **Ley Druid** |
 | 2 | Kjeldoran Phalanx, Pikemen |
 | 2 | Kjeldoran Skycaptain, Kjeldoran Skyknight |

@@ -10,6 +10,7 @@
     "Durkwood Boars",
     "Dwarven Trader",
     "Earth Elemental",
+    "Elvish Ranger",
     "Fire Elemental",
     "Garruk's Gorehorn",
     "Goblin Hero",
@@ -61,6 +62,14 @@
     "Willow Faerie"
   ],
   [
+    "Benalish Hero",
+    "Icatian Phalanx",
+    "Kjeldoran Escort",
+    "Kjeldoran Warrior",
+    "Shield Bearer",
+    "Timber Wolves"
+  ],
+  [
     "Elvish Archers",
     "Hornet Cobra",
     "Land Leeches",
@@ -89,13 +98,6 @@
     "Hunding Gjornersen",
     "Marhault Elsdragon",
     "Wolverine Pack"
-  ],
-  [
-    "Benalish Hero",
-    "Icatian Phalanx",
-    "Kjeldoran Warrior",
-    "Shield Bearer",
-    "Timber Wolves"
   ],
   [
     "Black Scarab",
@@ -158,6 +160,11 @@
     "Lifelace",
     "Purelace",
     "Thoughtlace"
+  ],
+  [
+    "Bog Imp",
+    "Mahamoti Djinn",
+    "Storm Crow"
   ],
   [
     "Darkness",
@@ -230,10 +237,6 @@
     "Red Elemental Blast"
   ],
   [
-    "Bog Imp",
-    "Mahamoti Djinn"
-  ],
-  [
     "Brassclaw Orcs",
     "Ironclaw Orcs"
   ],
@@ -278,6 +281,10 @@
     "Unstable Mutation"
   ],
   [
+    "Flame Spirit",
+    "Storm Shaman"
+  ],
+  [
     "Flooded Woodlands",
     "Reclamation"
   ],
@@ -316,6 +323,10 @@
   [
     "Island",
     "Snow-Covered Island"
+  ],
+  [
+    "Jacques le Vert",
+    "Kaysa"
   ],
   [
     "Juniper Order Druid",
