@@ -32,6 +32,8 @@ callers outside the package import them from this module
 the table did not move its address.
 """
 
+import dataclasses
+
 from ..oracle_types import OracleInstruction
 from . import ast
 from .derived import derived_instruction_for_line
@@ -87,6 +89,54 @@ def _lower_line_statement(
     return lower_statement(
         statement, produced, event=event, event_subject=event_subject
     )
+
+
+def _rebind_blocking_pronoun(statement: ast.Statement) -> ast.Statement:
+    """"Destroy target creature blocking **it**." (Urborg Panther.)
+
+    "It" is a back-reference, and the noun parser reads it as one: nothing is
+    printed after the word, so the referent is whatever the sentence bound
+    earlier (``blocking_bound_target``). Under an activated ability whose
+    *whole* effect is this one statement there is nothing earlier — the pronoun
+    cannot mean the creature being chosen, since no creature blocks itself — so
+    the only object it can name is the ability's own source (CR 109.5). That is
+    the relation ``blocking_source`` already carries, and the same rewrite
+    ``lowering/characteristics._resolve_per_each_pronoun`` makes one file over
+    for Johtull Wurm's "for each creature blocking it".
+
+    A rewrite here rather than a second parse rule, because the printed words
+    are identical: what decides the referent is the sentence around them, and
+    this is where the sentence is in view.
+
+    Narrow on purpose, in three ways, each of which is a card the rewrite must
+    **not** claim:
+
+    * Only the statement a spec *targets*. Feint's "each creature blocking it"
+      targets nothing and its "it" is the previous sentence's target.
+    * Only a statement that is not a sequence — a second clause could have
+      bound something for the pronoun to mean.
+    * Only from an activated ability. A spell's own source is a card on the
+      stack, which blocks nothing, and a trigger's event may itself bind the
+      object the pronoun names.
+    """
+    if isinstance(statement, (ast.Sequence, ast.Conjunction)):
+        return statement
+    changed = False
+    updates: dict[str, object] = {}
+    for field in dataclasses.fields(statement):
+        spec = getattr(statement, field.name, None)
+        if not isinstance(spec, ast.TargetSpec) or not spec.targeted:
+            continue
+        if not spec.filter.blocking_bound_target:
+            continue
+        updates[field.name] = dataclasses.replace(
+            spec,
+            filter=dataclasses.replace(
+                spec.filter, blocking_bound_target=False, blocking_source=True
+            ),
+        )
+        changed = True
+    return dataclasses.replace(statement, **updates) if changed else statement
 
 
 def lower_ability(
@@ -177,7 +227,9 @@ def lower_ability(
             for cost in node.costs
             if type(cost) in _COST_PRODUCES
         )
-        return _lower_line_statement(node.statement, produced=produced)
+        return _lower_line_statement(
+            _rebind_blocking_pronoun(node.statement), produced=produced
+        )
     if isinstance(node, ast.KeywordLine):
         return ()
     if isinstance(node, ast.RegistryLine):

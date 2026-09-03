@@ -342,13 +342,21 @@ class ObjectFilter:
     # never emitted, so every lowering not written for it refuses the phrase
     # instead of quietly widening to every creature.
     dealt_damage_to_source_this_turn: bool = False
-    # "all creatures **blocking this creature**" (The Wretched). The set of
-    # creatures currently declared as blockers of the ability's own source
-    # (CR 509.1a). *Relative* like ``created_with_source``: no read of the
-    # blocker alone can answer it, so it emits no payload key and never
-    # reaches ``permanent_matches_filter`` — the one lowering that admits it
-    # resolves the set from the fire-time combat record instead, and any
-    # other lowering that meets it refuses by name.
+    # "all creatures **blocking this creature**" (The Wretched), "target green
+    # creature blocking this creature" (Barbed-Back Wurm). The set of creatures
+    # currently declared as blockers of the ability's own source (CR 509.1a).
+    #
+    # *Relative*, so no read of the blocker alone can answer it and
+    # ``permanent_matches_filter`` never sees it — but emitted, and testable,
+    # for exactly ``blocked_by_source``'s reason two fields down: what it needs
+    # beyond the object is the ability's source, which ``subject_matches``
+    # already takes. A caller with no source answers no, which refuses the
+    # target rather than offering the board.
+    #
+    # It was unemitted for a set longer than its mirror, and the reason is worth
+    # keeping: the symmetry alone was not enough. Making it emitted with no card
+    # printing it as a **target** bought nothing and perturbed three shipped
+    # Wurms, so it went back; Barbed-Back Wurm is the printing that pays for it.
     blocking_source: bool = False
     # "creatures blocking **target attacking creature**" (Feint) and "each
     # creature blocking **it**" (Feint's second sentence). The same relation as
@@ -602,6 +610,17 @@ class ObjectFilter:
             payload["not_attacking"] = True
         if self.blocked_by_source:
             payload["blocked_by_source"] = True
+        # "target creature **blocking this creature**" (Barbed-Back Wurm), and
+        # the mirror of the key above it. It reached ``subject_matches``'s
+        # footing the day the *other* direction did — both are relations to the
+        # ability's own source, both are answered off the same combat maps, and
+        # that function already takes the source — but it stayed unemitted a set
+        # longer for want of a card that printed it as a **target**. The one
+        # card that reads it as a *count* ("for each creature blocking it",
+        # Johtull Wurm) lifts the key out of the payload itself, so the specs
+        # written before this are byte-identical.
+        if self.blocking_source:
+            payload["blocking_source"] = True
         if self.blocked_source_this_turn:
             payload["blocked_source_this_turn"] = True
         if self.tapped_to_pay_for_source_this_turn:

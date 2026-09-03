@@ -432,6 +432,7 @@ _COVERED_ELSEWHERE = {
     "not_attacked_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "could_attack_this_turn": "test_the_combat_records_are_read_off_the_permanent",
     "blocked_by_source": "test_blocked_by_source_names_only_what_the_source_blocks",
+    "blocking_source": "test_blocking_source_names_only_the_source_s_blockers",
     "blocked_source_this_turn":
         "test_blocked_source_this_turn_outlives_the_combat_it_names",
     "attacking_you": "test_attacking_you_is_two_questions_not_one",
@@ -649,6 +650,42 @@ def test_blocked_by_source_names_only_what_the_source_blocks(pool):
     assert subject_matches(game, attacker, described, source=blocker)
     assert not subject_matches(game, other, described, source=blocker)
     assert not subject_matches(game, attacker, described)
+
+
+def test_blocking_source_names_only_the_source_s_blockers(pool):
+    """"target green creature **blocking this creature**" (Barbed-Back Wurm).
+
+    The mirror of the key above, and the same combat read from the other end:
+    there the source is the blocker and the set is what it is blocking, here the
+    source is the attacker and the set is its blockers (CR 509.1a). So it is
+    demonstrated the same way, in a real combat -- the rejected creature is an
+    ordinary blocker that simply is not blocking *this* attacker, and nothing
+    about the creature itself tells the two apart.
+
+    With no source the answer must be **no**. That direction is the whole reason
+    the key was allowed to become testable at all: an emitted narrowing a caller
+    could not answer would be dropped, and a dropped block relation on a targeted
+    shrink is every creature on the board.
+    """
+    attacker = Permanent(card=pool["Grizzly Bears"])
+    other_attacker = Permanent(card=pool["Grizzly Bears"])
+    blocker = Permanent(card=pool["Grizzly Bears"])
+    elsewhere = Permanent(card=pool["Grizzly Bears"])
+    p1 = PlayerState(name="P1", battlefield=[attacker, other_attacker])
+    p2 = PlayerState(name="P2", battlefield=[blocker, elsewhere])
+    game = Game(players=[p1, p2])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0, 1])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0, 1: 1})[0]
+
+    described = {"blocking_source": True}
+    assert subject_matches(game, blocker, described, source=attacker)
+    assert not subject_matches(game, elsewhere, described, source=attacker)
+    assert not subject_matches(game, blocker, described)
 
 
 def test_blocked_source_this_turn_outlives_the_combat_it_names(pool):

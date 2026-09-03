@@ -159,6 +159,13 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # by. That makes them testable *here* and nowhere else — and untestable for
     # a caller with neither, which is the direction that cannot widen a set.
     "blocked_by_source",
+    # "target creature **blocking this creature**" (Barbed-Back Wurm) --
+    # ``blocked_by_source`` read the other way round: there the source is the
+    # blocker and the set is what it is blocking, here the source is the
+    # attacker and the set is its blockers (CR 509.1a). The same relation, the
+    # same combat record, and the same thing needed beyond the object: the
+    # ability's own source, which this function takes.
+    "blocking_source",
     # "…all creatures **that blocked this creature this turn**" (Joven's
     # Ferrets). The block *history* rather than the live relation: the record
     # lives on the candidate — a blocker names the attackers it blocked — so
@@ -582,6 +589,16 @@ def subject_matches(
         if source is None:
             return False
         if not any(attacker is obj for attacker in game.creatures_blocked_by(source)):
+            return False
+    # "target creature **blocking this creature**" — the same combat record read
+    # from the other end, through the reader the damage step and the count
+    # evaluator already share (``creatures_blocking``), so a band-propagated
+    # block (CR 702.22h) means the same thing here as it does there. Identity,
+    # never value: two copies of one creature are two permanents.
+    if described.get("blocking_source"):
+        if source is None:
+            return False
+        if not any(blocker is obj for blocker in game.creatures_blocking(source)):
             return False
     # "…all creatures **that blocked this creature this turn**" (Joven's
     # Ferrets). The same relation as a *history* rather than as a live combat

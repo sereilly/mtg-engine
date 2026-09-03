@@ -577,6 +577,14 @@ def _narrowing_flags(source: dict) -> dict:
         # it from the candidate alone. Without the flag the picker offered every
         # creature on the board for a ping the card aims at exactly one.
         flags["blocked_by_source"] = True
+    if source.get("blocking_source"):
+        # "target creature **blocking this creature**" (Barbed-Back Wurm). The
+        # mirror of the flag above and the enumerator's for its reason exactly:
+        # the relation is to the ability's own source, which the loop holds and
+        # the candidate alone cannot answer. Without the flag the picker offers
+        # every creature on the board for an ability aimed at the ones in front
+        # of it.
+        flags["blocking_source"] = True
     if source.get("attacking_you"):
         # "target creature **that's attacking you**" (Ice Floe, Snow Fortress).
         # A seat test like ``own_only`` — which player the creature was declared

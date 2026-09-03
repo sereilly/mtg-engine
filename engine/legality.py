@@ -1425,17 +1425,23 @@ class LegalityMixin:
 
                     if perm is attached_host(self, source_permanent):
                         continue
-                # The two combat *relations* a target description can print.
+                # The three combat *relations* a target description can print.
                 # Both are asked through ``subject_matches`` — the one reader of
                 # what a printed noun phrase means — with the observer and
                 # source this loop holds, so the list the picker offers and the
                 # set the handler affects are decided by the same function.
                 # A flag with nothing to answer it against offers nothing, which
                 # is the direction that cannot widen a target description.
-                if spec.get("blocked_by_source") or spec.get("attacking_you"):
+                if (
+                    spec.get("blocked_by_source")
+                    or spec.get("blocking_source")
+                    or spec.get("attacking_you")
+                ):
                     relation = {
                         key: True
-                        for key in ("blocked_by_source", "attacking_you")
+                        for key in (
+                            "blocked_by_source", "blocking_source", "attacking_you",
+                        )
                         if spec.get(key)
                     }
                     if not subject_matches(

@@ -1466,8 +1466,13 @@ def test_tap_or_untap_still_refuses_a_restriction_the_matcher_cannot_test():
     """The gate moved out to ``TESTABLE_SUBJECT_FILTER_KEYS``; it did not go
     away. A phrase naming something no filter payload can carry is still
     refused, because it would be dropped where the narrowing is applied."""
+    # "blocking **it**" and not "blocking this creature": the second is testable
+    # now (``blocking_source`` is a payload key, answered off the combat maps
+    # like its mirror), and the first still is not — a back-reference to an
+    # object no earlier clause of this line bound has nothing to resolve
+    # against.
     result = compile_line(
-        "Tap or untap target creature blocking this creature.", card_name="Test"
+        "Tap or untap target creature blocking it.", card_name="Test"
     )
 
     assert result.parsed and not result.lowered

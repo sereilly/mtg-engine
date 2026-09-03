@@ -117,10 +117,13 @@ class DeclareAttackersStepMixin:
         # `declared_attackers` list built further down, which does not exist yet
         # and which validates as it goes — this read only has to say who was
         # named.
+        # Through the seam (`permanent_at`), never `controller.battlefield[i]`:
+        # a slot is what the wire carries and this is the module that turns one
+        # into a permanent.
         declared_now = [
-            controller.battlefield[i]
-            for i in unique_indices
-            if 0 <= i < len(controller.battlefield)
+            perm
+            for perm in (self.permanent_at(controller_index, i) for i in unique_indices)
+            if perm is not None
         ]
         required_attackers: list[str] = []
         for idx, attacker in enumerate(controller.battlefield):

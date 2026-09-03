@@ -122,6 +122,9 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
     if instruction.payload.get("toughness_negative"):
         toughness_delta = -toughness_delta
     blocking_only = bool(instruction.payload.get("blocking_only"))
+    # Function-level, like every other handler that reads a noun phrase: the
+    # module graph runs card_loader -> oracle -> subject_filters -> handlers.
+    from ..subject_filters import subject_matches
 
     filters = (instruction.payload.get("targets") or {}).get("filter") or {}
 
@@ -135,15 +138,20 @@ def pump_target_creature_until_eot(game: Game, instruction: OracleInstruction, c
         # creature?", so Ranger's Guile's "target creature **you control**"
         # pumped an opponent's creature — the pump half of the same card whose
         # keyword half had the identical hole.
-        if not permanent_matches_filter(perm, filters):
-            return False
-        if filters.get("exclude_self") and perm is context.source_permanent:
-            return False
-        if filters.get("controller") == "you" and not game.controls(
-            game.players.index(caster), perm
-        ):
-            return False
-        return True
+        #
+        # Through ``subject_matches``, **not** the pure matcher and its two
+        # hand-written seat tests. Those covered `controller` and `exclude_self`
+        # and nothing else relative, so a *relation* in the phrase was carried
+        # by the payload and tested by nobody: "target green creature
+        # **blocking this creature**" (Barbed-Back Wurm) would have shrunk any
+        # green creature on the table. One reader, with CR 109.5's observer and
+        # the ability's own source, is what keeps the list the picker offers
+        # and the set this shrinks the same list.
+        return subject_matches(
+            game, perm, filters,
+            observer=game.players.index(caster),
+            source=context.source_permanent,
+        )
 
     target_perm = resolve_target_permanent(
         game, context, predicate=_eligible, fallback_players=(target, caster)

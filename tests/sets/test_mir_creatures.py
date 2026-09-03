@@ -514,7 +514,8 @@ from engine.oracle import compile_card_oracle
 
 
 def _w1g1_vanilla(
-    name: str, power: int, toughness: int, text: str = "", subtype: str = "Test"
+    name: str, power: int, toughness: int, text: str = "",
+    subtype: str = "Test", colors: tuple = (),
 ) -> CardDefinition:
     """A creature carrying only its numbers.
 
@@ -525,7 +526,7 @@ def _w1g1_vanilla(
     type_line = f"Creature - {subtype}"
     return CardDefinition(
         name=name, mana_cost="", cmc=0.0, type_line=type_line,
-        oracle_text=text, colors=(), color_identity=(), keywords=(),
+        oracle_text=text, colors=colors, color_identity=colors, keywords=(),
         produced_mana=(),
         raw={"name": name, "type_line": type_line,
              "power": str(power), "toughness": str(toughness)},
@@ -714,3 +715,210 @@ def test_sawback_manticore_pings_while_attacking(set_pool):
     assert any("dealt 2 damage to Blocker" in line for line in game.log)
 
     assert "only once each turn" in ping().details
+
+
+# --- Barbed-Back Wurm and Urborg Panther: the block relation, both spellings ---
+
+
+def _w1g1_blocked(set_pool, attacker_name: str, colors: tuple = ("G",)):
+    """*attacker_name* attacking, blocked by the first of two identical
+    creatures.
+
+    Two on the far side on purpose, and identical: one blocked and one did not,
+    and *nothing about either creature* tells them apart. A dropped relation
+    therefore shows up as the bystander being reachable, which is the only way
+    to see it -- a differently-shaped bystander would be excluded by its shape.
+    """
+    attacker = _w1g1_nosick(Permanent(card=set_pool("MIR")[attacker_name]))
+    others = [
+        Permanent(card=_w1g1_vanilla(name, 5, 5, colors=colors))
+        for name in ("Blocker", "Bystander")
+    ]
+    game = _w1g1_game([attacker], others)
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0]
+    game.resolve_stack()
+    return game, attacker, others
+
+
+def test_barbed_back_wurm_shrinks_only_a_green_blocker(set_pool):
+    """"{B}: Target **green** creature blocking this creature gets -1/-1."
+
+    "Blocking this creature" is ``blocked_by_source`` read from the other end,
+    and it was the one relative narrowing with no payload form -- so the whole
+    ability refused. It has one now, tested by the same ``subject_matches`` its
+    mirror goes through, and the colour rides beside it like any other key.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Barbed-Back Wurm"])
+    assert program.supported, program.reason
+    (ability,) = program.activated_abilities
+    described = ability.instruction.payload["targets"]["filter"]
+    assert described["blocking_source"] is True
+    assert described["color_filter"] == "G"
+
+
+def test_barbed_back_wurm_offers_only_the_creature_in_front_of_it(set_pool):
+    """The picker and the resolution are the same list.
+
+    Both halves matter and each was broken on its own: the enumerator offered
+    every creature on the board without the flag, and the pump handler dropped
+    the relation at resolution because it asked the *pure* matcher.
+    """
+    game, wurm, others = _w1g1_blocked(set_pool, "Barbed-Back Wurm")
+    blocker, bystander = others
+
+    result = game.activate_permanent_ability(
+        0, "Barbed-Back Wurm", permanent_index=0,
+        target_player_index=1, target_permanent_index=1,
+    )
+    assert not result.supported, "the bystander is not blocking this creature"
+
+    result = game.activate_permanent_ability(
+        0, "Barbed-Back Wurm", permanent_index=0,
+        target_player_index=1, target_permanent_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+    assert (blocker.effective_power, blocker.effective_toughness) == (4, 4)
+    assert (bystander.effective_power, bystander.effective_toughness) == (5, 5)
+
+
+def test_urborg_panther_binds_its_pronoun_to_its_own_source(set_pool):
+    """"Destroy target creature blocking **it**."
+
+    Nothing is printed after the word, so the noun parser reads a
+    back-reference -- and under an activated ability whose whole effect is this
+    one statement there is nothing earlier for it to name. The pronoun is
+    rebound onto the source where the sentence is in view, which is the same
+    rewrite Johtull Wurm's "for each creature blocking it" already needed.
+    """
+    program = compile_card_oracle(set_pool("MIR")["Urborg Panther"])
+    assert program.supported, program.reason
+    destroy = program.activated_abilities[0].instruction
+    assert destroy.kind == "destroy_target_permanent"
+    assert destroy.payload["targets"]["filter"]["blocking_source"] is True
+    assert "blocking_bound_target" not in destroy.payload["targets"]["filter"]
+
+
+def test_a_bare_spell_line_keeps_refusing_the_pronoun(set_pool):
+    """The rewrite is narrow on purpose. A spell's own source is a card on the
+    stack, which blocks nothing, so "Destroy target creature blocking it" as a
+    whole printed line still has no referent and still refuses."""
+    from engine.grammar import compile_line
+
+    result = compile_line("Destroy target creature blocking it.", card_name="Test")
+    assert result.parsed and not result.lowered
+
+
+def test_urborg_panther_destroys_the_creature_blocking_it(set_pool):
+    game, panther, others = _w1g1_blocked(set_pool, "Urborg Panther")
+    blocker, bystander = others
+
+    result = game.activate_permanent_ability(
+        0, "Urborg Panther", permanent_index=0,
+        target_player_index=1, target_permanent_index=0, ability_index=0,
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+    game._settle()
+
+    assert not game.is_on_battlefield(blocker)
+    assert game.is_on_battlefield(bystander)
+
+
+def test_urborg_panther_charges_all_three_sacrifices(set_pool):
+    """"Sacrifice a creature named Feral Shadow, a creature named
+    Breathstealer, **and this creature**."
+
+    Three objects under one printed verb, which is two more than the
+    single-object delimiter could see: it stopped at the first comma, read the
+    Shadow and missed both the Breathstealer and the source. A cost charged as
+    one third of what the card prints is an ability activated for less than it
+    says, so the list is read by the grammar *and* by the charger, and capped at
+    what the three cost fields can hold.
+    """
+    pool = set_pool("MIR")
+    panther = _w1g1_nosick(Permanent(card=pool["Urborg Panther"]))
+    shadow = _w1g1_nosick(Permanent(card=pool["Feral Shadow"]))
+    breathstealer = _w1g1_nosick(Permanent(card=pool["Breathstealer"]))
+    library = [pool["Spirit of the Night"], _w1g1_vanilla("Filler", 1, 1)]
+    game = Game(players=[
+        PlayerState(
+            name="P1", battlefield=[panther, shadow, breathstealer],
+            library=list(library),
+        ),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+
+    result = game.activate_permanent_ability(
+        0, "Urborg Panther", permanent_index=0, ability_index=1
+    )
+    assert result.supported, result.details
+    game.resolve_stack()
+
+    assert {card.name for card in game.players[0].graveyard} == {
+        "Urborg Panther", "Feral Shadow", "Breathstealer",
+    }
+
+    index = next(
+        i for i, card in enumerate(game.players[0].library)
+        if card.name == "Spirit of the Night"
+    )
+    assert game.confirm_search_library(0, index)
+    game._settle()
+    assert [perm.card.name for perm in game.players[0].battlefield] == [
+        "Spirit of the Night"
+    ]
+
+
+def test_urborg_panther_pays_nothing_when_a_piece_is_missing(set_pool):
+    """CR 601.2h: the whole cost is unpayable, so the activation is refused with
+    nothing sacrificed -- not the Shadow eaten for an ability that then cannot
+    finish."""
+    pool = set_pool("MIR")
+    panther = _w1g1_nosick(Permanent(card=pool["Urborg Panther"]))
+    shadow = _w1g1_nosick(Permanent(card=pool["Feral Shadow"]))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[panther, shadow],
+                    library=[pool["Spirit of the Night"]]),
+        PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game.start_turn(0)
+    game._close_current_priority_step()
+
+    result = game.activate_permanent_ability(
+        0, "Urborg Panther", permanent_index=0, ability_index=1
+    )
+    assert not result.supported
+    assert {perm.card.name for perm in game.players[0].battlefield} == {
+        "Urborg Panther", "Feral Shadow",
+    }
+
+
+def test_a_card_name_stops_at_a_list_separator(set_pool):
+    """The bug the three-object cost exposed, which has nothing to do with
+    sacrifice: a comma inside a name is the one a legendary title carries, and
+    the scan ran through this one to the next "and". The first cost object came
+    back asking for a card literally named "Feral Shadow, a creature named
+    Breathstealer" -- a filter matching nothing, so the cost was admitted and
+    could never be paid."""
+    from engine.oracle import parse_activated_ability_cost
+
+    cost = parse_activated_ability_cost(
+        set_pool("MIR")["Urborg Panther"].oracle_text.splitlines()[1]
+    )
+    assert cost.sacrifice_self is True
+    assert cost.sacrifice_filter == {
+        "type_filter": "creature", "named": "feral shadow",
+    }
+    assert cost.sacrifice_also_filter == {
+        "type_filter": "creature", "named": "breathstealer",
+    }
