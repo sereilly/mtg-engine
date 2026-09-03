@@ -61,13 +61,22 @@ def _lord_filter(filt: ast.ObjectFilter) -> LordBuffFilter:
         # decides whether the table can express it — the same round trip and
         # not a probe, for the reason this function's docstring gives.
         with_keywords=filt.with_keywords,
+        # "**Noncreature artifacts** have shroud." (Spectral Guardian.) The
+        # printed card type, carried rather than assumed: `_object_filter_of`
+        # wrote "creature" back unconditionally, so an anthem about any other
+        # permanent type failed the equality below and refused — the right
+        # direction while the consumer asked `is_creature`, and the wrong one
+        # now that it asks the filter.
+        card_types=filt.card_types,
+        excluded_types=filt.excluded_types,
     )
 
 
 def _object_filter_of(lord: LordBuffFilter) -> ast.ObjectFilter:
     """*lord* back as an ``ObjectFilter`` — the round trip the equality uses."""
     fields: dict[str, object] = {
-        "card_types": ("creature",),
+        "card_types": lord.card_types,
+        "excluded_types": lord.excluded_types,
         "colors": lord.colors,
         "subtypes": lord.subtypes,
         "controller": lord.controller,

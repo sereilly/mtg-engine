@@ -629,3 +629,149 @@ def test_haunting_apparition_with_no_chosen_player_is_just_the_constant(set_pool
     game._settle()
 
     assert apparition.effective_power == 1
+
+
+def _g5_artifact(name: str, type_line: str = "Artifact") -> CardDefinition:
+    return CardDefinition(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line,
+        oracle_text="", colors=(), color_identity=(), keywords=(),
+        produced_mana=(),
+        raw={"name": name, "type_line": type_line},
+    )
+
+
+def _g5_guardian_board(set_pool):
+    """Spectral Guardian beside a Mox, a Golem and a Bear."""
+    pool = set_pool("MIR")
+    guardian = Permanent(card=pool["Spectral Guardian"])
+    mox = Permanent(card=_g5_artifact("Mox"))
+    golem = Permanent(card=CardDefinition(
+        name="Golem", mana_cost="", cmc=0.0,
+        type_line="Artifact Creature - Golem", oracle_text="", colors=(),
+        color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": "Golem", "type_line": "Artifact Creature - Golem",
+             "power": "2", "toughness": "2"},
+    ))
+    bear = Permanent(card=_g5_vanilla("Bear"))
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[guardian, mox, golem, bear],
+                    library=[pool["Island"]] * 5),
+        PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._settle()
+    return game, guardian, mox, golem, bear
+
+
+def test_spectral_guardian_shrouds_noncreature_artifacts(set_pool):
+    """"As long as this creature is untapped, **noncreature artifacts** have
+    shroud."
+
+    The leading condition already worked. What did not was the *set*: CR 613's
+    layers 6 and 7c apply to every permanent, and it was the consumer that
+    required a creature — ``_lord_buff_matches`` asked ``is_creature`` above
+    every field of the filter, so which card type an anthem is about was a
+    question nobody could ask. It is a filter field now, defaulting to the
+    creature every printing before this one named.
+    """
+    game, _guardian, mox, golem, bear = _g5_guardian_board(set_pool)
+
+    assert game._has_keyword(mox, "shroud")
+    assert not game._has_keyword(golem, "shroud"), "an Artifact Creature is excluded"
+    assert not game._has_keyword(bear, "shroud")
+
+
+def test_spectral_guardians_shroud_stops_when_it_taps(set_pool):
+    """Derived on every recompute (CR 611.3a), so tapping takes it away with
+    nothing to undo — and untapping gives it back."""
+    game, guardian, mox, _golem, _bear = _g5_guardian_board(set_pool)
+
+    guardian.tapped = True
+    game._settle()
+    assert not game._has_keyword(mox, "shroud")
+
+    guardian.tapped = False
+    game._settle()
+    assert game._has_keyword(mox, "shroud")
+
+
+def test_a_creature_anthem_still_reaches_only_creatures(set_pool):
+    """The default the new field carries. Every anthem printed before Spectral
+    Guardian says "creature", so its payload rebuilds identically and an
+    artifact is no more buffed than it ever was."""
+    from engine.lord_buffs import lord_buff_for, lord_buff_payload
+
+    buff = lord_buff_for("black creatures get +1/+1")
+    assert buff is not None
+    assert buff.filter.card_types == ("creature",)
+    assert "card_types" not in lord_buff_payload(buff), (
+        "an untouched payload stays byte-identical"
+    )
+
+
+def test_mist_dragon_turns_its_own_flying_off_again(set_pool):
+    """"{0}: This creature gains flying." / "{0}: This creature **loses**
+    flying. (This effect lasts indefinitely.)"
+
+    The grant half already worked with no printed duration; the removal refused
+    on ``event is None`` — a gate that read "not inside a trigger" and meant
+    "not a printed static line". Those are different questions, and the second
+    is answered elsewhere: a bare printed line about the source lowers through
+    the statics path and refuses there, and one about a *set* is stopped by the
+    source check beside this one. So the trigger test bought nothing and cost
+    the Dragon the half of its card that lands it again.
+    """
+    pool = set_pool("MIR")
+    dragon = Permanent(card=pool["Mist Dragon"])
+    dragon.metadata["summoning_sickness_turn"] = -1
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[dragon], library=[pool["Island"]] * 5),
+        PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    game._settle()
+
+    assert not game._has_keyword(dragon, "flying")
+
+    gains = game.activate_permanent_ability(
+        0, "Mist Dragon", permanent_index=0, ability_index=0
+    )
+    assert gains.supported, gains.details
+    game.resolve_stack()
+    game._settle()
+    assert game._has_keyword(dragon, "flying")
+
+    loses = game.activate_permanent_ability(
+        0, "Mist Dragon", permanent_index=0, ability_index=1
+    )
+    assert loses.supported, loses.details
+    game.resolve_stack()
+    game._settle()
+    assert not game._has_keyword(dragon, "flying")
+
+
+def test_mist_dragons_grant_lasts_past_the_turn(set_pool):
+    """CR 611.2: an effect with no printed duration lasts indefinitely, which is
+    what the reminder text says out loud. Both halves are that one-shot, so
+    neither is swept at cleanup."""
+    pool = set_pool("MIR")
+    dragon = Permanent(card=pool["Mist Dragon"])
+    dragon.metadata["summoning_sickness_turn"] = -1
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[dragon], library=[pool["Island"]] * 5),
+        PlayerState(name="P2", library=[pool["Island"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+
+    game.activate_permanent_ability(
+        0, "Mist Dragon", permanent_index=0, ability_index=0
+    )
+    game.resolve_stack()
+    game._settle()
+    game.resolve_cleanup_step(0)
+    game._settle()
+
+    assert game._has_keyword(dragon, "flying")

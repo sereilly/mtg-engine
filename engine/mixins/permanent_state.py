@@ -1877,7 +1877,20 @@ class PermanentStateMixin:
         "does this lord reach this creature?".
         """
         filt = buff.filter
-        if not target_perm.is_creature:
+        # Which card type the anthem is about, read off the sentence rather
+        # than assumed. This was `is_creature`, asked above every field of the
+        # filter — and CR 613 has never said "creature": layers 6 and 7c apply
+        # to every permanent, so "noncreature artifacts have shroud" (Spectral
+        # Guardian) was unreachable for want of a question nobody was asking.
+        # Through `has_type` (CR 613 layer 4) like every other type read here,
+        # so an animated Swamp is a creature before a creature anthem considers
+        # it.
+        if not any(target_perm.has_type(word) for word in filt.card_types):
+            return False
+        # "**Non**creature artifacts" — the exclusion, OR'd the way every other
+        # negative type test in this engine is: a permanent naming any excluded
+        # type is out.
+        if any(target_perm.has_type(word) for word in filt.excluded_types):
             return False
         if filt.other_than_source and target_perm is source_perm:
             return False
