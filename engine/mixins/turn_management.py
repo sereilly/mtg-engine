@@ -12,6 +12,24 @@ from ..replacements import apply_replacements
 from ..trigger_utils import iter_triggered_abilities
 
 
+#: Every instruction kind ``_resolve_tapped_land_trigger_step`` has an arm for.
+#:
+#: Beside the dispatch rather than in the test that checks it. The guard used to
+#: keep its own list, which is the second-copy class SET_PLAYBOOK.md's promotion
+#: step calls the most expensive kind of guard — this one went stale the moment
+#: the site learned Storm Cauldron's return and Winter's Night's untap marker,
+#: and then reported two working cards as undispatched at the promotion gate.
+#: The arms read it as their own precondition, so a kind added to one and not
+#: the other is inert rather than silently mis-run, and the card's own test says
+#: so.
+TAP_TRIGGER_KINDS = frozenset({
+    "add_mana_for_tapped_land",   # Mana Flare, Gauntlet of Might
+    "return_tapped_land_to_hand", # Storm Cauldron
+    "skip_next_untap",            # Winter's Night
+    "deal_damage",                # Manabarbs
+})
+
+
 def _tap_trigger_steps(instruction) -> tuple:
     """A tap-for-mana trigger's effect as the clauses that make it up.
 
@@ -629,6 +647,12 @@ class TurnManagementMixin:
         visible beats doing something the card never said.
         """
         kind = instruction.kind
+        if kind not in TAP_TRIGGER_KINDS:
+            self.log.append(
+                f"{perm.card.name}: nothing here resolves "
+                f"{kind!r} inside a cost payment"
+            )
+            return
         if kind == "add_mana_for_tapped_land":
             self._add_triggered_land_mana(
                 instruction, player_index, land, mana_symbol, perm
@@ -663,12 +687,6 @@ class TurnManagementMixin:
                 # The seated spelling would be "your", and no card prints it
                 # under this condition.
                 seat=None,
-            )
-            return
-        if kind != "deal_damage":
-            self.log.append(
-                f"{perm.card.name}: nothing here resolves "
-                f"{kind!r} inside a cost payment"
             )
             return
         # The compiled payload names its victim ``event_subject_player`` —

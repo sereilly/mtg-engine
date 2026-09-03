@@ -205,6 +205,15 @@ def test_combat_restrictions_match_the_derivation_table_exactly():
         # reads the *shipped* pool, so a measured set's new kind arrives
         # here the day it ships.
         "creatures_cant_attack_you_unless_pay",
+        # Gorilla Berserkers: "This creature can't be blocked except by three
+        # or more creatures." A floor on the *number* of blockers, which
+        # `declare_blockers` counts once the whole declaration is in hand — the
+        # grammar has no production and refuses the line in full, which is what
+        # leaves it to the table. Arrived here at Alliances' promotion, for the
+        # reason the two rows above give: this guard reads the shipped pool, so
+        # a measured set's new kind lands the day it ships. Verified in a game
+        # rather than from the table — two blockers refused, three allowed.
+        "cant_be_blocked_by_fewer_than",
     }
 
     compared = 0

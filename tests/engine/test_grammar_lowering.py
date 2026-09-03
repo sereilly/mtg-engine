@@ -2437,10 +2437,15 @@ def test_every_executed_upkeep_trigger_lands_on_a_pair_something_dispatches(cata
 # on every tap) and a registered handler for its effect.
 # ---------------------------------------------------------------------------
 
-_LAND_TAPPED_FIRE_SITE_KINDS = frozenset({
-    "add_mana_for_tapped_land",   # Mana Flare, Gauntlet of Might
-    "deal_damage",                # Manabarbs
-})
+# Read from the fire site rather than restated here. The hand-written copy that
+# stood in this place named two kinds where the site had learned four, so it
+# reported Storm Cauldron and Winter's Night — both verified working — as
+# undispatched at Alliances' promotion gate. A guard that re-spells the thing it
+# checks invents the disagreement it then reports.
+from engine.mixins.turn_management import (
+    TAP_TRIGGER_KINDS as _LAND_TAPPED_FIRE_SITE_KINDS,
+    _tap_trigger_steps,
+)
 
 
 def test_every_land_tapped_for_mana_trigger_lands_on_a_kind_the_fire_site_runs(catalog):
@@ -2451,8 +2456,11 @@ def test_every_land_tapped_for_mana_trigger_lands_on_a_kind_the_fire_site_runs(c
         for trig in compile_card_oracle(card).triggered_abilities:
             if trig.condition.kind != "land_tapped_for_mana" or trig.instruction is None:
                 continue
-            if trig.instruction.kind not in _LAND_TAPPED_FIRE_SITE_KINDS:
-                undispatched.append(f"{card.name}: {trig.instruction.kind}")
+            # A printed paragraph is a `sequence`; the site flattens it one
+            # level and runs each clause, so the question is asked per clause.
+            for step in _tap_trigger_steps(trig.instruction):
+                if step.kind not in _LAND_TAPPED_FIRE_SITE_KINDS:
+                    undispatched.append(f"{card.name}: {step.kind}")
 
     assert not undispatched, (
         "tap_land_for_mana dispatches these triggers by instruction kind and "

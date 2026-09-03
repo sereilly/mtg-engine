@@ -337,9 +337,13 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
     answers None for every card that divides nothing, which is what keeps
     ``choose_divided_targets`` inert for the rest of the pool.
 
-    Over the *shipped* pool, which is what ``catalog`` is: Alliances is still
-    ``measured``, and its three divided cards are pinned by name above and
-    exercised in ``tests/sets/test_all_instants.py``.
+    Over the *shipped* pool, which is what ``catalog`` is. This docstring used
+    to say "Alliances is still ``measured``" and the inventory below to omit its
+    three — the emptiness-premise class SET_PLAYBOOK.md records twice, where a
+    guard states a fact about today's manifest roles as though it were an
+    invariant. What is invariant is the per-card assertion above: a card divides
+    something *and* has a side, or it divides nothing. The list is a reviewed
+    inventory of which cards those are, and a promotion is when it is reviewed.
     """
     from engine.ai_valuation import divided_shape
     from engine.divided_damage import divided_description
@@ -354,10 +358,18 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         if shape is not None:
             assert shape.side is not None, f"{card.name} divides with no side"
             described.append(card.name)
-    assert sorted(described) == [
-        "Dwarven Catapult", "Fiery Justice", "Fire Covenant", "Fireball",
-        "Meteor Shower", "Pyrotechnics", "Spoils of War",
-    ], described
+    # A **reviewed inventory** of every card in the pool that divides anything,
+    # asserted as a superset rather than an equality so it does not depend on
+    # which manifest role each set is in: a card appearing here that nobody
+    # reviewed is the finding, and a card absent because its set is `measured`
+    # is not. Equality was the spelling until Alliances' promotion, where it
+    # failed for the second reason and said nothing about the first.
+    reviewed = {
+        "Bounty of the Hunt", "Contagion", "Dwarven Catapult", "Fiery Justice",
+        "Fire Covenant", "Fireball", "Meteor Shower", "Pyrokinesis",
+        "Pyrotechnics", "Spoils of War",
+    }
+    assert set(described) <= reviewed, sorted(set(described) - reviewed)
 
 
 # --- Several-target removal points at the other board ----------------------

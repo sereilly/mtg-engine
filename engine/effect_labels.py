@@ -387,6 +387,27 @@ ACTIVATED_LABELS: dict[str, str] = {
     # than the P/T the animation arrives with. Its own entry because it is its
     # own instruction kind — the duration is what separates them.
     "animate_target_indefinitely": "activated_characteristic",
+    # --- Alliances, at its promotion ----------------------------------------
+    # Four kinds the grammar reads whose label was falling through to
+    # ``activated_{grammar family}``. Declared for the reason the whole table
+    # exists: the default is a fact about which `grammar/lowering/` module the
+    # kind happens to sit in, so a family split — three of which this set took —
+    # would silently re-bucket a shipped card in the support report.
+    #
+    # Ivory Gargoyle's self-exile takes ``exile_target_permanent``'s bucket
+    # above: what the ability does is remove a permanent, and which permanent is
+    # not the question the bucket answers.
+    "exile_self": "activated_destruction",
+    # Soldier of Fortune, beside ``reorder_target_library_top`` and
+    # ``look_top_exile_random``: the library is the object.
+    "shuffle_library": "activated_library",
+    # Gustha's Scepter returning a card it exiled — a card changing zones, which
+    # is the settled reading and also today's default; pinned so it stays that
+    # after the next split rather than by luck.
+    "put_exiled_with_source": "activated_zones",
+    # Phantasmal Fiend's switch is a P/T change, which is the bucket every other
+    # P/T kind reports; pinned for the same reason.
+    "switch_self_pt_until_eot": "activated_pump",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -476,6 +497,14 @@ TRIGGERED_LABELS: dict[str, str] = {
     "upkeep_chosen_player_hand_overflow_damage": "upkeep_effect",
     "upkeep_pay_or_deal_damage_to_controller": "upkeep_effect",
     "upkeep_pay_or_sacrifice_enchantment": "upkeep_effect",
+    # --- Alliances, at its promotion ----------------------------------------
+    # Both are upkeep obligations whose payment is the whole ability: Phantasmal
+    # Sphere's cumulative upkeep (CR 702.24) and Rogue Skycaptain's counter toll
+    # whose refusal cedes the creature. They take `upkeep_effect` beside every
+    # other pay-or-consequence above rather than the `spell_pattern` marker the
+    # fallback gives them, which is not a bucket at all.
+    "cumulative_upkeep": "upkeep_effect",
+    "upkeep_counter_toll_or_cede_control": "upkeep_effect",
     "upkeep_pay_or_sacrifice_self": "upkeep_effect",
     "upkeep_pay_to_untap_self": "upkeep_effect",
     # Paralyze's Aura twin. The label the card-name hook used to supply: the
